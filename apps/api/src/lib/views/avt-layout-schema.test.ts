@@ -6,8 +6,8 @@ import { t } from "elysia";
 import { VIEW_LAYOUT_TYPES } from "@stll/api-contract";
 
 import {
-  projectAvtViewInputSchemas,
   isAvtLayoutVisible,
+  projectAvtViewInputSchemas,
   projectViewEligibility,
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import {

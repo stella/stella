@@ -26,8 +26,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import type {
   SourceAdapter,
-  StoredRawResultReader,
   StoredRawReparseRejection,
+  StoredRawResultReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";

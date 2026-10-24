@@ -16,20 +16,20 @@ import {
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import {
-  VISIBLE_RUN_CASES,
   VISIBLE_FIELD_DOCUMENT,
+  VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
 import {
-  noteTableRtf,
-  furnitureRtf,
-  NOTE_PATHS,
-  LINE_BOUNDARIES,
-  notePathDocument,
   assertNotePath,
+  furnitureRtf,
+  LINE_BOUNDARIES,
+  NOTE_PATHS,
+  notePathDocument,
+  noteTableRtf,
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";

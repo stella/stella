@@ -3,8 +3,8 @@ import * as v from "valibot";
 
 import {
   ENTITY_NAME_MAX_LENGTH,
-  truncateEntityName,
   type EntityKind,
+  truncateEntityName,
 } from "@stll/api-contract";
 
 const resolvedSiblingNameSchema = v.pipe(

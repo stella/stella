@@ -16,9 +16,9 @@ import {
   centsColumn,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
   organizationCheck,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -26,11 +26,11 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   workspaceIdCheck,
   wsOrganizationPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   BankAccount,

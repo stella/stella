@@ -1,12 +1,12 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
-  INGESTION_STOP_KIND,
-  type IngestionStopKind,
-  type IngestionPipelineResult,
   CYCLE_HALT_REASON,
+  INGESTION_STOP_KIND,
+  type IngestionPipelineResult,
+  type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
 import type { IngestionScopedDb } from "@/api/db/safe-db";
@@ -35,9 +35,9 @@ import {
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
-  wrappedErrorDetail,
-  PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
+  PROCESS_DECISION_STATUS,
+  wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";

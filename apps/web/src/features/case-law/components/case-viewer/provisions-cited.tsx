@@ -27,9 +27,9 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
 import {
   groupProvisionsByWork,
+  type ProvisionGroup,
   provisionStatusMessage,
   summarizeProvisionVersions,
-  type ProvisionGroup,
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";

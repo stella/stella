@@ -3,8 +3,8 @@ import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
-  caseLawCourtYearSchema,
   type CaseLawCourtYear,
+  caseLawCourtYearSchema,
 } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";

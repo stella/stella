@@ -8,8 +8,8 @@ import {
   lte,
   notInArray,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -45,9 +45,9 @@ import {
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
+  type CorpusProjectionAppendScopedWorkOptions,
   entityIdsForCorpusProjectionWorkScope,
   indexIdForCorpusProjectionWorkScope,
-  type CorpusProjectionAppendScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   corpusIndexProjectionIntentIsOutstanding,

@@ -9,6 +9,7 @@
       "noOtherSessions": "Nenhuma outra sessão ativa",
       "revokeOtherSessions": "Desconectar outros dispositivos",
       "revokeOtherSessionsConfirm": "Isso encerrará todas as sessões, exceto a atual.",
+      "signedInFrom": "Sessão iniciada por {clientName}",
       "unknownDevice": "Dispositivo desconhecido"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
     "keyRequired": {
+      "accountRestricted": "As configurações do provedor de IA não estão disponíveis para esta conta.",
+      "configUnreadable": "Não foi possível ler a configuração do provedor de IA. Peça a um administrador da organização para reconectá-lo.",
       "cta": "Abrir configurações de IA",
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
+      "permissionRequired": "Somente um administrador da organização pode conectar um provedor de IA.",
+      "seatRequired": "Peça a um administrador da organização para atribuir uma vaga a você.",
       "title": "Conectar provedor de IA"
     },
     "refinePlaceholder": "Como a IA deve ajustar a redação?",
@@ -137,6 +142,8 @@
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
       "title": "Não foi possível fazer seu login"
     },
+    "handoffAccount": "Continuar como <account>{email}</account> em <organization>{organizationName}</organization>?",
+    "handoffTitle": "Continuar para a stella",
     "headline": "Clareza para cada caso.",
     "invitation": {
       "declined": "Convite recusado",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
     "professionalUse": {
-      "description": "Sua conta foi criada sem que esta declaração fosse exibida para você. Aceite-a para continuar.",
       "title": "Confirme o uso profissional"
     },
     "professionalUseStatement": "Ao criar uma conta, você confirma que usa o stella para fins profissionais e reconhece que o stella é uma ferramenta para profissionais do direito e não substitui a assessoria jurídica.",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
+    "reauthenticationRequired": "Entre novamente para continuar com esta ação.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",
@@ -926,13 +933,10 @@
     },
     "coverage": {
       "completeness": "Completude",
-      "countedOn": "Contado em {date}",
       "courtsHeading": "Por tribunal",
       "courtsUnavailable": "A distribuição por tribunal está indisponível no momento.",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
-      "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
-      "gapStatusUnknown": "Situação das lacunas desconhecida",
       "generatedAt": "Números de {date}",
       "globeLabel": "Países cuja jurisprudência o corpus contém, em um globo",
       "healthCurrent": "Atualizado",
@@ -953,7 +957,8 @@
       "searchable": "Pesquisáveis",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
+      "unreadListingPeriods": "Períodos da listagem não lidos"
     },
     "decisionNotFound": "Decisão não encontrada",
     "decisionTypes": {
@@ -1591,6 +1596,7 @@
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorConnectionFailed": "A conexão com o chat falhou. Verifique sua conexão e tente novamente.",
+    "sendErrorContinuationRejected": "Não foi possível continuar o chat. Envie uma nova mensagem para começar de novo.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
     "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
@@ -2277,6 +2283,7 @@
     "scopeKnowledgeWrite": "Criar, editar e excluir suas cláusulas e executar playbooks",
     "scopeLawRead": "Ler legislação pública e jurisprudência",
     "scopeMattersWrite": "Criar e editar seus casos e tarefas",
+    "scopeMemoryWrite": "Criar e atualizar as memórias do assistente",
     "scopeOfflineAccess": "Manter você conectado sem exigir aprovação repetida",
     "scopeOnboarding": "Configure as jurisdições de atuação da sua organização",
     "scopeProfile": "Acesse as informações do seu perfil",
@@ -2304,6 +2311,7 @@
     "summaryLineRead": "<group>Ler:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "casos e tarefas",
+    "summaryMemoryWrite": "memórias do assistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, casos e contatos",
     "summaryReadAnonymized": "documentos e casos anonimizados",
@@ -2669,6 +2677,7 @@
       "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
       "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
       "contact": "Entre em contato",
+      "featureDisabled": "Este recurso está temporariamente desativado.",
       "notEnabled": "Esta ação não está habilitada para sua organização.",
       "periodExhausted": "Esta ação está pausada para sua organização."
     },
@@ -3524,6 +3533,12 @@
       "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
+      "unsupportedEncoding": "Este documento usa a codificação {encoding}, que não é compatível, portanto não pode ser convertido.",
+      "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido.",
+      "unsupportedReference": "Este documento faz referência a um recurso externo em {element} {attribute}, portanto não pode ser convertido."
+    },
     "external": {
       "confirmDescription": "Você está prestes a acessar um site externo.",
       "confirmTitle": "Abrir link externo?",
@@ -4223,6 +4238,22 @@
       "guestStorageUnavailable": "Não foi possível salvar destaques e notas nesta aba.",
       "highlight": "Destacar",
       "highlightedPassage": "Passagem destacada",
+      "history": {
+        "colorRestored": "Cor restaurada",
+        "commentRemoved": "Comentário removido",
+        "commentRestored": "Comentário restaurado",
+        "highlightRemoved": "Destaque removido",
+        "highlightRestored": "Destaque restaurado",
+        "markChanged": "Este destaque ou comentário foi alterado em outro lugar e, por isso, foi mantido como está.",
+        "markGone": "Este destaque ou comentário não existe mais.",
+        "nothingToRedo": "Nada para refazer",
+        "nothingToUndo": "Nada para desfazer",
+        "redoShortcut": "Refazer alteração de destaque ou comentário",
+        "styleRestored": "Estilo restaurado",
+        "textRestored": "Texto do comentário restaurado",
+        "undoShortcut": "Desfazer alteração de destaque ou comentário",
+        "visibilityRestored": "Compartilhamento restaurado"
+      },
       "removeHighlight": "Remover destaque",
       "sharedBadge": "Compartilhado",
       "styleHighlight": "Destaque",
@@ -4734,6 +4765,7 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
+    "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
     "continueInChat": "Continuar no chat",
@@ -4791,6 +4823,7 @@
     "savedSearchesEmpty": "Salve uma pesquisa para usá-la novamente.",
     "scopeFilter": "Escopo da pesquisa",
     "scopePlaceholderAll": "Pesquisar em todas as <scope>fontes</scope>…",
+    "scopePlaceholderCaseLaw": "Pesquisar na <scope>jurisprudência</scope>…",
     "scopePlaceholderMatters": "Pesquisar em todos os <scope>casos</scope>…",
     "scopePlaceholderRegistries": "Pesquisar em <scope>registros</scope>…",
     "scopeRegistries": "Registros",
@@ -4940,7 +4973,7 @@
       "description": "Use o stella pelo seu assistente de IA e veja o que tem acesso à sua conta.",
       "developerDescription": "Endereços do servidor e a ferramenta de linha de comando, para configurações técnicas.",
       "developerTitle": "Acesso para desenvolvedores",
-      "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento.",
+      "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento. As sessões do navegador criadas por esta conexão também serão encerradas.",
       "disconnectConfirmTitle": "Desconectar {clientName}?",
       "disconnectSuccess": "{clientName} foi desconectado",
       "integrationsDescription": "Serviços externos que a IA pode usar por você, como seu repositório de documentos.",
@@ -5993,6 +6026,7 @@
       "downloadFailed": "Falha ao baixar",
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
+      "emptyFile": "O arquivo está vazio.",
       "includeReferenceNumber": "Incluir número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",

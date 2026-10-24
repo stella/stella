@@ -15,9 +15,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { makeSignature } from "better-auth/crypto";
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
@@ -26,6 +25,7 @@ import { Temporal } from "@stll/time";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { session as authSession } from "@/api/db/auth-schema";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import { isRecord } from "@/api/lib/type-guards";
@@ -125,7 +125,7 @@ const readRows = async (client: SQL) => {
          ORDER BY a.id
          LIMIT ${MAX_SIGN_IN_ROWS + 1}
       `;
-      const sessions = await drizzle({ client })
+      const sessions = await createDatabase({ client })
         .select({ token: authSession.token, userId: authSession.userId })
         .from(authSession)
         .where(liveSessionPredicate(new Date()))
@@ -240,7 +240,7 @@ const run = async (
     );
   }
   const { oauthBaseUrl, sessionSample } = parsed.value;
-  const client = new SQL({
+  const client = createSqlClient({
     connectionTimeout: DATABASE_CONNECTION_TIMEOUT_SECONDS,
     max: 1,
     url: databaseUrl,
@@ -259,7 +259,7 @@ const run = async (
     kid: SIGNING_KEY_ID,
     use: "sig",
   };
-  const database = drizzle({ client });
+  const database = createDatabase({ client });
   // A throwaway secret: nothing signed here outlives the replay.
   const secret = Bun.randomUUIDv7() + Bun.randomUUIDv7();
   const auth = betterAuth({

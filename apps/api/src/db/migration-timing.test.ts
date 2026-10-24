@@ -42,7 +42,7 @@ describe("timed", () => {
     });
     expect(result).toEqual({ type: "deferred" });
     expect(records).toEqual([
-      { ...step, outcome: "deferred", durationMs: 1251 },
+      { ...step, outcome: "deferred", durationMs: 1251, retriesSpent: 0 },
     ]);
   });
 
@@ -62,7 +62,80 @@ describe("timed", () => {
         }),
       ),
     ).toBe(failure);
-    expect(records).toEqual([{ ...step, outcome: "failed", durationMs: 900 }]);
+    expect(records).toEqual([
+      { ...step, outcome: "failed", durationMs: 900, retriesSpent: 0 },
+    ]);
+  });
+
+  test("a deferred online phase emits one terminal record with the retries spent in that phase", async () => {
+    const { records, timing } = recordingTiming([10, 30]);
+    let retries = 4;
+    timing.retriesSpent = () => retries;
+
+    await timed({
+      timing,
+      work: async () => {
+        retries += 3;
+        return await Promise.resolve({ type: "deferred" as const });
+      },
+      describe: ({ type }) => ({
+        event: "migrate.phase_duration",
+        phase: "online",
+        outcome: type,
+      }),
+      failure: {
+        event: "migrate.phase_duration",
+        phase: "online",
+        outcome: "failed",
+      },
+    });
+
+    expect(records).toEqual([
+      {
+        event: "migrate.phase_duration",
+        phase: "online",
+        outcome: "deferred",
+        durationMs: 20,
+        retriesSpent: 3,
+      },
+    ]);
+  });
+
+  test("a failed schema phase emits one terminal record with its retries spent", async () => {
+    const { records, timing } = recordingTiming([10, 30]);
+    let retries = 2;
+    timing.retriesSpent = () => retries;
+    const failure = new Error("schema phase failed");
+    const fields = {
+      event: "migrate.phase_duration",
+      phase: "schema",
+      laneWaitMs: null,
+      appliedCount: null,
+    } as const;
+
+    expect(
+      await rejectionOf(
+        timed({
+          timing,
+          work: async () => {
+            retries += 5;
+            await Promise.resolve();
+            throw failure;
+          },
+          describe: () => ({ ...fields, outcome: "applied" }),
+          failure: { ...fields, outcome: "failed" },
+        }),
+      ),
+    ).toBe(failure);
+
+    expect(records).toEqual([
+      {
+        ...fields,
+        outcome: "failed",
+        durationMs: 20,
+        retriesSpent: 5,
+      },
+    ]);
   });
 
   test("a clock that steps back never reports a negative duration", async () => {

@@ -16,8 +16,8 @@ import {
 import type {
   CitationAnchorSource,
   DecisionProvisionAnchor,
-  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
 } from "@stll/decision-reader/reader-types";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";

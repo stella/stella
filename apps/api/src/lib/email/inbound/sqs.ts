@@ -1,11 +1,11 @@
 import {
   ChangeMessageVisibilityBatchCommand,
   DeleteMessageCommand,
-  ReceiveMessageCommand,
   type Message,
+  ReceiveMessageCommand,
   type SQSClient,
 } from "@aws-sdk/client-sqs";
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";

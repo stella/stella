@@ -47,7 +47,9 @@ type CourtRow = CorpusStatus["courts"][number];
  * sees. The dot is green only while the newest change is inside the window; a
  * stale corpus says when it last changed instead of claiming to be current.
  * Nothing is shown until the status is known; a dot that cannot say when
- * would be a decoration.
+ * would be a decoration. Its box is held meanwhile: the badge is often the
+ * row's only content, so an empty slot would collapse the row and push the
+ * page down when a newly picked country's status arrives.
  */
 export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const t = useTranslations();
@@ -60,7 +62,14 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
 
   const updatedAt = status?.updatedAt ?? null;
   if (status === undefined || updatedAt === null) {
-    return null;
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "invisible")}
+      >
+        {t("caseLaw.coverage.healthCurrent")}
+      </span>
+    );
   }
   const upToDate = isWithinLast(updatedAt, UP_TO_DATE_WINDOW_SECONDS);
   const updatedAtDate = parseDeterministicDate(updatedAt);

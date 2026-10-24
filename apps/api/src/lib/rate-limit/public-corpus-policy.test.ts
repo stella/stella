@@ -6,8 +6,8 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import {
-  publicReadTimeoutError,
   PUBLIC_READ_TIMEOUT_CODE,
+  publicReadTimeoutError,
   runPublicReadRequest,
 } from "@/api/lib/legal-search/public-read-timeout";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";

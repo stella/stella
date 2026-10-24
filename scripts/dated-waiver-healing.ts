@@ -15,10 +15,10 @@ import * as v from "valibot";
 
 import {
   createPrivateTaskSink,
-  probeSourceFingerprint,
-  waiverKey,
   type FixEvidence,
+  probeSourceFingerprint,
   type RemovalAssessment,
+  waiverKey,
 } from "./dated-waiver-fix-task";
 import {
   createProbeBudget,
@@ -30,19 +30,19 @@ import {
   githubRequest,
   listRemovalProposals,
   orphanRemovalProposals,
-  type RemovalProposal,
   type PublishedRemoval,
   publishRemoval,
+  type RemovalProposal,
   retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
+  type DatedWaiver,
   DAY_MS,
   dueWaivers,
   expiryInstant,
   loadWaivers,
-  type DatedWaiver,
 } from "./dated-waivers";
 
 const OUTPUT_LIMIT = 24_000;

@@ -13,4 +13,5 @@ export const documentsRoute = new Elysia({
     body: compareDocumentVersions.config.body,
     params: compareDocumentVersions.config.params,
     permissions: compareDocumentVersions.config.permissions,
+    accountAccess: compareDocumentVersions.config.accountAccess,
   });

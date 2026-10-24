@@ -3,13 +3,13 @@ import { dkimSign } from "mailauth";
 import { generateKeyPairSync } from "node:crypto";
 
 import {
-  createMailDnsResolver,
   createLocalMailVerifier,
+  createMailDnsResolver,
   domainsAlign,
   hasAlignedAuthentication,
+  type MailAuthentication,
   parseProviderAuthentication,
   verifyMailLocally,
-  type MailAuthentication,
 } from "@/api/lib/email/inbound/authentication";
 
 const provider = (value: string) =>

@@ -2,12 +2,12 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { utimesSync } from "node:fs";
 import {
+  mkdir,
   mkdtemp,
+  readdir,
+  readFile,
   rm,
   writeFile,
-  readFile,
-  mkdir,
-  readdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";

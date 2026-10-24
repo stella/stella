@@ -24,15 +24,15 @@ import type {
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  type OrgAIConfig,
   resolveCaching,
   resolveOrgAIModelForTask,
-  type OrgAIConfig,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import {
+  type AIErrorKind,
   classifyAIError,
   isUnanticipatedAIFailure,
-  type AIErrorKind,
 } from "@/api/lib/ai-error";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -41,19 +41,19 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   analysisFailureKeyTag,
-  failureClaimGuard,
-  analysisFailureRecord,
-  failureRetryPending,
-  failureStillHolds,
   type AnalysisFailureRecord,
+  analysisFailureRecord,
   type AnalysisReaderKey,
   type AnalysisRequestKind,
+  failureClaimGuard,
+  failureRetryPending,
+  failureStillHolds,
 } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
+  type AnalysisStore,
   analysisStore,
   writesDerivedAnalyses,
-  type AnalysisStore,
 } from "@/api/lib/case-law/analysis-store";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
@@ -61,8 +61,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
-  redactedProviderDiagnostic,
   type RedactedProviderDiagnostic,
+  redactedProviderDiagnostic,
 } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {

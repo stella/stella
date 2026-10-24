@@ -14,22 +14,28 @@ export const sharepointRoute = new Elysia({ prefix: "/sharepoint" })
   .guard({ validateAuth: true })
   .get("/oauth/callback", sharepointOAuthCallback.handler, {
     permissions: sharepointOAuthCallback.config.permissions,
+    accountAccess: sharepointOAuthCallback.config.accountAccess,
     query: sharepointOAuthCallback.config.query,
   })
   .put("/enablement", setSharepointEnablement.handler, {
     body: setSharepointEnablement.config.body,
     permissions: setSharepointEnablement.config.permissions,
+    accountAccess: setSharepointEnablement.config.accountAccess,
   })
   .post("/connect", connectSharepoint.handler, {
     permissions: connectSharepoint.config.permissions,
+    accountAccess: connectSharepoint.config.accountAccess,
   })
   .get("/connection", sharepointConnectionStatus.handler, {
     permissions: sharepointConnectionStatus.config.permissions,
+    accountAccess: sharepointConnectionStatus.config.accountAccess,
   })
   .delete("/connection", disconnectSharepoint.handler, {
     permissions: disconnectSharepoint.config.permissions,
+    accountAccess: disconnectSharepoint.config.accountAccess,
   })
   .get("/drive/root", listSharepointDriveRoot.handler, {
     permissions: listSharepointDriveRoot.config.permissions,
+    accountAccess: listSharepointDriveRoot.config.accountAccess,
     query: listSharepointDriveRoot.config.query,
   });

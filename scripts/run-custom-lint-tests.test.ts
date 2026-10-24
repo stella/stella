@@ -208,6 +208,46 @@ test("parallel batches retain a deliberately failing fixture and every passing f
   }
 });
 
+// Fixtures that fail on purpose run without GITHUB_ACTIONS, so bun test
+// writes no ::error annotation into the job that runs this file.
+const withoutCiAnnotations = () =>
+  Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => name !== "GITHUB_ACTIONS"),
+  );
+
+test("the workers receive exactly the environment the caller passes", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "custom-lint-env-"));
+  try {
+    const seen = path.join(directory, "seen.json");
+    const filename = path.join(directory, "env.test.ts");
+    writeFileSync(
+      filename,
+      `import { test } from "bun:test";
+import { writeFileSync } from "node:fs";
+test("env", () => {
+  writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ actions: process.env["GITHUB_ACTIONS"] ?? null, marker: process.env["OXLINT_RULE_COVERAGE_PATH"] ?? null }));
+});`,
+    );
+    expect(
+      await runCustomLintTests(
+        customLintTestCommands([], [filename]),
+        undefined,
+        {
+          ...withoutCiAnnotations(),
+          // Without a coverage path the runner leaves this one as the caller set it.
+          OXLINT_RULE_COVERAGE_PATH: "caller-value",
+        },
+      ),
+    ).toBe(0);
+    expect(JSON.parse(readFileSync(seen, "utf-8"))).toEqual({
+      actions: null,
+      marker: "caller-value",
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("worker coverage merges complete records and preserves prior caller coverage", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "custom-lint-coverage-"));
   try {
@@ -229,8 +269,13 @@ test("${outcome}", () => {
       );
       return filename;
     });
+    // The report fixture fails on purpose: it must not annotate the CI run.
     expect(
-      await runCustomLintTests(customLintTestCommands([], paths), coveragePath),
+      await runCustomLintTests(
+        customLintTestCommands([], paths),
+        coveragePath,
+        withoutCiAnnotations(),
+      ),
     ).toBe(1);
     const records = readFileSync(coveragePath, "utf-8").trim().split("\n");
     expect(records.length).toBe(101);
@@ -302,7 +347,7 @@ test("shared commands and inert text are accepted", () => {
   ).toEqual([]);
 });
 
-// Both files must outlive Bun's 5s default; a preload-only budget protects one file.
+// Measured p95 is 20.2 s; both spawned files must outlive Bun's default timeout.
 test("the CLI budget reaches every sequential file and its removal fails", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "custom-lint-budget-"));
   try {
@@ -324,4 +369,4 @@ test("the CLI budget reaches every sequential file and its removal fails", () =>
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-}, 30_000);
+}, 45_000);

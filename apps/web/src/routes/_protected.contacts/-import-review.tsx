@@ -490,7 +490,7 @@ export const ImportCandidateCard = ({
                 index: format.number(ordinal),
               })}
           </span>
-          <span className="text-muted-foreground font-normal">
+          <span>
             {t("contacts.importStudio.sourceRow", {
               index: format.number(row.rowNumber),
             })}

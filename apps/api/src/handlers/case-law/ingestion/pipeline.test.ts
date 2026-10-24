@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
@@ -55,12 +55,12 @@ import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/o
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
   splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
@@ -79,8 +79,8 @@ import {
   fitsDecisionSearchCandidateRow,
   markListingOnly,
   observedDocketOf,
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";

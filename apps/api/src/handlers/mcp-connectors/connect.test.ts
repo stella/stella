@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  mcpConnectorAuthorizationReviews,
   mcpOAuthState,
   mcpUserConnections,
-  mcpConnectorAuthorizationReviews,
 } from "@/api/db/schema";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
 import { toSafeId } from "@/api/lib/branded-types";

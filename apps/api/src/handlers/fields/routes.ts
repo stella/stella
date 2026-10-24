@@ -15,16 +15,20 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
   .post("/", upsertField.handler, {
     body: upsertField.config.body,
     permissions: upsertField.config.permissions,
+    accountAccess: upsertField.config.accountAccess,
   })
   .patch("/kanban-placement", updateKanbanPlacement.handler, {
     body: updateKanbanPlacement.config.body,
     permissions: updateKanbanPlacement.config.permissions,
+    accountAccess: updateKanbanPlacement.config.accountAccess,
   })
   .patch("/metadata", updateCellMetadata.handler, {
     body: updateCellMetadata.config.body,
     permissions: updateCellMetadata.config.permissions,
+    accountAccess: updateCellMetadata.config.accountAccess,
   })
   .patch("/metadata-batch", markColumnFlag.handler, {
     body: markColumnFlag.config.body,
     permissions: markColumnFlag.config.permissions,
+    accountAccess: markColumnFlag.config.accountAccess,
   });

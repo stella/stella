@@ -14,8 +14,8 @@ import {
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
-  caseLawStatuteCitationCounts,
   caseLawSources,
+  caseLawStatuteCitationCounts,
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
 import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";

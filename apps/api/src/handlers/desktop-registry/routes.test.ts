@@ -10,8 +10,8 @@ import { createDesktopEditHandoff } from "@/api/handlers/entities/desktop-edit-h
 import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoffs";
 import {
   authorizeDesktopAccount,
-  authorizeDesktopRegistry,
   authorizeDesktopMember,
+  authorizeDesktopRegistry,
 } from "@/api/lib/business-registries/desktop/auth";
 import {
   DESKTOP_ACCOUNT_PERMISSION,

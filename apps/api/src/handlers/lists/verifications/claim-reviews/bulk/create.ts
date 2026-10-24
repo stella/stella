@@ -4,7 +4,7 @@
  * so the record still says, per claim, who accepted it and that it was bulk.
  */
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { legalListClaimReviewEvents } from "@/api/db/schema";

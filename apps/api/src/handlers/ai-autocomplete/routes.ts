@@ -32,4 +32,5 @@ export const aiAutocompleteRoute = new Elysia({
   .post("/stream", autocompleteStream.handler, {
     body: autocompleteStream.config.body,
     permissions: autocompleteStream.config.permissions,
+    accountAccess: autocompleteStream.config.accountAccess,
   });

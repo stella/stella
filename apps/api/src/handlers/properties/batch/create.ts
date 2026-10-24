@@ -16,9 +16,9 @@ import { LIMITS } from "@/api/lib/limits";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
-  DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
   createPropertyBodySchema,
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
 } from "@/api/lib/properties/create-schema";
 import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";

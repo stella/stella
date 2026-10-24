@@ -6,8 +6,8 @@ import { sha256Hex } from "@stll/sha256/browser";
 
 import {
   completeFolioSeedReceipt,
-  waitForFolioCollaborationSeed,
   FolioCollaborationSeedPreparingError,
+  waitForFolioCollaborationSeed,
 } from "./folio-collaboration-seed-receipt";
 
 test("captures the pristine cut before later edits and waits for its receipt plus durable flush", async () => {

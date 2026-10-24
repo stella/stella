@@ -14,8 +14,8 @@ import {
 import { MONITORING_SESSION_INDEXES } from "@/api/lib/synthetic-principal/indexes";
 
 import {
-  REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
+  REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
@@ -176,6 +176,42 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legislation_documents_work_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (version_valid_from IS NOT NULL)",
+    isUnique: false,
+    name: "legislation_documents_work_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_publisher_identity_idx" ON public."legislation_documents" (source_id, eli, language, publisher_expression_id) WHERE identity_mode = \'publisher-expression\'',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language, publisher_expression_id) WHERE ((identity_mode)::text = 'publisher-expression'::text)",
+    isUnique: true,
+    name: "legislation_documents_publisher_identity_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NOT NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_current_lang_idx" ON public."legislation_documents" (source_id, eli, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_current_lang_idx",
+    tableName: "legislation_documents",
+  },
   ...MONITORING_SESSION_INDEXES,
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
@@ -194,6 +230,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
   },
+  // A provision's subtree of citing rows as one byte-ordered anchor range.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C")`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C")',
+    isUnique: false,
+    name: "case_law_provision_citations_work_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C") WHERE "work_eli" IS NOT NULL`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C") WHERE (work_eli IS NOT NULL)',
+    isUnique: false,
+    name: "case_law_provision_citations_eli_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
   // Bounded cross-publisher ruling lookup before a decision insert.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_republished_ruling_idx" ON public."case_law_decisions" ("country", "court", "docket_family_key", "id") WHERE "docket_family_key" IS NOT NULL`,
@@ -202,6 +255,14 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_decisions_republished_ruling_idx",
     tableName: "case_law_decisions",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "session_originConsentId_idx" ON public."session" USING btree ("origin_consent_id")',
+    definitionBody: "ON public.session USING btree (origin_consent_id)",
+    isUnique: false,
+    name: "session_originConsentId_idx",
+    tableName: "session",
   },
   {
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
@@ -636,6 +697,21 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     replacementNames: ["case_law_decisions_search_candidate_published_idx"],
   },
   {
+    legacyName: "legislation_documents_eli_version_lang_idx",
+    replacementNames: [
+      "legislation_documents_work_version_lang_idx",
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_version_lang_idx",
+    ],
+  },
+  {
+    legacyName: "legislation_documents_eli_current_lang_idx",
+    replacementNames: [
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_current_lang_idx",
+    ],
+  },
+  {
     legacyName: "legal_reader_answer_messages_answer_idx",
     replacementNames: ["legal_reader_answer_messages_answer_sequence_idx"],
   },
@@ -649,6 +725,16 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
       "case_law_decisions_source_document_idx",
       "case_law_decisions_source_case_lang_null_idx",
     ],
+  },
+  // A provision's citing rows are its whole subtree, which the exact-anchor
+  // walks cannot seek under the database collation.
+  {
+    legacyName: "case_law_provision_citations_work_anchor_idx",
+    replacementNames: ["case_law_provision_citations_work_subtree_idx"],
+  },
+  {
+    legacyName: "case_law_provision_citations_eli_anchor_idx",
+    replacementNames: ["case_law_provision_citations_eli_subtree_idx"],
   },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
@@ -1408,6 +1494,9 @@ export const ensureOnlineIndexValid = async ({
         // DROP before CREATE would let a duplicate commit in between.
         await session.run(reindexIndexConcurrently(index));
         return;
+      }
+      if (!declaresOnlineBuild(index)) {
+        panic(`Required migration index ${index.name} is missing`);
       }
       await session.run(createIndexConcurrently(index));
     },

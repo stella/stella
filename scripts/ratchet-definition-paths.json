@@ -1,5 +1,6 @@
 [
   ".oxlint-plugins/database-access.ts",
+  ".oxlint-plugins/eden-client.ts",
   ".oxlint-plugins/module-id.ts",
   "apps/api/src/lib/db/status-tables.gen.ts",
   "apps/api/src/lib/errors/graded-handler-codes.ts",

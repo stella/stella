@@ -47,8 +47,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
-  timestampCasToken,
   type TimestampCasToken,
+  timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";

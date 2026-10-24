@@ -2,9 +2,9 @@ import {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_RESOURCE_HREF_PREFIX,
   EMAIL_CITATION_HREF_PREFIX,
+  OFFICE_CITATION_HREF_PREFIX,
   parseChatDecisionPassageHref,
   parseEmailCitationHref,
-  OFFICE_CITATION_HREF_PREFIX,
   parseOfficeCitationHref,
 } from "@stll/api-contract";
 import type {

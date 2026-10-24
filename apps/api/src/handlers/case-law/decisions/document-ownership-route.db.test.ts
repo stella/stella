@@ -5,8 +5,8 @@ import Elysia, { t } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
-  readThroughDeferredDocument,
   type OnDemandDocumentDeps,
+  readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";

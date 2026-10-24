@@ -3,8 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   resourceUpdatedChange,
 } from "@stll/api-contract";
 

@@ -44,6 +44,7 @@ const workflowSchema = v.looseObject({
     v.looseObject({
       if: v.optional(v.string()),
       permissions: v.optional(v.record(v.string(), v.string())),
+      outputs: v.optional(v.record(v.string(), v.string())),
       concurrency: v.optional(
         v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
       ),
@@ -196,7 +197,10 @@ test("full audits run on main and every six hours with one stable remediation id
   expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
   const remediation = step(auditWorkflow, "remediate", "Open one remediation");
   expect(auditWorkflow.jobs["remediate"]?.if).toBe(
-    "always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'",
+    "always() && github.event_name != 'pull_request' && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
+  );
+  expect(auditWorkflow.jobs["audit"]?.outputs?.["stale_acceptance"]).toContain(
+    "steps.full-audit.outputs.stale_acceptance || 'false'",
   );
   expect(remediation.env?.["FIX_BRANCH"]).toBe(
     "automation/dependency-audit-fix",

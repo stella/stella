@@ -8,10 +8,13 @@ import type {
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
+import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
   brandPersistedDesktopEditSessionId,
@@ -148,6 +151,106 @@ export const isEventStreamResponse = (response: Response): boolean =>
     ?.trim()
     .toLowerCase() === SSE_MEDIA_TYPE;
 
+// ── Stream bindings ─────────────────────────────────────
+//
+// An event stream outlives the request that authorized it, so its credential
+// can end while it still delivers: a session signed out elsewhere, revoked
+// from the account page, or expired. Every event stream is served bound to
+// the credential that opened it, and a sweep ends each one whose credential
+// no longer holds, exactly as if its client had disconnected. The sweep reads
+// the credential's live state, never a cached copy, so a stream never
+// outlives its credential by more than one interval
+// (`LIMITS.sseCredentialRecheckMs`), on any path a credential can end.
+
+const SESSION_LIVENESS_READ_FAILURE_SINK = failureSink({
+  event: "sse.session_liveness_read_failed",
+  expected: [],
+});
+const CREDENTIAL_REVALIDATION_FAILURE_SINK = failureSink({
+  event: "sse.credential_revalidation_failed",
+  expected: [],
+});
+const BOUND_STREAM_CANCEL_FAILURE_SINK = failureSink({
+  event: "sse.bound_stream_cancel_failed",
+  expected: [],
+});
+
+/** What authorized an event stream. */
+export type SseStreamBinding =
+  /** A session: the stream ends once the session is gone or expired. */
+  | { kind: "session"; sessionId: string; userId: SafeId<"user"> }
+  /**
+   * Any other credential. `revalidate` repeats the credential's own check and
+   * resolves `false` once it no longer holds; a rejection means the check
+   * could not run, and the stream waits for the next sweep.
+   */
+  | { kind: "credential"; revalidate: () => Promise<boolean> };
+
+type SseSessionBinding = Extract<SseStreamBinding, { kind: "session" }>;
+
+/** The ids among `sessions` whose session exists, belongs to that user and
+ *  has not expired. */
+export type SseSessionLivenessReader = (
+  sessions: readonly Omit<SseSessionBinding, "kind">[],
+) => Promise<ReadonlySet<string>>;
+
+type BoundStream = { binding: SseStreamBinding; end: () => void };
+
+/** Every event stream open on THIS instance, with what authorized it. */
+const boundStreams = new Set<BoundStream>();
+
+/**
+ * End every bound stream whose credential no longer holds. All sessions are
+ * read in one call, whatever the number of streams; a read or a
+ * revalidation that fails ends nothing, and the next sweep asks again.
+ */
+export const sweepBoundStreams = async (
+  readLiveSessions: SseSessionLivenessReader,
+): Promise<void> => {
+  const streams = [...boundStreams];
+  const sessions = new Map<string, Omit<SseSessionBinding, "kind">>();
+  for (const { binding } of streams) {
+    if (binding.kind === "session") {
+      sessions.set(binding.sessionId, {
+        sessionId: binding.sessionId,
+        userId: binding.userId,
+      });
+    }
+  }
+  const live =
+    sessions.size === 0
+      ? Result.ok(new Set<string>())
+      : await Result.tryPromise(
+          async () => await readLiveSessions([...sessions.values()]),
+        );
+  if (Result.isError(live)) {
+    observeFailure(live.error, { sink: SESSION_LIVENESS_READ_FAILURE_SINK });
+  }
+  await Promise.all(
+    streams.map(async ({ binding, end }) => {
+      if (binding.kind === "session") {
+        if (Result.isOk(live) && !live.value.has(binding.sessionId)) {
+          end();
+        }
+        return;
+      }
+      const held = await Result.tryPromise(binding.revalidate);
+      if (Result.isError(held)) {
+        observeFailure(held.error, {
+          sink: CREDENTIAL_REVALIDATION_FAILURE_SINK,
+        });
+        return;
+      }
+      if (!held.value) {
+        end();
+      }
+    }),
+  );
+};
+
+/** The reason a bound stream's producer is cancelled with. */
+const CREDENTIAL_ENDED = "The credential that opened this stream has ended.";
+
 type HeartbeatState = "closed" | "open";
 
 /**
@@ -160,10 +263,12 @@ const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
 
 const withHeartbeatFrames = (
   source: ReadableStream<Uint8Array>,
+  binding: SseStreamBinding,
 ): ReadableStream<Uint8Array> => {
   const reader = takeStreamReaderOwnership(source);
   let state: HeartbeatState = "open";
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let bound: BoundStream | undefined;
 
   const disarm = (): void => {
     if (timer !== undefined) {
@@ -174,6 +279,9 @@ const withHeartbeatFrames = (
   const closeHeartbeat = (): void => {
     state = "closed";
     disarm();
+    if (bound !== undefined) {
+      boundStreams.delete(bound);
+    }
   };
   // Armed from the last byte written, not on a fixed schedule: a stream that is
   // producing already keeps the connection busy and must not be padded.
@@ -194,6 +302,23 @@ const withHeartbeatFrames = (
   return new ReadableStream<Uint8Array>({
     start: (controller) => {
       arm(controller);
+      // Ending for the credential is the client leaving: the producer is
+      // cancelled as on a disconnect (the chat viewer detaches, the turn runs
+      // on), and the reader sees the stream end.
+      bound = {
+        binding,
+        end: () => {
+          if (state === "closed") {
+            return;
+          }
+          closeHeartbeat();
+          closeControllerQuietly(controller);
+          reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
+            observeFailure(error, { sink: BOUND_STREAM_CANCEL_FAILURE_SINK });
+          });
+        },
+      };
+      boundStreams.add(bound);
     },
     pull: async (controller) => {
       const result = await Result.tryPromise({
@@ -232,8 +357,11 @@ const withHeartbeatFrames = (
  * headers as well as the heartbeat, so an event stream cannot be served with a
  * cacheable or buffered one.
  */
-export const sseResponse = (body: ReadableStream<Uint8Array>): Response =>
-  new Response(withHeartbeatFrames(body), { headers: SSE_HEADERS });
+export const sseResponse = (
+  body: ReadableStream<Uint8Array>,
+  binding: SseStreamBinding,
+): Response =>
+  new Response(withHeartbeatFrames(body, binding), { headers: SSE_HEADERS });
 
 /**
  * Add the heartbeat to an event-stream `Response` built elsewhere: the chat
@@ -241,10 +369,13 @@ export const sseResponse = (body: ReadableStream<Uint8Array>): Response =>
  * and the MCP transport, which owns its own body. Status, status text, and
  * headers carry over untouched.
  */
-export const withSseHeartbeat = (response: Response): Response => {
+export const withSseHeartbeat = (
+  response: Response,
+  binding: SseStreamBinding,
+): Response => {
   const body =
     response.body ?? panic("Event-stream response was built without a body");
-  return new Response(withHeartbeatFrames(body), {
+  return new Response(withHeartbeatFrames(body, binding), {
     headers: response.headers,
     status: response.status,
     statusText: response.statusText,
@@ -1053,6 +1184,8 @@ type CreateSseRedisClient = () => SseRedisClient;
  * close every connection on that channel's first event).
  */
 export type SseConnectionAuthorizers = {
+  /** Live session state for the bound-stream sweep. */
+  sessions: SseSessionLivenessReader;
   user: UserConnectionAuthorizer;
   workspace: WorkspaceConnectionAuthorizer;
 };
@@ -1065,6 +1198,8 @@ type StartSseDependencies = {
 
 type SseLifecycle = {
   createClient: CreateSseRedisClient;
+  /** Runs `sweepBoundStreams` every `LIMITS.sseCredentialRecheckMs`. */
+  credentialSweepTimer: ReturnType<typeof setInterval>;
   keepAliveTimer: ReturnType<typeof setInterval>;
   publishAccessRevoked: typeof publishWorkspaceAccessRevoked;
   publishWorkspace: typeof publishWorkspaceEvent;
@@ -1342,10 +1477,30 @@ export const startSse = (
     return;
   }
 
+  // Sweeps never overlap: a slow liveness read skips the next tick instead of
+  // stacking reads behind it.
+  let sweeping = false;
+  const sweepCredentials = (): void => {
+    if (sweeping) {
+      return;
+    }
+    sweeping = true;
+    detached(
+      sweepBoundStreams(authorizers.sessions).finally(() => {
+        sweeping = false;
+      }),
+      "sse.credential-sweep",
+    );
+  };
+
   const lifecycle: SseLifecycle = {
     createClient:
       dependencies.createClient ??
       (() => createRedisClient({ storeClass: "cache" })),
+    credentialSweepTimer: setInterval(
+      sweepCredentials,
+      LIMITS.sseCredentialRecheckMs,
+    ),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
     publishAccessRevoked:
       dependencies.publishAccessRevoked ?? publishWorkspaceAccessRevoked,
@@ -1356,6 +1511,7 @@ export const startSse = (
     generation: 0,
   };
   lifecycle.keepAliveTimer.unref();
+  lifecycle.credentialSweepTimer.unref();
   activeLifecycle = lifecycle;
 
   // First attempt runs immediately; only retries are timer-scheduled.
@@ -1381,6 +1537,7 @@ export const stopSse = (): void => {
   activeLifecycle = null;
 
   clearInterval(lifecycle.keepAliveTimer);
+  clearInterval(lifecycle.credentialSweepTimer);
 
   if (lifecycle.attachTimer) {
     clearTimeout(lifecycle.attachTimer);

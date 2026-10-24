@@ -14,14 +14,14 @@ import {
   EmailParseError,
   emailToHtml,
   emailToPreview,
+  isEmailAttachmentPreviewable,
+  type ParsedEmail,
   parsedEmailToText,
   parseEmail,
-  type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
-  sanitizeEmailBodyHtml,
   resolveEmailAttachmentMimeType,
-  isEmailAttachmentPreviewable,
+  sanitizeEmailBodyHtml,
 } from "./email-to-html";
 
 const toArrayBuffer = (value: string): ArrayBuffer => {

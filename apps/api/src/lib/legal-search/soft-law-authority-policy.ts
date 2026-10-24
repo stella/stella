@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
+
 import {
-  type SoftLawAuthority,
-  type SoftLawMetadata,
-  type SOFT_LAW_KINDS,
-  SoftLawItemError,
   isTextlessExtraction,
+  type SoftLawAuthority,
   type SoftLawDocumentInput,
+  SoftLawItemError,
+  type SoftLawMetadata,
 } from "./soft-law-types";
 
 type KindDisposition =
@@ -18,7 +19,7 @@ type AuthorityPolicy = {
   identitySeries:
     | { type: "none" }
     | { type: "source-kind"; values: readonly string[] };
-  kinds: Record<(typeof SOFT_LAW_KINDS)[number], KindDisposition>;
+  kinds: Record<GuidanceKind, KindDisposition>;
 };
 
 const eligible = { type: "eligible" } as const;

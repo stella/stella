@@ -13,8 +13,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
-  corpusRankingCursorTarget,
   corpusQueryRankingMode,
+  corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";

@@ -67,8 +67,8 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
-  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
+  CHAT_MESSAGE_RENDER_POLICY,
   collectAnonRestorations,
   DATA_URL_PREFIX,
   decodeBase64DataUrl,
@@ -103,6 +103,7 @@ import {
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canRetryChatRequest,
 } from "@/components/chat/chat-user-actions";
 import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -131,8 +132,8 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
-  findChatRequestError,
   type ChatRequestError,
+  findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
@@ -426,6 +427,7 @@ export const ChatThreadMessages = ({
                             messages,
                           })}
                           canRetry={canRetryAssistantMessage({
+                            error,
                             isGenerating: generationActive,
                             messageId: message.id,
                             messages,
@@ -1132,9 +1134,12 @@ export const ChatErrorMessage = ({
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
-  const errorMessage = rejectedInput
-    ? t("errors.api.validation")
-    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
+  let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
+  if (!canRetryChatRequest(error)) {
+    errorMessage = t("chat.sendErrorContinuationRejected");
+  } else if (rejectedInput) {
+    errorMessage = t("errors.api.validation");
+  }
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1180,7 +1185,7 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
-          {onResend && (
+          {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
               onClick={() => {

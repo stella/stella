@@ -6,8 +6,8 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
-  TEXT_FIELD_TYPE,
   TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {

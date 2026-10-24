@@ -751,9 +751,14 @@ describe("confirmed file rename state", () => {
           }),
         ),
         v.object({
-          tabs: v.array(v.object({ label: v.string(), fileName: v.string() })),
+          version: v.literal(1),
+          value: v.object({
+            tabs: v.array(
+              v.object({ label: v.string(), fileName: v.string() }),
+            ),
+          }),
         }),
-      )?.tabs,
+      )?.value.tabs,
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

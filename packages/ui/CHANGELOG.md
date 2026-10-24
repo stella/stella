@@ -1,5 +1,31 @@
 # @stll/ui
 
+## 0.50.2
+
+### Patch Changes
+
+- [#6204](https://github.com/stella/stella/pull/6204) [`81f8075`](https://github.com/stella/stella/commit/81f80750038583d4b7377622cc93108c4c7c89ab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `HorizontalScroller`: a horizontal scroll area with a visible scrollbar, edge fades, previous and next buttons, vertical-wheel scrolling and focus scroll-into-view.
+
+## 0.50.1
+
+### Patch Changes
+
+- [#6447](https://github.com/stella/stella/pull/6447) [`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow landing row icons to grow to fit court abbreviations.
+
+## 0.50.0
+
+### Minor Changes
+
+- [#5903](https://github.com/stella/stella/pull/5903) [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Name the copy glyph by meaning: `CopyToClipboardIcon` (drawn only by `CopyButton`), `CopyFromMenuIcon` and `DuplicateIcon` replace the plain `CopyIcon` export. `CopyButton` takes a `labelClassName` for its visible label, and `useCopyConfirmation` exposes its in-place confirmation for copy controls that cannot be a glyph button.
+
+- [#6664](https://github.com/stella/stella/pull/6664) [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add start alignment to select triggers and remove inner horizontal padding from unstyled inputs.
+
+- [#6572](https://github.com/stella/stella/pull/6572) [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` no longer exports `BotIcon`. Use `AiActionIcon` for something the AI does and `CpuIcon` for models and providers.
+
+### Patch Changes
+
+- [#6203](https://github.com/stella/stella/pull/6203) [`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A host can trigger the copy button confirmation from outside its own click with `useCopiedFeedback` and `CopyFeedback`.
+
 ## 0.49.4
 
 ### Patch Changes

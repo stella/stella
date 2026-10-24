@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Install only what the git hooks import, once, in a checkout that has no
-# dependencies yet. The root workspace declares every package the hooks load;
-# pass a workspace directory for a hook that also runs that workspace's code.
+# dependencies yet. The root workspace declares every package the hooks load
+# or run (scripts/hook-dependencies.test.ts walks their imports and package
+# executables to prove it); pass a workspace directory for a hook that also
+# runs that workspace's code.
 # A full `bun install` covers all of this, so a checkout that has one is a
 # no-op. Lifecycle scripts stay off: the hooks never need generated files.
 #

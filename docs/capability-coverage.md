@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -136,6 +136,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
 | `documents.compare` | write | stella:documents_write | — | curated tool `compare_documents` |
+
+## docx-suggestions
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `docx-suggestions.list` | read | stella:read | — | generic invoke → `stella capability docx-suggestions list` |
+| `docx-suggestions.resolve` | write | stella:documents_write | — | generic invoke → `stella capability docx-suggestions resolve` |
+| `docx-suggestions.revert` | write | stella:documents_write | — | generic invoke → `stella capability docx-suggestions revert` |
 
 ## entities
 
@@ -322,6 +330,21 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.workflow.get` | read | stella:read | — | generic invoke → `stella capability matters workflow-get` |
 | `matters.workflow.start` | write | stella:matters_write | — | generic invoke → `stella capability matters workflow-start` |
 | `matters.workflow.targets.count` | read | stella:read | — | generic invoke → `stella capability matters workflow-targets-count` |
+
+## memories
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `memories.create` | write | stella:memory_write | FEATURE_AI_MEMORY | generic invoke → `stella capability memories create` |
+| `memories.list` | read | stella:chat | FEATURE_AI_MEMORY | generic invoke → `stella capability memories list` |
+| `memories.update` | write | stella:memory_write | FEATURE_AI_MEMORY | generic invoke → `stella capability memories update` |
+
+## notifications
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `notifications.list` | read | stella:read | — | generic invoke → `stella capability notifications list` |
+| `notifications.read-state.update` | write | stella:matters_write | — | generic invoke → `stella capability notifications read-state-update` |
 
 ## number-series
 
@@ -684,21 +707,21 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 4 |
-| assistant_chat | 18 |
+| assistant_chat | 15 |
 | auth_plumbing | 36 |
 | billing_ui | 1 |
 | chat_thread_ui | 17 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 25 |
+| document_processing | 22 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_tool_ui | 10 |
+| native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
-| search_ui | 18 |
+| search_ui | 19 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 20 |

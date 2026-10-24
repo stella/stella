@@ -5,8 +5,8 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
 import { isCountryCode } from "@stll/country-codes";
@@ -52,15 +52,15 @@ import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nat
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
+  CHECK_COUNTERPARTY_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LINK_MATTER_CONTACT_LINK_PROJECTION,
-  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LIST_CONTACTS_PROJECTION,
   LIST_TASKS_DETAIL_PROJECTION,
   LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
-  CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -114,6 +114,7 @@ import {
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
+  entityIdInputSchema,
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
@@ -124,7 +125,6 @@ import {
   structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
-  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {

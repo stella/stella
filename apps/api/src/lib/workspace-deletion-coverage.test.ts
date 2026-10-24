@@ -3,8 +3,8 @@ import { is } from "drizzle-orm";
 import {
   foreignKey,
   getTableConfig,
-  pgTable,
   PgTable,
+  pgTable,
   text,
 } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";

@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 // A provider's error message can echo request content, so it is never logged.
@@ -57,6 +59,11 @@ export const providerErrorReason = (message: string): ProviderErrorReason =>
 const PROVIDER_ERROR_TOKEN = /^[\w.:[\]-]{1,64}$/u;
 const PROVIDER_ERROR_FIELDS = ["code", "param", "type"] as const;
 
+const readProviderField = (value: object, field: string): unknown => {
+  const result = Result.try((): unknown => Reflect.get(value, field));
+  return Result.isError(result) ? undefined : result.value;
+};
+
 /** The provider error body `detail` carries: itself, or its `error` field
  *  (an SDK error keeps the body there). */
 const providerErrorBodyOf = (
@@ -65,7 +72,7 @@ const providerErrorBodyOf = (
   if (!isRecord(detail)) {
     return undefined;
   }
-  const nested = detail["error"];
+  const nested = readProviderField(detail, "error");
   if (isRecord(nested)) {
     return nested;
   }
@@ -82,7 +89,7 @@ export const providerErrorFields = (
   }
   return Object.fromEntries(
     PROVIDER_ERROR_FIELDS.flatMap((field): [string, string][] => {
-      const value = body[field];
+      const value = readProviderField(body, field);
       if (typeof value !== "string" || value === "") {
         return [];
       }

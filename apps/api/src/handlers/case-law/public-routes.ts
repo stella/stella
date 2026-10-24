@@ -45,6 +45,7 @@ import {
   readCaseLawCorpusStatusQuerySchema,
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
+import readDecisionSummaryRoute from "@/api/handlers/case-law/decisions/summary/get";
 import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
@@ -492,7 +493,7 @@ const listSitemapShards = createSafeBoundedPublicHandler(
  * Public-read routes: no auth, no session, no organization context.
  * Decisions are public records; protected workspace features live elsewhere.
  */
-export const publicCaseLawRoute = new Elysia({
+const publicCaseLawContentRoute = new Elysia({
   prefix: "/case",
 })
   .use(
@@ -590,3 +591,20 @@ export const publicCaseLawRoute = new Elysia({
     query: listSitemapShardDecisions.config.query,
     response: listSitemapShardDecisions.config.response,
   });
+
+// The summary has no cursor hook. Keep its chain separate so the capability
+// compiler can prove its only route gate is the shared deployment flag.
+const publicDecisionSummaryRoute = new Elysia({ prefix: "/case" })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+    ),
+  )
+  .get("/decisions/:decisionId/summary", readDecisionSummaryRoute.handler, {
+    params: readDecisionSummaryRoute.config.params,
+    response: readDecisionSummaryRoute.config.response,
+  });
+
+export const publicCaseLawRoute = new Elysia()
+  .use(publicCaseLawContentRoute)
+  .use(publicDecisionSummaryRoute);

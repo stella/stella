@@ -25,8 +25,8 @@ import { DAY_IN_MS } from "@stll/time";
 
 import {
   createPublisherRequestSlot,
-  PublisherPacingStopped,
   publisherGateReserves,
+  PublisherPacingStopped,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import {

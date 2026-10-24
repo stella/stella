@@ -48,9 +48,9 @@ import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

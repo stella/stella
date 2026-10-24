@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { Subquery, SQL } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
+import type { SQL, Subquery } from "drizzle-orm";
 import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
+import { Doc, encodeStateAsUpdate, XmlElement, XmlText } from "yjs";
 
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import { sha256Hex } from "@stll/sha256/node";
 
 import { folioCollabRooms, workspaces } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -71,7 +71,7 @@ const createQueryBuilder = ({
   let lockRead = false;
   let selectedTable: PgTable | undefined;
   const metadataFor = (table: PgTable) =>
-    drizzle.mock().select(selectedFields).from(table).$dynamic();
+    createMockDatabase().select(selectedFields).from(table).$dynamic();
   let metadata = metadataFor(folioCollabRooms);
   const query = Promise.resolve().then(() => {
     const rows = resolveRows(lockRead);

@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 /**
  * The operator command for the corpus generation registry: which generation
  * of each corpus family is registered, and which one serves.
@@ -32,9 +32,9 @@ import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  type CaseLawRootHandle,
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
-  type CaseLawRootHandle,
 } from "@/api/lib/case-law/maintenance-lane";
 import {
   CORPUS_FAMILIES,
@@ -54,10 +54,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   corpusIndexIdFromManifest,
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
-  type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusProjectionCensusIndexIdsTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
@@ -70,17 +70,17 @@ import {
   readCorpusIndexProjectionRevisionTx,
 } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
+  type CensusEvidence,
   censusIndexes,
+  type CensusRefusal,
   checkIndexesHoldDocuments,
   type CorpusGenerationCensusDriftError,
   type CorpusGenerationCensusUnreadableError,
   type CorpusGenerationNotConvergedError,
   CorpusGenerationProjectionMovedError,
-  requireConverged,
-  type CensusEvidence,
-  type CensusRefusal,
   type CorpusIndexReader,
   type IndexRefusal as ProvenIndexRefusal,
+  requireConverged,
 } from "@/api/lib/legal-search/corpus-index-promotion-gates";
 import { corpusIndexPattern } from "@/api/lib/legal-search/index-naming";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";

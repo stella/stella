@@ -15,8 +15,8 @@ import { sha256HexToBase64 } from "@stll/sha256";
 
 import {
   AGENT_SKILL_SCOPES,
-  pendingUploads,
   type PendingUploadPurposeData,
+  pendingUploads,
 } from "@/api/db/schema";
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";

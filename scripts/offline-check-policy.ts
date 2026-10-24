@@ -7,10 +7,10 @@ import ts from "typescript6";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  SOURCE_FILE,
   lexShell,
   parseBunFlags,
   programWords,
+  SOURCE_FILE,
 } from "./install-free-ci";
 import { parseSource } from "./parse-memo";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -27,8 +27,11 @@ export type OfflineImportAllowance = {
   file: string;
   reason: string;
 };
+// `entry` is the script whose import closure must stay transport-safe, or
+// null for Bun's native subcommands (`bun fmt`), which run no repository code
+// and open no connection.
 export type OfflineCheckCommand = { command: string } & (
-  | { protected: true; entry: string }
+  | { protected: true; entry: string | null }
   | { protected: false }
 );
 const root = path.resolve(import.meta.dir, "..");
@@ -118,6 +121,8 @@ const packageCheckEntry = (words: readonly string[]) => {
   return undefined;
 };
 
+const NATIVE_OFFLINE_SUBCOMMANDS: ReadonlySet<string> = new Set(["fmt"]);
+
 /** Enumerate every check invocation, including shell substitutions and parallel groups. */
 export const enumerateOfflineChecks = (
   workflow: unknown,
@@ -139,11 +144,18 @@ export const enumerateOfflineChecks = (
           continue;
         }
         const words = programWords(event.words);
+        const command = JSON.stringify(words);
+        if (
+          words.at(0) === "bun" &&
+          NATIVE_OFFLINE_SUBCOMMANDS.has(words.at(1) ?? "")
+        ) {
+          checks.push({ command, protected: true, entry: null });
+          continue;
+        }
         const entry =
           words.at(0) === "bun"
             ? (offlineCheckEntry(words, root) ?? packageCheckEntry(words))
             : undefined;
-        const command = JSON.stringify(words);
         checks.push(
           entry === undefined
             ? { command, protected: false }
@@ -532,7 +544,7 @@ if (import.meta.main) {
   violations.push(
     ...offlineImportGraphViolations({
       entries: checks.flatMap((check) =>
-        check.protected ? [check.entry] : [],
+        check.protected && check.entry !== null ? [check.entry] : [],
       ),
       repositoryRoot: root,
       allowances: importAllowances,

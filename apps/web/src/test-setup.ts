@@ -6,6 +6,12 @@ import {
   markTestStarted,
   reportRefusedRequests,
 } from "@/testing/dom-network-guard";
+import {
+  installTimerGuard,
+  markTimerTestEnded,
+  markTimerTestStarted,
+  reportLeakedTimers,
+} from "@/testing/timer-guard";
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.
@@ -17,11 +23,22 @@ Object.assign(import.meta.env, {
 // the test it happened in (see `installDomNetworkGuard`).
 installDomNetworkGuard();
 
-beforeEach(markTestStarted);
+// A timer a test starts never outlives it (see `installTimerGuard`).
+installTimerGuard();
+
+beforeEach(() => {
+  markTestStarted();
+  markTimerTestStarted();
+});
 
 afterEach(() => {
   markTestEnded();
+  markTimerTestEnded();
   reportRefusedRequests();
+  reportLeakedTimers();
 });
 
-afterAll(reportRefusedRequests);
+afterAll(() => {
+  reportRefusedRequests();
+  reportLeakedTimers();
+});

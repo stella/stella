@@ -43,8 +43,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */

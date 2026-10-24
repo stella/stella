@@ -29,8 +29,8 @@ import {
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import {
-  ToolsCatalogueView,
   type ToolsCatalogueKind,
+  ToolsCatalogueView,
 } from "@/features/knowledge/views/tools/tools-catalogue-view";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -38,13 +38,13 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
-  isEffectivelyInstalled,
   type CatalogueDisplayEntry,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
-  BlueprintGallerySheet,
   type BlueprintCreatedSkill,
+  BlueprintGallerySheet,
 } from "@/routes/knowledge/-components/blueprint-gallery-sheet";
 import { ImportSkillDialog } from "@/routes/knowledge/-components/import-skill-dialog";
 

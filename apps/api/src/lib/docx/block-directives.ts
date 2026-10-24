@@ -71,10 +71,10 @@ import {
   loopPattern,
   MARKER_OUTPUT_BODY,
   MARKER_STATEMENT_BODY,
+  markerPattern,
   numPattern,
   refPattern,
   resolvePath,
-  markerPattern,
 } from "@stll/template-conditions";
 import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";

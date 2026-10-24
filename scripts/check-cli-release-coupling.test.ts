@@ -20,14 +20,14 @@ import {
   changesetNamesCli,
   classifyCliRelease,
   CLI_CONTRACT_SURFACE,
+  type CliContractSurface,
   compareStableVersions,
   findSurfaceDrift,
   parseGeneratedConstants,
+  type PublishedCli,
   readHeadSurface,
   readPublishedPackageSurface,
   verdictFromClassification,
-  type CliContractSurface,
-  type PublishedCli,
 } from "./check-cli-release-coupling";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
 

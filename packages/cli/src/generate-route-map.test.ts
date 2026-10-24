@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   classifyProp,
-  type PropSchema,
   generateRouteMap,
+  type PropSchema,
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";

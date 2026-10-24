@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import {
-  filterCatalogueByKind,
-  loadCatalogue,
-  recommendedSlugsForJurisdictions,
   type CatalogueCost,
   type CatalogueSetup,
+  filterCatalogueByKind,
+  loadCatalogue,
   type LoadedCatalogueEntry,
+  recommendedSlugsForJurisdictions,
 } from "@stll/catalogue";
 
 import {
@@ -20,8 +20,8 @@ import type {
   McpConnectorAuthType,
 } from "@/api/db/schema";
 import {
-  computeCatalogueInstallState,
   type CatalogueInstallState,
+  computeCatalogueInstallState,
 } from "@/api/handlers/catalogue/install-state";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

@@ -22,8 +22,8 @@ import {
 } from "@/api/handlers/legal-resolve/law-endpoint";
 import type { GetLegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
 import {
-  serviceResolveAuditOutcome,
   serviceResolveAuditCountry,
+  serviceResolveAuditOutcome,
 } from "@/api/handlers/legal-resolve/service-audit";
 import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
 import type { LegalResolveSession } from "@/api/lib/db/service-client-contract";
@@ -37,8 +37,8 @@ import type {
 } from "@/api/lib/rate-limit/contracts";
 import { rateLimit, scopedRateLimitKey } from "@/api/lib/rate-limit/rate-limit";
 import {
-  createRedisRateLimitRequestKey,
   createRedisRateLimit,
+  createRedisRateLimitRequestKey,
 } from "@/api/lib/rate-limit/redis-context";
 import {
   CACHE_CONTROL_HEADER,

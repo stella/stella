@@ -2,7 +2,7 @@ import type {
   OpenRouterConfig,
   OpenRouterTextModelOptions,
 } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { BYOK_MODEL_OPTIONS, getModelRate } from "@stll/ai-catalog";
 import type { AIProvider } from "@stll/ai-catalog";

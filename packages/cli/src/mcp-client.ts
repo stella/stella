@@ -7,17 +7,17 @@
 
 import {
   Client,
+  type FetchLike,
   ProtocolError,
   SdkError,
   SdkHttpError,
   StreamableHTTPClientTransport,
-  type FetchLike,
 } from "@modelcontextprotocol/client";
 import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 
 import {
-  readHttpActionAdmissionRefusal,
   type CliActionAdmissionRefusal,
+  readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { apiFetch } from "./api-fetch.js";
 import { CLI_LATEST_HEADER, CLI_MINIMUM_HEADER } from "./cli-version-nudge.js";

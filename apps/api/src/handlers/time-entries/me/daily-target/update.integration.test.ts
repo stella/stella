@@ -10,8 +10,8 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { user as authUser, member } from "@/api/db/auth-schema";
-import { timeDailyTargets, featureEnrolments } from "@/api/db/schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
+import { featureEnrolments, timeDailyTargets } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { dailyTargetBody } from "@/api/lib/billing/daily-target";

@@ -939,7 +939,7 @@ export const classify = (
     return "test";
   }
   if (
-    /lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name) ||
+    /lint|format|fmt|oxlint|biome|prettier|stylelint/u.test(name) ||
     LINT_RULE.test(text)
   ) {
     return "lint";
@@ -1150,13 +1150,15 @@ type DigestOptions = {
 };
 
 /**
- * Jobs the result gate fails on: failed or timed-out jobs, and cancelled
- * jobs that contain a failed step (a cancellation can mask a failure).
+ * Jobs the result gate fails on: failed or timed-out jobs, cancelled jobs
+ * that contain a failed step (a cancellation can mask a failure), and the
+ * still-running job with a failed step: the gate running this digest, so a
+ * gate that fails before it evaluates any job still names its own step.
  */
 export const isFailedJob = (job: ApiJob): boolean =>
   job.conclusion === "failure" ||
   job.conclusion === "timed_out" ||
-  (job.conclusion === "cancelled" &&
+  ((job.conclusion === "cancelled" || job.conclusion === null) &&
     (job.steps ?? []).some(({ conclusion }) => conclusion === "failure"));
 
 export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>

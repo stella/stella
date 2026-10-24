@@ -39,8 +39,8 @@ import { AuditChangeDetails } from "@/routes/_protected.admin/-components/audit-
 import { toAuditLogDateRange } from "@/routes/_protected.admin/-queries/audit-log-date-range";
 import {
   auditLogOptions,
-  type fetchAuditLogs,
   type AuditLogsPageKey,
+  type fetchAuditLogs,
 } from "@/routes/_protected.admin/-queries/audit-logs";
 
 export const Route = createFileRoute("/_protected/admin/audit-logs")({

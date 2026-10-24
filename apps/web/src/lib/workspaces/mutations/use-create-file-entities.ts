@@ -19,6 +19,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { withActiveUpload } from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { validateUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -78,6 +80,9 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
+  for (const placement of plan.files) {
+    readQueryResult(validateUploadFileNotEmpty(placement.file.size));
+  }
   const files = [];
   for (const [index, placement] of plan.files.entries()) {
     files.push({
@@ -247,14 +252,16 @@ const prepareSingleFileEntityUpload = async ({
     workspaceId: toSafeId<"workspace">(workspaceId),
   });
   const presign = await wsClient.presign.post(
-    buildEntityCreatePresignPayload({
-      propertyId,
-      parentId,
-      name: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
-      sha256Hex,
-    }),
+    readQueryResult(
+      buildEntityCreatePresignPayload({
+        propertyId,
+        parentId,
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        sha256Hex,
+      }),
+    ),
     { fetch: { signal } },
   );
   if (presign.error) {

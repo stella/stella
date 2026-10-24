@@ -84,7 +84,7 @@ const KNOWN_NON_FAMILY_MODEL_PATTERNS = {
   anthropic: [] as const,
   google: [
     /^(?:deep-research|gemma|lyria|veo)-/u,
-    /^gemini-(?:embedding|flash-latest|flash-lite-latest|omni-)/u,
+    /^gemini-(?:embedding|flash-latest|flash-lite-latest|pro-latest|omni-)/u,
     /^gemini-\d+(?:\.\d+)?-(?:computer-use|flash-image|flash-live|flash-tts|live-translate|pro-image)/u,
     /^gemini-\d+(?:\.\d+)?-(?:flash|pro)-preview-(?:customtools|tts)$/u,
     /^gemini-\d+(?:\.\d+)?-flash-lite-image$/u,

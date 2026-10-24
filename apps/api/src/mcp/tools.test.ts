@@ -26,12 +26,12 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
-  SEARCH_PAGE_REACH,
-  SEARCH_PAGINATION_COMPLETE,
-  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
   FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -140,8 +140,8 @@ import {
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_EXPECTED,
+  CASE_LAW_COVERAGE_FIXTURE,
 } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -594,6 +594,7 @@ const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 2,
   identifiers: [
     { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
   ],
@@ -4760,6 +4761,8 @@ describe("OpenAI-compatible MCP tools", () => {
       items: [
         {
           anchor: PROVISION_ANCHOR,
+          // A source list names the reader link by it, not by the host.
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           eli: STATUTE_ELI,
           status: "found",
@@ -5160,6 +5163,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -5173,6 +5177,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_PRIOR_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
@@ -5238,6 +5243,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -5251,6 +5257,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_PRIOR_ID,
           message:
             "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
@@ -6532,6 +6539,7 @@ describe("OpenAI-compatible MCP tools", () => {
           languageAlternates: [],
           citationsFrom: [],
           citationsTo: [],
+          citationCount: 0,
         } satisfies ReadCaseLawDecisionSuccess);
         readGatedDecisionCitationDigestMock.mockResolvedValue(digest);
         const result = await handleMcpToolCall({

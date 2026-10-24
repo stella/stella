@@ -5,8 +5,8 @@ import { inspect } from "node:util";
 import {
   createDevErrorLogger,
   errorOutputLogger,
-  QUERY_ERROR_OUTPUT_FIELDS,
   printError,
+  QUERY_ERROR_OUTPUT_FIELDS,
   sanitizeErrorForOutput,
 } from "@stll/errors";
 
@@ -16,8 +16,8 @@ import { captureError } from "@/api/lib/analytics/capture";
 import {
   connectionErrorFields,
   errorFingerprint,
-  unredactedErrorFields,
   serializeDevError,
+  unredactedErrorFields,
 } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {

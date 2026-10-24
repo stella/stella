@@ -13,12 +13,12 @@ import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-iden
 import { Temporal } from "@stll/time";
 
 import {
-  caseLawCitations,
   caseLawCitationDoctrineReviews,
+  caseLawCitations,
   caseLawDecisionCitationStats,
   caseLawDecisionCitationStatsState,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";

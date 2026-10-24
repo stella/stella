@@ -20,8 +20,8 @@ import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  isEffectivelyInstalled,
   type CatalogueDisplayEntry,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 
 import { useCatalogueRemoval } from "./use-catalogue-removal";

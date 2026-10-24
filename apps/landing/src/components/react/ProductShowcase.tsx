@@ -53,20 +53,7 @@ const ProductShowcase = () => (
 
             <div className="px-1 pt-5">
               <h3 className="showcase-title font-display text-xl leading-tight font-medium tracking-tight sm:text-2xl">
-                <span
-                  className="tabular-nums"
-                  style={{ color: "var(--muted-foreground)" }}
-                >
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span
-                  className="mx-2"
-                  style={{ color: "var(--muted-foreground)" }}
-                  aria-hidden="true"
-                >
-                  —
-                </span>
-                {item.title}
+                {String(index + 1).padStart(2, "0")} — {item.title}
               </h3>
               <p className="showcase-description text-muted-foreground mt-3 text-sm leading-[1.7]">
                 {item.description}

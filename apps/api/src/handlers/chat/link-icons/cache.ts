@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
@@ -176,13 +177,13 @@ export const createLinkIconCache = ({
       userId,
       ip,
     }: {
-      hostname: string;
+      hostname: LinkIconTarget;
       userId: SafeId<"user">;
       ip: string;
     }): Promise<ReadResult> => {
       const token = Bun.randomUUIDv7();
       const value = await command(READ, [
-        sha256Hex(hostname),
+        sha256Hex(hostname.value),
         sha256Hex(userId),
         sha256Hex(ip),
         token,
@@ -223,7 +224,7 @@ export const createLinkIconCache = ({
       token,
       outcome,
     }: {
-      hostname: string;
+      hostname: LinkIconTarget;
       token: string;
       outcome: CacheableLinkIconOutcome;
     }): Promise<boolean> => {
@@ -249,7 +250,7 @@ export const createLinkIconCache = ({
       }
       return (
         (await command(FILL, [
-          sha256Hex(hostname),
+          sha256Hex(hostname.value),
           token,
           value,
           String(ttl),

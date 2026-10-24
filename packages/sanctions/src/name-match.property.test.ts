@@ -147,6 +147,38 @@ describe("name matching (properties)", () => {
   );
 
   test(
+    "an exact listed name always matches at the maximum score",
+    () => {
+      assertProperty(
+        "an exact listed name always matches at the maximum score",
+        fc.property(fullName, (name) => {
+          expect(score(name, name)).toBe(1);
+        }),
+        config(),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+
+  test(
+    "clearly different generated names stay below the screening cutoff",
+    () => {
+      const differentNames = fc.tuple(
+        fc.constantFrom("Anna Novak", "Petr Dvorak", "Lucia Horvath"),
+        fc.constantFrom("Xerxes Quillon", "Zubair Wexford", "Yara Bexley"),
+      );
+      assertProperty(
+        "clearly different generated names stay below the screening cutoff",
+        fc.property(differentNames, ([listed, query]) => {
+          expect(score(listed, query)).toBeLessThan(0.8);
+        }),
+        config(),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+
+  test(
     "keeps scores when query and list change case or whitespace",
     () => {
       fc.assert(

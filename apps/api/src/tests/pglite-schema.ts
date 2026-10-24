@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { panic } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -730,14 +730,15 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
-  for (const statement of readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261010212100_case_law_publication_filter",
-      "migration.sql",
-    ),
-  ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
-    await db.execute(sql.raw(statement));
+  for (const migration of [
+    "20261010212100_case_law_publication_filter",
+    "20261022230000_provision_citation_anchor_lineage",
+  ]) {
+    for (const statement of readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+    ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
+      await db.execute(sql.raw(statement));
+    }
   }
 };
 
@@ -894,11 +895,21 @@ export const installPgliteLegislationExpressionIdentity = async (
 ): Promise<void> => {
   const statements = readMigrationStatements(
     LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
-  ).filter((statement) =>
-    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
-      executableSql(statement).startsWith(prefix),
-    ),
-  );
+  )
+    .concat(
+      readMigrationStatements(
+        nodePath.join(
+          DRIZZLE_DIR,
+          "20261019091000_legislation_publisher_identity",
+          "migration.sql",
+        ),
+      ),
+    )
+    .filter((statement) =>
+      LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
+        executableSql(statement).startsWith(prefix),
+      ),
+    );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

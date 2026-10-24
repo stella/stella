@@ -31,7 +31,7 @@
   },
   {
     "file": "apps/api/scripts/ingestion-status.ts",
-    "fingerprint": "15fc14b794ffcb1dbcafea933e339ea9fec59dcb2e20aff782797ba2e3d15860",
+    "fingerprint": "e7c408f336ca0b7926a5a34941ffb6c46408ba9e80fc06ad2f054412ac1c5d35",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/ingestion-status.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -2383,21 +2383,9 @@
   },
   {
     "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "42c2e2530f4b5781e2487fcb811207c561f21f73d6b05992218c5fab4204ef87",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
     "fingerprint": "9cd561de2d5bc69f52ae21a7ff7b29673e412ece73f584b19a09bbcd9688e923",
     "count": 1,
     "reason": "lock table in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "ba2c8c81fb5f3b119bd4571a013cab18647f8785e8f936611fcf2ff2921805cf",
-    "count": 1,
-    "reason": "Existing sitemap shard refresh transaction; its loop now walks the pages-public country list instead of the search list, which changes its source fingerprint without changing the acquisition, its order or the count."
   },
   {
     "file": "apps/api/src/lib/cell-lock.ts",
@@ -3862,12 +3850,6 @@
     "fingerprint": "9fab03e7a0d013ca082a2fe44b0950a4c83368986e0a695b5357ebd05abd9770",
     "count": 1,
     "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
-    "fingerprint": "dcfb2ccbc88aace4a0da1ab24410ade76244bdd357ecea8cf40af2558300ebc7",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",

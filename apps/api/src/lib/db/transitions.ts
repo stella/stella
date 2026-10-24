@@ -4,10 +4,10 @@ import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
-  PgTable,
   PgAsyncDatabase,
-  PgQueryResultHKT,
   PgInsertValue,
+  PgQueryResultHKT,
+  PgTable,
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 

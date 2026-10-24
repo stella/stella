@@ -4,8 +4,8 @@ import { t } from "elysia";
 
 import { fileChatThreads } from "@/api/db/schema";
 import {
-  lockFileChatThreadMapping,
   type FileThreadLookupInput,
+  lockFileChatThreadMapping,
 } from "@/api/handlers/chat/file-thread-mapping";
 import {
   createFileChatThread,

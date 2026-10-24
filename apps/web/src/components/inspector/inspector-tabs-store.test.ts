@@ -123,6 +123,8 @@ class FakeBroadcastChannel {
 afterEach(() => {
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
+  // The next test is a fresh page: this one's pending restore settle ends.
+  startNewPageLoadForTest();
   restoreTemporalNow?.();
   restoreTemporalNow = undefined;
   FakeBroadcastChannel.reset();
@@ -1534,6 +1536,55 @@ describe("Inspector tab broadcast", () => {
     recovered.mockRestore();
   });
 
+  test("a viewer hold an earlier page load never released does not hold the next one", async () => {
+    installFakeBroadcastChannel();
+    const pagehide = new EventTarget();
+    const addListener = spyOn(
+      globalThis,
+      "addEventListener",
+    ).mockImplementation(
+      (...args: Parameters<typeof globalThis.addEventListener>) => {
+        pagehide.addEventListener(...args);
+      },
+    );
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // The restored viewer is still downloading when the page reloads.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    const releaseEarlierPage = holdInspectorRestoreSettle();
+    pagehide.dispatchEvent(new Event("pagehide"));
+
+    // The next load restores and stays responsive past the settle delay.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    await Bun.sleep(2200);
+
+    // Its restore settled, so the start after it reopens the pane, and the
+    // late release from the first page changes nothing.
+    releaseEarlierPage();
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+    addListener.mockRestore();
+  });
+
   test("keeps each window's own file tab lane across syncs", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };
@@ -2166,7 +2217,7 @@ describe("Inspector tab broadcast", () => {
           userId: "user-storage",
         }),
       ),
-    ).toBe("1");
+    ).toBe(JSON.stringify({ version: 1, value: true }));
   });
 
   test("does not exchange tabs across organization scopes", () => {
@@ -2280,20 +2331,23 @@ describe("a legal document's chat tab and the reader's composer", () => {
         userId: scope.userId,
       }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeLegalKey: statuteChatKey("document-1"),
-            contextMatterIds: [],
-            id: restored,
-            label: "Statute chat",
-            started: true,
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeLegalKey: statuteChatKey("document-1"),
+              contextMatterIds: [],
+              id: restored,
+              label: "Statute chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
     const minted = ensureLegalDocumentChatThread({
@@ -2325,20 +2379,23 @@ describe("a legal document's chat tab and the reader's composer", () => {
         userId: scope.userId,
       }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeDecisionId: "decision-1",
-            contextMatterIds: [],
-            id: restored,
-            label: "Decision chat",
-            started: true,
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeDecisionId: "decision-1",
+              contextMatterIds: [],
+              id: restored,
+              label: "Decision chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
 
@@ -2381,10 +2438,13 @@ describe("a legal document's chat tab and the reader's composer", () => {
     // Exactly these two: the empty document chat is left out.
     expect(persisted).toEqual(
       expect.objectContaining({
-        tabs: [
-          expect.objectContaining({ id: used, started: true }),
-          expect.objectContaining({ id: "thread-plain" }),
-        ],
+        version: 1,
+        value: expect.objectContaining({
+          tabs: [
+            expect.objectContaining({ id: used, started: true }),
+            expect.objectContaining({ id: "thread-plain" }),
+          ],
+        }),
       }),
     );
   });
@@ -2418,7 +2478,9 @@ test("inspector subscriptions restore only their active account scope", () => {
     kind: "user",
     userId: "a",
   });
-  expect(localArea().getItem(keyA)).toBe("1");
+  expect(localArea().getItem(keyA)).toBe(
+    JSON.stringify({ version: 1, value: true }),
+  );
   client.setQueryData(["session"], { user: { id: "b" } });
   expect(useInspectorTabsStore.getState().minimized).toBe(false);
   expect(useInspectorTabsStore.getState().tabs).toEqual([]);
@@ -2431,14 +2493,16 @@ test("inspector subscriptions restore only their active account scope", () => {
     kind: "user",
     userId: "b",
   });
-  localArea().setItem(keyB, "1");
+  localArea().setItem(keyB, JSON.stringify({ version: 1, value: true }));
   cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
     organizationId: "org",
     userId: "b",
   });
   expect(useInspectorTabsStore.getState().minimized).toBe(true);
   useInspectorTabsStore.getState().setMinimized(false);
-  expect(localArea().getItem(keyB)).toBe("0");
+  expect(localArea().getItem(keyB)).toBe(
+    JSON.stringify({ version: 1, value: false }),
+  );
   expect(localArea().getItem(keyA)).toBeNull();
   cleanupInspectorBroadcast();
   cleanupInspectorBroadcast = null;

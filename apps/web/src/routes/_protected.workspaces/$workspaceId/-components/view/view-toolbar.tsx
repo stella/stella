@@ -10,6 +10,7 @@ import type { PlaybookRunProjection } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import {
+  AiActionIcon,
   AlignJustifyIcon,
   CalendarIcon,
   ClockIcon,
@@ -19,7 +20,6 @@ import {
   Rows3Icon,
   SparklesIcon,
   UserIcon,
-  AiActionIcon,
   WrapTextIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";

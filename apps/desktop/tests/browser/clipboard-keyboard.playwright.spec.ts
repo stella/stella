@@ -4,7 +4,10 @@ import { TauriEvent } from "@tauri-apps/api/event";
 
 import { DEFAULT_CLIPBOARD_GROUP_COLOR } from "../../src/clipboard/clipboard-style";
 import { isClipboardSnapshot } from "../../src/clipboard/clipboard-types";
-import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
+import type {
+  ClipboardCaptureUpdate,
+  ClipboardSnapshot,
+} from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
@@ -36,6 +39,7 @@ const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
 }) satisfies ClipboardSnapshot["items"];
 
 const SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   groupLimit: 24,
   groups: [{ color: DEFAULT_CLIPBOARD_GROUP_COLOR, id: "work", name: "Work" }],
@@ -78,6 +82,53 @@ const installNativeBoundary = async (
       }[] = [];
       let nextCallbackId = 1;
       let session = 1;
+      let latestCapture: ClipboardCaptureUpdate | null = null;
+      Reflect.set(
+        window,
+        "__STELLA_TEST_CAPTURE_CLIPBOARD__",
+        (texts: string[]) => {
+          const subscription = invocations.findLast(
+            ({ args, command }) =>
+              command === "plugin:event|listen" &&
+              args["event"] === "clipboard-history-changed",
+          );
+          const handler = subscription?.args["handler"];
+          if (typeof handler !== "number") {
+            throw new TypeError("Clipboard history listener is not installed");
+          }
+          const notifications = [];
+          for (const text of texts) {
+            clipboardSnapshot.revision += 1;
+            const original = clipboardSnapshot.items.at(0);
+            if (!original) {
+              throw new TypeError(
+                "Capture fixture requires an existing text item",
+              );
+            }
+            const item = {
+              ...original,
+              id: `captured-${clipboardSnapshot.revision}`,
+              name: text,
+              plainText: text,
+            };
+            clipboardSnapshot.items.unshift(item);
+            latestCapture = {
+              revision: clipboardSnapshot.revision,
+              item,
+              removedItemIds: [],
+              sourceAppVisuals: [],
+            };
+            const payload = { revision: clipboardSnapshot.revision };
+            notifications.push(payload);
+            callbacks.get(handler)?.({
+              event: "clipboard-history-changed",
+              id: handler,
+              payload,
+            });
+          }
+          return notifications;
+        },
+      );
       Reflect.set(window, "__STELLA_TEST_REOPEN_CLIPBOARD__", () => {
         if (!document.documentElement.hidden) {
           throw new TypeError("Clipboard must be hidden before a new session");
@@ -128,8 +179,16 @@ const installNativeBoundary = async (
               ),
             };
           }
+          if (command === "clipboard_get_capture_update") {
+            // IPC replies cross a task boundary; a burst may replace the one
+            // retained delta before an earlier request is served.
+            await Promise.resolve();
+            return latestCapture?.revision === args["revision"]
+              ? latestCapture
+              : null;
+          }
           if (command === "clipboard_get_snapshot") {
-            return clipboardSnapshot;
+            return structuredClone(clipboardSnapshot);
           }
           if (command === "clipboard_create_group") {
             const groupId = "created-group";
@@ -373,6 +432,79 @@ const waitForTooltip = async (page: Page) =>
     }
     return false;
   });
+
+test("captures use a caller-scoped delta and recover a burst revision gap", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+  const capture = async (texts: string[]) =>
+    page.evaluate((values) => {
+      const emit: unknown = Reflect.get(
+        window,
+        "__STELLA_TEST_CAPTURE_CLIPBOARD__",
+      );
+      if (typeof emit !== "function") {
+        throw new TypeError("Native capture boundary is missing");
+      }
+      return emit(values);
+    }, texts);
+  expect(await capture(["First new capture"])).toEqual([{ revision: 1 }]);
+  await expect(
+    page.getByText("First new capture", { exact: true }).first(),
+  ).toBeVisible();
+  expect(
+    await lastInvocationArgs(page, "clipboard_get_capture_update"),
+  ).toEqual({ revision: 1 });
+  const snapshotsBeforeBurst = await page.evaluate(() => {
+    const invocations: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_INVOCATIONS__",
+    );
+    if (!Array.isArray(invocations)) {
+      throw new TypeError("Native invocation log is missing");
+    }
+    return invocations.filter(
+      (entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        "command" in entry &&
+        entry.command === "clipboard_get_snapshot",
+    ).length;
+  });
+  expect(await capture(["Second new capture", "Third new capture"])).toEqual([
+    { revision: 2 },
+    { revision: 3 },
+  ]);
+  await expect(
+    page.getByText("Third new capture", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Second new capture", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("First new capture", { exact: true }).first(),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const invocations: unknown = Reflect.get(
+          window,
+          "__STELLA_TEST_INVOCATIONS__",
+        );
+        if (!Array.isArray(invocations)) {
+          throw new TypeError("Native invocation log is missing");
+        }
+        return invocations.filter(
+          (entry: unknown) =>
+            typeof entry === "object" &&
+            entry !== null &&
+            "command" in entry &&
+            entry.command === "clipboard_get_snapshot",
+        ).length;
+      }),
+    )
+    .toBe(snapshotsBeforeBurst + 1);
+});
 
 const DIRECTIONS = [
   {

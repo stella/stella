@@ -6,9 +6,9 @@ import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import {
   canApproveIntegrationAuthorization,
+  type IntegrationAuthorizationStatus,
   integrationStatus,
   matchesConnectionQuery,
-  type IntegrationAuthorizationStatus,
 } from "./connections.logic";
 
 const PROPERTY_MAX_TEXT_PARTS = 20;

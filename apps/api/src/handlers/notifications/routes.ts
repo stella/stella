@@ -2,8 +2,8 @@ import Elysia from "elysia";
 
 import publishAnnouncement from "@/api/handlers/notifications/announce";
 import listNotifications from "@/api/handlers/notifications/list";
-import markNotificationRead from "@/api/handlers/notifications/read";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
@@ -57,21 +57,29 @@ export const notificationsRoute = new Elysia({
         userId: user.id,
       });
 
-      return sseResponse(stream);
+      return sseResponse(stream, {
+        kind: "session",
+        sessionId: session.id,
+        userId: user.id,
+      });
     },
   )
   .get("/", listNotifications.handler, {
     query: listNotifications.config.query,
     permissions: listNotifications.config.permissions,
+    accountAccess: listNotifications.config.accountAccess,
   })
   .post("/read-all", markAllNotificationsRead.handler, {
     permissions: markAllNotificationsRead.config.permissions,
+    accountAccess: markAllNotificationsRead.config.accountAccess,
   })
   .post("/announcements", publishAnnouncement.handler, {
     body: publishAnnouncement.config.body,
     permissions: publishAnnouncement.config.permissions,
+    accountAccess: publishAnnouncement.config.accountAccess,
   })
   .patch("/:notificationId/read", markNotificationRead.handler, {
     params: markNotificationRead.config.params,
     permissions: markNotificationRead.config.permissions,
+    accountAccess: markNotificationRead.config.accountAccess,
   });

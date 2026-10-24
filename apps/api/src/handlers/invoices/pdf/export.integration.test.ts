@@ -6,10 +6,10 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
+  featureEnrolments,
+  INVOICE_STATUS,
   invoiceLines,
   invoices,
-  INVOICE_STATUS,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";

@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtemp,
   chmod,
+  mkdir,
+  mkdtemp,
   readFile,
   rm,
   writeFile,
-  mkdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";

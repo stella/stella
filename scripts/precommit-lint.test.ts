@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  RECEIVER_TYPED_AUTOFIX_RULES,
   lintCommand,
   mergeScopedFiles,
+  RECEIVER_TYPED_AUTOFIX_RULES,
   runPrecommitLint,
 } from "./precommit-lint";
 
@@ -159,6 +159,7 @@ describe("pre-commit lint", () => {
     }
   });
 
+  // Measured p95: 12.6 s; this must spawn oxlint separately for every listed rule.
   test("each listed rule, run alone, rewrites its fixture", () => {
     // Guards the list itself: a renamed rule or one that no longer autofixes
     // would make its entry dead weight, and a fixture another rule rewrites
@@ -171,7 +172,7 @@ describe("pre-commit lint", () => {
       );
       expect(read(file), rule).not.toBe(`${body}\n`);
     }
-  });
+  }, 30_000);
 
   test("the hook command turns off every listed rule and still fixes", () => {
     const command = lintCommand(["a.ts"]);

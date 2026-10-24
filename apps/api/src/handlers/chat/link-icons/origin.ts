@@ -1,4 +1,5 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
+import { getDomain } from "tldts";
 
 import { Temporal } from "@stll/time";
 
@@ -27,6 +28,30 @@ export const isCanonicalIconHostname = (hostname: string): boolean => {
   return Result.isOk(parsed) && parsed.value.hostname === hostname;
 };
 
+export type RegistrableIconSite = {
+  readonly kind: "registrable-icon-site";
+  readonly value: string;
+};
+
+class NotIconSite extends TaggedError("NotIconSite")<{
+  message: string;
+}> {}
+
+export const toRegistrableIconSite = (hostname: string) => {
+  if (!isCanonicalIconHostname(hostname)) {
+    return Result.err(
+      new NotIconSite({ message: "Hostname is not an icon site" }),
+    );
+  }
+  const domain = getDomain(hostname, { allowPrivateDomains: false });
+  if (domain === null) {
+    return Result.err(
+      new NotIconSite({ message: "Hostname has no registrable domain" }),
+    );
+  }
+  return Result.ok({ kind: "registrable-icon-site", value: domain } as const);
+};
+
 const unavailableIcon = ({
   type,
   reason,
@@ -46,10 +71,21 @@ const isRetryableIconStatus = (status: number) =>
 
 type HttpsIconUrl = `https://${string}`;
 
+export type ExactIconUrl = {
+  readonly kind: "exact-icon-url";
+  readonly value: HttpsIconUrl;
+};
+
+/**
+ * What one cached icon belongs to. A site value is a bare registrable domain
+ * and an exact value always carries a scheme, so the two never share a key.
+ */
+export type LinkIconTarget = RegistrableIconSite | ExactIconUrl;
+
 const isHttpsIconUrl = (url: string): url is HttpsIconUrl =>
   url.startsWith("https://");
 
-export const normalizeExactIconUrl = (value: string): HttpsIconUrl | null => {
+const normalizeExactIconUrl = (value: string): HttpsIconUrl | null => {
   if (value.length > ICON_URL_MAX_LENGTH) {
     return null;
   }
@@ -67,6 +103,13 @@ export const normalizeExactIconUrl = (value: string): HttpsIconUrl | null => {
     return null;
   }
   return isHttpsIconUrl(url.href) ? url.href : null;
+};
+
+export const toExactIconUrl = (value: string): ExactIconUrl | null => {
+  const normalized = normalizeExactIconUrl(value);
+  return normalized === null
+    ? null
+    : { kind: "exact-icon-url", value: normalized };
 };
 
 type FetchIconBytes = (
@@ -216,16 +259,12 @@ const normalizeFaviconUrl = (value: string): HttpsIconUrl | null => {
 
 export const createLinkIconOrigin = (options: OriginOptions = {}) => {
   const readOrigin = createIconOrigin(options);
-  return async (hostname: string, permit: ThirdPartyOutboundPermit) => {
-    if (!isCanonicalIconHostname(hostname)) {
-      return unavailableIcon({ type: "no-icon", reason: "hostname" });
-    }
-    return await readOrigin(
-      `https://${hostname}/favicon.ico`,
+  return async (site: RegistrableIconSite, permit: ThirdPartyOutboundPermit) =>
+    await readOrigin(
+      `https://${site.value}/favicon.ico`,
       permit,
       normalizeFaviconUrl,
     );
-  };
 };
 
 export const createExactIconOrigin = (options: OriginOptions = {}) => {

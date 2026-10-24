@@ -39,12 +39,12 @@ import {
 } from "./decision-analysis.db";
 import {
   ANALYSIS_REJECTION,
+  type AnalysisRejection,
   flagValue,
   parseIdsFile,
   readAnalysisDatabaseUrl,
   resolveRowAnalysisInput,
   summariseOutcomes,
-  type AnalysisRejection,
 } from "./decision-analysis.logic";
 
 const USAGE = `Usage: bun run src/scripts/decision-analysis-input.ts (--decision <id> | --ids-file <path>)

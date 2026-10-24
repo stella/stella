@@ -9,8 +9,8 @@ import { projectionPayload } from "@/api/lib/projection-totality";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { AnonymizedTextFields } from "@/api/mcp/anonymization-core";
 import {
-  COMPAT_SEARCH_OUTPUT_SCHEMA,
   COMPAT_FETCH_OUTPUT_SCHEMA,
+  COMPAT_SEARCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";

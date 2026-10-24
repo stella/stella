@@ -39,7 +39,10 @@ import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
@@ -135,7 +138,7 @@ process.stderr.write(
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
-for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   if (
     tool.access !== "write" ||
     !WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable
@@ -282,11 +285,3 @@ export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,
 );
 process.stderr.write(`Wrote ${mcpContractOutputPath.pathname}\n`);
-
-// The registry transitively pulls in `@/api/lib/sse.ts`, which opens a
-// Redis subscriber connection at import time (for cross-instance SSE
-// broadcast) and never unrefs it. That's correct for the long-running API
-// process but leaves this one-off script's event loop open indefinitely.
-// The export is done at this point, so exit explicitly instead of waiting
-// on a handle this script never needed.
-process.exit(0);

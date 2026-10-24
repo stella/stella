@@ -17,7 +17,7 @@ import { panic } from "better-result";
 
 import type {
   DecisionAnalysis,
-  DecisionAnalysisV3,
+  DecisionAnalysisV4,
 } from "@stll/legal-ast/analysis";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,7 +27,7 @@ import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 
-import { buildDecisionAnalysis, type AnalysisOutput } from "./analysis-output";
+import { type AnalysisOutput, buildDecisionAnalysis } from "./analysis-output";
 
 /** As much of a decision row as writing an analysis depends on. */
 export type AnalysisSubject = {
@@ -55,7 +55,7 @@ export type AnalysisUpdateFences = {
 };
 
 export type AnalysisUpdateOutcome =
-  | { kind: "saved"; analysis: DecisionAnalysisV3 }
+  | { kind: "saved"; analysis: DecisionAnalysisV4 }
   /** An analysis over this very input is already stored: the retry is a no-op. */
   | { kind: "unchanged"; analysis: DecisionAnalysis }
   | { kind: "derived-ai-refused" }

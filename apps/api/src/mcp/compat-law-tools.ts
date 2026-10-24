@@ -17,13 +17,13 @@ import {
   decodeCompatCorpusId,
 } from "@/api/mcp/compat-ids";
 import {
-  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
+  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
 } from "@/api/mcp/compat-shared";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";

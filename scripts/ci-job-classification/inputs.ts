@@ -1,10 +1,22 @@
 // Every committed path the job classification reads. CI checks out exactly
 // these at the workflow revision, the autofix planner selects the digest
 // refresh by them, and the pre-push hook runs only when a push touches one.
-// No imports: the autofix planner loads this from a sparse checkout without
+// The autofix planner loads this from a sparse checkout without package
 // dependencies.
 export const CLASSIFICATION_DECISIONS_PATH =
+  ".github/ci-job-classification-decisions";
+
+export const LEGACY_CLASSIFICATION_DECISIONS_PATH =
   ".github/ci-job-classification-decisions.json";
+
+export type ClassificationDecision = {
+  kind: unknown;
+  qualifier: unknown;
+  reviewedDigest?: unknown;
+};
+
+export const decisionPathForKey = (key: string) =>
+  `${CLASSIFICATION_DECISIONS_PATH}/${encodeURIComponent(key)}.json`;
 
 export const CLASSIFICATION_INPUT_PATHS = [
   ".github/workflows",
@@ -22,6 +34,7 @@ const DIRECTORY_INPUTS = new Set<string>([
   ".github/workflows",
   ".github/actions",
   "scripts/ci-job-classification",
+  CLASSIFICATION_DECISIONS_PATH,
 ]);
 
 // The same paths as globs, directories covering everything below them.

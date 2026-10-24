@@ -4,8 +4,8 @@ import {
 } from "@better-auth/core/context";
 import type { AuthContext, BetterAuthPlugin, Session } from "better-auth";
 import {
-  createAuthMiddleware,
   createAuthEndpoint,
+  createAuthMiddleware,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
 import { parseUserOutput } from "better-auth/db";
@@ -26,12 +26,23 @@ import {
 export { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 
 export const SESSION_PRIOR_TOKEN_RECOVERY_MS = 10 * 60 * 1000;
-const cookieCacheVersion = (session: Pick<Session, "id">) =>
-  // Pending rotations require one storage read before their snapshot is reusable.
-  session.id.startsWith(SYNTHETIC_SESSION_PREFIX) ||
-  ("priorTokenHash" in session && typeof session.priorTokenHash === "string")
-    ? Bun.randomUUIDv7()
-    : "session-lifetime-v2";
+// Synthetic and handoff sessions resolve storage on every read, and a pending
+// rotation needs one storage read before its snapshot is reusable; ordinary
+// snapshots retain their cache.
+const cookieCacheVersion = (
+  session: Pick<Session, "id"> & Readonly<Record<string, unknown>>,
+) => {
+  if (
+    session.id.startsWith(SYNTHETIC_SESSION_PREFIX) ||
+    typeof session["priorTokenHash"] === "string"
+  ) {
+    return Bun.randomUUIDv7();
+  }
+  if (typeof session["originConsentId"] === "string") {
+    return `handoff:${Bun.randomUUIDv7()}`;
+  }
+  return "session-lifetime-v2";
+};
 
 type SessionLifetimeDecision = {
   refreshMode: "fixed";
@@ -53,6 +64,13 @@ export const decidePinnedSessionLifetime = (
     : undefined;
 
 export const SESSION_LIFETIME_FIELDS = {
+  originConsentId: { type: "string", required: false, input: false },
+  handoffAbsoluteExpiresAt: {
+    type: "date",
+    required: false,
+    input: false,
+    returned: false,
+  },
   refreshMode: {
     type: "string",
     required: false,
@@ -118,6 +136,72 @@ const resolveObservedSession = async (
       }
     : null;
 };
+
+type PriorSessionTokenOptions = {
+  context: AuthContext;
+  token: string;
+  now: Date;
+};
+
+const findPriorSessionToken = async ({
+  context,
+  token,
+  now,
+}: PriorSessionTokenOptions) => {
+  const adapter = await getCurrentAdapter(context.adapter);
+  const current: unknown = await adapter.findOne({
+    model: "session",
+    where: [
+      { field: "priorTokenHash", value: hashSessionToken(token) },
+      { field: "priorTokenExpiresAt", operator: "gt", value: now },
+      ...liveSessionAdapterWhere(now),
+    ],
+    select: ["token"],
+  });
+  return current === null
+    ? null
+    : v.parse(v.object({ token: v.string() }), current).token;
+};
+
+type SessionDeletionOptions = {
+  deleteSession: AuthContext["internalAdapter"]["deleteSession"];
+  observe: (token: string) => Promise<Session | null>;
+  forgetObservations: () => void;
+  now: () => Date;
+};
+
+const createSessionDeleter =
+  ({
+    deleteSession,
+    observe,
+    forgetObservations,
+    now,
+  }: SessionDeletionOptions) =>
+  async (token: string) => {
+    const ctx = tryGetCurrentAuthEndpointContext();
+    if (ctx) {
+      // Revocation inside an SDK transaction must use its adapter throughout.
+      await deleteSession(token);
+      const canonical = await findPriorSessionToken({
+        context: ctx.context,
+        token,
+        now: now(),
+      });
+      if (canonical !== null) {
+        await deleteSession(canonical);
+      }
+      forgetObservations();
+      return;
+    }
+    const current = await observe(token);
+    await deleteSession(current?.token ?? token);
+    forgetObservations();
+    const remaining = await observe(token);
+    if (remaining) {
+      await deleteSession(remaining.token);
+      forgetObservations();
+    }
+  };
 
 const createRevokeSessionByIdEndpoint = (
   store: SessionLifetimeStore,
@@ -304,32 +388,22 @@ export const createSessionLifetime = ({
         const current = await observe(token);
         return current ? await updateSession(current.token, data) : null;
       }
-      const transactionAdapter = await getCurrentAdapter(ctx.context.adapter);
-      const current: unknown = await transactionAdapter.findOne({
-        model: "session",
-        where: [
-          { field: "priorTokenHash", value: hashSessionToken(token) },
-          { field: "priorTokenExpiresAt", operator: "gt", value: now() },
-          ...liveSessionAdapterWhere(now()),
-        ],
-        select: ["token"],
+      const canonical = await findPriorSessionToken({
+        context: ctx.context,
+        token,
+        now: now(),
       });
-      if (current === null) {
+      if (canonical === null) {
         return null;
       }
-      const canonical = v.parse(v.object({ token: v.string() }), current);
-      return await updateSession(canonical.token, data);
+      return await updateSession(canonical, data);
     };
-    adapter.deleteSession = async (token) => {
-      const current = await observe(token);
-      await deleteSession(current?.token ?? token);
-      forgetObservations();
-      const remaining = await observe(token);
-      if (remaining) {
-        await deleteSession(remaining.token);
-        forgetObservations();
-      }
-    };
+    adapter.deleteSession = createSessionDeleter({
+      deleteSession,
+      observe,
+      forgetObservations,
+      now,
+    });
   };
 
   const plugin = {

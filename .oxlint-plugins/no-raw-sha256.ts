@@ -1,15 +1,14 @@
 import {
   type Context,
+  eslintCompatPlugin,
   type ESTree,
   type Variable,
   type Visitor,
-  eslintCompatPlugin,
 } from "@oxlint/plugins";
 import { panic } from "better-result";
 
 import { SHA256_OWNERS } from "../scripts/sha256-owners.ts";
 import {
-  type ScopeContext,
   dynamicModuleSourceForEnforcement,
   isAstNode,
   isIdentifier,
@@ -20,8 +19,9 @@ import {
   repoRelativeFilename,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
-  staticStringValue,
+  type ScopeContext,
   stableInitializer,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 

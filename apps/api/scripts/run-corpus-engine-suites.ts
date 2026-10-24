@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { mkdirSync, openSync, closeSync, readFileSync, rmSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { printError } from "@stll/errors";

@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import {
   DECISION_TYPE_KIND_OTHER,
-  isDecisionTypeKind,
   type DecisionTypeKind,
+  isDecisionTypeKind,
 } from "@stll/api-contract/case-law-decision-types";
 
 import inventory from "@/api/lib/case-law/decision-type-inventory.json" with { type: "json" };
@@ -29,6 +29,8 @@ export const STATED_DECISION_TYPE_KINDS = {
   rozsudek: "judgment",
   "rozs.": "judgment",
   "rozs.část.": "judgment",
+  // Ministry of Justice decision-type code: rozsudek pro uznání.
+  "rozs.uzn": "judgment",
   usnesení: "order",
   "usn.": "order",
   nález: "finding",
@@ -52,8 +54,6 @@ export const STATED_DECISION_TYPE_KINDS = {
   none: DECISION_TYPE_KIND_OTHER,
   // Not a type: "otherwise", the publisher's catch-all.
   jinak: DECISION_TYPE_KIND_OTHER,
-  // Not a type: two types run together, which one is meant is not stated.
-  "rozs.uzn": DECISION_TYPE_KIND_OTHER,
   // Not decisions: a court's letter and its analytical materials.
   přípis: DECISION_TYPE_KIND_OTHER,
   "průzkum, rozbor a jiné materiály": DECISION_TYPE_KIND_OTHER,
@@ -205,6 +205,23 @@ export const readDecisionType = (stated: string): DecisionTypeReading => {
     kind:
       kinds.size === 1 && only !== undefined ? only : DECISION_TYPE_KIND_OTHER,
   };
+};
+
+/**
+ * Whether a stored type names a form the table does not know, including one
+ * part of a joined list (`new-form,usn.`), so an audit lists it for mapping.
+ */
+export const hasUnmappedDecisionType = (stated: string): boolean => {
+  const reading = readDecisionType(stated);
+  if (reading.type !== "joined") {
+    return reading.type === "unmapped";
+  }
+  return (decisionTypeKey(stated) ?? "")
+    .split(JOINED_TYPES_SEPARATOR)
+    .some((part) => {
+      const partKey = decisionTypeKey(part);
+      return partKey !== undefined && !KIND_BY_KEY.has(partKey);
+    });
 };
 
 /** The canonical kind a stored decision type states; `other` when none. */

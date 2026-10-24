@@ -9,6 +9,7 @@
       "noOtherSessions": "Nav citu aktīvu sesiju",
       "revokeOtherSessions": "Izrakstīties no citām ierīcēm",
       "revokeOtherSessionsConfirm": "Tiks beigtas visas sesijas, izņemot pašreizējo.",
+      "signedInFrom": "Pierakstīšanās no {clientName}",
       "unknownDevice": "Nezināma ierīce"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Pārrakstīšanas iespējas",
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
+      "accountRestricted": "AI pakalpojumu sniedzēja iestatījumi šim kontam nav pieejami.",
+      "configUnreadable": "AI pakalpojumu sniedzēja konfigurāciju nevar nolasīt. Lūdziet organizācijas administratoram to savienot atkārtoti.",
       "cta": "Atvērt AI iestatījumus",
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
+      "permissionRequired": "AI pakalpojumu sniedzēju var pievienot tikai organizācijas administrators.",
+      "seatRequired": "Lūdziet organizācijas administratoram piešķirt jums vietu.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     },
     "refinePlaceholder": "Kā AI jāpielāgo formulējums?",
@@ -137,6 +142,8 @@
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
       "title": "Neizdevās jūs pieslēgt"
     },
+    "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
+    "handoffTitle": "Turpināt uz stella",
     "headline": "Skaidrība ikvienā lietā.",
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Mana organizācija",
     "password": "Parole",
     "professionalUse": {
-      "description": "Veidojot jūsu kontu, šis paziņojums jums netika parādīts. Lai turpinātu, pieņemiet to.",
       "title": "Apstipriniet profesionālu lietošanu"
     },
     "professionalUseStatement": "Izveidojot kontu, jūs apliecināt, ka izmantojat stella profesionāliem mērķiem, un saprotat, ka stella ir rīks juridiskajiem speciālistiem un neaizstāj juridisku konsultāciju.",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
+    "reauthenticationRequired": "Lai turpinātu šo darbību, pierakstieties vēlreiz.",
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
@@ -926,13 +933,10 @@
     },
     "coverage": {
       "completeness": "Pilnīgums",
-      "countedOn": "Saskaitīts {date}",
       "courtsHeading": "Pēc tiesas",
       "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
-      "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
-      "gapStatusUnknown": "Iztrūkumu statuss nav zināms",
       "generatedAt": "Dati uz {date}",
       "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
@@ -953,7 +957,8 @@
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
+      "unreadListingPeriods": "Nenolasītie saraksta periodi"
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {
@@ -1591,6 +1596,7 @@
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorConnectionFailed": "Neizdevās izveidot savienojumu ar tērzēšanu. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
+    "sendErrorContinuationRejected": "Tērzēšanu neizdevās turpināt. Nosūtiet jaunu ziņojumu, lai sāktu no jauna.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
     "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
@@ -2277,6 +2283,7 @@
     "scopeKnowledgeWrite": "Izveidot, rediģēt un dzēst jūsu klauzulas un palaist pārbaudes ceļvežus",
     "scopeLawRead": "Lasīt publiski pieejamos tiesību aktus un judikatūru",
     "scopeMattersWrite": "Izveidot un rediģēt jūsu lietas un uzdevumus",
+    "scopeMemoryWrite": "Izveidot un atjaunināt asistenta atmiņu",
     "scopeOfflineAccess": "Paturēt jūs pieslēgtu bez atkārtotas apstiprināšanas",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
     "scopeProfile": "Piekļūt jūsu profila informācijai",
@@ -2304,6 +2311,7 @@
     "summaryLineRead": "<group>Lasīt:</group> {items}",
     "summaryLineUse": "<group>Lietot:</group> {items}",
     "summaryMattersWrite": "lietas un uzdevumi",
+    "summaryMemoryWrite": "asistenta atmiņa",
     "summaryProfile": "profils",
     "summaryRead": "dokumenti, lietas un kontakti",
     "summaryReadAnonymized": "anonimizēti dokumenti un lietas",
@@ -2669,6 +2677,7 @@
       "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "contact": "Sazinieties ar mums",
+      "featureDisabled": "Šī funkcija ir īslaicīgi izslēgta.",
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
       "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
     },
@@ -3524,6 +3533,12 @@
       "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
+      "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
+      "unsupportedField": "Šajā dokumentā ir lauks {fieldType}, ko nevar konvertēt.",
+      "unsupportedReference": "Šajā dokumentā {element} {attribute} atsaucas uz ārēju resursu, tāpēc to nevar konvertēt."
+    },
     "external": {
       "confirmDescription": "Jūs tūlīt apmeklēsiet ārēju tīmekļa vietni.",
       "confirmTitle": "Atvērt ārēju saiti?",
@@ -4223,6 +4238,22 @@
       "guestStorageUnavailable": "Izcēlumus un piezīmes šajā cilnē neizdevās saglabāt.",
       "highlight": "Izcelt",
       "highlightedPassage": "Izceltais fragments",
+      "history": {
+        "colorRestored": "Krāsa atjaunota",
+        "commentRemoved": "Komentārs noņemts",
+        "commentRestored": "Komentārs atjaunots",
+        "highlightRemoved": "Izcēlums noņemts",
+        "highlightRestored": "Izcēlums atjaunots",
+        "markChanged": "Šis izcēlums vai komentārs pa to laiku tika mainīts citur, tāpēc tas atstāts nemainīts.",
+        "markGone": "Šis izcēlums vai komentārs vairs nepastāv.",
+        "nothingToRedo": "Nav ko atkārtot",
+        "nothingToUndo": "Nav ko atsaukt",
+        "redoShortcut": "Atkārtot izcēluma vai komentāra izmaiņu",
+        "styleRestored": "Stils atjaunots",
+        "textRestored": "Komentāra teksts atjaunots",
+        "undoShortcut": "Atsaukt izcēluma vai komentāra izmaiņu",
+        "visibilityRestored": "Kopīgošana atjaunota"
+      },
       "removeHighlight": "Noņemt izcēlumu",
       "sharedBadge": "Kopīgots",
       "styleHighlight": "Izcēlums",
@@ -4734,6 +4765,7 @@
   },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
+    "caseLawEmptyState": "Sāciet rakstīt, lai meklētu tiesu nolēmumus.",
     "caseLawMatchingDecisions": "{count, plural, zero {# atbilstošu nolēmumu} one {# atbilstošs nolēmums} other {# atbilstoši nolēmumi}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ atbilstošu nolēmumu} one {#+ atbilstošs nolēmums} other {#+ atbilstoši nolēmumi}}",
     "continueInChat": "Turpināt tērzēšanā",
@@ -4791,6 +4823,7 @@
     "savedSearchesEmpty": "Saglabājiet meklējumu, lai to izmantotu atkārtoti.",
     "scopeFilter": "Meklēšanas tvērums",
     "scopePlaceholderAll": "Meklēt visos <scope>avotos</scope>…",
+    "scopePlaceholderCaseLaw": "Meklēt <scope>tiesu praksē</scope>…",
     "scopePlaceholderMatters": "Meklēt visās <scope>lietās</scope>…",
     "scopePlaceholderRegistries": "Meklēt <scope>reģistros</scope>…",
     "scopeRegistries": "Reģistri",
@@ -4940,7 +4973,7 @@
       "description": "Izmantojiet stella no sava AI asistenta un redziet, kam ir piekļuve jūsu kontam.",
       "developerDescription": "Servera adreses un komandrindas rīks tehniskiem iestatījumiem.",
       "developerTitle": "Izstrādātāju piekļuve",
-      "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā.",
+      "disconnectConfirmDescription": "Tas atņems {clientName} piekļuvi jūsu kontam, kā arī atceļ visus tā izsniegtos marķierus. Jūs varat atkal pievienoties jebkurā laikā. Tiks izbeigtas arī pārlūkprogrammas sesijas, kas izveidotas, izmantojot šo savienojumu.",
       "disconnectConfirmTitle": "Atvienot {clientName}?",
       "disconnectSuccess": "{clientName} atvienots",
       "integrationsDescription": "Ārējie pakalpojumi, ko AI var izmantot jūsu vietā, piemēram, dokumentu krātuve.",
@@ -5993,6 +6026,7 @@
       "downloadFailed": "Lejupielāde neizdevās",
       "downloadPdf": "Lejupielādēt kā PDF",
       "downloadSearchablePdf": "Meklējams PDF",
+      "emptyFile": "Fails ir tukšs.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",

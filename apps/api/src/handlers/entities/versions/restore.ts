@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";

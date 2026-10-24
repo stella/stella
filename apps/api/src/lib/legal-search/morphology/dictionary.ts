@@ -16,7 +16,7 @@
 import { panic } from "better-result";
 
 import { nextMacrotask } from "@stll/concurrency/event-loop";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 

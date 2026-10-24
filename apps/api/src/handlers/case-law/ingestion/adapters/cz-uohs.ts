@@ -39,8 +39,8 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import {
   READ_OUTCOME_METADATA_KEY,
-  storedReadUnavailable,
   type StoredReadOutcome,
+  storedReadUnavailable,
   UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";

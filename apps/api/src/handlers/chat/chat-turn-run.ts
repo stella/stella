@@ -36,6 +36,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitChatTurnSettlementMetric } from "@/api/lib/observability/request-metrics";
 import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { withSseHeartbeat } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -603,10 +604,13 @@ export class ChatTurnRun {
    * Start producing `output`, built against `control`, and serve it. The
    * response is a viewer: closing it detaches delivery while the producer
    * keeps draining into the log under its existing deadlines and ownership.
+   * `viewer` is the credential that asked for it, and the response ends with
+   * that credential the same way.
    */
   produce(
     output: AsyncIterable<StreamChunk>,
     durability: StreamDurability,
+    viewer: SseStreamBinding,
   ): Response {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
@@ -625,6 +629,7 @@ export class ChatTurnRun {
             headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
           },
         ),
+        viewer,
       ),
       this.options.onDeliveryStalled,
     );

@@ -28,9 +28,9 @@ import {
 } from "@stll/ui/combobox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -80,8 +80,8 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clauseDetailOptions,
-  knowledgeKeys,
   invalidateTemplateClauseSources,
+  knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";

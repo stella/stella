@@ -24,8 +24,8 @@ import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_CODE,
-  publicCountryUnavailableSchema,
   type PublicCountryUnavailable,
+  publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";

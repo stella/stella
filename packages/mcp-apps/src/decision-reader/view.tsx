@@ -20,7 +20,7 @@ import type { ReaderController } from "./controller";
 import { openDecisionAnchor, openProvisionAnchor } from "./link-actions";
 import { readerMessages } from "./messages";
 import { resolveReaderRange } from "./model";
-import type { ReaderPager, OpenDecision } from "./model";
+import type { OpenDecision, ReaderPager } from "./model";
 
 const focusReaderBack = (button: HTMLButtonElement | null) => {
   button?.focus({ preventScroll: true });

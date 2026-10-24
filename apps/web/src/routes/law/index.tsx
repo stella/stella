@@ -72,8 +72,8 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
-  type LawScope,
   lawHomeDescriptor,
+  type LawScope,
   statuteCountryOf,
 } from "@/routes/law/-law-home/jurisdictions";
 import { LawDatabaseStatus } from "@/routes/law/-law-home/law-database-status";

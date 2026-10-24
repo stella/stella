@@ -7,8 +7,8 @@ import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import {
-  mcpMemberAuthority,
   type McpEffectiveAuthority,
+  mcpMemberAuthority,
 } from "@/api/mcp/effective-authority";
 
 /** One operation a write tool's input can select, with the grant it needs. */

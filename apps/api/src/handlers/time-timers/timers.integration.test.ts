@@ -19,14 +19,14 @@ import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
-  TIME_ENTRY_SOURCE,
+  featureEnrolments,
   organizationSettings,
   rateTables,
+  TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

@@ -167,7 +167,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           const rows = await census.unsafe<{ organization_id: string }[]>(
             `SELECT organization_id FROM ${schema}.${identifier(name)}`,
           );
-          expect(rows, name).toEqual([]);
+          expect([...rows], name).toEqual([]);
           expect(swept.get(name), name).toBe(2);
         }
       } finally {

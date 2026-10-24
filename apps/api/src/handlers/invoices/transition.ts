@@ -6,8 +6,8 @@ import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
-  INVOICE_ATTACHMENT,
   expenses,
+  INVOICE_ATTACHMENT,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
@@ -22,7 +22,7 @@ import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder, AuditEvent } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   allocateNumber,

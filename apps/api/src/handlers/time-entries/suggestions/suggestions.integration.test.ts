@@ -16,9 +16,9 @@ import {
   auditLogs,
   chatMessages,
   chatThreads,
+  featureEnrolments,
   timeEntries,
   timeEntrySuggestions,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";

@@ -8,7 +8,7 @@ import { invalidInput, type InvoicingResult } from "./errors";
 import {
   compactPaymentDate,
   parsePaymentAccount,
-  validateVariableSymbol,
+  validatePaymentSymbol,
 } from "./payment-fields";
 import type { InvoiceDocumentType } from "./types";
 
@@ -71,7 +71,7 @@ export const buildPayBySquarePayload = ({
 
   let symbol = "";
   if (variableSymbol !== undefined) {
-    const validSymbol = validateVariableSymbol(variableSymbol);
+    const validSymbol = validatePaymentSymbol(variableSymbol, "Variable");
     if (validSymbol.isErr()) {
       return Result.err(validSymbol.error);
     }

@@ -8,21 +8,21 @@ import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
   type ConditionNode,
-  type FilterCall,
-  type RowScope,
+  conditionNodeSchema,
   DATE_FORMAT_STYLES,
   type FieldDateFormat,
-  conditionNodeSchema,
+  type FilterCall,
   isFieldPath,
+  type RowScope,
 } from "@stll/template-conditions";
 
 import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
+  type FieldSource,
   fieldSourceSchema,
   fieldSourceToolInputSchema,
-  type FieldSource,
 } from "@/api/lib/template-binding/binding-sources";
 
 export type { FieldSource } from "@/api/lib/template-binding/binding-sources";

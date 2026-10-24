@@ -18,7 +18,7 @@ import { panic, Result } from "better-result";
  */
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";

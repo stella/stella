@@ -5,8 +5,8 @@ import { panic } from "better-result";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useQueryView } from "@/lib/use-query-view";
 import {
-  organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
+  organizationSettingsOptions,
 } from "@/queries/organization-settings";
 
 import { callerFeatureEnabled, runForCallerFeature } from "./access.logic";

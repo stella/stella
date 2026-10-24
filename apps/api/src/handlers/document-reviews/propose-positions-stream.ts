@@ -206,7 +206,13 @@ const proposePositionsStream = createSafeHandler(
       },
     });
 
-    return Result.ok(sseResponse(sse));
+    return Result.ok(
+      sseResponse(sse, {
+        kind: "session",
+        sessionId: session.id,
+        userId: user.id,
+      }),
+    );
   },
 );
 

@@ -708,7 +708,10 @@ export const identityFields = (
   }
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
-    "error.code": root.code ?? root.awsName ?? root.tag,
+    "error.code":
+      root.extraction?.["workerErrorClass"] === undefined
+        ? (root.code ?? root.awsName ?? root.tag)
+        : `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`,
   };
   const frame = frameValue(root.frame);
   if (frame !== undefined) {

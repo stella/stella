@@ -8,8 +8,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { documentProcessingRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  withAggregateTransaction,
   withAggregateRowQuery,
+  withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";

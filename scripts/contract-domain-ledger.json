@@ -940,10 +940,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/pane-width-storage.ts::INSPECTOR_PANE_SURFACES::domain:[\"matter\",\"public-law\"]::1",
-    "reason": "Existing INSPECTOR_PANE_SURFACES domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/inspector/playbook-facet.tsx::CounterpartyNotePopover::maxLength:2000::1",
     "reason": "Existing CounterpartyNotePopover UI validation or presentation bound; contract migration pending."
   },
@@ -1048,23 +1044,11 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/search-dialog.logic.test.ts::<module>::domain:[\"all\",\"matters\",\"registries\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/search-dialog.logic.test.ts::modes::domain:[\"browse\",\"pick\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
     "id": "apps/web/src/components/search-dialog.logic.test.ts::modes::domain:[\"browse\",\"pick\"]::2",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/components/search-dialog.logic.test.ts::scopes::domain:[\"all\",\"matters\",\"registries\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/components/search-dialog.logic.test.ts::scopes::domain:[\"all\",\"matters\",\"registries\"]::2",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {

@@ -114,6 +114,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
   "PUBLIC_CORPUS_ASSUMED_REPLICAS",
@@ -202,6 +203,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
   "SELFHOST_LOCAL_PASSWORD_AUTH",
+  "MCP_WEB_HANDOFF_MINT_ENABLED",
+  "MCP_WEB_HANDOFF_TEXT_ENABLED",
+  "MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
   "STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV",
@@ -228,6 +232,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 
 const EXAMPLE_VALUES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS: "{}",
+  KILL_SWITCHES: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
   BETTER_AUTH_URL: "http://localhost:3001",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -343,6 +348,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  KILL_SWITCHES:
+    'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
     "Age in days before unused client registrations expire (1–365; default 30).",
   AGENT_REGISTRATION_DAILY_LIMIT:
@@ -431,6 +438,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Delay before the migrator retries a deferred online index build.",
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS:
     "Maximum time an online index build may stay in one waiting phase, such as waiting for older transactions, before it is cancelled and retried.",
+  ONLINE_INDEX_IDLE_HOLDER_MS:
+    "How long another session may sit idle in a transaction on a table before online index work on that table defers instead of starting.",
+  ONLINE_INDEX_LONG_HOLDER_MS:
+    "How old another session's transaction on a table may be before online index work on that table defers instead of starting.",
   ONLINE_INDEX_PARALLEL_WORKERS:
     "max_parallel_maintenance_workers for online index builds (0 or 1).",
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB:
@@ -570,6 +581,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
+  MCP_WEB_HANDOFF_MINT_ENABLED:
+    "Enable sign-in handoffs on connected-app links. Defaults off.",
+  MCP_WEB_HANDOFF_TEXT_ENABLED:
+    "Include sign-in handoff codes in MCP text links. Defaults off; opt in separately from link minting.",
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS:
+    "Absolute lifetime in seconds for sessions created from MCP text links; defaults to twelve hours and cannot exceed it.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
   SMTP_HOST: "SMTP relay hostname.",
   SMTP_PORT: "SMTP relay port.",
@@ -803,6 +820,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
+  KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
@@ -875,6 +893,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_IDLE_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_LONG_HOLDER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_PARALLEL_WORKERS: ENV_CREDENTIAL_KIND.notCredential,
@@ -932,6 +952,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SELFHOST_LOCAL_PASSWORD_AUTH: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_MINT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_TEXT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
   SES_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
   SES_REGION: ENV_CREDENTIAL_KIND.notCredential,
@@ -1423,6 +1446,21 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
+  // the commit it deploys, the infrastructure repository and its App token,
+  // the readiness endpoint and edge header, and the bounds tests shorten.
+  "DEPLOY_SHA",
+  "INFRA_REPO",
+  "STAGING_POWER_TOKEN",
+  "STAGING_HEALTH_URL",
+  "EDGE_HEADER_NAME",
+  "EDGE_HEADER_VALUE",
+  "STAGING_WAKE_LOOKUP_ATTEMPTS",
+  "STAGING_WAKE_LOOKUP_INTERVAL_SECONDS",
+  "STAGING_WAKE_START_MINUTES",
+  "STAGING_WAKE_START_POLL_SECONDS",
+  "STAGING_WAKE_READY_MINUTES",
+  "STAGING_WAKE_READY_POLL_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",
@@ -1477,8 +1515,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
-  // JSON paths handed from ci-plan to the changed-test repeat in ci-tests.
-  "CHANGED_FILES_JSON",
+  // File holding ci-plan's changed paths for the changed-test repeat in ci-tests.
+  "CHANGED_FILES_PATH",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
   "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",
@@ -1517,6 +1555,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SIGN_IN",
+  "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
   "JOURNEY_WEB_DECISION_URL",
   "JOURNEY_WEB_SEARCH_URL",
@@ -1549,6 +1589,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Tailwind lint worker liveness tuning. The test hooks are confined to the
+  // plugin regression suite and are inert unless explicitly set.
+  "OXLINT_TAILWINDCSS_CACHE_DIR",
+  "OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
+  "OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS",
+  "OXLINT_TAILWINDCSS_WORKER_TEST_HOOK",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
@@ -1656,11 +1704,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_GENERATED_SOURCES_MANIFEST",
   // Check pool: the job context its step hands over and an optional
   // concurrency override; the pool strips the context before running checks.
-  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_NEEDS_FILE",
   "CI_CHECK_POOL_STEPS",
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
   "CI_CHECK_POOL_CONCURRENCY",
+  // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
+  "CI_CHECK_POOL_PARTITION",
+  // Test-only: the commit ci-checks-partition.test.ts compares the head with.
+  "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
@@ -1697,6 +1749,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_FIX_AVAILABLE",
   "TEST_OPEN_PRS",
   "TEST_ADVISORIES_REMAIN",
+  "TEST_STALE",
+  "TEST_PIN_REWRITE",
   "WXT_STELLA_ORIGINS",
 ]);
 

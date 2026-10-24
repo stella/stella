@@ -10,10 +10,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -56,8 +56,8 @@ import { useQueryView } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
-  PARTY_ROLES,
   PARTY_ROLE_LABEL_KEYS,
+  PARTY_ROLES,
   toPartyRole,
 } from "@/lib/workspaces/party-roles";
 import type { PartyRole } from "@/lib/workspaces/party-roles";

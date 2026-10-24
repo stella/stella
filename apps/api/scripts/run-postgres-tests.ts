@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { createSqlClient } from "../src/db/sql-client";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   mergeJunitReports,
@@ -74,7 +75,7 @@ process.exitCode = await runGatedTests({
       "application_name",
       `stella-postgres-runner-${process.pid}`,
     );
-    const sql = new Bun.SQL({ url: adminUrl.toString(), max: 1 });
+    const sql = createSqlClient({ url: adminUrl.toString(), max: 1 });
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "stella-postgres-junit-"),
     );

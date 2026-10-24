@@ -6,9 +6,9 @@ import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   coordinationExpireArguments,
+  type CoordinationKey,
   coordinationKey,
   coordinationSetArguments,
-  type CoordinationKey,
 } from "@/api/lib/redis-keys";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import {

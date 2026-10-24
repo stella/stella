@@ -4,10 +4,10 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import {
-  LIST_ITEM_TYPES,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
+  LIST_ITEM_TYPES,
 } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

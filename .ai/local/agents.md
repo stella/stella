@@ -17,8 +17,9 @@ publishable code lives in `packages/`. Use Glob/Grep to explore.
 Before changing a convention-governed domain, read and apply the matching
 `.agents/skills/conventions-*/SKILL.md`. This includes AI, databases, i18n and
 user-facing strings, ingestion, MCP tools and CLI capabilities (agent-facing
-schemas, errors, and reference resources), performance guard failures and hot
-paths, architecture and scale, auth and data access, files and external APIs,
+schemas, errors, and reference resources), performance measurement for routes,
+screens, endpoints, MCP tools, mutations, live events, background jobs and polling
+loops, architecture and scale, auth and data access, files and external APIs,
 tests, `apps/web` React effects, and user-facing UI. The skills own the detailed
 rules.
 
@@ -70,7 +71,7 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
-`bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
+`bun run typecheck` uses Bun’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
@@ -133,7 +134,7 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
+**Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
@@ -12,10 +12,10 @@ import {
   organization,
 } from "@/api/db/auth-schema";
 import {
-  createServiceOAuthClient,
   changeServiceOAuthClient,
-  rootDb,
+  createServiceOAuthClient,
   recordLegalResolveAudit,
+  rootDb,
 } from "@/api/db/root";
 import { auditLogs, serviceOAuthClients } from "@/api/db/schema";
 import { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";

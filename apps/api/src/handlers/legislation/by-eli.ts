@@ -23,7 +23,11 @@ import {
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import { legislationWorkIdentifierCondition } from "@/api/lib/legal-search/legislation-work-identifiers";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 
 export const readStatuteByEliQuerySchema = t.Object({
   eli: t.String({ minLength: 1, maxLength: 512 }),
@@ -81,20 +85,19 @@ export const publisherWindowInconsistentBody = (
  * statutes the same way: one implementation decides what an ELI plus a date
  * means, so a tool cannot resolve it differently from the reader.
  */
-const workConditionsFor = (
-  {
-    eli,
-    language,
-  }: {
-    eli: string;
-    language?: string | undefined;
-  },
-  surface: PublicCountrySurface,
-): SQL[] => {
-  const conditions: SQL[] = [
-    eq(legislationDocuments.eli, eli),
-    publishedLegislationDocumentFor(surface),
-  ];
+type WorkConditionsOptions = {
+  tx: LegislationReadTransaction;
+  query: { eli: string; language?: string | undefined };
+  surface: PublicCountrySurface;
+};
+
+const workConditionsFor = async ({
+  tx,
+  query: { eli, language },
+  surface,
+}: WorkConditionsOptions): Promise<SQL[]> => {
+  const identity = await legislationWorkIdentifierCondition(tx, eli);
+  const conditions = [identity, publishedLegislationDocumentFor(surface)];
   if (language !== undefined) {
     conditions.push(eq(legislationDocuments.language, language));
   }
@@ -117,10 +120,9 @@ export const resolveStatuteWorkVersion = async (
   query: { eli: string; language?: string | undefined },
   legislationDb: LegislationReadDb,
   surface: PublicCountrySurface,
-): Promise<StatuteExpressionResolution> => {
-  const conditions = workConditionsFor(query, surface);
-
-  return await legislationDb(async (tx) => {
+): Promise<StatuteExpressionResolution> =>
+  await legislationDb(async (tx) => {
+    const conditions = await workConditionsFor({ tx, query, surface });
     const [version] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
@@ -141,7 +143,6 @@ export const resolveStatuteWorkVersion = async (
       ? ({ type: "unknown-work" } as const)
       : ({ type: "expression", id: version.id } as const);
   });
-};
 
 export const resolveStatuteExpression = async (
   query: ReadStatuteByEliQuery,
@@ -151,9 +152,8 @@ export const resolveStatuteExpression = async (
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
 
-  const workConditions = workConditionsFor(query, surface);
-
   return await legislationDb(async (tx) => {
+    const workConditions = await workConditionsFor({ tx, query, surface });
     const [expression] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)

@@ -4,8 +4,8 @@ import JSZip from "jszip";
 import { writeZipEntry } from "@stll/docx-utils";
 
 import {
-  DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
+  DESKTOP_EDIT_FILE_TYPES,
   type DesktopEditFileType,
 } from "@/api/lib/desktop-edit-file-types";
 

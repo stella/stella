@@ -11,7 +11,7 @@ import type {
   PrefillSuggestion,
   PrefillTarget,
 } from "@/api/handlers/templates/prefill-fields";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,

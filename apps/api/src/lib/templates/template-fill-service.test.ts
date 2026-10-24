@@ -22,16 +22,16 @@ import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import { partParagraphTexts } from "@/api/lib/docx/rich-patch";
-import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateData } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -45,14 +45,14 @@ import {
   templateFillStatus,
 } from "./template-fill-completion";
 import {
+  type AiFillAdmission,
+  type AiFillCollaborators,
+  clauseDirectiveRecoveryHint,
   describeStoredTemplate,
+  discoverTemplateSource,
   fillStoredTemplateDocx,
   fillTemplateDocx,
   fillTemplateDocxStrict,
-  discoverTemplateSource,
-  clauseDirectiveRecoveryHint,
-  type AiFillAdmission,
-  type AiFillCollaborators,
 } from "./template-fill-service";
 import { runAdmittedAiFill } from "./template-fill-usage";
 

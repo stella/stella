@@ -16,8 +16,8 @@ import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
-  extractionWorkerErrorCode,
   ExtractionWorkerError,
+  extractionWorkerErrorCode,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -35,6 +35,7 @@ import {
   ATTACHMENT_EXTRACTION_OUTCOME,
   parseAttachmentIssues,
 } from "@/api/lib/search/extraction-worker-attachments";
+import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
 import { spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
@@ -172,6 +173,7 @@ export const extractFileTextResult = async (
       mimeType: normalizedMimeType,
       sizeBytes: buffer.byteLength,
       termination,
+      workerErrorClass: parseWorkerErrorClass(result.error.message),
     });
     return Result.err(error);
   }

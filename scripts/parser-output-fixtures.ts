@@ -16,8 +16,8 @@ import { czNsAdapter } from "../apps/api/src/handlers/case-law/ingestion/adapter
 import {
   assembleCzRegionalDecision,
   isCzRegionalApiItem,
-  readCzRegionalDocument,
   readCzRegionalChain,
+  readCzRegionalDocument,
 } from "../apps/api/src/handlers/case-law/ingestion/adapters/cz-regional";
 import { czUsAdapter } from "../apps/api/src/handlers/case-law/ingestion/adapters/cz-us";
 import {
@@ -50,18 +50,18 @@ import { judgeNameKey } from "../apps/api/src/handlers/case-law/judges/judge-nam
 import { loadDocxArchive } from "../apps/api/src/lib/docx-archive";
 import { sanitizeResult } from "../apps/api/src/lib/legal-search/ingestion-normalization";
 import {
+  type DecisionSupplement,
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  toPlainTextIngestionResult,
-  type DecisionSupplement,
   type IngestionResult,
   type RawIngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  toPlainTextIngestionResult,
 } from "../apps/api/src/lib/legal-search/ingestion-types";
 import {
-  setLogSinkForTesting,
-  resetLogSinkForTesting,
   type LogRecord,
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
 } from "../apps/api/src/lib/observability/logger";
 import { isRecord } from "../apps/api/src/lib/type-guards";
 import { collectPolishFixtures } from "./parser-output-polish-fixtures";

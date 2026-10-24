@@ -6,8 +6,8 @@
 import * as v from "valibot";
 
 import {
-  type ConditionNode,
   conditionHasFormula,
+  type ConditionNode,
   conditionNodeSchema,
 } from "@stll/conditions";
 import { MAX_CONDITION_NESTING } from "@stll/template-conditions";

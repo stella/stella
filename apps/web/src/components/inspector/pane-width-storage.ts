@@ -1,31 +1,57 @@
-/**
- * The one owner of the docked inspector's remembered width.
- *
- * The width is a display preference of this browser, not workspace state, so
- * it is not scoped to the organization and user the tab state is (see
- * `inspector-broadcast.ts`). It is also one preference, not one per section:
- * a reader moving between matters and case law expects the pane to stay the
- * width they dragged it to. Every dock reads and writes it through
- * `useSharedInspectorPaneWidth`, so no surface can grow a key of its own.
- */
-
 import { useState } from "react";
 
-import { useInspectorPaneWidth } from "@stll/ui/inspector";
+import * as v from "valibot";
+
+/** The one owner of the docked inspector's remembered width. */
+import {
+  INSPECTOR_PANE_MAX_WIDTH,
+  INSPECTOR_PANE_MIN_WIDTH,
+  useInspectorPaneWidth,
+} from "@stll/ui/inspector";
 
 import { deviceStorage } from "@/lib/account/browser-storage";
+import {
+  definePersistedState,
+  isRestoredStateSafeMode,
+  keepInAnyScope,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 export const INSPECTOR_PANE_WIDTH_STORAGE_KEY =
   "stella:inspector-pane-width:v2";
 
-const INSPECTOR_PANE_SURFACES = ["matter", "public-law"] as const;
+const paneWidthSchema = v.pipe(
+  v.number(),
+  v.minValue(INSPECTOR_PANE_MIN_WIDTH),
+  v.maxValue(INSPECTOR_PANE_MAX_WIDTH),
+);
 
-export type InspectorPaneSurface = (typeof INSPECTOR_PANE_SURFACES)[number];
+const inspectorPaneWidthEntry = definePersistedState({
+  key: INSPECTOR_PANE_WIDTH_STORAGE_KEY,
+  area: "local",
+  version: 1,
+  schema: paneWidthSchema,
+  legacy: { encoding: "json", schema: paneWidthSchema },
+  maxBytes: 128,
+  defaultValue: () => 512,
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
-const LEGACY_SURFACE_STORAGE_KEYS: Record<InspectorPaneSurface, string> = {
+const paneWidthPersistence = {
+  read: () => readPersistedState(inspectorPaneWidthEntry, {}),
+  write: (width: number) => {
+    writePersistedState(inspectorPaneWidthEntry, {}, width).unwrapOr(undefined);
+  },
+};
+
+const LEGACY_SURFACE_STORAGE_KEYS = {
   matter: "stella:inspector-pane-width:v1:matter",
   "public-law": "stella:inspector-pane-width:v1:public-law",
-};
+} as const;
+
+export type InspectorPaneSurface = keyof typeof LEGACY_SURFACE_STORAGE_KEYS;
 
 /**
  * Folds the per-surface widths an earlier build stored into the shared one.
@@ -37,13 +63,16 @@ const LEGACY_SURFACE_STORAGE_KEYS: Record<InspectorPaneSurface, string> = {
 export const migrateInspectorPaneWidth = (
   openedFrom: InspectorPaneSurface,
 ): void => {
+  if (isRestoredStateSafeMode()) {
+    return;
+  }
   // Best-effort like every device preference: blocked storage reads as empty
   // and the pane opens at its default width.
   const storage = deviceStorage("local");
   const legacyKeys = [
     LEGACY_SURFACE_STORAGE_KEYS[openedFrom],
-    ...INSPECTOR_PANE_SURFACES.filter((surface) => surface !== openedFrom).map(
-      (surface) => LEGACY_SURFACE_STORAGE_KEYS[surface],
+    ...Object.values(LEGACY_SURFACE_STORAGE_KEYS).filter(
+      (key) => key !== LEGACY_SURFACE_STORAGE_KEYS[openedFrom],
     ),
   ];
   const legacyWidth = legacyKeys
@@ -61,7 +90,6 @@ export const migrateInspectorPaneWidth = (
 };
 
 type UseSharedInspectorPaneWidthOptions = {
-  /** The surface docking the pane; only picks which earlier width migrates. */
   openedFrom: InspectorPaneSurface;
   sidebarWidth: number;
   viewportWidth: number;
@@ -72,14 +100,13 @@ export const useSharedInspectorPaneWidth = ({
   sidebarWidth,
   viewportWidth,
 }: UseSharedInspectorPaneWidthOptions) => {
-  // Runs before the width hook's own initializer reads the shared key.
   useState(() => {
     migrateInspectorPaneWidth(openedFrom);
     return null;
   });
   return useInspectorPaneWidth({
+    persistence: paneWidthPersistence,
     sidebarWidth,
-    storageKey: INSPECTOR_PANE_WIDTH_STORAGE_KEY,
     viewportWidth,
   });
 };

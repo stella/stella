@@ -118,7 +118,7 @@ export type BetterAuthFieldDefault =
 
 export type BetterAuthFieldReference = {
   field: "id";
-  model: "organization" | "user";
+  model: "oauthConsent" | "organization" | "user";
   onDelete: "cascade" | null;
 };
 

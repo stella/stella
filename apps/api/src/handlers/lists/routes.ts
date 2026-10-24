@@ -36,55 +36,68 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   .use(createListVerificationRoutes())
   .get("/", readLists.handler, {
     permissions: readLists.config.permissions,
+    accountAccess: readLists.config.accountAccess,
     query: readLists.config.query,
   })
   .put("/", createList.handler, {
     body: createList.config.body,
     permissions: createList.config.permissions,
+    accountAccess: createList.config.accountAccess,
   })
   .patch("/", updateList.handler, {
     body: updateList.config.body,
     permissions: updateList.config.permissions,
+    accountAccess: updateList.config.accountAccess,
   })
   .post("/sections", createSection.handler, {
     body: createSection.config.body,
     permissions: createSection.config.permissions,
+    accountAccess: createSection.config.accountAccess,
   })
   .post("/columns", createColumn.handler, {
     body: createColumn.config.body,
     permissions: createColumn.config.permissions,
+    accountAccess: createColumn.config.accountAccess,
   })
   .post("/generations", createGeneration.handler, {
     body: createGeneration.config.body,
     permissions: createGeneration.config.permissions,
+    accountAccess: createGeneration.config.accountAccess,
   })
   .post("/generation-candidates", submitGenerationCandidates.handler, {
     body: submitGenerationCandidates.config.body,
     permissions: submitGenerationCandidates.config.permissions,
+    accountAccess: submitGenerationCandidates.config.accountAccess,
   })
   .post("/generation-candidates/accept", acceptGenerationCandidate.handler, {
     body: acceptGenerationCandidate.config.body,
     permissions: acceptGenerationCandidate.config.permissions,
+    accountAccess: acceptGenerationCandidate.config.accountAccess,
   })
   .post("/generation-candidates/reject", rejectGenerationCandidate.handler, {
     body: rejectGenerationCandidate.config.body,
     permissions: rejectGenerationCandidate.config.permissions,
+    accountAccess: rejectGenerationCandidate.config.accountAccess,
   })
   .post("/item-sources", createItemSource.handler, {
     body: createItemSource.config.body,
     permissions: createItemSource.config.permissions,
+    accountAccess: createItemSource.config.accountAccess,
   })
   .post("/item-comments", createItemComment.handler, {
     body: createItemComment.config.body,
     permissions: createItemComment.config.permissions,
+    accountAccess: createItemComment.config.accountAccess,
   })
   .post("/item-reviews", reviewItem.handler, {
     body: reviewItem.config.body,
     permissions: reviewItem.config.permissions,
+    accountAccess: reviewItem.config.accountAccess,
   })
   .patch("/items", updateItem.handler, {
     body: updateItem.config.body,
     permissions: updateItem.config.permissions,
+    accountAccess: updateItem.config.accountAccess,
   })
   .get(
     "/:listId/generations/:runId/candidates",
@@ -92,30 +105,36 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
     {
       params: readGenerationCandidates.config.params,
       permissions: readGenerationCandidates.config.permissions,
+      accountAccess: readGenerationCandidates.config.accountAccess,
       query: readGenerationCandidates.config.query,
     },
   )
   .get("/:listId/generations", readGenerations.handler, {
     params: readGenerations.config.params,
     permissions: readGenerations.config.permissions,
+    accountAccess: readGenerations.config.accountAccess,
     query: readGenerations.config.query,
   })
   .get("/:listId", readListById.handler, {
     params: readListById.config.params,
     permissions: readListById.config.permissions,
+    accountAccess: readListById.config.accountAccess,
   })
   .get("/:listId/items", readListItems.handler, {
     params: readListItems.config.params,
     permissions: readListItems.config.permissions,
+    accountAccess: readListItems.config.accountAccess,
     query: readListItems.config.query,
   })
   .get("/:listId/items/:itemEntityId/activity", readItemActivity.handler, {
     params: readItemActivity.config.params,
     permissions: readItemActivity.config.permissions,
+    accountAccess: readItemActivity.config.accountAccess,
     query: readItemActivity.config.query,
   })
   .get("/:listId/items/:itemEntityId/sources", readItemSources.handler, {
     params: readItemSources.config.params,
     permissions: readItemSources.config.permissions,
+    accountAccess: readItemSources.config.accountAccess,
     query: readItemSources.config.query,
   });

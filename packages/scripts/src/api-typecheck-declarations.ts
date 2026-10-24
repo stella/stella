@@ -15,9 +15,9 @@ import {
 } from "./api-typecheck-config";
 import {
   apiResolvedTypecheckInputs,
-  uncoveredApiTypecheckFiles,
   nativeTypecheckProgramFiles,
   requireApiTypecheckGeneratedSources,
+  uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import {

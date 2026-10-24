@@ -12,8 +12,8 @@ import {
 import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  parseDecisionParagraphFragment,
   formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
 } from "@stll/api-contract/decision-paragraph-range";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { Temporal, todayFor } from "@stll/time";

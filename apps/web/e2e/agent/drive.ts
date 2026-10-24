@@ -25,16 +25,16 @@ import { createNetworkCollector, summarizeCapture } from "../helpers/network";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { collectSeparateNavigationMeasurements } from "./drive-measure";
 import {
+  type DriveOptions,
   formatFindings,
   formatSummaryTable,
   hasBlockingFindings,
   isMeasureSummary,
+  type MeasureSample,
+  type PageFindings,
   pageTotals,
   parseDriveArgs,
   summarizeSamples,
-  type DriveOptions,
-  type MeasureSample,
-  type PageFindings,
 } from "./drive-report";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");

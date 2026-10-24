@@ -19,8 +19,8 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -37,18 +37,28 @@ const COUNTRY = "ZZP";
 const uniqueLanguage = (): string =>
   `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
 
-/** Wait until `pid` is blocked on a lock, so timing cannot make a test vacuous. */
-const waitUntilBlocked = async (observer: SQL, pid: number) => {
+/** Observe server state before exercising or asserting a session transition. */
+const waitForBackendState = async (
+  observer: SQL,
+  { pid, state }: { pid: number; state: "blocked" | "sleeping" | "closed" },
+) => {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
-    const [row] =
-      await observer`SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
-    if (row?.blocked === true) {
+    const [row] = await observer`
+      SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked,
+        EXISTS (
+          SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+            AND state = 'active' AND query = 'SELECT pg_sleep(30)'
+        ) AS sleeping,
+        NOT EXISTS (
+          SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}
+        ) AS closed`;
+    if (row?.[state] === true) {
       return;
     }
     await Bun.sleep(10);
   }
-  throw new Error(`backend ${String(pid)} never blocked`);
+  throw new Error(`backend ${String(pid)} never became ${state}`);
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -261,7 +271,7 @@ if (!databaseUrl || !runPostgresTests) {
             await activated.promise;
             const pid = await backendPid(writer.sql);
             const write = insertDecision(writer.sql, fixture, language);
-            await waitUntilBlocked(observer, pid);
+            await waitForBackendState(observer, { pid, state: "blocked" });
             release.resolve(undefined);
             // swallow-ok: deliberate activation rollback is distinguished by the scope and decision-state assertions below
             await transition.catch(() => undefined);
@@ -505,7 +515,7 @@ if (!databaseUrl || !runPostgresTests) {
           // Started now: a Bun SQL query runs only once awaited.
           const ensuring = (async () =>
             await caller`SELECT ensure_case_law_provision_extraction_state(ARRAY[${id}::uuid], 'reconcile') AS written`)();
-          await waitUntilBlocked(observer, pid);
+          await waitForBackendState(observer, { pid, state: "blocked" });
           const [free] = await observer.begin(
             async (tx) =>
               await tx`
@@ -559,7 +569,7 @@ if (!databaseUrl || !runPostgresTests) {
           const running = (async () =>
             await runner`SELECT run_case_law_provision_scope_transition_page(
               ${COUNTRY}, ${language}, ${activeGeneration}::bigint) AS more`)();
-          await waitUntilBlocked(observer, pid);
+          await waitForBackendState(observer, { pid, state: "blocked" });
 
           const retiredGeneration = await observer.begin(async (tx) => {
             const [retired] = await tx`
@@ -650,7 +660,7 @@ if (!databaseUrl || !runPostgresTests) {
             WHERE conname LIKE 'provision_citations_%' AND NOT convalidated`;
           expect(pending?.count).toBe(0);
         } finally {
-          reserved.release();
+          await reserved.release();
         }
       });
     }, 120_000);
@@ -662,7 +672,7 @@ if (!databaseUrl || !runPostgresTests) {
      */
     test("an abort stops the statement in flight and discards its connection", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const pool = openClient({ max: 2 }).sql;
+        const pool = openClient({ max: 1 }).sql;
         const observer = openClient().sql;
         const controller = new AbortController();
         let reservedPid: unknown;
@@ -678,21 +688,38 @@ if (!databaseUrl || !runPostgresTests) {
               row !== null && typeof row === "object" && "pid" in row
                 ? row.pid
                 : undefined;
-            setTimeout(() => {
-              controller.abort();
-            }, 200);
-            return await session.query("SELECT pg_sleep(30)").then(
+            if (typeof reservedPid !== "number") {
+              throw new TypeError(
+                "Expected the reserved PostgreSQL backend pid",
+              );
+            }
+            const statement = session.query("SELECT pg_sleep(30)").then(
               () => "finished",
               () => "cancelled",
             );
+            try {
+              await waitForBackendState(observer, {
+                pid: reservedPid,
+                state: "sleeping",
+              });
+              controller.abort();
+              return await statement;
+            } finally {
+              controller.abort();
+              await statement;
+            }
           },
         });
         expect(outcome).toBe("cancelled");
         expect(Date.now() - started).toBeLessThan(10_000);
-        const [alive] = await observer`
-          SELECT count(*)::int AS count FROM pg_stat_activity
-          WHERE pid = ${Number(reservedPid)}`;
-        expect(alive?.count).toBe(0);
+        if (typeof reservedPid !== "number") {
+          throw new TypeError("Expected the discarded PostgreSQL backend pid");
+        }
+        expect(await backendPid(pool)).not.toBe(reservedPid);
+        await waitForBackendState(observer, {
+          pid: reservedPid,
+          state: "closed",
+        });
       });
     }, 30_000);
   });

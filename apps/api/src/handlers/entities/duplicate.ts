@@ -243,9 +243,12 @@ const duplicateEntityHandler = async function* ({
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
   dependencies
-    .flushEntitySearchRepairs(
-      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-    )
+    .flushEntitySearchRepairs([
+      ...txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+      ...txResult.entityIdsBySearchIndexOwner[
+        SEARCH_INDEX_OWNER.durableExtraction
+      ],
+    ])
     .catch(captureError);
 
   handoffCommittedDocumentProcessingRuns({

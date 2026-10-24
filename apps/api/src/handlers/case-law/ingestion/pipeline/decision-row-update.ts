@@ -384,6 +384,10 @@ export const describeRowUpdateTx = async (
       preservesExistingDetail || s3UploadFailed
         ? existing.sourceHash
         : result.rawHash,
+    sourceHashVersion:
+      preservesExistingDetail || s3UploadFailed
+        ? existing.sourceHashVersion
+        : write.sourceFingerprintVersion,
     sourceObservedAt: observedAt,
     sourceObservationOrder: observationOrder,
     sourceObservationHash: result.rawHash,

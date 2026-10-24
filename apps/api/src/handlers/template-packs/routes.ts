@@ -23,19 +23,23 @@ export const templatePacksRoute = new Elysia({ prefix: "/template-packs" })
   .guard({ validateAuth: true })
   .get("/", listTemplatePacks.handler, {
     permissions: listTemplatePacks.config.permissions,
+    accountAccess: listTemplatePacks.config.accountAccess,
     query: listTemplatePacks.config.query,
   })
   .post("/visibility", updateTemplatePackVisibility.handler, {
     body: updateTemplatePackVisibility.config.body,
     permissions: updateTemplatePackVisibility.config.permissions,
+    accountAccess: updateTemplatePackVisibility.config.accountAccess,
   })
   .get("/:packId", getTemplatePack.handler, {
     params: getTemplatePack.config.params,
     permissions: getTemplatePack.config.permissions,
+    accountAccess: getTemplatePack.config.accountAccess,
     query: getTemplatePack.config.query,
   })
   .post("/:packId/install", installTemplatePack.handler, {
     body: installTemplatePack.config.body,
     params: installTemplatePack.config.params,
     permissions: installTemplatePack.config.permissions,
+    accountAccess: installTemplatePack.config.accountAccess,
   });

@@ -3,8 +3,8 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import {
-  caseLawCourtYearSchema,
   CASE_LAW_COURT_YEAR_BUCKET_LIMIT,
+  caseLawCourtYearSchema,
 } from "@stll/api-contract/case-law-court-year";
 import { assertProperty } from "@stll/property-testing";
 

@@ -24,9 +24,11 @@ export const myTimeEntriesRoute = new Elysia({ prefix: "/v1/time-entries/me" })
   .guard({ validateAuth: true })
   .get("/", listMyTimeEntries.handler, {
     permissions: listMyTimeEntries.config.permissions,
+    accountAccess: listMyTimeEntries.config.accountAccess,
     query: listMyTimeEntries.config.query,
   })
   .put("/daily-target", updateDailyTarget.handler, {
     permissions: updateDailyTarget.config.permissions,
+    accountAccess: updateDailyTarget.config.accountAccess,
     body: updateDailyTarget.config.body,
   });

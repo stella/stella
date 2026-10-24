@@ -130,6 +130,25 @@ test("missing and equal bumps fail, catching merge-group version collisions", ()
   ]);
 });
 
+test("layout, comments and types never demand a bump, but output changes do", () => {
+  const base = fixture();
+  const reformatted = fixture({
+    parserSources: {
+      A: "// Reads one record.\nexport const parseA = (): string =>\n  helper( )\n",
+    },
+  });
+  const changedOutput = fixture({
+    parserSources: {
+      A: "export const parseA = (): string =>\n  helper() + '!'\n",
+    },
+  });
+
+  expect(changed(base, reformatted)).toEqual([]);
+  expect(changed(base, changedOutput)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
 test("registered versions cannot decrease, including unchanged and exempted output", () => {
   const base = fixture({ versions: { A: 2 } });
   for (const parserSource of [

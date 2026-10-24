@@ -107,6 +107,11 @@ describe("skill availability runs a fixed query plan", () => {
       orgName: "Skill queries",
       orgSlugPrefix: "skill-queries",
     });
+    // Session setup can record activity before the measured request.
+    await rootDb
+      .update(session)
+      .set({ lastSeenAt: null })
+      .where(eq(session.userId, userId));
     const withoutSnapshot = cookieHeader
       .split("; ")
       .filter((pair) => !pair.includes("session_data="))

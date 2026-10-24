@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
-import { QueryBuilder, PgDialect } from "drizzle-orm/pg-core";
+import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, workspaces, documentProcessingRuns } from "@/api/db/schema";
+import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -60,8 +60,7 @@ const executeParentLock = async (query: SQL) => {
 
 const createSourceLockSelect = (selectCount: number) => {
   if (selectCount === 1) {
-    const query = drizzle
-      .mock()
+    const query = createMockDatabase()
       .select({ id: workspaces.id, organizationId: workspaces.organizationId })
       .from(workspaces);
     return {
@@ -71,8 +70,7 @@ const createSourceLockSelect = (selectCount: number) => {
         }),
     };
   }
-  const query = drizzle
-    .mock()
+  const query = createMockDatabase()
     .select({ id: entities.id, workspaceId: entities.workspaceId })
     .from(entities);
   return {
@@ -791,8 +789,7 @@ describe("requestManualOcrHandler", () => {
     const tx = asTestRaw<Transaction>({
       execute: executeParentLock,
       select: () => {
-        const query = drizzle
-          .mock()
+        const query = createMockDatabase()
           .select({
             id: workspaces.id,
             organizationId: workspaces.organizationId,

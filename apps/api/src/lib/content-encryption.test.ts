@@ -6,9 +6,9 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   contentLookupKey,
-  keyedContentLookupKey,
   decryptContent,
   encryptContent,
+  keyedContentLookupKey,
 } from "@/api/lib/content-encryption";
 
 /**

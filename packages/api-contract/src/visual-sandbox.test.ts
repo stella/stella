@@ -4,8 +4,8 @@ import * as v from "valibot";
 import { visualRenderMessageSchema } from "./generated-visual";
 import {
   VISUAL_SANDBOX_LIMITS,
-  visualGuestMessageSchema,
   type VisualGuestMessage,
+  visualGuestMessageSchema,
   visualLinkSchema,
 } from "./visual-sandbox";
 

@@ -4,9 +4,9 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  type ActivitySignal,
   clusterActivitySignals,
   suggestionFingerprint,
-  type ActivitySignal,
 } from "./cluster";
 
 const DATE = "2026-09-18";

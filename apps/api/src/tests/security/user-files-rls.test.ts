@@ -15,10 +15,10 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
-  TestDatabaseTransaction,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
+  TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
 let ids: TestIds;

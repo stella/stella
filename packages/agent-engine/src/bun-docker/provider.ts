@@ -1,6 +1,5 @@
 import {
   createExecBackedGit,
-  UnsupportedCapabilityError,
   type ExecResult,
   type ProcessOptions,
   type SandboxCapabilities,
@@ -9,6 +8,7 @@ import {
   type SandboxProvider,
   type SandboxResumeInput,
   type SpawnHandle,
+  UnsupportedCapabilityError,
 } from "@tanstack/ai-sandbox";
 
 import {
@@ -17,6 +17,7 @@ import {
   decodeFrames,
   demuxExecStream,
   DockerApiError,
+  type DockerConn,
   imageExists,
   inspectContainerRunning,
   inspectExecExitCode,
@@ -25,7 +26,6 @@ import {
   startContainer,
   startExecStream,
   stopContainer,
-  type DockerConn,
   type UserDefinedDockerNetwork,
 } from "./api";
 

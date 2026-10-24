@@ -40,17 +40,17 @@ import {
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
-  visualPreviewToolOutputSchema,
   type VisualPreviewOutput,
+  visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  toPersistableChatMessage,
+  createChatAttachmentPart,
   normalizePersistedChatMessageContent,
+  toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -140,13 +140,13 @@ import {
   collectInitialRestorationPlaceholders,
   createChatAttemptState,
   hydrateMessages,
+  prepareResumeForThirdParty,
   processServerChatStream,
   pruneOrphanedToolParts,
-  prepareResumeForThirdParty,
   recordChatAttemptFinish,
-  toChatMessage,
   resolveAgentRunBoundaryError,
   shouldAttemptChatFallback,
+  toChatMessage,
   transformClientVisibleStream,
   transformOutgoingStream,
   transformPersistenceVisibleStream,

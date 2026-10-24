@@ -7,12 +7,12 @@ import {
   type BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  ELEMENT_REFERENCE_SHADOW_SEGMENT,
   type BrowserControlCommand,
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserObservedTab,
+  ELEMENT_REFERENCE_SHADOW_SEGMENT,
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";

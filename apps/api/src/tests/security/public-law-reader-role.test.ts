@@ -72,14 +72,14 @@ import type {
 } from "@/api/lib/legislation-public-read-db";
 import {
   assertPublicLawDatabaseRolePermissions,
-  publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
+  publicLawDatabaseRolePermissionsSql,
 } from "@/api/lib/public-law-read-db";
 import {
-  CASE_LAW_DECISION_VIEWS,
   CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
-  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatements,
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,

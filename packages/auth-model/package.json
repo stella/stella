@@ -1,6 +1,6 @@
 {
   "name": "@stll/auth-model",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Portable Better Auth core contract and parity checks.",
   "keywords": [
     "authentication",
@@ -40,7 +40,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/auth-model",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/auth-model",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "devDependencies": {

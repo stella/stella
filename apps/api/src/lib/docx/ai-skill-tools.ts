@@ -26,10 +26,10 @@ import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { listAvailableChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  chatToolMapToArray,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
-import { failureSink, type FailureSink } from "@/api/lib/observability/failure";
+import { type FailureSink, failureSink } from "@/api/lib/observability/failure";
 
 /** Server-validated identity the skill tools resolve skills against. */
 export type SkillToolsContext = {

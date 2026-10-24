@@ -179,6 +179,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ),
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
+  citationCount: t.Number(),
   // Whole official decision text is intentional. These and `sections[].text`
   // are the only fields exempted by the public-response ledger; a windowed
   // reader is separate.
@@ -395,6 +396,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ),
     decisionDate: nullableText(decision.decisionDate, text.decisionDate),
     decisionType: nullableText(decision.decisionType, text.decisionType),
+    citationCount: decision.citationCount,
     projectionDigest: nullableText(
       decision.projectionDigest,
       text.projectionDigest,

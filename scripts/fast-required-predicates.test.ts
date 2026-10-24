@@ -3,8 +3,8 @@ import * as v from "valibot";
 
 import {
   ALWAYS_PLANNED_PREDICATE,
-  MISSING_JOB_PREDICATE,
   fastRequiredJobs,
+  MISSING_JOB_PREDICATE,
   unmodeledFastRequiredJobs,
 } from "./fast-required-predicates";
 

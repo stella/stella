@@ -21,7 +21,7 @@
 
 import { panic } from "better-result";
 
-import { type CentsAmount, cents, isMinorUnitAmount } from "./cents";
+import { cents, type CentsAmount, isMinorUnitAmount } from "./cents";
 
 export { type CentsAmount, cents, unsafeCents } from "./cents";
 

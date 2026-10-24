@@ -449,6 +449,7 @@ describe("processExtraction", () => {
       mimeType: fileContent.mimeType,
       sizeBytes: fileContent.sizeBytes,
       termination: null,
+      workerErrorClass: null,
     });
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.err(workerError),

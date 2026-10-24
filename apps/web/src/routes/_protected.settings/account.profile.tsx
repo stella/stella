@@ -18,13 +18,13 @@ import {
 } from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
-  DialogFormState,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
-  DialogTitle,
   DialogPanel,
   DialogPopup,
+  DialogTitle,
 } from "@stll/ui/dialog";
 import {
   Frame,

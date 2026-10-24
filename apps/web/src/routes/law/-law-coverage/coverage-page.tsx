@@ -6,7 +6,6 @@ import { useTranslations } from "use-intl";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -25,10 +24,7 @@ import { Globe, type GlobeMarker } from "@/components/globe";
 import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
-import {
-  caseLawCompletenessExceedsReported,
-  caseLawCompletenessPercent,
-} from "@/features/case-law/coverage-completeness";
+import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
 import {
   useFormatter,
   useLocale,
@@ -80,17 +76,18 @@ const DELTA_FORMAT = {
 const HEAD_CLASS = "h-8 text-xs";
 
 /**
- * Source, status, last sync, new in seven days, completeness. Fixed widths,
- * shared by every country's table: sized to their own content, the same
- * column would sit at a different place under each country and the eye
- * would have to find it again.
+ * Source, decisions, status, last sync, new in seven days, completeness.
+ * Fixed widths, shared by every country's table: sized to their own content,
+ * the same column would sit at a different place under each country and the
+ * eye would have to find it again.
  */
 const SOURCE_COLUMNS = [
-  { key: "source", width: "40%" },
-  { key: "status", width: "14%" },
-  { key: "lastSync", width: "16%" },
+  { key: "source", width: "34%" },
+  { key: "decisions", width: "12%" },
+  { key: "status", width: "13%" },
+  { key: "lastSync", width: "13%" },
   { key: "newLastWeek", width: "14%" },
-  { key: "completeness", width: "16%" },
+  { key: "completeness", width: "14%" },
 ] as const satisfies readonly TableColumn[];
 
 /** Court, decisions, new in seven days, last updated. */
@@ -170,10 +167,7 @@ export const CaseLawCoveragePage = ({
 
       <Hero>
         <Headline>{format.number(coverage.totals.searchable)}</Headline>
-        <CoverageGlobe
-          countries={coverage.countries}
-          total={coverage.totals.searchable}
-        />
+        <CoverageGlobe countries={coverage.countries} />
       </Hero>
 
       {countries.map((country) => (
@@ -261,9 +255,7 @@ export const CaseLawCoveragePending = () => {
 const CoverageLayout = ({ children }: PropsWithChildren) => (
   <main className="flex min-h-0 flex-1 flex-col">
     <ScrollArea className="min-h-0 flex-1">
-      <div className="flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6">
-        {children}
-      </div>
+      <div className="flex w-full flex-col gap-6 p-4 sm:p-6">{children}</div>
     </ScrollArea>
   </main>
 );
@@ -357,16 +349,14 @@ const Hero = ({ children }: PropsWithChildren) => (
 /**
  * Where the corpus holds case law: a pin on each capital, and beside the
  * globe a legend naming each country with, where a search can find it, its
- * count and share of everything searchable. The figures sit in the legend
- * rather than on the pins: the capitals lie a few hundred kilometres apart,
- * so labels on the sphere land on top of one another.
+ * count. The figures sit in the legend rather than on the pins: the capitals
+ * lie a few hundred kilometres apart, so labels on the sphere land on top of
+ * one another.
  */
 const CoverageGlobe = ({
   countries,
-  total,
 }: {
   countries: readonly CaseLawCoverageCountry[];
-  total: number;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -409,12 +399,6 @@ const CoverageGlobe = ({
             {country.availability === "searchable" ? (
               <span className="text-muted-foreground tabular-nums">
                 {format.number(country.searchable)}
-                {total > 0 && (
-                  <>
-                    {" · "}
-                    {format.number(country.searchable / total, PERCENT_FORMAT)}
-                  </>
-                )}
               </span>
             ) : (
               <span className="text-muted-foreground">
@@ -534,27 +518,22 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
           >
             {t(CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS[country.availability])}
           </ReviewStatusBadge>
-          <HealthSignal health={country.health} />
-          <div className="w-full">
-            <DetailsGrid>
-              {country.availability === "searchable" && (
-                <DetailsItem label={t("caseLaw.coverage.searchable")}>
-                  <span className="font-medium tabular-nums">
-                    {format.number(country.searchable)}
-                  </span>
-                </DetailsItem>
-              )}
-              {country.availability === "searchable" && (
-                <DecisionYearsFigure
-                  from={country.decisionYearFrom}
-                  to={country.decisionYearTo}
-                />
-              )}
-              <DetailsItem label={t("caseLaw.corpusStatus.newLast7Days")}>
-                <Delta value={country.addedLastWeek} />
-              </DetailsItem>
-            </DetailsGrid>
-          </div>
+          {country.availability === "searchable" && (
+            <HeaderFigure label={t("caseLaw.coverage.searchable")}>
+              <span className="tabular-nums">
+                {format.number(country.searchable)}
+              </span>
+            </HeaderFigure>
+          )}
+          {country.availability === "searchable" && (
+            <DecisionYearsFigure
+              from={country.decisionYearFrom}
+              to={country.decisionYearTo}
+            />
+          )}
+          <HeaderFigure label={t("caseLaw.corpusStatus.newLast7Days")}>
+            <Delta value={country.addedLastWeek} />
+          </HeaderFigure>
         </>
       }
       headingId={headingId}
@@ -566,6 +545,20 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
     </CountryCard>
   );
 };
+
+/**
+ * A figure on the card's rim, beside the name: the sources' rows below carry
+ * each one's health, so the rim states only the country's totals.
+ */
+const HeaderFigure = ({
+  children,
+  label,
+}: PropsWithChildren<{ label: string }>) => (
+  <span className="inline-flex items-baseline gap-1.5 text-sm">
+    <span className="text-muted-foreground">{label}</span>
+    <span className="font-medium">{children}</span>
+  </span>
+);
 
 /** The span the index covers, omitted where the index states no year at all. */
 const DecisionYearsFigure = ({
@@ -585,11 +578,11 @@ const DecisionYearsFigure = ({
   const toYear = format.number(to, YEAR_FORMAT);
 
   return (
-    <DetailsItem label={t("caseLaw.coverage.decisionYears")}>
-      <bdi className="font-medium tabular-nums">
+    <HeaderFigure label={t("caseLaw.coverage.decisionYears")}>
+      <bdi className="tabular-nums">
         {from === to ? fromYear : `${fromYear}–${toYear}`}
       </bdi>
-    </DetailsItem>
+    </HeaderFigure>
   );
 };
 
@@ -602,6 +595,9 @@ const SourcesTableHead = () => {
       <TableRow>
         <TableHead className={HEAD_CLASS} scope="col">
           {t("common.source")}
+        </TableHead>
+        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
+          {t("common.decisions")}
         </TableHead>
         <TableHead className={HEAD_CLASS} scope="col">
           {t("common.status")}
@@ -626,6 +622,7 @@ const SourcesTable = ({
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const relativeTime = useRelativeTime();
 
   return (
@@ -649,6 +646,11 @@ const SourcesTable = ({
               </a>
               <SourceCoverageDetails source={source} />
             </TableHead>
+            <TableCell className="text-end tabular-nums">
+              {source.storedDecisions === null
+                ? NO_VALUE
+                : format.number(source.storedDecisions)}
+            </TableCell>
             <TableCell>
               <HealthSignal health={source.health} />
             </TableCell>
@@ -681,17 +683,33 @@ const SourceCoverageDetails = ({
     source.decisionYearFrom === null || source.decisionYearTo === null
       ? NO_VALUE
       : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
-  let gaps: string;
+  // An unreviewed source states nothing about gaps rather than a line saying
+  // it cannot; unknown is still never shown as "no gaps recorded".
+  let gaps: string | null;
   switch (source.knownGaps.type) {
-    case "unknown":
-      gaps = t("caseLaw.coverage.gapStatusUnknown");
+    case "not_reconciled":
+      gaps = null;
       break;
-    case "none-recorded":
-      gaps = t("caseLaw.coverage.noGapsRecorded");
+    case "reconciled": {
+      // Decisions and listing periods are different units: each keeps its
+      // own label rather than adding into one number.
+      const { missing, unlistedSlices } = source.knownGaps.summary;
+      const parts = [
+        ...(missing > 0
+          ? [`${t("caseLaw.coverage.knownGaps")}: ${formatter.number(missing)}`]
+          : []),
+        ...(unlistedSlices > 0
+          ? [
+              `${t("caseLaw.coverage.unreadListingPeriods")}: ${formatter.number(unlistedSlices)}`,
+            ]
+          : []),
+      ];
+      gaps =
+        parts.length === 0
+          ? t("caseLaw.coverage.noGapsRecorded")
+          : parts.join(" · ");
       break;
-    case "known":
-      gaps = `${t("caseLaw.coverage.knownGaps")}: ${formatter.number(source.knownGaps.gaps.length)}`;
-      break;
+    }
     default:
       source.knownGaps satisfies never;
       return panic("Unhandled case-law source gap state");
@@ -701,7 +719,8 @@ const SourceCoverageDetails = ({
     <span className="text-muted-foreground mt-1 block text-xs">
       {t("caseLaw.coverage.decisionYears")}: {years} ·{" "}
       {t("caseLaw.coverage.pendingTexts")}:{" "}
-      {formatter.number(source.pendingTextCount)} · {gaps}
+      {formatter.number(source.pendingTextCount)}
+      {gaps !== null && ` · ${gaps}`}
     </span>
   );
 };
@@ -737,14 +756,12 @@ const SourceCompleteness = ({
 };
 
 /**
- * A measured source's ratio, the warranty its denominator carries, and when
- * each half of the ratio was observed.
+ * A measured source's ratio and the warranty its denominator carries.
  *
- * The two halves are observed independently, so they get their own dates. The
- * count's date is always shown, because the numerator is never live. The
- * publisher's total states its date only where it is out of date or already
- * smaller than what is held: on a current total the date is noise, on a
- * lagging one it is the explanation.
+ * The count's own date is not repeated on every row: the page states once,
+ * at the top, when its figures were taken. The publisher's total states its
+ * date only where it is out of date: on a current total the date is noise, on
+ * a lagging one it is the explanation.
  */
 const MeasuredCompleteness = ({
   completeness,
@@ -769,16 +786,8 @@ const MeasuredCompleteness = ({
       <span className="text-muted-foreground text-xs">
         {t(CASE_LAW_TOTAL_REPORTER_LABEL_KEYS[completeness.reportedBy])}
       </span>
-      <CountedOn asOf={completeness.storedAsOf} />
       {completeness.state === "stale" && (
         <ObservedOn asOf={completeness.reportedAsOf} />
-      )}
-      {caseLawCompletenessExceedsReported(counts) && (
-        <span className="text-muted-foreground text-xs text-pretty">
-          {t("caseLaw.coverage.exceedsReportedTotal", {
-            date: observedDate(completeness.reportedAsOf, format),
-          })}
-        </span>
       )}
     </div>
   );
@@ -792,22 +801,6 @@ const ObservedOn = ({ asOf }: { asOf: string }) => {
   return (
     <span className="text-muted-foreground text-xs">
       {t("caseLaw.coverage.totalFrom", { date: observedDate(asOf, format) })}
-    </span>
-  );
-};
-
-/**
- * When the corpus itself was counted. Kept apart from `ObservedOn` in wording
- * as well as in data: one date is our own sweep, the other is the publisher's
- * statement, and reading them as one number would hide a months-wide gap.
- */
-const CountedOn = ({ asOf }: { asOf: string }) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  return (
-    <span className="text-muted-foreground block text-xs font-normal">
-      {t("caseLaw.coverage.countedOn", { date: observedDate(asOf, format) })}
     </span>
   );
 };

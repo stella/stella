@@ -22,8 +22,8 @@ import type {
 import { InboundPersistenceError } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailStore } from "@/api/lib/email/inbound/store";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,

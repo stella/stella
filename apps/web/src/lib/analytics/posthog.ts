@@ -14,6 +14,7 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/env";
+import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
@@ -736,7 +737,20 @@ const sanitizeSdkUrlContext = (
   ) {
     delete properties["$session_entry_referrer"];
   }
-  return { ...event, properties };
+  return {
+    ...event,
+    properties: {
+      ...properties,
+      ...Object.fromEntries(
+        ["$referrer", "$session_entry_referrer"].flatMap((key) => {
+          const value = properties[key];
+          return typeof value === "string"
+            ? [[key, sanitizeHandoffUrl(value)]]
+            : [];
+        }),
+      ),
+    },
+  };
 };
 
 const errorContextProperties = (

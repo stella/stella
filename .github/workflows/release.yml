@@ -1,4 +1,8 @@
 name: Release Artifacts
+# The run name carries the tag for a tag push and a dispatch alike: a
+# dispatched run's head branch is main. Release Desktop App and the desktop
+# release canary find a tag's runs by this name.
+run-name: Release Artifacts ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
 
 # release-chain-alert
 defaults:

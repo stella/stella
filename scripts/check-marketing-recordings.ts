@@ -24,9 +24,9 @@ import type {
 } from "../apps/web/e2e/marketing/captures";
 import {
   readProductMediaManifestSync,
-  updateRecordingArtifactDigest,
   recordingArtifactPaths,
   recordingArtifactsHashFromManifest,
+  updateRecordingArtifactDigest,
 } from "./product-media";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");

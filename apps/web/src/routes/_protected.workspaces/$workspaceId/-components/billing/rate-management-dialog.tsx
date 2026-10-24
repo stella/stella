@@ -43,8 +43,8 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import {
-  schemaFormOptions,
   requiredTrimmedStringSchema,
+  schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";

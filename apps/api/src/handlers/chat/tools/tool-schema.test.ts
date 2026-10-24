@@ -4,9 +4,9 @@ import {
   hashSchemaInput,
   normalizeApprovalSchema,
   parseWithStandardSchema,
-  toolDefinition,
   type StreamChunk,
   type Tool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   convertToolsToProviderFormat as convertAnthropicTools,
@@ -104,7 +104,7 @@ import {
 } from "@/api/lib/provider-safe-json-schema";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { MODEL_VISIBLE_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
@@ -2550,7 +2550,7 @@ describe("chat tool schemas", () => {
 });
 
 describe("registry write tool approval policy", () => {
-  const projectedWriteNames = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  const projectedWriteNames = MODEL_VISIBLE_MCP_TOOL_DEFINITIONS.filter(
     (definition) =>
       definition.access === "write" &&
       WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable,

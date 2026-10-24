@@ -8,8 +8,8 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
 import {
-  publishedCaseLawDecisions,
   legislationDocuments,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";

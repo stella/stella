@@ -3,10 +3,10 @@ import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import {
-  TANSTACK_AI_PROVIDERS,
   BYOK_DEFAULT_MODELS,
-  MODEL_OVERRIDE_GROUPS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { resolveDefaultOverrideModels } from "@stll/ai-catalog/model-defaults-ledger";
 
@@ -23,8 +23,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

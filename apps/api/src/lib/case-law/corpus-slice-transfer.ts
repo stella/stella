@@ -2,8 +2,8 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
-  parseCorpusSliceManifest,
   type CorpusSliceManifest,
+  parseCorpusSliceManifest,
 } from "@/api/lib/case-law/corpus-slice";
 
 export const CORPUS_SLICE_EXPORT_TABLES = [

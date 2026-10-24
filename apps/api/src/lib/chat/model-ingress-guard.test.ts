@@ -1,5 +1,9 @@
 import type { MCPToolSource, ServerTool } from "@tanstack/ai";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -41,6 +45,101 @@ beforeEach(() => {
 afterEach(() => {
   analytics.restore();
   logs.restore();
+});
+
+// The pre-TextSearch implementation remains the parity oracle.
+const sequentialRedaction = (text: string, ids: readonly string[]) => {
+  let value = text;
+  const redactedPaths: string[] = [];
+  for (const id of ids) {
+    if (value.includes(id)) {
+      redactedPaths.push("$.text");
+      value = value.replaceAll(id, () => TENANT_ID_REDACTION_PLACEHOLDER);
+    }
+  }
+  return { value: { text: value }, redactedPaths };
+};
+
+const tenantOccurrencesOverlap = (text: string, ids: readonly string[]) => {
+  const starts = new Set<number>();
+  for (const id of new Set(ids)) {
+    let start = text.indexOf(id);
+    while (start !== -1) {
+      starts.add(start);
+      start = text.indexOf(id, start + 1);
+    }
+  }
+  const ordered = [...starts].toSorted((left, right) => left - right);
+  return ordered.some((start, index) => {
+    const next = ordered.at(index + 1);
+    return next !== undefined && next < start + 36;
+  });
+};
+
+describe("literal tenant id matching", () => {
+  test("non-overlapping tenant redaction equals sequential replacement", () => {
+    assertProperty(
+      "non-overlapping tenant redaction equals sequential replacement",
+      fc.property(
+        fc.array(fc.uuid(), {
+          maxLength: WORKSPACES_PER_ORGANIZATION_MAX,
+          size: "small",
+        }),
+        fc.string(),
+        (ids, prefix) => {
+          // Separators prevent adjacent suffix/prefix alignments. Remove any
+          // generated occurrences from the unrelated prefix with the oracle.
+          const cleanPrefix = sequentialRedaction(prefix, ids).value.text;
+          const text = `${cleanPrefix}⚖️${ids.join("⚖️")}⚖️${ids.toReversed().join("⚖️")}`;
+          expect(tenantOccurrencesOverlap(text, ids)).toBe(false);
+          expect(
+            redactTenantIdsDeep({
+              value: { text },
+              workspaceIds: ids.map((id) => toSafeId<"workspace">(id)),
+            }),
+          ).toEqual(sequentialRedaction(text, ids));
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+
+  test("redacts overlapping tenant ids", () => {
+    const left = "12345678-1234-5678-9abc-123456789abc";
+    const right = "9abc1234-1234-5678-9abc-123456789abc";
+    const text = left + right.slice(4);
+    const { value } = redactTenantIdsDeep({
+      value: { text },
+      workspaceIds: [toSafeId<"workspace">(left), toSafeId<"workspace">(right)],
+    });
+    expect(text).toContain(left);
+    expect(text).toContain(right);
+    expect(value.text).toBe(TENANT_ID_REDACTION_PLACEHOLDER + right.slice(4));
+    expect(value.text).not.toContain(left);
+    expect(value.text).not.toContain(right);
+  });
+
+  test("an updated id array refreshes matching across surfaces", () => {
+    const workspaceIds = [WS_A];
+    const text: string = WS_A;
+    expect(
+      redactTenantIdsDeep({ value: { text }, workspaceIds }).value.text,
+    ).toBe(TENANT_ID_REDACTION_PLACEHOLDER);
+    workspaceIds[0] = WS_B;
+    expect(
+      redactTenantIdsDeep({ value: { text: `${WS_A}${WS_B}` }, workspaceIds }),
+    ).toEqual({
+      value: { text: `${WS_A}${TENANT_ID_REDACTION_PLACEHOLDER}` },
+      redactedPaths: ["$.text"],
+    });
+    expect(() =>
+      guardModelSystemPrompt({ system: WS_B, workspaceIds }),
+    ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
+    workspaceIds.length = 0;
+    expect<string>(
+      redactModelSystemPrompt({ system: WS_B, workspaceIds }),
+    ).toBe(WS_B);
+  });
 });
 
 describe("redactTenantIdsDeep", () => {

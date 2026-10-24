@@ -6,10 +6,10 @@ import { initialBatchState } from "@stll/db-load-gate/health";
 import { createSafeId } from "@/api/lib/branded-types";
 
 import {
+  type EuCompletionRowOptions,
+  type EuCompletionRowOutcome,
   EuCompletionStop,
   runEuCompletionTick,
-  type EuCompletionRowOutcome,
-  type EuCompletionRowOptions,
   type RunEuCompletionTickOptions,
 } from "./eu-completion";
 import {

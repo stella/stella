@@ -6,7 +6,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { invoices, timeEntries, featureEnrolments } from "@/api/db/schema";
+import { featureEnrolments, invoices, timeEntries } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
 import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";

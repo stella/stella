@@ -62,8 +62,8 @@ import type { DocumentSearchResult } from "@/lib/document-search";
 import { fileOptions } from "@/lib/files/queries";
 import {
   PDF_COLOR_MODES,
-  resolvePDFInvertColors,
   type PDFColorMode,
+  resolvePDFInvertColors,
 } from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";

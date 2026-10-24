@@ -9,8 +9,8 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { webApiClientOptions } from "@/lib/eden-client";
 import {
-  resetUserErrorReportDedupeForTests,
   reportUserVisibleError,
+  resetUserErrorReportDedupeForTests,
   setUserErrorRouteTemplate,
 } from "@/lib/errors/user-toast";
 import { reportOAuthCallbackError } from "@/routes/auth/-error-report";

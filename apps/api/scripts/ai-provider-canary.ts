@@ -7,15 +7,15 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  resolveDefaultModel,
   isBYOKModelRoleSupported,
-  MODEL_TASKS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  MODEL_OVERRIDE_GROUPS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
   supportsStreamingToolUse,
 } from "@stll/ai-catalog";
-import type { ModelTask, ModelOverrideGroup } from "@stll/ai-catalog";
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { AIErrorKind } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -42,14 +42,14 @@ import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
-  CANARY_TIERS,
   CANARY_PROVIDERS,
-  modelTaskMaxOutputTokens,
-  structuredOutputBudgetEdgeMaxOutputTokens,
-  structuredOutputModelTaskMaxOutputTokens,
+  CANARY_TIERS,
   IMPOSSIBLE_STRING_MAX_LENGTH,
   isCanaryProvider,
+  modelTaskMaxOutputTokens,
   NULL_WIDENING_CANARY_PROVIDERS,
+  structuredOutputBudgetEdgeMaxOutputTokens,
+  structuredOutputModelTaskMaxOutputTokens,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";

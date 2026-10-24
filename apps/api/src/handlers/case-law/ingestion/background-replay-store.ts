@@ -7,16 +7,16 @@ import {
   isNotNull,
   isNull,
   lt,
-  ne,
   lte,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import {
-  initialBatchState,
   type BatchState,
+  initialBatchState,
   type Verdict,
 } from "@stll/db-load-gate/health";
 import { DAY_IN_MS } from "@stll/time";
@@ -26,14 +26,14 @@ import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawSources,
+  caseLawReplayAuditEvents,
   caseLawReplayBatches,
   caseLawReplayBlocked,
   caseLawReplayDailyRows,
   caseLawReplaySourceProgress,
-  caseLawReplayAuditEvents,
-  type ReplayMaintenanceAuditDetails,
+  caseLawSources,
   databaseBackfillStates,
+  type ReplayMaintenanceAuditDetails,
 } from "@/api/db/schema";
 import {
   setSharedLockTimeout,
@@ -53,32 +53,32 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { getAdapter } from "./adapters/adapter-registry";
 import type {
   BackgroundReplayBatch,
-  BackgroundReplaySource,
   BackgroundReplayReservation,
+  BackgroundReplaySource,
   BackgroundReplayTickReport,
 } from "./background-replay";
 import {
-  CASE_LAW_REPLAY_SCOPE,
   BACKGROUND_REPLAY_PREVIEW_SUFFIX,
   buildBackgroundReplayProbe,
+  CASE_LAW_REPLAY_SCOPE,
   REPLAY_ROW_OUTCOME,
   replayCapability,
+  type ReplayRowReport,
+  type ReplayRowResult,
   replayRowResult,
   selectReplayPage,
   selectScopeEnd,
-  type ReplayRowReport,
-  type ReplayRowResult,
 } from "./replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
-  validateReplayEnrolment,
   type ReplayEnrolment,
+  validateReplayEnrolment,
 } from "./replay-enrolment";
 import {
   REPLAY_PREVIEW_FAILURE,
-  replayFailure,
   type ReplayFailure,
+  replayFailure,
 } from "./replay-failure";
 
 const withReplayTransaction = async <T>(

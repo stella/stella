@@ -11,12 +11,12 @@
 import { create } from "zustand";
 
 import type {
+  DocxEditorRef,
   FolioAIBlockPreviewRun,
   FolioAIEditApplyMode,
   FolioAIEditOperation,
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
-  DocxEditorRef,
 } from "@stll/folio-react";
 
 type DocumentOperationUndoHandle = NonNullable<

@@ -236,7 +236,17 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/runtime-workers --entry-naming sanctions-matcher-worker.js apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming image-smoke-model-ingress.js apps/api/src/scripts/image-smoke-model-ingress.ts",
+    bootCheck: {
+      type: "docker-run",
+      dockerfile: "apps/api/Dockerfile",
+      run: "RUN /tmp/image-smoke && touch /tmp/image-smoke-ok",
+    },
+  },
+  {
+    file: "apps/api/Dockerfile",
+    command:
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --entry-naming sanctions-matcher-worker.js apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -246,7 +256,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/runtime-workers apps/api/src/lib/search/extraction-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --entry-naming extraction-worker.js apps/api/src/lib/search/extraction-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -256,7 +266,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/apply-reviewed-citation-labels.js apps/api/src/scripts/apply-reviewed-citation-labels.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming apply-reviewed-citation-labels.js apps/api/src/scripts/apply-reviewed-citation-labels.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -266,43 +276,43 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/apps/api/src/db/migrate.js apps/api/src/db/migrate.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/apps/api/src/db --entry-naming migrate.js apps/api/src/db/migrate.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/backfill.js apps/api/src/scripts/backfill-case-law-slugs.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming backfill.js apps/api/src/scripts/backfill-case-law-slugs.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/better-auth-17-backfill.js apps/api/src/scripts/better-auth-17-backfill.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming better-auth-17-backfill.js apps/api/src/scripts/better-auth-17-backfill.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/better-auth-microsoft-identity-map.js apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming better-auth-microsoft-identity-map.js apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/better-auth-migration-audit.js apps/api/src/scripts/better-auth-migration-audit.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming better-auth-migration-audit.js apps/api/src/scripts/better-auth-migration-audit.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/better-auth-sign-in-replay.js apps/api/src/scripts/better-auth-sign-in-replay.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming better-auth-sign-in-replay.js apps/api/src/scripts/better-auth-sign-in-replay.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/case-law-raw-layout.js apps/api/src/scripts/case-law-raw-layout.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming case-law-raw-layout.js apps/api/src/scripts/case-law-raw-layout.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -312,7 +322,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/classify-citations.js apps/api/scripts/classify-citations.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming classify-citations.js apps/api/scripts/classify-citations.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -322,13 +332,13 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/complete-sk-us-raw.js apps/api/src/scripts/complete-sk-us-raw.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming complete-sk-us-raw.js apps/api/src/scripts/complete-sk-us-raw.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/corpus-generation.js apps/api/src/scripts/corpus-generation.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming corpus-generation.js apps/api/src/scripts/corpus-generation.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -338,7 +348,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/corpus-snippet-compare.js apps/api/src/scripts/corpus-snippet-compare.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming corpus-snippet-compare.js apps/api/src/scripts/corpus-snippet-compare.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -348,13 +358,13 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/database-census.js apps/api/src/scripts/database-census.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming database-census.js apps/api/src/scripts/database-census.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/decision-analysis-candidates.js apps/api/src/scripts/decision-analysis-candidates.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming decision-analysis-candidates.js apps/api/src/scripts/decision-analysis-candidates.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -364,7 +374,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/decision-analysis-input.js apps/api/src/scripts/decision-analysis-input.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming decision-analysis-input.js apps/api/src/scripts/decision-analysis-input.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -374,7 +384,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/decision-analysis-save.js apps/api/src/scripts/decision-analysis-save.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming decision-analysis-save.js apps/api/src/scripts/decision-analysis-save.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -384,7 +394,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/eu-completion-control.js apps/api/src/scripts/eu-completion-control.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming eu-completion-control.js apps/api/src/scripts/eu-completion-control.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -394,7 +404,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/eu-completion-tick.js apps/api/src/scripts/eu-completion-tick.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming eu-completion-tick.js apps/api/src/scripts/eu-completion-tick.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -404,7 +414,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/redact-case-law-decision.js apps/api/src/scripts/redact-case-law-decision.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming redact-case-law-decision.js apps/api/src/scripts/redact-case-law-decision.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -414,7 +424,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/repair-cz-ns-court.js apps/api/src/scripts/repair-cz-ns-court.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming repair-cz-ns-court.js apps/api/src/scripts/repair-cz-ns-court.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -424,7 +434,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/repair-publisher-absent-text.js apps/api/src/scripts/repair-publisher-absent-text.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming repair-publisher-absent-text.js apps/api/src/scripts/repair-publisher-absent-text.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -434,7 +444,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/replay-case-law-source.js apps/api/src/scripts/replay-case-law-source.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming replay-case-law-source.js apps/api/src/scripts/replay-case-law-source.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -444,7 +454,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/replay-provider-events.js apps/api/scripts/replay-provider-events.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming replay-provider-events.js apps/api/scripts/replay-provider-events.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -454,7 +464,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/replay-tick.js apps/api/src/scripts/replay-tick.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming replay-tick.js apps/api/src/scripts/replay-tick.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -464,13 +474,19 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/review-account.js apps/api/src/scripts/review-account.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming import-cz-us-roster.js apps/api/src/scripts/import-cz-us-roster.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/runtime-workers/ocr-local-worker.js apps/api/src/lib/ocr-local/ocr-local-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming review-account.js apps/api/src/scripts/review-account.ts",
+    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+  },
+  {
+    file: "apps/api/Dockerfile",
+    command:
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --entry-naming ocr-local-worker.js apps/api/src/lib/ocr-local/ocr-local-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -480,7 +496,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/runtime-workers/ocr-searchable-pdf-worker.js apps/api/src/lib/ocr-searchable-pdf-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --entry-naming ocr-searchable-pdf-worker.js apps/api/src/lib/ocr-searchable-pdf-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -490,7 +506,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/runtime-workers/office-evidence-worker.js apps/api/src/lib/files/office-evidence-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --entry-naming office-evidence-worker.js apps/api/src/lib/files/office-evidence-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -500,7 +516,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/runtime-workers/pdf-worker.js apps/api/src/lib/files/pdf-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --entry-naming pdf-worker.js apps/api/src/lib/files/pdf-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -510,7 +526,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outfile /app/seed-usage-policies.js apps/api/scripts/seed-usage-policies.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --entry-naming seed-usage-policies.js apps/api/scripts/seed-usage-policies.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -520,7 +536,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=inline --outfile /app/document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=inline --outdir /app/bundles --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {

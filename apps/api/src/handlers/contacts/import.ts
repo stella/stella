@@ -1,13 +1,13 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
 
 import {
+  type ContactImportReceiptResult,
   contactImportRequests,
   contacts,
-  type ContactImportReceiptResult,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { validateContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";

@@ -12,7 +12,7 @@ import {
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -21,9 +21,9 @@ import {
   COMPACTION_SYSTEM_PROMPT,
 } from "@/api/lib/chat/compaction-summary";
 import {
+  compactionGenerationRequest,
   DEFAULT_PRESERVE_TOKENS,
   DEFAULT_TRIGGER_TOKENS,
-  compactionGenerationRequest,
   estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_STRUCTURED_PART_CHARS,

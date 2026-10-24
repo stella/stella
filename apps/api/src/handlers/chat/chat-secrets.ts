@@ -8,8 +8,8 @@ import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatSecrets,
-  mcpUserConnections,
   MCP_RESPONSE_DISPOSITION,
+  mcpUserConnections,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";

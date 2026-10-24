@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -7,8 +7,8 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
-  managedProviderUnavailable,
   fetchManagedProviderCatalog,
+  managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";

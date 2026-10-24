@@ -5,8 +5,8 @@ import * as v from "valibot";
 
 import {
   checkPoolJob,
-  readCheckPool,
   type ReadCheckPool,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import {
   loadGlobalRuleInputs,

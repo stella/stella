@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
+import * as posthogSdk from "posthog-js";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -79,7 +80,7 @@ const resetMock = mock((options?: ResetOptions) => {
 });
 const groupMock = mock((_type: string, _key: string) => undefined);
 
-const posthogMock = {
+const posthogMock = Object.assign(new posthogSdk.PostHog(), {
   capture: captureMock,
   captureException: captureExceptionMock,
   get_distinct_id: getDistinctIdMock,
@@ -89,7 +90,7 @@ const posthogMock = {
   _isIdentified: isIdentifiedMock,
   register: registerMock,
   reset: resetMock,
-};
+});
 
 Object.defineProperty(globalThis, "__APP_VERSION__", {
   configurable: true,
@@ -101,6 +102,7 @@ Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
 });
 
 void mock.module("posthog-js", () => ({
+  ...posthogSdk,
   posthog: posthogMock,
 }));
 
@@ -211,14 +213,16 @@ describe("PostHog browser analytics adapter", () => {
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.pageLeft,
       properties: {
-        $current_url: "https://app.example.test/workspaces/ws_1",
+        $current_url: "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $pathname: "/workspaces/ws_1",
         $host: "app.example.test",
         $prev_pageview_pathname: "/workspaces/ws_1",
-        $session_entry_url: "https://app.example.test/workspaces/ws_1",
+        $session_entry_url:
+          "https://app.example.test/workspaces/ws_1#sh=sh1_sample",
         $session_entry_pathname: "/workspaces/ws_1",
         $referrer: "https://app.example.test/workspaces/ws_1",
-        $session_entry_referrer: "https://www.google.com/",
+        $session_entry_referrer:
+          "https://www.google.com/?sh=sh1_sample#sh=sh1_sample",
         $prev_pageview_duration: 12,
         title: "Client Smith v Example",
         $session_id: "session-1",

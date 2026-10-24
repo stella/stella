@@ -8,6 +8,7 @@ import * as v from "valibot";
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
+import { renderResultInputs } from "./ci-result-inputs";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -198,6 +199,10 @@ const heavyPlan = {
 };
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
+
+test("main heavy suites include the Windows desktop dry run", () => {
+  expect(heavy).toContain("desktop-windows-dry-run");
+});
 
 test("dedicated query recording dispatch schedules one measurement job", () => {
   const parsed = v.parse(
@@ -750,7 +755,11 @@ const evaluate = ({
     panic(`Missing scoped job: ${jobName}`);
   }
   job.result = result;
-  const run = Bun.spawnSync(["bash", "-e", "-c", outcome.run ?? "exit 2"], {
+  const script = renderResultInputs(outcome.run ?? "exit 2", {
+    needs: JSON.stringify(needs),
+    plan: JSON.stringify({ ...heavyPlan, [scope]: String(isPlanned) }),
+  });
+  const run = Bun.spawnSync(["bash", "-e", "-c", script], {
     cwd: root,
     env: {
       ...process.env,
@@ -760,11 +769,6 @@ const evaluate = ({
       HEAVY_JOBS: JSON.stringify(heavy),
       QUEUE_DEPTH: "full",
       THIN_JOBS: JSON.stringify(THIN_JOBS),
-      NEEDS: JSON.stringify(needs),
-      PLAN: JSON.stringify({
-        ...heavyPlan,
-        [scope]: String(isPlanned),
-      }),
       PLAN_RESULT: planResult,
       TRUSTED: "true",
       SUITE_DEPTH: "full",

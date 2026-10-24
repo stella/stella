@@ -834,8 +834,10 @@ describe("native authentication session responses", () => {
     expect(body).toMatchObject({
       session: { id: fixture.original.id, token: current.token },
     });
-    for (const field of Object.keys(SESSION_LIFETIME_FIELDS)) {
-      expect(body).not.toHaveProperty(`session.${field}`);
+    for (const [field, config] of Object.entries(SESSION_LIFETIME_FIELDS)) {
+      if ("returned" in config) {
+        expect(body).not.toHaveProperty(`session.${field}`);
+      }
     }
     const refreshedCookie = responseCookies(refreshed);
     expect(refreshedCookie).toContain("session_token=");
@@ -849,8 +851,10 @@ describe("native authentication session responses", () => {
     );
     expect(cached).not.toBeNull();
     expect(cached).toMatchObject({ session: { token: current.token } });
-    for (const field of Object.keys(SESSION_LIFETIME_FIELDS)) {
-      expect(cached).not.toHaveProperty(`session.${field}`);
+    for (const [field, config] of Object.entries(SESSION_LIFETIME_FIELDS)) {
+      if ("returned" in config) {
+        expect(cached).not.toHaveProperty(`session.${field}`);
+      }
     }
     fixture.advance(59_999);
     const cachedInFlight = await fixture.requestSession();

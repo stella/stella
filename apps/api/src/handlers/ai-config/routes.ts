@@ -8,4 +8,5 @@ export const aiConfigPublicRoute = new Elysia({ prefix: "/ai-config" })
   .guard({ validateSession: true })
   .post("/validate-provider", validateProvider.handler, {
     body: validateProvider.config.body,
+    accountAccess: validateProvider.config.accountAccess,
   });

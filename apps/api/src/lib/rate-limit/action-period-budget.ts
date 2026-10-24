@@ -5,7 +5,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 export type ActionPeriodIdentity = {
   actionKind: string;

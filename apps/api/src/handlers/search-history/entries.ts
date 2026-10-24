@@ -15,19 +15,19 @@ import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
+  SEARCH_HISTORY_KINDS,
   searchHistoryEntries,
+  type SearchHistoryKind,
   searchHistoryOwners,
   searchHistoryTombstones,
-  SEARCH_HISTORY_KINDS,
-  type SearchHistoryKind,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  keyedContentLookupKey,
   decryptContent,
   encryptContent,
+  keyedContentLookupKey,
 } from "@/api/lib/content-encryption";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

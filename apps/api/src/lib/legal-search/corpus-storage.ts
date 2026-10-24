@@ -4,9 +4,9 @@ import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  type DocumentAst,
   persistedAstDegradations,
   persistedDocumentAstSchema,
-  type DocumentAst,
 } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
@@ -39,8 +39,8 @@ import type {
   PackedCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import {
-  packJurisdictionPrefix,
   corpusMemberDigest,
+  packJurisdictionPrefix,
 } from "@/api/lib/legal-search/corpus-pack";
 import type {
   CorpusTombstoneReader,

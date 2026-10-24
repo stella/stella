@@ -9,8 +9,8 @@ import { useShallow } from "zustand/react/shallow";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -20,8 +20,8 @@ import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
-  MATTER_SWATCHES,
   getMatterSwatch,
+  MATTER_SWATCHES,
   resolveMatterColor,
 } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";

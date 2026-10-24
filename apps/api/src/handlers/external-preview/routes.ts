@@ -11,9 +11,11 @@ export const externalPreviewRoute = new Elysia({ prefix: "/external-preview" })
   .guard({ validateAuth: true })
   .get("/", previewExternalSource.handler, {
     permissions: previewExternalSource.config.permissions,
+    accountAccess: previewExternalSource.config.accountAccess,
     query: previewExternalSource.config.query,
   })
   .get("/file", previewExternalFile.handler, {
     permissions: previewExternalFile.config.permissions,
+    accountAccess: previewExternalFile.config.accountAccess,
     query: previewExternalFile.config.query,
   });

@@ -32,8 +32,8 @@ import * as v from "valibot";
 import { dispatchEvent } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
-  getHostedUsageProviderKind,
   getHostedUsageProviderApiVersion,
+  getHostedUsageProviderKind,
   getWebhookSecret,
 } from "@/api/lib/hosted-usage-provider/config";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";

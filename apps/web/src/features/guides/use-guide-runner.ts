@@ -20,9 +20,9 @@ import {
 import type { GuideEngine } from "@/features/guides/guide-engine";
 import { resolveGuideWorkspaceViewId } from "@/features/guides/guide-route";
 import type {
-  GuideSeed,
   GuideInteraction,
   GuideRoute,
+  GuideSeed,
   GuideStep,
   GuideTour,
   GuideTourId,

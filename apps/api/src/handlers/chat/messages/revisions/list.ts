@@ -6,8 +6,8 @@ import { t } from "elysia";
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreads,
 } from "@/api/db/schema";
 import { revisionText } from "@/api/handlers/chat/chat-revision-context";

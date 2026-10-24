@@ -3,8 +3,8 @@ import { Result } from "better-result";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import {
-  getPdfDownloadFileName,
   type DownloadVariant,
+  getPdfDownloadFileName,
 } from "@/components/inspector/file-download-service.logic";
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";

@@ -28,9 +28,9 @@ import {
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
+  absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,

@@ -128,8 +128,9 @@ export const createDatabaseSessionLifetimeStore = (
           priorTokenExpiresAt: new Date(
             now.getTime() + SESSION_PRIOR_TOKEN_RECOVERY_MS,
           ),
-          // A refresh never reaches past the absolute lifetime.
-          expiresAt: sql`LEAST(${expiresAt}::timestamptz, ${session.createdAt} + ${`${SESSION_ABSOLUTE_AGE_MS} milliseconds`}::interval)`,
+          // A refresh never reaches past the absolute lifetime or a text
+          // handoff's absolute deadline (LEAST ignores a null deadline).
+          expiresAt: sql`LEAST(${expiresAt}::timestamptz, ${session.createdAt} + ${`${SESSION_ABSOLUTE_AGE_MS} milliseconds`}::interval, ${session.handoffAbsoluteExpiresAt})`,
           updatedAt: now,
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
         })

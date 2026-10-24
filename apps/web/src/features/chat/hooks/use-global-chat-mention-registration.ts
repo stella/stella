@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ChatCorpusScope } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";

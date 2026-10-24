@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 
 import type { ScreenAction } from "@/lib/capabilities/screen-actions";

@@ -4,8 +4,8 @@ import { t } from "elysia";
 
 import {
   CONVERTIBLE_VIEW_LAYOUTS,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -22,8 +22,8 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  rejectAvtLayout,
   avtLayoutErrorDetail,
+  rejectAvtLayout,
 } from "@/api/lib/lists/verification/view-layout";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { normalizeDefaultViewLayout } from "@/api/lib/views";

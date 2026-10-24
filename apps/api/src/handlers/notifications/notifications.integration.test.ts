@@ -21,8 +21,8 @@ import publishAnnouncement, {
   createPublishAnnouncementEndpoint,
 } from "@/api/handlers/notifications/announce";
 import listNotifications from "@/api/handlers/notifications/list";
-import markNotificationRead from "@/api/handlers/notifications/read";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";

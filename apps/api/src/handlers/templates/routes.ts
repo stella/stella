@@ -61,140 +61,171 @@ export const templatesRoute = new Elysia({
   .get("/lookup-formats", listLookupFormats.handler, {
     query: listLookupFormats.config.query,
     permissions: listLookupFormats.config.permissions,
+    accountAccess: listLookupFormats.config.accountAccess,
   })
   .post("/lookup-formats", createLookupFormat.handler, {
     body: createLookupFormat.config.body,
     permissions: createLookupFormat.config.permissions,
+    accountAccess: createLookupFormat.config.accountAccess,
   })
   .delete("/lookup-formats/:formatId", deleteLookupFormat.handler, {
     params: deleteLookupFormat.config.params,
     permissions: deleteLookupFormat.config.permissions,
+    accountAccess: deleteLookupFormat.config.accountAccess,
   })
   .post("/lookup-formats/default", setDefaultLookupFormat.handler, {
     body: setDefaultLookupFormat.config.body,
     permissions: setDefaultLookupFormat.config.permissions,
+    accountAccess: setDefaultLookupFormat.config.accountAccess,
   })
   .post("/lookup-formats/my-default", setMyDefaultLookupFormat.handler, {
     body: setMyDefaultLookupFormat.config.body,
     permissions: setMyDefaultLookupFormat.config.permissions,
+    accountAccess: setMyDefaultLookupFormat.config.accountAccess,
   })
   .post("/discover", discoverTemplate.handler, {
     body: discoverTemplate.config.body,
     permissions: discoverTemplate.config.permissions,
+    accountAccess: discoverTemplate.config.accountAccess,
   })
   .post("/fill", fillTemplate.handler, {
     body: fillTemplate.config.body,
     permissions: fillTemplate.config.permissions,
+    accountAccess: fillTemplate.config.accountAccess,
     query: fillTemplate.config.query,
   })
   .post("/lookup-preview", lookupPreview.handler, {
     body: lookupPreview.config.body,
     permissions: lookupPreview.config.permissions,
+    accountAccess: lookupPreview.config.accountAccess,
   })
   .post("/prepare", prepareTemplate.handler, {
     body: prepareTemplate.config.body,
     permissions: prepareTemplate.config.permissions,
+    accountAccess: prepareTemplate.config.accountAccess,
   })
   .post("/suggest-fields", suggestFields.handler, {
     body: suggestFields.config.body,
     permissions: suggestFields.config.permissions,
+    accountAccess: suggestFields.config.accountAccess,
   })
   // Static catalog of data-binding (source, field) options; placed among the
   // transient GET endpoints, before `/:templateId` so the literal path wins.
   .get("/binding-catalog", getBindingCatalog.handler, {
     permissions: getBindingCatalog.config.permissions,
+    accountAccess: getBindingCatalog.config.accountAccess,
   })
   // ── CRUD endpoints ─────────────────────────────────
   .get("/", listTemplates.handler, {
     permissions: listTemplates.config.permissions,
+    accountAccess: listTemplates.config.accountAccess,
     query: listTemplates.config.query,
   })
   .put("/", createTemplate.handler, {
     body: createTemplate.config.body,
     permissions: createTemplate.config.permissions,
+    accountAccess: createTemplate.config.accountAccess,
   })
   .put("/blank", createBlankTemplate.handler, {
     body: createBlankTemplate.config.body,
     permissions: createBlankTemplate.config.permissions,
+    accountAccess: createBlankTemplate.config.accountAccess,
   })
   .put("/styles", createTemplateFromStyles.handler, {
     body: createTemplateFromStyles.config.body,
     permissions: createTemplateFromStyles.config.permissions,
+    accountAccess: createTemplateFromStyles.config.accountAccess,
   })
   .put("/style-set", createTemplateFromStyleSet.handler, {
     body: createTemplateFromStyleSet.config.body,
     permissions: createTemplateFromStyleSet.config.permissions,
+    accountAccess: createTemplateFromStyleSet.config.accountAccess,
   })
   .get("/:templateId/preview", previewTemplate.handler, {
     params: previewTemplate.config.params,
     permissions: previewTemplate.config.permissions,
+    accountAccess: previewTemplate.config.accountAccess,
   })
   .get("/:templateId/check", checkTemplate.handler, {
     params: checkTemplate.config.params,
     permissions: checkTemplate.config.permissions,
+    accountAccess: checkTemplate.config.accountAccess,
   })
   .post("/:templateId/decide-conditions", decideTemplateConditions.handler, {
     body: decideTemplateConditions.config.body,
     params: decideTemplateConditions.config.params,
     permissions: decideTemplateConditions.config.permissions,
+    accountAccess: decideTemplateConditions.config.accountAccess,
   })
   .post("/:templateId/fill-preview", fillTemplatePreview.handler, {
     body: fillTemplatePreview.config.body,
     params: fillTemplatePreview.config.params,
     permissions: fillTemplatePreview.config.permissions,
+    accountAccess: fillTemplatePreview.config.accountAccess,
   })
   .post("/:templateId/fill", fillTemplateById.handler, {
     body: fillTemplateById.config.body,
     params: fillTemplateById.config.params,
     permissions: fillTemplateById.config.permissions,
+    accountAccess: fillTemplateById.config.accountAccess,
     query: fillTemplateById.config.query,
   })
   .post("/:templateId/fill-to/:workspaceId", fillTemplateToWorkspace.handler, {
     body: fillTemplateToWorkspace.config.body,
     params: fillTemplateToWorkspace.config.params,
     permissions: fillTemplateToWorkspace.config.permissions,
+    accountAccess: fillTemplateToWorkspace.config.accountAccess,
     validateWorkspaceAccess: true,
   })
   .post("/:templateId/prefill", prefillTemplate.handler, {
     body: prefillTemplate.config.body,
     params: prefillTemplate.config.params,
     permissions: prefillTemplate.config.permissions,
+    accountAccess: prefillTemplate.config.accountAccess,
   })
   .get("/:templateId", getTemplate.handler, {
     params: getTemplate.config.params,
     permissions: getTemplate.config.permissions,
+    accountAccess: getTemplate.config.accountAccess,
   })
   .get("/:templateId/clause-slots", getTemplateClauseSlots.handler, {
     params: getTemplateClauseSlots.config.params,
     permissions: getTemplateClauseSlots.config.permissions,
+    accountAccess: getTemplateClauseSlots.config.accountAccess,
   })
   .post("/:templateId", updateTemplate.handler, {
     body: updateTemplate.config.body,
     params: updateTemplate.config.params,
     permissions: updateTemplate.config.permissions,
+    accountAccess: updateTemplate.config.accountAccess,
   })
   .post("/:templateId/document", saveTemplateDocument.handler, {
     body: saveTemplateDocument.config.body,
     params: saveTemplateDocument.config.params,
     permissions: saveTemplateDocument.config.permissions,
+    accountAccess: saveTemplateDocument.config.accountAccess,
   })
   .delete("/:templateId", deleteTemplate.handler, {
     params: deleteTemplate.config.params,
     permissions: deleteTemplate.config.permissions,
+    accountAccess: deleteTemplate.config.accountAccess,
   })
   // ── Versions ──────────────────────────────────────
   .get("/:templateId/versions", listTemplateVersions.handler, {
     params: listTemplateVersions.config.params,
     permissions: listTemplateVersions.config.permissions,
+    accountAccess: listTemplateVersions.config.accountAccess,
     query: listTemplateVersions.config.query,
   })
   .get("/:templateId/versions/:versionId", getTemplateVersion.handler, {
     params: getTemplateVersion.config.params,
     permissions: getTemplateVersion.config.permissions,
+    accountAccess: getTemplateVersion.config.accountAccess,
   })
   .get("/:templateId/versions/:versionId/diff", templateVersionDiff.handler, {
     params: templateVersionDiff.config.params,
     permissions: templateVersionDiff.config.permissions,
+    accountAccess: templateVersionDiff.config.accountAccess,
   })
   .post(
     "/:templateId/versions/:versionId/summarize",
@@ -202,34 +233,41 @@ export const templatesRoute = new Elysia({
     {
       params: templateVersionSummarize.config.params,
       permissions: templateVersionSummarize.config.permissions,
+      accountAccess: templateVersionSummarize.config.accountAccess,
     },
   )
   // ── Clause linking ──────────────────────────────────
   .get("/:templateId/clauses", listTemplateClauses.handler, {
     params: listTemplateClauses.config.params,
     permissions: listTemplateClauses.config.permissions,
+    accountAccess: listTemplateClauses.config.accountAccess,
   })
   .put("/:templateId/clauses", linkTemplateClause.handler, {
     body: linkTemplateClause.config.body,
     params: linkTemplateClause.config.params,
     permissions: linkTemplateClause.config.permissions,
+    accountAccess: linkTemplateClause.config.accountAccess,
   })
   .patch("/:templateId/clauses/:linkId", updateTemplateClauseSlot.handler, {
     body: updateTemplateClauseSlot.config.body,
     params: updateTemplateClauseSlot.config.params,
     permissions: updateTemplateClauseSlot.config.permissions,
+    accountAccess: updateTemplateClauseSlot.config.accountAccess,
   })
   .delete("/:templateId/clauses/:linkId", unlinkTemplateClause.handler, {
     params: unlinkTemplateClause.config.params,
     permissions: unlinkTemplateClause.config.permissions,
+    accountAccess: unlinkTemplateClause.config.accountAccess,
   })
   .post("/:templateId/clauses/sync", syncAllTemplateClauses.handler, {
     params: syncAllTemplateClauses.config.params,
     permissions: syncAllTemplateClauses.config.permissions,
+    accountAccess: syncAllTemplateClauses.config.accountAccess,
   })
   .post("/:templateId/clauses/:linkId/sync", syncTemplateClause.handler, {
     params: syncTemplateClause.config.params,
     permissions: syncTemplateClause.config.permissions,
+    accountAccess: syncTemplateClause.config.accountAccess,
   });
 
 // ── Template Categories ────────────────────────────
@@ -242,17 +280,21 @@ export const templateCategoriesRoute = new Elysia({
   .guard({ validateAuth: true })
   .get("/", listTemplateCategories.handler, {
     permissions: listTemplateCategories.config.permissions,
+    accountAccess: listTemplateCategories.config.accountAccess,
   })
   .put("/", createTemplateCategory.handler, {
     body: createTemplateCategory.config.body,
     permissions: createTemplateCategory.config.permissions,
+    accountAccess: createTemplateCategory.config.accountAccess,
   })
   .post("/:categoryId", updateTemplateCategory.handler, {
     body: updateTemplateCategory.config.body,
     params: updateTemplateCategory.config.params,
     permissions: updateTemplateCategory.config.permissions,
+    accountAccess: updateTemplateCategory.config.accountAccess,
   })
   .delete("/:categoryId", deleteTemplateCategory.handler, {
     params: deleteTemplateCategory.config.params,
     permissions: deleteTemplateCategory.config.permissions,
+    accountAccess: deleteTemplateCategory.config.accountAccess,
   });

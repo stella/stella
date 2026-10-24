@@ -38,8 +38,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureKeyTag,
-  failureClaimGuard,
   analysisFailureRecord,
+  failureClaimGuard,
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
@@ -116,8 +116,8 @@ const anthropicKey = {
 
 const VALID_ANSWER = {
   headings: [],
-  holding: { text: "Dovolání se zamítá.", anchors: [] },
-  abstract: "Soud dovolání zamítl.",
+  holding: [{ text: "Dovolání se zamítá.", anchors: [] }],
+  abstract: [{ text: "Soud dovolání zamítl.", anchors: [] }],
   topics: [],
 };
 
@@ -916,7 +916,7 @@ describe("a failed analysis run", () => {
         starts: 1,
       });
       expect(google.remaining()).toBe(0);
-      expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
+      expect(await storedValue(decisionId)).toMatchObject({ version: 4 });
     });
 
     test("refuses the claim itself, in its transaction, while the time is ahead", async () => {
@@ -1016,7 +1016,7 @@ describe("a failed analysis run", () => {
         ),
       }),
     ]);
-    expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
+    expect(await storedValue(decisionId)).toMatchObject({ version: 4 });
   });
 
   test("a retry runs again and its answer is stored", async () => {
@@ -1035,7 +1035,10 @@ describe("a failed analysis run", () => {
     expect(done.starts).toBe(0);
     expect(done.response).toMatchObject({
       status: "done",
-      analysis: { version: 3, holding: { text: "Dovolání se zamítá." } },
+      analysis: {
+        version: 4,
+        holding: { spans: [{ text: "Dovolání se zamítá." }] },
+      },
       // The finished analysis reaches the agent with what to tell the reader.
       aiDisclosure: { context: "caseLaw", text: AI_DISCLOSURES.caseLaw.text },
     });

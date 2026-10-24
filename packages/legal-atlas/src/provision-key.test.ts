@@ -18,7 +18,7 @@ import {
 } from "./cz-provision-citation-profile";
 import { PROVISION_CITATION_GRAMMARS } from "./provision-citation-grammars";
 import { formatWorkIdentifier } from "./provision-citation-profile";
-import { provisionRefOf, parseProvisionKey } from "./provision-key";
+import { parseProvisionKey, provisionRefOf } from "./provision-key";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
 const reference = fc.record({

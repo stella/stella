@@ -4,9 +4,9 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  type DesktopTimeEntryBatchStatus,
   desktopTimeEntryBatchStatusRequestSchema,
   desktopTimeEntryBatchStatusSchema,
-  type DesktopTimeEntryBatchStatus,
 } from "@stll/api-contract/desktop-time-entries";
 
 import { abortableTx } from "@/api/db/safe-db";

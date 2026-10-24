@@ -7,12 +7,12 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 
 import {
   collectFileCopySources,
-  getFolderSubtree,
-  remapFileIds,
-  type EntitySnapshot,
   type EntityFieldSnapshot,
+  type EntitySnapshot,
   type EntityVersionSnapshot,
   type FileMapping,
+  getFolderSubtree,
+  remapFileIds,
 } from "./copy-utils";
 
 const workspaceId = toSafeId<"workspace">("workspace_1");

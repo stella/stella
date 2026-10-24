@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 
 import { LIMITS } from "@/api/lib/limits";
 import {
-  DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
   createPropertyBodySchema,
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
 } from "@/api/lib/properties/create-schema";
 
 describe("property creation schema", () => {

@@ -31,26 +31,26 @@ import {
 
 import {
   CASE_LAW_INDEX_GROUP_CONTRACT_OF,
+  type CaseLawIndexGroup,
   caseLawIndexGroupAt,
   caseLawIndexGroupCountriesAt,
   caseLawIndexGroupNamesAt,
-  isCaseLawIndexGroup,
-  type CaseLawIndexGroup,
   type CorpusIndexGroupContractVersion,
+  isCaseLawIndexGroup,
 } from "@/api/lib/legal-search/case-law-index-groups";
 import {
-  PROVISION_KEYS_FIELD,
   type CorpusIndexConfig,
+  PROVISION_KEYS_FIELD,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexConfigWithId,
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
+  type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
   corpusIndexManifestDigest,
-  corpusIndexRoute,
-  type CorpusIndexManifest,
   type CorpusIndexRoute,
+  corpusIndexRoute,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";

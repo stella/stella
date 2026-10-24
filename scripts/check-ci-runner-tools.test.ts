@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -11,11 +11,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  RunnerToolInvariantError,
   runnerToolProblems,
   runnerTools,
   selfHostedProfiles,
   TOOL_PACKAGES,
-  RunnerToolInvariantError,
 } from "./check-ci-runner-tools";
 import { workflowJobSteps } from "./workflow-steps";
 

@@ -2,7 +2,7 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 /**
@@ -74,12 +74,12 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   readStoredRawListing,
-  storedSourceSurface,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
+  sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -113,10 +113,10 @@ import {
 import type { HuBhgyHeaderLabel } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import { arrayOrEmpty } from "@/api/lib/array";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
   presentTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -124,7 +124,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { readRtf, isRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

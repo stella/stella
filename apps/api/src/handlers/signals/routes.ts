@@ -17,36 +17,44 @@ export const signalsRoute = new Elysia({ prefix: "/signals" })
   .get("/", listSignals.handler, {
     query: listSignals.config.query,
     permissions: listSignals.config.permissions,
+    accountAccess: listSignals.config.accountAccess,
   })
   .get("/count", countInbox.handler, {
     query: countInbox.config.query,
     permissions: countInbox.config.permissions,
+    accountAccess: countInbox.config.accountAccess,
   })
   .post("/requests", createRequest.handler, {
     body: createRequest.config.body,
     permissions: createRequest.config.permissions,
+    accountAccess: createRequest.config.accountAccess,
   })
   .get("/:signalId", getSignal.handler, {
     params: getSignal.config.params,
     permissions: getSignal.config.permissions,
+    accountAccess: getSignal.config.accountAccess,
   })
   .post("/:signalId/snoozes", snoozeSignal.handler, {
     params: snoozeSignal.config.params,
     body: snoozeSignal.config.body,
     permissions: snoozeSignal.config.permissions,
+    accountAccess: snoozeSignal.config.accountAccess,
   })
   .post("/:signalId/dismissals", dismissSignal.handler, {
     params: dismissSignal.config.params,
     body: dismissSignal.config.body,
     permissions: dismissSignal.config.permissions,
+    accountAccess: dismissSignal.config.accountAccess,
   })
   .post("/:signalId/assignments", assignSignal.handler, {
     params: assignSignal.config.params,
     body: assignSignal.config.body,
     permissions: assignSignal.config.permissions,
+    accountAccess: assignSignal.config.accountAccess,
   })
   .post("/:signalId/acceptances", acceptSignal.handler, {
     params: acceptSignal.config.params,
     body: acceptSignal.config.body,
     permissions: acceptSignal.config.permissions,
+    accountAccess: acceptSignal.config.accountAccess,
   });

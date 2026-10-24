@@ -3,11 +3,11 @@ import { expect, spyOn, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
-  actionCallObserver,
-  runObservedAction,
   type ActionCallObserver,
+  actionCallObserver,
   type ActionCostIdentity,
   type ActionCostObservation,
+  runObservedAction,
 } from "./context";
 import * as failure from "./observation-failure";
 

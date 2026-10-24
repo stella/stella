@@ -16,8 +16,8 @@ import {
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
-  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
   encodeEntitiesWindowCursor,
+  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -93,6 +93,7 @@ const readKanbanGroup = createSafeHandler(
     );
     const result = yield* Result.await(
       queryEntities({
+        textMode: "preview",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: currentUser.id,
@@ -102,7 +103,7 @@ const readKanbanGroup = createSafeHandler(
         find: body.find,
         cursor: cursorResult.value,
         limit: limit + 1,
-        fieldMode: body.fieldMode ?? "full",
+        fieldMode: body.fieldMode ?? "visible",
         fieldIds: arrayOrEmpty(body.fieldIds),
         excludedKinds: arrayOrEmpty(body.excludedKinds),
         extraConditions: [conditionResult.value],

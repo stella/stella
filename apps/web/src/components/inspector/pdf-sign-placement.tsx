@@ -7,10 +7,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogTitle,
@@ -37,7 +37,7 @@ import {
   stampKeyAdjustment,
   type StampPageSize,
 } from "@/components/inspector/pdf-signing-stamp.logic";
-import { useBoxDrag, type BoxDragAdjustment } from "@/hooks/use-box-drag";
+import { type BoxDragAdjustment, useBoxDrag } from "@/hooks/use-box-drag";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { resolveAppTimeZone } from "@/i18n/time-zone";

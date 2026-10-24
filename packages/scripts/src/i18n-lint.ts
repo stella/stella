@@ -395,6 +395,13 @@ export const findDroppedExactSelectors = (
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
+// A glossary value, rather than a hard-coded catalogue exception: Unicode's
+// Extended_Pictographic property covers emoji bases without mistaking ordinary
+// symbols from non-Latin writing systems for emoji.
+export const EMOJI_GLOSSARY_PATTERN = "\\p{Emoji}";
+const EMOJI_PATTERN =
+  /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3)/u;
+
 // Arabic attaches proclitics to the front of a word — conjunctions (و/ف),
 // prepositions (ب/ك/ل/س), and the definite article ال — so a forbidden term
 // like قضية also surfaces as القضية / وقضية / بالقضية / للقضية. Allow an
@@ -409,6 +416,9 @@ const containsWord = (
   needle: string,
   locale: string,
 ): boolean => {
+  if (needle === EMOJI_GLOSSARY_PATTERN) {
+    return EMOJI_PATTERN.test(haystack);
+  }
   const cacheKey = `${locale}:${needle}`;
   let regex = wordRegexCache.get(cacheKey);
   if (!regex) {
@@ -483,6 +493,7 @@ export const hasInvalidCapitalizedStella = (value: string): boolean => {
 
 export type ForbiddenRule = {
   concept: string;
+  guidance?: string;
   triggers: string[];
   keyTriggers: string[];
   // Substrings that exempt a key from this concept's bans entirely (see
@@ -518,7 +529,7 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
     if (!term.forbidden && !term.forbiddenOnKey && !term.forbiddenAlways) {
       continue;
     }
-    rules.push({
+    const rule: ForbiddenRule = {
       concept: term.id,
       triggers: [term.en],
       keyTriggers: term.keyTriggers ?? [],
@@ -527,9 +538,41 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
       byLocaleAlways: { ...term.forbiddenAlways },
       byLocaleOnKey: { ...term.forbiddenOnKey },
       sourceExempt: (term.sourceExempt ?? []).map((s) => s.toLowerCase()),
-    });
+    };
+    if (term.guidance) {
+      rule.guidance = term.guidance;
+    }
+    rules.push(rule);
   }
   return rules;
+};
+
+type ForbiddenGuidanceOptions = {
+  source: string;
+  target: string;
+  locale: string;
+  rules: ForbiddenRule[];
+  key?: string;
+};
+
+/** Actionable guidance for the forbidden rules matched by a catalogue value. */
+export const findForbiddenGuidance = ({
+  source,
+  target,
+  locale,
+  rules,
+  key,
+}: ForbiddenGuidanceOptions): string[] => {
+  const guidance = new Set<string>();
+  for (const rule of rules) {
+    if (
+      rule.guidance &&
+      findForbiddenTerms(source, target, locale, [rule], key).length > 0
+    ) {
+      guidance.add(rule.guidance);
+    }
+  }
+  return [...guidance];
 };
 
 /**
@@ -794,7 +837,19 @@ if (import.meta.main) {
           if (writeBaseline) {
             (next[category][key] ??= {})[locale] = entry;
           } else if (!isSuppressed(baseline, category, key, locale, entry)) {
-            reported.push(`  ${category}: ${key}`);
+            const guidance =
+              category === "terminology"
+                ? findForbiddenGuidance({
+                    source: entry.source,
+                    target: entry.target,
+                    locale,
+                    rules,
+                    key,
+                  })
+                : [];
+            const suffix =
+              guidance.length > 0 ? ` (${guidance.join("; ")})` : "";
+            reported.push(`  ${category}: ${key}${suffix}`);
           }
         }
       }

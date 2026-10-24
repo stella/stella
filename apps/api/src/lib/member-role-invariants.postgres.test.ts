@@ -21,8 +21,8 @@ import {
 import { cents } from "@/api/lib/money";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";

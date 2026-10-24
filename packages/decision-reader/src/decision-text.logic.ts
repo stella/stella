@@ -4,15 +4,15 @@ import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import {
   DECISION_TEXT_FIELD,
-  TEXT_FIELD_TYPE,
   type ReadDecisionTextFields,
+  TEXT_FIELD_TYPE,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import {
   CZ_CAPTION_FORMS,
-  SK_CAPTION_FORMS,
   detectDecisionCaption,
+  SK_CAPTION_FORMS,
 } from "@stll/legal-ast/decision-caption";
 import type {
   CaptionForms,
@@ -21,8 +21,8 @@ import type {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
-  PUBLISHER_SUMMARY_ROLES,
   isApparatusRole,
+  PUBLISHER_SUMMARY_ROLES,
 } from "@stll/legal-ast/document-ast";
 import type {
   Block,

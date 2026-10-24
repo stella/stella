@@ -37,18 +37,18 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
-  usageEvents,
   usageAllocations,
   usageEntitlements,
+  usageEvents,
   workspaces,
 } from "@/api/db/schema";
 import type {
   UsageActionType,
   UsageAllocationReason,
   UsageAllocationSource,
+  UsageEntitlementStatus,
   UsageEventLane,
   UsageServiceTier,
-  UsageEntitlementStatus,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";

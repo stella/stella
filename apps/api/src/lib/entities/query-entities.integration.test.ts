@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   setDefaultTimeout,
@@ -120,6 +120,7 @@ const insertLiveSession = async ({
 
 const readActiveEditor = async () => {
   const result = await queryEntities({
+    textMode: "full",
     safeDb,
     scope: { type: "matter", workspaceId: ids.wsA1 },
     currentUserId: ids.userA1,
@@ -233,6 +234,7 @@ describe("entity creator projection", () => {
 
     try {
       const result = await queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId: ids.wsA1 },
         currentUserId: ids.userA1,
@@ -271,6 +273,7 @@ describe("creator sort", () => {
     try {
       for (const desc of [false, true]) {
         const result = await queryEntities({
+          textMode: "full",
           safeDb,
           scope: { type: "matter", workspaceId: ids.wsA1 },
           currentUserId: ids.userA1,
@@ -340,6 +343,7 @@ describe("task assignee projection", () => {
     includeAssignees = true,
   ) => {
     const result = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -669,6 +673,7 @@ describe("find in table", () => {
     search?: string;
   }): Promise<string[]> => {
     const result = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -790,6 +795,7 @@ describe("find in table", () => {
       term: TERM,
     };
     const first = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -809,6 +815,7 @@ describe("find in table", () => {
     expect(cursor).toBeDefined();
 
     const second = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
