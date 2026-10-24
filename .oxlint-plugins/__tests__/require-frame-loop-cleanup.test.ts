@@ -152,10 +152,13 @@ test("repeated interval helper proof stays bounded and shared aliases stay share
     `const shared={current:0}; const begin=()=>{const timer=shared;timer.current=setInterval(tick,10);}; useMountEffect(()=>{begin();begin();return()=>clearInterval(shared.current);});`,
     `const timer={current:0};const begin=()=>{timer.current=setInterval(tick,10);};${doubling}useMountEffect(()=>{wrap9();return()=>clearInterval(timer.current);});`,
   ];
-  for (const code of cases) {
-    expect(
-      (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length,
-    ).toBeGreaterThan(0);
+  const results = await Promise.all(
+    cases.map(async (code) =>
+      lintSingleRule(RULE, `const Comp=()=>{${code}};`),
+    ),
+  );
+  for (const lines of results) {
+    expect(lines.length).toBeGreaterThan(0);
   }
 });
 
@@ -210,11 +213,23 @@ test("only mutually exclusive writes can share one cleanup handle", async () => 
       true,
     ],
     [
+      "const ref={current:0};if(enabled){ref.current=setInterval(tick,10);return()=>clearInterval(ref.current);}ref.current=setInterval(tick,20);return()=>clearInterval(ref.current);",
+      true,
+    ],
+    [
       "let id;if(enabled)id=setInterval(tick,10);id=setInterval(tick,20);return()=>clearInterval(id);",
       false,
     ],
     [
       "const timer={current:0};if(enabled)timer.current=setInterval(tick,10);if(alsoEnabled)timer.current=setInterval(tick,20);return()=>clearInterval(timer.current);",
+      false,
+    ],
+    [
+      "let id;const begin=()=>{if(enabled){id=setInterval(tick,10);return;}};begin();id=setInterval(tick,20);return()=>clearInterval(id);",
+      false,
+    ],
+    [
+      "const ref={current:0};const begin=()=>{if(enabled){ref.current=setInterval(tick,10);return;}};begin();ref.current=setInterval(tick,20);return()=>clearInterval(ref.current);",
       false,
     ],
   ] as const;
@@ -223,6 +238,184 @@ test("only mutually exclusive writes can share one cleanup handle", async () => 
       async ([code]) =>
         (await lintSingleRule(RULE, `useMountEffect(()=>{${code}});`))
           .length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
+});
+
+test("named effect callbacks use the same cleanup ownership proof", async () => {
+  const cases = [
+    [
+      "const ref={current:0};const begin=()=>{ref.current=setInterval(tick,10);};const stop=()=>clearInterval(ref.current);",
+      "begin",
+      false,
+    ],
+    [
+      "const ref={current:0};const begin=()=>{ref.current=setInterval(tick,10);return()=>clearInterval(ref.current);};",
+      "begin",
+      true,
+    ],
+    [
+      "function begin(){const id=setInterval(tick,10);return()=>clearInterval(id);}",
+      "begin",
+      true,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};const alias=begin;",
+      "alias",
+      true,
+    ],
+    ["const begin=()=>setInterval(tick,10);", "begin", false],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>{const unused=()=>clearInterval(id);};};",
+      "begin",
+      false,
+    ],
+    [
+      "let id;const start=()=>{id=setInterval(tick,10);};const begin=()=>{start();start();return()=>clearInterval(id);};",
+      "begin",
+      false,
+    ],
+    [
+      "let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};const begin=()=>{tick();tick();return()=>cancelAnimationFrame(frame);};",
+      "begin",
+      false,
+    ],
+    [
+      "let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};const begin=()=>{tick();return()=>cancelAnimationFrame(frame);};const alias=begin;",
+      "alias",
+      true,
+    ],
+  ] as const;
+  const hooks = [
+    "useEffect",
+    "useExternalSyncEffect",
+    "useInsertionEffect",
+    "useLayoutEffect",
+    "useMountEffect",
+    "React.useEffect",
+  ];
+  const results = await Promise.all(
+    hooks.flatMap((hook) =>
+      cases.map(async ([setup, callback]) => {
+        const effect =
+          hook === "useMountEffect"
+            ? `${hook}(${callback})`
+            : `${hook}(${callback},[])`;
+        return (
+          (await lintSingleRule(RULE, `const Comp=()=>{${setup}${effect};};`))
+            .length === 0
+        );
+      }),
+    ),
+  );
+  expect(results).toEqual(
+    hooks.flatMap(() => cases.map(([, , owned]) => owned)),
+  );
+});
+
+test("effect registrations distinguish shared handles from fresh allocations", async () => {
+  const cases = [
+    [
+      "const ref={current:0};const begin=()=>{ref.current=setInterval(tick,10);return()=>clearInterval(ref.current);};useMountEffect(begin);useMountEffect(begin);",
+      false,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};useMountEffect(begin);useMountEffect(begin);",
+      true,
+    ],
+    [
+      "const ref={current:0};const begin=()=>{ref.current=setInterval(tick,10);return()=>clearInterval(ref.current);};const alias=begin;useMountEffect(begin);useExternalSyncEffect(alias,[]);",
+      false,
+    ],
+    [
+      "const ref={current:0};useMountEffect(()=>{ref.current=setInterval(tick,10);return()=>clearInterval(ref.current);});useMountEffect(()=>{ref.current=setInterval(tick,20);return()=>clearInterval(ref.current);});",
+      false,
+    ],
+    [
+      "useMountEffect(()=>{const id=setInterval(tick,10);return()=>clearInterval(id);});useMountEffect(()=>{const id=setInterval(tick,20);return()=>clearInterval(id);});",
+      true,
+    ],
+    [
+      "const ref={current:0};const begin=()=>{clearInterval(ref.current);ref.current=setInterval(tick,10);return()=>clearInterval(ref.current);};useMountEffect(begin);useMountEffect(begin);",
+      true,
+    ],
+    [
+      "const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};const begin=()=>{tick();return()=>cancelAnimationFrame(frame.current);};useMountEffect(begin);useMountEffect(begin);",
+      false,
+    ],
+    [
+      "const begin=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};tick();return()=>cancelAnimationFrame(frame.current);};useMountEffect(begin);useMountEffect(begin);",
+      true,
+    ],
+    [
+      "const frame={current:0};const begin=()=>{const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};frame.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame.current);};useMountEffect(begin);useMountEffect(begin);",
+      false,
+    ],
+    [
+      "const begin=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};frame.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame.current);};useMountEffect(begin);useMountEffect(begin);",
+      true,
+    ],
+    [
+      "const factory=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};frame.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame.current);};useMountEffect(()=>{factory();});",
+      false,
+    ],
+    [
+      "const factory=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};frame.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame.current);};useMountEffect(()=>{factory();return factory();});",
+      false,
+    ],
+    [
+      "const factory=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};frame.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame.current);};useMountEffect(()=>{const first=factory();const second=factory();return()=>{first();second();};});",
+      true,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) =>
+        (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
+});
+
+test("source-only factories retain their contract without inheriting lexical effects", async () => {
+  const intervalFactory =
+    "const factory=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};";
+  const frameFactory =
+    "const factory=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};frame.current=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame.current);};";
+  const cases = [
+    [intervalFactory, true],
+    [`useMountEffect(()=>{${intervalFactory}});`, true],
+    [`useMountEffect(()=>{${intervalFactory}factory();});`, false],
+    [`useMountEffect(()=>{${intervalFactory}return factory();});`, true],
+    [frameFactory, true],
+    [`useMountEffect(()=>{${frameFactory}});`, true],
+    [`useMountEffect(()=>{${frameFactory}factory();});`, false],
+    [`useMountEffect(()=>{${frameFactory}return factory();});`, true],
+    [
+      "useMountEffect(()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);});",
+      true,
+    ],
+    [
+      "useMountEffect(()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);});",
+      false,
+    ],
+    [
+      "useMountEffect(()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);});",
+      false,
+    ],
+    [
+      "const begin=()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);};useMountEffect(begin);",
+      true,
+    ],
+    [
+      "const begin=()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);};useMountEffect(begin);",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) => (await lintSingleRule(RULE, code)).length === 0,
     ),
   );
   expect(results).toEqual(cases.map(([, owned]) => owned));
@@ -914,6 +1107,62 @@ test("replacing a timer requires executed cancellation of the previous handle", 
       cases.map(([, owned]) => owned),
     );
   }
+});
+
+test("setup loops require proven termination and cleanup on every exit", async () => {
+  const cases = [
+    ["for(let n=0;n<2;n++){clearInterval(id);id=setInterval(tick,20);}", true],
+    ["for(let n=2;n>0;n--){clearInterval(id);id=setInterval(tick,20);}", true],
+    ["for(let n=0;3>n;n+=2){clearInterval(id);id=setInterval(tick,20);}", true],
+    [
+      "const limit=2;for(let n=0;n<limit;n++){clearInterval(id);id=setInterval(tick,20);}",
+      true,
+    ],
+    [
+      "for(let n=0;n<2;n++){if(ready())clearInterval(id);id=setInterval(tick,20);}",
+      false,
+    ],
+    [
+      "for(let n=0;n<2;n++){clearInterval(id);id=setInterval(tick,20);if(ready())return;}",
+      false,
+    ],
+    [
+      "for(let n=0;n<2;n++){clearInterval(id);id=setInterval(tick,20);throw failure;}",
+      false,
+    ],
+    [
+      "for(let n=0;n<2;n++){clearInterval(id);id=setInterval(tick,20);n=0;}",
+      false,
+    ],
+    ["for(let n=0;n<2;n--){clearInterval(id);id=setInterval(tick,20);}", false],
+    [
+      "for(let n=0;n<Infinity;n++){clearInterval(id);id=setInterval(tick,20);}",
+      false,
+    ],
+    ["for(;;){}", false],
+    ["while(true){}", false],
+    ["while(ready()){clearInterval(id);id=setInterval(tick,20);}", false],
+    ["do{clearInterval(id);id=setInterval(tick,20);}while(ready());", false],
+    [
+      "for(let n=0;n<2;n++){clearInterval(id);id=setInterval(tick,20);}return;",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.flatMap(([body, owned]) =>
+      [false, true].map(async (member) => {
+        const target = member ? "ref.current" : "id";
+        const declaration = member
+          ? "const ref={current:0};ref.current=setInterval(tick,10);"
+          : "let id=setInterval(tick,10);";
+        const source = `useEffect(()=>{${declaration}${body.replaceAll("id", target)}return()=>clearInterval(${target});},[]);`;
+        return [(await lintSingleRule(RULE, source)).length === 0, owned];
+      }),
+    ),
+  );
+  expect(results.map(([actual]) => actual)).toEqual(
+    results.map(([, owned]) => owned),
+  );
 });
 
 test("cancellation must execute after creation, independent of helper declaration order", async () => {

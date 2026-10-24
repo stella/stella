@@ -141,24 +141,14 @@ const enclosingFunctions = (node: AstNode): AstNode[] => {
   return functions;
 };
 
-// The effect callback a function sits in: the first argument of an effect
-// hook call, found on the way out from `node`.
-const enclosingEffect = (node: AstNode): AstNode | null => {
+// Inline and named hook callbacks share one resolved ownership boundary.
+const enclosingEffect = (
+  context: LoopContext,
+  node: AstNode,
+): AstNode | null => {
   for (const candidate of enclosingFunctions(node)) {
-    const call = parentOf(candidate);
-    if (
-      call?.type === "CallExpression" &&
-      callArguments(call).at(0) === candidate
-    ) {
-      const callee = unwrapExpression(call.callee);
-      const name = isIdentifier(callee)
-        ? callee.name
-        : callee?.type === "MemberExpression"
-          ? getPropertyName(callee.property)
-          : null;
-      if (name !== null && EFFECT_HOOKS.has(name)) {
-        return candidate;
-      }
+    if (context.effectCallbacks.has(candidate)) {
+      return candidate;
     }
   }
   return null;
@@ -296,7 +286,11 @@ const rescheduleGuards = (call: AstNode, loop: AstNode): Guard[] | null => {
   return conditional ? guards : null;
 };
 
-type LoopContext = ScopeContext & { sourceCode: { text: string } };
+type LoopContext = ScopeContext & {
+  sourceCode: { text: string };
+  effectCallbacks: ReadonlySet<AstNode>;
+  effectRegistrations: ReadonlyMap<AstNode, AstNode>;
+};
 
 type LoopStart = { kind: LoopKind; node: AstNode };
 
@@ -391,6 +385,18 @@ const functionFor = (context: LoopContext, node: unknown): AstNode | null => {
   return null;
 };
 
+const effectCallbackFor = (context: LoopContext, call: AstNode) => {
+  const callee = unwrapExpression(call.callee);
+  const name = isIdentifier(callee)
+    ? callee.name
+    : callee?.type === "MemberExpression"
+      ? getPropertyName(callee.property)
+      : null;
+  return name !== null && EFFECT_HOOKS.has(name)
+    ? functionFor(context, callArguments(call).at(0))
+    : null;
+};
+
 // The function a named call invokes, or null for any other call.
 const namedCallTarget = (
   context: LoopContext,
@@ -399,6 +405,10 @@ const namedCallTarget = (
   node.type === "CallExpression" && isIdentifier(unwrapExpression(node.callee))
     ? functionFor(context, node.callee)
     : null;
+
+const startupTarget = (context: LoopContext, invocation: AstNode) =>
+  context.effectRegistrations.get(invocation) ??
+  namedCallTarget(context, invocation);
 
 const directFunctionCalls = (callback: AstNode): AstNode[] =>
   everyNode(callback).filter(
@@ -856,6 +866,18 @@ const cleanupPaths = (
       ),
     );
   }
+  if (proof.setup !== undefined && finiteForLoop(proof.context, node)) {
+    return continueCleanupPaths(
+      cleanupExpressionPaths(proof, node.test),
+      () =>
+        new Set([
+          "continues",
+          ...continueCleanupPaths(cleanupPaths(proof, node.body), () =>
+            cleanupExpressionPaths(proof, node.update),
+          ),
+        ]),
+    );
+  }
   if (
     CONDITIONAL_PARENTS.has(node.type) ||
     node.type === "SwitchStatement" ||
@@ -1002,6 +1024,12 @@ const resetsConsumedFrame = ({
 };
 
 const mutuallyExclusiveBranches = (left: AstNode, right: AstNode): boolean => {
+  if (enclosingFunctions(left).at(0) !== enclosingFunctions(right).at(0)) {
+    return false;
+  }
+  if (left.range[0] > right.range[0]) {
+    return mutuallyExclusiveBranches(right, left);
+  }
   const owner = enclosingFunctions(left).at(0);
   let returnsBeforeRight = false;
   let crossesTry = false;
@@ -1275,6 +1303,15 @@ const hasAmbiguousMemberWrites = ({
   return false;
 };
 
+const assignedValue = (write: AstNode | null) => {
+  if (write?.type === "VariableDeclarator") {
+    return unwrapExpression(write.init);
+  }
+  return write?.type === "AssignmentExpression" && write.operator === "="
+    ? unwrapExpression(write.right)
+    : null;
+};
+
 const hasAmbiguousHandleWrites = ({
   cancels,
   context,
@@ -1312,13 +1349,7 @@ const hasAmbiguousHandleWrites = ({
     ) {
       continue;
     }
-    const value = unwrapExpression(
-      write?.type === "VariableDeclarator"
-        ? write.init
-        : write?.type === "AssignmentExpression" && write.operator === "="
-          ? write.right
-          : null,
-    );
+    const value = assignedValue(write);
     const empty =
       (value === null && write?.type === "VariableDeclarator") ||
       emptyHandleValue(context, value);
@@ -1354,13 +1385,18 @@ const hasAmbiguousHandleWrites = ({
   return false;
 };
 
-// `start`'s loop body is `loopBody`; the effect enclosing `effectAnchor`,
-// if any, must cancel it in its returned cleanup.
+type LoopOwner =
+  | { type: "factory-contract" }
+  | {
+      type: "effect-startup" | "async-frame-callback";
+      effectAnchor: AstNode;
+      invocationPath: AstNode[];
+    };
+
 type OwnedLoop = {
-  effectAnchor: AstNode;
+  owner: LoopOwner;
   loopBody: AstNode | null;
   start: AstNode;
-  invocationPath?: AstNode[];
 };
 
 type ReturnedHandleOptions = {
@@ -1412,9 +1448,12 @@ const returnsCreatedHandle = ({
   start,
 }: FactoryHandleFlowOptions): boolean => {
   const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
-  return invocationPath.every((call, index) => {
+  const valuePath = invocationPath.filter(
+    (call) => !context.effectRegistrations.has(call),
+  );
+  return valuePath.every((call, index) => {
     const factory = namedCallTarget(context, call);
-    const expected = invocationPath.at(index + 1) ?? start;
+    const expected = valuePath.at(index + 1) ?? start;
     if (
       factory === null ||
       factory.async === true ||
@@ -1563,54 +1602,118 @@ const ownsReturnedCleanup = ({
   );
 };
 
+type OwnerCleanupOptions = {
+  proof: CleanupProof;
+  effect: AstNode | null;
+  owner: AstNode;
+  start: AstNode;
+  effectAnchor: AstNode;
+  loopBody: AstNode | null;
+  transfers: Cancel[];
+  matching: Cancel[];
+};
+
+const ownsOwnerCleanup = ({
+  proof,
+  effect,
+  owner,
+  start,
+  effectAnchor,
+  loopBody,
+  transfers,
+  matching,
+}: OwnerCleanupOptions): boolean => {
+  const { context, handle } = proof;
+  const startupTransfers = transfers.filter(
+    (transfer) =>
+      cancelsHandle(context, transfer, handle) &&
+      (effect === null || transfer.node.type === "CallExpression") &&
+      transfer.node.range[0] > start.range[1] &&
+      (effect === null ||
+        loopBody === null ||
+        !isWithin(transfer.node, loopBody)),
+  );
+  if (
+    effect !== null &&
+    isAstNode(owner.body) &&
+    owner.body.type !== "BlockStatement"
+  ) {
+    return ownsReturnedCleanup({
+      proof,
+      expression: owner.body,
+      start,
+      budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
+    });
+  }
+  const returns = new Set<AstNode>();
+  const exits = cleanupPaths(
+    {
+      ...proof,
+      cancels:
+        effect === null ? [...matching, ...startupTransfers] : startupTransfers,
+      completed: new Map(),
+      setup: {
+        effect: owner,
+        start: effect === null ? start : effectAnchor,
+        returns,
+      },
+    },
+    owner.body,
+  );
+  if (exits.size === 0) {
+    return true;
+  }
+  if ([...exits].some((path) => path !== "returns")) {
+    return false;
+  }
+  return (
+    returns.size > 0 &&
+    [...returns].every((node) => {
+      const argument = unwrapExpression(node.argument);
+      if (
+        ownsReturnedCleanup({
+          proof,
+          expression: argument,
+          start,
+          budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
+        })
+      ) {
+        return true;
+      }
+      // A factory may explicitly return an object that owns the cancel method.
+      // Merely defining a dormant closure elsewhere does not hand ownership out.
+      if (
+        effect === null &&
+        argument?.type === "ObjectExpression" &&
+        Array.isArray(argument.properties)
+      ) {
+        return argument.properties.some((property) => {
+          const method = isAstNode(property)
+            ? functionFor(context, property.value)
+            : null;
+          return (
+            method !== null && cleanupFunctionPaths(proof, method).size === 0
+          );
+        });
+      }
+      return false;
+    })
+  );
+};
+
 const isOwned = (
   context: LoopContext,
   cancels: Cancel[],
-  { effectAnchor, loopBody, start, invocationPath }: OwnedLoop,
+  { owner: origin, loopBody, start }: OwnedLoop,
 ): boolean => {
-  const effect = enclosingEffect(effectAnchor);
-  const creator = enclosingFunctions(start).at(0);
-  if (
-    effect !== null &&
-    invocationPath === undefined &&
-    creator !== undefined &&
-    (effectAnchor !== start ||
-      (creator !== effect &&
-        isGlobalCall(context, start, START_NAMES.interval)))
-  ) {
-    const invocations =
-      effectAnchor !== start
-        ? [effectAnchor]
-        : directFunctionCalls(effect).filter((call) =>
-            invokesFunction(context, call, creator),
-          );
-    const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
-    for (const invocation of invocations) {
-      const paths = loopInvocationPaths({
-        context,
-        invocation,
-        target: creator,
-        budget,
-      });
-      if (
-        paths === null ||
-        paths.length === 0 ||
-        !paths.every((path) =>
-          isOwned(context, cancels, {
-            effectAnchor: invocation,
-            loopBody,
-            start,
-            invocationPath: path,
-          }),
-        )
-      ) {
-        return false;
-      }
-    }
-    if (invocations.length > 0) {
-      return true;
-    }
-  }
+  const effectAnchor =
+    origin.type === "factory-contract" ? start : origin.effectAnchor;
+  const invocationPath =
+    origin.type === "factory-contract" ? undefined : origin.invocationPath;
+  const effect =
+    origin.type === "factory-contract"
+      ? null
+      : enclosingEffect(context, effectAnchor);
   let ownershipStart = start;
   let handle = handleOf(context, start);
   if (effect !== null) {
@@ -1674,7 +1777,11 @@ const isOwned = (
   const bindingOwner = isAstNode(declaration)
     ? enclosingFunctions(declaration).at(0)
     : undefined;
-  const owner = effect ?? bindingOwner ?? enclosingFunctions(start).at(0);
+  const owner =
+    effect ??
+    (bindingOwner !== undefined && !context.effectCallbacks.has(bindingOwner)
+      ? bindingOwner
+      : enclosingFunctions(start).at(0));
   // A shared ref is an explicit external owner: separate schedule/clear
   // helpers operate on the same resolved root, after overwrite checks above.
   if (
@@ -1697,81 +1804,16 @@ const isOwned = (
   if (startsInFinally(ownershipStart, owner)) {
     return false;
   }
-  const startupTransfers = transfers.filter(
-    (transfer) =>
-      cancelsHandle(context, transfer, handle) &&
-      (effect === null || transfer.node.type === "CallExpression") &&
-      transfer.node.range[0] > ownershipStart.range[1] &&
-      (effect === null ||
-        loopBody === null ||
-        !isWithin(transfer.node, loopBody)),
-  );
-  if (
-    effect !== null &&
-    isAstNode(owner.body) &&
-    owner.body.type !== "BlockStatement"
-  ) {
-    return ownsReturnedCleanup({
-      proof,
-      expression: owner.body,
-      start: ownershipStart,
-      budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
-    });
-  }
-  const returns = new Set<AstNode>();
-  const exits = cleanupPaths(
-    {
-      ...proof,
-      cancels:
-        effect === null ? [...matching, ...startupTransfers] : startupTransfers,
-      completed: new Map(),
-      setup: {
-        effect: owner,
-        start: effect === null ? ownershipStart : effectAnchor,
-        returns,
-      },
-    },
-    owner.body,
-  );
-  if (exits.size === 0) {
-    return true;
-  }
-  if ([...exits].some((path) => path !== "returns")) {
-    return false;
-  }
-  return (
-    returns.size > 0 &&
-    [...returns].every((node) => {
-      const argument = unwrapExpression(node.argument);
-      if (
-        ownsReturnedCleanup({
-          proof,
-          expression: argument,
-          start: ownershipStart,
-          budget: { remaining: MAX_LOOP_INVOCATION_PATHS },
-        })
-      ) {
-        return true;
-      }
-      // A factory may explicitly return an object that owns the cancel method.
-      // Merely defining a dormant closure elsewhere does not hand ownership out.
-      if (
-        effect === null &&
-        argument?.type === "ObjectExpression" &&
-        Array.isArray(argument.properties)
-      ) {
-        return argument.properties.some((property) => {
-          const method = isAstNode(property)
-            ? functionFor(context, property.value)
-            : null;
-          return (
-            method !== null && cleanupFunctionPaths(proof, method).size === 0
-          );
-        });
-      }
-      return false;
-    })
-  );
+  return ownsOwnerCleanup({
+    proof,
+    effect,
+    owner,
+    start: ownershipStart,
+    effectAnchor,
+    loopBody,
+    transfers,
+    matching,
+  });
 };
 
 // Only literal integer progress and limits establish a finite retry budget.
@@ -1826,17 +1868,40 @@ const precedesOnPath = ({
 };
 
 type CounterDirection = "increasing" | "decreasing";
+type CounterProgress = "before-call" | "for-update";
 
 type CounterDirectionOptions = {
   variable: Variable;
   call: AstNode;
   loop: AstNode;
+  progress: CounterProgress;
+};
+
+const counterStep = (write: AstNode): number | null => {
+  const step =
+    write.type === "UpdateExpression"
+      ? write.operator === "++"
+        ? 1
+        : write.operator === "--"
+          ? -1
+          : null
+      : write.type === "AssignmentExpression" &&
+          (write.operator === "+=" || write.operator === "-=")
+        ? integerValue(write.right)
+        : null;
+  if (step === null || step === 0) {
+    return null;
+  }
+  return write.type === "AssignmentExpression" && write.operator === "-="
+    ? -step
+    : step;
 };
 
 const counterDirection = ({
   variable,
   call,
   loop,
+  progress,
 }: CounterDirectionOptions): CounterDirection | null => {
   const definition = variable.defs.at(0);
   if (
@@ -1844,9 +1909,15 @@ const counterDirection = ({
     definition?.type !== "Variable" ||
     !isAstNode(definition.node) ||
     definition.node.type !== "VariableDeclarator" ||
-    isWithin(definition.node, loop) ||
     integerValue(definition.node.init) === null
   ) {
+    return null;
+  }
+  const correctInitializer =
+    progress === "for-update"
+      ? isAstNode(loop.init) && isWithin(definition.node, loop.init)
+      : !isWithin(definition.node, loop);
+  if (!correctInitializer) {
     return null;
   }
   let direction: CounterDirection | null = null;
@@ -1860,29 +1931,16 @@ const counterDirection = ({
     const write = parentOf(reference.identifier);
     if (
       write === null ||
-      !isWithin(write, loop) ||
-      !precedesOnPath({ write, call, loop })
+      (progress === "for-update"
+        ? write !== loop.update
+        : !isWithin(write, loop) || !precedesOnPath({ write, call, loop }))
     ) {
       return null;
     }
-    const step =
-      write.type === "UpdateExpression"
-        ? write.operator === "++"
-          ? 1
-          : write.operator === "--"
-            ? -1
-            : null
-        : write.type === "AssignmentExpression" &&
-            (write.operator === "+=" || write.operator === "-=")
-          ? integerValue(write.right)
-          : null;
-    if (step === null || step === 0) {
+    const delta = counterStep(write);
+    if (delta === null) {
       return null;
     }
-    const delta =
-      write.type === "AssignmentExpression" && write.operator === "-="
-        ? -step
-        : step;
     const next = delta > 0 ? "increasing" : "decreasing";
     if (direction !== null && direction !== next) {
       return null;
@@ -1897,6 +1955,7 @@ type BoundedGuardOptions = {
   guard: Guard;
   call: AstNode;
   loop: AstNode;
+  progress: CounterProgress;
 };
 
 const boundedGuard = ({
@@ -1904,6 +1963,7 @@ const boundedGuard = ({
   guard: { expression, outcome },
   call,
   loop,
+  progress,
 }: BoundedGuardOptions): boolean => {
   const node = unwrapExpression(expression);
   if (node === null) {
@@ -1916,6 +1976,7 @@ const boundedGuard = ({
       guard: { expression: child, outcome: nextOutcome },
       call,
       loop,
+      progress,
     });
   if (node.type === "UnaryExpression" && node.operator === "!") {
     return recurse(node.argument, outcome === "truthy" ? "falsy" : "truthy");
@@ -1952,7 +2013,9 @@ const boundedGuard = ({
     }
     const variable = resolveVariable(context, counter);
     const direction =
-      variable === null ? null : counterDirection({ variable, call, loop });
+      variable === null
+        ? null
+        : counterDirection({ variable, call, loop, progress });
     if (direction === null) {
       continue;
     }
@@ -1978,6 +2041,22 @@ const boundedGuard = ({
   }
   return false;
 };
+
+const finiteForLoop = (context: LoopContext, node: AstNode): boolean =>
+  node.type === "ForStatement" &&
+  isAstNode(node.init) &&
+  node.init.type === "VariableDeclaration" &&
+  Array.isArray(node.init.declarations) &&
+  node.init.declarations.length === 1 &&
+  isAstNode(node.test) &&
+  isAstNode(node.update) &&
+  boundedGuard({
+    context,
+    guard: { expression: node.test, outcome: "truthy" },
+    call: node.update,
+    loop: node,
+    progress: "for-update",
+  });
 
 // Every frame call that enters a loop function, reschedules and kick-offs,
 // keyed by the loop.
@@ -2016,26 +2095,6 @@ const frameLoops = (
   return loops;
 };
 
-const invokesFunction = (
-  context: LoopContext,
-  invocation: AstNode,
-  target: AstNode,
-  visiting: ReadonlySet<AstNode> = new Set(),
-): boolean => {
-  const called = namedCallTarget(context, invocation);
-  if (called === target) {
-    return true;
-  }
-  if (called === null || visiting.has(called)) {
-    return false;
-  }
-  const active = new Set(visiting);
-  active.add(called);
-  return directFunctionCalls(called).some((call) =>
-    invokesFunction(context, call, target, active),
-  );
-};
-
 const hasGuardedFrameCallback = (
   context: LoopContext,
   call: AstNode,
@@ -2052,6 +2111,156 @@ const hasGuardedFrameCallback = (
     invocations.length > 0 &&
     invocations.every((node) => rescheduleGuards(node, callback) !== null)
   );
+};
+
+type LoopOwnershipOptions = {
+  context: LoopContext;
+  kind: LoopKind;
+  cancels: Cancel[];
+  starts: { node: AstNode; loopBody: AstNode | null }[];
+  effectInvocations: AstNode[];
+};
+
+type AsyncFrameOwnerOptions = Pick<
+  LoopOwnershipOptions,
+  "context" | "cancels" | "starts" | "effectInvocations"
+> & {
+  loopBody: AstNode;
+  budget: { remaining: number };
+  unowned: Set<AstNode>;
+};
+
+// An asynchronous frame callback inherits effect ownership only from a
+// retained kickoff on a proven startup path, not lexical nesting alone.
+const asyncFrameOwner = ({
+  context,
+  cancels,
+  starts,
+  effectInvocations,
+  loopBody,
+  budget,
+  unowned,
+}: AsyncFrameOwnerOptions): LoopOwner => {
+  for (const kickoff of starts) {
+    if (kickoff.loopBody !== loopBody || isWithin(kickoff.node, loopBody)) {
+      continue;
+    }
+    const kickoffOwner = enclosingFunctions(kickoff.node).at(0);
+    if (kickoffOwner === undefined) {
+      continue;
+    }
+    for (const invocation of effectInvocations) {
+      const paths = loopInvocationPaths({
+        context,
+        invocation,
+        target: kickoffOwner,
+        budget,
+      });
+      if (paths === null) {
+        unowned.add(invocation);
+        continue;
+      }
+      const path = paths.find((candidate) =>
+        isOwned(context, cancels, {
+          owner: {
+            type: "effect-startup",
+            effectAnchor: candidate.at(1) ?? kickoff.node,
+            invocationPath: candidate,
+          },
+          loopBody,
+          start: kickoff.node,
+        }),
+      );
+      if (path !== undefined) {
+        return {
+          type: "async-frame-callback",
+          effectAnchor: path.at(1) ?? kickoff.node,
+          invocationPath: path,
+        };
+      }
+    }
+  }
+  return { type: "factory-contract" };
+};
+
+const loopOwnershipReports = ({
+  context,
+  kind,
+  cancels,
+  starts,
+  effectInvocations,
+}: LoopOwnershipOptions): Report[] => {
+  const unowned = new Set<AstNode>();
+  for (const { node: start, loopBody } of starts) {
+    const owner = enclosingFunctions(start).at(0);
+    const repeated =
+      owner !== undefined &&
+      hasUncancelledRepeatedInvocation({
+        context,
+        cancels,
+        start,
+        owner,
+        invocations: effectInvocations,
+      });
+    const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
+    let reached = false;
+    for (const invocation of effectInvocations) {
+      if (owner === undefined) {
+        continue;
+      }
+      const paths = loopInvocationPaths({
+        context,
+        invocation,
+        target: owner,
+        budget,
+      });
+      if (paths === null) {
+        unowned.add(invocation);
+        continue;
+      }
+      if (paths.length === 0) {
+        continue;
+      }
+      reached = true;
+      if (
+        repeated ||
+        !paths.every((path) =>
+          isOwned(context, cancels, {
+            owner: {
+              type: "effect-startup",
+              effectAnchor: path.at(1) ?? start,
+              invocationPath: path,
+            },
+            loopBody,
+            start,
+          }),
+        )
+      ) {
+        unowned.add(
+          enclosingEffect(context, start) === null ? invocation : start,
+        );
+      }
+    }
+    const fallbackOwner =
+      !reached && loopBody !== null && owner === loopBody
+        ? asyncFrameOwner({
+            context,
+            cancels,
+            starts,
+            effectInvocations,
+            loopBody,
+            budget,
+            unowned,
+          })
+        : ({ type: "factory-contract" } as const);
+    if (
+      !reached &&
+      !isOwned(context, cancels, { owner: fallbackOwner, loopBody, start })
+    ) {
+      unowned.add(start);
+    }
+  }
+  return [...unowned].map((node) => ({ kind, messageId: "unownedLoop", node }));
 };
 
 const frameLoopReports = (
@@ -2074,7 +2283,13 @@ const frameLoopReports = (
         }
       } else if (
         !guards.some((guard) =>
-          boundedGuard({ context, guard, loop, call: reschedule }),
+          boundedGuard({
+            context,
+            guard,
+            loop,
+            call: reschedule,
+            progress: "before-call",
+          }),
         )
       ) {
         bounded = false;
@@ -2083,49 +2298,15 @@ const frameLoopReports = (
     if (bounded) {
       continue;
     }
-    const repeated = calls.some(
-      (start) =>
-        isWithin(start, loop) &&
-        hasUncancelledRepeatedInvocation({
-          context,
-          cancels: cancels.frame,
-          start,
-          owner: loop,
-          invocations: effectInvocations,
-        }),
+    reports.push(
+      ...loopOwnershipReports({
+        context,
+        kind: "frame",
+        cancels: cancels.frame,
+        starts: calls.map((node) => ({ node, loopBody: loop })),
+        effectInvocations,
+      }),
     );
-    for (const invocation of effectInvocations) {
-      if (
-        invokesFunction(context, invocation, loop) &&
-        calls.some(
-          (start) =>
-            isWithin(start, loop) &&
-            (repeated ||
-              !isOwned(context, cancels.frame, {
-                effectAnchor: invocation,
-                loopBody: loop,
-                start,
-              })),
-        )
-      ) {
-        reports.push({
-          kind: "frame",
-          messageId: "unownedLoop",
-          node: invocation,
-        });
-      }
-    }
-    for (const call of calls) {
-      if (
-        !isOwned(context, cancels.frame, {
-          effectAnchor: call,
-          loopBody: loop,
-          start: call,
-        })
-      ) {
-        reports.push({ kind: "frame", messageId: "unownedLoop", node: call });
-      }
-    }
   }
   return reports;
 };
@@ -2151,7 +2332,7 @@ const loopInvocationPaths = ({
     return null;
   }
   budget.remaining -= 1;
-  const called = namedCallTarget(context, invocation);
+  const called = startupTarget(context, invocation);
   if (called === null || visiting.has(called)) {
     return [];
   }
@@ -2208,6 +2389,55 @@ type RepeatedLoopInvocationOptions = {
   start: AstNode;
   owner: AstNode;
   invocations: AstNode[];
+};
+
+type InvocationPairOptions = {
+  context: LoopContext;
+  proof: CleanupProof;
+  left: AstNode[];
+  right: AstNode[];
+  freshOwner: AstNode | undefined;
+};
+
+const uncancelledInvocationPair = ({
+  context,
+  proof,
+  left,
+  right,
+  freshOwner,
+}: InvocationPairOptions): boolean => {
+  const divergence = left.findIndex(
+    (call, position) => call !== right[position],
+  );
+  if (divergence === -1) {
+    return true;
+  }
+  // Only divergence before entering the allocation owner creates two instances.
+  if (
+    freshOwner !== undefined &&
+    [left, right].every((path) => {
+      const allocation = path.findIndex(
+        (call) => startupTarget(context, call) === freshOwner,
+      );
+      return allocation >= divergence;
+    })
+  ) {
+    return false;
+  }
+  const earlier = left[divergence];
+  const later = right[divergence];
+  if (earlier === undefined || later === undefined) {
+    return true;
+  }
+  if (mutuallyExclusiveBranches(earlier, later)) {
+    return false;
+  }
+  const [first, second] =
+    earlier.range[0] < later.range[0] ? [earlier, later] : [later, earlier];
+  if (!cancelledBeforeWrite({ proof, write: second, start: first })) {
+    return true;
+  }
+  return false;
 };
 
 const hasUncancelledRepeatedInvocation = ({
@@ -2273,39 +2503,8 @@ const hasUncancelledRepeatedInvocation = ({
     }
     for (const right of paths.slice(index + 1)) {
       if (
-        enclosingEffect(left[0] ?? start) !== enclosingEffect(right[0] ?? start)
+        uncancelledInvocationPair({ context, proof, left, right, freshOwner })
       ) {
-        continue;
-      }
-      const divergence = left.findIndex(
-        (call, position) => call !== right[position],
-      );
-      if (divergence === -1) {
-        return true;
-      }
-      // Only divergence before entering the allocation owner creates two instances.
-      if (
-        freshOwner !== undefined &&
-        [left, right].every((path) => {
-          const allocation = path.findIndex(
-            (call) => namedCallTarget(context, call) === freshOwner,
-          );
-          return allocation >= divergence;
-        })
-      ) {
-        continue;
-      }
-      const earlier = left[divergence];
-      const later = right[divergence];
-      if (earlier === undefined || later === undefined) {
-        return true;
-      }
-      if (mutuallyExclusiveBranches(earlier, later)) {
-        continue;
-      }
-      const [first, second] =
-        earlier.range[0] < later.range[0] ? [earlier, later] : [later, earlier];
-      if (!cancelledBeforeWrite({ proof, write: second, start: first })) {
         return true;
       }
     }
@@ -2316,50 +2515,19 @@ const hasUncancelledRepeatedInvocation = ({
 const intervalReports = (
   context: LoopContext,
   { cancels, starts, effectInvocations }: LoopCalls,
-): Report[] => {
-  const intervals = starts.filter(({ kind }) => kind === "interval");
-  const reports: Report[] = intervals
-    .filter(
-      ({ node }) =>
-        !isOwned(context, cancels.interval, {
-          effectAnchor: node,
-          loopBody: functionFor(context, callArguments(node).at(0)),
-          start: node,
-        }),
-    )
-    .map(({ node }) => ({ kind: "interval", messageId: "unownedLoop", node }));
-  for (const { node } of intervals) {
-    const owner = enclosingFunctions(node).at(0);
-    if (owner === undefined || owner === enclosingEffect(node)) {
-      continue;
-    }
-    const repeated = hasUncancelledRepeatedInvocation({
-      context,
-      cancels: cancels.interval,
-      start: node,
-      owner,
-      invocations: effectInvocations,
-    });
-    for (const invocation of effectInvocations) {
-      if (
-        invokesFunction(context, invocation, owner) &&
-        (repeated ||
-          !isOwned(context, cancels.interval, {
-            effectAnchor: invocation,
-            loopBody: functionFor(context, callArguments(node).at(0)),
-            start: node,
-          }))
-      ) {
-        reports.push({
-          kind: "interval",
-          messageId: "unownedLoop",
-          node: invocation,
-        });
-      }
-    }
-  }
-  return reports;
-};
+): Report[] =>
+  loopOwnershipReports({
+    context,
+    kind: "interval",
+    cancels: cancels.interval,
+    starts: starts
+      .filter(({ kind }) => kind === "interval")
+      .map(({ node }) => ({
+        node,
+        loopBody: functionFor(context, callArguments(node).at(0)),
+      })),
+    effectInvocations,
+  });
 
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
@@ -2383,6 +2551,17 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
+        const effectRegistrations = new Map<AstNode, AstNode>();
+        let effectCallbacks = new Set<AstNode>();
+        const loopContext = {
+          get sourceCode() {
+            return context.sourceCode;
+          },
+          get effectCallbacks() {
+            return effectCallbacks;
+          },
+          effectRegistrations,
+        } satisfies LoopContext;
         const calls: LoopCalls = {
           effectInvocations: [],
           cancels: { frame: [], interval: [] },
@@ -2390,6 +2569,8 @@ export default eslintCompatPlugin({
         };
         return {
           before() {
+            effectCallbacks.clear();
+            effectRegistrations.clear();
             calls.starts.length = 0;
             calls.effectInvocations.length = 0;
             calls.cancels.frame.length = 0;
@@ -2405,14 +2586,14 @@ export default eslintCompatPlugin({
             if (!isAstNode(call)) {
               return;
             }
-            const effect = enclosingEffect(call);
-            if (effect !== null && enclosingFunctions(call).at(0) === effect) {
-              calls.effectInvocations.push(call);
+            const callback = effectCallbackFor(loopContext, call);
+            if (callback !== null) {
+              effectRegistrations.set(call, callback);
             }
             for (const kind of ["frame", "interval"] as const) {
-              if (isGlobalCall(context, call, START_NAMES[kind])) {
+              if (isGlobalCall(loopContext, call, START_NAMES[kind])) {
                 calls.starts.push({ kind, node: call });
-              } else if (isGlobalCall(context, call, CANCEL_NAMES[kind])) {
+              } else if (isGlobalCall(loopContext, call, CANCEL_NAMES[kind])) {
                 const argument = callArguments(call).at(0);
                 calls.cancels[kind].push({
                   argument: isAstNode(argument) ? argument : null,
@@ -2422,9 +2603,11 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
+            effectCallbacks = new Set(effectRegistrations.values());
+            calls.effectInvocations.push(...effectRegistrations.keys());
             const reports = [
-              ...frameLoopReports(context, calls),
-              ...intervalReports(context, calls),
+              ...frameLoopReports(loopContext, calls),
+              ...intervalReports(loopContext, calls),
             ];
             for (const { kind, messageId, node } of reports) {
               context.report({
