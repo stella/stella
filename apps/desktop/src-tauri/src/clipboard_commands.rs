@@ -1,4 +1,3 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Instant};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};

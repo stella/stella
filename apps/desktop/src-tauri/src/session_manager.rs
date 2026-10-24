@@ -2983,6 +2983,7 @@ mod tests {
       assert!(
         session.last_checkpoint_sha.as_deref() == Some(session.last_local_sha.as_str())
       );
+      drop(mgr);
     }
     let open = Arc::new(AtomicBool::new(true));
     let observed_open = Arc::clone(&open);
@@ -3242,12 +3243,14 @@ mod tests {
       let mut mgr = manager.lock().await;
       let session = mgr.sessions.get_mut("idle-0").unwrap();
       session.api_base_url = base_url;
-      (
+      let values = (
         session.id.clone(),
         session.file_path.clone(),
         session.file_name.clone(),
         session.last_observed_file.clone().unwrap(),
-      )
+      );
+      drop(mgr);
+      values
     };
     let changed = b"modified! document";
     assert_ne!(hash_bytes(changed), hash_bytes(b"unchanged document"));
@@ -3269,6 +3272,7 @@ mod tests {
       if let Some(timer) = session.open_probe_timer.take() {
         timer.abort();
       }
+      drop(mgr);
     }
     retry_session(Arc::clone(&manager), &id).await;
     retry_session(Arc::clone(&manager), &id).await;

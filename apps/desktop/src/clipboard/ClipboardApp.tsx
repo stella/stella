@@ -1752,7 +1752,7 @@ const ClipboardApp = () => {
         })
           .then((update) => {
             if (disposed) {
-              return;
+              return undefined;
             }
             // Only the most recent capture is retained natively. A gap or a
             // mutation invalidating it recovers through the authorized snapshot.
@@ -1763,7 +1763,7 @@ const ClipboardApp = () => {
               ) {
                 readSnapshot();
               }
-              return;
+              return undefined;
             }
             if (
               !isClipboardCaptureUpdate(update) ||
@@ -1775,22 +1775,23 @@ const ClipboardApp = () => {
                 window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
               });
               setError({ message: errorReadHistory, source: "read" });
-              return;
+              return undefined;
             }
             if (update.revision <= appliedRevisionRef.current) {
-              return;
+              return undefined;
             }
             if (snapshotPendingRef.current) {
               captureUpdatesRef.current.push(update);
-              return;
+              return undefined;
             }
             if (update.revision !== appliedRevisionRef.current + 1) {
               readSnapshot();
               captureUpdatesRef.current.push(update);
-              return;
+              return undefined;
             }
             dispatchClipboard({ type: "captureReceived", update });
             appliedRevisionRef.current = update.revision;
+            return undefined;
           })
           .catch((error: unknown) => {
             if (disposed) {
