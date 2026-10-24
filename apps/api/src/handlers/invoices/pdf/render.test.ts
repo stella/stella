@@ -234,6 +234,7 @@ describe("invoice PDF", () => {
     expect(buildInvoicePaymentPayload(draft)?.unwrap()).toEqual({
       status: "payable",
       errorCorrection: "M",
+      scheme: "spayd",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014",
     });
@@ -245,6 +246,7 @@ describe("invoice QR payment", () => {
     expect(buildInvoicePaymentPayload(options)?.unwrap()).toEqual({
       status: "payable",
       errorCorrection: "M",
+      scheme: "spayd",
       payload:
         "SPD*1.0*ACC:CZ3301000000000002970297*AM:555.55*CC:CZK*X-VS:0987654321*DT:20261014*MSG:2026-001",
     });
@@ -284,6 +286,7 @@ describe("invoice QR payment", () => {
     expect(buildInvoicePaymentPayload(polish)?.unwrap()).toEqual({
       status: "payable",
       errorCorrection: "L",
+      scheme: "zbp",
       payload:
         "5260001246|PL|61109010140000071219812874|055555|Kancelaria Nowak i W|2026-001|||",
     });
@@ -297,6 +300,7 @@ describe("invoice QR payment", () => {
       status: "not_payable",
       reason: "not_pln",
       errorCorrection: "L",
+      scheme: "zbp",
     });
     // No NIP on the seller profile, or a foreign VAT ID on a firm that banks
     // in Poland: no code, and the PDF still renders.
