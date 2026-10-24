@@ -554,6 +554,10 @@ export const gradeFailure = (
 
   const failureNode = nodes[failureIndex];
   if (failureNode?.kind === "tagged") {
+    // Library wrappers are not project declarations in the tag policy.
+    if (isTransportWrapper(failureNode)) {
+      return graded("tagged_failure", "tag", failureIndex);
+    }
     return graded(taggedFailureReason(failureNode.tag), "tag", failureIndex);
   }
 
