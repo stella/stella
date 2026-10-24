@@ -306,6 +306,8 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
       starstar: 'new Bun.Glob("apps/**").scanSync();',
       starsuffix: 'new Bun.Glob("apps/web*/src/**/*.ts").scanSync();',
+      slashclimb:
+        'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "../", "../", "web", "x.tsx"));',
       template:
         // The fixture source holds a template literal; `$` and `{` are joined
         // so this file's own string is not mistaken for one.
@@ -330,6 +332,7 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       "src/failed.test.ts",
       "src/nested.test.ts",
       "src/root.test.ts",
+      "src/slashclimb.test.ts",
       "src/star.test.ts",
       "src/starstar.test.ts",
       "src/starsuffix.test.ts",

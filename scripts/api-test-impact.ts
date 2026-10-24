@@ -215,7 +215,9 @@ const textReach = (file: string, source: string): ModuleReach => {
         ...code.slice(start, end - 1).matchAll(/["'`]([^"'`]*)["'`]/gu),
       ].map((literal) => literal[1] ?? "");
     }),
-  ].filter((segments) => segments.includes(".."));
+  ].filter((segments) =>
+    segments.some((segment) => segment.split("/").includes("..")),
+  );
   const workspace = /^(?:apps|packages)\/[^/]+/u.exec(file)?.[0];
   const apps = new Set<string>();
   for (const segments of climbs) {
