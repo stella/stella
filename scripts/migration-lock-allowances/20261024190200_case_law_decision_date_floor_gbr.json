@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The widened decision-date CHECK is added NOT VALID without scanning corpus rows; metadata-only lock acquisition retries at 2s, 10s and 30s within a 10-minute statement budget, then validation runs in the online phase."
+}

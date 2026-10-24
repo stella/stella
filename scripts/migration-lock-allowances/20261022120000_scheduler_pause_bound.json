@@ -1,0 +1,6 @@
+{
+  "add-column": "The nullable, default-free column is a catalog-only change under a 1s lock_timeout.",
+  "add-constraint": "CHECK constraints are added NOT VALID, avoiding a table scan while the 1s lock_timeout bounds lock acquisition.",
+  "create-index": "The partial pause index covers one scheduler row per declared job or scheduled flow; lock acquisition is bounded to 1s and the entire index build to 5s.",
+  "create-trigger": "Creating the trigger is a metadata-only change with lock acquisition bounded by the 1s lock_timeout."
+}

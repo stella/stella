@@ -1,0 +1,9 @@
+{
+  "add-column": "Constant literal defaults use the PostgreSQL fast-default catalog path without rewriting either legislation table; lock acquisition is bounded by 1s and the statement by 10s.",
+  "add-constraint": "Identity, namespace, lifecycle and nonempty CHECK constraints are added NOT VALID under a 1s lock_timeout; validation runs separately under its weaker lock.",
+  "add-foreign-key": "The identifier lookup foreign key is installed NOT VALID without an existing-row scan; locks on the lookup and legislation_sources are bounded by 1s lock_timeout.",
+  "create-index": "The ordinary index targets the lookup table initially created empty by this migration, not the populated legislation corpus; replay is bounded by 1s lock_timeout and 10s statement_timeout.",
+  "create-policy": "Policies install the identifier lookup table's existing ingestion/public-reader role boundary without application-relation reads, with DDL lock acquisition bounded to 1s.",
+  "create-trigger": "The three identity and writer fences install trigger metadata without scanning existing rows, under the migration's 1s lock_timeout and 10s statement_timeout.",
+  "row-level-security": "ENABLE and FORCE RLS affect only the identifier lookup table created by this migration; retries retain the 1s lock_timeout and 10s statement_timeout."
+}

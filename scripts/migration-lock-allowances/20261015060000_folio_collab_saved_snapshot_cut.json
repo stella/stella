@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable, default-free columns are a catalog-only change under a 1s lock_timeout.",
+  "add-constraint": "CHECK constraints are added NOT VALID under a 1s lock_timeout; 20261015060010 validates them without ACCESS EXCLUSIVE."
+}

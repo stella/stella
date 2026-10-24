@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { readMigrationLockSources } from "./check-migration-locks";
+import {
+  readMigrationLockAllowances,
+  readMigrationLockSources,
+} from "./check-migration-locks";
 import { MIGRATION_LOCK_BASELINE } from "./migration-lock-baseline";
 import {
   censusSql,
   checkMigrationLocks,
-  MIGRATION_LOCK_ALLOWANCES,
   migrationLockPairs,
+  parseMigrationLockAllowances,
 } from "./migration-lock-census";
 
 const source = (sql: string) => [
@@ -18,9 +21,12 @@ const source = (sql: string) => [
 
 describe("migration lock census", () => {
   test("every committed migration form is classified and strong locks are reviewed", () => {
+    const allowances = readMigrationLockAllowances();
+    expect(allowances.errors).toEqual([]);
     const result = checkMigrationLocks({
       sources: readMigrationLockSources(),
       baseline: MIGRATION_LOCK_BASELINE.entries,
+      allowances: allowances.allowances,
     });
     expect(result.errors).toEqual([]);
     expect(
@@ -34,7 +40,8 @@ describe("migration lock census", () => {
         ({ migration, form }) => `${migration}/${form}`,
       ),
     );
-    for (const { migration, form } of MIGRATION_LOCK_ALLOWANCES) {
+    for (const { migration, form } of readMigrationLockAllowances()
+      .allowances) {
       expect(committed).toContain(`${migration}/${form}`);
     }
   });
@@ -238,7 +245,7 @@ describe("migration lock census", () => {
     expect(
       checkMigrationLocks({ sources, baseline }).errors.join("\n"),
     ).toContain(
-      "add { migration, form, reason } to MIGRATION_LOCK_ALLOWANCES in scripts/migration-lock-census.ts",
+      'add "add-column": "<reason>" to scripts/migration-lock-allowances/20990102000000_other.json',
     );
     expect(
       checkMigrationLocks({
@@ -447,6 +454,66 @@ ALTER TABLE ${target} ADD COLUMN title text;`;
         ],
       }).errors.join("\n"),
     ).toContain("needs a reviewed");
+  });
+
+  test("an allowance file names its migration and maps each census form to a reason", () => {
+    const file =
+      "scripts/migration-lock-allowances/20990101000000_example.json";
+    expect(
+      parseMigrationLockAllowances(file, {
+        "add-column": "Additive expansion before application reads this column",
+        "add-constraint": "Added NOT VALID and validated after the schema lock",
+      }),
+    ).toEqual({
+      allowances: [
+        {
+          migration: "20990101000000_example",
+          form: "add-column",
+          reason: "Additive expansion before application reads this column",
+        },
+        {
+          migration: "20990101000000_example",
+          form: "add-constraint",
+          reason: "Added NOT VALID and validated after the schema lock",
+        },
+      ],
+      errors: [],
+    });
+    const refusals = (name: string, content: unknown) =>
+      parseMigrationLockAllowances(
+        `scripts/migration-lock-allowances/${name}`,
+        content,
+      );
+    expect(
+      refusals("example.json", { "add-column": "A reason long enough" }).errors,
+    ).toEqual([
+      "scripts/migration-lock-allowances/example.json: name the file after its migration folder, <YYYYMMDDHHMMSS>_<name>.json",
+    ]);
+    expect(
+      refusals("20990101000000_example.yaml", {}).errors.join("\n"),
+    ).toContain("name the file after its migration folder");
+    for (const content of [[], {}, null, "add-column"]) {
+      expect(
+        refusals("20990101000000_example.json", content).errors.join("\n"),
+      ).toContain("expected a non-empty object");
+    }
+    expect(
+      refusals("20990101000000_example.json", {
+        "add-colum": "A reason long enough",
+      }).errors,
+    ).toEqual([
+      "scripts/migration-lock-allowances/20990101000000_example.json: add-colum is not a census DDL form",
+    ]);
+    for (const reason of ["short", "           ", 42]) {
+      expect(
+        refusals("20990101000000_example.json", { "add-column": reason }),
+      ).toEqual({
+        allowances: [],
+        errors: [
+          "scripts/migration-lock-allowances/20990101000000_example.json: add-column needs a reason of at least 12 characters",
+        ],
+      });
+    }
   });
 
   test("only a valid matching statement acknowledgement clears a strong lock", () => {
