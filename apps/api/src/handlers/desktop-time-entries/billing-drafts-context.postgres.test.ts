@@ -412,13 +412,11 @@ if (!databaseUrl || !runPostgres) {
         ).unwrap();
         (
           await settingsB((tx) =>
-            tx
-              .insert(billingDraftUserSettings)
-              .values({
-                organizationId: organizationB,
-                userId,
-                consentAt: null,
-              }),
+            tx.insert(billingDraftUserSettings).values({
+              organizationId: organizationB,
+              userId,
+              consentAt: null,
+            }),
           )
         ).unwrap();
 
