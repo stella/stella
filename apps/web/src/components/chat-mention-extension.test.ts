@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test";
 import {
   isBusinessRegistrySlug,
   parseChatCorpusId,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";

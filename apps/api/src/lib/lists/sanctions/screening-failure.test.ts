@@ -6,7 +6,7 @@ import type { FailureGrade } from "@stll/errors";
 import { FAILURE_REASON_GRADE } from "@stll/errors";
 import { DEFAULT_CUTOFF } from "@stll/sanctions";
 
-import { gradeFailure, failureSink } from "@/api/lib/observability/failure";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   resetMetricLineSinkForTesting,
@@ -19,10 +19,10 @@ import {
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import {
-  SANCTIONS_WORK_PRESSURE,
-  SanctionsScreeningFailure,
   reportSanctionsScreeningFailure,
   reportSanctionsScreeningWork,
+  SANCTIONS_WORK_PRESSURE,
+  SanctionsScreeningFailure,
 } from "./screening-failure";
 import type { SanctionsScreeningFailureCause } from "./screening-failure";
 

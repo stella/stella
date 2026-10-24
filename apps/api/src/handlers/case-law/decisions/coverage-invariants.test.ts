@@ -50,6 +50,7 @@ test("coverage year bounds cannot read capped facet years", async () => {
       },
     ],
     readArrivals: async () => new Map(),
+    readYearCompleteness: async () => new Map(),
     readFacets: async (country) =>
       Result.ok({
         country: [{ value: country, count: allFacetYears.length }],
@@ -69,4 +70,50 @@ test("coverage year bounds cannot read capped facet years", async () => {
     decisionYearFrom: earliestYear,
     decisionYearTo: latestYear,
   });
+});
+
+test("an unread slice ledger leaves every source not reconciled, never failing the page", async () => {
+  const coverage = await loadCaseLawCoverage({
+    excludedSourceIds: [],
+    now: new Date("2026-10-22T00:00:00.000Z"),
+    readSources: async () => [
+      {
+        id: createSafeId<"caseLawSource">(),
+        adapterKey: ADAPTER_KEYS.CZ_NS,
+        enabled: true,
+        lastSyncAt: null,
+        reportedTotal: null,
+        reportedTotalAsOf: null,
+        reportedTotalOrigin: null,
+        storedTotal: null,
+        storedTotalAsOf: null,
+        decisionYearFrom: 1993,
+        decisionYearTo: 2026,
+        pendingTextCount: 0,
+      },
+    ],
+    readArrivals: async () => new Map(),
+    readYearCompleteness: async () => {
+      throw new Error("The slice ledger read was cancelled");
+    },
+    readFacets: async (country) =>
+      Result.ok({
+        country: [{ value: country, count: 1 }],
+        court: [],
+        year: [],
+      }),
+    readCourts: async () => [],
+  });
+
+  if (Result.isError(coverage)) {
+    throw coverage.error;
+  }
+  expect(coverage.value.countries.at(0)?.sources).toEqual([
+    expect.objectContaining({
+      knownGaps: {
+        type: "not_reconciled",
+        reason: "Slice completeness could not be read.",
+      },
+    }),
+  ]);
 });

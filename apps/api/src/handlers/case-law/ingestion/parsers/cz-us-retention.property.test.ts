@@ -5,8 +5,8 @@ import fc from "fast-check";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
-  validateAst,
   buildValidationHtml,
+  validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { parseUsDecisionHtml } from "./cz-us";

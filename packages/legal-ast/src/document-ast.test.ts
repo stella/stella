@@ -126,8 +126,8 @@ describe("isDocumentAst", () => {
   });
 
   test("rejects duplicate block ids and anchor ids", () => {
-    const first = documentAst.blocks[0];
-    const second = documentAst.blocks[1];
+    const first = documentAst.blocks.at(0);
+    const second = documentAst.blocks.at(1);
     expect(first).toBeDefined();
     expect(second).toBeDefined();
     if (first === undefined || second === undefined) {

@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  DockerEndpointError,
   dockerCommand,
+  DockerEndpointError,
   resolveDockerTarget,
 } from "./dev-docker";
 

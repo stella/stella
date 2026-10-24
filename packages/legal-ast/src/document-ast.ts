@@ -1,4 +1,3 @@
-// parser-output-unchanged: Validation actions are named for schema publication; accepted AST values are identical.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.

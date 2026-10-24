@@ -57,12 +57,12 @@ describe("statute AST", () => {
   });
 
   test("rejects duplicate identities anywhere in the statute tree", () => {
-    const provision = statuteAst.body[0];
+    const provision = statuteAst.body.at(0);
     expect(provision?.type).toBe("provision");
     if (provision?.type !== "provision") {
       return;
     }
-    const paragraph = provision.children[0];
+    const paragraph = provision.children.at(0);
     expect(paragraph).toBeDefined();
     if (paragraph === undefined) {
       return;
