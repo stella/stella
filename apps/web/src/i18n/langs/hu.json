@@ -3530,6 +3530,12 @@
       "unsupportedVisualContent": "Ez a fájl képeket vagy vektorgrafikákat tartalmaz, amelyekben nem ellenőrizhető az érzékeny szöveg. Az exportálás nem érhető el.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Ez egy régi formátumú {format}-fájl. A konvertáláshoz mentse újra {replacementExtension} formátumban.",
+      "unsupportedEncoding": "Ez a dokumentum nem támogatott {encoding} kódolást használ, ezért nem konvertálható.",
+      "unsupportedField": "Ez a dokumentum egy nem konvertálható {fieldType} mezőt tartalmaz.",
+      "unsupportedReference": "Ez a dokumentum külső erőforrásra hivatkozik a(z) {element} {attribute} helyen, ezért nem konvertálható."
+    },
     "external": {
       "confirmDescription": "Külső webhelyet készül megnyitni.",
       "confirmTitle": "Külső hivatkozás megnyitása?",

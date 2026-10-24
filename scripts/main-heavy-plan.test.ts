@@ -200,6 +200,10 @@ const heavyPlan = {
 
 const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
 
+test("main heavy suites include the Windows desktop dry run", () => {
+  expect(heavy).toContain("desktop-windows-dry-run");
+});
+
 test("dedicated query recording dispatch schedules one measurement job", () => {
   const parsed = v.parse(
     v.object({ on: v.record(v.string(), v.unknown()) }),

@@ -3530,6 +3530,12 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
+      "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
+      "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."
+    },
     "external": {
       "confirmDescription": "Sie sind dabei, eine externe Website zu besuchen.",
       "confirmTitle": "Externen Link öffnen?",
