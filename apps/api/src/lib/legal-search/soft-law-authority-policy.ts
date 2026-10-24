@@ -3,22 +3,20 @@ import { Result } from "better-result";
 import type { GuidanceKind } from "@stll/legal-ast/document-kind";
 
 import {
-  type SoftLawAuthority,
-  type SoftLawMetadata,
-  SoftLawItemError,
   isTextlessExtraction,
+  type SoftLawAuthority,
   type SoftLawDocumentInput,
+  SoftLawItemError,
+  type SoftLawMetadata,
 } from "./soft-law-types";
 
 type KindDisposition =
-  | { type: "eligible" }
-  | { type: "excluded"; reason: string };
+  { type: "eligible" } | { type: "excluded"; reason: string };
 type AuthorityPolicy = {
   expression: "optional" | "required";
   referenceStyle: "literal" | "wp_number";
   identitySeries:
-    | { type: "none" }
-    | { type: "source-kind"; values: readonly string[] };
+    { type: "none" } | { type: "source-kind"; values: readonly string[] };
   kinds: Record<GuidanceKind, KindDisposition>;
 };
 

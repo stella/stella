@@ -7,7 +7,7 @@ import {
   timelineWindows,
   versionWording,
 } from "./model";
-import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
+import type { ProvisionVersion, StatuteTimelineHistory } from "./parse";
 import { parseStatuteTimelineHistory } from "./parse";
 
 type FoundVersion = Extract<ProvisionVersion, { status: "found" }>;

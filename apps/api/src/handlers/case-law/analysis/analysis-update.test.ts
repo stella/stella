@@ -11,7 +11,7 @@ import { describe, expect, test } from "bun:test";
 
 import type {
   DecisionAnalysis,
-  DecisionAnalysisV3,
+  DecisionAnalysisV4,
 } from "@stll/legal-ast/analysis";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -21,9 +21,9 @@ import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
 
 import type { AnalysisOutput } from "./analysis-output";
 import {
-  applyAnalysisUpdate,
   type AnalysisSubject,
   type AnalysisUpdateFences,
+  applyAnalysisUpdate,
 } from "./analysis-update";
 
 const DECISION_ID = toSafeId<"caseLawDecision">(
@@ -52,12 +52,18 @@ const OUTPUT: AnalysisOutput = {
       ],
     },
   ],
-  holding: {
-    text: "A limitation period runs from the day the claim could first be brought.",
-    anchors: [{ startAnchorId: "b4", endAnchorId: "b5" }],
-  },
-  abstract:
-    "The court answered the limitation question and dismissed the appeal.",
+  holding: [
+    {
+      text: "A limitation period runs from the day the claim could first be brought.",
+      anchors: [{ startAnchorId: "b4", endAnchorId: "b5" }],
+    },
+  ],
+  abstract: [
+    {
+      text: "The court answered the limitation question and dismissed the appeal.",
+      anchors: [],
+    },
+  ],
   topics: ["promlčení"],
 };
 
@@ -159,14 +165,20 @@ const apply = async ({
 
 const storedAnalysis = (
   fingerprint: string = FINGERPRINT,
-): DecisionAnalysisV3 => ({
-  version: 3,
+): DecisionAnalysisV4 => ({
+  version: 4,
   generatedAt: "2026-08-01T00:00:00.000Z",
   model: "earlier-model",
   inputFingerprint: fingerprint,
   tree: [],
-  holding: { text: "Earlier holding.", language: "cs", anchors: [] },
-  abstract: { text: "Earlier abstract.", language: "cs" },
+  holding: {
+    spans: [{ text: "Earlier holding.", anchors: [] }],
+    language: "cs",
+  },
+  abstract: {
+    spans: [{ text: "Earlier abstract.", anchors: [] }],
+    language: "cs",
+  },
   topics: [],
 });
 
@@ -183,7 +195,7 @@ describe("applyAnalysisUpdate", () => {
     expect(calls.claims).toBe(1);
     expect(calls.saves).toHaveLength(1);
     expect(calls.saves[0]?.contentHash).toBe(CONTENT_HASH);
-    expect(outcome.analysis.version).toBe(3);
+    expect(outcome.analysis.version).toBe(4);
     expect(outcome.analysis.inputFingerprint).toBe(FINGERPRINT);
     expect(outcome.analysis.model).toBe("some-provider/some-model");
     expect(outcome.analysis.holding.language).toBe("cs");
@@ -285,9 +297,9 @@ describe("applyAnalysisUpdate", () => {
   });
 
   // A producer can name a paragraph that is not in this parse, or run a
-  // range backwards. Either would give the reader a holding link that
-  // scrolls nowhere, so neither is stored.
-  test("keeps only the holding anchors this parse actually carries", async () => {
+  // range backwards. Either would give the reader a citation that scrolls
+  // nowhere, so neither is stored; the claim it was attached to stays.
+  test("keeps only the cited anchors this parse actually carries", async () => {
     const { store } = createStore();
 
     const outcome = await apply({
@@ -295,15 +307,28 @@ describe("applyAnalysisUpdate", () => {
       submission: {
         ...FENCES,
         ...OUTPUT,
-        holding: {
-          text: OUTPUT.holding.text,
-          anchors: [
-            { startAnchorId: "b4", endAnchorId: "b5" },
-            { startAnchorId: "b4", endAnchorId: "nope" },
-            { startAnchorId: "nope", endAnchorId: "b5" },
-            { startAnchorId: "b9", endAnchorId: "b3" },
-          ],
-        },
+        holding: [
+          {
+            text: "A limitation period runs",
+            anchors: [
+              { startAnchorId: "b4", endAnchorId: "b5" },
+              { startAnchorId: "b4", endAnchorId: "nope" },
+            ],
+          },
+          {
+            text: " from the day the claim could first be brought.",
+            anchors: [
+              { startAnchorId: "nope", endAnchorId: "b5" },
+              { startAnchorId: "b9", endAnchorId: "b3" },
+            ],
+          },
+        ],
+        abstract: [
+          {
+            text: "The court dismissed the appeal.",
+            anchors: [{ startAnchorId: "b5", endAnchorId: "b4" }],
+          },
+        ],
       },
     });
 
@@ -311,8 +336,18 @@ describe("applyAnalysisUpdate", () => {
     if (outcome.kind !== "saved") {
       return;
     }
-    expect(outcome.analysis.holding.anchors).toEqual([
-      { startAnchorId: "b4", endAnchorId: "b5" },
+    expect(outcome.analysis.holding.spans).toEqual([
+      {
+        text: "A limitation period runs",
+        anchors: [{ startAnchorId: "b4", endAnchorId: "b5" }],
+      },
+      {
+        text: " from the day the claim could first be brought.",
+        anchors: [],
+      },
+    ]);
+    expect(outcome.analysis.abstract.spans).toEqual([
+      { text: "The court dismissed the appeal.", anchors: [] },
     ]);
   });
 

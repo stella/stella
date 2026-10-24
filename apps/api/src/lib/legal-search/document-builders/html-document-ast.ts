@@ -182,9 +182,10 @@ const isNoteTarget = ($: cheerio.CheerioAPI, target: Element): boolean => {
   let element: Element | undefined = target;
   while (element !== undefined) {
     const role = element.attribs["role"];
+    const classNames = element.attribs["class"];
     const names = [
       element.attribs["id"],
-      ...(element.attribs["class"]?.split(/\s+/u) ?? []),
+      ...(classNames === undefined ? [] : classNames.split(/\s+/u)),
     ];
     if (
       (role !== undefined && NOTE_ROLE.has(role.toLowerCase())) ||
@@ -411,7 +412,8 @@ const prepareFragmentLinks = (
       }
       state.nextFragmentLink += 1;
       const token = `#__stella_fragment_${String(state.nextFragmentLink)}`;
-      const roles = link.attribs["role"]?.toLowerCase().split(/\s+/u) ?? [];
+      const role = link.attribs["role"];
+      const roles = role === undefined ? [] : role.toLowerCase().split(/\s+/u);
       state.fragmentEvidence.set(token, {
         href,
         note: context.noteTarget,

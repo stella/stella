@@ -107,14 +107,12 @@ export const requiresDurableNativeExtraction = (
 };
 
 /**
- * Which mechanism writes an entity's search projection once its current
- * version is committed.
+ * Which mechanism owns extracting an entity's searchable content.
  *
- * `durable-extraction` means a document-processing run owns it: the run
- * persists the extracted text and indexes the entity when it completes, so a
- * search mark written beside it would index the same entity a second time
- * with no text. `search-mark` means nothing else will write the projection,
- * so the mutation must mark the entity dirty inside its own transaction.
+ * Every committed entity is also marked for an immediate name projection.
+ * `durable-extraction` owns only extracted content and later rebuilds the same
+ * idempotent, compare-and-set protected projection. Either writer may finish
+ * first without removing extracted text or creating another search row.
  *
  * `processExtraction` reads this to pick its own branch, so a caller that
  * splits its entities by owner cannot drift from what extraction actually
@@ -163,9 +161,7 @@ type PersistedNativeExtractionProjection = {
 };
 
 export type NativeExtractionProjectionOutcome =
-  | "persisted"
-  | "preserved"
-  | "source_cancelled";
+  "persisted" | "preserved" | "source_cancelled";
 
 export const persistNativeExtractionProjection = async (
   {

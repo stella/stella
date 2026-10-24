@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
@@ -107,9 +107,6 @@ export const declaredAppFrameScope = (
             break;
           case "member":
             scope = APP_FRAME_SCOPE.member;
-            break;
-          case "admin":
-            scope = APP_FRAME_SCOPE.admin;
             break;
           case "knowledge":
             scope = APP_FRAME_SCOPE.knowledge;

@@ -64,9 +64,22 @@ type CitedDecisionTarget = Pick<
   | "slug"
 >;
 
-type CitedDecisionLinkProps = CitedDecisionPreviewProps & {
+type CitedDecisionChipProps = CitedDecisionPreviewProps & {
   decision: CitedDecisionTarget;
   presentation?: DecisionCitationPresentation | undefined;
+  /**
+   * Text that already names the decision, drawn as the trigger itself in
+   * place of a court badge that would repeat it.
+   */
+  label?: ReactNode;
+  /** The citing text's own words, opened together with the court badge. */
+  citingText?: ReactNode;
+};
+
+type CitedDecisionLinkProps = Omit<
+  CitedDecisionChipProps,
+  "label" | "citingText"
+> & {
   children: ReactNode;
   className?: string | undefined;
 };
@@ -132,17 +145,34 @@ const CitingPassage = ({
 };
 
 /**
- * The source wording stays in the document; its court chip opens the shared
- * preview and keeps the inspector navigation action beside the source text.
+ * The source wording stays in the document and, together with its court
+ * chip, opens the shared preview: the reader points at the reference they
+ * are reading, not at a badge beside it.
  */
 export const CitedDecisionLink = ({
   children,
   className,
+  ...chip
+}: CitedDecisionLinkProps) => (
+  <CitedDecisionChip
+    {...chip}
+    citingText={<span className={className}>{children}</span>}
+    label={undefined}
+  />
+);
+
+/**
+ * The shared decision chip, wired to open the decision beside the text on a
+ * wide screen and in the main view on a narrow one.
+ */
+export const CitedDecisionChip = ({
   decision,
+  label,
+  citingText,
   passage,
   treatment,
   presentation,
-}: CitedDecisionLinkProps) => {
+}: CitedDecisionChipProps) => {
   const isMobile = useIsMobile();
   const inspector = useInspectorView();
   const navigate = useNavigate();
@@ -186,26 +216,25 @@ export const CitedDecisionLink = ({
   };
 
   return (
-    <>
-      <span className={className}>{children}</span>{" "}
-      <DecisionCitationChip
-        decision={{
-          decisionId: decision.id,
-          court: decision.court,
-          courtShortCode: decisionCitationCourtLabel(decision),
-          caseNumber: decision.caseNumber,
-          decisionDate: decision.decisionDate,
-          readerUrl,
-          originalUrl: decision.sourceUrl ?? null,
-        }}
-        onOpen={openDecision}
-        passage={
-          passage !== undefined || treatment !== undefined ? (
-            <CitedDecisionPreview passage={passage} treatment={treatment} />
-          ) : undefined
-        }
-        presentation={presentation}
-      />
-    </>
+    <DecisionCitationChip
+      decision={{
+        decisionId: decision.id,
+        court: decision.court,
+        courtShortCode: decisionCitationCourtLabel(decision),
+        caseNumber: decision.caseNumber,
+        decisionDate: decision.decisionDate,
+        readerUrl,
+        originalUrl: decision.sourceUrl ?? null,
+      }}
+      label={label}
+      citingText={citingText}
+      onOpen={openDecision}
+      passage={
+        passage !== undefined || treatment !== undefined ? (
+          <CitedDecisionPreview passage={passage} treatment={treatment} />
+        ) : undefined
+      }
+      presentation={presentation}
+    />
   );
 };

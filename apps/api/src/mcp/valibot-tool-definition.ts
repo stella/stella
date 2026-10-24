@@ -3,15 +3,15 @@ import type * as v from "valibot";
 
 import {
   AGENT_INPUT_NORMALIZATION_KIND,
-  agentInputNormalizationMetadata,
   type AgentInputNormalizationAnnotation,
+  agentInputNormalizationMetadata,
 } from "@stll/agent-input";
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 import type {
-  McpToolDefinition,
   McpToolAnnotationReasons,
+  McpToolDefinition,
   McpToolInputSchema,
   McpToolOutputContract,
   McpToolOutputSchema,
@@ -185,8 +185,7 @@ const withConventionalNormalization = (
 const applyInputNormalizationPlan = (
   schema: McpToolInputSchema,
   explicitPlan:
-    | Readonly<Record<string, AgentInputNormalizationAnnotation>>
-    | undefined,
+    Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined,
 ): McpToolInputSchema => {
   const plan = withConventionalNormalization(schema, explicitPlan);
   if (plan === undefined) {

@@ -6,8 +6,8 @@ import { validateSoftLawAuthorityMetadata } from "@/api/lib/legal-search/soft-la
 import type { SoftLawMetadata } from "@/api/lib/legal-search/soft-law-types";
 
 import {
-  SOFT_LAW_ADMISSIONS,
   type RegisteredSoftLawAuthority,
+  SOFT_LAW_ADMISSIONS,
 } from "./registry";
 
 test("unregistered authorities cannot enter the sync contract", () => {

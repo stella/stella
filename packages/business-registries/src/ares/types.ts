@@ -253,10 +253,7 @@ export type AresCompany = {
   actingClause: string | null;
   /** Availability of optional commercial-register (VR) enrichment. */
   vrEnrichmentStatus:
-    | "complete"
-    | "not_found"
-    | "unavailable"
-    | "not_requested";
+    "complete" | "not_found" | "unavailable" | "not_requested";
 };
 
 export type AresSearchResult = {

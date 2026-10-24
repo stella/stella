@@ -5,16 +5,16 @@ import type { GuidanceKind } from "@stll/legal-ast/document-kind";
 
 import type {
   SourceFieldInventory,
+  SourceSliceWalk,
   SourceSurfaceCensus,
   SourceTotalCount,
-  SourceSliceWalk,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 
 import {
-  type SoftLawFetchError,
   SOFT_LAW_BLOCK_REASONS,
   type SoftLawFetch,
+  type SoftLawFetchError,
 } from "./soft-law-access-types";
 
 export const SOFT_LAW_LISTING_STATES = ["listed", "no_longer_listed"] as const;
@@ -381,8 +381,7 @@ export const SOFT_LAW_AUTHORITIES = {
 } as const satisfies Record<string, SoftLawAuthorityDefinition>;
 export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
 export type SoftLawStated<T> =
-  | { state: "stated"; value: T }
-  | { state: "not_stated" };
+  { state: "stated"; value: T } | { state: "not_stated" };
 export type SoftLawEvidence = {
   url: string;
   quote: string;
@@ -459,8 +458,7 @@ export type SoftLawDiscoveryEntry = SoftLawEntry | SoftLawRejectedEntry;
  * no such worker can run.
  */
 export type StoredSoftLawDiscoveryEntry =
-  | SoftLawDiscoveryEntry
-  | (Omit<SoftLawEntry, "type"> & { type?: undefined });
+  SoftLawDiscoveryEntry | (Omit<SoftLawEntry, "type"> & { type?: undefined });
 
 export const storedSoftLawDiscoveryEntry = (
   entry: StoredSoftLawDiscoveryEntry,

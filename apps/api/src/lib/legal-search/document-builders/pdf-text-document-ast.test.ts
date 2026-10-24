@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -138,8 +139,9 @@ describe("the PDF text builder", () => {
   test.each(["WP29", "G7", "EU27"])(
     "does not read digits in the acronym %s as a footnote mark",
     (acronym) => {
-      const label = /\d+$/u.exec(acronym)?.at(0);
-      expect(label).toBeDefined();
+      const label =
+        /\d+$/u.exec(acronym)?.at(0) ??
+        panic("The acronym fixture must end in digits");
       const ast = build(
         [`The body names ${acronym} here.`, " ", label, " A note."].join("\n"),
       );

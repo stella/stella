@@ -6,13 +6,14 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  actionlintWorkflowSource,
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
-  actionlintWorkflowSource,
   validateLocalActionReferences,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
+  validateWorkflowJobTimeouts,
   validateWorkflowSize,
   WORKFLOW_SIZE_LIMIT_BYTES,
 } from "./check-workflow-yaml";
@@ -166,6 +167,14 @@ describe("workflow YAML validation", () => {
     expect(await rejectionOf(parseWorkflowYaml(file))).toHaveProperty(
       "message",
       `${file}: invalid YAML`,
+    );
+  });
+
+  test("a step-running job without a timeout names the workflow, job, and rule", async () => {
+    const file = path.join(FIXTURES, "missing-job-timeout.yml");
+    const workflow = await parseWorkflowYaml(file);
+    expect(() => validateWorkflowJobTimeouts(workflow, file)).toThrow(
+      `${file}: job missing-timeout runs steps and must define timeout-minutes; every step-running workflow job requires a timeout`,
     );
   });
 

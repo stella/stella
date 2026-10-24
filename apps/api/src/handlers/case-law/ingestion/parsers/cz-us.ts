@@ -73,8 +73,8 @@ import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -83,7 +83,7 @@ import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import { visibleHtmlText, stripFurniturePrefix } from "./shared-inlines";
+import { stripFurniturePrefix, visibleHtmlText } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 

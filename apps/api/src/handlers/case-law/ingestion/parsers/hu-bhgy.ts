@@ -29,9 +29,9 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
+  TrackedRunContent,
 } from "@stll/docx-core/model";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -63,8 +63,8 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import {
-  createParagraphLineReader,
   type BodyDocumentLine,
+  createParagraphLineReader,
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";

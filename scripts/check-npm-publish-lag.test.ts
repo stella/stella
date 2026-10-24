@@ -8,9 +8,9 @@ import {
   newestStableTag,
   parseArgs,
   readPublishablePackages,
-  renderLagTable,
   type RegistryFetcher,
   type RegistryView,
+  renderLagTable,
 } from "./check-npm-publish-lag";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
