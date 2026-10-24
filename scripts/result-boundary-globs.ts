@@ -149,6 +149,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/components/route-provider-scope/**/*.{ts,tsx}",
   "apps/web/src/components/settings-shell/**/*.{ts,tsx}",
+  "apps/web/src/components/sidebar/**/*.{ts,tsx}",
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",

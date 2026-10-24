@@ -304,7 +304,6 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
 export const DEVICE_STORAGE_FAMILIES = [
   { area: "local", prefix: "stella-ui-theme" },
   { area: "local", prefix: "stella-ui-palette" },
-  { area: "local", prefix: "sidebar_state" },
   { area: "local", prefix: "document_translation_last_target" },
   { area: "local", prefix: "folio:debug-scroll" },
   { area: "local", prefix: "stella:selfhost-update-dismissed:" },
