@@ -8,6 +8,7 @@
 
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -137,7 +138,7 @@ const ORGANIZATION_EVALUATION_LIFECYCLE = defineLifecycle({
  * writers. A replayed creation cannot restart or move a final state.
  */
 export const recordNewOrganizationAccessState = async (
-  db: Pick<Transaction, "insert">,
+  db: Pick<PgAsyncDatabase<PgQueryResultHKT>, "insert">,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<void> => {
   const enforced = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE");

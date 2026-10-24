@@ -31,7 +31,7 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 export const MULTIPART_REQUEST_MAX_BYTES =
   FILE_SIZE_LIMIT_BYTES.document + 1024 * 1024;
 
-export const isMultipartFormDataRequest = (request: Request): boolean =>
+const isMultipartFormDataRequest = (request: Request): boolean =>
   request.headers
     .get("content-type")
     ?.toLowerCase()

@@ -42,6 +42,7 @@ import {
 } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { logger } from "@/api/lib/observability/logger";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import {
@@ -81,6 +82,10 @@ const withFixture = async (
     name: "Personal key fixture",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values(
     ids.map((id) => ({
