@@ -7,6 +7,7 @@ import { Result } from "better-result";
 
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import type { DemoAccountConfig } from "@/api/lib/auth/demo-account-policy";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   brandPersistedOrganizationId,
@@ -95,7 +96,7 @@ export const createDemoSessionPolicy =
       throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
     }
     const { email } = account;
-    if (email.trim().toLowerCase() !== config.email.trim().toLowerCase()) {
+    if (normalizeEmail(email) !== normalizeEmail(config.email)) {
       return undefined;
     }
     const organizationId = config.organizationId;

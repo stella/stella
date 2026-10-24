@@ -35,6 +35,8 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/auth/normalized-email";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -544,7 +546,9 @@ const confirmerEmailMatchesHint = async (
   loginHint: string,
 ): Promise<boolean> => {
   const email = await readAccountEmail(userId);
-  return email !== undefined && email.toLowerCase() === loginHint.toLowerCase();
+  return (
+    email !== undefined && normalizeEmail(email) === normalizeEmail(loginHint)
+  );
 };
 
 export class AuthorizeCodeError extends Error {
@@ -871,7 +875,7 @@ export const startAnonymousUpgrade = async ({
   email,
 }: {
   claimToken: string;
-  email: string;
+  email: NormalizedEmail;
 }): Promise<Result<ServiceAuthCeremony, AgentTokenError | HandlerError>> => {
   const tokenHash = hashClaimToken(claimToken);
   const rows = await rootDb

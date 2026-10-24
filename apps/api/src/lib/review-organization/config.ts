@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
 import { env } from "@/api/env";
+import {
+  emailAddressSchema,
+  normalizeEmail,
+} from "@/api/lib/auth/normalized-email";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   AUTH_PROVIDER_ID_PATTERN,
@@ -21,7 +25,6 @@ export type ReviewOrganizationConfig = {
   demoEmail: string | null;
 };
 
-const emailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
 const organizationIdSchema = v.pipe(
   v.string(),
   v.regex(AUTH_PROVIDER_ID_PATTERN),
@@ -43,7 +46,7 @@ export const reviewOrganizationConfigFrom = (
   source: ConfigSource,
 ): ReviewOrganizationConfig | null => {
   const email = v.safeParse(
-    emailSchema,
+    emailAddressSchema,
     optionalString(source, "APP_REVIEW_ACCOUNT_EMAIL"),
   );
   const organizationId = v.safeParse(
@@ -58,7 +61,7 @@ export const reviewOrganizationConfigFrom = (
     email: email.output,
     organizationId: brandPersistedOrganizationId(organizationId.output),
     demoOrganizationId: optionalString(source, "DEMO_ACCOUNT_ORGANIZATION_ID"),
-    demoEmail: demoEmail === null ? null : demoEmail.trim().toLowerCase(),
+    demoEmail: demoEmail === null ? null : normalizeEmail(demoEmail),
   };
 };
 

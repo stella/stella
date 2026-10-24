@@ -11,6 +11,8 @@ import * as v from "valibot";
 import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/auth/normalized-email";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
 import {
   CACHE_CONTROL_HEADER,
@@ -29,7 +31,10 @@ const hintSchema = v.strictObject({
 });
 type Hint = v.InferOutput<typeof hintSchema>;
 
-type CallbackProof = { email: string; provider: Hint["provider"] } | null;
+type CallbackProof = {
+  email: NormalizedEmail;
+  provider: Hint["provider"];
+} | null;
 const callbackProof = defineRequestState<CallbackProof>(() => null);
 
 export const socialLinkHintIdentifier = (value: string) =>
@@ -108,7 +113,7 @@ export const createSocialLinkHintPlugin = (
                     typeof result.user.email === "string"
                   ) {
                     await callbackProof.set({
-                      email: result.user.email.toLowerCase(),
+                      email: normalizeEmail(result.user.email),
                       provider: parsedProvider.output,
                     });
                   }

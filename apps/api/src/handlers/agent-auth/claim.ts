@@ -8,6 +8,7 @@ import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
+import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -26,7 +27,7 @@ const agentClaimHandler = createSafePublicHandler(
   async function* ({ body: { claim_token, email } }) {
     const result = await startAnonymousUpgrade({
       claimToken: claim_token,
-      email: email.trim().toLowerCase(),
+      email: normalizeEmail(email),
     });
 
     // A bad/expired/non-anonymous claim token returns the same shape a
