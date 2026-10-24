@@ -2,20 +2,20 @@ import { Result } from "better-result";
 import { afterEach, expect, expectTypeOf, test } from "bun:test";
 
 import {
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 
 import {
+  type AdmittedWork,
   admitWork,
   assertWorkAdmission,
   createWorkAdmission,
   resetWorkAdmissionForTesting,
+  type WorkAdmission,
   WorkDeadlineError,
   WorkRefusal,
-  type AdmittedWork,
-  type WorkAdmission,
 } from "./work-admission";
 
 afterEach(resetLogSinkForTesting);
