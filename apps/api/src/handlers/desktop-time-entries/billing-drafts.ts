@@ -6,10 +6,12 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import {
   desktopBillingDraftRequestSchema,
   desktopBillingDraftResponseSchema,
+  desktopBillingDraftReviewSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
+  DesktopBillingDraftReview,
 } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
@@ -29,7 +31,7 @@ import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebo
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 import {
@@ -47,14 +49,14 @@ Steering is the user's requested adjustment to selected proposals. Personal pref
 Operations are reviewable suggestions only: rewrite, change_classification, set_billable, split, merge, move. Split minutes must sum to the source duration; merge only selected entries on the same matter and date, with one owner and no conflicting operations. Move only to supplied candidate matters, never increase time. No structural operations may overlap.
 Preserve all opaque references exactly. Previous results are suggestions, not established facts.`;
 
-const billingDraftResponseSchema = Type.Unsafe<DesktopBillingDraftResponse>(
-  jsonSchemaToTypeBox(toJsonSchema(desktopBillingDraftResponseSchema)),
+const billingDraftReviewSchema = Type.Unsafe<DesktopBillingDraftReview>(
+  jsonSchemaToTypeBox(toJsonSchema(desktopBillingDraftReviewSchema)),
 );
 
 type BillingDraftEndpointOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadContext?: typeof loadBillingDraftContext;
-  generateObjectForRole?: typeof generateTanStackObjectForRole;
+  generateObjectForTask?: typeof generateTanStackObjectForTask;
   admit?: typeof withActionAdmission;
 };
 
@@ -227,17 +229,25 @@ const prepareBillingDraftPrompt = ({
 
 type CanonicalBillingDraftResultOptions = {
   restored: DesktopBillingDraftResponse;
-  matters: PrepareBillingDraftPromptOptions["context"]["matters"];
+  context: Pick<
+    PrepareBillingDraftPromptOptions["context"],
+    "matters" | "earlierEntries"
+  >;
 };
 
-const canonicalBillingDraftResult = ({
+const canonicalBillingDraftReview = ({
   restored,
-  matters,
+  context: { matters, earlierEntries },
 }: CanonicalBillingDraftResultOptions) => {
   const matterNames = new Map(
     matters.map(({ matterId, name }) => [String(matterId), name]),
   );
-  return {
+  const cited = new Set(
+    restored.drafts.flatMap(
+      ({ matchedEarlierEntryIds }) => matchedEarlierEntryIds,
+    ),
+  );
+  const result = {
     ...restored,
     drafts: restored.drafts.map((draft) => ({
       ...draft,
@@ -253,12 +263,23 @@ const canonicalBillingDraftResult = ({
       ),
     })),
   };
+  return {
+    result,
+    earlierEntries: earlierEntries
+      .filter(({ id }) => cited.has(id))
+      .map(({ id, dateWorked, durationMinutes, narrative }) => ({
+        id,
+        dateWorked,
+        durationMinutes,
+        narrative,
+      })),
+  };
 };
 
 export const createDesktopBillingDraftEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadContext = loadBillingDraftContext,
-  generateObjectForRole = generateTanStackObjectForRole,
+  generateObjectForTask = generateTanStackObjectForTask,
   admit,
 }: BillingDraftEndpointOptions = {}) =>
   createSafeBoundedPublicHandler(
@@ -269,7 +290,7 @@ export const createDesktopBillingDraftEndpoint = ({
       cache: { kind: "none" },
       body: desktopBillingDraftRequestSchema,
       response: safePublicHandlerResponseSchemasWithStatusText(
-        billingDraftResponseSchema,
+        billingDraftReviewSchema,
       ),
     },
     async function* (ctx) {
@@ -309,10 +330,19 @@ export const createDesktopBillingDraftEndpoint = ({
         guidelines: context.guidelines,
       };
       if (body.previousResult) {
-        const previous = validateBillingDraftResult(
-          body.previousResult,
-          validationContext,
+        // Refining a subset of entries may narrow which guideline files apply,
+        // and the client cannot know which. A previous result is therefore held
+        // to the authorized files it cites: an unknown or duplicated file still
+        // fails coverage, and every flag must still cite a checked file.
+        const cited = new Set(
+          body.previousResult.checkedGuidelines.map(({ fileId }) => fileId),
         );
+        const previous = validateBillingDraftResult(body.previousResult, {
+          ...validationContext,
+          guidelines: context.guidelines.filter(({ fileId }) =>
+            cited.has(fileId),
+          ),
+        });
         if (previous.isErr()) {
           return Result.err(
             new HandlerError({ status: 400, message: previous.error.message }),
@@ -334,7 +364,7 @@ export const createDesktopBillingDraftEndpoint = ({
       }
       const authorization = yield* Result.await(
         authorizeHandlerUsage({
-          metering: { actionType: "chat", modelRole: "chat" },
+          metering: { actionType: "chat", modelTask: "analysis" },
           ...account,
           orgAIConfig: context.orgAIConfig,
           workspaceId: null,
@@ -357,7 +387,7 @@ export const createDesktopBillingDraftEndpoint = ({
                 const analytics = createTanStackAIAnalyticsCallbacks({
                   dataClass: "customer",
                   feature: "billing.activity_drafts",
-                  modelRole: "chat",
+                  modelTask: "analysis",
                   modelTier: modelAdmission.modelTier,
                   orgAIConfig: context.orgAIConfig,
                   properties: {},
@@ -372,34 +402,31 @@ export const createDesktopBillingDraftEndpoint = ({
                 const result = yield* Result.await(
                   Result.tryPromise({
                     try: async () =>
-                      await generateObjectForRole({
+                      await generateObjectForTask({
                         dataClass: "customer",
                         admission: modelAdmission,
+                        userId: account.userId,
                         organizationId: account.organizationId,
                         orgAIConfig: context.orgAIConfig,
                         managedAIResidency: context.managedAIResidency,
-                        role: "chat",
+                        task: "analysis",
                         serviceTier: "standard",
                         analytics,
                         caching: resolveCaching({
                           promptCachingEnabled: context.promptCachingEnabled,
-                          role: "chat",
+                          task: "analysis",
                           scopeKey: null,
                         }),
                         tenantWorkspaceIds: context.matters.map(
                           ({ matterId }) => matterId,
                         ),
-                        abortSignal: AbortSignal.any([
-                          actionSignal,
-                          AbortSignal.timeout(
-                            BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
-                          ),
-                        ]),
+                        abortSignal: actionSignal,
+                        deadlineMs: BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
                         system: SYSTEM_PROMPT,
                         systemPromptOrigin: "server-built",
                         prompt,
                         outputSchema: desktopBillingDraftResponseSchema,
-                        maxOutputTokens: 16_000,
+                        outputTokenBudget: 16_000,
                       }),
                     catch: (error) => {
                       analytics.captureError(error);
@@ -430,9 +457,9 @@ export const createDesktopBillingDraftEndpoint = ({
                   );
                 }
                 return Result.ok(
-                  canonicalBillingDraftResult({
+                  canonicalBillingDraftReview({
                     restored: validation.value,
-                    matters: context.matters,
+                    context,
                   }),
                 );
               },

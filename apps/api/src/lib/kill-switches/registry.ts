@@ -126,6 +126,12 @@ export const KILL_SWITCHES = {
     offHint:
       "Version summaries are turned off. Do not retry until they are turned back on.",
   },
+  "billing-drafts": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/desktop-time-entries",
+    offHint:
+      "AI billing drafts are turned off. Do not retry until they are turned back on.",
+  },
   "time-narratives": {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/time-entries",
@@ -195,6 +201,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "skills.generate-draft": "skills",
   "skills.propose-from-comments": "skills",
   "time-entries.polish-narrative": "time-narratives",
+  "billing.activity-drafts": "billing-drafts",
   "entities.suggest-placements": "placement-suggestions",
   "versions.summarize": "version-summaries",
   "properties.suggest-prompt": "workflows",

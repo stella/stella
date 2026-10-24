@@ -2828,7 +2828,7 @@ const config = defineConfig({
             approvedAdapters: [
               {
                 path: "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
-                binding: "billingDraftResponseSchema",
+                binding: "billingDraftReviewSchema",
                 reason:
                   "Runtime response schema and static type derive from the same strict shared Valibot contract.",
               },

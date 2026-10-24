@@ -13,7 +13,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -54,7 +54,7 @@ const body: DesktopBillingDraftRequest = {
       timezone: "Europe/Prague",
       durationMinutes: 30,
       appNames: ["Editor"],
-      evidence: { documentNames: ["Agreement"], emailSubjects: [] },
+      evidence: { documentNames: ["Agreement"], windowTitles: [] },
     },
   ],
 };
@@ -153,7 +153,7 @@ const exercise = async ({
     },
   );
   const generate = async (
-    options: Parameters<typeof generateTanStackObjectForRole>[0],
+    options: Parameters<typeof generateTanStackObjectForTask>[0],
   ) => {
     calls.push({
       prompt: options.prompt ?? "",
@@ -187,8 +187,8 @@ const exercise = async ({
         ? Result.err(new HandlerError({ status: 403, message: "Refused" }))
         : Result.ok(draftContext),
     ),
-    generateObjectForRole:
-      asTestRaw<typeof generateTanStackObjectForRole>(generate),
+    generateObjectForTask:
+      asTestRaw<typeof generateTanStackObjectForTask>(generate),
     admit: asTestRaw<typeof withActionAdmission>(
       async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
         Result.ok(
@@ -217,7 +217,17 @@ const exercise = async ({
 test("one structured request uses selected evidence, region and opaque references", async () => {
   const { response, calls } = await exercise();
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual(fixture);
+  expect(await response.json()).toEqual({
+    result: fixture,
+    earlierEntries: [
+      {
+        id: EARLIER_ID,
+        dateWorked: "2026-10-01",
+        durationMinutes: 30,
+        narrative: "Reviewed agreement",
+      },
+    ],
+  });
   expect(calls).toHaveLength(1);
   expect(calls.at(0)?.schema).toBe(desktopBillingDraftResponseSchema);
   expect(calls.at(0)?.region).toBe("eu");
@@ -270,6 +280,33 @@ test("steering round-trips only selected previous suggestions in one call", asyn
   expect(calls).toHaveLength(1);
   expect(calls.at(0)?.prompt).toContain('"steer":"Shorter"');
   expect(calls.at(0)?.prompt).toContain('"previousResult"');
+});
+
+test("a previous result may cite fewer guideline files, never unknown ones", async () => {
+  const withoutFlags = {
+    ...fixture,
+    drafts: fixture.drafts.map((draft) => ({ ...draft, flags: [] })),
+    checkedGuidelines: [],
+  };
+  const narrowed = await exercise({
+    input: { ...body, steer: "Shorter", previousResult: withoutFlags },
+  });
+  expect(narrowed.response.status).toBe(200);
+  expect(narrowed.calls).toHaveLength(1);
+  const unknown = await exercise({
+    input: {
+      ...body,
+      steer: "Shorter",
+      previousResult: {
+        ...withoutFlags,
+        checkedGuidelines: [
+          { fileId: "unknown-file", fileName: "references/billing.md" },
+        ],
+      },
+    },
+  });
+  expect(unknown.response.status).toBe(400);
+  expect(unknown.calls).toHaveLength(0);
 });
 
 test("malformed model output is refused", async () => {
@@ -388,16 +425,18 @@ test("move proposals use the authorized target's canonical name", async () => {
   expect(response.status).toBe(200);
   expect(calls).toHaveLength(1);
   expect(await response.json()).toMatchObject({
-    drafts: [
-      {
-        operations: [
-          {
-            type: "move",
-            targetMatterId: targetId,
-            targetMatterName: "Candidate matter",
-          },
-        ],
-      },
-    ],
+    result: {
+      drafts: [
+        {
+          operations: [
+            {
+              type: "move",
+              targetMatterId: targetId,
+              targetMatterName: "Candidate matter",
+            },
+          ],
+        },
+      ],
+    },
   });
 });

@@ -6,15 +6,16 @@ import {
   DESKTOP_BILLING_DRAFT_LIMITS,
   desktopBillingDraftEntrySchema,
   desktopBillingDraftEvidenceSchema,
+  type DesktopBillingDraftOperation,
   desktopBillingDraftOperationSchema,
+  type DesktopBillingDraftRequest,
   desktopBillingDraftRequestSchema,
+  type DesktopBillingDraftResponse,
   desktopBillingDraftResponseSchema,
+  desktopBillingDraftReviewSchema,
+  type DesktopBillingDraftSettingsRequest,
   desktopBillingDraftSettingsRequestSchema,
   desktopBillingDraftSettingsResponseSchema,
-  type DesktopBillingDraftRequest,
-  type DesktopBillingDraftResponse,
-  type DesktopBillingDraftSettingsRequest,
-  type DesktopBillingDraftOperation,
 } from "./desktop-billing-drafts";
 
 const entry = {
@@ -23,7 +24,7 @@ const entry = {
   timezone: "Europe/Prague",
   durationMinutes: 30,
   appNames: ["Editor"],
-  evidence: { documentNames: ["Agreement.docx"], emailSubjects: ["Review"] },
+  evidence: { documentNames: ["Agreement.docx"], windowTitles: ["Review"] },
 } satisfies DesktopBillingDraftRequest["entries"][number];
 
 const response = {
@@ -66,7 +67,7 @@ test("billing draft request keys remain limited to selected evidence and steerin
   ]);
   expect(
     Object.keys(desktopBillingDraftEvidenceSchema.entries).toSorted(),
-  ).toEqual(["documentNames", "emailSubjects"]);
+  ).toEqual(["documentNames", "windowTitles"]);
   expect(
     toJsonSchema(desktopBillingDraftRequestSchema, { errorMode: "ignore" }),
   ).toMatchObject({ additionalProperties: false });
@@ -202,7 +203,7 @@ test("selected entry inputs and guideline citations have finite validated bounds
     {
       evidence: {
         documentNames: [],
-        emailSubjects: Array.from(
+        windowTitles: Array.from(
           { length: DESKTOP_BILLING_DRAFT_LIMITS.evidenceItems + 1 },
           () => "Subject",
         ),
@@ -344,4 +345,31 @@ test("draft guideline counts and billing codes remain within persistence bounds"
       }).success,
     ).toBe(false);
   }
+});
+
+test("the review returns the model result beside only the cited entry fields", () => {
+  const earlier = {
+    id: "earlier-entry",
+    dateWorked: "2026-10-01",
+    durationMinutes: 30,
+    narrative: "Reviewed agreement",
+  };
+  const review = { result: response, earlierEntries: [earlier] };
+  expect(v.parse(desktopBillingDraftReviewSchema, review)).toEqual(review);
+  for (const extra of [
+    { matterId: "00000000-0000-4000-8000-000000000001" },
+    { userId: "another-user" },
+    { taskCode: "L120" },
+  ]) {
+    expect(
+      v.safeParse(desktopBillingDraftReviewSchema, {
+        ...review,
+        earlierEntries: [{ ...earlier, ...extra }],
+      }).success,
+    ).toBe(false);
+  }
+  expect(
+    v.safeParse(desktopBillingDraftReviewSchema, { ...review, timeline: [] })
+      .success,
+  ).toBe(false);
 });

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
+import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries";
 
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
   entries: 20,
@@ -10,6 +11,7 @@ export const DESKTOP_BILLING_DRAFT_LIMITS = {
   nameLength: 512,
   guidelines: 20,
   codeLength: 20,
+  matchedEarlierEntries: 20,
 } as const;
 
 const identifierSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
@@ -42,7 +44,7 @@ export const desktopBillingDraftEvidenceSchema = v.strictObject({
     v.array(nameSchema),
     v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.evidenceItems),
   ),
-  emailSubjects: v.pipe(
+  windowTitles: v.pipe(
     v.array(nameSchema),
     v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.evidenceItems),
   ),
@@ -134,7 +136,10 @@ export const desktopBillingDraftSchema = v.strictObject({
   narrative: narrativeSchema,
   classification: desktopBillingDraftClassificationSchema,
   flags: v.pipe(v.array(desktopBillingDraftFlagSchema), v.maxLength(20)),
-  matchedEarlierEntryIds: v.pipe(v.array(identifierSchema), v.maxLength(20)),
+  matchedEarlierEntryIds: v.pipe(
+    v.array(identifierSchema),
+    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries),
+  ),
   operations: v.pipe(
     v.array(desktopBillingDraftOperationSchema),
     v.maxLength(20),
@@ -155,6 +160,31 @@ export const desktopBillingDraftResponseSchema = v.strictObject({
       }),
     ),
     v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.guidelines),
+  ),
+});
+
+/** The caller's own earlier entries a draft cites, so the review can show
+ * what "consistent with" refers to without a second request. */
+export const desktopBillingDraftEarlierEntrySchema = v.strictObject({
+  id: identifierSchema,
+  dateWorked: v.pipe(v.string(), v.isoDate()),
+  durationMinutes: durationSchema,
+  narrative: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
+  ),
+});
+
+/** What the endpoint returns: the model's result, which a steering request
+ * sends back unchanged as `previousResult`, and the cited earlier entries. */
+export const desktopBillingDraftReviewSchema = v.strictObject({
+  result: desktopBillingDraftResponseSchema,
+  earlierEntries: v.pipe(
+    v.array(desktopBillingDraftEarlierEntrySchema),
+    v.maxLength(
+      DESKTOP_BILLING_DRAFT_LIMITS.entries *
+        DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries,
+    ),
   ),
 });
 
@@ -204,6 +234,9 @@ export type DesktopBillingDraftRequest = v.InferOutput<
 >;
 export type DesktopBillingDraftResponse = v.InferOutput<
   typeof desktopBillingDraftResponseSchema
+>;
+export type DesktopBillingDraftReview = v.InferOutput<
+  typeof desktopBillingDraftReviewSchema
 >;
 export type DesktopBillingDraft = v.InferOutput<
   typeof desktopBillingDraftSchema
