@@ -14,6 +14,7 @@ import {
   analyzeModule,
   API_ALL_RULES,
   API_SHARD_SECONDS,
+  buildImportGraph,
   selectApiTestImpact,
 } from "./api-test-impact";
 import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
@@ -198,36 +199,52 @@ test("preload dependencies always widen, while erased type imports do not select
   });
 });
 
-test("a planted source-text reader and transitive directory scanner run on every application change", () => {
+test("readers widen another app only when their paths can reach it", () => {
   withRepository((root, write) => {
     write(
-      "apps/api/src/text.test.ts",
-      'import { readFileSync } from "node:fs"; readFileSync("apps/web/src/screen.tsx");',
+      "apps/api/src/web-reader.ts",
+      'import { readFileSync } from "node:fs"; export const data = readFileSync("apps/web/x.tsx");',
     );
+    write("apps/api/src/web-reader.test.ts", 'import "./web-reader";');
     write(
-      "apps/api/src/list.ts",
-      'import { readdirSync } from "node:fs"; export const files = readdirSync("apps");',
+      "apps/api/src/root-reader.ts",
+      'import { readdirSync } from "node:fs"; export const files = readdirSync(process.cwd());',
     );
-    write("apps/api/src/list.test.ts", 'import "./list";');
+    write("apps/api/src/root-reader.test.ts", 'import "./root-reader";');
     write(
-      "apps/api/src/data-reader.ts",
-      'import { readFileSync } from "node:fs"; export const data = readFileSync("rules.yar");',
+      "apps/api/src/api-reader.ts",
+      'import { readFileSync } from "node:fs"; export const data = readFileSync("apps/api/rules.yar");',
     );
-    write("apps/api/src/data.test.ts", 'import "./data-reader";');
-    for (const changed of [
-      "apps/web/src/screen.tsx",
-      "apps/desktop/src/feature.ts",
-      "packages/example/src/feature.ts",
-    ]) {
-      const selection = selectApiTestImpact({ root, changed: [changed] });
-      expect(selection.mode).toBe("selected");
-      expect(selection.files).toContain("src/text.test.ts");
-      expect(selection.files).toContain("src/list.test.ts");
-      expect(selection.files).not.toContain("src/data.test.ts");
+    write("apps/api/src/api-reader.test.ts", 'import "./api-reader";');
+    write("apps/api/src/z.ts", "export const z = true;");
+    write("packages/p/q.ts", "export const q = true;");
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/root-reader.test.ts", "src/web-reader.test.ts"]);
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/landing/y.astro"] }).files,
+    ).toEqual(["src/root-reader.test.ts"]);
+    for (const changed of ["apps/api/src/z.ts", "packages/p/q.ts"]) {
+      expect(selectApiTestImpact({ root, changed: [changed] }).files).toEqual([
+        "src/api-reader.test.ts",
+        "src/root-reader.test.ts",
+        "src/web-reader.test.ts",
+      ]);
     }
-    expect(selectApiTestImpact({ root, changed: ["docs/guide.md"] }).mode).toBe(
-      "none",
+  });
+});
+
+test("an unclassifiable computed reader path reaches every app", () => {
+  withRepository((root, write) => {
+    write(
+      "apps/api/src/computed-reader.test.ts",
+      'import { readFileSync } from "node:fs"; readFileSync(getTarget()); function getTarget() { return "somewhere"; }',
     );
+    for (const changed of ["apps/web/x.tsx", "apps/landing/y.astro"]) {
+      expect(selectApiTestImpact({ root, changed: [changed] }).files).toEqual([
+        "src/computed-reader.test.ts",
+      ]);
+    }
   });
 });
 
@@ -443,6 +460,27 @@ test("the repository graph reaches real handler tests and workspace consumers", 
   expect(handler.files.length).toBeLessThan(apiTestCount);
   expect(pkg.files.length).toBeLessThan(apiTestCount);
 }, 40_000);
+
+test("a real web change selects only tests with a web-reaching reader", () => {
+  const repositoryRoot = path.resolve(import.meta.dir, "..");
+  const selection = selectApiTestImpact({
+    changed: ["apps/web/src/components/globe.tsx"],
+  });
+  expect(selection.mode).toBe("selected");
+  expect(selection.files.length).toBeLessThan(400);
+
+  const tests = selection.files.map((file) => `apps/api/${file}`);
+  const graph = buildImportGraph(repositoryRoot, tests);
+  for (const testPath of tests) {
+    expect(
+      [...graph.closure(testPath)].some((file) => {
+        const reach = graph.reaches.get(file);
+        return reach === "all" || reach?.has("web") === true;
+      }),
+      testPath,
+    ).toBe(true);
+  }
+}, 30_000);
 
 test("selection is a deterministic union through cycles, duplicates and reordered changes", () => {
   withRepository((root, write) => {
