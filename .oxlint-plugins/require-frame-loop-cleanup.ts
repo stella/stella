@@ -827,6 +827,79 @@ const cleanupFunctionPaths = (
   return paths;
 };
 
+// A shared binding cannot prove ownership when another write replaces its
+// handle. Frame loops retain one kick-off and their own pending-frame updates.
+type AmbiguousHandleOptions = {
+  context: LoopContext;
+  handle: Handle;
+  start: AstNode;
+  loopBody: AstNode | null;
+};
+
+const hasAmbiguousHandleWrites = ({
+  context,
+  handle,
+  start,
+  loopBody,
+}: AmbiguousHandleOptions): boolean => {
+  if (handle.kind !== "binding") {
+    return false;
+  }
+  let frameKickOffs = 0;
+  for (const reference of handle.variable.references) {
+    if (!reference.isWrite()) {
+      continue;
+    }
+    const identifier: unknown = reference.identifier;
+    const write = isAstNode(identifier) ? parentOf(identifier) : null;
+    const value = unwrapExpression(
+      write?.type === "VariableDeclarator"
+        ? write.init
+        : write?.type === "AssignmentExpression" && write.operator === "="
+          ? write.right
+          : null,
+    );
+    const empty =
+      (value === null && write?.type === "VariableDeclarator") ||
+      (value !== null &&
+        ((value.type === "Literal" &&
+          (value.value === 0 || value.value === null)) ||
+          isGlobalName(context, value, "undefined")));
+    if (reference.init && empty) {
+      continue;
+    }
+    const frame = isGlobalCall(context, start, START_NAMES.frame);
+    const insideLoop =
+      loopBody !== null && write !== null && isWithin(write, loopBody);
+    const callback =
+      value === null ? null : unwrapExpression(callArguments(value).at(0));
+    const startsLoop =
+      frame &&
+      value !== null &&
+      value.type === "CallExpression" &&
+      isGlobalCall(context, value, START_NAMES.frame) &&
+      loopBody !== null &&
+      (functionFor(context, callback) === loopBody ||
+        (isFunctionNode(callback) &&
+          everyNode(callback).some(
+            (node) => namedCallTarget(context, node) === loopBody,
+          )));
+    if (frame && insideLoop && (empty || startsLoop)) {
+      continue;
+    }
+    if (startsLoop && !insideLoop) {
+      frameKickOffs += 1;
+      if (frameKickOffs <= 1) {
+        continue;
+      }
+    } else if (value === start) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+};
+
 // `start`'s loop body is `loopBody`; the effect enclosing `effectAnchor`,
 // if any, must cancel it in its returned cleanup.
 type OwnedLoop = {
@@ -841,7 +914,10 @@ const isOwned = (
   { effectAnchor, loopBody, start }: OwnedLoop,
 ): boolean => {
   const handle = handleOf(context, start);
-  if (handle === null) {
+  if (
+    handle === null ||
+    hasAmbiguousHandleWrites({ context, handle, start, loopBody })
+  ) {
     return false;
   }
   if (handle.kind === "transferred") {
@@ -877,6 +953,16 @@ const isOwned = (
     ).size === 0
   ) {
     return true;
+  }
+  const body = unwrapExpression(effect.body);
+  if (body?.type === "BlockStatement") {
+    const exits = cleanupPaths(
+      { ...proof, cancels: [], completed: new Map() },
+      body,
+    );
+    if ([...exits].some((path) => path !== "returns")) {
+      return false;
+    }
   }
   const returned = returnedFunctions({ context, effect, start });
   return (

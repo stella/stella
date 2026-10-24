@@ -422,6 +422,8 @@ test("effect cleanup ownership covers every reachable path and immutable alias",
     ],
     ["if (ready()) return () => {}; return () => clearInterval(id);", false],
     ["if (ready()) return; return () => clearInterval(id);", false],
+    ["if (ready()) return () => clearInterval(id);", false],
+    ["if (ready()) return () => clearInterval(id); else throw failure;", false],
     [
       "if (ready()) return () => clearInterval(id); return () => clearInterval(id);",
       true,
@@ -502,6 +504,21 @@ test("effect cleanup ownership covers every reachable path and immutable alias",
   );
   expect(results.map((lines) => lines.length === 0)).toEqual(
     cases.map(([, owned]) => owned),
+  );
+});
+
+test("ownership does not follow an overwritten timer handle", async () => {
+  const sources = [
+    "useEffect(() => { let id = setInterval(tick, 10); id = setInterval(tick, 20); return () => clearInterval(id); }, []);",
+    "useEffect(() => { let id = setInterval(tick, 10); id = undefined; return () => clearInterval(id); }, []);",
+    "useEffect(() => { let id = setInterval(tick, 10); const replace = () => { id = setInterval(tick, 20); }; return () => clearInterval(id); }, []);",
+    "useEffect(() => { let frame = 0; const tick = () => { if (ready()) frame = requestAnimationFrame(tick); }; frame = requestAnimationFrame(tick); frame = requestAnimationFrame(tick); return () => cancelAnimationFrame(frame); }, []);",
+  ];
+  const results = await Promise.all(
+    sources.map(async (source) => lintSingleRule(RULE, source)),
+  );
+  expect(results.map((lines) => lines.length > 0)).toEqual(
+    sources.map(() => true),
   );
 });
 
