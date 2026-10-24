@@ -2,7 +2,7 @@ import { PDF, PdfArray, PdfDict, PdfName, PdfStream } from "@libpdf/core";
 import { afterAll, describe, expect, test } from "bun:test";
 import { encode } from "uqr";
 
-import { buildInvoicePaymentPayload } from "../render";
+import { buildInvoicePaymentPayload } from "../render-helpers";
 import { buildInvoiceTemplateData, qrSvg } from "./data";
 import { CEE_DIACRITICS, DUMMY_ISDOC, invoiceFixture } from "./fixtures";
 import { PDFA_PRODUCER } from "./pdfa";
@@ -149,7 +149,7 @@ describe("Typst invoice renderer", () => {
   });
 });
 
-describe("SPAYD QR as SVG", () => {
+describe("payment QR as SVG", () => {
   test("the SVG paths reproduce the encoder's module matrix exactly", () => {
     const payment = buildInvoicePaymentPayload(invoiceFixture(1));
     expect(payment).not.toBeNull();
@@ -183,4 +183,104 @@ describe("SPAYD QR as SVG", () => {
     }).unwrap();
     expect(data.payment?.qrSvg).toBeNull();
   });
+});
+
+describe("Typst country invoice wording", () => {
+  test.each(["sk", "en"] as const)(
+    "extracts mandated Slovak reverse-charge wording in %s",
+    async (lang) => {
+      const fixture = invoiceFixture(1);
+      const sourceLine = fixture.invoice.lines.at(0);
+      if (sourceLine === undefined) {
+        throw new Error("Fixture must contain an invoice line");
+      }
+      const input = {
+        ...fixture,
+        seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
+        invoice: {
+          ...fixture.invoice,
+          language: lang,
+          lines: [{ ...sourceLine, vatTreatment: "reverse_charge" as const }],
+        },
+      };
+      const outcome = (
+        await renderInvoiceWithTypst({
+          invoice: input,
+          session,
+          attachments: [isdoc],
+          createdAt: CREATED_AT,
+        })
+      ).unwrap();
+      if (outcome.status !== "rendered") {
+        throw new Error(outcome.diagnostics.join("\n"));
+      }
+      const text = (await PDF.load(outcome.pdf))
+        .extractText()
+        .map((page) => page.text)
+        .join("\n");
+      expect(text).toContain("Prenesenie daňovej povinnosti.");
+    },
+  );
+
+  test("extracts a Slovak exemption reason", async () => {
+    const fixture = invoiceFixture(1);
+    const sourceLine = fixture.invoice.lines.at(0);
+    if (sourceLine === undefined) {
+      throw new Error("Fixture must contain an invoice line");
+    }
+    const input = {
+      ...fixture,
+      seller: { ...fixture.seller, country: "SK", vatId: "SK1234567890" },
+      invoice: {
+        ...fixture.invoice,
+        language: "en" as const,
+        lines: [
+          {
+            ...sourceLine,
+            vatTreatment: "exempt" as const,
+            exemptionReason: "§ 38",
+          },
+        ],
+      },
+    };
+    const outcome = (
+      await renderInvoiceWithTypst({
+        invoice: input,
+        session,
+        attachments: [isdoc],
+        createdAt: CREATED_AT,
+      })
+    ).unwrap();
+    if (outcome.status !== "rendered") {
+      throw new Error(outcome.diagnostics.join("\n"));
+    }
+    const text = (await PDF.load(outcome.pdf))
+      .extractText()
+      .map((page) => page.text)
+      .join("\n");
+    expect(text).toContain("Dodanie je oslobodené od dane.");
+    expect(text).toContain("§ 38");
+  });
+});
+
+test("Slovak payment documents carry the complete official print mark at its recommended size", () => {
+  const fixture = invoiceFixture(1);
+  const slovak = buildInvoiceTemplateData({
+    ...fixture,
+    seller: {
+      ...fixture.seller,
+      iban: "SK2711000000123456789012",
+      country: "SK",
+      bic: "FIKTSKBA",
+    },
+    invoice: { ...fixture.invoice, currency: "EUR", language: "sk" },
+  }).unwrap();
+  expect(slovak.payment?.qrWidthMm).toBe(37.254);
+  expect(slovak.payment?.qrSvg).toContain('viewBox="0 0 64 75"');
+  for (const id of ["g3522-3", "g3493-4", "g3487-0"]) {
+    expect(slovak.payment?.qrSvg).toContain(`id="${id}"`);
+  }
+  const czech = buildInvoiceTemplateData(fixture).unwrap();
+  expect(czech.payment?.qrWidthMm).toBe(32);
+  expect(czech.payment?.qrSvg).not.toContain('id="g3522-3"');
 });

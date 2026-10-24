@@ -196,6 +196,7 @@ const prefillInvoice = createSafeHandler(
       prefill.clientCurrency;
     return Result.ok({
       currency,
+      language: prefill.language,
       invoiceDate: loaded.invoiceDate,
       taxableSupplyDate: loaded.supplyDate,
       dueDays: prefill.dueDays,

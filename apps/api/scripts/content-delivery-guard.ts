@@ -307,7 +307,7 @@ class ContentDeliveryInspector {
         (attribute) =>
           propertyName(attribute.name) === "type" &&
           ts.isStringLiteralLike(attribute.value) &&
-          attribute.value.text === "text",
+          (attribute.value.text === "text" || attribute.value.text === "file"),
       )
     ) {
       return;

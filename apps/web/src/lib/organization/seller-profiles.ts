@@ -75,7 +75,10 @@ export const sendSellerProfileCommand = async (
         await profile.patch({
           ...command.values,
           registrationId: command.values.registrationId ?? null,
+          taxId: command.values.taxId ?? null,
           vatId: command.values.vatId ?? null,
+          registerEntry: command.values.registerEntry ?? null,
+          barRegistration: command.values.barRegistration ?? null,
           addressLine1: command.values.addressLine1 ?? null,
           addressLine2: command.values.addressLine2 ?? null,
           city: command.values.city ?? null,

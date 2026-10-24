@@ -46,7 +46,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/typecheck-recording"
           bun scripts/typecheck-baseline.ts --measure "$GITHUB_WORKSPACE" "$RUNNER_TEMP/typecheck-recording/typecheck-base.json"
           git rev-parse HEAD > "$RUNNER_TEMP/typecheck-recording/sha"
-          cp apps/web/src/generated/api-routes.gen.ts apps/web/src/routeTree.gen.ts "$RUNNER_TEMP/typecheck-recording/"
+          cp apps/web/src/generated/api-routes.gen.ts apps/web/src/routeTree.gen.ts apps/web/src/route-templates.gen.ts "$RUNNER_TEMP/typecheck-recording/"
       - name: Publish recording
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

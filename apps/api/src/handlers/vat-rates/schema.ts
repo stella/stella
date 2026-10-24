@@ -1,5 +1,7 @@
 import { t } from "elysia";
 
+import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
+
 import { tSafeId } from "@/api/lib/custom-schema";
 
 export const vatRateParams = t.Object({ vatRateId: tSafeId("vatRate") });
@@ -20,4 +22,10 @@ export const updateVatRateBody = t.Object({
   rateBps: t.Optional(rateBps),
   validFrom: t.Optional(date),
   validTo: t.Optional(t.Nullable(date)),
+});
+export const applyVatRatePresetBody = t.Object({
+  country: t.Union([
+    t.Literal(VAT_RATE_PRESET_COUNTRIES[0]),
+    t.Literal(VAT_RATE_PRESET_COUNTRIES[1]),
+  ]),
 });

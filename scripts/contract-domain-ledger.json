@@ -1668,10 +1668,6 @@
     "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.logic.ts::SELLER_PROFILE_FIELDS::domain:[\"legalName\",\"registrationId\",\"vatId\",\"addressLine1\",\"addressLine2\",\"city\",\"postalCode\",\"country\",\"iban\",\"bic\",\"accountNumber\",\"defaultCurrency\",\"footerNotes\"]::1",
-    "reason": "Existing SELLER_PROFILE_FIELDS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-refusal.test.tsx::<module>::domain:[\"en\",\"ar\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1781,14 +1777,6 @@
   },
   {
     "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:512::2",
-    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:64::1",
-    "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.contacts/-components/editable-row.logic.ts::EDITABLE_FIELD_POLICY::maxLength:64::2",
     "reason": "Existing EDITABLE_FIELD_POLICY UI validation or presentation bound; contract migration pending."
   },
   {

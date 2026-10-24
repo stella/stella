@@ -74,7 +74,7 @@ const CONTACT_FIELD_LABELS = {
   addressPostalCode: "contacts.fields.billingAddressPostalCode",
   addressCountry: "common.country",
   registrationNumber: "contacts.fields.registrationNumber",
-  taxId: "contacts.fields.taxId",
+  taxId: "common.taxId",
   iban: "contacts.fields.bankAccountIban",
   bic: "contacts.fields.bankAccountBic",
   dataBox: "contacts.communication.dataBoxPlaceholder",
