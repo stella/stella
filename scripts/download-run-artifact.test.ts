@@ -32,7 +32,7 @@ while (($# > 0)); do
     *) shift ;;
   esac
 done
-mkdir -p "$dir"
+[[ -z "$dir" ]] || mkdir -p "$dir"
 source "$FAKE_ROOT/responses/$count"
 `;
 
@@ -77,6 +77,9 @@ exit "$status"
 const HANG = `echo partial > "$dir/partial.txt"
 exec sleep 20
 `;
+// The artifact listing a pattern download reads first.
+const list = (...names: string[]) =>
+  names.map((name) => `echo '${name}'\n`).join("");
 const fail = (message: string, status: number) =>
   `echo 'private trace line' >&2
 echo 'gh: ${message} (HTTP ${String(status)})' >&2
@@ -277,12 +280,18 @@ test(
   "the download names this run, its repository and the artifact selector",
   async () => {
     const result = await runScenario({
-      responses: [write({ "playwright-blob-1/report-1.zip": "1" })],
+      responses: [
+        list("playwright-blob-1", "other"),
+        write({ "playwright-blob-1/report-1.zip": "1" }),
+      ],
       args: ["--pattern", "playwright-blob-*"],
     });
     expect(result.exitCode).toBe(0);
-    expect(result.calls).toHaveLength(1);
+    expect(result.calls).toHaveLength(2);
     expect(result.calls[0]).toStartWith(
+      "api --paginate repos/example/repo/actions/runs/4242/artifacts?per_page=100",
+    );
+    expect(result.calls[1]).toStartWith(
       "run download 4242 --repo example/repo --pattern playwright-blob-* --dir ",
     );
     // Without --merge every match keeps its own directory.
@@ -296,6 +305,7 @@ test(
   async () => {
     const result = await runScenario({
       responses: [
+        list("api-test-timings-api-1", "api-test-timings-api-2"),
         write({
           "api-test-timings-api-1/api-1.json": "1",
           "api-test-timings-api-2/nested/api-2.json": "2",
@@ -320,6 +330,7 @@ test(
   async () => {
     const result = await runScenario({
       responses: [
+        list("playwright-blob-1", "playwright-blob-2"),
         write({
           "playwright-blob-1/only-first.zip": "only",
           "playwright-blob-1/report.zip": "first",
@@ -329,7 +340,8 @@ test(
       args: ["--pattern", "playwright-blob-*", "--merge"],
     });
     expect(result.exitCode).toBe(1);
-    expect(result.calls).toHaveLength(1);
+    // The listing, then one download: a collision is not retried.
+    expect(result.calls).toHaveLength(2);
     expect(errorLines(result.stdout)).toEqual([
       "::error::Artifact download for artifacts matching 'playwright-blob-*' in run 4242 of example/repo: 'report.zip' is in more than one matching artifact (one is 'playwright-blob-2'); merged artifacts must not share file names",
     ]);
@@ -361,13 +373,32 @@ test(
   "stopped attempts that never complete leave no file behind",
   async () => {
     const result = await runScenario({
-      responses: [HANG, HANG],
+      responses: [list("playwright-blob-1"), HANG, HANG],
       args: ["--pattern", "playwright-blob-*", "--merge"],
       existing: { "unrelated.txt": "kept" },
     });
     expect(result.exitCode).toBe(1);
     expect(result.files).toEqual({ "unrelated.txt": "kept" });
     expect(result.leftovers).toEqual([]);
+  },
+  SCENARIO_TIMEOUT_MS,
+);
+
+test(
+  "a pattern that matches no artifact of the run downloads nothing and succeeds",
+  async () => {
+    const result = await runScenario({
+      responses: [list("generated-sources-abc", "api-test-durations-plan")],
+      args: ["--pattern", "playwright-blob-*", "--merge"],
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.calls).toHaveLength(1);
+    expect(result.calls[0]).toStartWith("api --paginate ");
+    expect(existsSync(result.destination)).toBe(true);
+    expect(result.files).toEqual({});
+    expect(result.stdout).toContain(
+      "No artifact of run 4242 of example/repo matches 'playwright-blob-*'; nothing to download.",
+    );
   },
   SCENARIO_TIMEOUT_MS,
 );

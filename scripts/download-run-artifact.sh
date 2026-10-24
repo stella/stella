@@ -68,6 +68,33 @@ else
 fi
 run_label="run $GITHUB_RUN_ID of $GITHUB_REPOSITORY"
 
+# A pattern that matches no artifact of the run downloads nothing and
+# succeeds, as actions/download-artifact does, so a job whose producers were
+# skipped is not failed by its download. A failed listing leaves the decision
+# to the download attempts below.
+if [[ -n "$pattern" ]]; then
+  if listed=$(timeout --kill-after=10 "$attempt_seconds" \
+    bash "$gh_retry_script" api --paginate \
+    "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+    --jq '.artifacts[] | select(.expired | not) | .name' </dev/null); then
+    matched=false
+    while IFS= read -r artifact_name; do
+      # shellcheck disable=SC2053 # the pattern is a glob on purpose
+      if [[ -n "$artifact_name" && "$artifact_name" == $pattern ]]; then
+        matched=true
+        break
+      fi
+    done <<< "$listed"
+    if [[ "$matched" == false ]]; then
+      mkdir -p "$destination"
+      echo "No artifact of $run_label matches '$pattern'; nothing to download."
+      exit 0
+    fi
+  else
+    echo "Listing the artifacts of $run_label failed; downloading $label anyway." >&2
+  fi
+fi
+
 # Workflow commands end at a newline; % introduces an escape.
 annotate_error() {
   local message=$1

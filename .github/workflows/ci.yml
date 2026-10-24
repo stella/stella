@@ -4717,6 +4717,9 @@ jobs:
           E2E_EXECUTION_PROFILE: standard
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
+          # The shard's main run writes report-<shard>.zip; e2e-report merges
+          # both blob artifacts into one directory, so this one has its own name.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-${{ matrix.shard }}.zip
         run: >-
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
