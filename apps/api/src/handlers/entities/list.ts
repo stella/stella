@@ -16,6 +16,10 @@ import {
 
 const readEntitiesBodySchema = t.Object({
   ...entityReadPageBodySchema.properties,
+  limit: {
+    ...entityReadPageBodySchema.properties.limit,
+    description: "Max entities to return",
+  },
   ...t.Pick(entityQueryWindowBodySchema, ["excludedKinds", "previewableForAi"])
     .properties,
 });

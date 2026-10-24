@@ -60,6 +60,11 @@ export const entityReadPageBodySchema = t.Object({
     "fieldMode",
     "fieldIds",
   ]).properties,
+  search: {
+    ...entityQueryWindowBodySchema.properties.search,
+    description:
+      "Rank rows by relevance against the asynchronous document-title index.",
+  },
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.entitiesPageSizeMax }),
   ),
