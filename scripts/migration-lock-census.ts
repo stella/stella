@@ -718,6 +718,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "The three language CHECKs are added NOT VALID without scanning existing rows, under 5s lock_timeout and 30s statement_timeout; they are validated in the online phase after the schema lock is released.",
   },
   {
+    migration: "20261024190200_case_law_decision_date_floor_gbr",
+    form: "add-constraint",
+    reason:
+      "The widened decision-date CHECK is added NOT VALID without scanning corpus rows; metadata-only lock acquisition retries at 2s, 10s and 30s within a 10-minute statement budget, then validation runs in the online phase.",
+  },
+  {
     migration: "20261020013635_case_law_source_hash_version",
     form: "add-column",
     reason:

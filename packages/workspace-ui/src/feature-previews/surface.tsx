@@ -6,11 +6,14 @@ import { cn } from "@stll/ui/utils";
 import type { PreviewPerson } from "./mock-data";
 
 /** Props every scene takes: its interface labels, the formatting locale for
- *  its dates and numbers, and classes for the host's sizing. */
-export type FeaturePreviewProps<Labels> = {
+ *  its dates and numbers, its content, and classes for the host's sizing. */
+export type FeaturePreviewProps<Labels, Data> = {
   labels: Labels;
   /** Full formatting locale (`en-GB`, `cs-CZ`), used for dates and numbers. */
   locale: string;
+  /** What the scene depicts (matters, documents, amounts). Omitted, the
+   *  scene shows the package's fictional English set. */
+  data?: Data | undefined;
   className?: string | undefined;
 };
 
