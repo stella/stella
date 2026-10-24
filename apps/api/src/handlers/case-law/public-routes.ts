@@ -48,8 +48,7 @@ import {
   readCaseLawCorpusStatusQuerySchema,
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
-import { readDecisionSummary } from "@/api/handlers/case-law/decisions/summary";
-import { decisionSummaryResponseSchema } from "@/api/handlers/case-law/decisions/summary-response";
+import readDecisionSummaryRoute from "@/api/handlers/case-law/decisions/summary/get";
 import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
@@ -267,22 +266,6 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
       ? projectDecisionReader(hydrated)
       : hydrated;
   },
-});
-
-export const readDecisionSummaryRoute = createSafePublicSubjectHandler({
-  config: {
-    contract: "patch",
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "covered", by: "read_case_law_decision" },
-    cache: { kind: "none" },
-    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      decisionSummaryResponseSchema,
-    ),
-  },
-  caseLawDb: caseLawPublicReadDb,
-  locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
-  read: readDecisionSummary,
 });
 
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({

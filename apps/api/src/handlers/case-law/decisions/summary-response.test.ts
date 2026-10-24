@@ -24,14 +24,14 @@ const summaryWithText = (text: string) => ({
   publication: text,
 });
 
-test("stored decision summaries satisfy their wire bounds and projection is idempotent", async () => {
+test("stored decision summaries satisfy their wire bounds and projection is idempotent", () => {
   const text = fc
     .array(fc.constantFrom("a", "Ž", "😀", "\ud800"), {
       minLength: 1025,
       maxLength: 2049,
     })
     .map((characters) => characters.join(""));
-  await assertProperty(
+  assertProperty(
     "stored decision summaries satisfy their wire bounds and projection is idempotent",
     fc.property(text, (raw) => {
       const input = summaryWithText(raw);

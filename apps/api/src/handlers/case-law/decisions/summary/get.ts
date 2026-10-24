@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
+import { t } from "elysia";
 
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -8,6 +9,12 @@ import {
   caseLawDecisionIdentifiers,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import {
+  ACCOUNT_ACCESS,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   courtPresentation,
   readCourtRegistry,
@@ -19,11 +26,15 @@ import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
+import { tSafeId } from "@/api/lib/custom-schema";
 
-import { projectDecisionSummary } from "./summary-response";
+import {
+  decisionSummaryResponseSchema,
+  projectDecisionSummary,
+} from "../summary-response";
 
 /** A bounded, stored-only projection for citation cards. */
-export const readDecisionSummary = async (
+const readDecisionSummary = async (
   subject: RedistributableDecisionSubject,
 ): Promise<CaseLawDecisionSummary> => {
   const [decision, publication, courtWeights] = await Promise.all([
@@ -89,3 +100,21 @@ export const readDecisionSummary = async (
     publication: publication?.value ?? null,
   });
 };
+
+const readDecisionSummaryRoute = createSafePublicSubjectHandler({
+  config: {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: { type: "covered", by: "read_case_law_decision" },
+    cache: { kind: "none" },
+    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      decisionSummaryResponseSchema,
+    ),
+  },
+  caseLawDb: caseLawPublicReadDb,
+  locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
+  read: readDecisionSummary,
+});
+
+export default readDecisionSummaryRoute;
