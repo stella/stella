@@ -177,8 +177,39 @@ test("the outfile guard detects every script bundle when regressed individually"
   ).toEqual([]);
 });
 
+// The runner runs every entrypoint with the base image's Bun; a --compile
+// binary would embed another full copy of the runtime in the image.
+test("the image ships one Bun runtime: no builder bundle compiles", () => {
+  expect(
+    bundleBuilds(stage("builder")).filter((bundle) =>
+      /--compile(?:\s|$)/u.test(bundle),
+    ),
+  ).toEqual([]);
+});
+
+// Bun emits a `with { type: "file" }` import as "./name-hash.ext" unless the
+// build names a public path, and that relative path resolves against the
+// process working directory (/app/apps/api), not the bundle. Each bundle must
+// therefore name the absolute directory its output occupies on the runner.
+test("every bundle resolves its file assets from its runner directory", () => {
+  const bundles = bundleBuilds(stage("builder"));
+  expect(bundles.length).toBeGreaterThan(0);
+  for (const bundle of bundles) {
+    const output = buildOutput(bundle);
+    const publicPath = /--public-path(?:=|\s+)(\S+)/u.exec(bundle)?.at(1);
+    const runnerDirectories = runnerOutputs(output).map(
+      (runnerOutput) => `${nodePath.posix.dirname(runnerOutput)}/`,
+    );
+    expect(runnerDirectories, output).toHaveLength(1);
+    expect(publicPath, output).toBe(runnerDirectories.at(0));
+  }
+});
+
 test("long-running API builds map frames to source", () => {
-  for (const output of ["/app/server", "/app/document-processing-worker.js"]) {
+  for (const output of [
+    "/app/server.js",
+    "/app/document-processing-worker.js",
+  ]) {
     expect(buildForOutput(output), output).toContain("--sourcemap=inline");
   }
 });
