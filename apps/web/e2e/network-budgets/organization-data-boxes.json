@@ -1,0 +1,70 @@
+{
+  "route": "/admin target",
+  "reason": "Organization settings reads the organization's own data-box IDs for its correspondence controls. The bounded inventory (at most 20 IDs) adds one request; existing route budgets are retained.",
+  "budget": {
+    "depth": 5,
+    "requests": [
+      "GET /api/auth/get-session",
+      "GET /api/auth/organization/get-active-member-role",
+      "GET /api/auth/organization/get-full-organization",
+      "GET /health",
+      "GET /v1/chat/threads",
+      "GET /v1/me/professional-use",
+      "GET /v1/notifications",
+      "GET /v1/notifications/events",
+      "GET /v1/organization-settings",
+      "GET /v1/organization-settings/ai-availability",
+      "GET /v1/organization-settings/correspondence/data-boxes",
+      "GET /v1/signals/count",
+      "GET /v1/time-timers",
+      "GET /v1/workspaces/navigation"
+    ],
+    "requestCounts": {
+      "GET /api/auth/get-session": 1,
+      "GET /api/auth/organization/get-active-member-role": 1,
+      "GET /api/auth/organization/get-full-organization": 1,
+      "GET /health": 1,
+      "GET /v1/chat/threads": 1,
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/notifications": 1,
+      "GET /v1/notifications/events": 1,
+      "GET /v1/organization-settings": 1,
+      "GET /v1/organization-settings/ai-availability": 1,
+      "GET /v1/organization-settings/correspondence/data-boxes": 1,
+      "GET /v1/signals/count": 1,
+      "GET /v1/time-timers": 1,
+      "GET /v1/workspaces/navigation": 1
+    },
+    "dbQueries": {
+      "GET /api/auth/get-session": 2,
+      "GET /api/auth/organization/get-active-member-role": 4,
+      "GET /api/auth/organization/get-full-organization": 7,
+      "GET /health": 0,
+      "GET /v1/chat/threads": 4,
+      "GET /v1/me/professional-use": 2,
+      "GET /v1/notifications": 6,
+      "GET /v1/notifications/events": 2,
+      "GET /v1/organization-settings": 4,
+      "GET /v1/organization-settings/ai-availability": 2,
+      "GET /v1/organization-settings/correspondence/data-boxes": 4,
+      "GET /v1/signals/count": 4,
+      "GET /v1/time-timers": 4,
+      "GET /v1/workspaces/navigation": 4
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 1024,
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/notifications": 1024,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/correspondence/data-boxes": 1024,
+      "GET /v1/signals/count": 1024,
+      "GET /v1/time-timers": 1024,
+      "GET /v1/workspaces/navigation": 1024
+    }
+  }
+}

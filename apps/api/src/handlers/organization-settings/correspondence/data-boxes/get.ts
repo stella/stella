@@ -21,6 +21,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "id", // The settings row identity is not part of the data-box inventory.
   "organizationId", // The active organization scopes this read.
   "personalApiKeyPolicy", // API-key policy belongs to general settings.
+  "invoiceLanguage", // Invoice language belongs to invoicing settings.
   "sanctionsMonitoringMode", // Sanctions policy belongs to general settings.
   "matterNumberingEnabled", // Matter numbering belongs to general settings.
   "matterNumberPattern", // Matter numbering belongs to general settings.

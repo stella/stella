@@ -10,6 +10,7 @@ ALTER TABLE "organization_settings" ADD COLUMN IF NOT EXISTS "data_box_ids" json
 
 -- The registered online phase builds contacts_data_box_ids_idx through its
 -- contention gate after these catalog-only changes commit.
+-- squawk-ignore ban-drop-not-null -- Data-box direction is derived on reads; the replacement CHECK still requires a valid direction on every email row.
 ALTER TABLE "correspondence" ALTER COLUMN "direction" DROP NOT NULL;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - email retains its existing direction domain; data-box direction is derived on reads
 ALTER TABLE "correspondence" DROP CONSTRAINT "correspondence_direction_check";--> statement-breakpoint
