@@ -3,7 +3,7 @@
 // against the batch runner. Not wired into CI; only the experiment workflow
 // calls it.
 import { panic } from "better-result";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -12,7 +12,6 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { listApiTestPaths } from "./api-test-plan";
-import { API_TEST_DURATIONS_FILE_ENV, durationSeconds } from "./test-timings";
 
 const apiRoot = path.resolve(import.meta.dir, "..");
 const shard =
@@ -34,31 +33,18 @@ if (snapshotBuild.exitCode !== 0) {
 }
 const snapshotSeconds = (performance.now() - snapshotStartedAt) / 1000;
 
-// The batch runner's duration cache, converted to Bun's timings format so
-// `--shard` cuts by recorded duration as the batch runner's shards do.
-const timingArguments: string[] = [];
-const durationsPath = process.env[API_TEST_DURATIONS_FILE_ENV];
-if (durationsPath !== undefined && existsSync(durationsPath)) {
-  const seconds = durationSeconds(
-    JSON.parse(readFileSync(durationsPath, "utf-8")),
-  );
-  const timingsPath = path.join(workDirectory, "timings.json");
-  writeFileSync(
-    timingsPath,
-    JSON.stringify({
-      version: 1,
-      files: Object.fromEntries(
-        Object.entries(seconds).map(([file, value]) => [
-          file,
-          Math.round(value * 1000),
-        ]),
-      ),
-    }),
-  );
-  timingArguments.push(`--timings=${timingsPath}`);
-} else {
-  console.log("No API test duration cache; shards split by file count.");
-}
+// Every shard cuts from the same committed seed table. `--update-timings`
+// writes to the first `--timings` path and, with `--shard`, only the files
+// this shard ran, so the six outputs together form the next table.
+const shardTimingsPath =
+  process.env["NATIVE_TIMINGS_OUT"] ??
+  panic("NATIVE_TIMINGS_OUT must name this shard's timings output");
+writeFileSync(shardTimingsPath, '{"version":1,"files":{}}\n');
+const timingArguments = [
+  `--timings=${shardTimingsPath}`,
+  `--timings=${path.join(apiRoot, "scripts/native-timings-seed.json")}`,
+  "--update-timings",
+];
 
 const testStartedAt = performance.now();
 const child = Bun.spawn(

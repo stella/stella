@@ -25,6 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
           submodules: true
 
@@ -51,13 +52,6 @@ jobs:
           bun --cwd=packages/cli run codegen:runtime
           bun --cwd=apps/api run generate:capability-runtime
 
-      - name: Restore API test durations
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/api-test-durations.json
-          key: api-test-durations-${{ github.run_id }}
-          restore-keys: api-test-durations-
-
       - name: Runner resources
         run: nproc; free -m
 
@@ -65,7 +59,7 @@ jobs:
         env:
           NATIVE_TEST_SHARD: ${{ matrix.shard }}/6
           NATIVE_TEST_JUNIT: ${{ runner.temp }}/junit-${{ matrix.shard }}.xml
-          API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
+          NATIVE_TIMINGS_OUT: ${{ runner.temp }}/timings-${{ matrix.shard }}.json
           BUN_OPTIONS: --smol --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
           FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         run: |
@@ -84,6 +78,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-api-junit-${{ matrix.shard }}
-          path: ${{ runner.temp }}/junit-${{ matrix.shard }}.xml
+          path: |
+            ${{ runner.temp }}/junit-${{ matrix.shard }}.xml
+            ${{ runner.temp }}/timings-${{ matrix.shard }}.json
           if-no-files-found: warn
           retention-days: 7
