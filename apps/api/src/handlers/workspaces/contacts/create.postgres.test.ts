@@ -1,7 +1,6 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
@@ -13,6 +12,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgConstraintError } from "@/api/lib/pg-error";
@@ -149,7 +149,7 @@ if (!databaseUrl || !runPostgresTests) {
                 /^insert\b/iu.test(query.trimStart()) &&
                 query.includes('"workspace_contacts"'),
             );
-          const secondDatabase = drizzle({
+          const secondDatabase = createDatabase({
             client: second.sql,
             relations: databaseRelations,
             logger: {

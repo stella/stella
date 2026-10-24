@@ -704,8 +704,7 @@ export type PruneUnlistedReconciliationItemsInput = ReconciliationLease & {
  * listed. Filter before the bounded read so listed rows cannot hide removals.
  */
 type PruneUnlistedReconciliationItemsResult =
-  | { outcome: "superseded" }
-  | { outcome: "pruned"; removed: number };
+  { outcome: "superseded" } | { outcome: "pruned"; removed: number };
 
 export const pruneUnlistedReconciliationItems = async (
   scopedDb: ScopedDb,

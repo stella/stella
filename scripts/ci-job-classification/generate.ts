@@ -8,7 +8,7 @@ import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
 import { decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
-import type { PublicMetadata, MetadataReader } from "./public-metadata";
+import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
   GIT_ORIGIN,
   parseRemoteReference,

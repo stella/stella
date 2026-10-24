@@ -99,7 +99,7 @@ export const TypeChipsRow = <TType extends string>({
           showSeparator && "border-t pt-2",
         )}
       >
-        <span className="text-foreground-label text-2xs shrink-0 px-1.5 font-medium">
+        <span className="text-foreground-label text-2xs shrink-0 font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
         {chipDefs.map(({ type, icon: Icon, label }) => {

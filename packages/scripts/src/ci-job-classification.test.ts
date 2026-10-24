@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -32,13 +32,13 @@ import {
   decisionPathForKey,
 } from "../../../scripts/ci-job-classification/inputs";
 import {
-  PUBLIC_METADATA,
   createCandidateMetadataReader,
+  PUBLIC_METADATA,
   verifyPublicMetadata,
 } from "../../../scripts/ci-job-classification/public-metadata";
 import type {
-  PublicMetadata,
   MetadataReader,
+  PublicMetadata,
 } from "../../../scripts/ci-job-classification/public-metadata";
 import { parseRemoteReference } from "../../../scripts/ci-job-classification/references";
 import type { MetadataOrigin } from "../../../scripts/ci-job-classification/references";

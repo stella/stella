@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
-  readFileSync,
-  readdirSync,
-  mkdtempSync,
   mkdirSync,
-  writeFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";

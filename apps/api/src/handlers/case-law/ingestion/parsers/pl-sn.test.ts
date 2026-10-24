@@ -5,9 +5,9 @@ import { sha256Hex } from "@stll/sha256/bun";
 import {
   assemblePlSnParagraphs,
   extractPlSnLines,
-  withoutRaisedReferenceMarkers,
   PL_PDF_PAGE_FURNITURE,
   plSnParagraphsToHtml,
+  withoutRaisedReferenceMarkers,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 
