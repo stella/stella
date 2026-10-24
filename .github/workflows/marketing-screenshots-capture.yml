@@ -49,8 +49,6 @@ jobs:
         uses: ./.github/actions/marketing-capture
         with:
           mode: update
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Upload regenerated baselines
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

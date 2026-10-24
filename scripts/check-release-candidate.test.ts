@@ -69,7 +69,11 @@ const fixture = (script = subject) => {
   const repo = path.join(directory, "repo");
   mkdirSync(path.join(repo, "scripts"), { recursive: true });
   writeFileSync(path.join(repo, "scripts/check-release-candidate.sh"), script);
-  for (const name of ["verify-release-tree-proof.sh", "gh-retry.sh"]) {
+  for (const name of [
+    "verify-release-tree-proof.sh",
+    "verify-release-candidate-tree.mjs",
+    "gh-retry.sh",
+  ]) {
     writeFileSync(
       path.join(repo, "scripts", name),
       readFileSync(new URL(name, import.meta.url), "utf-8"),

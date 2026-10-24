@@ -1,0 +1,55 @@
+Bound sandbox-to-host MCP App messages before the bundled protocol validator
+walks them. Remove when upstream enforces equivalent structural limits before
+validation.
+
+diff --git a/dist/index.mjs b/dist/index.mjs
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -5415,6 +5415,35 @@
+ l.object({ method: l.literal("ui/notifications/host-context-changed"), params: ac.describe("Partial context update containing only changed fields.") });
+ var jv = l.object({ method: l.literal("ui/update-model-context"), params: l.object({ content: l.array(ca).optional().describe("Context content blocks (text, image, etc.)."), structuredContent: l.record(l.string(), l.unknown().describe("Structured content for machine-readable context data.")).optional().describe("Structured content for machine-readable context data.") }) }), Zv = l.object({ method: l.literal("ui/initialize"), params: l.object({ appInfo: fa.describe("App identification (name and version)."), appCapabilities: wv.describe("Features and capabilities this app provides."), protocolVersion: l.string().describe("Protocol version this app supports.") }) });
+ l.object({ protocolVersion: l.string().describe('Negotiated protocol version string (e.g., "2025-11-21").'), hostInfo: fa.describe("Host application identification and version."), hostCapabilities: xv.describe("Features and capabilities provided by the host."), hostContext: ac.describe("Rich context about the host environment.") }).passthrough();
++var MCP_UI_MESSAGE_MAX_ARRAY_ITEMS = 4096, MCP_UI_MESSAGE_MAX_DEPTH = 32, MCP_UI_MESSAGE_MAX_NODES = 16384, MCP_UI_MESSAGE_MAX_OBJECT_KEYS = 4096, MCP_UI_MESSAGE_MAX_STRING_CHARS = 1048576;
++function isWithinMcpUiMessageBudget(e) {
++  const i = [{ value: e, depth: 0 }], n = /* @__PURE__ */ new Set();
++  let a = 0;
++  while (i.length > 0) {
++    const t = i.pop();
++    if (!t || ++a > MCP_UI_MESSAGE_MAX_NODES) return false;
++    const { value: r, depth: o } = t;
++    if (typeof r === "string") {
++      if (r.length > MCP_UI_MESSAGE_MAX_STRING_CHARS) return false;
++      continue;
++    }
++    if (r === null || typeof r !== "object" || n.has(r)) continue;
++    if (o > MCP_UI_MESSAGE_MAX_DEPTH) return false;
++    n.add(r);
++    if (Array.isArray(r)) {
++      if (r.length > MCP_UI_MESSAGE_MAX_ARRAY_ITEMS) return false;
++      for (const u of r) i.push({ value: u, depth: o + 1 });
++      continue;
++    }
++    let u = 0;
++    for (const d in r) {
++      if (!Object.prototype.hasOwnProperty.call(r, d)) continue;
++      if (++u > MCP_UI_MESSAGE_MAX_OBJECT_KEYS) return false;
++      i.push({ value: r[d], depth: o + 1 });
++    }
++  }
++  return true;
++}
+ class Nv {
+   constructor(i = window.parent, n) {
+     J(this, "eventTarget");
+@@ -5431,6 +5460,11 @@
+         console.debug("Ignoring message from unknown source", a);
+         return;
+       }
++      if (!isWithinMcpUiMessageBudget(a.data)) {
++        const t = Error("MCP App message exceeds host input limits");
++        console.error(t.message), (r = this.onerror) == null || r.call(this, t);
++        return;
++      }
+       let t = Uc.safeParse(a.data);
+       t.success ? (console.debug("Parsed message", t.data), (r = this.onmessage) == null || r.call(this, t.data)) : ((o = a.data) == null ? void 0 : o.jsonrpc) !== "2.0" ? console.debug("Ignoring non-JSON-RPC message", t.error.message, a) : (console.error("Failed to parse message", t.error.message, a), (u = this.onerror) == null || u.call(this, Error("Invalid JSON-RPC message received: " + t.error.message)));
+     };
