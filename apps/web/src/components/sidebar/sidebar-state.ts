@@ -31,6 +31,9 @@ const SIDEBAR_STATE_LIFETIME_HOURS = 24 * 365;
 export const parsePersistedSidebarOpen = (
   storedState: string | null | undefined,
 ): boolean | null => {
+  if (storedState === null || storedState === undefined) {
+    return null;
+  }
   switch (storedState) {
     case SIDEBAR_STATE_VALUES.expanded:
       return true;
