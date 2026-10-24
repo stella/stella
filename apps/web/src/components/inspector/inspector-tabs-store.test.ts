@@ -123,6 +123,8 @@ class FakeBroadcastChannel {
 afterEach(() => {
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
+  // The next test is a fresh page: this one's pending restore settle ends.
+  startNewPageLoadForTest();
   restoreTemporalNow?.();
   restoreTemporalNow = undefined;
   FakeBroadcastChannel.reset();
@@ -1532,6 +1534,55 @@ describe("Inspector tab broadcast", () => {
     expect(recovered).toHaveBeenCalledTimes(1);
     release();
     recovered.mockRestore();
+  });
+
+  test("a viewer hold an earlier page load never released does not hold the next one", async () => {
+    installFakeBroadcastChannel();
+    const pagehide = new EventTarget();
+    const addListener = spyOn(
+      globalThis,
+      "addEventListener",
+    ).mockImplementation(
+      (...args: Parameters<typeof globalThis.addEventListener>) => {
+        pagehide.addEventListener(...args);
+      },
+    );
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // The restored viewer is still downloading when the page reloads.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    const releaseEarlierPage = holdInspectorRestoreSettle();
+    pagehide.dispatchEvent(new Event("pagehide"));
+
+    // The next load restores and stays responsive past the settle delay.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    await Bun.sleep(2200);
+
+    // Its restore settled, so the start after it reopens the pane, and the
+    // late release from the first page changes nothing.
+    releaseEarlierPage();
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+    addListener.mockRestore();
   });
 
   test("keeps each window's own file tab lane across syncs", () => {

@@ -833,8 +833,27 @@ describe("chat path budgets", () => {
         );
       }
     }
-    // The catch-up is the run's, not the thread's.
-    expect(measured.long.rejoin, report).toEqual(measured.short.rejoin);
+    // The catch-up is the run's, not the thread's. Its events carry the
+    // thread's sequence numbers, which can be a digit wider in the long
+    // thread, so the bytes may differ by that width and nothing more; every
+    // count must match exactly.
+    const withoutBytes = ({
+      replayed,
+      snapshotted,
+    }: typeof measured.long.rejoin) => ({
+      replayed: { ...replayed, catchUpBytes: 0 },
+      snapshotted: { ...snapshotted, catchUpBytes: 0 },
+    });
+    expect(withoutBytes(measured.long.rejoin), report).toEqual(
+      withoutBytes(measured.short.rejoin),
+    );
+    const SEQUENCE_WIDTH_BYTES = 8;
+    for (const key of ["replayed", "snapshotted"] as const) {
+      const grown =
+        measured.long.rejoin[key].catchUpBytes -
+        measured.short.rejoin[key].catchUpBytes;
+      expect(Math.abs(grown), report).toBeLessThanOrEqual(SEQUENCE_WIDTH_BYTES);
+    }
   });
 
   test("Stop costs a fixed number of statements", () => {
