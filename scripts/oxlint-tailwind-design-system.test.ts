@@ -16,8 +16,9 @@ const diagnosticReport = v.object({
   ),
 });
 
-// A design system that cannot load is one setup failure for the lint process.
-// Every later rule and file still bails, but does not repeat the same message.
+// A design system that cannot load is one setup failure per rule for the lint
+// process. Each rule reports on the first file it meets; later files bail until
+// the lint session restarts, matching the process-sticky service failure.
 test("an unavailable Tailwind design system fails once across rules and files", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-design-system-"),
@@ -37,8 +38,8 @@ test("an unavailable Tailwind design system fails once across rules and files", 
         rules: {
           // A warning-level rule that needs the design system must not absorb
           // the error-level reports.
-          "tailwindcss/no-conflicting-classes": "warn",
-          "tailwindcss/no-unknown-classes": "error",
+          "tailwindcss/no-unknown-classes": "warn",
+          "tailwindcss/no-conflicting-classes": "error",
           // Duplicate detection needs no design system and reports nothing.
           "tailwindcss/no-duplicate-classes": "error",
         },
@@ -70,13 +71,19 @@ test("an unavailable Tailwind design system fails once across rules and files", 
     expect(stderr).not.toContain("Failed to load");
     expect(exitCode).toBe(1);
     const { diagnostics } = v.parse(diagnosticReport, JSON.parse(stdout));
-    expect(diagnostics, stdout).toHaveLength(1);
-    expect(diagnostics[0]?.message).toStartWith(
-      "tailwind design system not loaded: ",
-    );
-    expect(diagnostics[0]?.message).toContain(
-      "Every Tailwind rule is skipped for this stylesheet in this run.",
-    );
+    expect(diagnostics, stdout).toHaveLength(2);
+    expect(
+      diagnostics.map(({ code, severity }) => ({ code, severity })),
+    ).toEqual([
+      { code: "tailwindcss(no-unknown-classes)", severity: "warning" },
+      { code: "tailwindcss(no-conflicting-classes)", severity: "error" },
+    ]);
+    for (const { message } of diagnostics) {
+      expect(message).toStartWith("tailwind design system not loaded: ");
+      expect(message).toContain(
+        "Every Tailwind rule is skipped for this stylesheet in this run.",
+      );
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -85,6 +92,7 @@ test("an unavailable Tailwind design system fails once across rules and files", 
 type WorkerHook =
   | "busy-load"
   | "busy-request"
+  | "fail-load"
   | "slow-heartbeat"
   | "stall-first-load"
   | "stop-heartbeat"
@@ -207,15 +215,14 @@ test("a stalled first load is retried once with a fresh worker", async () => {
 }, 120_000);
 
 test("a worker-reported design-system load error is not retried", async () => {
-  const result = await runWorkerHook("trace-load", {
-    css: '@import "./missing-theme.css";\n',
+  const result = await runWorkerHook("fail-load", {
     heartbeatLimitMs: 1000,
   });
   expect(result.exitCode).toBe(1);
   expect(result.workerLoads).toEqual(["0"]);
   expect(result.diagnostics).toHaveLength(1);
   expect(result.diagnostics[0]?.message).toContain(
-    "tailwind design system not loaded: ",
+    "injected declarations worker load failure",
   );
 }, 120_000);
 
@@ -238,11 +245,12 @@ test("a worker with a stopped heartbeat fails promptly with its phase", async ()
   });
   expect(result.elapsedMs).toBeLessThan(10_000);
   expect(result.exitCode).toBe(1);
-  expect(result.diagnostics.map(({ message }) => message)).toEqual([
-    expect.stringContaining(
+  expect(result.diagnostics).toHaveLength(2);
+  for (const { message } of result.diagnostics) {
+    expect(message).toContain(
       "declarations worker stopped answering while compiling the design system",
-    ),
-  ]);
+    );
+  }
   expect(result.workerLoads).toEqual(["0", "1"]);
 }, 120_000);
 
