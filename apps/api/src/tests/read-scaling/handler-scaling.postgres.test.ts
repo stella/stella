@@ -60,6 +60,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           expect(
             api.routes.some(({ handler }) => handler === scenario.handler),
           ).toBe(true);
+          await scenario.prepare(db);
           const small = await scenario.seed(db, 10);
           const large = await scenario.seed(db, 200);
           try {

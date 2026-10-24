@@ -17,10 +17,11 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScalingTempTables } from "@/api/tests/read-scaling/entity-fixture";
 
 // The audit recorder is stubbed: the measured statements are the write's own,
 // which are the ones that could grow with the data its scope already holds.
-const noopAuditRecorder: AuditRecorder = async () => undefined;
+const noopAuditRecorder: AuditRecorder = () => Promise.resolve();
 
 const TIME_BILLING_FEATURE =
   "time-billing" satisfies keyof typeof FEATURE_REGISTRY;
@@ -99,6 +100,8 @@ export const writeScalingScenarios = [
   {
     name: "VAT rate preset",
     handler: applyVatRatePreset.handler,
+    prepare: async (db: GatedTestDb) =>
+      await createScalingTempTables(db, [organization, user, vatRates]),
     seed: seedVatRateWriteScaling,
     measure: async (fixture: WriteFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
