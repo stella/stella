@@ -89,7 +89,7 @@ import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-proje
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { readPresent } from "@/api/lib/errors/read-outcome";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -1917,6 +1917,27 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(executeRegistryLookupMock.mock.calls.at(0)?.at(0)).toMatchObject({
         handler: { slug: "krs" },
         query: "0000123456",
+      });
+    });
+
+    test("reports registry settings read failures instead of provider absence", async () => {
+      let providerLoads = 0;
+      const cause = new DatabaseError({ message: "Settings read unavailable" });
+      const result = await handleMcpToolCall({
+        args: { registry: "krs", query: "Company name" },
+        context: {
+          ...createContext(),
+          loadWebSearchProvider: async () => {
+            providerLoads += 1;
+            return Result.err(cause);
+          },
+        },
+        toolName: "lookup_business_registry",
+      });
+      expect(providerLoads).toBe(1);
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: { code: "internal_error" },
       });
     });
 

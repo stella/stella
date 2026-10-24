@@ -4813,6 +4813,8 @@
     "recentDocuments": "Nedávné dokumenty",
     "recentSearches": "Nedávná hledání",
     "recentlyOpenedFiles": "Nedávno otevřené soubory",
+    "registryCandidateNameMismatch": "Oficiální název „{officialName}“ se neshoduje",
+    "registryCandidateNoOfficialRecord": "Oficiální rejstřík pro toto číslo neobsahuje žádný záznam",
     "registryChoose": "Vyberte obchodní rejstřík",
     "registryCredentialAskAdmin": "Požádejte správce organizace o nastavení přístupu k tomuto rejstříku.",
     "registryCredentialSaved": "Přístup k rejstříku uložen",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Podrobnosti z obchodního rejstříku jsou dočasně nedostupné"
     },
     "registryKrsHint": "KRS vyhledává podle registračního čísla, ne podle názvu společnosti. Zadejte desetimístné číslo KRS včetně úvodních nul (např. 0000006865).",
+    "registryNameSearchNotFound": "Tomuto názvu neodpovídá žádná ověřená společnost. Následující kandidáti byli odmítnuti:",
     "registryVatHint": "VIES ověřuje DIČ, ne názvy společností. Zadejte DIČ včetně kódu země (např. CZ27082440); formát závisí na zemi.",
     "renameSearchTitle": "Přejmenovat uložené hledání",
     "requestCountry": "Požádat o přidání nové země",

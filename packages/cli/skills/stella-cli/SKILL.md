@@ -232,7 +232,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
   - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
-  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
   - optional: --detail (standard|full)
 - `stella contact read`
   - `--contact-id` — Contact ID (string)

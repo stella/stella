@@ -73,6 +73,8 @@ const AGENT_REGISTRATION_READ = 1;
 const MACHINE_KEY_STATEMENTS = 4;
 const PERSONAL_POLICY_READ = 1;
 const REGISTRY_LOAD = { statements: 3, transactions: 1 } as const;
+// One scoped settings read; a fixture org stores no key to decrypt.
+const WEB_SEARCH_LOAD = { statements: 2, transactions: 1 } as const;
 
 type QueryPlan = {
   authenticate: number;
@@ -216,6 +218,8 @@ type Measured = QueryPlan & {
   signingKeyFetches: number;
   registryLoad: { statements: number; transactions: number };
   registryReload: number;
+  webSearchLoad: { statements: number; transactions: number };
+  webSearchReload: number;
 };
 
 const measure = async (credential: string): Promise<Measured> => {
@@ -249,6 +253,16 @@ const measure = async (credential: string): Promise<Measured> => {
     await requestContext.loadEnabledRegistrySlugs?.();
     return counter.count;
   });
+  const webSearchTransactionsBefore = transactions;
+  const webSearchLoad = await runWithQueryCounter(async (counter) => {
+    await requestContext.loadWebSearchProvider?.();
+    return counter.count;
+  });
+  const webSearchTransactions = transactions - webSearchTransactionsBefore;
+  const webSearchReload = await runWithQueryCounter(async (counter) => {
+    await requestContext.loadWebSearchProvider?.();
+    return counter.count;
+  });
   return {
     authenticate,
     context,
@@ -259,6 +273,11 @@ const measure = async (credential: string): Promise<Measured> => {
       transactions: registryTransactions,
     },
     registryReload,
+    webSearchLoad: {
+      statements: webSearchLoad,
+      transactions: webSearchTransactions,
+    },
+    webSearchReload,
   };
 };
 
@@ -333,6 +352,8 @@ describe("MCP request authentication and session context run a fixed query plan"
         signingKeyFetches: 0,
         registryLoad: REGISTRY_LOAD,
         registryReload: 0,
+        webSearchLoad: WEB_SEARCH_LOAD,
+        webSearchReload: 0,
       });
       expect(await measure(credential)).toEqual(steady);
     }

@@ -4813,6 +4813,8 @@
     "recentDocuments": "Legutóbbi dokumentumok",
     "recentSearches": "Legutóbbi keresések",
     "recentlyOpenedFiles": "Legutóbb megnyitott fájlok",
+    "registryCandidateNameMismatch": "A hivatalos név „{officialName}”, amely nem egyezik",
+    "registryCandidateNoOfficialRecord": "A hivatalos nyilvántartásban nincs bejegyzés ehhez a számhoz",
     "registryChoose": "Cégnyilvántartás kiválasztása",
     "registryCredentialAskAdmin": "Kérje meg a szervezet egyik adminisztrátorát, hogy állítsa be a hozzáférést ehhez a nyilvántartáshoz.",
     "registryCredentialSaved": "A nyilvántartás hozzáférési adatai mentve",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "A cégnyilvántartás adatai átmenetileg nem érhetők el"
     },
     "registryKrsHint": "A KRS nyilvántartási szám, nem cégnév alapján keres. Adjon meg egy 10 számjegyű KRS-számot a kezdő nullákkal együtt (pl. 0000006865).",
+    "registryNameSearchNotFound": "Egy ellenőrzött cég sem felelt meg ennek a névnek. A következő jelölteket elutasítottuk:",
     "registryVatHint": "A VIES adószámokat ellenőriz, nem cégneveket. Adja meg a közösségi adószámot az országkóddal együtt (pl. CZ27082440); a formátum országonként eltér.",
     "renameSearchTitle": "Mentett keresés átnevezése",
     "requestCountry": "Új ország hozzáadásának kérése",

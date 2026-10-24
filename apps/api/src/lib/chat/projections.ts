@@ -2054,6 +2054,12 @@ const businessRegistryHitProjection = v.strictObject({
   // unchanged.
   registryUrl: publicUrl(),
   details: v.optional(unenumeratedJson()),
+  provenance: v.optional(
+    v.strictObject({
+      identifierSource: v.literal("web-search"),
+      recordSource: v.literal("official-registry"),
+    }),
+  ),
 });
 
 /**
@@ -2074,6 +2080,26 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
       type: v.literal("search"),
       registry: v.string(),
       hits: v.array(businessRegistryHitProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-not-found"),
+      registry: v.string(),
+      candidates: v.array(
+        v.strictObject({
+          id: v.string(),
+          reason: v.picklist(["no-official-record", "name-mismatch"]),
+          officialName: v.optional(v.string()),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-unavailable"),
+      registry: v.string(),
+      reason: v.literal("web-search-unavailable"),
     }),
   ),
 ]);

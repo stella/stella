@@ -131,6 +131,10 @@ import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -155,6 +159,12 @@ export const isWebSearchAvailable = ({
     disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
   return webSearchProviderAvailable && !webSearchOrgDisabled;
 };
+
+/** Registry name search may use web candidates only when web research is available on this turn. */
+const registryWebSearchProvider = (
+  webResearchAvailable: boolean,
+  webSearchProviders: ResolvedWebSearchProviders,
+) => (webResearchAvailable ? webSearchProviders.webSearchProvider : null);
 
 type WebResearchToolsRegisteredProps = {
   webSearchEnabled: boolean;
@@ -997,6 +1007,10 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const businessRegistryTools = createBusinessRegistryTools({
     organizationId,
     enabledHandlers: businessRegistryHandlers,
+    webSearchProvider: registryWebSearchProvider(
+      webResearchAvailable,
+      webSearchProviders,
+    ),
     scopeCall: businessRegistryCallScope(registryScope),
   });
   // Findings name natural persons with birth dates and identifiers, which the
@@ -1016,7 +1030,14 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // createWebSearchTools; it is implied by `webResearchAvailable`.
   const webSearchTools =
     webResearchAvailable && webSearchProvider !== null
-      ? createWebSearchTools({ webSearchProvider, urlFetcher })
+      ? createWebSearchTools({
+          webSearchProvider,
+          urlFetcher,
+          observeWebSearch: actionRequestObserver(
+            organizationId,
+            ACTION_COST_CALL_KIND.webSearchRequest,
+          ).onRequest,
+        })
       : {};
   // `editApplyMode === "auto"` also requires the client-executed manual
   // tool to stay OFF: the two review modes are mutually exclusive tool

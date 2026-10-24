@@ -4813,6 +4813,8 @@
     "recentDocuments": "Zuletzt verwendete Dokumente",
     "recentSearches": "Letzte Suchen",
     "recentlyOpenedFiles": "Zuletzt geöffnete Dateien",
+    "registryCandidateNameMismatch": "Der amtliche Name „{officialName}“ stimmt nicht überein",
+    "registryCandidateNoOfficialRecord": "Das amtliche Register enthält keinen Eintrag für diese Nummer",
     "registryChoose": "Unternehmensregister auswählen",
     "registryCredentialAskAdmin": "Bitten Sie einen Organisationsadministrator, den Zugang zu diesem Register einzurichten.",
     "registryCredentialSaved": "Registerzugang gespeichert",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Details aus dem Unternehmensregister sind vorübergehend nicht verfügbar"
     },
     "registryKrsHint": "KRS sucht nach der Registernummer, nicht nach dem Firmennamen. Geben Sie eine zehnstellige KRS-Nummer einschließlich führender Nullen ein (z. B. 0000006865).",
+    "registryNameSearchNotFound": "Kein verifiziertes Unternehmen stimmt mit diesem Namen überein. Folgende Kandidaten wurden verworfen:",
     "registryVatHint": "VIES prüft Umsatzsteuer-Identifikationsnummern, keine Unternehmensnamen. Geben Sie die Nummer mit Länderpräfix ein (z. B. CZ27082440); das Format hängt vom Land ab.",
     "renameSearchTitle": "Gespeicherte Suche umbenennen",
     "requestCountry": "Neues Land anfragen",

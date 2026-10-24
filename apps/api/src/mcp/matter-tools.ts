@@ -94,6 +94,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -1000,7 +1001,7 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(256),
       v.description(
-        "Canonical identifier (e.g. company number, VAT number) or company name",
+        "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)",
       ),
     ),
     detail: v.optional(
@@ -1037,6 +1038,26 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     q: parsed.output.query,
     detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
+    loadWebSearch: async () => {
+      const webSearch = await context.loadWebSearchProvider?.();
+      if (webSearch === undefined) {
+        return Result.ok(null);
+      }
+      if (webSearch.isErr()) {
+        return webSearch;
+      }
+      const provider = providerFromMcpWebSearchAvailability(webSearch.value);
+      if (provider === null) {
+        return Result.ok(null);
+      }
+      return Result.ok({
+        provider,
+        observer: actionRequestObserver(
+          context.organizationId,
+          ACTION_COST_CALL_KIND.webSearchRequest,
+        ).onRequest,
+      });
+    },
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
@@ -2534,7 +2555,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Look up a company in a public business register. Pass a canonical " +
       "identifier (company/registration number, VAT number) for an exact " +
-      "match, or a company name to search where the register supports it. " +
+      "match, or a company name to search where supported; KRS matches are verified. " +
       "Result IDs belong to the external registry, not stella's contact " +
       "directory. Create a contact with save_contact before using " +
       "read_contact.",

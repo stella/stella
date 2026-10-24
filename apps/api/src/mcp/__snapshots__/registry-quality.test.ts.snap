@@ -3641,7 +3641,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Look up business registry does not change state.",
       "openWorldHint": "Look up business registry can access public or external entities outside the private workspace."
     },
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where supported; KRS matches are verified. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -3678,7 +3678,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Canonical identifier (e.g. company number, VAT number) or company name"
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)"
         },
         "detail": {
           "enum": [
@@ -10277,7 +10277,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Look up business registry does not change state.",
       "openWorldHint": "Look up business registry can access public or external entities outside the private workspace."
     },
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where supported; KRS matches are verified. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -10314,7 +10314,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Canonical identifier (e.g. company number, VAT number) or company name"
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)"
         },
         "detail": {
           "enum": [
@@ -15547,7 +15547,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "Look up business registry does not change state.",
       "openWorldHint": "Look up business registry can access public or external entities outside the private workspace."
     },
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where supported; KRS matches are verified. Result IDs belong to the external registry, not stella's contact directory.",
     "annotations": {
       "title": "Look up business registry",
       "destructiveHint": false,
@@ -15584,7 +15584,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Canonical identifier (e.g. company number, VAT number) or company name"
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)"
         },
         "detail": {
           "enum": [

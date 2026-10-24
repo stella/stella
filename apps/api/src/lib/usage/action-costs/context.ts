@@ -11,6 +11,7 @@ import { reportActionCostObservationFailure } from "./observation-failure";
 export const ACTION_COST_CALL_KIND = {
   registryRequest: "registry_request",
   corpusRequest: "corpus_request",
+  webSearchRequest: "web_search_request",
 } as const;
 
 export type ActionCostIdentity = {

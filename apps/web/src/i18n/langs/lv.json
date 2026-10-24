@@ -4813,6 +4813,8 @@
     "recentDocuments": "Nesenie dokumenti",
     "recentSearches": "Nesenie meklējumi",
     "recentlyOpenedFiles": "Nesen atvērtie faili",
+    "registryCandidateNameMismatch": "Oficiālais nosaukums “{officialName}” neatbilst",
+    "registryCandidateNoOfficialRecord": "Oficiālajā reģistrā šim numuram nav ieraksta",
     "registryChoose": "Izvēlieties uzņēmumu reģistru",
     "registryCredentialAskAdmin": "Lūdziet organizācijas administratoram konfigurēt piekļuvi šim reģistram.",
     "registryCredentialSaved": "Piekļuve reģistram saglabāta",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Uzņēmumu reģistra informācija īslaicīgi nav pieejama"
     },
     "registryKrsHint": "KRS meklē pēc reģistrācijas numura, nevis uzņēmuma nosaukuma. Ievadiet 10 ciparu KRS numuru, ieskaitot sākuma nulles (piem., 0000006865).",
+    "registryNameSearchNotFound": "Neviens pārbaudīts uzņēmums neatbilda šim nosaukumam. Tika noraidīti šādi kandidāti:",
     "registryVatHint": "VIES pārbauda PVN numurus, nevis uzņēmumu nosaukumus. Ievadiet PVN numuru ar valsts prefiksu (piem., CZ27082440); formāts ir atkarīgs no valsts.",
     "renameSearchTitle": "Pārdēvēt saglabāto meklējumu",
     "requestCountry": "Pieprasīt jaunas valsts pievienošanu",

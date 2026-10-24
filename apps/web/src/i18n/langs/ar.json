@@ -4813,6 +4813,8 @@
     "recentDocuments": "المستندات الحديثة",
     "recentSearches": "عمليات البحث الأخيرة",
     "recentlyOpenedFiles": "الملفات المفتوحة مؤخراً",
+    "registryCandidateNameMismatch": "الاسم الرسمي هو «{officialName}» ولا يتطابق",
+    "registryCandidateNoOfficialRecord": "لا يحتوي السجل الرسمي على قيد لهذا الرقم",
     "registryChoose": "اختر سجل شركات",
     "registryCredentialAskAdmin": "اطلب من مسؤول المؤسسة إعداد الوصول إلى هذا السجل.",
     "registryCredentialSaved": "تم حفظ إعدادات الوصول إلى السجل",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "تفاصيل السجل التجاري غير متاحة مؤقتًا"
     },
     "registryKrsHint": "يبحث KRS برقم التسجيل، وليس باسم الشركة. أدخل رقم KRS المكوّن من 10 أرقام، بما في ذلك الأصفار في البداية (مثل 0000006865).",
+    "registryNameSearchNotFound": "لم تتطابق أي شركة موثّقة مع هذا الاسم. رُفض المرشحون الآتون:",
     "registryVatHint": "يتحقق VIES من أرقام ضريبة القيمة المضافة، وليس أسماء الشركات. أدخل الرقم مع رمز البلد (مثل CZ27082440)؛ تختلف الصيغة حسب البلد.",
     "renameSearchTitle": "إعادة تسمية البحث المحفوظ",
     "requestCountry": "طلب إضافة بلد جديد",
