@@ -131,7 +131,8 @@ describe("check-migration-safety", () => {
           SET lock_timeout = '1s';
           SET statement_timeout = '10min';
           COMMIT;
-          CREATE INDEX IF NOT EXISTS "documents_status_idx" ON "documents" ("status");
+          CREATE TABLE "review_marks" ("status" text);
+          CREATE INDEX IF NOT EXISTS "review_marks_status_idx" ON "review_marks" ("status");
           BEGIN;
         `),
       );
