@@ -784,7 +784,7 @@ export function PublicCaseLawIndex({
                 intent={intent}
                 isRefreshing={isRefreshing}
                 page={pager.currentPage}
-                relaxedHitCount={pageData?.relaxedHitCount ?? 0}
+                relaxedHitCount={pageData?.relaxedHitCount}
                 total={searchTotal}
               />
               {rewriteState.rewrittenFrom === undefined ||

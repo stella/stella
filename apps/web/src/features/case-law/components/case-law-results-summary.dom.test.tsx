@@ -80,6 +80,14 @@ test("keeps the page without inventing a total when no partial matches were appe
   expect(view.getByText("Page 1")).toBeTruthy();
 });
 
+test("keeps the page while its partial-match count is unavailable", () => {
+  const view = renderHeading({
+    relaxedHitCount: undefined,
+    total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+  });
+  expect(view.getByText("Page 1")).toBeTruthy();
+});
+
 test("keeps the displayed count busy while replacement results are pending", () => {
   const view = renderHeading({ isRefreshing: true, relaxedHitCount: 3 });
   const text = view.getByText(

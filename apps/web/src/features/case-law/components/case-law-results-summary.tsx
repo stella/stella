@@ -13,7 +13,7 @@ type CaseLawResultsSummaryProps = {
   /** The count still answers the previous search; say so without hiding it. */
   isRefreshing: boolean;
   page: number;
-  relaxedHitCount: number;
+  relaxedHitCount: number | undefined;
   total: SearchTotal;
 };
 
@@ -36,7 +36,7 @@ const CaseLawResultsSummaryText = ({
   exactCount,
   intent,
   page,
-  relaxedHitCount,
+  relaxedHitCount = 0,
   total,
 }: Omit<CaseLawResultsSummaryProps, "isRefreshing">) => {
   const t = useTranslations();
