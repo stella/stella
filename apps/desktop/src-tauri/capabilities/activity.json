@@ -27,6 +27,10 @@
     "allow-time-entry-candidates",
     "allow-time-entry-submit-batch-confirmed",
     "allow-time-entry-discard-pending-batch-confirmed",
+    "allow-billing-draft-get-settings",
+    "allow-billing-draft-set-consent",
+    "allow-billing-draft-set-preference",
+    "allow-billing-draft-create-confirmed",
     "allow-activity-assign-ranges"
   ]
 }

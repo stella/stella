@@ -7,8 +7,10 @@ import * as v from "valibot";
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   auditLogs,
@@ -90,6 +92,43 @@ test("batch fingerprint follows reviewed field values rather than JSON key order
       ...BODY,
       entries: [{ ...entry, narrative: "Changed" }],
     }),
+  );
+});
+
+test("an entry without a classification keeps the fingerprint it had before the field", () => {
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  expect(desktopBatchFingerprint(BODY)).toBe(
+    sha256Hex(
+      JSON.stringify([
+        {
+          matterId: entry.matterId,
+          dateWorked: entry.dateWorked,
+          timezoneId: entry.timezoneId,
+          durationMinutes: entry.durationMinutes,
+          narrative: entry.narrative,
+          billable: entry.billable,
+        },
+      ]),
+    ),
+  );
+  const classified = (taskCode: string) => ({
+    ...BODY,
+    entries: [
+      {
+        ...entry,
+        classification: {
+          type: "ledes" as const,
+          activityCode: "A103",
+          taskCode,
+        },
+      },
+    ],
+  });
+  expect(desktopBatchFingerprint(classified("L120"))).not.toBe(
+    desktopBatchFingerprint(BODY),
+  );
+  expect(desktopBatchFingerprint(classified("L120"))).not.toBe(
+    desktopBatchFingerprint(classified("L110")),
   );
 });
 
@@ -197,7 +236,7 @@ const createBatchHarness = (existingEntries = 0) => {
         body: JSON.stringify({ idempotencyKey: BODY.idempotencyKey }),
       }),
     );
-  const send = async (body: typeof BODY) =>
+  const send = async (body: DesktopTimeEntryBatch) =>
     await app.handle(
       new Request("http://localhost/batch", {
         method: "PUT",
@@ -403,4 +442,38 @@ test("missing bulk rates reject billable entries without individual rate reads o
   expect(response.status).toBe(400);
   expect(writes).toHaveLength(0);
   expect(rateReads()).toBe(1);
+});
+
+test("LEDES classification persists as codes; matter entries refuse the internal group", async () => {
+  const { send, writes } = createBatchHarness();
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const ledes = await send({
+    idempotencyKey: "classified",
+    entries: [
+      {
+        ...entry,
+        classification: {
+          type: "ledes",
+          taskCode: "L120",
+          activityCode: "A103",
+        },
+      },
+    ],
+  });
+  expect(ledes.status).toBe(200);
+  expect(writes.at(0)).toMatchObject({
+    taskCode: "L120",
+    activityCode: "A103",
+  });
+  const internal = await send({
+    idempotencyKey: "internal",
+    entries: [
+      {
+        ...entry,
+        classification: { type: "activity_group", activityGroup: "internal" },
+      },
+    ],
+  });
+  expect(internal.status).toBe(400);
+  expect(writes).toHaveLength(1);
 });

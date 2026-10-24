@@ -13,6 +13,37 @@ use crate::{
 
 const FAILURE: &str = "draft time entry request failed";
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
+const MAX_CODE_BYTES: usize = 20;
+
+/// The billing classification the user confirmed: LEDES task and activity
+/// codes, or the firm's activity group.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Classification {
+  #[serde(rename_all = "camelCase")]
+  Ledes {
+    task_code: String,
+    activity_code: String,
+  },
+  #[serde(rename = "activity_group")]
+  FirmGroup {
+    #[serde(rename = "activityGroup")]
+    group: String,
+  },
+}
+
+impl Classification {
+  fn is_valid(&self) -> bool {
+    let code = |value: &String| !value.is_empty() && value.len() <= MAX_CODE_BYTES;
+    match self {
+      Self::Ledes {
+        task_code,
+        activity_code,
+      } => code(task_code) && code(activity_code),
+      Self::FirmGroup { group } => code(group),
+    }
+  }
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -23,6 +54,8 @@ pub struct ConfirmedTimeEntry {
   pub duration_minutes: u32,
   pub narrative: String,
   pub billable: bool,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub classification: Option<Classification>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -191,6 +224,10 @@ impl ConfirmedBatch {
           || entry.duration_minutes == 0
           || entry.duration_minutes > 1440
           || entry.narrative.len() > 40000
+          || entry
+            .classification
+            .as_ref()
+            .is_some_and(|classification| !classification.is_valid())
       })
     {
       return Err(FAILURE.to_string());
@@ -546,6 +583,40 @@ mod tests {
         input["matters"]
       );
     }
+  }
+
+  #[test]
+  fn confirmed_classification_round_trips_and_stays_optional() {
+    let base = serde_json::json!({"matterId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
+      "durationMinutes":6, "narrative":"", "billable":true});
+    let plain: ConfirmedTimeEntry = serde_json::from_value(base.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&plain).unwrap(), base);
+    for classification in [
+      serde_json::json!({"type": "ledes", "taskCode": "L120", "activityCode": "A103"}),
+      serde_json::json!({"type": "activity_group", "activityGroup": "client"}),
+    ] {
+      let mut input = base.clone();
+      input["classification"] = classification;
+      let entry: ConfirmedTimeEntry = serde_json::from_value(input.clone()).unwrap();
+      assert_eq!(serde_json::to_value(&entry).unwrap(), input);
+    }
+    for invalid in [
+      serde_json::json!({"type": "ledes", "taskCode": "L120"}),
+      serde_json::json!({"type": "ledes", "taskCode": "L120", "activityCode": "A103", "note": "x"}),
+      serde_json::json!({"type": "category", "name": "x"}),
+    ] {
+      let mut input = base.clone();
+      input["classification"] = invalid;
+      assert!(serde_json::from_value::<ConfirmedTimeEntry>(input).is_err());
+    }
+    let mut long = base;
+    long["classification"] =
+      serde_json::json!({"type": "ledes", "taskCode": "L".repeat(21), "activityCode": "A103"});
+    let batch = ConfirmedBatch {
+      idempotency_key: "classified".into(),
+      entries: vec![serde_json::from_value(long).unwrap()],
+    };
+    assert!(batch.validate().is_err());
   }
 
   #[test]

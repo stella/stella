@@ -1,7 +1,9 @@
 import * as v from "valibot";
 
-import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
-import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries";
+import {
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+  desktopTimeEntryClassificationSchema,
+} from "./desktop-time-entries";
 
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
   entries: 20,
@@ -10,7 +12,6 @@ export const DESKTOP_BILLING_DRAFT_LIMITS = {
   evidenceItems: 20,
   nameLength: 512,
   guidelines: 20,
-  codeLength: 20,
   matchedEarlierEntries: 20,
 } as const;
 
@@ -59,26 +60,6 @@ export const desktopBillingDraftEntrySchema = v.strictObject({
   evidence: v.optional(desktopBillingDraftEvidenceSchema),
 });
 
-export const desktopBillingDraftClassificationSchema = v.union([
-  v.strictObject({
-    type: v.literal("ledes"),
-    taskCode: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-    ),
-    activityCode: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-    ),
-  }),
-  v.strictObject({
-    type: v.literal("activity_group"),
-    activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
-  }),
-]);
-
 export const desktopBillingDraftRuleRefSchema = v.strictObject({
   fileId: identifierSchema,
   fileName: nameSchema,
@@ -94,7 +75,7 @@ export const desktopBillingDraftFlagSchema = v.strictObject({
 const splitPartSchema = v.strictObject({
   durationMinutes: durationSchema,
   narrative: narrativeSchema,
-  classification: desktopBillingDraftClassificationSchema,
+  classification: desktopTimeEntryClassificationSchema,
   billable: v.boolean(),
 });
 
@@ -102,7 +83,7 @@ export const desktopBillingDraftOperationSchema = v.union([
   v.strictObject({ type: v.literal("rewrite"), narrative: narrativeSchema }),
   v.strictObject({
     type: v.literal("change_classification"),
-    classification: desktopBillingDraftClassificationSchema,
+    classification: desktopTimeEntryClassificationSchema,
   }),
   v.strictObject({ type: v.literal("set_billable"), billable: v.boolean() }),
   v.strictObject({
@@ -117,7 +98,7 @@ export const desktopBillingDraftOperationSchema = v.union([
       v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.entries),
     ),
     narrative: narrativeSchema,
-    classification: desktopBillingDraftClassificationSchema,
+    classification: desktopTimeEntryClassificationSchema,
     billable: v.boolean(),
   }),
   v.strictObject({
@@ -126,7 +107,7 @@ export const desktopBillingDraftOperationSchema = v.union([
     targetMatterName: v.pipe(v.string(), v.maxLength(512)),
     durationMinutes: durationSchema,
     narrative: narrativeSchema,
-    classification: desktopBillingDraftClassificationSchema,
+    classification: desktopTimeEntryClassificationSchema,
     billable: v.boolean(),
   }),
 ]);
@@ -134,7 +115,7 @@ export const desktopBillingDraftOperationSchema = v.union([
 export const desktopBillingDraftSchema = v.strictObject({
   entryId: identifierSchema,
   narrative: narrativeSchema,
-  classification: desktopBillingDraftClassificationSchema,
+  classification: desktopTimeEntryClassificationSchema,
   flags: v.pipe(v.array(desktopBillingDraftFlagSchema), v.maxLength(20)),
   matchedEarlierEntryIds: v.pipe(
     v.array(identifierSchema),
@@ -243,9 +224,6 @@ export type DesktopBillingDraft = v.InferOutput<
 >;
 export type DesktopBillingDraftOperation = v.InferOutput<
   typeof desktopBillingDraftOperationSchema
->;
-export type DesktopBillingDraftClassification = v.InferOutput<
-  typeof desktopBillingDraftClassificationSchema
 >;
 export type DesktopBillingDraftSettingsRequest = v.InferOutput<
   typeof desktopBillingDraftSettingsRequestSchema

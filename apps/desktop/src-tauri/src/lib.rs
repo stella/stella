@@ -6,6 +6,8 @@ mod activity_commands;
 mod activity_details;
 mod activity_store;
 mod activity_window;
+mod billing_draft_commands;
+mod billing_draft_submit;
 mod app_lifecycle;
 mod app_window;
 mod autostart;

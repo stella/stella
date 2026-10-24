@@ -2,12 +2,16 @@ import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
+import {
+  TIME_ENTRY_ACTIVITY_GROUP,
+  TIME_ENTRY_SOURCE,
+} from "@stll/api-contract";
 import {
   type DesktopTimeEntryBatch,
   type DesktopTimeEntryBatchResponse,
   desktopTimeEntryBatchResponseSchema,
   desktopTimeEntryBatchSchema,
+  type DesktopTimeEntryClassification,
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -48,7 +52,32 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
+const canonicalClassification = (
+  classification: DesktopTimeEntryClassification,
+) => {
+  switch (classification.type) {
+    case "ledes":
+      return {
+        type: classification.type,
+        taskCode: classification.taskCode,
+        activityCode: classification.activityCode,
+      };
+    case "activity_group":
+      return {
+        type: classification.type,
+        activityGroup: classification.activityGroup,
+      };
+    default:
+      return panic(
+        "Unknown time entry classification",
+        classification satisfies never,
+      );
+  }
+};
+
 // Object construction makes fingerprints independent of JSON property order.
+// An entry without a classification hashes as before the field existed, so a
+// pending retry keeps its fingerprint.
 export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
   sha256Hex(
     JSON.stringify(
@@ -60,6 +89,7 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           durationMinutes,
           narrative,
           billable,
+          classification,
         }) => ({
           matterId: matterId.toLowerCase(),
           dateWorked,
@@ -67,10 +97,52 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           durationMinutes,
           narrative,
           billable,
+          ...(classification
+            ? { classification: canonicalClassification(classification) }
+            : {}),
         }),
       ),
     ),
   );
+
+/** Matter entries bill to the client, so only LEDES codes add to the entry. */
+const classificationCodes = (
+  classification: DesktopTimeEntryClassification | undefined,
+) => {
+  if (classification?.type !== "ledes") {
+    return {};
+  }
+  return {
+    taskCode: classification.taskCode,
+    activityCode: classification.activityCode,
+  };
+};
+
+/** Lower-cased matter ids with the accepted codes as entry fields. Matter
+ * entries bill to the client, so only that activity group is accepted. */
+const normalizedBatchEntries = ({ entries }: DesktopTimeEntryBatch) => {
+  if (
+    entries.some(
+      ({ classification }) =>
+        classification?.type === "activity_group" &&
+        classification.activityGroup !== TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+    )
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Matter time entries bill to the client activity group",
+      }),
+    );
+  }
+  return Result.ok(
+    entries.map(({ matterId, classification, ...entry }) => ({
+      ...entry,
+      ...classificationCodes(classification),
+      matterId: matterId.toLowerCase(),
+    })),
+  );
+};
 
 const responseSchema = Type.Unsafe<DesktopTimeEntryBatchResponse>(
   jsonSchemaToTypeBox(toJsonSchema(desktopTimeEntryBatchResponseSchema)),
@@ -100,11 +172,8 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }),
         );
       }
+      const normalizedEntries = yield* normalizedBatchEntries(body);
       const fingerprint = desktopBatchFingerprint(body);
-      const normalizedEntries = body.entries.map(({ matterId, ...entry }) => ({
-        ...entry,
-        matterId: matterId.toLowerCase(),
-      }));
       const response = yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
           // The ledger lock and all writes share one transaction, including audits.

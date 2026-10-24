@@ -42,6 +42,7 @@ export const LOCAL_ONLY_FEATURES = [
     commandOwners: [
       { module: "src/activity_commands.rs", prefix: "activity_" },
       { module: "src/time_entry_commands.rs", prefix: "time_entry_" },
+      { module: "src/billing_draft_commands.rs", prefix: "billing_draft_" },
     ],
     id: "activity",
     telemetry: "fixedCodes",
@@ -56,6 +57,9 @@ export const LOCAL_ONLY_FEATURES = [
         "src/activity/ActivityApp.tsx",
         "src/activity/ActivityDayReview.tsx",
         "src/activity/ActivityTimeline.tsx",
+        "src/activity/ActivityBillingDrafts.tsx",
+        "src/activity/billing-draft-logic.ts",
+        "src/activity/billing-draft-session.tsx",
         "src/activity/MatterPicker.tsx",
         "src/activity/day-review-logic.ts",
       ],
@@ -90,5 +94,6 @@ export const isFeatureModule = (
 
 /** Network owners accepting explicit confirmation, never recorded activity. */
 export const CONFIRMED_ENTRY_NETWORK_MODULES = [
+  "billing_draft_submit.rs",
   "time_entry_submit.rs",
 ] as const;

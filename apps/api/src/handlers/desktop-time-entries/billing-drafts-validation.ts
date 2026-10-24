@@ -3,11 +3,11 @@ import { panic, Result, TaggedError } from "better-result";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type {
   DesktopBillingDraft,
-  DesktopBillingDraftClassification,
   DesktopBillingDraftOperation,
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
+import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
 
 const OPERATION_EFFECT = {
   rewrite: "scalar",
@@ -60,7 +60,7 @@ type ValidateBillingDraftOperationsOptions = {
   consumed: Map<string, string>;
   operationOwners: ReadonlySet<string>;
   validClassification: (
-    classification: DesktopBillingDraftClassification,
+    classification: DesktopTimeEntryClassification,
     matterId: string,
   ) => boolean;
 };
@@ -206,7 +206,7 @@ export const validateBillingDraftResult = (
     context.guidelines.map((file) => [file.fileId, file]),
   );
   const validClassification = (
-    classification: DesktopBillingDraftClassification,
+    classification: DesktopTimeEntryClassification,
     matterId: string,
   ) => {
     const matter = matters.get(matterId);

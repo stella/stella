@@ -2,10 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type {
-  DesktopBillingDraftClassification,
   DesktopBillingDraftOperation,
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
+import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
 
 import {
   type BillingDraftValidationContext,
@@ -441,7 +441,7 @@ test("matter-backed drafts reject internal categories in every classification-be
       ],
     },
   ] satisfies {
-    classification: DesktopBillingDraftClassification;
+    classification: DesktopTimeEntryClassification;
     operations: DesktopBillingDraftOperation[];
   }[]) {
     const { context, result } = fixture();

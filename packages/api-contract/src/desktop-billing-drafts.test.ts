@@ -17,6 +17,7 @@ import {
   desktopBillingDraftSettingsRequestSchema,
   desktopBillingDraftSettingsResponseSchema,
 } from "./desktop-billing-drafts";
+import { DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH } from "./desktop-time-entries";
 
 const entry = {
   matterId: "12345678-1234-4123-8123-123456789abc",
@@ -311,8 +312,8 @@ test("draft operations carry reviewable payloads and classification branches rem
 test("draft guideline counts and billing codes remain within persistence bounds", () => {
   const classification = {
     type: "ledes",
-    taskCode: "L".repeat(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-    activityCode: "A".repeat(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
+    taskCode: "L".repeat(DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH),
+    activityCode: "A".repeat(DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH),
   } as const;
   const drafts = response.drafts.map((draft) => ({ ...draft, classification }));
   const checkedGuidelines = Array.from(
