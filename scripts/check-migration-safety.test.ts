@@ -399,6 +399,10 @@ describe("check-migration-safety", () => {
           "pre-deploy-dynamic-sql",
         ],
         [
+          `DO $$ DECLARE command text := 'UPDATE documents SET status = ''ready'''; BEGIN EXECUTE command; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
           `DO $$ BEGIN EXECUTE 'ALTER TABLE documents VALIDATE CONSTRAINT documents_owner_fk'; END $$;`,
           "pre-deploy-dynamic-sql",
         ],

@@ -39,8 +39,8 @@ type Statement = {
   identifiers: { index: number; name: string }[];
   literals: { index: number; end: number; value: string }[];
   executableIndexHint?: boolean;
-  // A DO block runs this statement's command string through EXECUTE, and the
-  // string is an operation the pre-deploy phase refuses.
+  // This statement runs EXECUTE in a DO block whose literals hold an
+  // operation the pre-deploy phase refuses.
   executableRefusedOperation?: boolean;
   // Comment, string, and identifier content masked to spaces so keyword scans
   // cannot be fooled by literals.
@@ -1091,6 +1091,15 @@ const surfaceQuotedBody = ({
   const executableIndexHint = INDEX_BUILD_HINT_PATTERN.test(
     literalFragments.join(" "),
   );
+  // An executed body that runs EXECUTE: every literal in it may become the
+  // command, alone, assembled with `||`, or through a variable assigned
+  // earlier in the body, so each one and all of them in order are judged.
+  const executableRefusedOperation =
+    !deferred &&
+    /\bEXECUTE\b/iu.test(maskedBody) &&
+    [...literalFragments, literalFragments.join(" x ")].some(
+      isRefusedPreDeployCommand,
+    );
   return bodyStatements.map((statement, index) => {
     statement.line += startLine - 1;
     statement.enclosingLine = enclosingLine;
@@ -1103,16 +1112,7 @@ const surfaceQuotedBody = ({
     if (rowLoop && index === 0) {
       statement.rowLoop = true;
     }
-    if (
-      !deferred &&
-      /\bEXECUTE\b/iu.test(statement.text) &&
-      // Each literal alone, and all of them in order: a command assembled
-      // with `||` (`'UPDATE ' || quote_ident(t) || ' SET ...'`) reads as one.
-      [
-        ...statement.literals.map(({ value }) => value),
-        statement.literals.map(({ value }) => value).join(" x "),
-      ].some(isRefusedPreDeployCommand)
-    ) {
+    if (executableRefusedOperation && /\bEXECUTE\b/iu.test(statement.text)) {
       statement.executableRefusedOperation = true;
     }
     return statement;
