@@ -2076,38 +2076,36 @@ const frameLoopReports = (
     if (bounded) {
       continue;
     }
-    if (enclosingEffect(loop) === null) {
-      const repeated = calls.some(
-        (start) =>
-          isWithin(start, loop) &&
-          hasUncancelledRepeatedInvocation({
-            context,
-            cancels: cancels.frame,
-            start,
-            owner: loop,
-            invocations: effectInvocations,
-          }),
-      );
-      for (const invocation of effectInvocations) {
-        if (
-          invokesFunction(context, invocation, loop) &&
-          calls.some(
-            (start) =>
-              isWithin(start, loop) &&
-              (repeated ||
-                !isOwned(context, cancels.frame, {
-                  effectAnchor: invocation,
-                  loopBody: loop,
-                  start,
-                })),
-          )
-        ) {
-          reports.push({
-            kind: "frame",
-            messageId: "unownedLoop",
-            node: invocation,
-          });
-        }
+    const repeated = calls.some(
+      (start) =>
+        isWithin(start, loop) &&
+        hasUncancelledRepeatedInvocation({
+          context,
+          cancels: cancels.frame,
+          start,
+          owner: loop,
+          invocations: effectInvocations,
+        }),
+    );
+    for (const invocation of effectInvocations) {
+      if (
+        invokesFunction(context, invocation, loop) &&
+        calls.some(
+          (start) =>
+            isWithin(start, loop) &&
+            (repeated ||
+              !isOwned(context, cancels.frame, {
+                effectAnchor: invocation,
+                loopBody: loop,
+                start,
+              })),
+        )
+      ) {
+        reports.push({
+          kind: "frame",
+          messageId: "unownedLoop",
+          node: invocation,
+        });
       }
     }
     for (const call of calls) {
@@ -2325,7 +2323,7 @@ const intervalReports = (
     .map(({ node }) => ({ kind: "interval", messageId: "unownedLoop", node }));
   for (const { node } of intervals) {
     const owner = enclosingFunctions(node).at(0);
-    if (owner === undefined || enclosingEffect(node) !== null) {
+    if (owner === undefined || owner === enclosingEffect(node)) {
       continue;
     }
     const repeated = hasUncancelledRepeatedInvocation({

@@ -159,6 +159,34 @@ test("repeated interval helper proof stays bounded and shared aliases stay share
   }
 });
 
+test("effect-local helpers retain repeated-start ownership checks", async () => {
+  const cases = [
+    [
+      "useMountEffect(()=>{let id;const begin=()=>{id=setInterval(tick,10);};begin();begin();return()=>clearInterval(id);});",
+      false,
+    ],
+    [
+      "useMountEffect(()=>{let id;const begin=()=>{clearInterval(id);id=setInterval(tick,10);};begin();begin();return()=>clearInterval(id);});",
+      true,
+    ],
+    [
+      "useMountEffect(()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};tick();tick();return()=>cancelAnimationFrame(frame);});",
+      false,
+    ],
+    [
+      "useMountEffect(()=>{let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};tick();cancelAnimationFrame(frame);tick();return()=>cancelAnimationFrame(frame);});",
+      true,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) =>
+        (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
+});
+
 test("effect factories transfer their actual result into cleanup ownership", async () => {
   const cases = [
     [
