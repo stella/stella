@@ -31,7 +31,7 @@ const IMPORT_CLOSURES = new Map<
 export type PlaygroundInventory = {
   specs: readonly string[];
   registeredVisuals: ReadonlySet<string>;
-  loaderByVisual: ReadonlyMap<string, string>;
+  loaderByVisual: ReadonlyMap<string, readonly string[]>;
   visualsBySpec: ReadonlyMap<string, ReadonlySet<string>>;
   complete: boolean;
 };
@@ -71,29 +71,43 @@ export const registeredVisualNames = (source: string): ReadonlySet<string> => {
     return new Set();
   }
   return new Set(
-    [...body.matchAll(/^[ \t]*(?:"([^"]+)"|([A-Za-z_$][\w$]*))[ \t]*:/gmu)].map(
-      (match) => match[1] ?? match[2] ?? "",
-    ),
+    [
+      ...body.matchAll(/^[ \t]{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))[ \t]*:/gmu),
+    ].map((match) => match[1] ?? match[2] ?? ""),
   );
 };
 
 export const visualLoaderModules = (
   source: string,
   registryFile = REGISTRY,
-): ReadonlyMap<string, string> => {
-  const loaders = new Map<string, string>();
+): ReadonlyMap<string, readonly string[]> => {
+  const loaders = new Map<string, readonly string[]>();
   const entries = source.matchAll(
-    /^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*)):\s*\{[\s\S]*?import\("([^"]+)"\)[\s\S]*?^\s{2}\},/gmu,
+    /^[ \t]{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*)):[ \t]*\{([\s\S]*?)^[ \t]{2}\},/gmu,
   );
   for (const match of entries) {
     const name = match[1] ?? match[2];
-    const imported = match[3];
-    if (name !== undefined && imported !== undefined) {
-      loaders.set(
-        name,
-        path.posix.join(path.posix.dirname(registryFile), imported),
-      );
+    const body = match[3];
+    if (name === undefined || body === undefined) {
+      continue;
     }
+    const imported = [
+      ...body.matchAll(/\bimport\s*\(\s*(["'])([^"']+)\1\s*\)/gu),
+    ].flatMap((entry) => (entry[2] === undefined ? [] : [entry[2]]));
+    // An unknown or computed loader leaves the inventory incomplete. A loader
+    // can compose several modules; every one contributes to its geometry.
+    if (
+      imported.length === 0 ||
+      imported.length !== (body.match(/\bimport\s*\(/gu)?.length ?? 0)
+    ) {
+      continue;
+    }
+    loaders.set(
+      name,
+      imported.map((module) =>
+        path.posix.join(path.posix.dirname(registryFile), module),
+      ),
+    );
   }
   return loaders;
 };
@@ -600,23 +614,24 @@ export const selectGeometrySpecs = (
       continue;
     }
     for (const visual of inventory.visualsBySpec.get(spec) ?? []) {
-      const loader = inventory.loaderByVisual.get(visual);
-      if (loader === undefined) {
+      const loaders = inventory.loaderByVisual.get(visual);
+      if (loaders === undefined) {
         return inventory.specs;
       }
-      const cacheKey = `${root}\0${loader}`;
-      const closure =
-        closures.get(loader) ??
-        IMPORT_CLOSURES.get(cacheKey) ??
-        staticImportClosure(loader, root);
-      closures.set(loader, closure);
-      IMPORT_CLOSURES.set(cacheKey, closure);
-      if (!closure.complete) {
-        return inventory.specs;
-      }
-      if ([...changed].some((file) => closure.files.has(file))) {
-        selected.add(spec);
-        break;
+      for (const loader of loaders) {
+        const cacheKey = `${root}\0${loader}`;
+        const closure =
+          closures.get(loader) ??
+          IMPORT_CLOSURES.get(cacheKey) ??
+          staticImportClosure(loader, root);
+        closures.set(loader, closure);
+        IMPORT_CLOSURES.set(cacheKey, closure);
+        if (!closure.complete) {
+          return inventory.specs;
+        }
+        if ([...changed].some((file) => closure.files.has(file))) {
+          selected.add(spec);
+        }
       }
     }
   }

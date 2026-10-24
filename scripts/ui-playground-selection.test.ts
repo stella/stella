@@ -67,6 +67,49 @@ test("every geometry spec opens registered visuals with loader modules", () => {
   }
 });
 
+test("nested metadata fields stay out of the visual census and every loader module selects its spec", () => {
+  const { root, spec, write } = createSelectionFixture();
+  try {
+    write(
+      "apps/web/src/routes/dev/-visual-metadata.ts",
+      `export const visualRegistry = {
+  fixture: {
+    label: "Fixture",
+    layout: "plain",
+  },
+} as const;
+`,
+    );
+    write(
+      "apps/web/src/routes/dev/-visual-registry.tsx",
+      `const visualLoaders = {
+  fixture: {
+    load: async () => {
+      return await Promise.all([
+        import("./fixture"),
+        import("./fixture-data"),
+      ]);
+    },
+  },
+} as const;
+`,
+    );
+    write("apps/web/src/routes/dev/fixture.ts", "export {};\n");
+    write("apps/web/src/routes/dev/fixture-data.ts", "export {};\n");
+    const inventory = readPlaygroundInventory(root);
+    expect(inventory.complete).toBe(true);
+    expect([...inventory.registeredVisuals]).toEqual(["fixture"]);
+    for (const file of ["fixture.ts", "fixture-data.ts"]) {
+      expect(
+        selectGeometrySpecs([`apps/web/src/routes/dev/${file}`], root),
+      ).toEqual([spec]);
+    }
+    expect(selectGeometrySpecs(["README.md"], root)).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("selects loader, transitive, spec, and shared harness changes", () => {
   const inventory = readPlaygroundInventory(ROOT);
   const pageCrop = "apps/web/e2e/ui-playground/page-crop.geometry.spec.ts";
