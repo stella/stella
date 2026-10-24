@@ -248,7 +248,8 @@ import {
   playbooksOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
@@ -419,7 +420,7 @@ export const PlaybookFacet = ({
   const versionsQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId }),
   );
-  const versions = useQueryView(versionsQuery);
+  const versions = queryView(versionsQuery);
 
   const { playbooks, view: playbooksView } = usePlaybookPickerItems(
     user.activeOrganizationId,
@@ -1079,7 +1080,7 @@ const usePlaybookPickerItems = (organizationId: string) => {
   const dataQuery = useQuery(
     playbooksOptions(organizationId, PLAYBOOK_PICKER_LIMIT),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
@@ -1136,7 +1137,7 @@ const useShownReviewRun = ({
     ...documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
     select: (data) => data.items,
   });
-  const history = useQueryView(query);
+  const history = queryView(query);
   let runs: readonly DocumentReviewRunSummary[] = EMPTY_RUNS;
   switch (history.type) {
     case "pending":
@@ -1290,7 +1291,7 @@ const ReviewRunPanel = ({
     ...playbookDetailOptions(organizationId, restoredPlaybookId ?? ""),
     enabled: restoredPlaybookId !== null,
   });
-  const playbookDetailView = useQueryView(playbookDetailQuery);
+  const playbookDetailView = queryView(playbookDetailQuery);
   useQueryViewError(playbookDetailView);
   const playbookDetail =
     playbookDetailView.type === "items" ? playbookDetailView.items : undefined;
@@ -1595,7 +1596,7 @@ const Launcher = ({
     ),
     select: (answer) => (answer.type === "cached" ? answer.parties : []),
   });
-  const parties = useQueryView(partiesQuery);
+  const parties = queryView(partiesQuery);
   const setup: ReviewSetup = {
     ...emptyReviewSetup(),
     playbookId: selectedPlaybookId,
@@ -1610,7 +1611,7 @@ const Launcher = ({
     ),
     enabled: selectedPlaybookId !== null,
   });
-  const selectedPlaybookView = useQueryView(selectedPlaybookQuery);
+  const selectedPlaybookView = queryView(selectedPlaybookQuery);
   useQueryViewError(selectedPlaybookView);
   const selectedPlaybook =
     selectedPlaybookView.type === "items"
@@ -2162,7 +2163,7 @@ const ReferenceFilePicker = ({
   const sourcePagesQuery = useInfiniteQuery(
     documentReviewSourcesOptions({ workspaceId, q: "" }),
   );
-  const sourcePagesView = useQueryView(sourcePagesQuery);
+  const sourcePagesView = queryView(sourcePagesQuery);
   useQueryViewError(sourcePagesView);
   const sourcePages =
     sourcePagesView.type === "items" ? sourcePagesView.items : undefined;

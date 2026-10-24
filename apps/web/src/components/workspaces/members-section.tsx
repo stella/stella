@@ -38,8 +38,8 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { QueryView } from "@/lib/query-view.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import {
@@ -106,7 +106,7 @@ export const MembersList = ({
 
 export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
   const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceMembersOptions(workspaceId)));
+  const view = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const canUpdate = usePermissions({ workspace: ["update"] });
 
   return (

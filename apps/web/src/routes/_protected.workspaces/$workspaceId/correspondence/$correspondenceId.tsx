@@ -20,9 +20,10 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
@@ -64,7 +65,7 @@ function CorrespondenceDetailPage() {
   const { record, filers, attachments } = data;
   const provenance = correspondenceProvenancePresentation(record);
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
+  const membersView = queryView(membersQuery);
   const members = membersView.type === "items" ? membersView.items : [];
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
@@ -339,7 +340,7 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
     select: (views) =>
       correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
-  const viewIdView = useQueryView(viewIdQuery);
+  const viewIdView = queryView(viewIdQuery);
   useQueryViewError(viewIdView);
   const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (

@@ -25,8 +25,9 @@ import { VerificationView } from "@/features/avt/verification-view";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type VerificationDetailProps = {
@@ -52,7 +53,7 @@ export const VerificationDetail = ({
     isError,
   } = useQuery(verificationRunOptions(workspaceId, runId));
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
+  const filesView = queryView(filesQuery);
   useQueryViewError(filesView);
   const files = filesView.type === "items" ? filesView.items : undefined;
   // The document as it stands now: an earlier run may pin a file field a

@@ -99,8 +99,8 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 import {
@@ -274,7 +274,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // The citation strip's own summary, already cached for this decision: a
   // later-treatment note is drawn only once it shows a later citing decision.
   // The strip reports a failed read; here it only keeps the note hidden.
-  const citationSummary = useQueryView(
+  const citationSummary = queryView(
     useQuery(decisionCitationSummaryOptions(decisionId)),
   );
   const citedLater =

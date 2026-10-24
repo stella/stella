@@ -8,7 +8,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { ToggleSettingsSectionProps } from "./ai-settings-section";
@@ -27,7 +27,7 @@ export const PromptCachingCard = ({
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 

@@ -33,7 +33,8 @@ import {
   type LawRecentFilter,
   readLawRecent,
 } from "@/lib/law-search-history/law-search-history.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type HistoryInput = Parameters<(typeof api)["search-history"]["post"]>[0];
 type SearchRecordInput = Extract<HistoryInput, { kind: "search" }>;
@@ -290,7 +291,7 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
 const useLawHistoryState = (filter: LawRecentFilter) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const sessionView = useQueryView(useQuery(sessionOptions));
+  const sessionView = queryView(useQuery(sessionOptions));
   useQueryViewError(sessionView);
   const session = sessionView.type === "items" ? sessionView.items : null;
   const userId = session?.user.id;
@@ -301,7 +302,7 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
   const importQuery = useQuery(
     localLawHistoryImportOptions(keyScope, queryClient),
   );
-  const importView = useQueryView(importQuery);
+  const importView = queryView(importQuery);
   useQueryViewError(importView);
   const query = useQuery({
     queryKey: lawHistoryKeys.list({ scope: scope ?? keyScope, filter }),
@@ -371,7 +372,7 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
       return refreshedPage.items;
     },
   });
-  const view = useQueryView(query);
+  const view = queryView(query);
   useQueryViewError(view);
   const onError = (error: unknown) => {
     notifyUserError(error, t("lawHome.recentUpdateFailed"));

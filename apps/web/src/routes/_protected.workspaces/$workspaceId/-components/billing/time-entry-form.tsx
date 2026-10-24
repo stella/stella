@@ -38,8 +38,8 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
 import type { QueryView } from "@/lib/query-view.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
@@ -135,12 +135,12 @@ export const TimeEntryForm = ({
   );
 
   const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
-  const taskCodesView = useQueryView(taskCodesQuery);
+  const taskCodesView = queryView(taskCodesQuery);
   const taskCodes = loadedItems(taskCodesView);
   const activityCodesQuery = useQuery(
     billingCodesOptions(workspaceId, "activity"),
   );
-  const activityCodesView = useQueryView(activityCodesQuery);
+  const activityCodesView = queryView(activityCodesQuery);
   const activityCodes = loadedItems(activityCodesView);
 
   const form = useForm(
@@ -171,7 +171,7 @@ export const TimeEntryForm = ({
   const resolvedQuery = useQuery(
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
-  const resolvedView = useQueryView(resolvedQuery);
+  const resolvedView = queryView(resolvedQuery);
   const resolved = loadedItems(resolvedView);
 
   // Resolved rates are automatic defaults, not unsaved user changes.

@@ -24,8 +24,8 @@ import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 
@@ -59,7 +59,7 @@ export const MatterCard = ({
     ...overviewOptions(workspace.id),
     enabled: previewEnabled,
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
 
   const hasPreviewContent =

@@ -32,7 +32,8 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
@@ -64,7 +65,7 @@ export const VersionsFacet = ({
       filePropertyId: currentFilePropertyId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
 

@@ -4,7 +4,7 @@ import Tooltip from "@/components/tooltip";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /**
  * Marks the composer while the local mock model answers this organization's
@@ -24,7 +24,7 @@ export const ChatMockModelBadge = () => {
     // not refetch it.
     refetchOnMount: false,
   });
-  const availabilityView = useQueryView(availabilityQuery);
+  const availabilityView = queryView(availabilityQuery);
   // This dev-only decoration can be omitted when availability cannot be read.
   if (
     user === null ||

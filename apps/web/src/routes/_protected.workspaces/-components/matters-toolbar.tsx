@@ -29,7 +29,7 @@ import { cn } from "@stll/ui/utils";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import type { MattersColumnId } from "@/lib/workspaces/types";
@@ -194,7 +194,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 

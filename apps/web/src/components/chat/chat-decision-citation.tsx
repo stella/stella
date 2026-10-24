@@ -40,7 +40,6 @@ import {
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
-import { useQueryView } from "@/lib/use-query-view";
 
 type CitationCacheRequest =
   | { type: "id"; key: string; options: ReturnType<typeof decisionOptions> }
@@ -161,7 +160,7 @@ const ActiveChatDecisionCitation = ({
 }: ChatDecisionCitationProps) => {
   const answer = useContext(AnswerDecisionContext);
   const scopedRead = answer?.reads.get(decisionId);
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...decisionOptions(decisionId),
       enabled: scopedRead?.type !== "source",
@@ -199,7 +198,7 @@ const ActiveChatRouteDecisionCitation = ({
 }) => {
   const answer = useContext(AnswerDecisionContext);
   const scopedRead = answer?.routes.get(createCaseLawDecisionPath(params));
-  const view = useQueryView(
+  const view = queryView(
     useQuery({ ...options, enabled: scopedRead?.type !== "source" }),
   );
   const { open } = useOpenDecisionTab();

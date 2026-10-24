@@ -45,8 +45,9 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
 /** A mark not yet acknowledged by the server, keyed so it can be told apart. */
@@ -170,7 +171,7 @@ export const useReaderAnnotations = (
   });
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
 

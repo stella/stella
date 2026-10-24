@@ -15,18 +15,16 @@ import { UserIdentity } from "@/components/user-avatar";
 import { addableMembersView } from "@/components/workspaces/addable-member-select.logic";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 /** Organization members who are not yet members of the workspace. */
 export const useAddableMembers = (workspaceId: string) => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const organizationView = useQueryView(
+  const organizationView = queryView(
     useQuery(organizationOptions(activeOrganizationId)),
   );
-  const membersView = useQueryView(
-    useQuery(workspaceMembersOptions(workspaceId)),
-  );
+  const membersView = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const view = addableMembersView(organizationView, membersView);
   return { view, organizationView, membersView };
 };

@@ -39,7 +39,8 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   workspacesNavigationOptions,
   workspacesRouteOptions,
@@ -60,7 +61,7 @@ export const useInspectorGroups = () => {
       userId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const state = useInspectorTabsStore(
@@ -340,7 +341,7 @@ const InspectorGroupDestinations = ({
 }) => {
   const { activeOrganizationId } = useAuthenticatedUser();
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const customGroups = useInspectorTabsStore((state) => state.groups);

@@ -137,6 +137,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -144,7 +145,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -376,7 +377,7 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(propertiesQuery);
+  const propertiesView = queryView(propertiesQuery);
   useQueryViewError(propertiesView);
   const properties =
     propertiesView.type === "items" ? propertiesView.items : undefined;

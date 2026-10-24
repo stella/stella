@@ -28,7 +28,8 @@ import {
   WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useLocale } from "@/i18n/formatting-context";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useAddTaskAssignee,
   useRemoveTaskAssignee,
@@ -258,7 +259,7 @@ export const OwnerPicker = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
+  const membersView = queryView(membersQuery);
   useQueryViewError(membersView);
   const members = membersView.type === "items" ? membersView.items : undefined;
   const selectableMembers = members?.filter(
@@ -349,7 +350,7 @@ export const AssigneePicker = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
+  const membersView = queryView(membersQuery);
   useQueryViewError(membersView);
   const members = membersView.type === "items" ? membersView.items : undefined;
 

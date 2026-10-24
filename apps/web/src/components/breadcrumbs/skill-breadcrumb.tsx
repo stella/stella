@@ -6,7 +6,7 @@ import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
 import { classifyToolEntry } from "@/lib/knowledge/tool-entry";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 const toolEntryRoute = getRouteApi("/knowledge/tools_/$entry");
 
@@ -26,7 +26,7 @@ export const SkillBreadcrumb = () => {
     ...skillDetailOptions(activeOrganizationId, userId, entry),
     enabled: isSkill,
   });
-  const skillView = useQueryView(skillQuery);
+  const skillView = queryView(skillQuery);
   const skill = skillView.type === "items" ? skillView.items : undefined;
 
   if (isSkill && skillView.type !== "items") {
