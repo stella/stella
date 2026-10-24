@@ -15,9 +15,13 @@ import type { LucideIcon } from "@stll/ui/icons";
  * `satisfies Record<TaskStatus, …>`, so a status added there fails typecheck
  * until it has a glyph here.
  */
-export const TASK_STATUS_ICONS: Record<
-  "open" | "in_progress" | "in_review" | "done" | "cancelled",
-  LucideIcon
+// Typed explicitly: the published declarations must name the icon type
+// without reaching into @stll/ui's own lucide-react install.
+export const TASK_STATUS_ICONS: Readonly<
+  Record<
+    "open" | "in_progress" | "in_review" | "done" | "cancelled",
+    LucideIcon
+  >
 > = {
   open: CircleIcon,
   in_progress: CircleDotIcon,
