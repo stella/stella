@@ -11,7 +11,7 @@ endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
 ## Overview
 
 Stella guards performance with recorded budgets, diffed on every run. A regression either fails CI outright or shows
-up as a reviewable diff in the PR. Six guards exist today:
+up as a reviewable diff in the PR. Seven guards exist today:
 
 - **Network baseline** (`apps/web/e2e/network-baseline.json`, checked by
   `apps/web/e2e/helpers/network.ts` from `apps/web/e2e/specs/route-smoke.spec.ts`):
@@ -29,6 +29,15 @@ up as a reviewable diff in the PR. Six guards exist today:
   CI instead of silently reintroducing an infinite-update-loop risk.
 - **DB query counter** (`apps/api/src/lib/db-query-counter.ts`): the runtime
   half of the network baseline's DB-query budget. Dev/test only.
+- **Chat path budgets**
+  (`apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts`,
+  `apps/web/src/features/chat/chat-runtime-send-budget.test.ts`): SQL
+  statements and bytes per chat path (thread open, older page, send, streamed
+  delta, settlement, rejoin, Stop) through the real handlers, on a short and
+  a long thread. The counts must be equal on both, so an N+1 fails at any
+  size; bytes are bounded per page and per delta, and a send carries only the
+  message it posts. Each budget is the measurement on main plus a stated
+  headroom; a real improvement lowers the measurement.
 - **`require-loader-prefetch`** oxlint rule
   (`.oxlint-plugins/require-loader-prefetch.ts`): static, not baseline-based;
   flags the waterfall pattern the network baseline would otherwise only catch

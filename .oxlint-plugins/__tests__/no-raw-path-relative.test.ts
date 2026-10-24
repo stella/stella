@@ -50,17 +50,28 @@ test("only the published loader is exempt in the repository configuration", asyn
     (override) => override.rules !== undefined && rule in override.rules,
   );
   const source = 'import path from "node:path";\npath.relative(root, file);';
-  for (const [sourcePath, expectedLine] of [
-    ["packages/start-runtime/src/local-module-loader.ts", null],
-    ["packages/start-runtime/src/another-loader.ts", 2],
-    ["packages/start-runtime/src/nested/local-module-loader.ts", 2],
-  ] as const) {
-    expect(
-      await lintSingleRule("no-raw-path-relative", source, {
-        sourcePath,
-        overrides,
-        cwd: "scratch",
-      }),
-    ).toEqual(expectedLine === null ? [] : [expectedLine]);
-  }
+  const results = await Promise.all(
+    (
+      [
+        ["packages/start-runtime/src/local-module-loader.ts", null],
+        ["packages/start-runtime/src/another-loader.ts", 2],
+        ["packages/start-runtime/src/nested/local-module-loader.ts", 2],
+      ] as const
+    ).map(async (lintCase, index) => {
+      const [sourcePath, expectedLine] = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule("no-raw-path-relative", source, {
+          sourcePath,
+          overrides,
+          cwd: "scratch",
+        }),
+        expected: expectedLine === null ? [] : [expectedLine],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
