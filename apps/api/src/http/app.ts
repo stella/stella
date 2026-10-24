@@ -122,13 +122,30 @@ const indexRoutes = (
   );
 };
 
+/**
+ * Keep-alive idle timeout in seconds: longer than the load balancer's 60 s
+ * idle timeout (Bun defaults to 10 s). The balancer may reuse an idle backend
+ * connection any time before its own timeout expires, so the server must
+ * never close first: a request written onto a connection the server is
+ * closing is lost in flight and the client hangs with no response and no
+ * server-side log line. The SSE keep-alive heartbeat (20 s) stays well inside
+ * this window, and so does a public read's 30 s statement timeout.
+ */
+const HTTP_IDLE_TIMEOUT_S = 75;
+
 export type HttpApp = {
   /** Every mounted route, for tooling and censuses. */
   readonly routes: readonly RouteEntry[];
-  /** `Bun.serve` routes: one handler per path; methods are dispatched here. */
-  readonly bunRoutes: Readonly<Record<string, BunRouteHandler>>;
-  /** `Bun.serve` fallback: answers paths no route serves, through the pipeline. */
-  readonly fetch: (request: Request, server: HttpServer) => Promise<Response>;
+  /**
+   * Everything `Bun.serve` needs but the address, so production and test
+   * servers share one connection policy. `routes` holds one handler per path
+   * and dispatches methods; `fetch` answers paths no route serves.
+   */
+  readonly serveOptions: {
+    readonly routes: Readonly<Record<string, BunRouteHandler>>;
+    readonly fetch: (request: Request, server: HttpServer) => Promise<Response>;
+    readonly idleTimeout: number;
+  };
 };
 
 export const createHttpApp = ({
@@ -230,8 +247,11 @@ export const createHttpApp = ({
 
   return {
     routes,
-    bunRoutes,
-    fetch: async (request, server) =>
-      await handle(request, server, undefined, {}),
+    serveOptions: {
+      routes: bunRoutes,
+      fetch: async (request, server) =>
+        await handle(request, server, undefined, {}),
+      idleTimeout: HTTP_IDLE_TIMEOUT_S,
+    },
   };
 };

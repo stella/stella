@@ -64,8 +64,6 @@ import {
 } from "@/api/server-shutdown";
 
 const DEFAULT_API_PORT = 3001;
-// Keep-alive idle timeout in seconds; see the `Bun.serve` call.
-const HTTP_IDLE_TIMEOUT_S = 75;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const WORKER_SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -239,16 +237,7 @@ const startServer = async (): Promise<void> => {
 
   const server = Bun.serve({
     port: getApiPort(),
-    // Longer than the load balancer's 60 s idle timeout (Bun defaults to
-    // 10 s). The balancer may reuse an idle backend connection any time
-    // before its own timeout expires, so the server must never close
-    // first: a request written onto a connection the server is closing is
-    // lost in flight and the client hangs with no response and no
-    // server-side log line. The SSE keep-alive heartbeat (20 s) stays
-    // well inside this window.
-    idleTimeout: HTTP_IDLE_TIMEOUT_S,
-    routes: apiApp.bunRoutes,
-    fetch: apiApp.fetch,
+    ...apiApp.serveOptions,
   });
 
   // From here the loop serves requests; boot work before this point delays

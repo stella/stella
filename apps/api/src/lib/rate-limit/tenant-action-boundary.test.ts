@@ -280,8 +280,7 @@ describe("tenant HTTP action boundary", () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
-      routes: app.bunRoutes,
-      fetch: app.fetch,
+      ...app.serveOptions,
     });
     try {
       const response = await fetch(server.url, { method: "POST", body: "é" });

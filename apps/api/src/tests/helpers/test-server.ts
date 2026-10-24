@@ -18,11 +18,7 @@ export type TestServer = {
  * so a test exercises exactly the router, pipeline and wire format users get.
  */
 export const serveForTest = (app: HttpApp): TestServer => {
-  const server = Bun.serve({
-    port: 0,
-    routes: app.bunRoutes,
-    fetch: app.fetch,
-  });
+  const server = Bun.serve({ port: 0, ...app.serveOptions });
   const stop = async () => {
     await server.stop(true);
   };

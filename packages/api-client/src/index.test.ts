@@ -382,7 +382,7 @@ describe("createApiClient", () => {
       name: string;
       count?: number;
     }>();
-    expectTypeOf<Parameters<typeof api.filter.get>[0]>().toMatchTypeOf<{
+    expectTypeOf<Parameters<typeof api.filter.get>[0]>().toExtend<{
       readonly query: { status: "open" | "closed" };
     }>();
     expectTypeOf<
