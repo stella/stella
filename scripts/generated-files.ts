@@ -515,11 +515,11 @@ const GENERATOR_DECLARATIONS = [
     // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
     id: "ci-job-classification-digests",
     outputKind: "committed",
-    outputs: [".github/ci-job-classification-decisions.json"],
+    outputs: [".github/ci-job-classification-decisions/**"],
     inputs: [
       ".github/workflows/**",
       ".github/actions/**",
-      ".github/ci-job-classification-decisions.json",
+      ".github/ci-job-classification-decisions/**",
       ".github/ci-job-classification-sources.json",
       "scripts/check-ci-job-classification.ts",
       "scripts/ci-job-classification/**",
