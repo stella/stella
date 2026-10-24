@@ -28,6 +28,7 @@ import {
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
 import type { api } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -1268,6 +1269,87 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
       caseRoute.update(original);
     }
   });
+
+  test.each([
+    ["accepted member", FIXTURE_AUDIENCE.member, "accepted"],
+    ["required member", FIXTURE_AUDIENCE.member, "required"],
+    ["anonymous visitor", FIXTURE_AUDIENCE.anonymous, "accepted"],
+  ] satisfies readonly (readonly [
+    string,
+    FixtureAudience,
+    "accepted" | "required",
+  ])[])(
+    "public SSR leaves auth uncached and hydration checks the %s",
+    async (_name, audience, status) => {
+      const { router, queryClient, caughtErrors, path } = await runCase(
+        FIXTURE_AUDIENCE.anonymous,
+        status,
+      );
+      const serverEnvironment = import.meta.env.SSR;
+      const requestsBeforeSsr = fixture.requests.length;
+      try {
+        Object.assign(import.meta.env, { SSR: true });
+        await router.load();
+        expect(router.state.location.pathname).toBe(path.split("?").at(0));
+        expect(
+          queryClient.getQueryState(sessionOptions.queryKey),
+        ).toBeUndefined();
+        expect(
+          fixture.requests
+            .slice(requestsBeforeSsr)
+            .filter(
+              (request) =>
+                request.startsWith("/api/auth/") ||
+                request === "/v1/me/professional-use",
+            ),
+        ).toEqual([]);
+
+        Object.assign(import.meta.env, { SSR: false });
+        fixture.state.audience = audience;
+        await fixture.act(async () => {
+          fixture.render(<fixture.RouterProvider router={router} />, {
+            container: document,
+          });
+        });
+        await fixture.waitFor(() => {
+          expect(
+            queryClient.getQueryState(sessionOptions.queryKey)?.status,
+          ).toBe("success");
+          if (status === "required") {
+            expect(router.state.location.pathname).toBe(
+              "/auth/professional-use",
+            );
+            expect(router.state.location.search).toEqual({ redirectTo: path });
+          } else {
+            expect(
+              `${router.state.location.pathname}${router.state.location.searchStr}`,
+            ).toBe(path);
+            expect(
+              document.querySelector(
+                '[data-testid="professional-use-case-page"]',
+              ),
+            ).not.toBeNull();
+          }
+        });
+        const session = queryClient.getQueryData(sessionOptions.queryKey);
+        if (audience === FIXTURE_AUDIENCE.member) {
+          expect(session?.session.userId).toBe(fixture.user.id);
+        } else {
+          expect(session).toBeNull();
+        }
+        expect(caughtErrors).toEqual([]);
+        expect(fixture.unexpectedRequests).toEqual([]);
+      } finally {
+        Object.assign(import.meta.env, { SSR: serverEnvironment });
+        await fixture.act(async () => {
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          fixture.cleanup();
+        });
+        caseRoute.update(original);
+      }
+    },
+  );
 };
 /** Actual ancestors and public initial pages; leaf guards use recorded fixture data. */
 export const declareRouteShellProviderFixture = async (

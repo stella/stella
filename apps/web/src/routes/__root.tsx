@@ -11,6 +11,7 @@ import {
   redirect,
   Scripts,
   useNavigate,
+  useRouter,
   useRouterState,
 } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -70,6 +71,11 @@ export const Route = createRootRouteWithContext<{
       panic("TanStack Router did not throw the handoff redirect.");
     }
     await requireFreshDocument({ queryClient: context.queryClient, location });
+    // Public SSR has no browser session. Caching its anonymous response would
+    // keep signed-in member actions hidden after hydration.
+    if (import.meta.env.SSR) {
+      return;
+    }
     await requireProfessionalUseForSignedInRoute({
       queryClient: context.queryClient,
       location,
@@ -114,20 +120,31 @@ function RootErrorComponent(props: ErrorComponentProps) {
 
 function RootComponent() {
   const navigate = useNavigate();
+  const router = useRouter();
   // Public documents reuse server route context during hydration. Re-enter
-  // the clean location so the client root guard handles a captured handoff.
+  // the browser guard after mounting so redirects stay in the router boundary.
   useMountEffect(() => {
     const href = pendingHandoffPath();
-    if (!href) {
+    if (href) {
+      detached(
+        navigate({
+          href,
+          replace: true,
+        }),
+        "mcp-handoff.route-entry",
+      );
       return;
     }
-    detached(
-      navigate({
-        href,
-        replace: true,
-      }),
-      "mcp-handoff.route-entry",
-    );
+    if (isPublicSsrPath(router.state.location.pathname)) {
+      detached(
+        navigate({
+          href: router.state.location.publicHref,
+          replace: true,
+          resetScroll: false,
+        }),
+        "professional-use.route-entry",
+      );
+    }
   });
   const appContext = Route.useRouteContext({
     select: (context) => ({

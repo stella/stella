@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { EventType } from "@tanstack/ai/client";
 import type { StreamChunk } from "@tanstack/ai/client";
 import * as v from "valibot";
@@ -8,7 +9,7 @@ import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
-  openFreshDecisionReaderChat,
+  installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
@@ -28,6 +29,24 @@ const sendIdentitySchema = v.object({
 });
 
 test.use({ locale: "en-US" });
+
+const openFreshReader = async (page: Page) => {
+  await installDockedLegalFixtures(page);
+  await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
+    await route.fulfill({ json: { prompts: [] } });
+  });
+  await page.goto("/law", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => !history.pushState.toString().includes("[native code]"),
+  );
+  await page.evaluate((target) => {
+    history.pushState(null, "", target);
+  }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
+  await expect(page.locator(".reader-scroll article")).toBeVisible();
+  const composer = page.locator('[data-slot="docked-chat-composer"]');
+  await expect(composer.getByRole("textbox")).toBeVisible();
+  return composer;
+};
 
 // HTTP fixtures exercise the real reader, fresh runtime, composer and SDK.
 // Provider availability and corpus storage are outside this browser contract.
@@ -92,7 +111,7 @@ test("a fresh decision reader succeeds on its first chat question", async ({
     });
   });
 
-  const composer = await openFreshDecisionReaderChat(page);
+  const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
   await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
@@ -124,7 +143,7 @@ test("a fresh reader shows connection guidance when its first chat request canno
     sends += 1;
     await route.abort("failed");
   });
-  const composer = await openFreshDecisionReaderChat(page);
+  const composer = await openFreshReader(page);
   await composer.getByRole("textbox").fill(QUESTION);
   await composer.getByRole("button", { name: "Send message" }).click();
   await expect(page.locator('[data-slot="docked-chat-thread"]')).toContainText(
