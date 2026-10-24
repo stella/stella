@@ -507,6 +507,80 @@ test("effect cleanup ownership covers every reachable path and immutable alias",
   );
 });
 
+test("a recursive helper hands each frame to its caller on the executed path", async () => {
+  const cases = [
+    ["onFrame(frame);", true],
+    ["if (ready()) onFrame(frame);", false],
+    ["const unused = () => onFrame(frame);", false],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([handoff]) =>
+      lintSingleRule(
+        RULE,
+        `const schedule = ({ onFrame, remaining }) => {
+      if (remaining <= 0) return;
+      const frame = requestAnimationFrame(() => schedule({ onFrame, remaining: remaining - 1 }));
+      ${handoff}
+    };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
+test("effect cleanup obligations start on the path that creates each timer", async () => {
+  const cases = [
+    [
+      "if (enabled) { const id = setInterval(tick, 10); return () => clearInterval(id); }",
+      true,
+    ],
+    [
+      "if (enabled) { const id = setInterval(tick, 10); if (ready()) return () => clearInterval(id); }",
+      false,
+    ],
+    [
+      "if (enabled) return () => {}; const id = setInterval(tick, 10); return () => clearInterval(id);",
+      true,
+    ],
+    [
+      "if (enabled) { const id = setInterval(tick, 10); return () => clearInterval(id); } else return () => {};",
+      true,
+    ],
+    [
+      "if (enabled) { if (ready()) { const id = setInterval(tick, 10); return () => clearInterval(id); } }",
+      true,
+    ],
+    [
+      "const id = setInterval(tick, 10); if (enabled) return () => clearInterval(id);",
+      false,
+    ],
+    ["try { return; } finally { const id = setInterval(tick, 10); }", false],
+    [
+      "try { throw failure; } finally { const id = setInterval(tick, 10); }",
+      false,
+    ],
+    [
+      "try { return; } finally { const id = setInterval(tick, 10); return () => clearInterval(id); }",
+      false,
+    ],
+    ["if (enabled) { const id = setInterval(tick, 10); consume(id); }", true],
+    [
+      "if (enabled) { const id = setInterval(tick, 10); if (ready()) consume(id); }",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([body]) =>
+      lintSingleRule(RULE, `useEffect(() => { ${body} }, [enabled]);`),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
 test("ownership does not follow an overwritten timer handle", async () => {
   const sources = [
     "useEffect(() => { let id = setInterval(tick, 10); id = setInterval(tick, 20); return () => clearInterval(id); }, []);",

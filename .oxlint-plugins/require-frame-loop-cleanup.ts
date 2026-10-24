@@ -513,47 +513,17 @@ const cancelsHandle = (
   );
 };
 
-// Every possible cleanup must own the handle. Bare early returns before the
-// start do not matter; an unknown cleanup after it fails closed.
-type ReturnedFunctionsOptions = {
-  context: LoopContext;
-  effect: AstNode;
-  start: AstNode;
-};
-
-const returnedFunctions = ({
-  context,
-  effect,
-  start,
-}: ReturnedFunctionsOptions): (AstNode | null)[] => {
-  const body = unwrapExpression(effect.body);
-  if (
-    effect.type === "ArrowFunctionExpression" &&
-    body?.type !== "BlockStatement"
-  ) {
-    return [functionFor(context, body)];
-  }
-  return everyNode(effect.body).flatMap((node) => {
-    if (
-      node.type !== "ReturnStatement" ||
-      enclosingFunctions(node).at(0) !== effect
-    ) {
-      return [];
-    }
-    const returned = functionFor(context, node.argument);
-    if (returned === null && node.range[0] < start.range[0]) {
-      return [];
-    }
-    return [returned];
-  });
-};
-
 type CleanupProof = {
   context: LoopContext;
   handle: Handle;
   cancels: Cancel[];
   visiting: ReadonlySet<AstNode>;
   completed: Map<AstNode, ReadonlySet<UncancelledPath>>;
+  setup?: {
+    effect: AstNode;
+    start: AstNode;
+    returns: Set<AstNode>;
+  };
 };
 type CleanupTruth = "truthy" | "falsy" | "unknown";
 type UncancelledPath =
@@ -733,6 +703,15 @@ const cleanupPaths = (
     return paths;
   }
   if (node.type === "IfStatement") {
+    // Reaching this start establishes its enclosing branch. The other branch
+    // creates no handle and imposes no cleanup obligation for this start.
+    if (proof.setup !== undefined) {
+      for (const branch of [node.consequent, node.alternate]) {
+        if (isAstNode(branch) && isWithin(proof.setup.start, branch)) {
+          return cleanupPaths(proof, branch);
+        }
+      }
+    }
     return continueCleanupPaths(
       cleanupExpressionPaths(proof, node.test),
       () => {
@@ -769,6 +748,17 @@ const cleanupPaths = (
     return paths;
   }
   if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
+    if (
+      proof.setup !== undefined &&
+      enclosingFunctions(node).at(0) === proof.setup.effect
+    ) {
+      if (node.range[0] < proof.setup.start.range[0]) {
+        return new Set();
+      }
+      if (node.type === "ReturnStatement") {
+        proof.setup.returns.add(node);
+      }
+    }
     return new Set(
       [...cleanupExpressionPaths(proof, node.argument)].map((path) =>
         path === "continues"
@@ -851,6 +841,56 @@ type AmbiguousHandleOptions = {
   loopBody: AstNode | null;
 };
 
+const emptyHandleValue = (context: LoopContext, value: AstNode | null) =>
+  value !== null &&
+  ((value.type === "Literal" && (value.value === 0 || value.value === null)) ||
+    isGlobalName(context, value, "undefined"));
+
+type StartsFrameLoopOptions = {
+  context: LoopContext;
+  value: AstNode | null;
+  loopBody: AstNode | null;
+};
+
+const startsFrameLoop = ({
+  context,
+  value,
+  loopBody,
+}: StartsFrameLoopOptions) => {
+  if (
+    value?.type !== "CallExpression" ||
+    loopBody === null ||
+    !isGlobalCall(context, value, START_NAMES.frame)
+  ) {
+    return false;
+  }
+  const callback = unwrapExpression(callArguments(value).at(0));
+  return (
+    functionFor(context, callback) === loopBody ||
+    (isFunctionNode(callback) &&
+      everyNode(callback).some(
+        (node) => namedCallTarget(context, node) === loopBody,
+      ))
+  );
+};
+
+const startsInFinally = (start: AstNode, owner: AstNode) => {
+  for (
+    let parent = parentOf(start);
+    parent !== null && parent !== owner;
+    parent = parentOf(parent)
+  ) {
+    if (
+      parent.type === "TryStatement" &&
+      isAstNode(parent.finalizer) &&
+      isWithin(start, parent.finalizer)
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const hasAmbiguousHandleWrites = ({
   cancels,
   context,
@@ -884,10 +924,7 @@ const hasAmbiguousHandleWrites = ({
     );
     const empty =
       (value === null && write?.type === "VariableDeclarator") ||
-      (value !== null &&
-        ((value.type === "Literal" &&
-          (value.value === 0 || value.value === null)) ||
-          isGlobalName(context, value, "undefined")));
+      emptyHandleValue(context, value);
     if (
       empty &&
       (reference.init || (write !== null && cancelledBeforeWrite(proof, write)))
@@ -897,18 +934,7 @@ const hasAmbiguousHandleWrites = ({
     const frame = isGlobalCall(context, start, START_NAMES.frame);
     const insideLoop =
       loopBody !== null && write !== null && isWithin(write, loopBody);
-    const callback =
-      value === null ? null : unwrapExpression(callArguments(value).at(0));
-    const startsLoop =
-      frame &&
-      value?.type === "CallExpression" &&
-      isGlobalCall(context, value, START_NAMES.frame) &&
-      loopBody !== null &&
-      (functionFor(context, callback) === loopBody ||
-        (isFunctionNode(callback) &&
-          everyNode(callback).some(
-            (node) => namedCallTarget(context, node) === loopBody,
-          )));
+    const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
     if (frame && insideLoop && (empty || startsLoop)) {
       continue;
     }
@@ -955,10 +981,6 @@ const isOwned = (
       cancelsHandle(context, cancel, handle) &&
       (loopBody === null || !isWithin(cancel.node, loopBody)),
   );
-  const effect = enclosingEffect(effectAnchor);
-  if (effect === null) {
-    return matching.length > 0;
-  }
   const proof: CleanupProof = {
     context,
     handle,
@@ -966,30 +988,61 @@ const isOwned = (
     visiting: new Set(),
     completed: new Map(),
   };
+  const effect = enclosingEffect(effectAnchor);
+  if (effect === null) {
+    if (matching.length > 0) {
+      return true;
+    }
+    const owner = enclosingFunctions(start).at(0);
+    const handoffs = transfers.filter(
+      (transfer) =>
+        transfer.node.range[0] > start.range[1] &&
+        enclosingFunctions(transfer.node).at(0) === owner,
+    );
+    return (
+      owner !== undefined &&
+      !startsInFinally(start, owner) &&
+      handoffs.length > 0 &&
+      cleanupPaths(
+        {
+          ...proof,
+          cancels: handoffs,
+          completed: new Map(),
+          setup: { effect: owner, start, returns: new Set() },
+        },
+        owner.body,
+      ).size === 0
+    );
+  }
+  // A finally block can start a timer after an earlier return or throw. Its
+  // incoming completion is unknown to the structural setup-path proof.
+  if (startsInFinally(start, effect)) {
+    return false;
+  }
   const startupTransfers = transfers.filter(
     (transfer) =>
       transfer.node.range[0] > start.range[1] &&
       (loopBody === null || !isWithin(transfer.node, loopBody)),
   );
-  if (
-    cleanupPaths(
-      { ...proof, cancels: startupTransfers, completed: new Map() },
-      effect.body,
-    ).size === 0
-  ) {
+  const returns = new Set<AstNode>();
+  const exits = cleanupPaths(
+    {
+      ...proof,
+      cancels: startupTransfers,
+      completed: new Map(),
+      setup: { effect, start, returns },
+    },
+    effect.body,
+  );
+  if (exits.size === 0) {
     return true;
   }
-  const body = unwrapExpression(effect.body);
-  if (body?.type === "BlockStatement") {
-    const exits = cleanupPaths(
-      { ...proof, cancels: [], completed: new Map() },
-      body,
-    );
-    if ([...exits].some((path) => path !== "returns")) {
-      return false;
-    }
+  if ([...exits].some((path) => path !== "returns")) {
+    return false;
   }
-  const returned = returnedFunctions({ context, effect, start });
+  const returned = [...returns].map((node) =>
+    functionFor(context, node.argument),
+  );
   return (
     returned.length > 0 &&
     returned.every(
