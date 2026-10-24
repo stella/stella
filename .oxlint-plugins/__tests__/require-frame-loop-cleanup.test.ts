@@ -26,8 +26,7 @@ test("accepts intervals cleared by their owner or handed to the caller", async (
         "export const cleanup = () => { const id = setInterval(tick, 10); return () => clearInterval(id); };",
         "export const factory = () => { const id = globalThis.setInterval(tick, 10); return { stop: () => clearInterval(id) }; };",
         "export const returned = () => setInterval(tick, 10);",
-        "export const member = (ref: { current: number }) => { ref.current = setInterval(tick, 10); };",
-        "export const memberStop = (ref: { current: number }) => { clearInterval(ref.current); };",
+        "export const member = (ref: { current: number }) => { ref.current = setInterval(tick, 10); return () => clearInterval(ref.current); };",
       ].join("\n"),
     ),
   ).toEqual([]);
@@ -504,6 +503,51 @@ test("effect cleanup ownership covers every reachable path and immutable alias",
   );
   expect(results.map((lines) => lines.length === 0)).toEqual(
     cases.map(([, owned]) => owned),
+  );
+});
+
+test("outside-effect handoffs must execute after timer creation", async () => {
+  const cases = [
+    ["consume(id);", true],
+    ["if (ready()) consume(id);", false],
+    ["const unused = () => consume(id);", false],
+    ["function unused() { consume(id); }", false],
+    ["const unused = () => clearInterval(id);", false],
+    ["return { stop: () => clearInterval(id) };", true],
+    ["return () => clearInterval(id);", true],
+    ["return id;", true],
+    ["const handoff = () => consume(id); handoff();", true],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([handoff]) =>
+      lintSingleRule(
+        RULE,
+        `const owner = () => { const id = setInterval(tick, 10); ${handoff} };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
+test("member handles retain one stable root and an unambiguous pending timer", async () => {
+  const sources = [
+    "useEffect(() => { ref.current = setInterval(tick, 10); ref.current = setInterval(tick, 20); return () => clearInterval(ref.current); }, []);",
+    "useEffect(() => { ref.current = setInterval(tick, 10); ref.current = undefined; return () => clearInterval(ref.current); }, []);",
+    "useEffect(() => { const alias = ref; ref.current = setInterval(tick, 10); alias.current = setInterval(tick, 20); return () => clearInterval(ref.current); }, []);",
+    "useEffect(() => { ref.current = setInterval(tick, 10); return () => { const ref = { current: 0 }; clearInterval(ref.current); }; }, []);",
+  ];
+  const results = await Promise.all(
+    sources.map(async (source) =>
+      lintSingleRule(
+        RULE,
+        `const Comp = () => { const ref = { current: 0 }; ${source} };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length > 0)).toEqual(
+    sources.map(() => true),
   );
 });
 

@@ -100,7 +100,7 @@ const CANCEL_NAMES: Record<LoopKind, string> = {
 
 type Handle =
   | { kind: "binding"; variable: Variable }
-  | { kind: "member"; text: string }
+  | { kind: "member"; text: string; rootVariable: Variable }
   | { kind: "transferred" };
 
 type Cancel = { argument: AstNode | null; node: AstNode };
@@ -435,6 +435,14 @@ const bindingTransfers = (context: LoopContext, variable: Variable): Cancel[] =>
       : [];
   });
 
+const memberRootVariable = (context: LoopContext, member: AstNode) => {
+  let root: AstNode | null = member;
+  while (root?.type === "MemberExpression") {
+    root = unwrapExpression(root.object);
+  }
+  return isIdentifierReference(root) ? resolveVariable(context, root) : null;
+};
+
 const assignedHandle = (
   context: LoopContext,
   target: AstNode | null,
@@ -443,9 +451,30 @@ const assignedHandle = (
     const variable = resolveVariable(context, target);
     return variable === null ? null : { kind: "binding", variable };
   }
-  return target?.type === "MemberExpression"
-    ? { kind: "member", text: sourceText(context, target) }
-    : null;
+  if (
+    target?.type !== "MemberExpression" ||
+    target.computed === true ||
+    !isIdentifierReference(unwrapExpression(target.object))
+  ) {
+    return null;
+  }
+  const rootVariable = memberRootVariable(context, target);
+  if (
+    rootVariable === null ||
+    !isSingleAssignment(rootVariable) ||
+    rootVariable.references.some((reference) => {
+      const identifier: unknown = reference.identifier;
+      if (!isAstNode(identifier)) return true;
+      if (reference.init && reference.isWrite()) return false;
+      const parent = parentOf(identifier);
+      return (
+        parent?.type !== "MemberExpression" || parent.object !== identifier
+      );
+    })
+  ) {
+    return null;
+  }
+  return { kind: "member", text: sourceText(context, target), rootVariable };
 };
 
 const handleOf = (context: LoopContext, call: AstNode): Handle | null => {
@@ -509,7 +538,8 @@ const cancelsHandle = (
   return (
     handle.kind === "member" &&
     argument.type === "MemberExpression" &&
-    sourceText(context, argument) === handle.text
+    sourceText(context, argument) === handle.text &&
+    memberRootVariable(context, argument) === handle.rootVariable
   );
 };
 
@@ -748,6 +778,9 @@ const cleanupPaths = (
     return paths;
   }
   if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
+    if (proof.cancels.some((cancel) => cancel.node === node)) {
+      return new Set();
+    }
     if (
       proof.setup !== undefined &&
       enclosingFunctions(node).at(0) === proof.setup.effect
@@ -891,6 +924,60 @@ const startsInFinally = (start: AstNode, owner: AstNode) => {
   return false;
 };
 
+const hasAmbiguousMemberWrites = ({
+  context,
+  cancels,
+  handle,
+  start,
+  loopBody,
+}: AmbiguousHandleOptions) => {
+  if (handle.kind !== "member") return false;
+  let root = start;
+  while (parentOf(root) !== null) {
+    const parent = parentOf(root);
+    if (parent === null) break;
+    root = parent;
+  }
+  const proof: CleanupProof = {
+    context,
+    handle,
+    cancels: cancels.filter((cancel) => cancelsHandle(context, cancel, handle)),
+    visiting: new Set(),
+    completed: new Map(),
+  };
+  const frame = isGlobalCall(context, start, START_NAMES.frame);
+  let kickOffs = 0;
+  for (const node of everyNode(root)) {
+    const target = unwrapExpression(
+      node.type === "AssignmentExpression"
+        ? node.left
+        : node.type === "UpdateExpression" ||
+            (node.type === "UnaryExpression" && node.operator === "delete")
+          ? node.argument
+          : null,
+    );
+    if (
+      target?.type !== "MemberExpression" ||
+      !cancelsHandle(context, { argument: target, node }, handle)
+    )
+      continue;
+    const value = unwrapExpression(
+      node.type === "AssignmentExpression" && node.operator === "="
+        ? node.right
+        : null,
+    );
+    if (value === start) continue;
+    const empty = emptyHandleValue(context, value);
+    if (empty && cancelledBeforeWrite(proof, node)) continue;
+    const insideLoop = loopBody !== null && isWithin(node, loopBody);
+    const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
+    if (frame && insideLoop && (empty || startsLoop)) continue;
+    if (startsLoop && !insideLoop && ++kickOffs <= 1) continue;
+    return true;
+  }
+  return false;
+};
+
 const hasAmbiguousHandleWrites = ({
   cancels,
   context,
@@ -899,7 +986,13 @@ const hasAmbiguousHandleWrites = ({
   loopBody,
 }: AmbiguousHandleOptions): boolean => {
   if (handle.kind !== "binding") {
-    return false;
+    return hasAmbiguousMemberWrites({
+      context,
+      cancels,
+      handle,
+      start,
+      loopBody,
+    });
   }
   const proof: CleanupProof = {
     context,
@@ -976,7 +1069,7 @@ const isOwned = (
   }
   const transfers =
     handle.kind === "binding" ? bindingTransfers(context, handle.variable) : [];
-  const matching = [...cancels, ...transfers].filter(
+  const matching = cancels.filter(
     (cancel) =>
       cancelsHandle(context, cancel, handle) &&
       (loopBody === null || !isWithin(cancel.node, loopBody)),
@@ -989,50 +1082,33 @@ const isOwned = (
     completed: new Map(),
   };
   const effect = enclosingEffect(effectAnchor);
-  if (effect === null) {
-    if (matching.length > 0) {
-      return true;
-    }
-    const owner = enclosingFunctions(start).at(0);
-    const handoffs = transfers.filter(
-      (transfer) =>
-        transfer.node.range[0] > start.range[1] &&
-        enclosingFunctions(transfer.node).at(0) === owner,
-    );
-    return (
-      owner !== undefined &&
-      !startsInFinally(start, owner) &&
-      handoffs.length > 0 &&
-      cleanupPaths(
-        {
-          ...proof,
-          cancels: handoffs,
-          completed: new Map(),
-          setup: { effect: owner, start, returns: new Set() },
-        },
-        owner.body,
-      ).size === 0
-    );
+  const owner = effect ?? enclosingFunctions(start).at(0);
+  if (owner === undefined) {
+    return false;
   }
   // A finally block can start a timer after an earlier return or throw. Its
   // incoming completion is unknown to the structural setup-path proof.
-  if (startsInFinally(start, effect)) {
+  if (startsInFinally(start, owner)) {
     return false;
   }
   const startupTransfers = transfers.filter(
     (transfer) =>
+      cancelsHandle(context, transfer, handle) &&
       transfer.node.range[0] > start.range[1] &&
-      (loopBody === null || !isWithin(transfer.node, loopBody)),
+      (effect === null ||
+        loopBody === null ||
+        !isWithin(transfer.node, loopBody)),
   );
   const returns = new Set<AstNode>();
   const exits = cleanupPaths(
     {
       ...proof,
-      cancels: startupTransfers,
+      cancels:
+        effect === null ? [...matching, ...startupTransfers] : startupTransfers,
       completed: new Map(),
-      setup: { effect, start, returns },
+      setup: { effect: owner, start, returns },
     },
-    effect.body,
+    owner.body,
   );
   if (exits.size === 0) {
     return true;
@@ -1040,15 +1116,32 @@ const isOwned = (
   if ([...exits].some((path) => path !== "returns")) {
     return false;
   }
-  const returned = [...returns].map((node) =>
-    functionFor(context, node.argument),
-  );
   return (
-    returned.length > 0 &&
-    returned.every(
-      (cleanup) =>
-        cleanup !== null && cleanupFunctionPaths(proof, cleanup).size === 0,
-    )
+    returns.size > 0 &&
+    [...returns].every((node) => {
+      const argument = unwrapExpression(node.argument);
+      const cleanup = functionFor(context, argument);
+      if (cleanup !== null) {
+        return cleanupFunctionPaths(proof, cleanup).size === 0;
+      }
+      // A factory may explicitly return an object that owns the cancel method.
+      // Merely defining a dormant closure elsewhere does not hand ownership out.
+      if (
+        effect === null &&
+        argument?.type === "ObjectExpression" &&
+        Array.isArray(argument.properties)
+      ) {
+        return argument.properties.some((property) => {
+          const method = isAstNode(property)
+            ? functionFor(context, property.value)
+            : null;
+          return (
+            method !== null && cleanupFunctionPaths(proof, method).size === 0
+          );
+        });
+      }
+      return false;
+    })
   );
 };
 
