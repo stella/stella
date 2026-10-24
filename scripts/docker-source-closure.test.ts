@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -14,17 +14,17 @@ import * as v from "valibot";
 
 import {
   BUN_FLAGS,
+  checkDockerSource,
   checkRepositoryDockerSources,
   commandEntries,
-  checkDockerSource,
   copySource,
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
   installToolingCopies,
   sourceClosureProblems,
-  updateInstallToolingCopies,
   type SourceTree,
+  updateInstallToolingCopies,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
@@ -1035,13 +1035,13 @@ describe("Docker source closure", () => {
         mkdirSync(path.dirname(target), { recursive: true });
         writeFileSync(target, source);
       };
-      const output = GENERATORS.find(
-        ({ id }) => id === "route-tree",
-      )?.outputs.at(0);
-      if (output === undefined) {
-        throw new Error("Route tree output is missing");
+      const outputs = GENERATORS.find(({ id }) => id === "route-tree")?.outputs;
+      if (outputs === undefined) {
+        panic("Route tree outputs are missing");
       }
-      write(output, "export const routeTree = {};");
+      for (const output of outputs) {
+        write(output, "export const generated = true;");
+      }
       const producer = "apps/web/scripts/generate-route-tree.ts";
       const manifest = "apps/web/package.json";
       const entry = "apps/web/src/entry.ts";
@@ -1062,7 +1062,15 @@ describe("Docker source closure", () => {
           },
         }),
       );
-      write(entry, 'import "./routeTree.gen";');
+      write(
+        entry,
+        outputs
+          .map(
+            (output) =>
+              `import ${JSON.stringify(`./${path.basename(output, ".ts")}`)};`,
+          )
+          .join("\n"),
+      );
       const context: SourceTree = new Map(
         [producer, manifest, entry].map((file) => [`/${file}`, file]),
       );
@@ -1412,11 +1420,12 @@ describe("Docker source closure", () => {
     );
   });
 
+  // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
   test("every tracked Dockerfile passes the full hydrated repository check", () => {
     expect(
       checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
-  }, 30_000);
+  }, 40_000);
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     // Pooled checks are steps of their job; see scripts/workflow-steps.ts.

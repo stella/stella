@@ -17,23 +17,23 @@ export const WINDOWED_READ_SURFACE = {
   },
   "case-law-reader": {
     source: "handlers/case-law/decisions/reader.ts",
-    guard: "lib/windowed-read.test.ts",
-    test: "case-law-reader",
+    guard: "lib/case-law/windowed-read.postgres.test.ts",
+    test: "every case-law window measures its admitted production owner",
   },
   "citation-passages": {
     source: "handlers/case-law/decisions/citation-passages.ts",
-    guard: "lib/windowed-read.test.ts",
-    test: "citation-passages",
+    guard: "lib/case-law/windowed-read.postgres.test.ts",
+    test: "every case-law window measures its admitted production owner",
   },
   "reader-answer": {
     source: "lib/case-law/reader-answer-corpus.ts",
-    guard: "lib/windowed-read.test.ts",
-    test: "reader-answer",
+    guard: "lib/case-law/windowed-read.postgres.test.ts",
+    test: "every case-law window measures its admitted production owner",
   },
   "analysis-input": {
     source: "handlers/case-law/analysis/analysis-input.ts",
-    guard: "lib/windowed-read.test.ts",
-    test: "analysis-input",
+    guard: "lib/case-law/windowed-read.postgres.test.ts",
+    test: "every case-law window measures its admitted production owner",
   },
 } as const;
 
@@ -47,7 +47,7 @@ export const WINDOWED_READ_DELEGATES = {
 export type CaseLawWindowProfile = {
   [
     Key in WindowedReadSurface
-  ]: (typeof WINDOWED_READ_SURFACE)[Key]["guard"] extends "lib/windowed-read.test.ts"
+  ]: (typeof WINDOWED_READ_SURFACE)[Key]["guard"] extends "lib/case-law/windowed-read.postgres.test.ts"
     ? Key
     : never;
 }[WindowedReadSurface];

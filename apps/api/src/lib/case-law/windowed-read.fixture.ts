@@ -24,7 +24,7 @@ import type { WINDOWED_READ_SURFACE } from "@/api/lib/windowed-read-surface";
 type CaseLawWindowProfile = {
   [
     Key in keyof typeof WINDOWED_READ_SURFACE
-  ]: (typeof WINDOWED_READ_SURFACE)[Key]["guard"] extends "lib/windowed-read.test.ts"
+  ]: (typeof WINDOWED_READ_SURFACE)[Key]["guard"] extends "lib/case-law/windowed-read.postgres.test.ts"
     ? Key
     : never;
 }[keyof typeof WINDOWED_READ_SURFACE];

@@ -89,6 +89,7 @@ const validResponse = {
   ],
   facets: null,
   total: SEARCH_TOTAL_NOT_COUNTED,
+  relaxedHitCount: 0,
   nextCursor: null,
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   pageReach: SEARCH_PAGE_REACH.REACHED,

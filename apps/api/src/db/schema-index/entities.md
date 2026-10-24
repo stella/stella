@@ -297,7 +297,7 @@ pending_uploads.reject_reason          text                null              ent
 pending_uploads.rejection_details      jsonb               null              entities.ts:1283
 pending_uploads.claimed_at             timestamptz         null              entities.ts:1287  Set inside the claim transaction.
 pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1288
-pending_uploads.expires_at             timestamptz         not null          entities.ts:1290  `createdAt + 5min`.
+pending_uploads.expires_at             timestamptz         not null          entities.ts:1290  Finalize deadline (`uploadTimeline`); later requests only replay terminal results.
 pending_uploads.created_at             timestamptz         default,not null  entities.ts:1291
 pending_uploads.finalized_at           timestamptz         null              entities.ts:1292
 ```

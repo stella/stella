@@ -41,8 +41,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getTestDb,
   releaseTestDb,
-  withQueryLogger,
   type TestDatabase,
+  withQueryLogger,
 } from "@/api/tests/security/test-utils";
 
 const organizationId = mintAuthProviderId<"organization">();

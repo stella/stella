@@ -10,8 +10,8 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
-  DECISION_TEXT_WITHHELD_REASON,
   DECISION_TEXT_SOURCE,
+  DECISION_TEXT_WITHHELD_REASON,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1342,6 +1342,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         unitPrice: v.number(),
         vatRateBps: v.number(),
         vatTreatment: v.string(),
+        exemptionReason: v.nullable(contentText()),
         netAmount: v.number(),
         vatAmount: v.number(),
         grossAmount: v.number(),

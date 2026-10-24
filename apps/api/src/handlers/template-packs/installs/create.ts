@@ -22,8 +22,8 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
   canInstallTemplatePacks,
-  TEMPLATE_PACK_INSTALL_PERMISSIONS,
   getTemplatePackCatalogue,
+  TEMPLATE_PACK_INSTALL_PERMISSIONS,
 } from "../catalogue";
 import { templatePackParamsSchema } from "../get";
 import { readInstalledPackTemplates } from "../organization-context";

@@ -3,8 +3,8 @@ import { panic } from "better-result";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { recordReadWork } from "@/api/lib/db-query-counter";
-import { CorpusMemberTombstonedError } from "@/api/lib/errors/tagged-errors";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import { withReadableCorpusMember } from "@/api/lib/legal-search/corpus-storage";
 import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
@@ -129,14 +129,11 @@ export const createCorpusAstCache = ({
           if (readTombstones === undefined) {
             return (await read(storedKey)).ast;
           }
-          const denied = await readTombstones([storedKey]);
-          if (denied.has(storedKey)) {
-            throw new CorpusMemberTombstonedError({
-              message: "Corpus member is erased and is no longer served",
-              location: storedKey,
-            });
-          }
-          return await readThrough(storedKey, readTombstones);
+          return await withReadableCorpusMember({
+            location,
+            readTombstones,
+            read: async () => await readThrough(storedKey, readTombstones),
+          });
         }
         default: {
           location satisfies never;

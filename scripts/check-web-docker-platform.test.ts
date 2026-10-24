@@ -112,6 +112,24 @@ describe("web container platform boundary", () => {
     expect(runner?.body).toContain("COPY --from=deps-prod /app/ .");
   });
 
+  test("carries only the previous build manifest and keeps current files", () => {
+    expect(dockerfile).toContain("ARG PREVIOUS_WEB_IMAGE=runtime-base");
+    const previous = stagesByName.get("previous-web-image")?.body;
+    expect(previous).toContain("ARG PREVIOUS_WEB_IMAGE");
+    expect(previous).toContain(
+      '/usr/local/bin/validate-previous-web-image "$PREVIOUS_WEB_IMAGE"',
+    );
+    expect(previous).toContain("/app/apps/web/dist/.stella-client-assets");
+    expect(previous).toContain("/usr/local/bin/merge-web-assets");
+    const builder = stagesByName.get("builder")?.body;
+    expect(builder).toContain("find apps/web/dist/client -type f");
+    expect(builder).toContain("> apps/web/dist/.stella-client-assets");
+    const runner = stagesByName.get("runner")?.body;
+    expect(runner).toContain("--from=previous-web-image /previous-web-assets");
+    expect(runner).toContain("/tmp/previous-web-assets.manifest");
+    expect(runner).toContain("/usr/local/bin/merge-web-assets");
+  });
+
   test("uses the same pinned multi-architecture base for build and runtime", () => {
     const buildBase = stagesByName.get("build-base");
     const runtimeBase = stagesByName.get("runtime-base");

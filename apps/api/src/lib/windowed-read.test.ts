@@ -19,14 +19,12 @@ const profiles = {
 } as const satisfies Record<CaseLawWindowProfile, typeof caseLawWindowFixture>;
 
 for (const profile of Object.keys(profiles)) {
-  if (
-    !(
-      profile === "case-law-reader" ||
-      profile === "citation-passages" ||
-      profile === "reader-answer" ||
-      profile === "analysis-input"
-    )
-  ) {
+  if (!(
+    profile === "case-law-reader" ||
+    profile === "citation-passages" ||
+    profile === "reader-answer" ||
+    profile === "analysis-input"
+  )) {
     throw new Error(`Unregistered window fixture: ${profile}`);
   }
   test(`windowed read budget: ${profile}`, async () => {
@@ -52,14 +50,13 @@ test("every registered document window has a live owner and executable budget gu
   for (const [surface, entry] of Object.entries(WINDOWED_READ_SURFACE)) {
     const source = await Bun.file(`${sourceRoot}${entry.source}`).text();
     const guard = await Bun.file(`${sourceRoot}${entry.guard}`).text();
-    if (entry.guard === "lib/windowed-read.test.ts") {
+    if (entry.guard === "lib/case-law/windowed-read.postgres.test.ts") {
       expect(surface in profiles).toBe(true);
       expect(source).toMatch(
         new RegExp(`defineWindowedRead\\(\\s*"${surface}"`, "u"),
       );
-    } else {
-      expect(guard).toContain(entry.test);
     }
+    expect(guard).toContain(entry.test);
   }
   const declared = new Set<string>();
   const excluded = new Set<string>();

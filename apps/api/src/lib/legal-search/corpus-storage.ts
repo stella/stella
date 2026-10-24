@@ -4,9 +4,9 @@ import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  type DocumentAst,
   persistedAstDegradations,
   persistedDocumentAstSchema,
-  type DocumentAst,
 } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
@@ -40,8 +40,8 @@ import type {
   PackedCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import {
-  packJurisdictionPrefix,
   corpusMemberDigest,
+  packJurisdictionPrefix,
 } from "@/api/lib/legal-search/corpus-pack";
 import type {
   CorpusTombstoneReader,
@@ -673,11 +673,32 @@ type ReadPackedMemberOptions = {
   readTombstones: CorpusTombstoneReader;
 };
 
+type ReadableCorpusMemberOptions<T> = {
+  location: PackedCorpusLocation;
+  readTombstones: CorpusTombstoneReader;
+  read: () => Promise<T>;
+};
+
+/** Revalidate erasure before serving either stored bytes or an immutable cache entry. */
+export const withReadableCorpusMember = async <T>({
+  location,
+  readTombstones,
+  read,
+}: ReadableCorpusMemberOptions<T>): Promise<T> => {
+  const address = formatCorpusLocation(location);
+  const tombstoned = await readTombstones([address]);
+  if (tombstoned.has(address)) {
+    throw new CorpusMemberTombstonedError({
+      message: `Corpus member is erased and is no longer served: ${address}`,
+      location: address,
+    });
+  }
+  return await read();
+};
+
 /**
- * The three ways a packed member can be refused, answered before the caller
- * sees any bytes: past the transfer ceiling, erased, or not the bytes the
- * address records. Returned rather than thrown so the read path keeps one
- * failure site.
+ * Transfer and integrity failures are returned to the storage boundary.
+ * Erasure is enforced by the shared admission gate before the range read.
  */
 const readPackedMember = async ({
   location,
@@ -687,12 +708,7 @@ const readPackedMember = async ({
   readRange,
   readTombstones,
 }: ReadPackedMemberOptions): Promise<
-  Result<
-    Uint8Array,
-    | PayloadBudgetError
-    | CorpusMemberTombstonedError
-    | CorpusMemberDigestMismatchError
-  >
+  Result<Uint8Array, PayloadBudgetError | CorpusMemberDigestMismatchError>
 > => {
   if (location.length > maxBytes) {
     return Result.err(
@@ -702,32 +718,29 @@ const readPackedMember = async ({
     );
   }
   const address = formatCorpusLocation(location);
-  const tombstoned = await readTombstones([address]);
-  if (tombstoned.has(address)) {
-    return Result.err(
-      new CorpusMemberTombstonedError({
-        message: `Corpus member is erased and is no longer served: ${address}`,
-        location: address,
-      }),
-    );
-  }
-  const bytes = await readRange({
-    key: location.packKey,
-    offset: location.offset,
-    length: location.length,
-    signal,
-    ...(s3Policy === undefined ? {} : { s3Policy }),
+  return await withReadableCorpusMember({
+    location,
+    readTombstones,
+    read: async () => {
+      const bytes = await readRange({
+        key: location.packKey,
+        offset: location.offset,
+        length: location.length,
+        signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      });
+      const digest = corpusMemberDigest(bytes);
+      return digest === location.sha256
+        ? Result.ok(bytes)
+        : Result.err(
+            new CorpusMemberDigestMismatchError({
+              message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
+              location: address,
+              digest,
+            }),
+          );
+    },
   });
-  const digest = corpusMemberDigest(bytes);
-  return digest === location.sha256
-    ? Result.ok(bytes)
-    : Result.err(
-        new CorpusMemberDigestMismatchError({
-          message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
-          location: address,
-          digest,
-        }),
-      );
 };
 
 export const readCorpusBytesAt = async ({

@@ -22,6 +22,8 @@ import {
   parsePlKisCursor,
   parsePlKisProvision,
   parsePlKisSlice,
+  PL_KIS_INCLUDED_CATEGORIES,
+  PL_KIS_UNDATED_SLICE,
   plKisAdapter,
   plKisCategoryById,
   plKisCategoryLabel,
@@ -36,8 +38,6 @@ import {
   plKisQuarantineId,
   plKisRawPartsOf,
   plKisSlice,
-  PL_KIS_INCLUDED_CATEGORIES,
-  PL_KIS_UNDATED_SLICE,
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";

@@ -11,7 +11,7 @@
 
 import { panic } from "better-result";
 
-import { normalizeUnicode, escapeRegExp } from "@stll/text-normalize";
+import { escapeRegExp, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CITATION_PREFIX_SOURCE,

@@ -5,6 +5,7 @@ import type {
   DesktopMatter,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import {
   ACTIVITY_CHANGED_EVENT,
@@ -14,6 +15,8 @@ import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
 import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
+import type { TauriInvocation } from "./tauri-ipc";
 
 const SNAPSHOT = {
   date: "2026-10-07",
@@ -72,11 +75,7 @@ type InstallNativeBoundaryOptions = {
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
-    | "available"
-    | "keyMissing"
-    | "unreadable"
-    | "mixed"
-    | "incompatible";
+    "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
 };
 
 const installNativeBoundary = async ({
@@ -89,44 +88,34 @@ const installNativeBoundary = async ({
   historyDeletion = "available",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
-  await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
-  await page.addInitScript(
-    ({
-      snapshot: initialSnapshot,
-      additionalSnapshots: otherDays,
-      changedEvent,
-      language: desktopLanguage,
-      batchValidation: validation,
-      batchReceipt: receipt,
-      historyDeletion: historyState,
-    }) => {
-      // Playwright's Date clock does not change native Temporal's clock.
-      const nativeTemporal: unknown = Reflect.get(window, "Temporal");
-      if (typeof nativeTemporal === "object" && nativeTemporal !== null) {
-        const now = Reflect.get(nativeTemporal, "Now");
-        const instant = Reflect.get(nativeTemporal, "Instant");
-        Reflect.set(now, "instant", () =>
-          Reflect.get(instant, "fromEpochMilliseconds")(Date.now()),
-        );
-      }
-      const callbacks = new Map<number, (data: unknown) => unknown>();
-      const invocations: { args: Record<string, unknown>; command: string }[] =
-        [];
-      let nextCallbackId = 1;
+  await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
+  await installTauriIpc(page, {
+    windowLabel: "activity",
+    unhandled: "resolveUndefined",
+    arg: {
+      snapshot,
+      additionalSnapshots,
+      changedEvent: ACTIVITY_CHANGED_EVENT,
+      language,
+      batchValidation,
+      batchReceipt,
+      historyDeletion,
+    },
+    handlers: (
+      {
+        snapshot: initialSnapshot,
+        additionalSnapshots: otherDays,
+        changedEvent,
+        language: desktopLanguage,
+        batchValidation: validation,
+        batchReceipt: receipt,
+        historyDeletion: historyState,
+      },
+      { emit },
+    ) => {
       let batchAttempts = 0;
       let activitySnapshot = initialSnapshot;
-      Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
-      const emitActivityChanged = () => {
-        const subscription = invocations.findLast(
-          ({ args, command }) =>
-            command === "plugin:event|listen" && args["event"] === changedEvent,
-        );
-        const id = subscription?.args["handler"];
-        if (typeof id !== "number") {
-          throw new TypeError("Activity listener is not installed");
-        }
-        callbacks.get(id)?.({ event: changedEvent, id, payload: null });
-      };
+      const emitActivityChanged = () => emit(changedEvent, null);
       Reflect.set(
         window,
         "__STELLA_TEST_ACTIVITY_CHANGED__",
@@ -140,25 +129,18 @@ const installNativeBoundary = async ({
           emitActivityChanged();
         },
       );
-      Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
-        unregisterListener: () => undefined,
-      });
-      Reflect.set(window, "__TAURI_INTERNALS__", {
-        callbacks,
-        convertFileSrc: (path: string) => path,
-        invoke: async (command: string, args: Record<string, unknown> = {}) => {
-          invocations.push({ args, command });
-          if (command === "activity_get_day") {
-            const daySnapshot =
-              otherDays.find((day) => day.date === args["date"]) ??
-              activitySnapshot;
-            return {
-              ...daySnapshot,
-              date: args["date"] ?? activitySnapshot.date,
-            };
-          }
+      return {
+        activity_get_day: (args) => {
+          const daySnapshot =
+            otherDays.find((day) => day.date === args["date"]) ??
+            activitySnapshot;
+          return {
+            ...daySnapshot,
+            date: args["date"] ?? activitySnapshot.date,
+          };
+        },
+        activity_delete_all: (args) => {
           if (
-            command === "activity_delete_all" &&
             args["recovery"] === "discardUnreadable" &&
             activitySnapshot.unreadable
           ) {
@@ -170,224 +152,183 @@ const installNativeBoundary = async ({
               deletionStatus: "available",
             };
             emitActivityChanged();
-            return undefined;
           }
-          if (command === "activity_delete_other_account_history") {
-            if (
-              args["recovery"] !== "preserve" &&
-              args["recovery"] !== "discardUnrecoverable"
-            ) {
-              throw new TypeError("Unsupported history recovery mode");
-            }
-            if (
-              historyState !== "available" &&
-              args["recovery"] === "preserve"
-            ) {
-              throw Object.assign(
-                new Error("Activity history key is missing"),
-                {
-                  type: historyState === "mixed" ? "keyMissing" : historyState,
-                },
-              );
-            }
-            activitySnapshot = {
-              ...activitySnapshot,
-              otherAccountHistoryDays: 0,
-            };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_capture_details") {
-            const enabled = args["enabled"];
-            if (typeof enabled !== "boolean") {
-              throw new TypeError("Capture choice must be explicit");
-            }
-            let detailsAccess = activitySnapshot.detailsAccess;
-            if (!enabled) {
-              detailsAccess = "disabled";
-            } else if (detailsAccess !== "accessibilityRequired") {
-              detailsAccess = "ready";
-            }
-            activitySnapshot = {
-              ...activitySnapshot,
-              captureDetails: enabled,
-              detailsAccess,
-            };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_detect_calls") {
-            const enabled = args["enabled"];
-            if (typeof enabled !== "boolean") {
-              throw new TypeError("Call choice must be explicit");
-            }
-            activitySnapshot = { ...activitySnapshot, detectCalls: enabled };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_app_detail_capture") {
-            const identifier = args["identifier"];
-            const name = args["name"];
-            if (typeof identifier !== "string" || typeof name !== "string") {
-              throw new TypeError("App identity is missing");
-            }
-            const appNameOnlyApps = activitySnapshot.appNameOnlyApps.filter(
-              (app) => app.identifier !== identifier,
-            );
-            if (args["mode"] === "appNameOnly") {
-              appNameOnlyApps.push({ identifier, name });
-            }
-            activitySnapshot = { ...activitySnapshot, appNameOnlyApps };
-            emitActivityChanged();
-          }
-          if (command === "activity_set_browser_title_capture") {
-            const identifier = args["identifier"];
-            const name = args["name"];
-            const enabled = args["enabled"];
-            if (
-              typeof identifier !== "string" ||
-              typeof name !== "string" ||
-              typeof enabled !== "boolean"
-            ) {
-              throw new TypeError("Browser choice must be explicit");
-            }
-            const browserTitleApps = activitySnapshot.browserTitleApps.filter(
-              (browser) => browser.identifier !== identifier,
-            );
-            if (enabled) {
-              browserTitleApps.push({ identifier, name });
-            }
-            activitySnapshot = { ...activitySnapshot, browserTitleApps };
-            emitActivityChanged();
-          }
+          return undefined;
+        },
+        activity_delete_other_account_history: (args) => {
           if (
-            command === "activity_set_recording_status" &&
-            args["status"] === "recording"
+            args["recovery"] !== "preserve" &&
+            args["recovery"] !== "discardUnrecoverable"
           ) {
+            throw new TypeError("Unsupported history recovery mode");
+          }
+          if (historyState !== "available" && args["recovery"] === "preserve") {
+            throw Object.assign(new Error("Activity history key is missing"), {
+              type: historyState === "mixed" ? "keyMissing" : historyState,
+            });
+          }
+          activitySnapshot = {
+            ...activitySnapshot,
+            otherAccountHistoryDays: 0,
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_capture_details: (args) => {
+          const enabled = args["enabled"];
+          if (typeof enabled !== "boolean") {
+            throw new TypeError("Capture choice must be explicit");
+          }
+          let detailsAccess = activitySnapshot.detailsAccess;
+          if (!enabled) {
+            detailsAccess = "disabled";
+          } else if (detailsAccess !== "accessibilityRequired") {
+            detailsAccess = "ready";
+          }
+          activitySnapshot = {
+            ...activitySnapshot,
+            captureDetails: enabled,
+            detailsAccess,
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_detect_calls: (args) => {
+          const enabled = args["enabled"];
+          if (typeof enabled !== "boolean") {
+            throw new TypeError("Call choice must be explicit");
+          }
+          activitySnapshot = { ...activitySnapshot, detectCalls: enabled };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_app_detail_capture: (args) => {
+          const identifier = args["identifier"];
+          const name = args["name"];
+          if (typeof identifier !== "string" || typeof name !== "string") {
+            throw new TypeError("App identity is missing");
+          }
+          const appNameOnlyApps = activitySnapshot.appNameOnlyApps.filter(
+            (app) => app.identifier !== identifier,
+          );
+          if (args["mode"] === "appNameOnly") {
+            appNameOnlyApps.push({ identifier, name });
+          }
+          activitySnapshot = { ...activitySnapshot, appNameOnlyApps };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_browser_title_capture: (args) => {
+          const identifier = args["identifier"];
+          const name = args["name"];
+          const enabled = args["enabled"];
+          if (
+            typeof identifier !== "string" ||
+            typeof name !== "string" ||
+            typeof enabled !== "boolean"
+          ) {
+            throw new TypeError("Browser choice must be explicit");
+          }
+          const browserTitleApps = activitySnapshot.browserTitleApps.filter(
+            (browser) => browser.identifier !== identifier,
+          );
+          if (enabled) {
+            browserTitleApps.push({ identifier, name });
+          }
+          activitySnapshot = { ...activitySnapshot, browserTitleApps };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_set_recording_status: (args) => {
+          if (args["status"] === "recording") {
             activitySnapshot = {
               ...activitySnapshot,
               recordingStatus: "recording",
             };
             emitActivityChanged();
           }
-          if (command === "time_entry_search_matters") {
-            return [
-              {
-                id: "matter-1",
-                name: "Example matter",
-                reference: "M-001",
-                color: "--option-emerald",
+          return undefined;
+        },
+        time_entry_search_matters: () =>
+          [
+            {
+              id: "matter-1",
+              name: "Example matter",
+              reference: "M-001",
+              color: "--option-emerald",
+            },
+          ] satisfies DesktopMatter[],
+        time_entry_candidates: () =>
+          [
+            {
+              id: "matter-1",
+              name: "Example matter",
+              reference: "M-001",
+              color: "--option-emerald",
+              clientName: "Example client",
+              signals: {
+                lastWorkedAt: "2026-10-06",
+                newlyAssignedAt: null,
+                upcomingDeadline: null,
               },
-            ] satisfies DesktopMatter[];
+            },
+          ] satisfies DesktopTimeEntryMatterCandidate[],
+        time_entry_discard_pending_batch_confirmed: (args) => {
+          if (
+            activitySnapshot.timeBillingEnabled ||
+            activitySnapshot.pendingBatch?.idempotencyKey !==
+              args["idempotencyKey"]
+          ) {
+            throw new TypeError("Pending discard is unavailable");
           }
-          if (command === "time_entry_candidates") {
-            return [
-              {
-                id: "matter-1",
-                name: "Example matter",
-                reference: "M-001",
-                color: "--option-emerald",
-                clientName: "Example client",
-                signals: {
-                  lastWorkedAt: "2026-10-06",
-                  newlyAssignedAt: null,
-                  upcomingDeadline: null,
-                },
-              },
-            ] satisfies DesktopTimeEntryMatterCandidate[];
+          activitySnapshot = {
+            ...activitySnapshot,
+            pendingBatch: null,
+            deletionStatus: "available",
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        time_entry_submit_batch_confirmed: async () => {
+          batchAttempts += 1;
+          if (validation === "hold-first" && batchAttempts === 1) {
+            return await new Promise((_resolve, reject) => {
+              Reflect.set(window, "__STELLA_TEST_REJECT_BATCH__", () =>
+                reject(
+                  Object.assign(new Error("Response unavailable"), {
+                    type: "uncertain",
+                  }),
+                ),
+              );
+            });
           }
-          if (command === "time_entry_discard_pending_batch_confirmed") {
-            if (
-              activitySnapshot.timeBillingEnabled ||
-              activitySnapshot.pendingBatch?.idempotencyKey !==
-                args["idempotencyKey"]
-            ) {
-              throw new TypeError("Pending discard is unavailable");
-            }
+          if (validation === "reject-first" && batchAttempts === 1) {
+            throw Object.assign(new Error("Activity range validation failed"), {
+              type: "rejected",
+            });
+          }
+          const markerSaved = receipt !== "fail-first" || batchAttempts !== 1;
+          if (
+            markerSaved &&
+            receipt !== "keep-pending" &&
+            activitySnapshot.pendingBatch !== null
+          ) {
             activitySnapshot = {
               ...activitySnapshot,
               pendingBatch: null,
               deletionStatus: "available",
             };
             emitActivityChanged();
-            return undefined;
           }
-          if (command === "time_entry_submit_batch_confirmed") {
-            batchAttempts += 1;
-            if (validation === "hold-first" && batchAttempts === 1) {
-              return new Promise((_resolve, reject) => {
-                Reflect.set(window, "__STELLA_TEST_REJECT_BATCH__", () =>
-                  reject(
-                    Object.assign(new Error("Response unavailable"), {
-                      type: "uncertain",
-                    }),
-                  ),
-                );
-              });
-            }
-            if (validation === "reject-first" && batchAttempts === 1) {
-              throw Object.assign(
-                new Error("Activity range validation failed"),
-                {
-                  type: "rejected",
-                },
-              );
-            }
-            const markerSaved = receipt !== "fail-first" || batchAttempts !== 1;
-            if (
-              markerSaved &&
-              receipt !== "keep-pending" &&
-              activitySnapshot.pendingBatch !== null
-            ) {
-              activitySnapshot = {
-                ...activitySnapshot,
-                pendingBatch: null,
-                deletionStatus: "available",
-              };
-              emitActivityChanged();
-            }
-            return {
-              entries: [{ id: "draft-1", matterId: "matter-1" }],
-              markerSaved,
-            };
-          }
-          if (command === "get_desktop_language") {
-            return desktopLanguage;
-          }
-          if (command === "plugin:event|listen") {
-            return args["handler"];
-          }
-          return undefined;
+          return {
+            entries: [{ id: "draft-1", matterId: "matter-1" }],
+            markerSaved,
+          };
         },
-        metadata: {
-          currentWebview: { label: "activity", windowLabel: "activity" },
-          currentWindow: { label: "activity" },
-        },
-        runCallback: (id: number, data: unknown) => callbacks.get(id)?.(data),
-        transformCallback: (
-          callback: ((data: unknown) => unknown) | undefined,
-          once = false,
-        ) => {
-          const id = nextCallbackId;
-          nextCallbackId += 1;
-          callbacks.set(id, (data) => {
-            if (once) {
-              callbacks.delete(id);
-            }
-            return callback?.(data);
-          });
-          return id;
-        },
-        unregisterCallback: (id: number) => callbacks.delete(id),
-      });
+        get_desktop_language: () => desktopLanguage,
+      };
     },
-    {
-      snapshot,
-      additionalSnapshots,
-      changedEvent: ACTIVITY_CHANGED_EVENT,
-      language,
-      batchValidation,
-      batchReceipt,
-      historyDeletion,
-    },
-  );
+  });
   await page.goto("/");
   const messages = language === "ar" ? arMessages : enMessages;
   if (snapshot.persistence === "deletionOnly") {
@@ -430,12 +371,6 @@ const installNativeBoundary = async ({
   }
 };
 
-const invocations = async (page: Page) =>
-  page.evaluate(() => {
-    const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
-    return calls;
-  });
-
 for (const history of ["keep", "delete"] as const) {
   test(`excluding an app waits for the ${history} history choice`, async ({
     page,
@@ -445,7 +380,7 @@ for (const history of ["keep", "delete"] as const) {
       .getByRole("button", { name: "Stop recording Example Editor" })
       .click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_exclude_app" }),
     );
     await page
@@ -457,7 +392,7 @@ for (const history of ["keep", "delete"] as const) {
       })
       .click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_exclude_app",
       args: {
         identifier: "com.example.editor",
@@ -477,7 +412,7 @@ test("canceling exclusion leaves recording and history unchanged", async ({
     .click();
   await page.getByRole("button", { name: enMessages.activity.cancel }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_exclude_app" }),
   );
 });
@@ -616,7 +551,7 @@ test("only explicit batch creation sends the edited billing fields and prevents 
   ).toBeDisabled();
   await include.check();
   await narrative.fill("Draft-only confidential narrative 71f3");
-  const callsBefore = await invocations(page);
+  const callsBefore = await tauriInvocations(page);
   expect(callsBefore).not.toContainEqual(
     expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
   );
@@ -630,7 +565,7 @@ test("only explicit batch creation sends the edited billing fields and prevents 
   const timezoneId = await page.evaluate(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
-  const calls = await invocations(page);
+  const calls = await tauriInvocations(page);
   expect(calls).toContainEqual({
     command: "time_entry_submit_batch_confirmed",
     args: {
@@ -656,15 +591,9 @@ test("only explicit batch creation sends the edited billing fields and prevents 
     },
   });
   // The local native boundary receives receipts, without app identities or raw segments.
-  const submissions = Array.isArray(calls)
-    ? calls.filter(
-        (call: unknown) =>
-          typeof call === "object" &&
-          call !== null &&
-          "command" in call &&
-          call.command === "time_entry_submit_batch_confirmed",
-      )
-    : [];
+  const submissions = calls.filter(
+    ({ command }) => command === "time_entry_submit_batch_confirmed",
+  );
   expect(submissions).toHaveLength(1);
   expect(JSON.stringify(submissions)).not.toContain("Example Editor");
   expect(JSON.stringify(submissions)).not.toContain("appIdentifier");
@@ -716,7 +645,7 @@ test("more than 100 selected matters keep the review editable until the selectio
   await expect(page.getByRole("alert")).toContainText(
     enMessages.activity.batchLimitExceeded.replace("{limit}", "100"),
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
   );
   const include = page.getByRole("checkbox", {
@@ -803,38 +732,26 @@ test("native validation rejection leaves the review editable and a corrected sel
     .getByRole("button", { name: "Create 1 draft", exact: true })
     .click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
-  const submitted = await page.evaluate(() => {
-    const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
-    if (!Array.isArray(calls)) {
-      throw new TypeError("Native invocations are missing");
-    }
-    return calls.flatMap((call: unknown) => {
-      if (
-        typeof call !== "object" ||
-        call === null ||
-        !("command" in call) ||
-        call.command !== "time_entry_submit_batch_confirmed"
-      ) {
+  const submitted = (await tauriInvocations(page)).flatMap(
+    ({ args, command }) => {
+      if (command !== "time_entry_submit_batch_confirmed") {
         return [];
       }
+      const request = args["request"];
       if (
-        !("args" in call) ||
-        typeof call.args !== "object" ||
-        call.args === null ||
-        !("request" in call.args) ||
-        typeof call.args.request !== "object" ||
-        call.args.request === null ||
-        !("idempotencyKey" in call.args.request) ||
-        typeof call.args.request.idempotencyKey !== "string" ||
-        !("items" in call.args.request) ||
-        !Array.isArray(call.args.request.items)
+        typeof request !== "object" ||
+        request === null ||
+        !("idempotencyKey" in request) ||
+        typeof request.idempotencyKey !== "string" ||
+        !("items" in request) ||
+        !Array.isArray(request.items)
       ) {
         throw new TypeError("Batch request is missing");
       }
       return [
         {
-          key: call.args.request.idempotencyKey,
-          matterIds: call.args.request.items.map((item: unknown) => {
+          key: request.idempotencyKey,
+          matterIds: request.items.map((item: unknown) => {
             if (
               typeof item !== "object" ||
               item === null ||
@@ -850,8 +767,8 @@ test("native validation rejection leaves the review editable and a corrected sel
           }),
         },
       ];
-    });
-  });
+    },
+  );
   expect(submitted).toHaveLength(2);
   expect(submitted.at(0)?.matterIds).toEqual(["matter-1", "corrected-matter"]);
   expect(submitted.at(1)?.matterIds).toEqual(["corrected-matter"]);
@@ -906,22 +823,14 @@ test("unresolved draft creation protects activity deletion and retains its batch
       exact: true,
     }),
   ).toBeDisabled();
-  const before = await invocations(page);
+  const before = await tauriInvocations(page);
   await retry.click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
-  const after = await invocations(page);
-  const submissions = (calls: unknown) => {
-    if (!Array.isArray(calls)) {
-      throw new TypeError("Native invocations are missing");
-    }
-    return calls.filter(
-      (call: unknown) =>
-        typeof call === "object" &&
-        call !== null &&
-        "command" in call &&
-        call.command === "time_entry_submit_batch_confirmed",
+  const after = await tauriInvocations(page);
+  const submissions = (calls: TauriInvocation[]) =>
+    calls.filter(
+      ({ command }) => command === "time_entry_submit_batch_confirmed",
     );
-  };
   expect(submissions(before)).toHaveLength(1);
   expect(submissions(after)).toHaveLength(2);
   expect(submissions(after).at(0)).toEqual(submissions(after).at(1));
@@ -971,7 +880,7 @@ for (const recoveryState of ["empty", "unreadable", "off"] as const) {
       })
       .click();
     await expect(page.getByRole("status")).toContainText("1 draft created");
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "time_entry_submit_batch_confirmed",
       args: {
         request: {
@@ -1009,7 +918,7 @@ for (const recordingStatus of ["recording", "off"] as const) {
     await page
       .getByRole("button", { name: enMessages.activity.previousDay })
       .click();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_get_day",
       args: { date: "2026-10-06" },
     });
@@ -1105,7 +1014,7 @@ test("stored pending drafts remain visible without billing capability and cannot
   await expect(page.getByRole("status")).toContainText(
     enMessages.activity.batchUnavailable,
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
   );
   await expect(
@@ -1114,7 +1023,7 @@ test("stored pending drafts remain visible without billing capability and cannot
   await page
     .getByRole("button", { name: enMessages.activity.previousDay })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_get_day",
     args: { date: "2026-10-06" },
   });
@@ -1210,7 +1119,7 @@ test("a failed draft receipt remains retryable with the same stored batch key", 
   ).toBeEnabled();
   await retry.click();
   await expect(page.getByRole("status")).toContainText("1 draft created");
-  const calls = await invocations(page);
+  const calls = await tauriInvocations(page);
   const expected = {
     command: "time_entry_submit_batch_confirmed",
     args: {
@@ -1224,15 +1133,9 @@ test("a failed draft receipt remains retryable with the same stored batch key", 
     },
   };
   expect(
-    Array.isArray(calls)
-      ? calls.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "time_entry_submit_batch_confirmed",
-        )
-      : [],
+    calls.filter(
+      ({ command }) => command === "time_entry_submit_batch_confirmed",
+    ),
   ).toEqual([expected, expected]);
 });
 
@@ -1264,14 +1167,14 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
     await expect(page.getByRole("dialog")).toContainText(
       enMessages.activity.unrecoverableOtherHistoryConfirmation,
     );
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "preserve" },
     });
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_delete_all" }),
     );
-    expect(await invocations(page)).not.toContainEqual({
+    expect(await tauriInvocations(page)).not.toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "discardUnrecoverable" },
     });
@@ -1279,7 +1182,7 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
       .getByRole("dialog")
       .getByRole("button", { name: enMessages.activity.delete, exact: true })
       .click();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "discardUnrecoverable" },
     });
@@ -1307,7 +1210,7 @@ test("billing-disabled pending recovery can be discarded locally only after conf
   await expect(page.getByRole("dialog")).toContainText(
     enMessages.activity.discardPendingConfirmation,
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "time_entry_discard_pending_batch_confirmed",
     }),
@@ -1325,11 +1228,11 @@ test("billing-disabled pending recovery can be discarded locally only after conf
   await expect(
     page.getByText(enMessages.activity.empty, { exact: true }),
   ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "time_entry_discard_pending_batch_confirmed",
     args: { date: SNAPSHOT.date, idempotencyKey: PENDING_BATCH.idempotencyKey },
   });
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
   );
 });
@@ -1372,7 +1275,7 @@ test("pending drafts dated after today remain reachable after the clock moves ba
       exact: true,
     }),
   ).toBeEnabled();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_get_day",
     args: { date: futureDate },
   });
@@ -1437,7 +1340,7 @@ test("discarding an old recovery key cannot unlock a later uncertain batch", asy
   await expect(
     page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
   ).toBeDisabled();
-  expect(await invocations(page)).toContainEqual(
+  expect(await tauriInvocations(page)).toContainEqual(
     expect.objectContaining({
       command: "time_entry_submit_batch_confirmed",
       args: expect.objectContaining({
@@ -1482,7 +1385,7 @@ test("pending discard confirmation becomes unavailable when billing capability r
       .getByRole("dialog")
       .getByRole("button", { name: enMessages.activity.delete, exact: true }),
   ).toBeDisabled();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "time_entry_discard_pending_batch_confirmed",
     }),
@@ -1537,11 +1440,11 @@ test("stored pending retry permits confirmed unreadable repair while ordinary de
       exact: true,
     }),
   ).toHaveCount(0);
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardUnreadable" },
   });
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "time_entry_discard_pending_batch_confirmed",
     }),
@@ -1564,14 +1467,14 @@ test("unreadable activity erase requires confirmation of lost pending recovery",
   await expect(page.getByRole("dialog")).toContainText(
     enMessages.activity.unreadableEraseConfirmation,
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_all" }),
   );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardUnreadable" },
   });
@@ -1602,7 +1505,7 @@ test("inactive unreadable history reaches its dedicated confirmed recovery path"
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_other_account_history",
     args: { recovery: "discardUnrecoverable" },
   });
@@ -1634,17 +1537,10 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const calls = await invocations(page);
   expect(
-    Array.isArray(calls)
-      ? calls.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "activity_delete_other_account_history",
-        )
-      : [],
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "activity_delete_other_account_history",
+    ),
   ).toEqual([
     {
       command: "activity_delete_other_account_history",
@@ -1743,7 +1639,7 @@ test("an open erase dialog disappears safely when saved history becomes incompat
     page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
   ).toBeVisible();
   expect(pageErrors).toEqual([]);
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_day" }),
   );
 });
@@ -1770,7 +1666,7 @@ test("inactive incompatible history closes consent and requests an app update", 
   await expect(page.getByRole("alert")).toContainText(
     enMessages.activity.incompatibleActivity,
   );
-  expect(await invocations(page)).not.toContainEqual({
+  expect(await tauriInvocations(page)).not.toContainEqual({
     command: "activity_delete_other_account_history",
     args: { recovery: "discardUnrecoverable" },
   });
@@ -1794,14 +1690,14 @@ test("missing-key erase requires explicit confirmation that draft recovery will 
   await expect(page.getByRole("dialog")).toContainText(
     enMessages.activity.missingKeyEraseConfirmation,
   );
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_all" }),
   );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: enMessages.activity.delete, exact: true })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_delete_all",
     args: { recovery: "discardMissingKey" },
   });
@@ -1827,7 +1723,7 @@ test("only an explicit summary copy publishes activity to the clipboard", async 
   await expect(
     page.getByRole("button", { name: enMessages.activity.nextDay }),
   ).toBeEnabled();
-  const callsBeforeCopy = await invocations(page);
+  const callsBeforeCopy = await tauriInvocations(page);
   expect(callsBeforeCopy).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
@@ -1840,21 +1736,13 @@ test("only an explicit summary copy publishes activity to the clipboard", async 
   await expect(
     page.getByRole("button", { name: enMessages.activity.copied }),
   ).toBeVisible();
-  const callsAfterCopy = await invocations(page);
+  const callsAfterCopy = await tauriInvocations(page);
   expect(callsAfterCopy).toContainEqual({
     command: "activity_copy_text",
     args: { text: expect.stringContaining("Example Editor") },
   });
   expect(
-    Array.isArray(callsAfterCopy)
-      ? callsAfterCopy.filter(
-          (call: unknown) =>
-            typeof call === "object" &&
-            call !== null &&
-            "command" in call &&
-            call.command === "activity_copy_text",
-        )
-      : [],
+    callsAfterCopy.filter(({ command }) => command === "activity_copy_text"),
   ).toHaveLength(1);
 });
 
@@ -1887,7 +1775,7 @@ for (const state of [
     await expect(page.getByRole("dialog")).toContainText(
       "Delete 3 saved days from other accounts on this device? This cannot be undone.",
     );
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_delete_other_account_history",
       }),
@@ -1897,7 +1785,7 @@ for (const state of [
       .getByRole("button", { name: enMessages.activity.cancel, exact: true })
       .click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_delete_other_account_history",
       }),
@@ -1909,7 +1797,7 @@ for (const state of [
       .click();
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(openDelete).toBeHidden();
-    expect(await invocations(page)).toContainEqual({
+    expect(await tauriInvocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
       args: { recovery: "preserve" },
     });
@@ -1939,7 +1827,7 @@ test("detail capture is unchecked in welcome and recording starts without enabli
     name: enMessages.activity.captureDetails,
   });
   await expect(details).not.toBeChecked();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
   await page
@@ -1953,7 +1841,7 @@ test("detail capture is unchecked in welcome and recording starts without enabli
     .filter({ hasText: enMessages.activity.settings })
     .click();
   await expect(details).not.toBeChecked();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
 });
@@ -1970,7 +1858,7 @@ test("detail capture changes only on explicit choice and can be turned off in se
   });
   await details.check();
   await expect(details).toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_capture_details",
     args: { enabled: true },
   });
@@ -1986,7 +1874,7 @@ test("detail capture changes only on explicit choice and can be turned off in se
     .click();
   await details.uncheck();
   await expect(details).not.toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_capture_details",
     args: { enabled: false },
   });
@@ -2006,7 +1894,7 @@ test("accessibility hint opens system settings only after a user request", async
   await expect(
     page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
   ).toBeVisible();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "activity_open_accessibility_settings",
     }),
@@ -2016,7 +1904,7 @@ test("accessibility hint opens system settings only after a user request", async
       name: enMessages.activity.openAccessibilitySettings,
     })
     .click();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_open_accessibility_settings",
     args: {},
   });
@@ -2041,7 +1929,7 @@ test("per-app detail controls keep time recording and allow details to be restor
       .getByRole("button", { name: "Record details for Example Editor" })
       .first(),
   ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_app_detail_capture",
     args: {
       identifier: "com.example.editor",
@@ -2049,7 +1937,7 @@ test("per-app detail controls keep time recording and allow details to be restor
       mode: "appNameOnly",
     },
   });
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_exclude_app" }),
   );
   await page
@@ -2061,7 +1949,7 @@ test("per-app detail controls keep time recording and allow details to be restor
       name: "Record app name only for Example Editor",
     }),
   ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_app_detail_capture",
     args: {
       identifier: "com.example.editor",
@@ -2094,18 +1982,18 @@ test("browser title capture is a separate unticked opt-in and can be turned off"
   await expect(
     page.getByText(enMessages.activity.browserPrivacyNote, { exact: true }),
   ).toBeVisible();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_browser_title_capture" }),
   );
   await browserTitles.check();
   await expect(browserTitles).toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_browser_title_capture",
     args: { identifier: browser.identifier, name: browser.name, enabled: true },
   });
   await browserTitles.uncheck();
   await expect(browserTitles).not.toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_browser_title_capture",
     args: {
       identifier: browser.identifier,
@@ -2138,7 +2026,7 @@ for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
         name: "Record window titles in Native Browser",
       }),
     ).toBeDisabled();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_set_browser_title_capture",
       }),
@@ -2173,7 +2061,7 @@ test("document names render locally without publishing full paths", async ({
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toContainText("memo.docx");
   await expect(tooltip).not.toContainText(document);
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
   await page
@@ -2182,11 +2070,11 @@ test("document names render locally without publishing full paths", async ({
   await expect(
     page.getByRole("button", { name: enMessages.activity.copied }),
   ).toBeVisible();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_copy_text",
     args: { text: expect.stringContaining("memo.docx") },
   });
-  expect(await invocations(page)).not.toContainEqual({
+  expect(await tauriInvocations(page)).not.toContainEqual({
     command: "activity_copy_text",
     args: { text: expect.stringContaining(document) },
   });
@@ -2258,7 +2146,7 @@ for (const language of ["en", "ar"] as const) {
     await expect(
       page.getByText(messages.activity.welcomeDetails, { exact: true }),
     ).toBeVisible();
-    expect(await invocations(page)).not.toContainEqual(
+    expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_set_recording_status" }),
     );
   });
@@ -2504,26 +2392,26 @@ test("call recording is on by default and changes only on explicit choice", asyn
   await expect(
     page.getByText(enMessages.activity.detectCallsDescription),
   ).toBeVisible();
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_detect_calls" }),
   );
   await calls.uncheck();
   await expect(calls).not.toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_detect_calls",
     args: { enabled: false },
   });
-  expect(await invocations(page)).not.toContainEqual({
+  expect(await tauriInvocations(page)).not.toContainEqual({
     command: "activity_set_detect_calls",
     args: { enabled: true },
   });
   await calls.check();
   await expect(calls).toBeChecked();
-  expect(await invocations(page)).toContainEqual({
+  expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_detect_calls",
     args: { enabled: true },
   });
-  expect(await invocations(page)).not.toContainEqual(
+  expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
   );
 });

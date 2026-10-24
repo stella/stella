@@ -16,7 +16,6 @@ import type {
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,9 +26,10 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
 /** Streaming updatedAt is the claim time; it never renews during admission or generation. */

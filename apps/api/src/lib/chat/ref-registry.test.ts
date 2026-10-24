@@ -146,6 +146,39 @@ describe("chat refs across the requests of a thread", () => {
     expect(next.toEntityRef(entityTarget(0))).toBe("ent_2");
   });
 
+  test("each ref failure reports under its own error code", () => {
+    const registryA = createChatRefRegistry();
+    const registryB = createChatRefRegistry();
+    const bindingA =
+      registryA
+        .collectRefBindings({
+          values: [registryA.toEntityRef(entityTarget(0))],
+        })
+        .at(0) ?? expect.unreachable("The registry holds the ref it minted");
+
+    const next = createChatRefRegistry([
+      bindingA,
+      ...registryB.collectRefBindings({
+        values: [registryB.toEntityRef(entityTarget(1))],
+      }),
+      { ...bindingA, ref: "bogus" },
+    ]);
+    next.resolveAssistantTextRefs("[Ghost](#stella-entity-ref=ent_9)");
+
+    expect(
+      analytics
+        .exceptions()
+        .map(({ properties }) => [
+          properties["error.code"],
+          properties["kind"],
+        ]),
+    ).toEqual([
+      ["chat_ref_conflict", "entity"],
+      ["chat_ref_malformed", "entity"],
+      ["chat_ref_unminted", "entity"],
+    ]);
+  });
+
   test("only whole minted tokens are collected", () => {
     const registry = createChatRefRegistry();
     for (let index = 0; index < 12; index += 1) {

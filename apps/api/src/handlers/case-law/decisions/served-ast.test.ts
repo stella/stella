@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { headingPathsByAnchor } from "@stll/legal-ast";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type {
+  DecisionDocumentAst,
+  DocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
@@ -16,7 +19,7 @@ import {
 } from "@/api/lib/db-query-counter";
 import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 
-const ast = (text: string): DocumentAst => ({
+const ast = (text: string): DecisionDocumentAst => ({
   version: 1,
   source: {
     system: "test",

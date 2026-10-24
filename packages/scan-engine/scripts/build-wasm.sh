@@ -57,4 +57,4 @@ perl -0pi -e 's/  if \(wasm !== undefined\) return wasm;\n//g' "${OUTPUT_DIR}/sc
 for declaration in "${OUTPUT_DIR}"/*.d.ts; do
   perl -ni -e 'print unless m{^/\* (?:eslint|tslint)-disable \*/$}' "${declaration}"
 done
-bun "${CRATE_DIR}/../../scripts/run-oxfmt.ts" "${OUTPUT_DIR}"
+bun fmt "${OUTPUT_DIR}"

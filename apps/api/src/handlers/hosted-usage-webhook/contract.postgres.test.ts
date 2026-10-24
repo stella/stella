@@ -1,4 +1,4 @@
-import { panic, TaggedError, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
@@ -7,10 +7,10 @@ import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   hostedUsageWebhookEvents,
+  USAGE_ENTITLEMENT_STATUSES,
   usageAllocations,
   usageEntitlements,
   usagePolicies,
-  USAGE_ENTITLEMENT_STATUSES,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { env } from "@/api/env";

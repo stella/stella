@@ -9,8 +9,8 @@ import { DAY_IN_MS } from "@stll/time";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawSources,
   caseLawIndexJobs,
+  caseLawSources,
   databaseBackfillStates,
   euCompletionApprovals,
   euCompletionControls,
@@ -31,8 +31,8 @@ import {
 
 import {
   buildEuCompletionPageQuery,
-  createEuCompletionStore,
   CompletionPayloadTooLarge,
+  createEuCompletionStore,
   EU_COMPLETION_STORE_LIMITS,
   type EuCompletionReceipt,
 } from "./eu-completion-store";

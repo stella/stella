@@ -58,8 +58,7 @@ const DECISION_READER_TEXT_BYTES = {
   Exclude<
     {
       [Key in keyof ReadableDecision]: ReadableDecision[Key] extends
-        | string
-        | null
+        string | null
         ? Key
         : never;
     }[keyof ReadableDecision],
@@ -179,6 +178,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ),
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
+  citationCount: t.Number(),
   // Whole official decision text is intentional; a windowed reader is separate.
   documentAst: t.Unknown(),
   fulltext: t.Nullable(t.String()),
@@ -392,6 +392,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ),
     decisionDate: nullableText(decision.decisionDate, text.decisionDate),
     decisionType: nullableText(decision.decisionType, text.decisionType),
+    citationCount: decision.citationCount,
     projectionDigest: nullableText(
       decision.projectionDigest,
       text.projectionDigest,

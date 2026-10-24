@@ -1,0 +1,356 @@
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import {
+  caseLawCitations,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import { resolveAnalysisInput } from "@/api/handlers/case-law/analysis/analysis-input";
+import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
+import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
+import { createSafeId } from "@/api/lib/branded-types";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
+import { readReaderAnswerRelated } from "@/api/lib/case-law/reader-answer-corpus";
+import {
+  currentReadWork,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type { CaseLawWindowProfile } from "@/api/lib/windowed-read-surface";
+import { WINDOWED_READ_SURFACE } from "@/api/lib/windowed-read-surface";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import {
+  caseLawPublishedDecisionsFixtureSql,
+  caseLawUnredactedDecisionsFixtureSql,
+} from "@/api/tests/helpers/case-law-publication-view-fixture";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const CITATION_TEXT = "4 Tdo 348/2023";
+const PARAGRAPH_ID = "reasoning";
+const SCALES = [1, 10] as const;
+
+const prepareFixture = async (db: GatedTestDb, scale: number) => {
+  // Native SQL, driver result metering and canonical publication predicates;
+  // temporary relations keep every fixture's data on its own pool connection.
+  for (const table of [
+    "case_law_sources",
+    "case_law_decisions",
+    "case_law_citations",
+    "case_law_decision_identifiers",
+  ]) {
+    await db.execute(sql`CREATE TEMP TABLE ${sql.identifier(table)} (
+      LIKE public.${sql.identifier(table)} INCLUDING DEFAULTS
+    )`);
+  }
+  await db.execute(caseLawPublishedDecisionsFixtureSql);
+  await db.execute(caseLawUnredactedDecisionsFixtureSql);
+  const sourceId = createSafeId<"caseLawSource">();
+  const decisionId = createSafeId<"caseLawDecision">();
+  const targetId = createSafeId<"caseLawDecision">();
+  const text = `${"Court reasoning. ".repeat(1000 * scale)} ${CITATION_TEXT}`;
+  const ast = {
+    version: 1,
+    source: {
+      system: "test",
+      documentId: decisionId,
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: "Window fixture",
+      ecli: null,
+      court: "Court",
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        type: "paragraph",
+        id: PARAGRAPH_ID,
+        anchorId: PARAGRAPH_ID,
+        plainText: text,
+        inlines: [{ type: "text", text }],
+      },
+    ],
+  } satisfies DocumentAst;
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: ADAPTER_KEYS.CZ_NS,
+    name: "Window fixture",
+    descriptor: {
+      license: "public-domain",
+      attribution: null,
+      allowsRedistribution: true,
+      allowsDerivedAi: true,
+    },
+  });
+  const identity = { sourceId, country: "CZE", language: "cs", court: "Court" };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...identity,
+      id: decisionId,
+      caseNumber: "Window fixture",
+      documentAst: ast,
+      sections: [{ index: 0, type: "ruling", title: null, text }],
+    },
+    {
+      ...identity,
+      id: targetId,
+      caseNumber: CITATION_TEXT,
+      documentAst: { ...ast, source: { ...ast.source, documentId: targetId } },
+    },
+  ]);
+  await db.insert(caseLawCitations).values({
+    citingDecisionId: decisionId,
+    citedDecisionId: targetId,
+    citationText: CITATION_TEXT,
+    sectionIndex: 0,
+  });
+  const readDb = async <T>(
+    read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+    options?: Parameters<CaseLawPublicReadDb>[1],
+  ) =>
+    await db.transaction(
+      async (tx) => await read(asTestRaw<CaseLawPublicReadTransaction>(tx)),
+      {
+        isolationLevel:
+          options?.isolation === "repeatable-read"
+            ? "repeatable read"
+            : "read committed",
+      },
+    );
+  return {
+    decisionId,
+    targetId,
+    sourceId,
+    text,
+    caseLawDb: asTestRaw<CaseLawPublicReadDb>(readDb),
+    scopedDb: asTestRaw<ScopedDb>(readDb),
+    payloadBytes: Buffer.byteLength(JSON.stringify(ast)),
+  };
+};
+
+type WindowFixture = Awaited<ReturnType<typeof prepareFixture>>;
+
+const productionReads = {
+  "case-law-reader": async (fixture: WindowFixture) => {
+    const read = await readDecisionReaderSource({
+      caseLawDb: fixture.caseLawDb,
+      decisionId: fixture.decisionId,
+      phase: "blocks",
+      audience: "model",
+      surface: "search",
+    });
+    if (read?.status !== "read" || read.ast === null) {
+      return panic("Window fixture must reach the admitted production reader");
+    }
+    const paragraph = read.ast.blocks.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    expect(paragraph?.plainText).toBe(fixture.text);
+  },
+  "citation-passages": async (fixture: WindowFixture) => {
+    const read = await readGatedDecisionCitations({
+      caseLawDb: fixture.caseLawDb,
+      decisionId: fixture.targetId,
+      cursor: undefined,
+      direction: "cited_by",
+      limit: 1,
+      surface: "search",
+    });
+    if (read?.type !== "page") {
+      return panic("Window fixture must reach the production citation page");
+    }
+    expect(read.page.items).toHaveLength(1);
+    expect(read.page.items.at(0)?.passage?.text).toContain(CITATION_TEXT);
+  },
+  "reader-answer": async (fixture: WindowFixture) => {
+    const read = await readReaderAnswerRelated(
+      {
+        decisionId: fixture.decisionId,
+        paragraphId: PARAGRAPH_ID,
+        direction: "cited",
+        query: "Court reasoning.",
+      },
+      { caseLawDb: fixture.caseLawDb },
+    );
+    if (read.isErr()) {
+      return panic("Window fixture must reach the production reader answer");
+    }
+    expect(read.value).toHaveLength(1);
+    expect(read.value.at(0)?.decisionId).toBe(fixture.targetId);
+    expect(read.value.at(0)?.paragraphId).toBe(PARAGRAPH_ID);
+    expect(read.value.at(0)?.text).toContain("Court reasoning.");
+  },
+  "analysis-input": async (fixture: WindowFixture) => {
+    expect(envBase.PUBLIC_LAW_DATABASE_URL).toBeUndefined();
+    const read = await resolveAnalysisInput({
+      decisionId: fixture.decisionId,
+      scopedDb: fixture.scopedDb,
+    });
+    if (read.kind !== "resolved") {
+      return panic("Window fixture must reach the production analysis input");
+    }
+    expect(read.anchorIds).toContain(PARAGRAPH_ID);
+    expect(read.input.userMessage).toContain(fixture.text);
+  },
+} satisfies Record<
+  CaseLawWindowProfile,
+  (fixture: WindowFixture) => Promise<void>
+>;
+
+const expectRedacted = async (profile: string, fixture: WindowFixture) => {
+  switch (profile) {
+    case "analysis-input":
+      expect(
+        (
+          await resolveAnalysisInput({
+            decisionId: fixture.decisionId,
+            scopedDb: fixture.scopedDb,
+          })
+        ).kind,
+      ).toBe("decision-not-found");
+      return;
+    case "citation-passages":
+      expect(
+        await readGatedDecisionCitations({
+          caseLawDb: fixture.caseLawDb,
+          decisionId: fixture.targetId,
+          cursor: undefined,
+          direction: "cited_by",
+          limit: 1,
+          surface: "search",
+        }),
+      ).toBeNull();
+      return;
+    case "reader-answer": {
+      const read = await readReaderAnswerRelated(
+        {
+          decisionId: fixture.decisionId,
+          paragraphId: PARAGRAPH_ID,
+          direction: "cited",
+          query: "Court reasoning.",
+        },
+        { caseLawDb: fixture.caseLawDb },
+      );
+      expect(read.isOk()).toBe(true);
+      if (read.isErr()) {
+        return panic(
+          "Redaction must not turn into a reader failure",
+          read.error,
+        );
+      }
+      expect(read.value).toEqual([]);
+      return;
+    }
+    case "case-law-reader":
+      expect(
+        await readDecisionReaderSource({
+          caseLawDb: fixture.caseLawDb,
+          decisionId: fixture.decisionId,
+          phase: "blocks",
+          audience: "model",
+          surface: "search",
+        }),
+      ).toBeNull();
+      return;
+    default:
+      return panic("Unregistered native window measurement");
+  }
+};
+
+const measuredRead = async (read: () => Promise<void>) =>
+  await runWithQueryCounter(async (counter) => {
+    await read();
+    return {
+      ...(currentReadWork() ??
+        panic("Native window read needs its request meter")),
+      statements: counter.count,
+      transactionRoundTrips: counter.transactions,
+    };
+  });
+
+describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
+  "production case-law window budgets",
+  () => {
+    test("every case-law window measures its admitted production owner", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      expect(Object.keys(productionReads).toSorted()).toEqual(
+        Object.entries(WINDOWED_READ_SURFACE)
+          .filter(
+            ([, entry]) =>
+              entry.guard === "lib/case-law/windowed-read.postgres.test.ts",
+          )
+          .map(([profile]) => profile)
+          .toSorted(),
+      );
+      for (const [profile, read] of Object.entries(productionReads)) {
+        const measurements = [];
+        for (const scale of SCALES) {
+          await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+            const { db } = openClient({ max: 1 });
+            const fixture = await prepareFixture(db, scale);
+            resetPublicCaseLawConfigForTesting(fixture.caseLawDb);
+            try {
+              const cold = await measuredRead(async () => await read(fixture));
+              const warm = await measuredRead(async () => await read(fixture));
+              expect(cold.statements).toBeGreaterThan(0);
+              expect(cold.transactionRoundTrips).toBeGreaterThan(0);
+              expect(cold.dbResultBytes).toBeGreaterThan(fixture.payloadBytes);
+              expect(cold.astParses).toBeGreaterThan(0);
+              expect(warm.statements).toBeGreaterThan(0);
+              expect(warm.statements).toBeLessThan(cold.statements);
+              expect(warm.transactionRoundTrips).toBeGreaterThan(0);
+              expect(warm.dbResultBytes).toBeLessThan(fixture.payloadBytes / 2);
+              expect(warm.astParses).toBe(0);
+              expect(warm.storageReadBytes).toBe(0);
+              expect(warm.cacheHits).toBeGreaterThan(0);
+              console.info(
+                "production-window-budget",
+                JSON.stringify({ profile, scale, cold, warm }),
+              );
+              measurements.push({
+                cold,
+                warm,
+                payloadBytes: fixture.payloadBytes,
+              });
+              // Redaction must be checked again before any warmed payload is served.
+              await db
+                .update(caseLawDecisions)
+                .set({ redactedAt: new Date("2026-01-01T00:00:00Z") })
+                .where(eq(caseLawDecisions.sourceId, fixture.sourceId));
+              await expectRedacted(profile, fixture);
+            } finally {
+              resetPublicCaseLawConfigForTesting();
+            }
+          });
+        }
+        const small = measurements.at(0) ?? panic("Missing 1x measurement");
+        const large = measurements.at(1) ?? panic("Missing 10x measurement");
+        expect(
+          large.cold.dbResultBytes - small.cold.dbResultBytes,
+        ).toBeGreaterThanOrEqual(large.payloadBytes - small.payloadBytes);
+        expect(large.warm.statements).toBe(small.warm.statements);
+        expect(large.warm.transactionRoundTrips).toBe(
+          small.warm.transactionRoundTrips,
+        );
+        expect(large.warm.dbResultBytes).toBeLessThanOrEqual(
+          small.warm.dbResultBytes + 256,
+        );
+      }
+    });
+  },
+);
