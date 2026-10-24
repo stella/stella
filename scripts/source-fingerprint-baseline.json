@@ -7,6 +7,173 @@
     "pl-courts::search": "rawHash is derived from part of the stored source; derive it with sourceFingerprint over the stored envelope and objects.",
     "us-courtlistener::decision": "rawHash is derived from part of the stored source; derive it with sourceFingerprint over the stored envelope and objects."
   },
+  "fingerprints": {
+    "at-asylgh::decision": {
+      "fingerprint": "bcb8f6854e847e0a4e2682829a775d6793674a1b02d351faded1d555ef2eadbc",
+      "storedInputIdentity": "c44b4fde6e51781252a0344d55d3e2e671b070ad4df91a564087ac6649a25078",
+      "version": 0
+    },
+    "at-bks::decision": {
+      "fingerprint": "0cb71d2a0f052e56f28af0f8e707eafb8fadea27b8371a1b3125db5bc5a23607",
+      "storedInputIdentity": "2f348a373b3b0590f7f40c22e31012dc5ae07aa2856bc3782df4fdb4e2465bbc",
+      "version": 0
+    },
+    "at-bvwg::decision": {
+      "fingerprint": "2685b3d1be4665c9a84a88824e10b28c84cff151aa0913c0183e52c8ced3bb34",
+      "storedInputIdentity": "3241565a8b181807349dcf1ae88614776bb8453fd0b885b1d7bba40ca60f1678",
+      "version": 0
+    },
+    "at-courts::decision": {
+      "fingerprint": "d33014e8cfd217023d6005ade3fd15fcb02b54f1be50fefa1cef79718ac54c64",
+      "storedInputIdentity": "db47aae05a4ddd6fa0bb4117576f577886da50c672bb653f2571a797e5b77b9f",
+      "version": 0
+    },
+    "at-findok::decision": {
+      "fingerprint": "d895815cb021c4725bdb7460592cd73ab48f394c2637471e8554935243d26ccf",
+      "storedInputIdentity": "ef3edf67d03c0bf39f63fd4db21546535e4bd6e60243dea3ce1fb6b180732e05",
+      "version": 0
+    },
+    "at-lvwg::decision": {
+      "fingerprint": "a69e0a9d06ffc21f5a1aeee6ff457a4d369cc1da39229f396f15bff1f2bbd30d",
+      "storedInputIdentity": "9a4d0a098fee80318bb5597f8f4a1e358980c92ebee776f3bf341f234d10511c",
+      "version": 0
+    },
+    "at-ubas::decision": {
+      "fingerprint": "99db3b53f418eacdbfac668f96b29e3028a0f52f93b51d3bfa060fbbaa5e6cbb",
+      "storedInputIdentity": "7d69618a8ea92fb639e0e1bcaedc14feae4f3d1e0420ed4188a9b15cb42dc3d8",
+      "version": 0
+    },
+    "at-umse::decision": {
+      "fingerprint": "1dd8164b7d7ad97f69062561cc400378ac9cedb5be5742cab33e319c108348ad",
+      "storedInputIdentity": "4b1b3afb9ac59eda92e2ff453ce84524d7f49f6d810f2a6dbb3174c32e0a05a2",
+      "version": 0
+    },
+    "at-uvs::decision": {
+      "fingerprint": "9ee44a8d2f88966919a0cdcc4398ebe79e54e7db60a6cde27d7391cd6f341e0c",
+      "storedInputIdentity": "567e669b11829140bc0690b2793a512f3713f744890d0f65427d2d509f773821",
+      "version": 0
+    },
+    "at-verg::decision": {
+      "fingerprint": "e2e6a5e437c38be7c7744920a4e12f9bf3d94eb3a5ee5f26cfff3b799788727f",
+      "storedInputIdentity": "f3e7efaab84fb2dbb2ef652d31fa375e4fe29ae852f33191dbe260d2ebaa31eb",
+      "version": 0
+    },
+    "at-vfgh::decision": {
+      "fingerprint": "0f0b4d2477f859435e09e2fc8bcbb19d7c5a9a1ddf8409e10ad482cda5fafcda",
+      "storedInputIdentity": "c11a47b386d8fcde278259f326daaaf83d436e720f507c6c62e4d696125d4ad4",
+      "version": 0
+    },
+    "at-vwgh::decision": {
+      "fingerprint": "4e0cd8b730675a4222d3360cc5b4a5d1a34e28464530e9691f310872a527932b",
+      "storedInputIdentity": "bf8b995b45fcfa1444c8669973fcdf4cb4dfa6883b33e7b88c17abe69f799f41",
+      "version": 0
+    },
+    "cz-ns::decision": {
+      "fingerprint": "b676541c6ed1a6836eb338f41fb10fb2efcfe5ba298f7b4bf2c88a558b8478ca",
+      "storedInputIdentity": "f4f1998c94b30c6a2986f9d002092eb61a347aa128f858c536704c2bdab0e715",
+      "version": 0
+    },
+    "cz-nss::decision": {
+      "fingerprint": "9fa55692a6c1dc34227a85e281dd90437fc2952fc69e3ed38ca389f22fdf6cf1",
+      "storedInputIdentity": "e98a0ac76e791c257c2888012a22f7524d58e70827eeb7d6d2d8f47cc875ded9",
+      "version": 0
+    },
+    "cz-regional::decision": {
+      "fingerprint": "cfcf09c81ecb7f86a05440e66b1621acfbae443a6dc4c1b5ace6d569a095b7ea",
+      "storedInputIdentity": "d5ec882e024059988319797fcec313dc8a86702fb2a0185d8b0c6d239b05748b",
+      "version": 0
+    },
+    "cz-uohs::decision": {
+      "fingerprint": "3f4ffa5751afacd7d1a2a3bb6e929e99086d5fe51e5c0cfc97eba79e9415ab21",
+      "storedInputIdentity": "a50941690090b14434867ca1b00eac90c51a2edac5d55c1926383181b1c9cae5",
+      "version": 0
+    },
+    "cz-us::decision": {
+      "fingerprint": "ac02b6be3764bfa4f133944762e23ed5e2d2a9082301e9132a99d91234dbdab7",
+      "storedInputIdentity": "2379d49693d5e1842529d1b3a23581dea5292011ffa7b0d668244014d4591b99",
+      "version": 0
+    },
+    "eu-ecj::decision": {
+      "fingerprint": "fb23fc94041c96be17d26549fdbb9283a4da5cebe974223d6bd30f1334a9d6b8",
+      "storedInputIdentity": "ec8a7ef3a528a2a9141b00a1c39f7cc826649167dd65f6aa0b549c19f23526c2",
+      "version": 0
+    },
+    "hu-bhgy::decision": {
+      "fingerprint": "de0829bb5dc48e0fba27acd58766d30b56a7f11cfdcb4821be6a827881683e95",
+      "storedInputIdentity": "b06fac23cb55c8d3788f79579d67aa34d260722d0a9f104dda6fc9f001d4f010",
+      "version": 0
+    },
+    "pl-courts::decision": {
+      "fingerprint": "9fae365d3a5029b47b69ac97a69f5d41a1b868cd938f3b31648b565e96b31dd4",
+      "storedInputIdentity": "19401e401f0c2d35730b640b407cdf129d7381db3a3e941b5f7f3b451e4b93e6",
+      "version": 0
+    },
+    "pl-courts::search": {
+      "fingerprint": "fb82fcc295d16c8627a05552c11d8c3617d63ce4881da8c7e9332ce89b01277a",
+      "storedInputIdentity": "9cc0b4d15a83484a46727a2c8b10be8a31e8e2485bf6248fa25d2bcf0a9391e9",
+      "version": 0
+    },
+    "pl-kio::decision": {
+      "fingerprint": "773e21c509cb50be7967a85da79d9b86d8c745279ad51ef517f4211fa583e2db",
+      "storedInputIdentity": "cd4268c33572352c86dbf0d37e2dd4a7b01b76c28cdaeabbf2b2be08b1a0f963",
+      "version": 0
+    },
+    "pl-kis::decision": {
+      "fingerprint": "f34cfafed407a4087a7cf44127414a78a02214fe58f2a46b231b935e65c92816",
+      "storedInputIdentity": "2089ccf0970fc4b4705cdf276b9a6c1faa6ab68c72249558838a70d5d792bc89",
+      "version": 0
+    },
+    "pl-ncourt::decision": {
+      "fingerprint": "107491ee2e0f1d013f80f119b8b66c08ea218a9b56249215a694d9959d6ab148",
+      "storedInputIdentity": "9807c6a83ec69eccfdd31458c669acec4dd17ac6a1fd2924f78d3e3a5208433e",
+      "version": 0
+    },
+    "pl-nsa::decision": {
+      "fingerprint": "ab8c1ea0b2b791007a05a6a5e10e66aa07027f4e75dca3157407b378492598d6",
+      "storedInputIdentity": "11a307ce3d46f24d97cc8fa1d553ca71a55b346ca694a333a4554f214c9efa34",
+      "version": 0
+    },
+    "pl-sn::decision": {
+      "fingerprint": "95682ac43a55065e6435d4409ace93cba265d56541d657f45cb1de6a794c96c6",
+      "storedInputIdentity": "1301c1701ca0d3c68f3edc041ea87ae50f024efe2e3ef654ec443097152927da",
+      "version": 0
+    },
+    "pl-tk::decision": {
+      "fingerprint": "3071ac4750e380b685657f10a3f84f4f880bee13bcf9d6e30330b38c3ac79df2",
+      "storedInputIdentity": "41d9dfdca864173de58636ffad013668aab478760deb3be18d7818894e5599ae",
+      "version": 0
+    },
+    "pl-uodo::decision": {
+      "fingerprint": "73f6078a2b2a9e3fd98c688871e8a03bb28f68656a485647b8f734c59bbf08e2",
+      "storedInputIdentity": "11e4430fb338d6c43ba651308e8df15dbc04539b24497251af575538f0b8625a",
+      "version": 0
+    },
+    "pl-uokik::decision": {
+      "fingerprint": "113b0e4b4efe5625895a8c5c56ba5cc2cbce94d89b9ce6030651ab524b28199e",
+      "storedInputIdentity": "d567f0b6586494fce6641d765c54c3a029c0d29fbd6d1030b53c09311f95f63f",
+      "version": 0
+    },
+    "pl-uokik::ruling": {
+      "fingerprint": "ae03fae709ff59a88eb0b155a202e9e9f17af3dec28e024c07f6ba3d7bb3ebbf",
+      "storedInputIdentity": "0303847cb07b1dc26cab438276d4e358f3e87b5015b351ed612059ef35491747",
+      "version": 0
+    },
+    "sk-courts::decision": {
+      "fingerprint": "93e26e3c7bf2a85968ad441817456428d81b58537ccec27f764876d4e0705d99",
+      "storedInputIdentity": "a3fa94f4c30c220b0c9f8d4940a3fb7c34b2a52a5d0991d6051d2577eefca62f",
+      "version": 0
+    },
+    "sk-us::decision": {
+      "fingerprint": "c05bbec99dff08e2264309c93d88c81fba23cb47bdcf37556c260a21a80def95",
+      "storedInputIdentity": "53094fbfbff9a41848104a4dcf7c17864d2d07a83e97610dbd525154f71c1c9d",
+      "version": 0
+    },
+    "us-courtlistener::decision": {
+      "fingerprint": "1d971155bcbfa4cb1b5c3cd95753dafa463456a8334c9256ea3825d937440660",
+      "storedInputIdentity": "efe87bb0d99d98b98db9ce07f28738d2b29f95d6ad8d8955b55fd09d57d023a9",
+      "version": 0
+    }
+  },
   "files": {
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path.",
     "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": "Hand-written rawHash equal to sourceFingerprint for the enrolled fixture; replace each site with the owner call (stored hashes unchanged), checking every build path.",

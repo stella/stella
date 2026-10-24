@@ -910,15 +910,10 @@ describe("processDecision — canonical storage mode", () => {
     // The next crawl pass sees the row the settle produced — the addresses
     // it wrote, not a recomputation of them; with the source unchanged it
     // advances the watermark and touches no corpus state.
-    existingDecision = {
-      ...existingDecision,
-      corpusMirrorStatus: "settled",
-      contentHash: settled["contentHash"],
-      textS3Key: settled["textS3Key"],
-      normalizedS3Key: settled["normalizedS3Key"],
-      astS3Key: settled["astS3Key"],
-      hasStoredDocument: true,
-    };
+    for (const updated of updatedDecisionRows) {
+      Object.assign(existingDecision, updated);
+    }
+    existingDecision.hasStoredDocument = true;
     events.length = 0;
     transferredPacks.length = 0;
 
