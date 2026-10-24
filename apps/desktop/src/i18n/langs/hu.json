@@ -241,6 +241,7 @@
     "strikethrough": "Áthúzott",
     "underline": "Aláhúzott",
     "unnamedClip": "Szöveg",
+    "clipName": "Név",
     "allClips": "Összes vágólapelem",
     "clips": "Vágólapelemek",
     "externalRegistry": "Külső nyilvántartás",
