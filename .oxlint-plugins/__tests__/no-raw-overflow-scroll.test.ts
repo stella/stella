@@ -58,3 +58,12 @@ test("accepts vertical-only scrolling and the primitive scrollbar", async () => 
     ),
   ).toEqual([1, 2]);
 });
+
+test("rejects hidden horizontal scrollbars even on otherwise exempt native content", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-overflow-scroll",
+      'const visible = "[&_pre]:overflow-x-auto";\nconst hidden = "[&_pre]:overflow-x-auto [&_pre]:[scrollbar-width:none]";',
+    ),
+  ).toEqual([2]);
+});
