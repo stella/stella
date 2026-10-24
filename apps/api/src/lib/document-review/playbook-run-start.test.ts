@@ -108,7 +108,8 @@ describe("classifying a playbook run's workflow start", () => {
           failedRuns.push(id);
         },
       },
-      kickoff: async ({ run }) => await run(new AbortController().signal),
+      kickoff: async ({ run }) =>
+        await run(new AbortController().signal, async () => undefined),
       queue: asTestRaw<
         NonNullable<Parameters<typeof startWorkflow>[0]["queue"]>
       >({
@@ -125,7 +126,12 @@ describe("classifying a playbook run's workflow start", () => {
 
     // These reachability assertions prevent a planning failure from standing
     // in for the enqueue fault, or a cleanup-only failure from satisfying it.
-    expect(enqueued).toEqual([`workflow-${claimed.at(0)}-${entityId}`]);
+    const claimedRunId = claimed.at(0);
+    expect(claimedRunId).toBeDefined();
+    if (claimedRunId === undefined) {
+      return;
+    }
+    expect(enqueued).toEqual([`workflow-${claimedRunId}-${entityId}`]);
     expect(result).toEqual({ status: "failed" });
     expect(playbookRunStartOutcome(result.status)).toBe(
       PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED,
