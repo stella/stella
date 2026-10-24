@@ -7104,8 +7104,8 @@ jobs:
               input_valid=true
               case "$input_kind" in
                 json-object-file) [[ -r "$input_value" ]] && jq -se 'length == 1 and (.[0] | type == "object")' "$input_value" > /dev/null 2>&1 ;;
-                json-array) jq -e 'type == "array"' <<< "$input_value" > /dev/null 2>&1 ;;
-                json-object) jq -e 'type == "object"' <<< "$input_value" > /dev/null 2>&1 ;;
+                json-array) jq -se 'length == 1 and (.[0] | type == "array")' <<< "$input_value" > /dev/null 2>&1 ;;
+                json-object) jq -se 'length == 1 and (.[0] | type == "object")' <<< "$input_value" > /dev/null 2>&1 ;;
                 positive-integer) [[ "$input_value" =~ ^[1-9][0-9]*$ ]] ;;
                 hex40) [[ "$input_value" =~ ^[0-9a-f]{40}$ ]] ;;
                 hex64) [[ "$input_value" =~ ^[0-9a-f]{64}$ ]] ;;

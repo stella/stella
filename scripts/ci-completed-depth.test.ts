@@ -570,6 +570,7 @@ const recordEvidence = (
     head = pr.head.sha,
     script = evidenceBlock,
     runRequired = "true",
+    env = {},
   } = {},
 ) => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
@@ -615,6 +616,7 @@ const recordEvidence = (
             ]),
           ),
         ),
+        ...env,
       },
     });
     expect(child.exitCode, child.stderr.toString()).toBe(0);
@@ -636,6 +638,21 @@ const allSucceeded = Object.fromEntries([
   ...fastRequired.map((job) => [job, "success"]),
   ["web-build", "skipped"],
 ]);
+
+test("completion evidence inputs contain exactly one JSON document", () => {
+  for (const [name, value] of [
+    ["FAST_REQUIRED", "[] []"],
+    ["PR_DEPTH_JOBS", "[] []"],
+    ["JOB_SCOPES", "{} {}"],
+    ["FAST_JOB_SCOPES", "{} {}"],
+    ["NEEDS", "{} {}"],
+  ]) {
+    expect(
+      recordEvidence(allSucceeded, { env: { [name]: value } }),
+      name,
+    ).toBeUndefined();
+  }
+});
 
 test("a superseded, cancelled or failed run records no completion evidence", () => {
   expect(recordEvidence(allSucceeded)).toBeDefined();
