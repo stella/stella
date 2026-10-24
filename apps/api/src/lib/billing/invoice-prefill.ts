@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { standardVatRateOn } from "@stll/invoicing";
 
@@ -48,17 +48,19 @@ const SELLER_COLUMNS = {
  * requested seller profile that is missing or archived resolves to `null`
  * with `sellerSource: "not_found"`; callers refuse it.
  */
-export const resolveInvoicePrefill = async (
+export const readInvoicePrefillContext = async (
   tx: Transaction,
   {
     organizationId,
-    workspaceId,
+    workspaceIds,
     sellerProfileId,
-    supplyDate,
-  }: ResolveInvoicePrefillOptions,
+  }: Omit<ResolveInvoicePrefillOptions, "workspaceId" | "supplyDate"> & {
+    workspaceIds: readonly SafeId<"workspace">[];
+  },
 ) => {
-  const [matter] = await tx
+  const matters = await tx
     .select({
+      workspaceId: workspaces.id,
       clientId: workspaces.clientId,
       clientName: contacts.displayName,
       registrationNumber: contacts.registrationNumber,
@@ -78,11 +80,11 @@ export const resolveInvoicePrefill = async (
     )
     .where(
       and(
-        eq(workspaces.id, workspaceId),
+        inArray(workspaces.id, workspaceIds),
         eq(workspaces.organizationId, organizationId),
       ),
     )
-    .limit(1);
+    .limit(workspaceIds.length);
   const [seller] = await tx
     .select(SELLER_COLUMNS)
     .from(sellerProfiles)
@@ -122,6 +124,29 @@ export const resolveInvoicePrefill = async (
           `An organization keeps more than ${VAT_RATE_PERIOD_LIMIT} VAT rate periods`,
         );
 
+  return {
+    matters: new Map(matters.map((matter) => [matter.workspaceId, matter])),
+    seller: seller ?? null,
+    sellerProfileId,
+    vatRatePeriods,
+  };
+};
+
+type ResolveInvoicePrefillContextOptions = Pick<
+  ResolveInvoicePrefillOptions,
+  "workspaceId" | "supplyDate"
+>;
+
+export const resolveInvoicePrefillContext = (
+  {
+    matters,
+    seller,
+    sellerProfileId,
+    vatRatePeriods,
+  }: Awaited<ReturnType<typeof readInvoicePrefillContext>>,
+  { workspaceId, supplyDate }: ResolveInvoicePrefillContextOptions,
+) => {
+  const matter = matters.get(workspaceId);
   const buyer =
     matter?.clientName === null || matter?.clientName === undefined
       ? EMPTY_BUYER_SNAPSHOT
@@ -158,3 +183,15 @@ export const resolveInvoicePrefill = async (
     dueDaysSource: due.source,
   };
 };
+
+export const resolveInvoicePrefill = async (
+  tx: Transaction,
+  { workspaceId, supplyDate, ...options }: ResolveInvoicePrefillOptions,
+) =>
+  resolveInvoicePrefillContext(
+    await readInvoicePrefillContext(tx, {
+      ...options,
+      workspaceIds: [workspaceId],
+    }),
+    { workspaceId, supplyDate },
+  );

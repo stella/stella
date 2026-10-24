@@ -388,6 +388,7 @@
         "reading": "Mode lecture"
       },
       "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
+      "pdfTextFailed": "Le texte du PDF n’a pas pu être lu : les affirmations ne sont donc pas signalées sur ses pages.",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
@@ -655,6 +656,7 @@
         "eso9": "Feuille d'import ESO9 (XLSX)",
         "exporting": "Préparation de l'export…",
         "isdoc": "Facture électronique ISDOC (ABRA Gen et autres)",
+        "ksefFa3": "Facture électronique KSeF FA(3) (XML)",
         "spreadsheets": "Feuilles de calcul",
         "xlsx": "Factures (XLSX)",
         "xlsxLines": "Lignes de facture (XLSX)"
@@ -1043,7 +1045,10 @@
       "pageOfCount": "Page {page} sur {pageCount}",
       "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
+      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
+      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page",
       "refineForMore": "Affinez votre recherche pour voir d’autres résultats"

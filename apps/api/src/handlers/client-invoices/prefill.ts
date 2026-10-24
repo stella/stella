@@ -1,10 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { readMatterInvoicePrefill } from "@/api/lib/billing/invoice-prefill-operation";
+import { readMatterInvoicePrefills } from "@/api/lib/billing/invoice-prefill-operation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -82,32 +82,37 @@ const prefillClientInvoice = createSafeRootHandler(
             }),
           );
         }
-        const matters = [];
-        let itemCount = 0;
-        for (const matter of rows) {
-          // db-await-in-loop: bounded at 50 matters; canonical prefill owns eligibility and seller/VAT rules
-          const prefill = await readMatterInvoicePrefill(tx, {
-            organizationId: session.activeOrganizationId,
-            workspaceId: matter.workspaceId,
-            periodStart: query.periodStart,
-            periodEnd: query.periodEnd,
-          });
-          if (prefill.isErr()) {
-            return Result.err(prefill.error);
-          }
-          itemCount +=
-            prefill.value.timeEntries.length + prefill.value.expenses.length;
-          if (itemCount > LIMITS.invoiceLinesPerInvoice) {
-            return Result.err(
-              new HandlerError({
-                status: 409,
-                message:
-                  "Narrow the billing period to preview fewer work items",
-              }),
-            );
-          }
-          matters.push({ ...matter, prefill: prefill.value });
+        const prefills = await readMatterInvoicePrefills(tx, {
+          organizationId: session.activeOrganizationId,
+          workspaceIds: rows.map((row) => row.workspaceId),
+          periodStart: query.periodStart,
+          periodEnd: query.periodEnd,
+        });
+        if (prefills.isErr()) {
+          return Result.err(prefills.error);
         }
+        const itemCount = prefills.value.reduce(
+          (count, { prefill }) =>
+            count + prefill.timeEntries.length + prefill.expenses.length,
+          0,
+        );
+        if (itemCount > LIMITS.invoiceLinesPerInvoice) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Narrow the billing period to preview fewer work items",
+            }),
+          );
+        }
+        const prefillByMatter = new Map(
+          prefills.value.map((row) => [row.workspaceId, row.prefill]),
+        );
+        const matters = rows.map((matter) => ({
+          ...matter,
+          prefill:
+            prefillByMatter.get(matter.workspaceId) ??
+            panic("Selected invoice matter has no prefill"),
+        }));
         return Result.ok({ clientId: params.clientId, matters });
       }),
     );

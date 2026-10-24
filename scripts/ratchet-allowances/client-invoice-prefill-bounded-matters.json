@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/handlers/client-invoices/prefill.ts",
-  "delta": 1,
-  "reason": "At most 50 selected matters are read through the canonical matter prefill operation, fail-fast on access or entry limits and bounded to 1000 combined lines. Each owner query applies its existing read bounds."
-}

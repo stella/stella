@@ -388,6 +388,7 @@
         "reading": "Olvasási nézet"
       },
       "notLocated": "{count, plural, one {# állítás nem található az eredetiben} other {# állítás nem található az eredetiben}}",
+      "pdfTextFailed": "A PDF szövegét nem sikerült beolvasni, ezért az állítások nincsenek megjelölve az oldalakon.",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {
@@ -655,6 +656,7 @@
         "eso9": "ESO9 importtábla (XLSX)",
         "exporting": "Export előkészítése…",
         "isdoc": "ISDOC e-számla (ABRA Gen és mások)",
+        "ksefFa3": "KSeF e-számla FA(3) (XML)",
         "spreadsheets": "Táblázatok",
         "xlsx": "Számlák (XLSX)",
         "xlsxLines": "Számlatételek (XLSX)"
@@ -1043,7 +1045,10 @@
       "pageOfCount": "{page}. oldal / {pageCount}",
       "pageOfEstimatedCount": "{page}. oldal / ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page}. oldal a körülbelül {pageCount} oldalból",
+      "pageWithEstimatedMatchCounts": "{page}. oldal · körülbelül {exactCount, plural, one {# pontos egyezés} other {# pontos egyezés}} · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}} ezen az oldalon",
       "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
+      "pageWithMatchCounts": "{page}. oldal · {exactCount, plural, one {# pontos egyezés} other {# pontos egyezés}} · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}} ezen az oldalon",
+      "pageWithPartialMatchCount": "{page}. oldal · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}} ezen az oldalon",
       "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
       "perPage": "Oldalanként",
       "refineForMore": "Szűkítse a keresést, hogy további találatokat lásson"

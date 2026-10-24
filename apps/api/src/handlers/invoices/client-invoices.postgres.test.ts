@@ -344,23 +344,11 @@ if (!databaseUrl || !runPostgres) {
       }
     };
 
-    test("client prefill keeps its selected matters and query cost as other client matters grow", async () => {
-      const scenario = await seedScenario();
-      const unrelatedMatters = Array.from({ length: 199 }, () => {
-        const id = createSafeId<"workspace">();
-        return {
-          id,
-          organizationId: scenario.orgId,
-          clientId: scenario.otherClientId,
-          name: "Unrelated client matter",
-          reference: id,
-        };
-      });
-      // The fixture already has one other-client matter: these populations
-      // contain exactly 10 and 200, while the requested client keeps two.
-      await db.insert(workspaces).values(unrelatedMatters.slice(0, 9));
-      const userId = scenario.actors.owner;
-      const context = createTestHandlerContext<
+    const prefillContext = (
+      scenario: Awaited<ReturnType<typeof seedScenario>>,
+      userId: SafeId<"user"> = scenario.actors.owner,
+    ) =>
+      createTestHandlerContext<
         Parameters<typeof clientInvoicePrefillScalingScenario.handler>[0]
       >({
         safeDb: createMembershipSafeDb(markRlsDatabase(db), {
@@ -379,6 +367,23 @@ if (!databaseUrl || !runPostgres) {
         ),
         route: "/v1/client-invoices/:clientId/prefill",
       });
+
+    test("client prefill keeps its selected matters and query cost as other client matters grow", async () => {
+      const scenario = await seedScenario();
+      const unrelatedMatters = Array.from({ length: 199 }, () => {
+        const id = createSafeId<"workspace">();
+        return {
+          id,
+          organizationId: scenario.orgId,
+          clientId: scenario.otherClientId,
+          name: "Unrelated client matter",
+          reference: id,
+        };
+      });
+      // The fixture already has one other-client matter: these populations
+      // contain exactly 10 and 200, while the requested client keeps two.
+      await db.insert(workspaces).values(unrelatedMatters.slice(0, 9));
+      const context = prefillContext(scenario);
       const at10 = await clientInvoicePrefillScalingScenario.measure(context);
       await db.insert(workspaces).values(unrelatedMatters.slice(9));
       const at200 = await clientInvoicePrefillScalingScenario.measure(context);
@@ -392,6 +397,102 @@ if (!databaseUrl || !runPostgres) {
         expect(measurement.transactionRoundTrips).toBeGreaterThan(0);
       }
       expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
+    });
+
+    test("selected matter growth shares source queries and refuses per-matter overflow", async () => {
+      const scenario = await seedScenario();
+      const entryValues = [scenario.firstMatterId, scenario.secondMatterId].map(
+        (workspaceId) => ({
+          id: createSafeId<"timeEntry">(),
+          organizationId: scenario.orgId,
+          workspaceId,
+          userId: scenario.actors.owner,
+          dateWorked: "2026-09-10",
+          timezoneId: "UTC",
+          durationMinutes: 60,
+          billedMinutes: 60,
+          rateAtEntry: cents(100),
+          currency: "EUR",
+          status: "approved" as const,
+          narrative: "Selected work",
+        }),
+      );
+      await db.insert(timeEntries).values(entryValues);
+      const context = prefillContext(scenario);
+      await db
+        .update(workspaces)
+        .set({ status: "archived" })
+        .where(eq(workspaces.id, scenario.secondMatterId));
+      const atOne = await clientInvoicePrefillScalingScenario.measure(context);
+      await db
+        .update(workspaces)
+        .set({ status: "active" })
+        .where(eq(workspaces.id, scenario.secondMatterId));
+      const atTwo = await clientInvoicePrefillScalingScenario.measure(context);
+      const additional = Array.from(
+        { length: LIMITS.clientInvoiceMatters - 2 },
+        () => {
+          const id = createSafeId<"workspace">();
+          return {
+            id,
+            organizationId: scenario.orgId,
+            clientId: scenario.clientId,
+            name: "Selected matter",
+            reference: id,
+          };
+        },
+      );
+      await db.insert(workspaces).values(additional);
+      const atLimit =
+        await clientInvoicePrefillScalingScenario.measure(context);
+      expect([atOne.rows, atTwo.rows, atLimit.rows]).toEqual([
+        1,
+        2,
+        LIMITS.clientInvoiceMatters,
+      ]);
+      expect(atOne.statements).toBeGreaterThan(0);
+      expect(atTwo.statements).toBe(atOne.statements);
+      expect(atLimit.statements).toBe(atOne.statements);
+      expect(atLimit.transactionRoundTrips).toBe(atOne.transactionRoundTrips);
+      expect(
+        await clientInvoicePrefillScalingScenario.handler(context),
+      ).toMatchObject({
+        matters: expect.arrayContaining(
+          entryValues.map((entry) => ({
+            workspaceId: entry.workspaceId,
+            prefill: {
+              taxableSupplyDate: entry.dateWorked,
+              timeEntries: [
+                {
+                  id: entry.id,
+                  rateAtEntry: entry.rateAtEntry,
+                  timekeeperName: "Invoice visibility",
+                },
+              ],
+              expenses: [],
+            },
+          })),
+        ),
+      });
+      // Overflow on the final selected matter must not become an empty or
+      // truncated successful group after earlier matters have been loaded.
+      const last =
+        additional.at(-1) ?? panic("Selected-matter limit fixture is empty");
+      const sourceEntry =
+        entryValues.at(0) ?? panic("Selected source fixture is empty");
+      await db.insert(timeEntries).values(
+        Array.from({ length: LIMITS.invoiceSourceItemsPerKind + 1 }, () => ({
+          ...sourceEntry,
+          id: createSafeId<"timeEntry">(),
+          workspaceId: last.id,
+        })),
+      );
+      expect(
+        await clientInvoicePrefillScalingScenario.handler(context),
+      ).toMatchObject({
+        code: 409,
+        response: { code: "too_many_unbilled_items" },
+      });
     });
 
     test("organization deletion cascades through contacts, matters and client-linked invoices", async () => {

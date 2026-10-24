@@ -388,6 +388,7 @@
         "reading": "Text na čítanie"
       },
       "notLocated": "{count, plural, one {# tvrdenie sa v origináli nepodarilo nájsť} few {# tvrdenia sa v origináli nepodarilo nájsť} many {# tvrdenia sa v origináli nepodarilo nájsť} other {# tvrdení sa v origináli nepodarilo nájsť}}",
+      "pdfTextFailed": "Text PDF sa nepodarilo prečítať, preto tvrdenia nie sú na stranách vyznačené.",
       "selectClaim": "Vyberte tvrdenie a pozrite si súvisiace záznamy.",
       "showQueue": "Zobraziť poradie",
       "stats": {
@@ -655,6 +656,7 @@
         "eso9": "Importná tabuľka ESO9 (XLSX)",
         "exporting": "Pripravujem export…",
         "isdoc": "E-faktúra ISDOC (ABRA Gen a ďalšie)",
+        "ksefFa3": "E-faktúra KSeF FA(3) (XML)",
         "spreadsheets": "Tabuľky",
         "xlsx": "Faktúry (XLSX)",
         "xlsxLines": "Položky faktúr (XLSX)"
@@ -1043,7 +1045,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · približne {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku",
       "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"

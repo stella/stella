@@ -1572,6 +1572,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1650,6 +1651,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],

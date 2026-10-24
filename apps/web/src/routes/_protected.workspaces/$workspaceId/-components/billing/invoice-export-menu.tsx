@@ -59,6 +59,7 @@ const FORMAT_GROUPS = [
     labelKey: "billing.invoices.export.eBilling",
     formats: [
       ["ubl", { name: PRODUCT_NAMES.ubl }],
+      ["ksef_fa3", "billing.invoices.export.ksefFa3"],
       ["ledes_1998b", { name: PRODUCT_NAMES.ledes_1998b }],
     ],
   },

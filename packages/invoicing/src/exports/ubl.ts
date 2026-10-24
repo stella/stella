@@ -6,6 +6,7 @@ import {
   amountText,
   countryCodeOf,
   effectiveVatRateBps,
+  exportFileNamer,
   exportMattersOf,
   invoiceDescriptionOf,
   type InvoiceExportLine,
@@ -296,9 +297,10 @@ export const buildUblFiles = (
       }
     }
   }
+  const fileName = exportFileNamer("xml");
   return Result.ok(
     records.map((record) => ({
-      fileName: `${record.number.replace(/[^\w.-]/gu, "_")}.xml`,
+      fileName: fileName(record.number),
       content: document(record),
     })),
   );

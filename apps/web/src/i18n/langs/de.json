@@ -388,6 +388,7 @@
         "reading": "Leseansicht"
       },
       "notLocated": "{count, plural, one {# Behauptung wurde im Original nicht gefunden} other {# Behauptungen wurden im Original nicht gefunden}}",
+      "pdfTextFailed": "Der Text der PDF konnte nicht gelesen werden, daher sind die Behauptungen auf den Seiten nicht markiert.",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {
@@ -655,6 +656,7 @@
         "eso9": "ESO9-Importtabelle (XLSX)",
         "exporting": "Export wird vorbereitet…",
         "isdoc": "ISDOC-E-Rechnung (ABRA Gen u. a.)",
+        "ksefFa3": "KSeF-E-Rechnung FA(3) (XML)",
         "spreadsheets": "Tabellen",
         "xlsx": "Rechnungen (XLSX)",
         "xlsxLines": "Rechnungspositionen (XLSX)"
@@ -1043,7 +1045,10 @@
       "pageOfCount": "Seite {page} von {pageCount}",
       "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
       "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
+      "pageWithEstimatedMatchCounts": "Seite {page} · etwa {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "pageWithMatchCounts": "Seite {page} · {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
+      "pageWithPartialMatchCount": "Seite {page} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite",
       "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"

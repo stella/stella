@@ -6,6 +6,7 @@ import {
   amountText,
   countryCodeOf,
   effectiveVatRateBps,
+  exportFileNamer,
   invoiceDescriptionOf,
   type InvoiceExportRecord,
   quantityText,
@@ -227,6 +228,7 @@ export const buildIsdocFiles = (
   if (records.length === 0) {
     return invalidInput("There are no issued invoices to export");
   }
+  const fileName = exportFileNamer("isdoc");
   const files: { fileName: string; content: string }[] = [];
   for (const record of records) {
     if (record.currency !== record.seller.homeCurrency) {
@@ -238,7 +240,7 @@ export const buildIsdocFiles = (
       return invalidInput(`Invoice ${record.number} has no UUID identifier`);
     }
     files.push({
-      fileName: `${record.number.replace(/[^\w.-]/gu, "_")}.isdoc`,
+      fileName: fileName(record.number),
       content: document(record),
     });
   }

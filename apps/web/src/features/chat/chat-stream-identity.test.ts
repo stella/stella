@@ -884,30 +884,32 @@ describe("streamed chunks keep what they do not change", () => {
     } satisfies Session;
     const observed = await streamSession({ session });
     expectStableStreamIdentity({ ...observed, history });
-    expect(
-      observed.emits.some(
-        ({ cause, shown }) =>
-          typeof cause === "object" &&
-          cause.type === EventType.REASONING_MESSAGE_CONTENT &&
-          shown.some(
-            (message) =>
-              !STREAMED_IDS.has(message.id) &&
-              reasoningTargetsMessage({
-                cause,
-                message,
-                historyIds: new Set(history.map(({ id }) => id)),
-                activeAssistantId: shown.findLast(
-                  ({ id, role }) =>
-                    role === "assistant" &&
-                    !history.some(
-                      (historicalMessage) => historicalMessage.id === id,
-                    ),
-                )?.id,
-                stepName: undefined,
-              }),
-          ),
-      ),
-    ).toBe(true);
+    const historyIds = new Set(history.map(({ id }) => id));
+    let stepName: string | undefined;
+    const reachedFallbackReasoning = observed.emits.some(({ cause, shown }) => {
+      if (typeof cause !== "object") {
+        return false;
+      }
+      if (cause.type === EventType.RUN_STARTED) {
+        stepName = undefined;
+      } else if (cause.type === EventType.STEP_STARTED) {
+        stepName = cause.stepName;
+      }
+      return shown.some(
+        (message) =>
+          !STREAMED_IDS.has(message.id) &&
+          reasoningTargetsMessage({
+            cause,
+            message,
+            historyIds,
+            activeAssistantId: shown.findLast(
+              ({ id, role }) => role === "assistant" && !historyIds.has(id),
+            )?.id,
+            stepName,
+          }),
+      );
+    });
+    expect(reachedFallbackReasoning).toBe(true);
   });
 
   test("no chunk, tool result or snapshot reads the 200 finished tool calls it leaves alone", async () => {

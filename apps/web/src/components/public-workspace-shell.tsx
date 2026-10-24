@@ -39,6 +39,7 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";
@@ -204,6 +205,7 @@ const PublicSidebar = ({
     select: (state) => state.location.href,
   });
   const { toggleSidebar } = useSidebar();
+  const mounted = useHasMounted();
   const sidebarLayout = useSidebarLayout();
   const isCollapsed = sidebarLayout === "rail";
   const feedbackChannel = resolveFeedbackChannel(authStatus.status);
@@ -269,6 +271,7 @@ const PublicSidebar = ({
           <Button
             aria-label={t("navigation.toggleSidebar")}
             className="size-7"
+            disabled={!mounted}
             onClick={toggleSidebar}
             size="icon"
             variant="muted"

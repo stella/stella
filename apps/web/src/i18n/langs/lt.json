@@ -388,6 +388,7 @@
         "reading": "Skaitymo rodinys"
       },
       "notLocated": "{count, plural, one {# teiginys originale nerastas} few {# teiginiai originale nerasti} many {# teiginio originale nerasta} other {# teiginių originale nerasta}}",
+      "pdfTextFailed": "Nepavyko perskaityti PDF teksto, todėl teiginiai puslapiuose nepažymėti.",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
@@ -655,6 +656,7 @@
         "eso9": "ESO9 importo lentelė (XLSX)",
         "exporting": "Ruošiamas eksportas…",
         "isdoc": "ISDOC el. sąskaita (ABRA Gen ir kt.)",
+        "ksefFa3": "KSeF el. sąskaita FA(3) (XML)",
         "spreadsheets": "Skaičiuoklės",
         "xlsx": "Sąskaitos (XLSX)",
         "xlsxLines": "Sąskaitų eilutės (XLSX)"
@@ -1043,7 +1045,10 @@
       "pageOfCount": "{page} psl. iš {pageCount}",
       "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page} psl. · apytiksliai {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithMatchCounts": "{page} psl. · {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithPartialMatchCount": "{page} psl. · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje",
       "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
