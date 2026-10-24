@@ -474,7 +474,11 @@ const combineSchemas = (
   const unique = uniqueSchemas(schemas);
   const combined =
     compaction === "equivalent" ? mergeLiteralAlternatives(unique) : unique;
-  return combined.length === 1 ? (combined.at(0) ?? {}) : { anyOf: combined };
+  // Normalize newly combined property unions before the depth limit counts
+  // their alternatives as another level of object detail.
+  return combined.length === 1
+    ? (combined.at(0) ?? {})
+    : simplifyMcpOutputSchema({ anyOf: combined }, compaction);
 };
 
 const MERGEABLE_OBJECT_SCHEMA_KEYS = new Set([
