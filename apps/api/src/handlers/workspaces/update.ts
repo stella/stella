@@ -44,8 +44,9 @@ const updateWorkspaceBodySchema = t.Object({
 const config = {
   contract: "patch",
   description:
-    "Change a matter: its name, client, reference, billing reference, colour, " +
-    "or lead (who must already be a member of it). Only the fields you pass " +
+    "Change a matter: its name, client, reference, billing reference, the " +
+    "language its billing narratives are written in, colour, or lead (who " +
+    "must already be a member of it). Only the fields you pass " +
     "are written. clientId attaches a client to a personal matter or replaces " +
     "the client of a client matter; members are managed separately.",
   permissions: { workspace: ["update"] },
