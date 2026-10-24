@@ -10,11 +10,10 @@ import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/cr
 import { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistrySlug,
+  LoadRegistryWebSearch,
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { WebSearchRequestObserver } from "@/api/lib/web-search/search";
-import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 type LookupBusinessRegistryProps = {
   observer: RegistryRequestObservation;
@@ -25,8 +24,7 @@ type LookupBusinessRegistryProps = {
   q: string;
   detail?: BusinessRegistryLookupDetail | undefined;
   executeLookup?: typeof executeRegistryLookup | undefined;
-  webSearchProvider?: WebSearchProvider | null | undefined;
-  observeWebSearch?: WebSearchRequestObserver | undefined;
+  loadWebSearch?: LoadRegistryWebSearch | undefined;
 };
 
 // Native-tool preferences control discovery, not access to public records.
@@ -39,8 +37,7 @@ export const lookupBusinessRegistryShared = async ({
   q,
   detail,
   executeLookup = executeRegistryLookup,
-  webSearchProvider,
-  observeWebSearch = () => undefined,
+  loadWebSearch,
 }: LookupBusinessRegistryProps): Promise<
   Result<RegistryLookupResponse, HandlerError>
 > => {
@@ -78,14 +75,7 @@ export const lookupBusinessRegistryShared = async ({
     detail,
     observer,
     permit,
-    ...(webSearchProvider
-      ? {
-          webSearch: {
-            provider: webSearchProvider,
-            observer: observeWebSearch,
-          },
-        }
-      : {}),
+    loadWebSearch,
   });
   if (result instanceof HandlerError) {
     return Result.err(result);

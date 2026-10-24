@@ -5,7 +5,7 @@ import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -80,12 +80,19 @@ import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-fil
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import {
+  type ReadOutcome,
+  readPresent,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
@@ -254,6 +261,8 @@ export type McpRequestContext = {
   accessibleWorkspaces: AccessibleWorkspace[];
   /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
   clientIp?: string | null;
+  credentialType?: "oauth" | "api-key" | "anonymous";
+  clientId?: string | null;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -278,21 +287,18 @@ export type McpRequestContext = {
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
    * `registry` enum to these and drops the tool when empty, mirroring the
    * in-app chat tool so the MCP surface never advertises a registry the
-   * call cannot execute.
+   * call cannot execute. Read from organization settings and registry
+   * credential availability on first use, at most once per request: only
+   * discovery narrows by it, so a `tools/call` never pays the settings read and
+   * credential decryption behind it.
    *
-   * Loaded on first use within this request only: reading organization
-   * settings and decrypting registry credentials is paid by a projection that
-   * offers the registry tool, never by a call that does not.
-   *
-   * An absent loader, or a failed read (a settings or credential read
-   * fault), means "not resolved": the projection then leaves the full enum
-   * advertised and the call-time gate stays the backstop. It is NOT the same
-   * as an empty array, which means the org can reach no registry and the tool
-   * is dropped.
+   * Absent (a synthetic/test context) or an unavailable read leaves the full
+   * enum advertised, and the call-time gate stays the backstop. Neither is
+   * the same as a present empty list, which means the org can reach no
+   * registry and the tool is dropped.
    */
   loadEnabledRegistrySlugs?:
-    | (() => Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>>)
-    | undefined;
+    (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>) | undefined;
   /**
    * The web search provider, loaded on first use within this request only, so
    * a call that does no web search never reads or decrypts the stored key.
@@ -300,8 +306,7 @@ export type McpRequestContext = {
    * web search is off (not configured, turned off, or an unreadable key).
    */
   loadWebSearchProvider?:
-    | (() => Promise<Result<McpWebSearchAvailability, SafeDbError>>)
-    | undefined;
+    (() => Promise<Result<McpWebSearchAvailability, SafeDbError>>) | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -316,8 +321,7 @@ export type McpRequestContext = {
   createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
   /** Pin one workspace only after an MCP access/status gate proves it. */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
@@ -466,6 +470,7 @@ const readMcpWebSearchProvider = async ({
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
       columns: {
+        practiceJurisdictions: true,
         nativeToolOverrides: true,
         webSearchApiKeyEncrypted: true,
         webSearchApiKeyIv: true,
@@ -488,6 +493,24 @@ const readMcpWebSearchProvider = async ({
   );
 };
 
+const resolveMcpWebHandoffIdentity = (session: McpSession) => {
+  const credential = session.credential;
+  if (credential?.type === "oauth_client") {
+    return { credentialType: "oauth", clientId: credential.clientId } as const;
+  }
+  const credentialType =
+    credential?.type === "machine_api_key" ||
+    credential?.type === "personal_api_key"
+      ? "api-key"
+      : "anonymous";
+  return { credentialType, clientId: null } as const;
+};
+
+const REGISTRY_NARROWING_SINK = failureSink({
+  event: "mcp.registry_narrowing.read_failed",
+  expected: [],
+});
+
 /**
  * The registries one organization can reach, from its settings and its stored
  * credentials, read in one scoped transaction.
@@ -498,7 +521,7 @@ const readEnabledRegistrySlugs = async ({
 }: {
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
-}): Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>> => {
+}): Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> => {
   const read = await safeDb(async (tx) => {
     const settings = await tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
@@ -511,7 +534,12 @@ const readEnabledRegistrySlugs = async ({
     });
     return { dispatch, settings };
   });
-  return read.map(({ dispatch, settings }) =>
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: REGISTRY_NARROWING_SINK });
+    return readUnavailable({ kind: "thrown", error: read.error });
+  }
+  const { dispatch, settings } = read.value;
+  return readPresent(
     availableRegistryHandlersForOrg({
       disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
         settings ?? undefined,
@@ -653,8 +681,7 @@ export const resolveMcpSessionContext = async (
   // Read once, on first use within this request: settings and decrypted
   // registry credentials in one scoped transaction.
   let enabledRegistrySlugs:
-    | Promise<Result<readonly BusinessRegistrySlug[], SafeDbError>>
-    | undefined;
+    Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> | undefined;
   const loadEnabledRegistrySlugs = async () => {
     enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,
@@ -663,8 +690,7 @@ export const resolveMcpSessionContext = async (
     return await enabledRegistrySlugs;
   };
   let webSearchAvailability:
-    | Promise<Result<McpWebSearchAvailability, SafeDbError>>
-    | undefined;
+    Promise<Result<McpWebSearchAvailability, SafeDbError>> | undefined;
   const loadWebSearchProvider = async () => {
     webSearchAvailability ??= readMcpWebSearchProvider({
       organizationId,
@@ -673,7 +699,10 @@ export const resolveMcpSessionContext = async (
     return await webSearchAvailability;
   };
 
+  const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
+
   return {
+    ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,

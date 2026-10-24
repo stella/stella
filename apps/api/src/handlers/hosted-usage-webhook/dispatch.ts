@@ -20,10 +20,10 @@ import * as v from "valibot";
 import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  hostedCheckoutClaims,
-  usagePolicies,
-  usageEntitlements,
   CLOSED_USAGE_ENTITLEMENT_STATUSES,
+  hostedCheckoutClaims,
+  usageEntitlements,
+  usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
@@ -33,13 +33,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
-  HostedUsageWebhookEvent,
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
+  HostedUsageWebhookEvent,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
 import {
-  polarEntitlementStatusSchema,
   type PolarEntitlementStatus,
+  polarEntitlementStatusSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { failureSink } from "@/api/lib/observability/failure";

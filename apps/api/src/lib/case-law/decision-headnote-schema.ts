@@ -4,9 +4,9 @@ import { t } from "elysia";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  type DecisionHeadnotePreview,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
-  type DecisionHeadnotePreview,
 } from "@stll/api-contract/case-law-text-field";
 
 import { LIMITS } from "@/api/lib/limits";

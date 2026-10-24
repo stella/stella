@@ -261,9 +261,7 @@ const SPAWN_MODULES: Record<string, ReadonlySet<string> | "all"> = {
 const PROPERTY_BUILDERS = new Set(["asyncProperty", "property"]);
 
 type FunctionNode =
-  | ts.ArrowFunction
-  | ts.FunctionDeclaration
-  | ts.FunctionExpression;
+  ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
 
 // Reports property predicates that spawn a process, directly or through a
 // function declared in the same file.
@@ -589,22 +587,7 @@ describe("property-test convention", () => {
 
   test("every workspace property selector includes both assertion APIs", async () => {
     const fixtureRoot = mkdtempSync(path.join(tmpdir(), "property-selectors-"));
-    const legacyPath = "src/legacy.test.ts";
-    const sharedPath = "src/shared.test.ts";
-    const expectedPaths = [legacyPath, sharedPath];
     try {
-      mkdirSync(path.join(fixtureRoot, "src"));
-      await Promise.all([
-        Bun.write(path.join(fixtureRoot, legacyPath), "fc.assert(property);"),
-        Bun.write(
-          path.join(fixtureRoot, sharedPath),
-          'assertProperty("shared", property);',
-        ),
-        Bun.write(
-          path.join(fixtureRoot, "src/ordinary.test.ts"),
-          'test("ordinary", () => {});',
-        ),
-      ]);
       const violations: string[] = [];
       for (const [
         workspace,
@@ -625,14 +608,49 @@ describe("property-test convention", () => {
           }
           continue;
         }
-        // Exercise the manifest's selector without starting the test runner.
         const selector = /\$\((grep\s[^)]+)\)/u.exec(command)?.at(1);
-        if (selector === undefined) {
+        // Accept the literal root operands and include flags used by the
+        // manifests; unrelated test roots need not belong to this runner.
+        const roots =
+          selector === undefined
+            ? undefined
+            : /^grep\s+-rlE\s+'[^']+'\s+([a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*(?:\s+[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*)*)(?:\s+--include='[^']+')*$/u
+                .exec(selector)
+                ?.at(1)
+                ?.split(/\s+/u);
+        if (
+          selector === undefined ||
+          roots === undefined ||
+          roots.length === 0
+        ) {
           violations.push(
-            `${workspace}: test:property has no recognized property selector`,
+            `${workspace}: test:property has no recognized literal-root selector`,
           );
           continue;
         }
+        for (const root of roots) {
+          mkdirSync(path.join(fixtureRoot, root), { recursive: true });
+          await Promise.all([
+            Bun.write(
+              path.join(fixtureRoot, root, "legacy.test.ts"),
+              "fc.assert(property);",
+            ),
+            Bun.write(
+              path.join(fixtureRoot, root, "shared.test.ts"),
+              'assertProperty("shared", property);',
+            ),
+            Bun.write(
+              path.join(fixtureRoot, root, "ordinary.test.ts"),
+              'test("ordinary", () => {});',
+            ),
+          ]);
+        }
+        const expectedPaths = [...new Set(roots)]
+          .flatMap((root) => [
+            `${root}/legacy.test.ts`,
+            `${root}/shared.test.ts`,
+          ])
+          .toSorted();
         const selectionProcess = Bun.spawn(["sh", "-c", selector], {
           cwd: fixtureRoot,
           stdout: "pipe",

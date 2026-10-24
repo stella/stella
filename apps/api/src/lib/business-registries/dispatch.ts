@@ -13,8 +13,8 @@ import type {
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 import {
-  AresAPIError,
   type AresAddress,
+  AresAPIError,
   type AresCompany,
   AresRequestError,
   type AresSearchResult,
@@ -84,26 +84,26 @@ import {
   normalizeKrsNumber,
 } from "@stll/business-registries/krs";
 import {
-  OrsrAPIError,
+  lookupByIco as lookupOrsrByIco,
+  lookupFullRecordByIco as lookupOrsrFullRecordByIco,
+  normalizeIco as normalizeOrsrIco,
   type OrsrAddress,
+  OrsrAPIError,
   type OrsrCompany,
   type OrsrFullRecord,
   OrsrRequestError,
   type OrsrSearchResult,
   OrsrValidationError,
-  lookupByIco as lookupOrsrByIco,
-  lookupFullRecordByIco as lookupOrsrFullRecordByIco,
-  normalizeIco as normalizeOrsrIco,
   searchByName as searchOrsrByName,
 } from "@stll/business-registries/orsr";
 import {
+  lookupByBusinessId,
+  normalizeBusinessId,
   PrhAPIError,
   type PrhCompany,
   PrhRequestError,
   type PrhSearchResult,
   PrhValidationError,
-  lookupByBusinessId,
-  normalizeBusinessId,
   searchByName as searchPrhByName,
 } from "@stll/business-registries/prh";
 import {
@@ -135,9 +135,9 @@ import {
   isKnownVatCountry,
   parseVatNumber,
   validateVat,
-  type ViesValidation,
   ViesAPIError,
   ViesRequestError,
+  type ViesValidation,
   ViesValidationError,
 } from "@stll/business-registries/vies";
 import type { CountryCode } from "@stll/country-codes";
@@ -164,8 +164,7 @@ export type { BusinessRegistrySlug } from "@stll/api-contract";
 
 const EU_PSEUDO_JURISDICTION = "EU" as const;
 export type RegistryJurisdictionCode =
-  | CountryCode
-  | typeof EU_PSEUDO_JURISDICTION;
+  CountryCode | typeof EU_PSEUDO_JURISDICTION;
 
 // ---------------------------------------------------------------------------
 // Normalised cross-registry shapes
@@ -1818,6 +1817,15 @@ const getRegistryHandlerDefinitionByCountry = (
   country: RegistryJurisdictionCode,
 ): RegistryHandler | undefined => HANDLERS_BY_JURISDICTION.get(country);
 
+type RegistryWebSearch = {
+  provider: WebSearchProvider;
+  observer: WebSearchRequestObserver;
+  abortSignal?: AbortSignal | undefined;
+};
+
+export type LoadRegistryWebSearch = () =>
+  RegistryWebSearch | null | Promise<RegistryWebSearch | null>;
+
 /**
  * Run the dispatch flow for a registry handler: detect lookup vs.
  * search by canonical-ID shape, run the upstream call, normalise the
@@ -1836,7 +1844,7 @@ export const executeRegistryLookup = async ({
   detail,
   observer,
   permit,
-  webSearch,
+  loadWebSearch,
 }: {
   handler: RegistryHandler;
   observer: RegistryRequestObservation;
@@ -1852,13 +1860,7 @@ export const executeRegistryLookup = async ({
    * silently clamped to the adapter's max.
    */
   limit?: number;
-  webSearch?:
-    | {
-        provider: WebSearchProvider;
-        observer: WebSearchRequestObserver;
-        abortSignal?: AbortSignal | undefined;
-      }
-    | undefined;
+  loadWebSearch?: LoadRegistryWebSearch | undefined;
 }): Promise<RegistryLookupResponse | HandlerError> => {
   const trimmed = query.trim();
   if (trimmed.length === 0) {
@@ -1877,7 +1879,8 @@ export const executeRegistryLookup = async ({
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn && handler.webCandidateNameSearch) {
-      if (!webSearch) {
+      const webSearch = await loadWebSearch?.();
+      if (webSearch === undefined || webSearch === null) {
         return {
           type: "name-search-unavailable",
           registry: handler.slug,
@@ -1926,11 +1929,7 @@ type SearchRegistryByWebCandidatesOptions = {
   query: string;
   observer: RegistryRequestObservation;
   permit: ThirdPartyOutboundPermit;
-  webSearch: {
-    provider: WebSearchProvider;
-    observer: WebSearchRequestObserver;
-    abortSignal?: AbortSignal | undefined;
-  };
+  webSearch: RegistryWebSearch;
 };
 
 const searchRegistryByWebCandidates = async ({

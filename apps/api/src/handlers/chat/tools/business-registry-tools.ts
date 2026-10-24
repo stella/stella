@@ -13,8 +13,8 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   executeRegistryLookup,
-  type RegistryHandler,
   LOOKUP_DETAIL_DESCRIPTION,
+  type RegistryHandler,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -46,8 +46,8 @@ const QUERY_DESCRIPTION_BASE =
   "route to a direct lookup; everything else is treated as a " +
   "name search where supported.";
 
-const KRS_NAME_SEARCH_GUIDANCE =
-  " KRS company-name matches are verified against its register.";
+const VERIFIED_NAME_SEARCH_GUIDANCE =
+  " Company-name matches are verified against the selected register.";
 
 /**
  * Holds one call to the turn's source scope (`scopeBusinessRegistryLookup`):
@@ -124,7 +124,13 @@ export const createBusinessRegistryTools = ({
       ? ` Name search is not supported for these enabled registries: ${canonicalOnlyGuidance}. Ask the user for the canonical identifier instead of passing a company name.`
       : "";
   const nameSearchGuidance =
-    webSearchProvider === null ? "" : KRS_NAME_SEARCH_GUIDANCE;
+    webSearchProvider !== null &&
+    enabledHandlers.some(
+      ({ search, webCandidateNameSearch }) =>
+        search === null && webCandidateNameSearch !== undefined,
+    )
+      ? VERIFIED_NAME_SEARCH_GUIDANCE
+      : "";
 
   const [firstHandler, ...otherHandlers] = enabledHandlers;
   if (firstHandler === undefined) {
@@ -210,17 +216,16 @@ export const createBusinessRegistryTools = ({
         handler,
         query,
         detail,
-        ...(webSearchProvider
-          ? {
-              webSearch: {
+        loadWebSearch: () =>
+          webSearchProvider === null
+            ? null
+            : {
                 provider: webSearchProvider,
                 observer: actionRequestObserver(
                   organizationId,
                   ACTION_COST_CALL_KIND.webSearchRequest,
                 ).onRequest,
               },
-            }
-          : {}),
         ...(limit === undefined ? {} : { limit }),
       });
       // executeRegistryLookup returns a HandlerError instance for
