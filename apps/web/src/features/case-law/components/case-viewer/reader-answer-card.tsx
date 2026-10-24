@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -69,7 +69,7 @@ export const ReaderAnswerCard = ({
     }
   }
   const expanded = busy || display === "expanded";
-  const observe = useCallback((node: HTMLElement | null) => {
+  const observe = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
     }
@@ -90,7 +90,7 @@ export const ReaderAnswerCard = ({
       observerRef.current = null;
       cardRef.current = null;
     };
-  }, []);
+  };
   useLayoutEffect(() => {
     if (!active) {
       visibility.current = "tracking";
