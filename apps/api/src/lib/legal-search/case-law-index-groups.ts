@@ -108,6 +108,7 @@ export const CASE_LAW_INDEX_GROUP_CONTRACT_OF = {
   cs_sk: "base",
   cze: "provision_keys_v1",
   eu: "base",
+  gbr: "base",
   hun: "base",
   pol: "base",
   usa: "court_partition_v1",

@@ -13,7 +13,7 @@ AS $function$
        AND 2147483647
   THEN generation || '_' || CASE upper(country)
     WHEN 'AUT' THEN 'aut'
-    WHEN 'CZE' THEN 'cs_sk'
+    WHEN 'CZE' THEN CASE WHEN substring(generation from '^case_law_v([1-9][0-9]*)$')::numeric >= 9 THEN 'cze' ELSE 'cs_sk' END
     WHEN 'EU' THEN 'eu'
     WHEN 'GBR' THEN 'gbr'
     WHEN 'HUN' THEN 'hun'
