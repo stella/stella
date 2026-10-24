@@ -343,6 +343,10 @@ fn mark_account_expired_with(
   mut delete: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
   write_marker()?;
+  // Remove the device identity before the account record. If this fails, the
+  // durable expiry marker makes the next read retry cleanup, while the saved
+  // account prevents a new link from reusing the old key.
+  delete(ACCOUNT_DEVICE_KEY)?;
   let mut failure = None;
   for key in ACCOUNT_KEYS_TO_DELETE
     .into_iter()
@@ -479,13 +483,36 @@ mod tests {
       .is_err()
     );
     assert!(marked.get());
-    assert_eq!(deleted.len(), ACCOUNT_KEYS_TO_DELETE.len() - 1);
+    assert_eq!(deleted, [ACCOUNT_DEVICE_KEY]);
     assert!(
       mark_account_expired_with(
         || Err("marker unavailable".into()),
         |_| panic!("credential must remain until its expiry reason is durable"),
       )
       .is_err()
+    );
+  }
+
+  #[test]
+  fn expiry_removes_the_device_identity_before_account_credentials() {
+    let mut deleted = Vec::new();
+    mark_account_expired_with(
+      || Ok(()),
+      |key| {
+        deleted.push(key);
+        Ok(())
+      },
+    )
+    .unwrap();
+
+    assert_eq!(deleted.first(), Some(&ACCOUNT_DEVICE_KEY));
+    assert_eq!(
+      &deleted[1..],
+      ACCOUNT_KEYS_TO_DELETE
+        .iter()
+        .copied()
+        .filter(|key| *key != ACCOUNT_EXPIRED_KEY)
+        .collect::<Vec<_>>()
     );
   }
 }

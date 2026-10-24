@@ -14,6 +14,7 @@ use crate::types::ErrorResponse;
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 const STATUS_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_SSE_FRAME_BYTES: usize = 1024 * 1024;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 
 #[derive(Debug, serde::Deserialize)]
@@ -139,7 +140,14 @@ pub fn spawn_sse_listener(
           }
         };
 
-        byte_buf.extend_from_slice(&chunk);
+        if !append_sse_chunk(&mut byte_buf, &chunk) {
+          tracing::warn!(
+            session_id = %session_id,
+            max_frame_bytes = MAX_SSE_FRAME_BYTES,
+            "SSE frame exceeded the byte limit"
+          );
+          break;
+        }
 
         // Process complete SSE frames (terminated by \n\n).
         // Only decode UTF-8 on frame boundaries to avoid corrupting
@@ -170,6 +178,14 @@ pub fn spawn_sse_listener(
       tokio::time::sleep(RECONNECT_DELAY).await;
     }
   })
+}
+
+fn append_sse_chunk(buffer: &mut Vec<u8>, chunk: &[u8]) -> bool {
+  if chunk.len() > MAX_SSE_FRAME_BYTES.saturating_sub(buffer.len()) {
+    return false;
+  }
+  buffer.extend_from_slice(chunk);
+  true
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -318,5 +334,19 @@ mod tests {
   fn sse_unexpected_errors_retry_without_cleanup() {
     assert_eq!(classify_sse_rejection(422), SseRejection::Retry);
     assert_eq!(classify_sse_rejection(500), SseRejection::Retry);
+  }
+
+  #[test]
+  fn sse_frame_buffer_accepts_the_exact_limit() {
+    let mut buffer = vec![0; MAX_SSE_FRAME_BYTES - 1];
+    assert!(append_sse_chunk(&mut buffer, b"x"));
+    assert_eq!(buffer.len(), MAX_SSE_FRAME_BYTES);
+  }
+
+  #[test]
+  fn sse_frame_buffer_rejects_growth_past_the_limit() {
+    let mut buffer = vec![0; MAX_SSE_FRAME_BYTES];
+    assert!(!append_sse_chunk(&mut buffer, b"x"));
+    assert_eq!(buffer.len(), MAX_SSE_FRAME_BYTES);
   }
 }

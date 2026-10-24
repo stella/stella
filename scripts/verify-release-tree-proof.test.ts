@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -193,11 +194,13 @@ const createRepository = (directory: string) => {
     return result.stdout.toString().trim();
   };
   git("init", "--quiet", "--initial-branch=main", "--template=");
+  mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
   writeFileSync(path.join(directory, "VERSION"), "1.2.2\n");
-  git("add", "VERSION");
+  writeFileSync(path.join(directory, "bun.lock"), "{}\n");
+  git("add", "VERSION", "bun.lock");
   const commit = (contents: string, message: string) => {
-    writeFileSync(path.join(directory, "release.txt"), contents);
-    git("add", "release.txt", "VERSION");
+    writeFileSync(path.join(directory, "docs/changelog/v1.2.3.md"), contents);
+    git("add", "docs/changelog/v1.2.3.md", "VERSION");
     git("commit", "--quiet", "--message", message);
     return git("rev-parse", "HEAD");
   };
@@ -590,6 +593,27 @@ esac
 };
 
 describe("release proof trust boundary", () => {
+  // The proof resolves its release PR tree verifier beside itself, so a step
+  // that relocates the proof without it refuses every release PR head.
+  test("every step that relocates the proof relocates its tree verifier beside it", () => {
+    const workflows = path.join(import.meta.dir, "../.github/workflows");
+    const relocatedProof = /"\$RUNNER_TEMP\/verify-release-tree-proof\.sh"$/mu;
+    const relocatedVerifier =
+      /"\$RUNNER_TEMP\/verify-release-candidate-tree\.mjs"$/mu;
+    const missing = readdirSync(workflows)
+      .filter((file) => file.endsWith(".yml"))
+      .flatMap((file) =>
+        readFileSync(path.join(workflows, file), "utf-8")
+          .split("\n      - name: ")
+          .filter(
+            (step) =>
+              relocatedProof.test(step) && !relocatedVerifier.test(step),
+          )
+          .map((step) => `${file}: ${step.split("\n").at(0)}`),
+      );
+    expect(missing).toEqual([]);
+  });
+
   test("accepts identical trees when the same repository verifies the squash parent and PR head", async () =>
     withRepository(({ git, proof, target, verify }) => {
       expect(proof).not.toBe(target);

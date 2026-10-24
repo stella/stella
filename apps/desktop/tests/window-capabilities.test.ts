@@ -147,6 +147,20 @@ const assertGrantedCommands = ({
 };
 
 describe("window Tauri capabilities", () => {
+  test("the main webview has no plugin command authority", async () => {
+    const permissions = await grantedCommands(
+      "src-tauri/capabilities/default.json",
+    );
+    expect(
+      [...permissions].filter(
+        (permission) =>
+          typeof permission === "string" &&
+          permission.includes(":") &&
+          !permission.startsWith("core:"),
+      ),
+    ).toEqual([]);
+  });
+
   test.each(Object.entries(WINDOW_MODULES))(
     "%s grants every command its shell and branch invoke",
     async (capabilityPath, modules) => {

@@ -1,7 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
@@ -104,8 +110,9 @@ test("dispatch SHA validation delegates main and authorized release heads to the
     runGit(fixture, "config", "user.name", "Fixture");
     runGit(fixture, "config", "user.email", "fixture@example.invalid");
     runGit(fixture, "config", "commit.gpgsign", "false");
-    writeFileSync(path.join(fixture, "tracked"), "main\n");
-    runGit(fixture, "add", "tracked");
+    writeFileSync(path.join(fixture, "VERSION"), "1.2.2\n");
+    writeFileSync(path.join(fixture, "bun.lock"), "{}\n");
+    runGit(fixture, "add", "VERSION", "bun.lock");
     runGit(fixture, "commit", "-m", "main commit");
     const mainSha = runGit(fixture, "rev-parse", "HEAD");
     runGit(fixture, "update-ref", "refs/remotes/origin/main", mainSha);
@@ -118,17 +125,21 @@ test("dispatch SHA validation delegates main and authorized release heads to the
     const siblingSha = runGit(fixture, "rev-parse", "HEAD");
 
     runGit(fixture, "checkout", "-b", "release", mainSha);
-    writeFileSync(path.join(fixture, "tracked"), "release\n");
-    runGit(fixture, "add", "tracked");
+    mkdirSync(path.join(fixture, "docs/changelog"), { recursive: true });
+    writeFileSync(path.join(fixture, "VERSION"), "1.2.3\n");
+    writeFileSync(path.join(fixture, "docs/changelog/v1.2.3.md"), "release\n");
+    runGit(fixture, "add", "VERSION", "docs/changelog/v1.2.3.md");
     runGit(fixture, "commit", "-m", "release commit");
     const releaseSha = runGit(fixture, "rev-parse", "HEAD");
-    writeFileSync(
-      path.join(fixture, "verify-release-tree-proof.sh"),
-      readFileSync(
-        new URL("verify-release-tree-proof.sh", import.meta.url),
-        "utf-8",
-      ),
-    );
+    for (const script of [
+      "verify-release-tree-proof.sh",
+      "verify-release-candidate-tree.mjs",
+    ]) {
+      writeFileSync(
+        path.join(fixture, script),
+        readFileSync(new URL(script, import.meta.url), "utf-8"),
+      );
+    }
     writeFileSync(
       path.join(fixture, "gh-retry.sh"),
       `#!/usr/bin/env bash
@@ -344,6 +355,9 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
     );
     expect(fetch?.run, name).toContain(
       "show origin/main:scripts/verify-release-tree-proof.sh",
+    );
+    expect(fetch?.run, name).toContain(
+      "show origin/main:scripts/verify-release-candidate-tree.mjs",
     );
     const ancestry = steps.find(
       ({ name: stepName }) => stepName === "Verify main ancestry",

@@ -32,6 +32,7 @@ minimumReleaseAgeExcludes = [
   # body-parser 2.4.0 is the first release outside GHSA-27r3-jxmh-p828.
   "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
   # happy-dom 21.0.4 carries the patched DOMStringMap override forward.
+  "@happy-dom/global-registrator", # quarantine-expires: 2026-10-25T18:05:53.295Z
   "happy-dom", # quarantine-expires: 2026-10-25T18:05:53.295Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
@@ -139,15 +140,31 @@ customGroups = [
     "react-dom",
     "react-dom/**",
   ] },
-  { groupName = "stella", elementNamePattern = ["@stll/**"] },
-  { groupName = "aliases", elementNamePattern = ["@/**"] },
+  { groupName = "stella", elementNamePattern = [
+    "@stll/**",
+  ] },
+  { groupName = "aliases", elementNamePattern = [
+    "@/**",
+  ] },
 ]
 groups = [
   "react",
-  ["builtin", "external", "type-builtin", "type-external"],
+  [
+    "builtin",
+    "external",
+    "type-builtin",
+    "type-external",
+  ],
   "stella",
   "aliases",
-  ["parent", "sibling", "index", "type-parent", "type-sibling", "type-index"],
+  [
+    "parent",
+    "sibling",
+    "index",
+    "type-parent",
+    "type-sibling",
+    "type-index",
+  ],
 ]
 newlinesBetween = true
 
