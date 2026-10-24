@@ -154,141 +154,79 @@ const LOADER_CALL_PATTERN = /\b(?:import|require)\s*(?:\(|\/[*/])|\\u/u;
 
 type ModuleReach = "all" | ReadonlySet<string>;
 
-const mergeReach = (current: ModuleReach, next: ModuleReach): ModuleReach => {
-  if (current === "all" || next === "all") {
+const TEXT_REACH_PREFILTER =
+  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/|\.\.\/|["'`]\.\.["'`]/u;
+
+const textReach = (
+  source: string,
+  appNames: ReadonlySet<string>,
+): ModuleReach => {
+  if (!TEXT_REACH_PREFILTER.test(source)) {
+    return new Set();
+  }
+  const sourceFile = ts.createSourceFile(
+    "module.ts",
+    source,
+    ts.ScriptTarget.Latest,
+  );
+  const ignored: [number, number][] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined
+    ) {
+      ignored.push([
+        node.moduleSpecifier.getStart(sourceFile),
+        node.moduleSpecifier.getEnd(),
+      ]);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          node.expression.text === "require"))
+    ) {
+      const specifier = node.arguments.at(0);
+      if (specifier !== undefined && ts.isStringLiteralLike(specifier)) {
+        ignored.push([specifier.getStart(sourceFile), specifier.getEnd()]);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  const chars = source.split("");
+  for (const [start, end] of ignored) {
+    chars.fill(" ", start, end);
+  }
+  const code = chars.join("");
+  if (
+    /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b/u.test(
+      code,
+    ) ||
+    /process\s*\.\s*cwd\s*\(/u.test(code) ||
+    /(?:^|[/'"`])(?:\.\.\/){3}/u.test(code) ||
+    /apps\/(?:\*|\*\*|\{[^}/]+\})(?:\/|$)/u.test(code)
+  ) {
     return "all";
   }
-  return new Set([...current, ...next]);
-};
-
-const directPathReach = (
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
-): ModuleReach | undefined => {
-  const text = expression.getText(sourceFile);
-  if (
-    /\bREPOSITORY_ROOT\b|\b(?:repoRoot|repositoryRoot)\b|process\s*\.\s*cwd\s*\(/u.test(
-      text,
-    ) ||
-    /(?:\.\.\/){3}/u.test(text)
-  ) {
+  const textClimbsFromCall = [
+    ...code.matchAll(/(?:\bpath\s*\.\s*)?(?:join|resolve)\s*\(([^)]*)\)/gu),
+  ].some(
+    (match) => [...(match[1] ?? "").matchAll(/["'`]\.\.["'`]/gu)].length >= 3,
+  );
+  if (textClimbsFromCall) {
     return "all";
   }
   const apps = new Set<string>();
-  for (const match of text.matchAll(/(?:apps\/|\.\.\/)([^/'"`$}]+)\//gu)) {
+  for (const match of code.matchAll(
+    /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?:\/|$)/gu,
+  )) {
     const app = match[1];
-    if (app !== undefined && app !== "api" && app !== "..") {
+    if (app !== undefined && appNames.has(app)) {
       apps.add(app);
     }
   }
-  if (
-    apps.size > 0 ||
-    ts.isStringLiteralLike(expression) ||
-    (ts.isTemplateExpression(expression) &&
-      expression.templateSpans.length === 0) ||
-    ts.isMetaProperty(expression) ||
-    (ts.isPropertyAccessExpression(expression) &&
-      ts.isMetaProperty(expression.expression)) ||
-    (ts.isIdentifier(expression) &&
-      ["__dirname", "__filename"].includes(expression.text)) ||
-    ts.isPropertyAccessExpression(expression) ||
-    ts.isElementAccessExpression(expression)
-  ) {
-    return apps;
-  }
-  return undefined;
-};
-
-const pathReach = (
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
-  initializers: ReadonlyMap<string, ts.Expression>,
-  seen = new Set<string>(),
-): ModuleReach => {
-  const direct = directPathReach(expression, sourceFile);
-  if (direct !== undefined) {
-    return direct;
-  }
-  if (ts.isIdentifier(expression)) {
-    if (!/^[A-Z][A-Z0-9_]*$/u.test(expression.text)) {
-      return new Set();
-    }
-    if (seen.has(expression.text)) {
-      return "all";
-    }
-    const initializer = initializers.get(expression.text);
-    if (initializer === undefined) {
-      return new Set();
-    }
-    return pathReach(
-      initializer,
-      sourceFile,
-      initializers,
-      new Set([...seen, expression.text]),
-    );
-  }
-  if (ts.isTemplateExpression(expression)) {
-    let reach: ModuleReach = new Set();
-    for (const span of expression.templateSpans) {
-      reach = mergeReach(
-        reach,
-        pathReach(span.expression, sourceFile, initializers, seen),
-      );
-    }
-    return reach;
-  }
-  if (ts.isConditionalExpression(expression)) {
-    return mergeReach(
-      pathReach(expression.whenTrue, sourceFile, initializers, seen),
-      pathReach(expression.whenFalse, sourceFile, initializers, seen),
-    );
-  }
-  if (ts.isBinaryExpression(expression)) {
-    const left = pathReach(expression.left, sourceFile, initializers, seen);
-    const right = pathReach(expression.right, sourceFile, initializers, seen);
-    if (
-      [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(
-        expression.operatorToken.kind,
-      )
-    ) {
-      // Runtime-configured paths are outside the checkout; the local fallback
-      // determines which repository directories this module can inspect.
-      if (left === "all" && right !== "all") {
-        return right;
-      }
-      if (right === "all" && left !== "all") {
-        return left;
-      }
-    }
-    return mergeReach(left, right);
-  }
-  if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isNonNullExpression(expression)
-  ) {
-    return pathReach(expression.expression, sourceFile, initializers, seen);
-  }
-  if (
-    (ts.isCallExpression(expression) || ts.isNewExpression(expression)) &&
-    ((ts.isPropertyAccessExpression(expression.expression) &&
-      ["join", "resolve", "dirname"].includes(
-        expression.expression.name.text,
-      )) ||
-      expression.expression.getText(sourceFile) === "fileURLToPath" ||
-      expression.expression.getText(sourceFile) === "URL")
-  ) {
-    let reach: ModuleReach = new Set();
-    for (const argument of expression.arguments ?? []) {
-      reach = mergeReach(
-        reach,
-        pathReach(argument, sourceFile, initializers, seen),
-      );
-    }
-    return reach;
-  }
-  // A value whose origin is not visible here may resolve outside apps/api.
-  return "all";
+  return apps;
 };
 
 /**
@@ -300,7 +238,15 @@ const pathReach = (
  * runs, and one unscannable module widens every failure-strict plan to the
  * full suite, so strip it first.
  */
-export const analyzeModule = (file: string, source: string) => {
+export const analyzeModule = (
+  file: string,
+  source: string,
+  appNames = new Set(
+    readdirSync(path.join(REPOSITORY_ROOT, "apps"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== "api")
+      .map((entry) => entry.name),
+  ),
+) => {
   let transpiler = transpilers.js;
   if (file.endsWith(".tsx")) {
     transpiler = transpilers.tsx;
@@ -311,27 +257,15 @@ export const analyzeModule = (file: string, source: string) => {
   const imports = transpiler.scanImports(runnable);
   const mentionsReads = READER_PATTERN.test(runnable);
   const mentionsScans = SCANNER_PATTERN.test(runnable);
-  const code =
-    mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
+  const shouldTransform =
+    mentionsReads || mentionsScans || TEXT_REACH_PREFILTER.test(runnable);
+  const code = shouldTransform ? transpiler.transformSync(runnable) : "";
   let computedImports = false;
-  const fileOperationReaches: ModuleReach[] = [];
-  const initializers = new Map<string, ts.Expression>();
   const sourceFile = ts.createSourceFile(
     file,
     runnable,
     ts.ScriptTarget.Latest,
   );
-  const collectInitializers = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      initializers.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collectInitializers);
-  };
-  collectInitializers(sourceFile);
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -344,44 +278,27 @@ export const analyzeModule = (file: string, source: string) => {
         computedImports = true;
       }
     }
-    const callExpression =
-      ts.isCallExpression(node) || ts.isNewExpression(node) ? node : undefined;
-    if (callExpression !== undefined) {
-      const callee = callExpression.expression.getText(sourceFile);
-      if (
-        /^(?:readFile(?:Sync)?|readdir(?:Sync)?|glob|Glob|Bun\.file)$/u.test(
-          callee,
-        ) ||
-        /\.(?:readFile(?:Sync)?|readdir(?:Sync)?|glob)$/u.test(callee)
-      ) {
-        const argument = callExpression.arguments?.at(0);
-        fileOperationReaches.push(
-          argument === undefined
-            ? "all"
-            : pathReach(argument, sourceFile, initializers),
-        );
-      }
-    }
     ts.forEachChild(node, visit);
   };
   if (LOADER_CALL_PATTERN.test(runnable) || mentionsReads || mentionsScans) {
     visit(sourceFile);
   }
-  let reach: ModuleReach = new Set();
-  for (const operationReach of fileOperationReaches) {
-    reach = mergeReach(reach, operationReach);
-  }
   return {
     computedImports,
     imports,
     reads: mentionsReads && READER_PATTERN.test(code),
-    reach: fileOperationReaches.length === 0 ? "all" : reach,
+    reach: textReach(code, appNames),
     scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
 
 export const buildImportGraph = (root: string, starts: readonly string[]) => {
   const packages = workspaceExports(root);
+  const appNames = new Set(
+    readdirSync(path.join(root, "apps"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== "api")
+      .map((entry) => entry.name),
+  );
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
   const scanners = new Set<string>();
@@ -436,7 +353,11 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
       continue;
     }
     const scanned = Result.try(() => {
-      const analysis = analyzeModule(file, readFileSync(absolute, "utf-8"));
+      const analysis = analyzeModule(
+        file,
+        readFileSync(absolute, "utf-8"),
+        appNames,
+      );
       const { imports, reach, reads, scans } = analysis;
       if (analysis.computedImports) {
         computedImports.add(file);
@@ -447,9 +368,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
       if (scans) {
         scanners.add(file);
       }
-      if (reads || scans) {
-        reaches.set(file, reach);
-      }
+      reaches.set(file, reach);
       return imports;
     });
     if (scanned.isErr()) {
@@ -591,14 +510,20 @@ export const selectApiTestImpact = ({
                 graph.failed.has(file),
             )) ||
           (changedApps.size > 0 &&
-            [...closure].some((file) => {
-              const reach = graph.reaches.get(file);
-              return (
-                reach === "all" ||
-                (reach !== undefined &&
-                  [...changedApps].some((app) => reach.has(app)))
-              );
-            }))
+            [...closure].some(
+              (file) => graph.readers.has(file) || graph.scanners.has(file),
+            ) &&
+            ([...closure].some((file) => graph.failed.has(file)) ||
+              [...closure].some((file) => {
+                const reach = graph.reaches.get(file);
+                return (
+                  (reach === "all" &&
+                    (graph.readers.has(file) || graph.scanners.has(file))) ||
+                  (reach !== undefined &&
+                    reach !== "all" &&
+                    [...changedApps].some((app) => reach.has(app)))
+                );
+              })))
         );
       })
       .map((file) => file.slice("apps/api/".length));

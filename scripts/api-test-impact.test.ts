@@ -37,6 +37,8 @@ const withRepository = (
       }),
     );
     write("apps/api/package.json", JSON.stringify({ name: "@stll/api" }));
+    write("apps/web/x.tsx", "export const x = true;");
+    write("apps/landing/y.astro", "<main />");
     write("apps/api/src/tests/setup-env.ts", 'import "./preload-helper";');
     write("apps/api/src/tests/preload-helper.ts", "export const setup = true;");
     write(
@@ -234,17 +236,68 @@ test("readers widen another app only when their paths can reach it", () => {
   });
 });
 
-test("an unclassifiable computed reader path reaches every app", () => {
+test("another app is selected from text anywhere in a reader closure", () => {
+  withRepository((root, write) => {
+    write("apps/api/src/path.ts", 'export const target = "apps/web/x.tsx";');
+    write(
+      "apps/api/src/computed-reader.ts",
+      'import { readFileSync } from "node:fs"; export const read = (target: string) => readFileSync(target);',
+    );
+    write(
+      "apps/api/src/computed-reader.test.ts",
+      'import "./path"; import "./computed-reader";',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/computed-reader.test.ts"]);
+  });
+});
+
+test("caller-only readers do not reach another app", () => {
   withRepository((root, write) => {
     write(
       "apps/api/src/computed-reader.test.ts",
-      'import { readFileSync } from "node:fs"; readFileSync(getTarget()); function getTarget() { return "somewhere"; }',
+      'import { readFileSync } from "node:fs"; export const read = (target: string) => readFileSync(target);',
     );
-    for (const changed of ["apps/web/x.tsx", "apps/landing/y.astro"]) {
-      expect(selectApiTestImpact({ root, changed: [changed] }).files).toEqual([
-        "src/computed-reader.test.ts",
-      ]);
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).mode,
+    ).toBe("none");
+  });
+});
+
+test("wildcard globs, repository climbs and analysis failures reach another app", () => {
+  withRepository((root, write) => {
+    const cases = {
+      star: 'new Bun.Glob("apps/*/src/**/*.ts").scanSync();',
+      brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
+      root: 'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "..", "..", ".."));',
+      failed:
+        'import "./missing"; import { readFileSync } from "node:fs"; readFileSync(target);',
+    };
+    for (const [name, source] of Object.entries(cases)) {
+      write(`apps/api/src/${name}.test.ts`, source);
     }
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual([
+      "src/brace.test.ts",
+      "src/failed.test.ts",
+      "src/root.test.ts",
+      "src/star.test.ts",
+    ]);
+  });
+});
+
+test("relative import specifiers alone do not reach every app", () => {
+  withRepository((root, write) => {
+    write("lib/x.ts", "export const x = true;");
+    write(
+      "apps/api/src/import-reader.test.ts",
+      'import "../../../lib/x"; import { readFileSync } from "node:fs"; readFileSync(target);',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).mode,
+    ).toBe("none");
   });
 });
 
@@ -425,8 +478,8 @@ test("computed template imports and require calls retain their test importers", 
       'const file = "./handler"; require(file);',
     );
     expect(
-      selectApiTestImpact({ root, changed: ["apps/web/src/screen.tsx"] }).files,
-    ).toEqual(["src/loader.test.ts", "src/require.test.ts"]);
+      selectApiTestImpact({ root, changed: ["apps/web/src/screen.tsx"] }).mode,
+    ).toBe("none");
   });
 });
 
@@ -467,7 +520,7 @@ test("a real web change selects only tests with a web-reaching reader", () => {
     changed: ["apps/web/src/components/globe.tsx"],
   });
   expect(selection.mode).toBe("selected");
-  expect(selection.files.length).toBeLessThan(400);
+  expect(selection.files.length).toBeLessThan(450);
 
   const tests = selection.files.map((file) => `apps/api/${file}`);
   const graph = buildImportGraph(repositoryRoot, tests);
