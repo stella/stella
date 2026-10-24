@@ -227,6 +227,31 @@ const COURT_WEIGHT_SEED_BY_JURISDICTION = {
       },
     ],
   },
+  GBR: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern:
+          "^uksc$|^ukpc$|^ukhl$|^supreme court( of the united kingdom)?$|^judicial committee of the privy council$|^house of lords$",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern:
+          "^ewca( civ| crim)?$|^court of appeal( \\(civil division\\)| \\(criminal division\\))?$",
+        ...RANK.appeal,
+      },
+      {
+        courtPattern:
+          "^ewhc($| )|^ukut($| )|^eat$|^high court( of justice)?($| )|^upper tribunal($| )|^employment appeal tribunal$",
+        ...RANK.regional,
+      },
+      {
+        courtPattern:
+          "^ukftt($| )|^ewfc$|^ewcop$|^first-tier tribunal($| )|^family court$|^court of protection$",
+        ...RANK.district,
+      },
+    ],
+  },
 } as const satisfies Record<CaseLawJurisdiction, CourtWeightSeedDisposition>;
 
 const seededPatterns = (

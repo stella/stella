@@ -226,7 +226,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   const unattestedGlobal = await target(undefined);
   expect(unattestedGlobal.contract).toBeNull();
   expect(unattestedGlobal.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_hun*,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_gbr*,case_law_v7_hun*,case_law_v7_pol",
   );
   expect(unattestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
 
@@ -268,7 +268,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, hun));
   const hunPending = await target(undefined);
   expect(hunPending.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_gbr*,case_law_v7_pol",
   );
   expect(hunPending.cursorTarget).not.toBe(unattestedGlobal.cursorTarget);
   expect((await target("HUN")).route.indexId).toBe("case_law_v7_hun");
@@ -281,7 +281,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   );
   const withHun = await target(undefined);
   expect(withHun.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_hun,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_gbr*,case_law_v7_hun,case_law_v7_pol",
   );
   expect(withHun.cursorTarget).not.toBe(unattestedGlobal.cursorTarget);
 });

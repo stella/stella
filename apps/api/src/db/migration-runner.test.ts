@@ -8,6 +8,7 @@ import { DEFAULT_LOCK_RETRY_CONFIG } from "./lock-retry-ladder";
 import {
   applyPendingRetryingLockWaits,
   applySchemaMigrationsRetryingLockWaits,
+  classifyMigrationLedger,
   decideLedgerAheadPolicy,
   MIGRATION_LOCK_WAIT_FAILURE,
   MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
@@ -20,8 +21,8 @@ const NEWER = "20260930100000_newer";
 const NEWEST = "20260930110000_newest";
 
 const bundle = [
-  { name: A, hash: "first", folderMillis: 1, sql: ["SELECT 1;"] },
-  { name: B, hash: "second", folderMillis: 2, sql: ["SELECT 2;"] },
+  { name: A, hash: "first", folderMillis: 1, sql: ["SELECT 1;"], bps: true },
+  { name: B, hash: "second", folderMillis: 2, sql: ["SELECT 2;"], bps: true },
 ];
 
 const receipt = (id: number, name: string, hash: string) => ({
@@ -115,6 +116,44 @@ test("an alias rewrite ahead of this bundle joins an unknown migration in the ro
   });
 });
 
+test("ledger retry classification accepts only an ordered prefix of this run's receipts", () => {
+  const preflight = [receipt(10, "20260928000000_existing", "existing")];
+  const first = { ...receipt(11, A, "first"), created_at: 1 };
+  const second = { ...receipt(12, B, "second"), created_at: 2 };
+  const classify = (currentRows: typeof preflight) =>
+    classifyMigrationLedger({
+      preflightRows: preflight,
+      currentRows,
+      predicted: bundle,
+    });
+
+  expect(classify(preflight)).toEqual({
+    status: "unchanged",
+    committedReceipts: 0,
+  });
+  expect(classify([...preflight, first])).toEqual({
+    status: "own",
+    committedReceipts: 1,
+  });
+  expect(classify([...preflight, first, second])).toEqual({
+    status: "own",
+    committedReceipts: 2,
+  });
+
+  const foreignCases = [
+    [...preflight, receipt(99, NEWER, "newer")],
+    [...preflight, second, first],
+    [...preflight, receipt(11, A, "changed")],
+    [],
+  ];
+  for (const currentRows of foreignCases) {
+    expect(classify(currentRows)).toEqual({
+      status: "foreign",
+      committedReceipts: 0,
+    });
+  }
+});
+
 const serverFailure = (errno: string) =>
   new DrizzleQueryError(
     "ALTER TABLE probe ADD COLUMN reissued boolean",
@@ -133,14 +172,14 @@ const lockWaitLoss = () => serverFailure(PG_ERROR.LOCK_NOT_AVAILABLE);
 type ScriptedRunOptions = {
   /** One outcome per attempt: the failure it throws, or null to apply. */
   script: readonly (Error | null)[];
-  ledgerUnchanged?: boolean;
+  ledgerProgress?: "unchanged" | "own" | "foreign";
   /** How long each attempt takes on the fake clock. */
   attemptMs?: number;
 };
 
 const runScripted = async ({
   script,
-  ledgerUnchanged = true,
+  ledgerProgress = "unchanged",
   attemptMs = 0,
 }: ScriptedRunOptions) => {
   let attempts = 0;
@@ -163,7 +202,12 @@ const runScripted = async ({
         }
         await Promise.resolve();
       },
-      ledgerUnchanged: async () => await Promise.resolve(ledgerUnchanged),
+      classifyLedger: async () =>
+        await Promise.resolve(
+          ledgerProgress === "own"
+            ? { status: "own", committedReceipts: 1 }
+            : { status: ledgerProgress, committedReceipts: 0 },
+        ),
       retry: {
         ...DEFAULT_LOCK_RETRY_CONFIG,
         random: () => 0.5,
@@ -209,6 +253,7 @@ describe("a pending set that loses a lock wait", () => {
         attempts: ATTEMPTS,
         delayMs,
         lockTimeoutMs: DEFAULT_LOCK_RETRY_CONFIG.lockTimeoutsMs.at(index),
+        committedReceipts: 0,
       })),
     );
   });
@@ -254,11 +299,26 @@ describe("a pending set that loses a lock wait", () => {
     });
   });
 
-  test("does not rerun once a split migration has committed receipts", async () => {
+  test("reruns after this run committed a predicted receipt", async () => {
     const failure = lockWaitLoss();
     const run = await runScripted({
       script: [failure, null],
-      ledgerUnchanged: false,
+      ledgerProgress: "own",
+    });
+    expect(run.attempts).toBe(2);
+    expect(run.sleeps).toEqual(JITTERED_PAUSES_MS.slice(0, 1));
+    expect(run.outcome).toBeNull();
+    expect(run.events.at(0)).toMatchObject({
+      event: "migrate.lock_wait_retry",
+      committedReceipts: 1,
+    });
+  });
+
+  test("does not rerun after a foreign receipt appeared", async () => {
+    const failure = lockWaitLoss();
+    const run = await runScripted({
+      script: [failure, null],
+      ledgerProgress: "foreign",
     });
     expect(run.attempts).toBe(1);
     expect(run.sleeps).toEqual([]);
@@ -303,7 +363,7 @@ test("the schema ladder restores the session lock timeout before the online phas
         `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
       );
     },
-    ledgerUnchanged: async () => true,
+    classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
     retry: {
       ...DEFAULT_LOCK_RETRY_CONFIG,
       lockTimeoutsMs: [25],
@@ -339,7 +399,7 @@ test("the schema ladder restores the session lock timeout after a failure", asyn
       );
       throw failure;
     },
-    ledgerUnchanged: async () => true,
+    classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
     retry: {
       ...DEFAULT_LOCK_RETRY_CONFIG,
       lockTimeoutsMs: [25],
@@ -375,7 +435,7 @@ test("a terminated schema session preserves the observation failure without rese
       connectionState = "terminated";
       throw failure;
     },
-    ledgerUnchanged: async () => true,
+    classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
     retry: {
       ...DEFAULT_LOCK_RETRY_CONFIG,
       random: () => 0.5,
