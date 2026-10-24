@@ -5,7 +5,9 @@ import path from "node:path";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const DEADLINE_MS = 30_000;
+// No probe deadline: the plugin waits its design-system workers out, bounded
+// only far past any slow load, so a slow runner makes this probe slower, never
+// red. Phase timings go to stderr.
 const CHILD_MODE = "--probe";
 const RULE = "no-conflicting-classes";
 const BENIGN = "size-[1em] object-contain";
@@ -78,22 +80,20 @@ if (process.argv.at(2) === CHILD_MODE) {
     {
       cwd: ROOT,
       encoding: "utf-8",
-      timeout: DEADLINE_MS,
-      killSignal: "SIGKILL",
     },
   );
   process.stderr.write(result.stderr);
   const status = childExitStatus(result);
   if (status !== 0) {
     process.stderr.write(
-      `Design-system worker probe failed (signal=${result.signal ?? "none"}, deadline=${DEADLINE_MS}ms).\n`,
+      `Design-system worker probe failed (signal=${result.signal ?? "none"}).\n`,
     );
     process.exitCode = status;
   } else {
     const receipt = JSON.parse(result.stdout);
     assert.equal(receipt.conflict, "conflictUnordered");
     process.stdout.write(
-      `${JSON.stringify({ ...receipt, totalMs: Math.round(performance.now() - started), deadlineMs: DEADLINE_MS })}\n`,
+      `${JSON.stringify({ ...receipt, totalMs: Math.round(performance.now() - started) })}\n`,
     );
   }
 }

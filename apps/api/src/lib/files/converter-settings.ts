@@ -6,11 +6,9 @@ export const converterSettingsSchema = {
   GOTENBERG_PASSWORD: v.string(),
 };
 
-export type ConverterSettings = {
-  GOTENBERG_PASSWORD: string;
-  GOTENBERG_URL: string;
-  GOTENBERG_USERNAME: string;
-};
+export type ConverterSettings = v.InferOutput<
+  v.ObjectSchema<typeof converterSettingsSchema, undefined>
+>;
 
 /**
  * Build the converter endpoint from a process-validated service URL. The
@@ -19,7 +17,11 @@ export type ConverterSettings = {
  */
 export const gotenbergConvertTarget = (settings: ConverterSettings): URL => {
   const target = new URL(settings.GOTENBERG_URL);
-  target.pathname = `${target.pathname.replace(/\/+$/u, "")}/forms/libreoffice/convert`;
+  let pathEnd = target.pathname.length;
+  while (pathEnd > 0 && target.pathname[pathEnd - 1] === "/") {
+    pathEnd -= 1;
+  }
+  target.pathname = `${target.pathname.slice(0, pathEnd)}/forms/libreoffice/convert`;
   target.search = "";
   target.hash = "";
   return target;

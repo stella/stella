@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -214,7 +213,7 @@ export const fillHandler = async ({
         },
       );
     }
-    const pdfResult = await convertToPdf(scannedOutput, { converter: env });
+    const pdfResult = await convertToPdf(scannedOutput);
     if (Result.isError(pdfResult)) {
       return new Response(JSON.stringify({ error: "PDF conversion failed" }), {
         status: 502,

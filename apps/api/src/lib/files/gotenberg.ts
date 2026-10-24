@@ -1,13 +1,15 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
+import { envConverter } from "@/api/env-converter";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
-  type ConverterSettings,
-  gotenbergConvertTarget,
-} from "@/api/lib/files/converter-settings";
+  checkConversionInput,
+  type ConversionInputRefusal,
+} from "@/api/lib/files/conversion-input";
+import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import type { ImageHeader } from "@/api/lib/files/image-header";
@@ -19,6 +21,7 @@ import {
   isEmbeddableImageMimeType,
 } from "@/api/lib/files/image-pdf";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
+import { isConvertibleMimeType } from "@/api/lib/files/pdf-derivative-policy";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -69,8 +72,39 @@ export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
   cause?: unknown;
 }> {}
 
+export type ConversionInputErrorReason = ConversionInputRefusal;
+
+export class ConversionInputError extends TaggedError("ConversionInputError")<{
+  message: string;
+  reason: ConversionInputErrorReason;
+  cause?: unknown;
+}> {}
+
+const conversionInputRefusalMessage = (
+  reason: ConversionInputRefusal,
+): string => {
+  switch (reason.kind) {
+    case "external_reference":
+      return "The document contains a reference that cannot be converted.";
+    case "unsupported_encoding":
+      return `The document encoding ${reason.encoding} cannot be converted.`;
+    case "unsupported_reference":
+      return `This document refers to an external resource in ${reason.element} ${reason.attribute}, so it can't be converted.`;
+    case "unsupported_field":
+      return `The document field ${reason.fieldType} cannot be converted.`;
+    case "legacy_format":
+      return `Re-save this document as ${reason.replacementExtension} to convert it.`;
+    case "inspection_failed":
+      return "The document could not be inspected for conversion.";
+    default:
+      reason satisfies never;
+      return panic("Unexpected conversion input refusal");
+  }
+};
+
 type ConvertToPdfError =
   | DerivativeAdmissionError
+  | ConversionInputError
   | GotenbergError
   | ImageTranscodeError;
 
@@ -141,10 +175,10 @@ const withConverterExtension = (fileName: string, mimeType: string): string => {
   return `${stem}.${canonical}`;
 };
 
-const gotenbergAuth = (settings: ConverterSettings): string =>
+const gotenbergAuth = (): string =>
   basicAuthorizationHeader(
-    settings.GOTENBERG_USERNAME,
-    settings.GOTENBERG_PASSWORD,
+    envConverter.GOTENBERG_USERNAME,
+    envConverter.GOTENBERG_PASSWORD,
   );
 
 const GOTENBERG_RETRY = {
@@ -156,7 +190,6 @@ const GOTENBERG_RETRY = {
 } as const;
 
 type ConvertToPdfOptions = {
-  converter: ConverterSettings;
   /**
    * Who retries a failed converter call. `in-call` retries transient
    * converter failures inside this call, for request paths where nothing
@@ -253,7 +286,7 @@ const transcodeImageToPdf = async (
  */
 export const convertToPdf = async (
   file: ScannedFile,
-  { converter, retry = "in-call" }: ConvertToPdfOptions,
+  { retry = "in-call" }: ConvertToPdfOptions = {},
 ): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
   const { fileName, mimeType } = file;
   const bytes = new Uint8Array(file.bytes);
@@ -293,6 +326,29 @@ export const convertToPdf = async (
     });
   }
 
+  if (isConvertibleMimeType(mimeType)) {
+    const inspection = await Result.tryPromise({
+      try: async () => await checkConversionInput(mimeType, bytes),
+      catch: (cause) =>
+        new ConversionInputError({
+          message: "The document could not be inspected for conversion.",
+          reason: { kind: "inspection_failed" },
+          cause,
+        }),
+    });
+    if (Result.isError(inspection)) {
+      return inspection;
+    }
+    if (inspection.value.kind === "refuse") {
+      return Result.err(
+        new ConversionInputError({
+          message: conversionInputRefusalMessage(inspection.value.reason),
+          reason: inspection.value.reason,
+        }),
+      );
+    }
+  }
+
   return await Result.tryPromise(
     {
       try: async () => {
@@ -312,12 +368,12 @@ export const convertToPdf = async (
           },
           fields: { exportNotes: "true", exportNotesInMargin: "true" },
         });
-        const target = gotenbergConvertTarget(converter);
+        const target = gotenbergConvertTarget(envConverter);
         const response = await fetchWithTimeout(target, {
           method: "POST",
           redirect: "error",
           headers: {
-            Authorization: gotenbergAuth(converter),
+            Authorization: gotenbergAuth(),
             "Content-Type": form.contentType,
             "Content-Length": String(form.contentLength),
           },

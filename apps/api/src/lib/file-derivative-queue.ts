@@ -1,9 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { DelayedError } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -39,7 +40,6 @@ import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
-import type { ConverterSettings } from "@/api/lib/files/converter-settings";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import type { DerivativeRefusal } from "@/api/lib/files/derivative-admission";
 import {
@@ -52,6 +52,8 @@ import {
   resolveQueuedFileObject,
 } from "@/api/lib/files/file-object-ids";
 import {
+  ConversionInputError,
+  type ConversionInputErrorReason,
   convertToPdf,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
@@ -94,9 +96,9 @@ import {
   S3ObjectBudgetError,
 } from "@/api/lib/s3";
 import {
+  brandNullablePersistedUserId,
   brandPersistedEntityId,
   brandPersistedFieldId,
-  brandNullablePersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -373,143 +375,143 @@ export const enqueueImageThumbnailOrMarkFailed = async (
   }
 };
 
-export const createFileDerivativeWorker =
-  (converter: ConverterSettings) => () => {
-    // BullMQ workers use blocking commands and need a dedicated connection
-    // separate from the queue's. Create a fresh raw client per worker init.
-    const workerConnection = createBullMqConnection({
-      storeClass: "durable-coordination",
-    });
+export const initFileDerivativeWorker = () => {
+  // BullMQ workers use blocking commands and need a dedicated connection
+  // separate from the queue's. Create a fresh raw client per worker init.
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
 
-    // The limit is read once: it is fixed for the life of the process.
-    const memoryLimit = readProcessMemoryLimit();
-    const rssHighBytes = derivativeDeferRssBytes(memoryLimit);
-    const memory = createMemoryPressureGate({
-      holdMs: LIMITS.fileDerivativeMemoryPressureHoldMs,
-      now: () => Temporal.Now.instant().epochMilliseconds,
-      readRssBytes: () => process.memoryUsage.rss(),
-      rssHighBytes,
-    });
-    process.on("memoryPressure", memory.record);
+  // The limit is read once: it is fixed for the life of the process.
+  const memoryLimit = readProcessMemoryLimit();
+  const rssHighBytes = derivativeDeferRssBytes(memoryLimit);
+  const memory = createMemoryPressureGate({
+    holdMs: LIMITS.fileDerivativeMemoryPressureHoldMs,
+    now: () => Temporal.Now.instant().epochMilliseconds,
+    readRssBytes: () => process.memoryUsage.rss(),
+    rssHighBytes,
+  });
+  process.on("memoryPressure", memory.record);
 
-    // Bound late: the controller pauses the worker that runs the processor.
-    let pauseTarget: { pause: () => void; resume: () => void } | null = null;
-    const pausing = createPressurePause({
-      gate: memory,
-      pause: () => pauseTarget?.pause(),
-      resume: () => pauseTarget?.resume(),
-      recheckMs: LIMITS.fileDerivativeDeferDelayMs,
-      onClose: (reading) => {
-        logger.warn("file_derivative.paused", {
-          "memory.pressure_cause": reading.cause ?? "",
-          "memory.rss_bytes": reading.rssBytes,
-        });
-      },
-      onOpen: (reading) => {
-        logger.info("file_derivative.resumed", {
-          "memory.rss_bytes": reading.rssBytes,
-        });
-      },
-    });
-
-    const worker = new BullMqWorker<FileDerivativeJobData>(
-      QUEUE_NAME,
-      createFileDerivativeProcessor({
-        memory,
-        pausing,
-        processPdf: async (data) =>
-          await processPdfDerivativeJob(data, converter),
-        processThumbnail: processImageThumbnailJob,
-      }),
-      {
-        connection: workerConnection,
-        concurrency: FILE_DERIVATIVE_WORKER_CONCURRENCY,
-      },
-    );
-
-    pauseTarget = {
-      // Local pause without waiting: it is called from inside the processor,
-      // which must still finish the job in hand.
-      pause: () => {
-        worker.pause(true).catch((error: unknown) => {
-          observeFailure(error, {
-            sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-            ctx: { queue: QUEUE_NAME },
-          });
-        });
-      },
-      resume: () => {
-        worker.resume().catch((error: unknown) => {
-          observeFailure(error, {
-            sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-            ctx: { queue: QUEUE_NAME },
-          });
-        });
-      },
-    };
-
-    worker.on("failed", (job, error) => {
-      const exhausted =
-        job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
-      if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-        markImageThumbnailFailed(
-          job.data,
-          DERIVATIVE_FAILURE_REASON.PROCESSING,
-        ).catch((markError: unknown) => {
-          captureError(markError, {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
-          });
-        });
-      } else if (exhausted) {
-        markPdfDerivativeFailed(
-          job.data,
-          DERIVATIVE_FAILURE_REASON.PROCESSING,
-        ).catch((markError: unknown) => {
-          captureError(markError, {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
-          });
-        });
-      }
-
-      captureError(error, {
-        entityId: job?.data.entityId ?? "",
-        fieldId: job?.data.fieldId ?? "",
-        workspaceId: job?.data.workspaceId ?? "",
+  // Bound late: the controller pauses the worker that runs the processor.
+  let pauseTarget: { pause: () => void; resume: () => void } | null = null;
+  const pausing = createPressurePause({
+    gate: {
+      read: () => memory.read(LIMITS.fileDerivativeSourceMaxBytes),
+    },
+    pause: () => pauseTarget?.pause(),
+    resume: () => pauseTarget?.resume(),
+    recheckMs: LIMITS.fileDerivativeDeferDelayMs,
+    onClose: (reading) => {
+      logger.warn("file_derivative.paused", {
+        "memory.pressure_cause": reading.cause ?? "",
+        "memory.rss_bytes": reading.rssBytes,
       });
-      logger.error("file_derivative.failed", {
-        entityId: job?.data.entityId ?? "",
-        "error.type": errorTag(error),
-        fieldId: job?.data.fieldId ?? "",
-        job: job?.name ?? "",
-        workspaceId: job?.data.workspaceId ?? "",
+    },
+    onOpen: (reading) => {
+      logger.info("file_derivative.resumed", {
+        "memory.rss_bytes": reading.rssBytes,
       });
-    });
+    },
+  });
 
-    worker.on(
-      "error",
-      createQueueWorkerErrorLogger("file_derivative.worker_error"),
-    );
+  const worker = new BullMqWorker<FileDerivativeJobData>(
+    QUEUE_NAME,
+    createFileDerivativeProcessor({
+      memory,
+      pausing,
+      processPdf: processPdfDerivativeJob,
+      processThumbnail: processImageThumbnailJob,
+    }),
+    {
+      connection: workerConnection,
+      concurrency: FILE_DERIVATIVE_WORKER_CONCURRENCY,
+    },
+  );
 
-    logger.info("file_derivative.worker_started", {
-      concurrency: String(FILE_DERIVATIVE_WORKER_CONCURRENCY),
-      "memory.defer_rss_bytes": rssHighBytes,
-      "memory.limit_bytes":
-        memoryLimit.type === "limited" ? memoryLimit.bytes : memoryLimit.type,
-    });
-
-    return {
-      queues: [QUEUE_NAME] as const,
-      close: async () => {
-        process.off("memoryPressure", memory.record);
-        pausing.stop();
-        await worker.close();
-      },
-    };
+  pauseTarget = {
+    // Local pause without waiting: it is called from inside the processor,
+    // which must still finish the job in hand.
+    pause: () => {
+      worker.pause(true).catch((error: unknown) => {
+        observeFailure(error, {
+          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+          ctx: { queue: QUEUE_NAME },
+        });
+      });
+    },
+    resume: () => {
+      worker.resume().catch((error: unknown) => {
+        observeFailure(error, {
+          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+          ctx: { queue: QUEUE_NAME },
+        });
+      });
+    },
   };
+
+  worker.on("failed", (job, error) => {
+    const exhausted =
+      job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
+    if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
+      markImageThumbnailFailed(
+        job.data,
+        DERIVATIVE_FAILURE_REASON.PROCESSING,
+      ).catch((markError: unknown) => {
+        captureError(markError, {
+          entityId: job.data.entityId,
+          fieldId: job.data.fieldId,
+          workspaceId: job.data.workspaceId,
+        });
+      });
+    } else if (exhausted) {
+      markPdfDerivativeFailed(
+        job.data,
+        DERIVATIVE_FAILURE_REASON.PROCESSING,
+      ).catch((markError: unknown) => {
+        captureError(markError, {
+          entityId: job.data.entityId,
+          fieldId: job.data.fieldId,
+          workspaceId: job.data.workspaceId,
+        });
+      });
+    }
+
+    captureError(error, {
+      entityId: job?.data.entityId ?? "",
+      fieldId: job?.data.fieldId ?? "",
+      workspaceId: job?.data.workspaceId ?? "",
+    });
+    logger.error("file_derivative.failed", {
+      entityId: job?.data.entityId ?? "",
+      "error.type": errorTag(error),
+      fieldId: job?.data.fieldId ?? "",
+      job: job?.name ?? "",
+      workspaceId: job?.data.workspaceId ?? "",
+    });
+  });
+
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("file_derivative.worker_error"),
+  );
+
+  logger.info("file_derivative.worker_started", {
+    concurrency: String(FILE_DERIVATIVE_WORKER_CONCURRENCY),
+    "memory.defer_rss_bytes": rssHighBytes,
+    "memory.limit_bytes":
+      memoryLimit.type === "limited" ? memoryLimit.bytes : memoryLimit.type,
+  });
+
+  return {
+    queues: [QUEUE_NAME] as const,
+    close: async () => {
+      process.off("memoryPressure", memory.record);
+      pausing.stop();
+      await worker.close();
+    },
+  };
+};
 
 type FileDerivativeProcessorJob = {
   data: FileDerivativeJobData;
@@ -613,7 +615,8 @@ const MARK_DERIVATIVE_FAILED = {
   [FILE_DERIVATIVE_KIND.PDF]: async (
     data: FileDerivativeJobData,
     reason: DerivativeFailureReason,
-  ) => await markPdfDerivativeFailed(data, reason),
+    conversionRefusal?: DisplayableConversionRefusal,
+  ) => await markPdfDerivativeFailed(data, reason, conversionRefusal),
   [FILE_DERIVATIVE_KIND.THUMBNAIL]: async (
     data: FileDerivativeJobData,
     reason: DerivativeFailureReason,
@@ -623,6 +626,7 @@ const MARK_DERIVATIVE_FAILED = {
   (
     data: FileDerivativeJobData,
     reason: DerivativeFailureReason,
+    conversionRefusal?: DisplayableConversionRefusal,
   ) => Promise<void>
 >;
 
@@ -632,12 +636,14 @@ const refuseDerivative = async ({
   jobData,
   kind,
   reason,
+  conversionRefusal,
   workspaceId,
 }: {
   fieldId: SafeId<"field">;
   jobData: FileDerivativeJobData;
   kind: FileDerivativeKind;
   reason: DerivativeFailureReason;
+  conversionRefusal?: DisplayableConversionRefusal;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
   logger.info("file_derivative.refused", {
@@ -646,14 +652,53 @@ const refuseDerivative = async ({
     reason,
     workspaceId,
   });
-  await MARK_DERIVATIVE_FAILED[kind](jobData, reason);
+  await MARK_DERIVATIVE_FAILED[kind](jobData, reason, conversionRefusal);
 };
 
 type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 
+type DisplayableConversionRefusal = ConversionRefusal;
+
+/** Every refusal the user can act on is shown; a new kind must choose. */
+export const displayableConversionRefusal = (
+  reason: ConversionInputErrorReason,
+): DisplayableConversionRefusal | undefined => {
+  switch (reason.kind) {
+    case "unsupported_encoding": {
+      return { kind: reason.kind, encoding: reason.encoding.slice(0, 256) };
+    }
+    case "unsupported_reference": {
+      return {
+        kind: reason.kind,
+        format: reason.format.slice(0, 256),
+        element: reason.element.slice(0, 512),
+        attribute: reason.attribute.slice(0, 512),
+      };
+    }
+    case "unsupported_field": {
+      return { kind: reason.kind, fieldType: reason.fieldType.slice(0, 256) };
+    }
+    case "legacy_format": {
+      return reason;
+    }
+    case "external_reference":
+    case "inspection_failed": {
+      return undefined;
+    }
+    default: {
+      reason satisfies never;
+      return panic("Unclassified conversion refusal");
+    }
+  }
+};
+
 type DerivativeBuild<T> =
   | { type: "built"; value: T }
-  | { type: "refused"; reason: DerivativeFailureReason };
+  | {
+      type: "refused";
+      reason: DerivativeFailureReason;
+      conversionRefusal?: DisplayableConversionRefusal;
+    };
 
 const readSourceWithinBudget = async <T>(
   read: (signal: AbortSignal) => Promise<T>,
@@ -670,7 +715,6 @@ const readSourceWithinBudget = async <T>(
 const buildPdfDerivative = async (
   content: FileFieldContent,
   sourceKey: FileKey,
-  converter: ConverterSettings,
 ): Promise<DerivativeBuild<ArrayBuffer>> => {
   const source = await loadDerivativeSource<ScannedFile>({
     sizeBytes: content.sizeBytes,
@@ -690,10 +734,19 @@ const buildPdfDerivative = async (
     return source;
   }
   const conversion = await convertToPdf(source.source, {
-    converter,
     retry: "caller",
   });
   if (Result.isError(conversion)) {
+    if (conversion.error instanceof ConversionInputError) {
+      const conversionRefusal = displayableConversionRefusal(
+        conversion.error.reason,
+      );
+      return {
+        type: "refused",
+        reason: DERIVATIVE_FAILURE_REASON.PROCESSING,
+        ...(conversionRefusal === undefined ? {} : { conversionRefusal }),
+      };
+    }
     if (conversion.error instanceof DerivativeAdmissionError) {
       return {
         type: "refused",
@@ -738,7 +791,6 @@ const buildThumbnailDerivative = async (
 
 const processPdfDerivativeJob = async (
   jobData: FileDerivativeJobData,
-  converter: ConverterSettings,
 ): Promise<void> => {
   const {
     derivativeFileId,
@@ -798,13 +850,16 @@ const processPdfDerivativeJob = async (
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const built = await buildPdfDerivative(content, sourceKey, converter);
+  const built = await buildPdfDerivative(content, sourceKey);
   if (built.type === "refused") {
     await refuseDerivative({
       fieldId: brandedFieldId,
       jobData,
       kind: FILE_DERIVATIVE_KIND.PDF,
       reason: built.reason,
+      ...(built.conversionRefusal === undefined
+        ? {}
+        : { conversionRefusal: built.conversionRefusal }),
       workspaceId: branded.workspaceId,
     });
     return;
@@ -950,17 +1005,25 @@ const readyPdfDerivativeContent = (pdfFileId: string) =>
     true
   )`;
 
-const failedPdfDerivativeContent = (reason: DerivativeFailureReason) =>
+const failedPdfDerivativeContent = (
+  reason: DerivativeFailureReason,
+  conversionRefusal?: DisplayableConversionRefusal,
+) =>
   sql<FieldContent>`jsonb_set(
     ${fields.content},
     '{pdfDerivative}',
-    ${JSON.stringify({ status: "failed", reason })}::text::jsonb,
+    ${JSON.stringify({
+      status: "failed",
+      reason,
+      ...(conversionRefusal === undefined ? {} : { conversionRefusal }),
+    })}::text::jsonb,
     true
   )`;
 
 const markPdfDerivativeFailed = async (
   { fieldId, organizationId, userId, workspaceId }: FileDerivativeJobData,
   reason: DerivativeFailureReason,
+  conversionRefusal?: DisplayableConversionRefusal,
 ): Promise<void> => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
@@ -976,7 +1039,7 @@ const markPdfDerivativeFailed = async (
     tx
       .update(fields)
       .set({
-        content: failedPdfDerivativeContent(reason),
+        content: failedPdfDerivativeContent(reason, conversionRefusal),
       })
       .where(
         and(

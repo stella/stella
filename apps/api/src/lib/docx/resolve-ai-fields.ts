@@ -35,10 +35,7 @@ import type { FieldMeta } from "./types";
  * reporting a finish at all (a cancelled fill, a lifecycle regression).
  */
 type AiFieldFailureReason =
-  | "empty"
-  | "generation-failed"
-  | "interrupted"
-  | "truncated";
+  "empty" | "generation-failed" | "interrupted" | "truncated";
 
 export const AI_FIELD_GENERATION_FAILURE_MESSAGE =
   "AI field generation failed. Retry or provide the value yourself.";

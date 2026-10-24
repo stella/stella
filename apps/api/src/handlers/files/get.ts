@@ -292,7 +292,7 @@ export const printPdfHandler = async ({
     return status(502);
   }
 
-  const conversionResult = await convertToPdf(source.value, { converter: env });
+  const conversionResult = await convertToPdf(source.value);
 
   if (Result.isError(conversionResult)) {
     captureError(conversionResult.error, {

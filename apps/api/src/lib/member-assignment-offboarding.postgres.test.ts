@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test, setDefaultTimeout } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
@@ -9,26 +9,26 @@ import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
-  properties,
   auditLogs,
+  contacts,
   desktopEditHandoffs,
-  pdfSigningSessions,
   desktopEditSessions,
   desktopPresence,
-  searchHistoryEntries,
+  entities,
   entityVersions,
   flowDefinitions,
   flowRuns,
   flowRunSteps,
   mcpConnectors,
-  mcpUserConnections,
   mcpOAuthState,
+  mcpUserConnections,
+  pdfSigningSessions,
+  properties,
+  searchHistoryEntries,
   sharepointConnections,
   sharepointOAuthState,
-  workObligations,
-  contacts,
-  entities,
   taskAssignees,
+  workObligations,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -51,8 +51,8 @@ import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
 import {
-  tryLockMemberCleanupWorkspace,
   removeOrganizationMemberInTransaction,
+  tryLockMemberCleanupWorkspace,
 } from "@/api/lib/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,

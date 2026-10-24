@@ -1,4 +1,4 @@
-import { Result, panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, desc, eq, exists, isNull, ne, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
@@ -16,15 +16,15 @@ import {
   user,
 } from "@/api/db/auth-schema";
 import {
-  mcpWebHandoff,
-  MCP_WEB_HANDOFF_MAX_PATHS,
   type MCP_WEB_HANDOFF_KINDS,
+  MCP_WEB_HANDOFF_MAX_PATHS,
+  mcpWebHandoff,
 } from "@/api/db/schema/mcp-web-handoff";
 import { env } from "@/api/env";
 import {
-  createAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -34,8 +34,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
-  brandPersistedUserId,
   brandPersistedOrganizationId,
+  brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 
 const HANDOFF_SESSION_LABEL_CAP = 100;

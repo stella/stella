@@ -8,6 +8,7 @@ export default {
   owner: [
     "apps/api/src/api-background-workers.ts",
     "apps/api/src/scripts/document-processing-worker.ts",
+    "apps/api/src/scripts/file-derivative-worker.ts",
   ],
   summary:
     "Each process that runs BullMQ workers builds its host here and passes the " +

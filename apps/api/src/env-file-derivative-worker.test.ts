@@ -47,6 +47,23 @@ describe("file-derivative worker environment", () => {
     expect(validate(withoutGotenberg).exitCode).not.toBe(0);
   });
 
+  test("shares the background-worker mode schema", () => {
+    expect(
+      validate({
+        ...baseEnv,
+        NODE_ENV: "test",
+        STELLA_LOCAL_DEV: "1",
+        SCHEDULED_JOBS_MODE: "disabled",
+      }).exitCode,
+    ).toBe(0);
+    expect(
+      validate({ ...baseEnv, SCHEDULED_JOBS_MODE: "invalid" }).exitCode,
+    ).not.toBe(0);
+    expect(
+      validate({ ...baseEnv, SCHEDULED_JOBS_MODE: "disabled" }).exitCode,
+    ).not.toBe(0);
+  });
+
   test("does not import the API environment", async () => {
     const modules = await collectApiModuleGraph(
       nodePath.resolve(apiSourceRoot, "scripts/file-derivative-worker.ts"),

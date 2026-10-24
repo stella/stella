@@ -26,6 +26,7 @@ const violation = fileDerivativeWorkerEnvInvariantViolation({
   gotenbergUrl: specific.GOTENBERG_URL,
   redisUrl: envBase.REDIS_URL,
   runtimeMode: runtimeMode(),
+  scheduledJobsMode: specific.SCHEDULED_JOBS_MODE,
 });
 if (violation !== null) {
   panic(violation);

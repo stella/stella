@@ -5,8 +5,8 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  SubprocessError,
   SUBPROCESS_TERMINATION_REASON,
+  SubprocessError,
 } from "@/api/lib/errors/tagged-errors";
 import {
   classifySubprocessTermination,

@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { INTERRUPT_BINDING_METADATA_KEY } from "@tanstack/ai/client";
 import type { InterruptBinding } from "@tanstack/ai/client";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,

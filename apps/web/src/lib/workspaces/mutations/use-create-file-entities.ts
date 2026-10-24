@@ -6,6 +6,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
@@ -27,25 +28,23 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
-import { validateUploadFileNotEmpty } from "@/lib/files/upload-file-validation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
+  folderReservableFiles,
 } from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
 import {
   buildEntityCreatePresignPayload,
   entityCreateLocalInvalidationKeys,
 } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
+import {
+  createFileEntityUploader,
+  type FileEntityUploadGrant,
+} from "@/lib/workspaces/mutations/file-entity-upload.logic";
 import { showUploadFailureToast } from "@/lib/workspaces/mutations/upload-failure-toast";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-
-// Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
-// file can be arbitrarily large). This is a stall ceiling, not a target
-// duration: a healthy slow upload of a large file can legitimately take
-// several minutes.
-const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 type UploadResult = {
   entityId: string;
@@ -54,11 +53,8 @@ type UploadResult = {
   renamed: boolean;
 };
 
-type PreparedFileEntityUpload = {
-  uploadId: string;
+type PreparedFileEntityUpload = FileEntityUploadGrant & {
   parentId: string | null;
-  url: string;
-  headers: Record<string, string>;
 };
 
 type PrepareFolderTreeUploadOptions = {
@@ -80,13 +76,11 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
-  for (const placement of plan.files) {
-    readQueryResult(validateUploadFileNotEmpty(placement.file.size));
-  }
+  const reservable = folderReservableFiles(plan);
   const files = [];
-  for (const [index, placement] of plan.files.entries()) {
+  for (const { key, placement } of reservable) {
     files.push({
-      key: String(index),
+      key,
       parentKey: placement.parentKey,
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
@@ -109,8 +103,8 @@ const prepareFolderTreeUpload = async ({
   }
 
   const fileByKey = new Map<string, File>();
-  for (const [index, placement] of plan.files.entries()) {
-    fileByKey.set(String(index), placement.file);
+  for (const { key, placement } of reservable) {
+    fileByKey.set(key, placement.file);
   }
 
   const preparedUploadByFile = new Map<File, PreparedFileEntityUpload>();
@@ -130,7 +124,7 @@ const prepareFolderTreeUpload = async ({
     });
   }
 
-  if (preparedUploadByFile.size !== plan.files.length) {
+  if (preparedUploadByFile.size !== reservable.length) {
     throw new ClientOperationError({
       action: "prepare-dropped-folder-upload",
       message: "Prepared upload response did not include every file",
@@ -182,25 +176,6 @@ const abortUpload = async (
   }
 };
 
-type AbortPreparedUploadsForFilesOptions = {
-  workspaceId: string;
-  files: File[];
-  preparedUploadForFile: (file: File) => PreparedFileEntityUpload | undefined;
-};
-
-const abortPreparedUploadsForFiles = async ({
-  workspaceId,
-  files,
-  preparedUploadForFile,
-}: AbortPreparedUploadsForFilesOptions): Promise<void> => {
-  for (const file of files) {
-    const preparedUpload = preparedUploadForFile(file);
-    if (preparedUpload) {
-      await abortUpload(workspaceId, preparedUpload.uploadId);
-    }
-  }
-};
-
 /**
  * Upload a single file via the presigned-S3-PUT migration. Same
  * external shape as the legacy multipart upload (throws with
@@ -219,9 +194,11 @@ const abortPreparedUploadsForFiles = async ({
  *   4. POST `/uploads/:wsId/:uploadId/finalize`. The API runs the
  *      claim FSM, scans, server-side promotes `tmp/` → final key,
  *      commits the entity transaction.
- *   5. On any abort/error mid-flight, POST `/abort` to mark the
- *      pending row as rejected. Re-entry to step 2 returns the
- *      cached result so accidental double-finalizes are safe.
+ *   5. A failed PUT POSTs `/abort` to mark the pending row as
+ *      rejected; the next attempt reserves anew. A finalize that may
+ *      still complete is retried on the same upload id (see
+ *      `createFileEntityUploader`), so a lost finalize response
+ *      replays the committed result instead of uploading again.
  */
 type UploadSingleFileOptions = {
   file: File;
@@ -276,23 +253,20 @@ const prepareSingleFileEntityUpload = async ({
   };
 };
 
-type UploadPreparedFileEntityOptions = {
+type PutFileEntityOptions = {
   file: File;
   workspaceId: string;
-  preparedUpload: PreparedFileEntityUpload;
+  grant: FileEntityUploadGrant;
   signal: AbortSignal;
 };
 
-const uploadPreparedFileEntity = async ({
+const putFileEntity = async ({
   file,
   workspaceId,
-  preparedUpload,
+  grant,
   signal,
-}: UploadPreparedFileEntityOptions): Promise<UploadResult> => {
-  const { uploadId, url, headers } = preparedUpload;
-  const wsClient = api.uploads({
-    workspaceId: toSafeId<"workspace">(workspaceId),
-  });
+}: PutFileEntityOptions): Promise<void> => {
+  const { uploadId, url, headers } = grant;
 
   // 3. PUT to S3. S3 enforces the signed checksum + length; a
   //    mismatched body comes back as 4xx and we surface the body
@@ -304,7 +278,7 @@ const uploadPreparedFileEntity = async ({
       headers,
       body: file,
       signal,
-      timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+      timeout: { type: "idle", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
   } catch (error) {
     // Best-effort cleanup: abortUpload swallows its own errors and its
@@ -332,16 +306,28 @@ const uploadPreparedFileEntity = async ({
     await abortUpload(workspaceId, uploadId);
     throw error;
   }
+};
 
-  // 4. Finalize.
-  const finalize = await wsClient({ uploadId }).finalize.post(undefined, {
-    fetch: { signal },
-  });
+type FinalizeFileEntityOptions = {
+  workspaceId: string;
+  uploadId: string;
+  signal: AbortSignal;
+};
+
+const finalizeFileEntity = async ({
+  workspaceId,
+  uploadId,
+  signal,
+}: FinalizeFileEntityOptions): Promise<UploadResult> => {
+  // 4. Finalize. Finalize owns the pending row once called; whether a
+  //    failure may still complete on this upload id is decided by
+  //    `finalizeFailureKeepsUpload`.
+  const finalize = await api
+    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({ uploadId })
+    .finalize.post(undefined, { fetch: { signal } });
   if (finalize.error) {
     const error = toAPIError(finalize.error);
     attachResponseForRetry(error, finalize.response);
-    // Finalize owns the pending row once called. 422s are terminal
-    // rejections, 409/5xx may still be in-flight or retryable.
     throw error;
   }
 
@@ -361,18 +347,6 @@ const uploadPreparedFileEntity = async ({
     fileName: finalizedResult.fileName,
     renamed: finalizedResult.renamed,
   };
-};
-
-const uploadSingleFile = async (
-  options: UploadSingleFileOptions,
-): Promise<UploadResult> => {
-  const preparedUpload = await prepareSingleFileEntityUpload(options);
-  return await uploadPreparedFileEntity({
-    file: options.file,
-    workspaceId: options.workspaceId,
-    preparedUpload,
-    signal: options.signal,
-  });
 };
 
 type BatchUploadLabels = {
@@ -423,11 +397,11 @@ type BatchUploadOptions = {
   propertyId: string;
   parentId?: string | null | undefined;
   parentIdForFile?: (file: File) => string | null | undefined;
-  preparedUploadForFile?: (file: File) => PreparedFileEntityUpload | undefined;
-  onPreparedUploadFailed?: (
-    file: File,
-    preparedUpload: PreparedFileEntityUpload,
-  ) => Promise<void> | void;
+  /**
+   * Reservations made ahead for some files (a dropped folder). Each is used
+   * by its file's first attempt and removed; a cancel aborts the unused ones.
+   */
+  preparedUploads?: Map<File, PreparedFileEntityUpload>;
   labels: BatchUploadLabels;
   onError?: (error: Error) => void;
 };
@@ -455,42 +429,38 @@ const runUploadBatch = async ({
   propertyId,
   parentId,
   parentIdForFile,
-  preparedUploadForFile,
-  onPreparedUploadFailed,
+  preparedUploads,
   labels,
   onError,
 }: BatchUploadOptions): Promise<UploadResult[]> =>
   await new Promise<UploadResult[]>((resolve) => {
-    const completedFiles = new Set<File>();
-    const queue = new UploadQueue<UploadResult>(async (file, signal) => {
-      const preparedUpload = preparedUploadForFile?.(file);
-      if (preparedUpload) {
-        try {
-          const result = await uploadPreparedFileEntity({
-            file,
-            workspaceId,
-            preparedUpload,
-            signal,
-          });
-          completedFiles.add(file);
-          return result;
-        } catch (error) {
-          await onPreparedUploadFailed?.(file, preparedUpload);
-          throw error;
+    const uploader = createFileEntityUploader<UploadResult>({
+      reserve: async (file, signal) => {
+        const preparedUpload = preparedUploads?.get(file);
+        if (preparedUpload) {
+          preparedUploads?.delete(file);
+          return preparedUpload;
         }
-      }
-
-      const fileParentId = parentIdForFile?.(file);
-      const result = await uploadSingleFile({
-        file,
-        workspaceId,
-        propertyId,
-        parentId: fileParentId === undefined ? parentId : fileParentId,
-        signal,
-      });
-      completedFiles.add(file);
-      return result;
-    }, MAX_PARALLEL_FILE_UPLOADS);
+        const fileParentId = parentIdForFile?.(file);
+        return await prepareSingleFileEntityUpload({
+          file,
+          workspaceId,
+          propertyId,
+          parentId: fileParentId === undefined ? parentId : fileParentId,
+          signal,
+        });
+      },
+      put: async (file, grant, signal) =>
+        await putFileEntity({ file, workspaceId, grant, signal }),
+      finalize: async (uploadId, signal) =>
+        await finalizeFileEntity({ workspaceId, uploadId, signal }),
+      abort: async (uploadId) => await abortUpload(workspaceId, uploadId),
+    });
+    const queue = new UploadQueue<UploadResult>(
+      async (file, signal) =>
+        readQueryResult(await uploader.upload(file, signal)),
+      MAX_PARALLEL_FILE_UPLOADS,
+    );
 
     const initialTotal = files.length;
     const showProgress = initialTotal > 1;
@@ -541,19 +511,20 @@ const runUploadBatch = async ({
         onError?.(error);
       }
 
-      if (cancelled && preparedUploadForFile) {
-        const unfinishedPreparedFiles = files.filter(
-          (file) => !completedFiles.has(file),
+      if (cancelled) {
+        const unusedPreparedUploads = preparedUploads
+          ? [...preparedUploads.values()]
+          : [];
+        preparedUploads?.clear();
+        detached(
+          (async () => {
+            for (const preparedUpload of unusedPreparedUploads) {
+              await abortUpload(workspaceId, preparedUpload.uploadId);
+            }
+            await uploader.abortStaged();
+          })(),
+          "use-create-file-entities.abort-cancelled-uploads",
         );
-        abortPreparedUploadsForFiles({
-          workspaceId,
-          files: unfinishedPreparedFiles,
-          preparedUploadForFile,
-        }).catch((error: unknown) => {
-          if (error instanceof Error) {
-            onError?.(error);
-          }
-        });
       }
 
       const failedCount = failed.length;
@@ -774,12 +745,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
           propertyId,
           parentId,
           parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
-          preparedUploadForFile: (file) =>
-            preparedTree.preparedUploadByFile.get(file),
-          onPreparedUploadFailed: async (file, preparedUpload) => {
-            preparedTree.preparedUploadByFile.delete(file);
-            await abortUpload(workspaceId, preparedUpload.uploadId);
-          },
+          preparedUploads: preparedTree.preparedUploadByFile,
           labels,
           onError: (error) => analytics.captureError(error),
         });

@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
@@ -6,9 +6,9 @@ import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
-  type AuditAction,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  type AuditAction,
   type AuditActivityCategory,
   type AuditResourceType,
 } from "@/api/lib/audit-log";

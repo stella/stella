@@ -72,8 +72,18 @@ services:
       - bun
       - /app/file-derivative-worker.js
     depends_on:
-      gotenberg:
+      api:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "const response = await fetch('http://api:3001/ready', { signal: AbortSignal.timeout(4000) }); if (!response.ok) process.exit(1);"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

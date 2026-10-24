@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  readFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +12,8 @@ import path from "node:path";
 import {
   OWNERSHIP,
   SCHEMA_INTROSPECTION,
-  withSchemaIntrospection,
   validateOwnership,
+  withSchemaIntrospection,
 } from "./ownership.ts";
 import { assessMeasurements, RATCHET_METRICS } from "./ratchet.ts";
 import {

@@ -16,6 +16,7 @@ import {
 } from "@stll/fetch";
 
 import { env } from "@/api/env";
+import { envConverter } from "@/api/env-converter";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
@@ -99,10 +100,21 @@ export const mustAllowConfiguredTargets = async () => {
   await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, { timeoutMs: 1000 });
 
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target
-  await fetchWithTimeout(gotenbergConvertTarget(env), {
+  await fetchWithTimeout(gotenbergConvertTarget(envConverter), {
     redirect: "error",
     timeoutMs: 1000,
   });
+
+  const converterSettings = envConverter;
+  const converterTarget = gotenbergConvertTarget(converterSettings);
+  converterTarget.searchParams.set("trace", "fixture");
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(converterTarget, { timeoutMs: 1000 });
+
+  const changedConverterTarget = gotenbergConvertTarget(envConverter);
+  changedConverterTarget.hostname = dynamicBase;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a configured builder still returns a mutable URL whose authority can change
+  await fetchWithTimeout(changedConverterTarget, { timeoutMs: 1000 });
 
   const choice = useFreeTier ? "https://free.example" : "https://pro.example";
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target

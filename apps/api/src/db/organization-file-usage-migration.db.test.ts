@@ -1,7 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, expect, test } from "bun:test";
 import { SQL } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -10,6 +9,7 @@ import {
   organizationFileObjects,
   organizationFileUsage,
 } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import {
   organizationFileLedgerPageQuery,
   organizationFileReservationCandidatesQuery,
@@ -163,7 +163,7 @@ test("global tuple pages use keyset indexes and stale claims support ordered sca
       from generate_series(1, 20) tenant cross join generate_series(1, 5000) file;
       analyze organization_file_objects;
     `);
-    const queryDb = drizzle.mock();
+    const queryDb = createMockDatabase();
     const organizationId = brandPersistedOrganizationId("tenant-1");
     const firstPage = await planFor(
       database,

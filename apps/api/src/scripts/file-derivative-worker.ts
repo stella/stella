@@ -3,7 +3,7 @@ import { envFileDerivativeWorker } from "@/api/env-file-derivative-worker";
 import { detached } from "@/api/lib/analytics/capture";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
 import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
-import { createFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
+import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { logger } from "@/api/lib/observability/logger";
 import { refreshS3 } from "@/api/lib/s3";
 
@@ -12,8 +12,8 @@ await refreshS3();
 const workers = createBullMqWorkerHost(
   "file-derivative-worker",
   { db: rootDb },
-  "enabled",
-  [createFileDerivativeWorker(envFileDerivativeWorker)],
+  envFileDerivativeWorker.SCHEDULED_JOBS_MODE,
+  [initFileDerivativeWorker],
 );
 
 let shuttingDown = false;

@@ -11,4 +11,5 @@ test("the derivative entrypoint owns the derivative worker host and shutdown", (
   );
   expect(source).toContain('process.once("SIGTERM"');
   expect(source).toContain("await workers.close()");
+  expect(source).toContain("envFileDerivativeWorker.SCHEDULED_JOBS_MODE");
 });

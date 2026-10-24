@@ -403,7 +403,7 @@ must build `apps/web/Dockerfile` with their own public URLs, or run
 ## Run With Docker Compose
 
 From the repository root, validate the production profile, inspect the resolved
-Compose model, migrate, then start the three declared services. Run the web SSR
+Compose model, migrate, then start the declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->

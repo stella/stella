@@ -6,7 +6,6 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
  * (`handlers/templates/fills/download.ts`) so that module can keep to one default
  * `{ config, handler }` export while this generator stays directly testable.
  */
-import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -167,7 +166,7 @@ export const fillByIdLogic = async function* ({
         new HandlerError({ status: 422, message: "Template output invalid" }),
       );
     }
-    const pdfResult = await convertToPdf(scannedOutput, { converter: env });
+    const pdfResult = await convertToPdf(scannedOutput);
     if (Result.isError(pdfResult)) {
       return Result.err(
         new HandlerError({
