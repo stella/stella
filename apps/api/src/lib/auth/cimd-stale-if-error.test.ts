@@ -6,8 +6,9 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, test } from "bun:test";
 
 import {
-  CIMD_STALE_IF_ERROR_GRACE_SECONDS,
-  type CimdMetadataValidationStore,
+  CIMD_STALE_IF_ERROR_GRACE_MS,
+  CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
+  recordClientMetadataValidated,
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
 
@@ -38,28 +39,10 @@ type HarnessOptions = {
 type HarnessState = {
   upstream: Upstream;
   fetches: number;
-  validations: number;
-  ageSeconds: number | undefined;
 };
 
 const createHarness = ({ minimumFetchInterval, wrapInner }: HarnessOptions) => {
-  const state: HarnessState = {
-    upstream: { type: "document" },
-    fetches: 0,
-    validations: 0,
-    ageSeconds: undefined,
-  };
-  const store: CimdMetadataValidationStore = {
-    recordValidated: async () => {
-      state.validations += 1;
-      state.ageSeconds = 0;
-      await Promise.resolve();
-    },
-    readValidationAgeSeconds: async () => {
-      await Promise.resolve();
-      return state.ageSeconds;
-    },
-  };
+  const state: HarnessState = { upstream: { type: "document" }, fetches: 0 };
   const cimdDiscovery = createCimdClientDiscovery({
     fetchClientMetadataResource: async () => {
       state.fetches += 1;
@@ -87,17 +70,9 @@ const createHarness = ({ minimumFetchInterval, wrapInner }: HarnessOptions) => {
       }
     },
     metadataFetchPolicy: { minimumFetchInterval },
-    onClientCreated: async ({ client }) => {
-      await store.recordValidated(client.clientId);
-    },
-    onClientRefreshed: async ({ client }) => {
-      await store.recordValidated(client.clientId);
-    },
+    onClientCreated: recordClientMetadataValidated,
+    onClientRefreshed: recordClientMetadataValidated,
   });
-  const discovery = withStaleIfError(
-    wrapInner ? wrapInner(cimdDiscovery) : cimdDiscovery,
-    store,
-  );
   const database: Record<string, Record<string, unknown>[]> = {
     user: [],
     session: [],
@@ -113,19 +88,26 @@ const createHarness = ({ minimumFetchInterval, wrapInner }: HarnessOptions) => {
     database: memoryAdapter(database),
     rateLimit: { enabled: false },
     plugins: [
+      CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       oauthProvider({
         loginPage: "/sign-in",
         consentPage: "/consent",
         disableJwtPlugin: true,
         resourceSeedMode: "none",
         scopes: ["read"],
-        extensions: [{ clientDiscovery: discovery }],
+        extensions: [
+          {
+            clientDiscovery: withStaleIfError(
+              wrapInner ? wrapInner(cimdDiscovery) : cimdDiscovery,
+            ),
+          },
+        ],
       }),
     ],
   });
-  const authorize = async (clientId = CLIENT_ID): Promise<Response> => {
+  const authorize = async (): Promise<Response> => {
     const query = new URLSearchParams({
-      client_id: clientId,
+      client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
       response_type: "code",
       scope: "read",
@@ -139,12 +121,25 @@ const createHarness = ({ minimumFetchInterval, wrapInner }: HarnessOptions) => {
       ),
     );
   };
-  return { state, database, authorize };
+  const clientRow = () => database["oauthClient"]?.at(0);
+  const validatedAt = (): unknown => clientRow()?.["metadataValidatedAt"];
+  /** Moves the recorded validation `ageMs` into the past. */
+  const ageValidation = (ageMs: number) => {
+    const row = clientRow();
+    expect(row).toBeDefined();
+    if (row) {
+      row["metadataValidatedAt"] = new Date(Date.now() - ageMs);
+    }
+  };
+  return { state, database, authorize, validatedAt, ageValidation };
 };
 
 const isAccepted = (response: Response): boolean =>
   response.status === 302 &&
   (response.headers.get("location") ?? "").includes("/sign-in");
+
+// Leaves room for the request itself inside the window.
+const WITHIN_WINDOW_MS = CIMD_STALE_IF_ERROR_GRACE_MS - 60_000;
 
 describe("CIMD stale-if-error", () => {
   test.each([
@@ -155,82 +150,82 @@ describe("CIMD stale-if-error", () => {
   ] satisfies Upstream[])(
     "keeps a registered client within the window when upstream answers %o",
     async (upstream) => {
-      const { state, authorize } = createHarness({ minimumFetchInterval: 0 });
-      expect(isAccepted(await authorize())).toBe(true);
-      expect(state.validations).toBe(1);
+      const harness = createHarness({ minimumFetchInterval: 0 });
+      expect(isAccepted(await harness.authorize())).toBe(true);
+      expect(harness.validatedAt()).toBeInstanceOf(Date);
 
-      state.upstream = upstream;
-      state.ageSeconds = CIMD_STALE_IF_ERROR_GRACE_SECONDS;
-      const fetchesBefore = state.fetches;
-      expect(isAccepted(await authorize())).toBe(true);
-      expect(state.fetches).toBe(fetchesBefore + 1);
-      expect(state.validations).toBe(1);
+      harness.state.upstream = upstream;
+      harness.ageValidation(WITHIN_WINDOW_MS);
+      const stamped = harness.validatedAt();
+      const fetchesBefore = harness.state.fetches;
+      expect(isAccepted(await harness.authorize())).toBe(true);
+      expect(harness.state.fetches).toBe(fetchesBefore + 1);
+      // A stale answer records no validation, so it cannot extend its window.
+      expect(harness.validatedAt()).toBe(stamped);
 
-      state.ageSeconds = CIMD_STALE_IF_ERROR_GRACE_SECONDS + 1;
-      const refused = await authorize();
+      harness.ageValidation(CIMD_STALE_IF_ERROR_GRACE_MS + 1000);
+      const refused = await harness.authorize();
       expect(refused.status).toBe(400);
       expect(await refused.json()).toMatchObject({ error: "invalid_client" });
     },
   );
 
   test("answers a fetch the discovery's own pacing refuses from the stored client", async () => {
-    const { state, authorize } = createHarness({ minimumFetchInterval: "1h" });
-    expect(isAccepted(await authorize())).toBe(true);
+    const harness = createHarness({ minimumFetchInterval: "1h" });
+    expect(isAccepted(await harness.authorize())).toBe(true);
 
-    state.upstream = { type: "status", status: 404 };
-    expect(isAccepted(await authorize())).toBe(true);
-    const fetchesAfterFailure = state.fetches;
+    harness.state.upstream = { type: "status", status: 404 };
+    expect(isAccepted(await harness.authorize())).toBe(true);
+    const fetchesAfterFailure = harness.state.fetches;
     // Within the failed-fetch interval the discovery refuses without fetching.
-    expect(isAccepted(await authorize())).toBe(true);
-    expect(state.fetches).toBe(fetchesAfterFailure);
+    expect(isAccepted(await harness.authorize())).toBe(true);
+    expect(harness.state.fetches).toBe(fetchesAfterFailure);
 
-    state.ageSeconds = CIMD_STALE_IF_ERROR_GRACE_SECONDS + 1;
-    expect((await authorize()).status).toBe(429);
+    harness.ageValidation(CIMD_STALE_IF_ERROR_GRACE_MS + 1000);
+    expect((await harness.authorize()).status).toBe(429);
   });
 
-  test("resumes validating once the document is back", async () => {
-    const { state, authorize } = createHarness({ minimumFetchInterval: 0 });
-    expect(isAccepted(await authorize())).toBe(true);
-    state.upstream = { type: "status", status: 404 };
-    state.ageSeconds = 60;
-    expect(isAccepted(await authorize())).toBe(true);
+  test("records a new validation once the document is back", async () => {
+    const harness = createHarness({ minimumFetchInterval: 0 });
+    expect(isAccepted(await harness.authorize())).toBe(true);
+    harness.state.upstream = { type: "status", status: 404 };
+    harness.ageValidation(WITHIN_WINDOW_MS);
+    expect(isAccepted(await harness.authorize())).toBe(true);
 
-    state.upstream = { type: "document" };
-    expect(isAccepted(await authorize())).toBe(true);
-    expect(state.validations).toBe(2);
-    expect(state.ageSeconds).toBe(0);
+    harness.state.upstream = { type: "document" };
+    const before = Date.now();
+    expect(isAccepted(await harness.authorize())).toBe(true);
+    const validatedAt = harness.validatedAt();
+    expect(validatedAt).toBeInstanceOf(Date);
+    if (validatedAt instanceof Date) {
+      expect(validatedAt.getTime()).toBeGreaterThanOrEqual(before);
+    }
   });
 
   test("never creates a client from an unavailable document", async () => {
-    const { state, database, authorize } = createHarness({
-      minimumFetchInterval: 0,
-    });
-    state.upstream = { type: "status", status: 404 };
-    state.ageSeconds = 0;
-    const refused = await authorize();
+    const harness = createHarness({ minimumFetchInterval: 0 });
+    harness.state.upstream = { type: "status", status: 404 };
+    const refused = await harness.authorize();
     expect(refused.status).toBe(400);
-    expect(database["oauthClient"]).toEqual([]);
-    expect(state.validations).toBe(0);
+    expect(harness.database["oauthClient"]).toEqual([]);
   });
 
   test("passes through refusals that are not revalidation failures", async () => {
-    const failure = new Error("database unavailable");
     let failing = false;
-    const { state, authorize } = createHarness({
+    const harness = createHarness({
       minimumFetchInterval: 0,
       wrapInner: (discovery) => ({
         ...discovery,
         resolve: async (ctx, clientId, existing) => {
           if (failing) {
-            throw failure;
+            throw new Error("database unavailable");
           }
           return await discovery.resolve(ctx, clientId, existing);
         },
       }),
     });
-    expect(isAccepted(await authorize())).toBe(true);
+    expect(isAccepted(await harness.authorize())).toBe(true);
     failing = true;
-    state.ageSeconds = 0;
-    expect((await authorize()).status).toBe(500);
+    expect((await harness.authorize()).status).toBe(500);
   });
 });

@@ -105,7 +105,8 @@ import {
 } from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
-  createCimdMetadataValidationStore,
+  CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
+  recordClientMetadataValidated,
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
 import {
@@ -1276,7 +1277,6 @@ export const createAuth = (
   roleAssignmentPolicy = assignableRoles,
   factoryOptions: CreateAuthOptions = {},
 ) => {
-  const cimdMetadataValidations = createCimdMetadataValidationStore(rootDb);
   const authRateLimitStorage =
     factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
   const rateLimitEnabled =
@@ -2110,6 +2110,7 @@ export const createAuth = (
     }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+      CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createMcpWebHandoffPlugin({ service: getWebHandoffService }),
       createAgentUserPlugin(),
@@ -2286,18 +2287,9 @@ export const createAuth = (
                   fetchClientMetadataResource: withOwnClientDocuments(
                     fetchClientMetadataResource,
                   ),
-                  onClientCreated: async ({ client }) => {
-                    await cimdMetadataValidations.recordValidated(
-                      client.clientId,
-                    );
-                  },
-                  onClientRefreshed: async ({ client }) => {
-                    await cimdMetadataValidations.recordValidated(
-                      client.clientId,
-                    );
-                  },
+                  onClientCreated: recordClientMetadataValidated,
+                  onClientRefreshed: recordClientMetadataValidated,
                 }),
-                cimdMetadataValidations,
               ),
             },
           ],

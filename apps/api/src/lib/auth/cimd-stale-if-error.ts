@@ -1,56 +1,71 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type { ClientDiscovery } from "@better-auth/oauth-provider";
+import type { BetterAuthPlugin } from "better-auth";
 import { Result } from "better-result";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
 
-import { oauthClient } from "@/api/db/auth-schema";
-import type { RootDatabase } from "@/api/db/root";
+import { Temporal } from "@stll/time";
+
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** How long a registered client keeps resolving from its last validated
  * metadata document while the document cannot be revalidated. */
-export const CIMD_STALE_IF_ERROR_GRACE_SECONDS = 6 * 60 * 60;
+export const CIMD_STALE_IF_ERROR_GRACE_MS = Temporal.Duration.from({
+  hours: 6,
+}).total("milliseconds");
 
-export type CimdMetadataValidationStore = {
-  /** Records that the client's document just passed a fetch and validation. */
-  recordValidated: (clientId: string) => Promise<void>;
-  /** Seconds since the last recorded validation, or undefined when none is. */
-  readValidationAgeSeconds: (clientId: string) => Promise<number | undefined>;
+const OAUTH_CLIENT_MODEL = "oauthClient";
+
+/** Declares `oauth_client.metadata_validated_at` to the auth adapter. */
+export const CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN = {
+  id: "client-metadata-validation-schema",
+  schema: {
+    oauthClient: {
+      fields: {
+        metadataValidatedAt: {
+          type: "date",
+          input: false,
+          required: false,
+        },
+      },
+    },
+  },
+} satisfies BetterAuthPlugin;
+
+type ClientValidationEvent = {
+  client: { clientId: string };
+  context: GenericEndpointContext;
 };
 
 /**
- * Persists validations on `oauth_client.metadata_validated_at`. The database
- * clock stamps and measures them, so instances agree on one grace window
- * whatever their own clocks say. The auth owner passes its connection.
+ * Records that the client's metadata document just passed a fetch and
+ * validation. The discovery calls it only after persisting a document it
+ * validated, so a stale answer never records one.
  */
-export const createCimdMetadataValidationStore = (
-  db: RootDatabase,
-): CimdMetadataValidationStore => ({
-  recordValidated: async (clientId) => {
-    // audit: skip - freshness bookkeeping for a discovery-owned client document.
-    await db
-      .update(oauthClient)
-      .set({ metadataValidatedAt: sql`now()` })
-      .where(eq(oauthClient.clientId, clientId));
-  },
-  readValidationAgeSeconds: async (clientId) => {
-    const row = (
-      await db
-        .select({
-          ageSeconds: sql<number>`extract(epoch from now() - ${oauthClient.metadataValidatedAt})::float8`,
-        })
-        .from(oauthClient)
-        .where(
-          and(
-            eq(oauthClient.clientId, clientId),
-            isNotNull(oauthClient.metadataValidatedAt),
-          ),
-        )
-        .limit(1)
-    ).at(0);
-    return row?.ageSeconds;
-  },
-});
+export const recordClientMetadataValidated = async ({
+  client,
+  context,
+}: ClientValidationEvent): Promise<void> => {
+  // audit: skip - freshness bookkeeping for a discovery-owned client document.
+  await context.context.adapter.update({
+    model: OAUTH_CLIENT_MODEL,
+    where: [{ field: "clientId", value: client.clientId }],
+    update: { metadataValidatedAt: new Date() },
+  });
+};
+
+const readClientMetadataValidatedAt = async (
+  ctx: GenericEndpointContext,
+  clientId: string,
+): Promise<Date | undefined> => {
+  const row: unknown = await ctx.context.adapter.findOne({
+    model: OAUTH_CLIENT_MODEL,
+    where: [{ field: "clientId", value: clientId }],
+    select: ["metadataValidatedAt"],
+  });
+  const validatedAt = isRecord(row) ? row["metadataValidatedAt"] : undefined;
+  return validatedAt instanceof Date ? validatedAt : undefined;
+};
 
 // The discovery answers a document it could not fetch or validate with
 // `invalid_client`, and a fetch its budget refuses with HTTP 429.
@@ -81,7 +96,6 @@ const isRevalidationRefusal = (error: unknown): boolean => {
  */
 export const withStaleIfError = (
   discovery: ClientDiscovery,
-  store: CimdMetadataValidationStore,
 ): ClientDiscovery => ({
   ...discovery,
   resolve: async (ctx, clientId, existing) => {
@@ -99,16 +113,17 @@ export const withStaleIfError = (
     ) {
       throw resolved.error;
     }
-    const ageSeconds = await store.readValidationAgeSeconds(clientId);
-    if (
-      ageSeconds === undefined ||
-      ageSeconds > CIMD_STALE_IF_ERROR_GRACE_SECONDS
-    ) {
+    const validatedAt = await readClientMetadataValidatedAt(ctx, clientId);
+    const ageMs =
+      validatedAt === undefined
+        ? undefined
+        : Temporal.Now.instant().epochMilliseconds - validatedAt.getTime();
+    if (ageMs === undefined || ageMs > CIMD_STALE_IF_ERROR_GRACE_MS) {
       throw resolved.error;
     }
     logger.warn("auth.client_metadata_stale_served", {
       "oauth.client_id": clientId,
-      "oauth.client_metadata_age_seconds": Math.floor(ageSeconds),
+      "oauth.client_metadata_age_seconds": Math.floor(ageMs / 1000),
     });
     return existing;
   },
