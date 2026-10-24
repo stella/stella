@@ -106,6 +106,21 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    // @stll/scan-engine starts its own module worker with
+    // `new URL("scan-engine.worker.js", import.meta.url)` the first time the
+    // page editor cleans a scan.
+    label: "scan cleanup engine worker",
+    pattern: "dist/client/assets/scan-engine.worker-????????.js",
+  },
+  {
+    expectedCount: 1,
+    // Fetched by that worker (and the engine's in-thread fallback) through
+    // `new URL("../generated/scan_engine_bg.wasm", import.meta.url)`.
+    label: "scan cleanup engine WASM",
+    pattern: "dist/client/assets/scan_engine_bg-????????.wasm",
+  },
+  {
+    expectedCount: 1,
     label: "anonymization WASM glue",
     pattern: "dist/client/native/index.js",
   },
