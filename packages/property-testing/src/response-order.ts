@@ -47,7 +47,7 @@ export const responseOrderProperty = <Scenario>({
       let inFlight = 0;
       let maxInFlight = 0;
       const order: ResponseOrder = {
-        hold: (label, deliver) => {
+        hold: async (label, deliver) => {
           inFlight += 1;
           maxInFlight = Math.max(maxInFlight, inFlight);
           return scheduler
