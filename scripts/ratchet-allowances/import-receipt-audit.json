@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Contact import retains its existing transactional idempotency receipt when its row-writing logic moves into import-contacts.ts. writeImportRows records each contact mutation in the same transaction; the receipt is replay bookkeeping and does not create a separate contact audit event. Splitting the functions requires an explicit disposition for the receipt insert."
+}

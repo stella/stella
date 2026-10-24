@@ -40,6 +40,10 @@ import {
 } from "./decision-date-ceiling-repair";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import {
+  IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  IMPORT_PROVENANCE_CONSTRAINTS,
+} from "./import-provenance-constraint-validation";
+import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
@@ -665,6 +669,60 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_external_uidx" ON public."contacts" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.contacts USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "contacts_org_external_uidx",
+    tableName: "contacts",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_org_external_uidx" ON public."workspaces" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.workspaces USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "workspaces_org_external_uidx",
+    tableName: "workspaces",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_org_external_uidx" ON public."time_entries" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "time_entries_org_external_uidx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "expenses_org_external_uidx" ON public."expenses" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.expenses USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "expenses_org_external_uidx",
+    tableName: "expenses",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_org_external_uidx" ON public."invoices" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "invoices_org_external_uidx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "correspondence_org_external_uidx" ON public."correspondence" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.correspondence USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "correspondence_org_external_uidx",
+    tableName: "correspondence",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -802,6 +860,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that
@@ -825,6 +884,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 
 type PresentIndexState = {

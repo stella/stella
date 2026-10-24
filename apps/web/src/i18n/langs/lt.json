@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# sukurtas} few {# sukurti} other {# sukurta}}, {skipped, plural, one {# praleistas} few {# praleisti} other {# praleista}}",
       "rowLabel": "Klientas {index}",
       "skippedDuplicateContactId": "Praleista: pasikartojantis kontakto ID",
+      "skippedDuplicateExternalRef": "Praleista: tas pats šaltinis ir išorinis ID pasikartoja",
       "skippedDuplicateTaxId": "Praleista: pasikartojantis mokesčių mokėtojo kodas",
       "skippedInvalidRow": "Praleista: eilutė neatitinka importo taisyklių",
       "skippedInvalidTaxId": "Praleista: neteisingas mokesčių mokėtojo kodas",

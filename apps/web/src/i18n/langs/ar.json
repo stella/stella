@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, zero {لم يتم إنشاء أي جهة اتصال} one {تم إنشاء جهة اتصال واحدة} two {تم إنشاء جهتي اتصال} few {تم إنشاء # جهات اتصال} many {تم إنشاء # جهة اتصال} other {تم إنشاء # جهة اتصال}}، {skipped, plural, zero {لم يتم تخطي أي جهة اتصال} one {تم تخطي جهة اتصال واحدة} two {تم تخطي جهتي اتصال} few {تم تخطي # جهات اتصال} many {تم تخطي # جهة اتصال} other {تم تخطي # جهة اتصال}}",
       "rowLabel": "العميل {index}",
       "skippedDuplicateContactId": "تم التخطي: معرّف جهة اتصال مكرر",
+      "skippedDuplicateExternalRef": "تم التخطي: يتكرر المصدر نفسه والمعرّف الخارجي نفسه مرتين",
       "skippedDuplicateTaxId": "تم التخطي: رقم ضريبي مكرر",
       "skippedInvalidRow": "تم التخطي: الصف لم يستوفِ قواعد الاستيراد",
       "skippedInvalidTaxId": "تم التخطي: رقم ضريبي غير صالح",

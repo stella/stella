@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, zero {# izveidotu} one {# izveidots} other {# izveidoti}}, {skipped, plural, zero {# izlaistu} one {# izlaists} other {# izlaisti}}",
       "rowLabel": "Klients {index}",
       "skippedDuplicateContactId": "Izlaists: dublēts kontakta ID",
+      "skippedDuplicateExternalRef": "Izlaists: tas pats avots un ārējais ID parādās divreiz",
       "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
       "skippedInvalidRow": "Izlaists: rinda neatbilst importa noteikumiem",
       "skippedInvalidTaxId": "Izlaists: nederīgs nodokļu maksātāja numurs",

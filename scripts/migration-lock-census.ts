@@ -736,6 +736,18 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "The widened decision-date CHECK is added NOT VALID without scanning corpus rows; metadata-only lock acquisition retries at 2s, 10s and 30s within a 10-minute statement budget, then validation runs in the online phase.",
   },
   {
+    migration: "20261014130000_import_provenance",
+    form: "add-column",
+    reason:
+      "Nullable provenance columns without defaults are catalog-only additions with no row rewrite, under 1s lock_timeout and 10s statement_timeout.",
+  },
+  {
+    migration: "20261014130000_import_provenance",
+    form: "add-constraint",
+    reason:
+      "The six provenance checks are added NOT VALID without scanning existing rows, under 1s lock_timeout and 10s statement_timeout; canonical online repairs validate after the DDL transaction commits.",
+  },
+  {
     migration: "20261020013635_case_law_source_hash_version",
     form: "add-column",
     reason:

@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# loodud} other {# loodud}}, {skipped, plural, one {# vahele jäetud} other {# vahele jäetud}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
+      "skippedDuplicateExternalRef": "Vahele jäetud: sama allikas ja väline ID esinevad kaks korda",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",
       "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",

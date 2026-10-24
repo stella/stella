@@ -123,6 +123,7 @@ const IMPORT_ISSUE_LABELS = {
 
 const IMPORT_SKIP_REASON_LABELS = {
   duplicate_contact_id: "contacts.import.skippedDuplicateContactId",
+  duplicate_external_ref: "contacts.import.skippedDuplicateExternalRef",
   duplicate_tax_id: "contacts.import.skippedDuplicateTaxId",
   invalid_row: "contacts.import.skippedInvalidRow",
   invalid_tax_id: "contacts.import.skippedInvalidTaxId",
@@ -156,7 +157,7 @@ type ImportReviewRow = ImportReviewSeedRow & {
 };
 
 export type ImportReviewResult = { rowNumber: number; displayName: string } & (
-  | { status: "created"; contactId: SafeId<"contact"> }
+  | { status: "created" | "updated"; contactId: SafeId<"contact"> }
   | { status: "skipped"; reason: ImportSkipReason }
 );
 
@@ -389,18 +390,18 @@ export const useImportReview = ({
         const row = validRows.at(result.index);
         const rowNumber = row?.rowNumber ?? result.index;
         const displayName = row?.candidate.displayName ?? "";
-        return result.status === "created"
+        return result.status === "skipped"
           ? {
-              rowNumber,
-              displayName,
-              status: "created",
-              contactId: result.contactId,
-            }
-          : {
               rowNumber,
               displayName,
               status: "skipped",
               reason: result.reason,
+            }
+          : {
+              rowNumber,
+              displayName,
+              status: result.status,
+              contactId: result.contactId,
             };
       }),
     );
@@ -684,13 +685,26 @@ export const ImportResultsList = ({
   const t = useTranslations();
   const format = useFormatter();
 
-  // Each line names the contact; a created one links to its page so the
+  // Each line names the contact; a written one links to its page so the
   // receipt is a way into the imported data, not just a tally.
   return (
     <ul className="flex flex-col gap-1.5 text-sm">
       {results.map((result) => (
         <li className="flex items-center gap-1.5" key={result.rowNumber}>
-          {result.status === "created" ? (
+          {result.status === "skipped" ? (
+            <>
+              <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
+              <span>
+                {result.displayName ||
+                  t("contacts.import.rowLabel", {
+                    index: format.number(result.rowNumber),
+                  })}
+              </span>
+              <span className="text-muted-foreground">
+                {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
+              </span>
+            </>
+          ) : (
             <>
               <CheckIcon className="text-success size-4 shrink-0" />
               <Link
@@ -703,19 +717,6 @@ export const ImportResultsList = ({
                     index: format.number(result.rowNumber),
                   })}
               </Link>
-            </>
-          ) : (
-            <>
-              <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
-              <span>
-                {result.displayName ||
-                  t("contacts.import.rowLabel", {
-                    index: format.number(result.rowNumber),
-                  })}
-              </span>
-              <span className="text-muted-foreground">
-                {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
-              </span>
             </>
           )}
         </li>

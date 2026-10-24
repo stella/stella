@@ -318,6 +318,10 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
  */
 export const READ_CONTACT_PROJECTION = v.strictObject({
   contactId: chatRef("contact"),
+  /** Source system and id when the contact was imported; else null. */
+  external: v.nullable(
+    v.strictObject({ source: v.string(), id: passthroughId() }),
+  ),
   type: v.string(),
   displayName: v.string(),
   firstName: v.nullable(v.string()),

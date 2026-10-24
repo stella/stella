@@ -1045,7 +1045,6 @@
     "apps/api/src/handlers/clauses/update.ts": 1,
     "apps/api/src/handlers/contacts/contact-import-file.ts": 1,
     "apps/api/src/handlers/contacts/extract-procuracao.ts": 1,
-    "apps/api/src/handlers/contacts/import.ts": 2,
     "apps/api/src/handlers/document-reviews/create-run.ts": 1,
     "apps/api/src/handlers/documents/compare.ts": 2,
     "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts": 1,

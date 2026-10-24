@@ -45,4 +45,29 @@ describe("documentSourceSchema", () => {
     // An unknown kind is rejected.
     expect(v.is(documentSourceSchema, { kind: "onedrive-write" })).toBe(false);
   });
+
+  test("accepts provenance of a file imported from another system", () => {
+    const imported = {
+      kind: "import",
+      externalSource: "file-share",
+      externalId: null,
+      originalCreatedAt: "2019-03-04T08:15:00.000Z",
+      originalModifiedAt: "2021-11-30T17:45:12.000Z",
+      originalAuthorName: "M. Dvořák",
+    } as const;
+
+    expect(v.parse(documentSourceSchema, imported)).toEqual(imported);
+    expect(
+      v.is(documentSourceSchema, { ...imported, externalSource: "File Share" }),
+    ).toBe(false);
+    expect(
+      v.is(documentSourceSchema, { ...imported, originalAuthorName: "" }),
+    ).toBe(false);
+    expect(
+      v.is(documentSourceSchema, {
+        ...imported,
+        originalCreatedAt: "4 March 2019",
+      }),
+    ).toBe(false);
+  });
 });

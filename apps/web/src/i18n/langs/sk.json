@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# vytvorený} few {# vytvorené} other {# vytvorených}}, {skipped, plural, one {# preskočený} few {# preskočené} other {# preskočených}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
+      "skippedDuplicateExternalRef": "Preskočené: rovnaký zdroj a externé ID sa vyskytujú dvakrát",
       "skippedDuplicateTaxId": "Preskočené: duplicitné daňové identifikačné číslo",
       "skippedInvalidRow": "Preskočené: riadok nespĺňa pravidlá importu",
       "skippedInvalidTaxId": "Preskočené: neplatné daňové identifikačné číslo",

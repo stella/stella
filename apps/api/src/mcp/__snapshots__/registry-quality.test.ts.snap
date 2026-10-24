@@ -3592,6 +3592,29 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "maxItems": 250,
           "description": "Nationality countries; pass [] to clear"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Lowercase source-system key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "ID in the source system"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "Creation only. read_contact returns it; duplicate source/id is refused."
         }
       }
     }
@@ -10228,6 +10251,29 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "maxItems": 250,
           "description": "Nationality countries; pass [] to clear"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Lowercase source-system key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "ID in the source system"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "Creation only. read_contact returns it; duplicate source/id is refused."
         }
       }
     }

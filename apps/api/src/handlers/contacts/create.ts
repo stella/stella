@@ -38,6 +38,8 @@ import {
   tUserId,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { tExternalRef } from "@/api/lib/imports/external-ref";
+import { readExternalRefIds } from "@/api/lib/imports/upsert-by-external-id";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -78,6 +80,7 @@ export const createContactBodySchema = t.Object({
   invoiceLanguage: t.Optional(t.Nullable(tInvoiceLanguage)),
   originatingAttorneyId: t.Optional(tUserId),
   responsibleAttorneyId: t.Optional(tUserId),
+  external: t.Optional(tExternalRef),
 });
 
 export type CreateContactBody = Static<typeof createContactBodySchema>;
@@ -172,6 +175,13 @@ export const insertContactRow = async ({
       invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
+      ...(body.external === undefined
+        ? {}
+        : {
+            externalSource: body.external.source,
+            externalId: body.external.id,
+            importedAt: new Date(),
+          }),
       createdBy: userId,
     })
     .returning();
@@ -201,6 +211,7 @@ export const insertContactRow = async ({
 type CreateContactOutcome =
   | { kind: "limit_reached" }
   | { kind: "invalid_attorney" }
+  | { kind: "external_ref_taken"; contactId: SafeId<"contact"> }
   | { kind: "created"; row: typeof contacts.$inferSelect | undefined };
 
 // Shared contact-creation logic reused by the HTTP handler and the
@@ -228,6 +239,21 @@ export const createContactHandler = async function* ({
       );
       if (wouldExceed) {
         return { kind: "limit_reached" };
+      }
+
+      // The capacity lock serializes contact creation in the organization,
+      // so this read cannot race another create of the same ref.
+      if (body.external !== undefined) {
+        const existing = await readExternalRefIds({
+          tx,
+          table: contacts,
+          organizationId,
+          refs: [body.external],
+        });
+        const [contactId] = existing.values();
+        if (contactId !== undefined) {
+          return { kind: "external_ref_taken", contactId };
+        }
       }
 
       const attorneyIds: string[] = [];
@@ -265,6 +291,15 @@ export const createContactHandler = async function* ({
     );
   }
 
+  if (outcome.kind === "external_ref_taken") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: `Contact ${outcome.contactId} already has this external source and id`,
+      }),
+    );
+  }
+
   if (outcome.kind === "invalid_attorney") {
     return Result.err(
       new HandlerError({
@@ -285,13 +320,10 @@ const createContact = createSafeRootHandler(
   {
     contract: "patch",
     description:
-      "Create a contact in the organization address book. type (person or " +
-      "organization), displayName, and the contact id are supplied in the " +
-      "body; names, emails, phones, addresses, tags, registration and tax " +
-      "numbers, bank and billing details, default hourly rate, payment " +
-      "terms, and originating or responsible attorneys are optional. Refused " +
-      "once the organization holds its maximum number of contacts, or when " +
-      "an attorney id is not a member of the organization.",
+      "Create an organization address-book contact. Supply id, type " +
+      "(person or organization) and displayName; other fields are optional. " +
+      "Refuses the contact limit, attorney IDs outside this organization, " +
+      "and an external source/id already used by another contact.",
     permissions: { contact: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "save_contact" },

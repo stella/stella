@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# erstellt} other {# erstellt}}, {skipped, plural, one {# übersprungen} other {# übersprungen}}",
       "rowLabel": "Mandant {index}",
       "skippedDuplicateContactId": "Übersprungen: doppelte Kontakt-ID",
+      "skippedDuplicateExternalRef": "Übersprungen: dieselbe Quelle und externe ID kommen doppelt vor",
       "skippedDuplicateTaxId": "Übersprungen: doppelte Steuernummer",
       "skippedInvalidRow": "Übersprungen: Die Zeile verletzt die Importregeln",
       "skippedInvalidTaxId": "Übersprungen: ungültige Steuernummer",

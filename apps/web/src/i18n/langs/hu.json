@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# létrehozva} other {# létrehozva}}, {skipped, plural, one {# kihagyva} other {# kihagyva}}",
       "rowLabel": "Ügyfél {index}",
       "skippedDuplicateContactId": "Kihagyva: ismétlődő névjegyazonosító",
+      "skippedDuplicateExternalRef": "Kihagyva: ugyanaz a forrás és külső azonosító kétszer szerepel",
       "skippedDuplicateTaxId": "Kihagyva: duplikált adóazonosító",
       "skippedInvalidRow": "Kihagyva: a sor nem felel meg az importálási szabályoknak",
       "skippedInvalidTaxId": "Kihagyva: érvénytelen adóazonosító",

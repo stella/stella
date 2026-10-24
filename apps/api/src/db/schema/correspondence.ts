@@ -19,6 +19,10 @@ import {
   entityFeatureGateColumns,
 } from "../entity-feature-gate-columns";
 import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
+import {
   REVIEW_RESET_ORGANIZATION_SETTING,
   reviewResetOwnerPolicies,
 } from "../review-reset-policies";
@@ -83,6 +87,8 @@ export const correspondence = p.pgTable.withRLS(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, imported_at. */
+    ...importProvenanceColumns(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -131,6 +137,7 @@ export const correspondence = p.pgTable.withRLS(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("correspondence", table),
     ...reviewResetOwnerPolicies("correspondence"),
     ...entityFeatureGateChecks(table),
     p

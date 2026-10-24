@@ -118,6 +118,7 @@ import {
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -3842,6 +3843,7 @@ const handleReadContactTool: TypedMcpToolHandler<
     phones: arrayOrEmpty(contact.phones),
     dateOfBirth: dateOfBirthFromColumns(contact),
     nationalityCodes: contact.nationalityCodes,
+    external: externalRefFromColumns(contact),
   });
 
   const textFields = runTextFieldSpecs(
@@ -3855,6 +3857,8 @@ const handleReadContactTool: TypedMcpToolHandler<
     redactInAnonymized: () => {
       payload.dateOfBirth = null;
       payload.nationalityCodes = [];
+      // A source-system id can embed names or file numbers.
+      payload.external = null;
     },
   });
 };

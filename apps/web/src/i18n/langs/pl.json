@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# utworzony} few {# utworzone} many {# utworzonych} other {# utworzonego}}, {skipped, plural, one {# pominięty} few {# pominięte} many {# pominiętych} other {# pominiętego}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Pominięto: zduplikowany identyfikator kontaktu",
+      "skippedDuplicateExternalRef": "Pominięto: to samo źródło i identyfikator zewnętrzny występują dwukrotnie",
       "skippedDuplicateTaxId": "Pominięto: zduplikowany CPF/CNPJ",
       "skippedInvalidRow": "Pominięto: wiersz nie spełnia reguł importu",
       "skippedInvalidTaxId": "Pominięto: nieprawidłowy CPF/CNPJ",

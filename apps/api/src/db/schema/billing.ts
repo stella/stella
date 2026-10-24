@@ -23,6 +23,10 @@ import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
@@ -139,6 +143,8 @@ export const timeEntries = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, imported_at. */
+    ...importProvenanceColumns(),
     activityGroup: p
       .text("activity_group", { enum: TIME_ENTRY_ACTIVITY_GROUPS })
       .notNull()
@@ -199,6 +205,7 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("time_entries", table),
     ...entityFeaturePolicies(
       table,
       new Map([[table.workItemId, { target: "entities", kind: "context" }]]),
@@ -887,6 +894,8 @@ export const expenses = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, imported_at. */
+    ...importProvenanceColumns(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -916,6 +925,7 @@ export const expenses = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("expenses", table),
     ...entityFeaturePolicies(
       table,
       new Map([[table.matterId, { target: "entities", kind: "context" }]]),
@@ -954,6 +964,8 @@ export const invoices = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, imported_at. */
+    ...importProvenanceColumns(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -1011,6 +1023,7 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("invoices", table),
     p.check(
       "invoices_language_check",
       sql`${table.language} IN (${sql.join(

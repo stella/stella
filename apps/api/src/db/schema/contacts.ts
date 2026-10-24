@@ -17,6 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
+import {
   centsColumn,
   isNotNull,
   jsonb,
@@ -111,6 +115,9 @@ export const contacts = p.pgTable(
       .text("responsible_attorney_id")
       .references(() => user.id, { onDelete: "set null" }),
 
+    /** Import provenance: external_source, external_id, imported_at. */
+    ...importProvenanceColumns(),
+
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -129,6 +136,7 @@ export const contacts = p.pgTable(
       )})`,
     ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
+    ...importProvenanceConstraints("contacts", table),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -186,12 +194,15 @@ export type ContactType = (typeof contacts.type)["enumValues"][number];
 export type ContactImportReceiptResult = {
   results: (
     | { index: number; status: "created"; contactId: SafeId<"contact"> }
+    /** The row's external ref matched a contact an earlier import created. */
+    | { index: number; status: "updated"; contactId: SafeId<"contact"> }
     | {
         index: number;
         status: "skipped";
         reason:
           | "contacts_limit_reached"
           | "duplicate_contact_id"
+          | "duplicate_external_ref"
           | "duplicate_tax_id"
           | "invalid_row"
           | "invalid_tax_id";
@@ -325,6 +336,8 @@ export const workspaces = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, imported_at. */
+    ...importProvenanceColumns(),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
     // Nullable: a null client_id encodes a personal matter (visible
@@ -354,6 +367,7 @@ export const workspaces = p.pgTable(
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),

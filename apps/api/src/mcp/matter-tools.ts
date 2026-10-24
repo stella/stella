@@ -70,6 +70,11 @@ import {
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  EXTERNAL_ID_MAX_LENGTH,
+  EXTERNAL_SOURCE_MAX_LENGTH,
+  EXTERNAL_SOURCE_PATTERN,
+} from "@/api/lib/imports/external-ref-limits";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -772,7 +777,37 @@ const saveContactArgsSchema = nullAsAbsent(
           v.description("Nationality countries; pass [] to clear"),
         ),
       ),
+      external: v.optional(
+        v.pipe(
+          v.strictObject({
+            source: v.pipe(
+              v.string(),
+              v.maxLength(EXTERNAL_SOURCE_MAX_LENGTH),
+              v.regex(EXTERNAL_SOURCE_PATTERN),
+              v.description("Lowercase source-system key"),
+            ),
+            id: v.pipe(
+              v.string(),
+              v.nonEmpty(),
+              v.maxLength(EXTERNAL_ID_MAX_LENGTH),
+              v.description("ID in the source system"),
+            ),
+          }),
+          v.description(
+            "Creation only. read_contact returns it; duplicate source/id is refused.",
+          ),
+        ),
+      ),
     }),
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["external"]],
+        ({ contact_id, external }) =>
+          contact_id === undefined || external === undefined,
+        "external can only be set when creating a contact",
+      ),
+      ["external"],
+    ),
     // Creating (no contact_id) requires type and a name to display.
     v.forward(
       v.partialCheck(
@@ -884,6 +919,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ...(input.nationality_codes === undefined
             ? {}
             : { nationalityCodes: input.nationality_codes }),
+          ...(input.external === undefined ? {} : { external: input.external }),
         },
       }),
     );

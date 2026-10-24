@@ -224,9 +224,9 @@
       "law": {"title": 29, "description": 263, "inputSchema": 374, "outputSchema": 3262, "annotations": 107, "payloadUtf8Bytes": 4187}
     },
     "read_contact": {
-      "advanced": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1218, "annotations": 90, "payloadUtf8Bytes": 1708},
-      "anonymized": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1218, "annotations": 90, "payloadUtf8Bytes": 1708},
-      "default": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1218, "annotations": 90, "payloadUtf8Bytes": 1708}
+      "advanced": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1388, "annotations": 90, "payloadUtf8Bytes": 1878},
+      "anonymized": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1388, "annotations": 90, "payloadUtf8Bytes": 1878},
+      "default": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1388, "annotations": 90, "payloadUtf8Bytes": 1878}
     },
     "read_content_across_matters": {
       "advanced": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 447, "annotations": 105, "payloadUtf8Bytes": 1327},
@@ -287,8 +287,8 @@
       "default": {"title": 11, "description": 402, "inputSchema": 3241, "outputSchema": 114, "annotations": 112, "payloadUtf8Bytes": 3976}
     },
     "save_contact": {
-      "advanced": {"title": 12, "description": 303, "inputSchema": 2245, "outputSchema": 116, "annotations": 113, "payloadUtf8Bytes": 2886},
-      "default": {"title": 12, "description": 303, "inputSchema": 2245, "outputSchema": 116, "annotations": 113, "payloadUtf8Bytes": 2886}
+      "advanced": {"title": 12, "description": 370, "inputSchema": 2755, "outputSchema": 116, "annotations": 113, "payloadUtf8Bytes": 3463},
+      "default": {"title": 12, "description": 370, "inputSchema": 2755, "outputSchema": 116, "annotations": 113, "payloadUtf8Bytes": 3463}
     },
     "save_document": {
       "advanced": {"title": 13, "description": 516, "inputSchema": 1455, "outputSchema": 133, "annotations": 114, "payloadUtf8Bytes": 2329},

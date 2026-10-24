@@ -55,6 +55,10 @@ const queueColumns = {
 };
 // The queue omits pricing, source bookkeeping, and timer internals.
 const QUEUE_OMITTED_COLUMNS = [
+  // Import provenance is reserved for the time-entry import contract.
+  "externalSource",
+  "externalId",
+  "importedAt",
   "organizationId",
   "workItemId",
   "rateAtEntry",

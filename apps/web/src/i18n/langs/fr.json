@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# créé} other {# créés}}, {skipped, plural, one {# ignoré} other {# ignorés}}",
       "rowLabel": "Client n° {index}",
       "skippedDuplicateContactId": "Ignoré : identifiant de contact en double",
+      "skippedDuplicateExternalRef": "Ignoré : la même source et le même identifiant externe apparaissent deux fois",
       "skippedDuplicateTaxId": "Ignoré : numéro fiscal en double",
       "skippedInvalidRow": "Ignoré : la ligne ne respecte pas les règles d'import",
       "skippedInvalidTaxId": "Ignoré : numéro fiscal invalide",

@@ -17,6 +17,8 @@ import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
  * parses, so the assertion binds the runtime validator, not a mirror of it.
  */
 const NON_UUID_ID_INPUTS: Record<string, string> = {
+  "save_contact.external.id":
+    "opaque source-system record identifier stored in a text column, not a stella uuid",
   // Auth-provider (better-auth) user ids are alphanumeric text, and the
   // columns that hold them are `text`/`varchar`, never `uuid`.
   "list_time_entries.user_id": "better-auth user id (text column)",

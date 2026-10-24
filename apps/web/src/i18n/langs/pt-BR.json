@@ -2457,6 +2457,7 @@
       "resultsSummary": "{created, plural, one {# criado} other {# criados}}, {skipped, plural, one {# ignorado} other {# ignorados}}",
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Ignorado: ID de contato duplicado",
+      "skippedDuplicateExternalRef": "Ignorado: a mesma origem e o mesmo ID externo aparecem duas vezes",
       "skippedDuplicateTaxId": "Ignorado: CPF/CNPJ duplicado",
       "skippedInvalidRow": "Ignorado: a linha não atende às regras de importação",
       "skippedInvalidTaxId": "Ignorado: CPF/CNPJ inválido",

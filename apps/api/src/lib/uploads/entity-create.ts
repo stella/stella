@@ -607,7 +607,7 @@ export const finalizeEntityCreate = async function* ({
         workspaceId,
         entityId,
         versionNumber: 1,
-        source: UPLOAD_DOCUMENT_SOURCE,
+        source: purposeData.importSource ?? UPLOAD_DOCUMENT_SOURCE,
         stamp: entityStamp.stamp,
       });
       await tx
