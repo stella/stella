@@ -26,6 +26,12 @@ const SECTION = '[data-playground-section="workspace-table"]';
 const SCROLL_BOX = `${SECTION} [data-slot="workspace-table-scroll"]`;
 const HEADER_CELL = `${SECTION} [data-slot="workspace-grid-head"]`;
 const BODY_ROW = `${SECTION} [data-slot="workspace-grid-row"][data-index]`;
+const TABLE_MEASUREMENTS = [
+  SCROLL_BOX,
+  HEADER_CELL,
+  BODY_ROW,
+  `${BODY_ROW} [data-slot="workspace-grid-cell"]`,
+].join(", ");
 
 /** The column pinned past the checkbox, so its offset is not zero. */
 const PINNED_COLUMN_INDEX = 2;
@@ -55,7 +61,7 @@ type TableGeometry = {
 };
 
 const readGeometry = async (page: Page) => {
-  await waitForStableGeometry(page, page.locator(SCROLL_BOX));
+  await waitForStableGeometry(page, page.locator(TABLE_MEASUREMENTS));
   return await page.evaluate(
     ([sectionSelector, scrollSelector]): TableGeometry => {
       const section = document.querySelector(sectionSelector);
@@ -135,7 +141,7 @@ const scrollToMiddle = async (
     },
     [SCROLL_BOX, axes.inline, axes.block] as const,
   );
-  await waitForStableGeometry(page, page.locator(SCROLL_BOX));
+  await waitForStableGeometry(page, page.locator(TABLE_MEASUREMENTS));
 };
 
 test.beforeEach(async ({ page }) => {
@@ -144,6 +150,55 @@ test.beforeEach(async ({ page }) => {
   });
   await page.locator(HEADER_CELL).first().waitFor();
   await page.locator(BODY_ROW).first().waitFor();
+});
+
+test("table measurements wait for a moving cell inside a fixed scroll box", async ({
+  page,
+}) => {
+  const before = await readGeometry(page);
+  const beforeCell = before.headerCells.at(0);
+  if (beforeCell === undefined) {
+    throw new Error("Table fixture has no measured header cell");
+  }
+  const cell = page.locator(`${HEADER_CELL}[aria-colindex]`).first();
+  const displacement = 80;
+  const animationId = "geometry-cell-motion";
+  await cell.evaluate(
+    (element, { distance, id }) => {
+      const motion = element.animate(
+        [
+          { transform: "translateX(0px)" },
+          { transform: `translateX(${distance}px)` },
+        ],
+        { duration: 1000, easing: "linear", fill: "forwards" },
+      );
+      motion.id = id;
+    },
+    { distance: displacement, id: animationId },
+  );
+  try {
+    const after = await readGeometry(page);
+    expect(
+      await cell.evaluate(
+        (element, id) =>
+          element.getAnimations().find((motion) => motion.id === id)?.playState,
+        animationId,
+      ),
+    ).toBe("finished");
+    expect(after.scroll.clientWidth).toBe(before.scroll.clientWidth);
+    expect(after.scroll.clientHeight).toBe(before.scroll.clientHeight);
+    expect(after.headerCells.at(0)?.inlineOffset).toBe(
+      beforeCell.inlineOffset + displacement,
+    );
+  } finally {
+    await cell.evaluate((element, id) => {
+      for (const motion of element.getAnimations()) {
+        if (motion.id === id) {
+          motion.cancel();
+        }
+      }
+    }, animationId);
+  }
 });
 
 test("the table scrolls inside the height its host gives it", async ({
@@ -173,10 +228,13 @@ test.describe("a short viewport", () => {
     // height at which that bites is lower here; the assertion below checks the
     // page really did overflow rather than trusting the number.
     const belowTable = page.locator(`${SECTION} > div:last-child`);
+    const pageScrollerLocator = page
+      .locator("main")
+      .filter({ has: page.locator(SECTION) });
     await expect(belowTable).toBeVisible();
 
     const readReach = async () => {
-      await waitForStableGeometry(page, belowTable);
+      await waitForStableGeometry(page, [pageScrollerLocator, belowTable]);
       return await page.evaluate(
         ([sectionSelector]) => {
           const section = document.querySelector(sectionSelector);
