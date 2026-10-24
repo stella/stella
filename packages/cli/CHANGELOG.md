@@ -1,5 +1,19 @@
 # @stll/cli
 
+## 5.4.0
+
+### Minor Changes
+
+- [#6559](https://github.com/stella/stella/pull/6559) [`23d1bd0`](https://github.com/stella/stella/commit/23d1bd032baa9c0c75623d0cc2c09710d6c3b312) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the folder-from-selection capability: create a folder and move a selection into it atomically.
+
+- [#6780](https://github.com/stella/stella/pull/6780) [`6e05ee0`](https://github.com/stella/stella/commit/6e05ee01231be81f8ce70f702898166e7c97249c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice line commands accept an exemption basis, the legal provision printed for an exempt or non-VAT-payer line, and the VAT rate preset command accepts Poland.
+
+### Patch Changes
+
+- [#6701](https://github.com/stella/stella/pull/6701) [`9191b62`](https://github.com/stella/stella/commit/9191b623f5f18a4759ac376faeae82cc18877569) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search` accepts Slovakia, Hungary and the EU, and `stella legislation search` accepts Slovakia.
+
+- [#6332](https://github.com/stella/stella/pull/6332) [`fb05250`](https://github.com/stella/stella/commit/fb05250ee7cab1ceeafde842797a76c7424eebdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the generated company-registry lookup contract for verified KRS name searches.
+
 ## 5.3.1
 
 ### Patch Changes
