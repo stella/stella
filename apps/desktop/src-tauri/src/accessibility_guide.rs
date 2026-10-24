@@ -18,7 +18,9 @@ pub enum GuideStatus {
 }
 
 #[tauri::command]
-pub async fn accessibility_guide_get_state(app: AppHandle) -> Result<GuideStatus, String> {
+pub async fn accessibility_guide_get_state(
+  app: AppHandle,
+) -> Result<GuideStatus, String> {
   Ok(current_status(&app))
 }
 

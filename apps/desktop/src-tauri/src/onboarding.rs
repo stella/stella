@@ -142,10 +142,14 @@ pub fn settle(stored: Step, context: FlowContext) -> Step {
 pub enum Progress {
   // Earlier builds stored this value for first-run progress.
   #[serde(rename = "inProgress")]
-  FirstRun { resume: Step },
+  FirstRun {
+    resume: Step,
+  },
   /// Started again from settings after it was completed: it resumes like
   /// the first run but never reopens at launch.
-  Replaying { resume: Step },
+  Replaying {
+    resume: Step,
+  },
   Completed,
 }
 
@@ -263,8 +267,7 @@ impl Onboarding {
       .unwrap_or(Progress::FirstRun {
         resume: Step::Welcome,
       });
-    let history_preference =
-      DevicePreference::in_app_data(HISTORY_FILE_NAME);
+    let history_preference = DevicePreference::in_app_data(HISTORY_FILE_NAME);
     let history = history_preference
       .read()
       .and_then(|stored| serde_json::from_str(&stored).ok())
@@ -355,7 +358,10 @@ pub fn activity_step_permissions(activity_available: bool) -> &'static [Permissi
 }
 
 /// Whether the Permissions step has rows the Activity step does not ask for.
-pub fn has_permission_step_rows(activity_available: bool, rows: &[PermissionRow]) -> bool {
+pub fn has_permission_step_rows(
+  activity_available: bool,
+  rows: &[PermissionRow],
+) -> bool {
   let asked_by_activity = activity_step_permissions(activity_available);
   rows
     .iter()
@@ -451,7 +457,8 @@ pub fn show_if_pending(app: &AppHandle, background_launch: bool) {
           return;
         };
         let mode = launch_mode(onboarding.progress, &onboarding.history, &rows);
-        onboarding.update_history(|history| remember_granted(&mut history.granted, &rows));
+        onboarding
+          .update_history(|history| remember_granted(&mut history.granted, &rows));
         if let Some(mode) = &mode {
           onboarding.mode = mode.clone();
         }
@@ -939,7 +946,10 @@ mod tests {
       },
     ] {
       let stored = serde_json::to_string(&history).unwrap();
-      assert_eq!(serde_json::from_str::<SetupHistory>(&stored).unwrap(), history);
+      assert_eq!(
+        serde_json::from_str::<SetupHistory>(&stored).unwrap(),
+        history
+      );
     }
   }
 
@@ -993,7 +1003,9 @@ mod tests {
     };
     assert_eq!(
       launch_mode(
-        Progress::FirstRun { resume: Step::Welcome },
+        Progress::FirstRun {
+          resume: Step::Welcome
+        },
         &history,
         &current,
       ),
@@ -1011,7 +1023,10 @@ mod tests {
 
   #[test]
   fn activity_is_explained_after_how_it_works_and_before_permissions() {
-    for context in CONTEXTS.into_iter().filter(|context| context.activity_available) {
+    for context in CONTEXTS
+      .into_iter()
+      .filter(|context| context.activity_available)
+    {
       let steps = visible_steps(context, Step::Welcome);
       let position = |step: Step| steps.iter().position(|s| *s == step);
       assert_eq!(

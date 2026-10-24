@@ -118,10 +118,7 @@ pub fn target_work_area(app: &AppHandle) -> Option<WorkArea> {
   clippy::disallowed_methods,
   reason = "this is the owner of screen selection; the ban keeps a second rule from appearing elsewhere"
 )]
-pub fn work_area_at(
-  app: &AppHandle,
-  point: LogicalPosition<f64>,
-) -> Option<WorkArea> {
+pub fn work_area_at(app: &AppHandle, point: LogicalPosition<f64>) -> Option<WorkArea> {
   use objc2::MainThreadMarker;
   use objc2_app_kit::NSScreen;
 
