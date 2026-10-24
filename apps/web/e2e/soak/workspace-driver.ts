@@ -11,10 +11,10 @@ import { WORKSPACE_REPLAY_ENV } from "./env";
 import type { ReplayStateSnapshot } from "./replay-artifact";
 import {
   HISTORY_DIRECTION,
-  WORKSPACE_ACTION_TYPE,
   parseReplayControlSelection,
   type ReplayControlSelection,
   type WeightedWorkspaceAction,
+  WORKSPACE_ACTION_TYPE,
   type WorkspaceAction,
   type WorkspaceActionType,
 } from "./workspace-actions";

@@ -1,11 +1,15 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import JSZip from "jszip";
+
+import { writeZipEntry } from "@stll/docx-utils";
 
 import {
   DERIVATIVE_REFUSAL,
   DerivativeAdmissionError,
 } from "@/api/lib/files/derivative-admission";
 import {
+  ConversionInputError,
   convertToPdf,
   ImageTranscodeError,
   isConvertibleMimeType,
@@ -27,6 +31,7 @@ import {
   splitWebp,
   withJpegComponents,
 } from "@/api/tests/helpers/image-fixtures";
+import { legacyWordFile } from "@/api/tests/helpers/legacy-word-fixture";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -176,13 +181,44 @@ describe("PDF conversion routes", () => {
     }
   });
 
+  test("names an unsupported document field", async () => {
+    const archive = new JSZip();
+    writeZipEntry(
+      archive,
+      "word/document.xml",
+      new TextEncoder().encode(
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldSimple w:instr="INCLUDEPICTURE https://example.test/a.png"/></w:document>',
+      ),
+    );
+    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const { result, urls } = await withConverterFetch(
+      () => new Response("unexpected", { status: 500 }),
+      async () => await convertToPdf(fileOf(bytes, DOCX_MIME_TYPE)),
+    );
+
+    expect(urls).toEqual([]);
+    expect(Result.isError(result)).toBe(true);
+    if (
+      Result.isError(result) &&
+      result.error instanceof ConversionInputError
+    ) {
+      expect(result.error.reason).toEqual({
+        kind: "unsupported_field",
+        fieldType: "INCLUDEPICTURE",
+      });
+      expect(result.error.message).toBe(
+        "The document field INCLUDEPICTURE cannot be converted.",
+      );
+    }
+  });
+
   test("office files go to the LibreOffice route", async () => {
     const pdf = new TextEncoder().encode("%PDF-1.7 converted");
     const { result, urls } = await withConverterFetch(
       () => new Response(pdf),
       async () =>
         await convertToPdf(
-          fileOf(new TextEncoder().encode("doc"), "application/msword"),
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
         ),
     );
 
@@ -191,12 +227,65 @@ describe("PDF conversion routes", () => {
     expect(Result.isOk(result)).toBe(true);
   });
 
+  test("returns an error when document inspection cannot read the archive", async () => {
+    const { result, urls } = await withConverterFetch(
+      () => new Response("unexpected", { status: 500 }),
+      async () =>
+        await convertToPdf(
+          fileOf(new TextEncoder().encode("not a zip"), DOCX_MIME_TYPE),
+        ),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    expect(urls).toEqual([]);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(ConversionInputError);
+      expect(
+        result.error instanceof ConversionInputError && result.error.reason,
+      ).toEqual({ kind: "inspection_failed" });
+    }
+  });
+
+  test.each([
+    [
+      "application/vnd.ms-excel",
+      ".xlsx",
+      "Re-save this document as .xlsx to convert it.",
+    ],
+    [
+      "application/vnd.ms-powerpoint",
+      ".pptx",
+      "Re-save this document as .pptx to convert it.",
+    ],
+  ] as const)(
+    "names the replacement for %s",
+    async (mimeType, extension, message) => {
+      const { result, urls } = await withConverterFetch(
+        () => new Response("unexpected", { status: 500 }),
+        async () => await convertToPdf(fileOf(new Uint8Array(), mimeType)),
+      );
+
+      expect(urls).toEqual([]);
+      expect(Result.isError(result)).toBe(true);
+      if (
+        Result.isError(result) &&
+        result.error instanceof ConversionInputError
+      ) {
+        expect(result.error.reason).toEqual({
+          kind: "legacy_format",
+          replacementExtension: extension,
+        });
+        expect(result.error.message).toBe(message);
+      }
+    },
+  );
+
   test("a caller-owned retry makes exactly one converter call per conversion", async () => {
     const { result, urls } = await withConverterFetch(
       () => new Response("busy", { status: 503 }),
       async () =>
         await convertToPdf(
-          fileOf(new TextEncoder().encode("doc"), "application/msword"),
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
           { retry: "caller" },
         ),
     );
@@ -362,7 +451,7 @@ describe("converter upload filenames", () => {
         async () =>
           await convertToPdf(
             namedFileOf(
-              new TextEncoder().encode("doc"),
+              legacyWordFile(["ordinary text"]),
               "application/msword",
               "brief.doc",
             ),

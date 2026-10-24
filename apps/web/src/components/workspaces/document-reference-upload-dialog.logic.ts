@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ReferenceUploadAction } from "@/lib/files/document-reference";
 import { REFERENCE_UPLOAD_ACTION } from "@/lib/files/document-reference";

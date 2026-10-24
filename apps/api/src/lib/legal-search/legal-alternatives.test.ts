@@ -10,8 +10,8 @@ import {
   withLegalAlternativesIdentity,
 } from "@/api/lib/legal-search/legal-alternatives";
 import {
-  NO_EXPANSION_DICTIONARY_IDENTITY,
   isMorphologyDictionaryContentHash,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
   serializeExpansionDictionaryIdentity,
 } from "@/api/lib/legal-search/morphology/dictionary";
 import { FUNCTION_WORDS } from "@/api/lib/legal-search/morphology/function-words";

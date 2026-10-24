@@ -30,8 +30,7 @@ export const TABLE_FIND_TERM_MIN_LENGTH = ENTITY_FIND_TERM_MIN_LENGTH;
  * empty array.
  */
 export type TableFindSelection =
-  | { type: "all" }
-  | { columnIds: string[]; type: "columns" };
+  { type: "all" } | { columnIds: string[]; type: "columns" };
 
 export const UNRESTRICTED_FIND: TableFindSelection = { type: "all" };
 

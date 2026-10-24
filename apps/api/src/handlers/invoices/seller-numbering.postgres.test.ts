@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
+  featureEnrolments,
   INVOICE_STATUS,
   invoices,
   numberSeries,
@@ -12,7 +13,6 @@ import {
   sellerProfiles,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import transitionInvoice from "@/api/handlers/invoices/transition";

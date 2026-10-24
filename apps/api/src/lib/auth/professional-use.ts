@@ -12,8 +12,8 @@ import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import {
-  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   organizationProfessionalUseAcceptances,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
 import {
@@ -21,6 +21,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   recordAuditGroups,
 } from "@/api/lib/audit-log";
+import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { AGENT_IDENTITY_CREATE_USER_PATH } from "@/api/lib/auth/agent-auth-user";
 import { REVIEW_ACCOUNT_CREATE_USER_PATH } from "@/api/lib/auth/review-account-plugin";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,8 +45,6 @@ const USER_CREATION_ORIGIN = {
   socialRegistration: "social_registration",
   /** The self-host first-account sign-up on the sign-in panel. */
   bootstrapRegistration: "bootstrap_registration",
-  /** A provider ID token posted straight to the API; no Stella page is shown. */
-  identityTokenSignIn: "identity_token_sign_in",
   /** An agent's verified identity, provisioned without a browser. */
   agentProvisioning: "agent_provisioning",
   /** The operator command that creates the review account. */
@@ -75,7 +74,6 @@ const STATEMENT_AT_CREATION = {
   email_otp_registration: { type: "shown", displayedVersionIn: "request_body" },
   social_registration: { type: "shown", displayedVersionIn: "oauth_state" },
   bootstrap_registration: { type: "shown", displayedVersionIn: "request_body" },
-  identity_token_sign_in: { type: "not_shown" },
   agent_provisioning: { type: "not_shown" },
   operator_command: { type: "not_shown" },
 } as const satisfies Record<UserCreationOrigin, StatementAtCreation>;
@@ -89,7 +87,10 @@ const USER_CREATION_PATH_ORIGINS = new Map([
   ["/sign-in/email-otp", USER_CREATION_ORIGIN.emailOtpRegistration],
   ["/callback/:id", USER_CREATION_ORIGIN.socialRegistration],
   ["/sign-up/email", USER_CREATION_ORIGIN.bootstrapRegistration],
-  ["/sign-in/social", USER_CREATION_ORIGIN.identityTokenSignIn],
+  // Better Auth reports this initiating path to the user-creation hook after
+  // the provider callback. ID-token sign-in is disabled for every provider,
+  // so every account created here came through the OAuth state above.
+  ["/sign-in/social", USER_CREATION_ORIGIN.socialRegistration],
   [AGENT_IDENTITY_CREATE_USER_PATH, USER_CREATION_ORIGIN.agentProvisioning],
   [REVIEW_ACCOUNT_CREATE_USER_PATH, USER_CREATION_ORIGIN.operatorCommand],
 ]);
@@ -332,7 +333,14 @@ type InsertOrganizationAcceptancesOptions = {
   organizationIds: readonly SafeId<"organization">[];
   userId: SafeId<"user">;
   versions: AcceptedVersions;
+  execution: AuditExecutionContext;
 };
+
+/** An account's own action, performed directly by it. */
+const directExecution = (userId: SafeId<"user">): AuditExecutionContext => ({
+  performer: { type: "user", id: userId },
+  trigger: { type: "direct" },
+});
 
 /**
  * Insert-once organization acceptances carrying `userId`'s accepted
@@ -343,6 +351,7 @@ const insertOrganizationAcceptances = async ({
   organizationIds,
   userId,
   versions,
+  execution,
 }: InsertOrganizationAcceptancesOptions): Promise<void> => {
   if (organizationIds.length === 0) {
     return;
@@ -369,10 +378,7 @@ const insertOrganizationAcceptances = async ({
         organizationId: brandPersistedOrganizationId(row.organizationId),
         workspaceId: null,
         userId,
-        execution: {
-          performer: { type: "user", id: userId },
-          trigger: { type: "direct" },
-        },
+        execution,
       },
       events: [
         {
@@ -418,6 +424,7 @@ export const recordOrganizationProfessionalUse = async ({
           statementVersion: creator.statementVersion,
           termsVersion: creator.termsVersion,
         },
+        execution: directExecution(userId),
       });
       return;
     default:
@@ -443,13 +450,62 @@ export const acceptProfessionalUse = async ({
   userId,
 }: AcceptProfessionalUseOptions): Promise<void> => {
   await lockAccount(tx, userId);
-  await recordProfessionalUseAcceptance({ tx, userId });
+  await recordProfessionalUseAcceptance({
+    tx,
+    userId,
+    provenance: interactiveProvenance(userId),
+  });
 };
 
-/** The account acceptance operation owns its transaction and aggregate lock. */
-export const acceptAccountProfessionalUse = async (
+/**
+ * How an acceptance was given (the account row's `source`) and who performed
+ * it (the organization audit rows' execution).
+ */
+type AcceptanceProvenance = {
+  source: AcceptingUser["source"];
+  execution: AuditExecutionContext;
+};
+
+/** The account accepted on the prompt itself. */
+const interactiveProvenance = (
   userId: SafeId<"user">,
-): Promise<Result<UserProfessionalUseState, HandlerError>> =>
+): AcceptanceProvenance => ({
+  source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+  execution: directExecution(userId),
+});
+
+/** The operator command recorded it while provisioning the review account. */
+const OPERATOR_PROVISIONING_PROVENANCE: AcceptanceProvenance = {
+  source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning,
+  execution: {
+    performer: {
+      type: "service",
+      id: "review-account",
+      name: "Review account provisioning",
+    },
+    trigger: { type: "system", source: "review-account" },
+  },
+};
+
+const ACCOUNT_ACCEPTANCE_PROVENANCE = {
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive]: interactiveProvenance,
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning]: (
+    _userId: SafeId<"user">,
+  ) => OPERATOR_PROVISIONING_PROVENANCE,
+} as const;
+
+type RecordAccountProfessionalUseOptions = {
+  userId: SafeId<"user">;
+  source: keyof typeof ACCOUNT_ACCEPTANCE_PROVENANCE;
+};
+
+/** Records the caller's explicit provenance under the account aggregate lock. */
+export const recordAccountProfessionalUse = async ({
+  userId,
+  source,
+}: RecordAccountProfessionalUseOptions): Promise<
+  Result<UserProfessionalUseState, HandlerError>
+> =>
   await Result.tryPromise({
     try: async () => {
       await withAggregateTransaction(rootDb, async (tx) => {
@@ -458,7 +514,11 @@ export const acceptAccountProfessionalUse = async (
           aggregate: "professionalUseAcceptance",
           id: { userId },
         });
-        await recordProfessionalUseAcceptance({ tx, userId });
+        await recordProfessionalUseAcceptance({
+          tx,
+          userId,
+          provenance: ACCOUNT_ACCEPTANCE_PROVENANCE[source](userId),
+        });
       });
       return await readUserProfessionalUse(rootDb, userId);
     },
@@ -470,14 +530,19 @@ export const acceptAccountProfessionalUse = async (
       }),
   });
 
+type RecordProfessionalUseAcceptanceOptions = AcceptProfessionalUseOptions & {
+  provenance: AcceptanceProvenance;
+};
+
 const recordProfessionalUseAcceptance = async ({
   tx,
   userId,
-}: AcceptProfessionalUseOptions): Promise<void> => {
+  provenance,
+}: RecordProfessionalUseAcceptanceOptions): Promise<void> => {
   await insertUserAcceptance(tx, {
     userId,
     statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
-    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+    source: provenance.source,
   });
   const accepted = await readUserProfessionalUse(tx, userId);
   if (accepted.status !== PROFESSIONAL_USE_STATUS.accepted) {
@@ -511,5 +576,6 @@ const recordProfessionalUseAcceptance = async ({
       statementVersion: accepted.statementVersion,
       termsVersion: accepted.termsVersion,
     },
+    execution: provenance.execution,
   });
 };

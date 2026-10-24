@@ -34,11 +34,11 @@ import {
   ChevronDownIcon,
   Clock3Icon,
   DownloadIcon,
-  LanguagesIcon,
   LandmarkIcon,
+  LanguagesIcon,
   ListChecksIcon,
-  ListIcon,
   ListFilterIcon,
+  ListIcon,
   MailIcon,
   UsersIcon,
   WorkflowIcon,
@@ -101,13 +101,13 @@ import {
   exportOverviewActivity,
   MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
-  overviewActivityActorsOptions,
-  overviewActivityOptions,
-  type MatterActivityActor,
   type MatterActivityAction,
+  type MatterActivityActor,
   type MatterActivityCategory,
   type MatterActivityFilters,
   type MatterActivityItem,
+  overviewActivityActorsOptions,
+  overviewActivityOptions,
 } from "@/lib/workspaces/queries";
 
 import type { ActivityGroup } from "./activity-panel.logic";
@@ -115,13 +115,13 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
-  resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
+  resolveVisibleActivityTriggerType,
   ROW_ACTION_LABEL_KEYS,
   TARGET_LABEL_KEYS,
-  toSingleActivityGroup,
-  toMatterActivityDateRange,
   toMatterActivityDatePickerValues,
+  toMatterActivityDateRange,
+  toSingleActivityGroup,
 } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };

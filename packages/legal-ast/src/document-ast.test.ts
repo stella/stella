@@ -125,6 +125,28 @@ describe("isDocumentAst", () => {
     expect(isDocumentAst(documentAst)).toBe(true);
   });
 
+  test("rejects duplicate block ids and anchor ids", () => {
+    const first = documentAst.blocks.at(0);
+    const second = documentAst.blocks.at(1);
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    if (first === undefined || second === undefined) {
+      return;
+    }
+    expect(isDocumentAst({ ...documentAst, blocks: [first, first] })).toBe(
+      false,
+    );
+    expect(
+      isDocumentAst({
+        ...documentAst,
+        blocks: [first, { ...second, anchorId: first.anchorId }],
+      }),
+    ).toBe(false);
+    expect(
+      parseDocumentAst({ ...documentAst, blocks: [first, first] }),
+    ).toBeNull();
+  });
+
   test("rejects an AST missing required source and metadata", () => {
     expect(isDocumentAst({ version: 1, blocks: [] })).toBe(false);
   });

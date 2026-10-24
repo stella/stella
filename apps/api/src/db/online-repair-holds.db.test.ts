@@ -2,9 +2,9 @@ import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   getTableConfig,
   PgDialect,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
@@ -20,8 +20,8 @@ import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
-  runOnlineMigrations,
   type OnlineRepairOptions,
+  runOnlineMigrations,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
@@ -67,7 +67,9 @@ const repairConnection = (
     }
     return await connection.unsafe(statement, [...parameters]);
   },
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
   terminate: async () => {
     await terminateReserved(connection);
   },
@@ -288,6 +290,9 @@ describe.skipIf(!enabled)(
               },
               pollMs: 1,
               retryMs: 7,
+              // The writer this test holds is the wait under test.
+              idleHolderMs: 3_600_000,
+              longHolderMs: 3_600_000,
             };
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },
@@ -383,15 +388,15 @@ describe.skipIf(!enabled)(
               "SELECT i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1",
               [staged.name],
             );
-            expect(stageState).toEqual(
+            expect([...stageState]).toEqual(
               reason === "cancel" ? [{ valid: false }] : [],
             );
             expect(readings).toBe(reason === "cancel" ? 3 : 1);
           } finally {
             await blocker.unsafe("ROLLBACK");
-            blocker.release();
-            observer.release();
-            builder.release();
+            await blocker.release();
+            await observer.release();
+            await builder.release();
           }
         });
       });
@@ -460,7 +465,9 @@ describe.skipIf(!enabled)(
                 },
                 query: async (statement, parameters = []) =>
                   await observer.unsafe(statement, [...parameters]),
-                release: () => observer.release(),
+                release: async () => {
+                  await observer.release();
+                },
               };
             },
             log: (record: unknown) => {
