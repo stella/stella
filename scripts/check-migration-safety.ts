@@ -758,7 +758,7 @@ const STATEMENT_INVARIANT_RULES = [
       !deferred &&
       /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/iu.test(text),
     guidance:
-      "Move concurrent index creation to a post-deploy index builder such as apps/api/src/db/case-law-publication-indexes.ts.",
+      "Register the index in ONLINE_MIGRATION_INDEXES in apps/api/src/db/online-migrations.ts, which builds it concurrently after deploy.",
   },
   {
     id: "pre-deploy-validate-constraint",

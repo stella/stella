@@ -42,8 +42,8 @@ tables or columns, add constraints as `NOT VALID`, and use only short-lock DDL.
 Never put data backfills, `CREATE [UNIQUE] INDEX CONCURRENTLY`, or
 `ALTER TABLE ... VALIDATE CONSTRAINT` in a migration. Governed, bounded
 backfills belong to `apps/api/src/db/backfill-runtime.ts` and registered online
-repairs in `apps/api/src/db/online-migrations.ts`; post-deploy index builders
-follow `apps/api/src/db/case-law-publication-indexes.ts`.
+repairs and concurrent index builds (`ONLINE_MIGRATION_INDEXES`) in
+`apps/api/src/db/online-migrations.ts`.
 
 - `bun --filter @stll/api db:migrate` is the shipped migration path used by CI
   and deployment. `db:push` is a local declarative schema-diff tool; it does
@@ -112,7 +112,7 @@ follow `apps/api/src/db/case-law-publication-indexes.ts`.
 - Keep transactions short; perform S3, network, conversion, and other external
   I/O outside them.
 - Close every read-decide-write race. Lock the decisive row with `SELECT ...
-FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
+  FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
   clause and check the affected-row count.
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert
