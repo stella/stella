@@ -28,6 +28,7 @@ import {
 } from "@stll/ui/sidebar";
 
 import { DEFAULT_SIDEBAR_OPEN } from "@/components/sidebar/sidebar-state";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
@@ -99,9 +100,14 @@ const SidebarTrigger = (
   props: React.ComponentProps<typeof SidebarTriggerShell>,
 ) => {
   const t = useTranslations();
+  const mounted = useHasMounted();
 
   return (
-    <SidebarTriggerShell label={t("navigation.toggleSidebar")} {...props} />
+    <SidebarTriggerShell
+      label={t("navigation.toggleSidebar")}
+      {...props}
+      disabled={!mounted || props.disabled}
+    />
   );
 };
 

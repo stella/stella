@@ -20,22 +20,34 @@ for (const persistence of ["browser-default", "without-cookie-store"]) {
         Reflect.deleteProperty(globalThis, "cookieStore");
       });
     }
-    await page.goto("/law", { waitUntil: "domcontentloaded" });
+    const scripts = Promise.withResolvers<undefined>();
+    // Keep parser-blocking prepaint scripts available; delay the app modules.
+    await page.route("**/assets/*.js", async (route) => {
+      await scripts.promise;
+      await route.fallback();
+    });
+    await page.goto("/law", { waitUntil: "commit" });
     const sidebar = page.locator('[data-slot="sidebar"]');
-    await expect(sidebar).toHaveAttribute("data-state", "expanded");
-    if (persistence === "without-cookie-store") {
-      expect(await page.evaluate(() => "cookieStore" in globalThis)).toBe(
-        false,
-      );
+    const toggle = sidebar
+      .locator('[data-slot="sidebar-header"]')
+      .getByRole("button");
+    try {
+      await expect(sidebar).toHaveAttribute("data-state", "expanded");
+      // Server-rendered controls stay unavailable until their handlers mount.
+      await expect(toggle).toBeDisabled();
+      if (persistence === "without-cookie-store") {
+        expect(await page.evaluate(() => "cookieStore" in globalThis)).toBe(
+          false,
+        );
+      }
+    } finally {
+      scripts.resolve(undefined);
     }
     for (const state of [
       SIDEBAR_STATE_VALUES.collapsed,
       SIDEBAR_STATE_VALUES.expanded,
     ]) {
-      await sidebar
-        .locator('[data-slot="sidebar-header"]')
-        .getByRole("button")
-        .click();
+      await toggle.click();
       await expect(sidebar).toHaveAttribute("data-state", state);
       await expect
         .poll(

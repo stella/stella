@@ -660,6 +660,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             render={
               <Button
                 className={SIDE_RAIL_ICON_BUTTON_SIZE}
+                disabled={!mounted}
                 onClick={toggleSidebar}
                 size="icon"
                 variant="muted"
