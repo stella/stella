@@ -37,12 +37,14 @@ export const LandingLayout = ({
         would suggest. */}
     <div className="@container flex min-h-0 flex-1 flex-col items-center overflow-hidden px-4">
       {/* The box may grow past the preferred fold height; keep every one
-          of its controls reachable without making the whole page scroll. */}
+          of its controls reachable without making the whole page scroll.
+          The viewport clips, so the inline padding leaves room at the sides
+          for the box's outer halo (the shield ring, focus rings). */}
       <ScrollArea
         className="min-h-72 w-full max-w-2xl shrink basis-[22rem]"
         scrollFade
       >
-        <div className="flex min-h-full w-full flex-col items-center justify-center gap-8">
+        <div className="flex min-h-full w-full flex-col items-center justify-center gap-8 px-1">
           {hero}
         </div>
       </ScrollArea>
@@ -94,12 +96,14 @@ type LandingSectionProps = {
   heading: ReactNode;
 };
 
-/** A column: its heading stays put, its rows scroll beneath it. */
+/** A column: its heading stays put, its rows scroll beneath it. The rows get
+ *  the same ring room as the hero box, since the viewport clips a flush row's
+ *  focus ring; the heading takes the same inset so the labels stay aligned. */
 export const LandingSection = ({ children, heading }: LandingSectionProps) => (
   <section className="flex min-h-0 min-w-0 flex-col">
-    <div className="mb-3 shrink-0">{heading}</div>
+    <div className="mb-3 shrink-0 px-1">{heading}</div>
     <ScrollArea className="min-h-0 flex-1" scrollFade>
-      <div className="flex flex-col gap-1 pb-4">{children}</div>
+      <div className="flex flex-col gap-1 px-1 pt-1 pb-4">{children}</div>
     </ScrollArea>
   </section>
 );
@@ -172,7 +176,7 @@ export const LandingRowIcon = ({
 }: LandingRowIconProps) => (
   <span
     className={cn(
-      "mt-0.5 flex size-4 shrink-0 items-center justify-center",
+      "mt-0.5 flex min-h-4 min-w-4 shrink-0 items-center justify-center",
       tone === "muted" &&
         "text-foreground-muted group-hover:text-muted-foreground",
     )}

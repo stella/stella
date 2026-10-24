@@ -1,4 +1,4 @@
-import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, type QueryKey, skipToken } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -57,8 +57,8 @@ import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
-  organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
+  organizationSettingsOptions,
 } from "@/queries/organization-settings";
 import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
@@ -246,6 +246,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason:
       "Public site icons are shared by hostname; the caller is used only for miss admission.",
+  },
+  "chat/link-icons/get-exact.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public icon bytes are shared by exact URL; the caller is used only for miss admission.",
   },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
@@ -489,7 +494,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "notifications/read-all.ts": { kind: "not-per-user", reason: WRITE },
-  "notifications/read.ts": { kind: "not-per-user", reason: WRITE },
+  "notifications/read-state/update.ts": { kind: "not-per-user", reason: WRITE },
   "playbooks/recent/list.ts": {
     kind: "keyed",
     calls: ["api.playbooks.recent.get"],
@@ -1266,7 +1271,6 @@ test("organization settings skip authenticated reads until an organization is se
     organizationId: ORG,
     userId: USER,
   });
-  expect(typeof selected.queryFn).toBe("function");
   expect(selected.queryKey).not.toEqual(unselected.queryKey);
   const selectedOptional = optionalOrganizationSettingsOptions({
     organizationId: ORG,

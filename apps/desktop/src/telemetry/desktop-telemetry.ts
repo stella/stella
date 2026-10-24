@@ -7,6 +7,7 @@ export const DESKTOP_TELEMETRY_WINDOWS = {
   selfHostConnectDialog: "selfHostConnectDialog",
   takeoverDialog: "takeoverDialog",
   activity: "activity",
+  onboarding: "onboarding",
 } as const;
 
 export const DESKTOP_TELEMETRY_OPERATIONS = {
@@ -386,6 +387,9 @@ export const desktopTelemetryWindowFromLabel = (
       return DESKTOP_TELEMETRY_WINDOWS.takeoverDialog;
     case "activity":
       return DESKTOP_TELEMETRY_WINDOWS.activity;
+    case "onboarding":
+    case "accessibility-guide":
+      return DESKTOP_TELEMETRY_WINDOWS.onboarding;
     default:
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.windowLabelMismatch,

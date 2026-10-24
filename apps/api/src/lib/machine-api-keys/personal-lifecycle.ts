@@ -20,19 +20,19 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
   API_KEY_POLICY,
-  PERSONAL_API_KEY_SCOPES,
-  PERSONAL_API_KEY_AUDIENCES,
   MACHINE_API_KEY_LENGTH,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
   MACHINE_API_KEY_PREFIX,
   MACHINE_API_KEY_RATE_LIMIT,
   MACHINE_API_KEY_START_LENGTH,
   PERSONAL_API_KEY_ACTIVE_LIMIT,
+  PERSONAL_API_KEY_AUDIENCES,
   PERSONAL_API_KEY_DEFAULT_SCOPES,
+  PERSONAL_API_KEY_SCOPES,
 } from "@/api/lib/machine-api-key-config";
 import type {
-  PersonalApiKeyScope,
   PERSONAL_API_KEY_POLICIES,
+  PersonalApiKeyScope,
 } from "@/api/lib/machine-api-key-config";
 import {
   machineApiKeyColumns,
