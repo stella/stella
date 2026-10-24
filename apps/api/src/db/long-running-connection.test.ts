@@ -174,7 +174,7 @@ class RecordingSqlQuery extends QueryPromise<RecordedRows> {
   get cancelled() {
     return this.state.type === "cancelled";
   }
-  private start(): Promise<RecordedRows> {
+  private async start(): Promise<RecordedRows> {
     if (this.state.type === "cancelled") {
       return Promise.reject(new TypeError("query cancelled before dispatch"));
     }
@@ -183,7 +183,7 @@ class RecordingSqlQuery extends QueryPromise<RecordedRows> {
     }
     return this.state.result;
   }
-  execute() {
+  async execute() {
     return this.start();
   }
   values() {
