@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildDroppedFolderUploadPlan } from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
+import {
+  buildDroppedFolderUploadPlan,
+  folderReservableFiles,
+} from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
 
 describe("dropped folder upload planning", () => {
   test("creates directories before assigning files to leaf parents", () => {
@@ -66,5 +69,30 @@ describe("dropped folder upload planning", () => {
         ({ parentKey }) => parentKey === firstPlacement.parentKey,
       ),
     ).toBe(true);
+  });
+
+  test("an empty file stays out of the folder reservation and keeps the others' keys", () => {
+    const first = new File(["first"], "first.txt");
+    const empty = new File([], "empty.txt");
+    const last = new File(["x"], "last.txt");
+
+    const plan = buildDroppedFolderUploadPlan({
+      directoryPaths: [],
+      files: [
+        { file: first, pathSegments: ["docs", "first.txt"] },
+        { file: empty, pathSegments: ["docs", "empty.txt"] },
+        { file: last, pathSegments: ["last.txt"] },
+      ],
+    });
+
+    expect(
+      folderReservableFiles(plan).map(({ key, placement }) => ({
+        key,
+        file: placement.file,
+      })),
+    ).toEqual([
+      { key: "0", file: first },
+      { key: "2", file: last },
+    ]);
   });
 });

@@ -41,6 +41,7 @@ export const DECISION_DOCKETS_STORED_WITH_SHEETS = {
   AUT: false,
   CZE: true,
   EU: false,
+  GBR: false,
   HUN: false,
   POL: false,
   SVK: true,
@@ -104,13 +105,54 @@ export const trimDecisionReferenceEdges = (
     (REFERENCE_EDGE_CHARACTERS.has(character) ||
       extra.includes(character) ||
       /^\s$/u.test(character));
+  // Balanced delimiters inside the reference carry identity: a neutral
+  // citation starts with [year], and a division ends with (KB). Only a pair
+  // surrounding the entire remaining reference is edge punctuation.
+  const closingByOpening = new Map([
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+    ["<", ">"],
+  ]);
+  const openings = [];
+  const partnerByIndex = new Map<number, number>();
+  for (const [index, character] of characters.entries()) {
+    const closing = closingByOpening.get(character);
+    if (closing !== undefined) {
+      openings.push({ index, closing });
+      continue;
+    }
+    const opening = openings.at(-1);
+    if (opening?.closing !== character) {
+      continue;
+    }
+    openings.pop();
+    partnerByIndex.set(opening.index, index);
+    partnerByIndex.set(index, opening.index);
+  }
   let start = 0;
   let end = characters.length;
-  while (start < end && isEdge(characters[start])) {
-    start += 1;
-  }
-  while (end > start && isEdge(characters[end - 1])) {
-    end -= 1;
+  while (start < end) {
+    if (isEdge(characters[start])) {
+      const partner = partnerByIndex.get(start);
+      if (partner === undefined || partner >= end || partner < start) {
+        start += 1;
+        continue;
+      }
+      if (partner === end - 1) {
+        start += 1;
+        end -= 1;
+        continue;
+      }
+    }
+    if (isEdge(characters[end - 1])) {
+      const partner = partnerByIndex.get(end - 1);
+      if (partner === undefined || partner < start || partner >= end) {
+        end -= 1;
+        continue;
+      }
+    }
+    break;
   }
   return characters.slice(start, end).join("");
 };

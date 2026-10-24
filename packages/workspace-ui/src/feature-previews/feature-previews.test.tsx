@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import { cents } from "@stll/money";
 import {
   BillingPreview,
   ContactsPreview,
@@ -11,9 +12,11 @@ import {
   TimeTrackingPreview,
 } from "@stll/workspace-ui/feature-previews";
 import type {
+  BillingPreviewData,
   BillingPreviewLabels,
   ContactsPreviewLabels,
   DocumentsPreviewLabels,
+  MattersPreviewData,
   MattersPreviewLabels,
   ResearchPreviewLabels,
   TimeTrackingPreviewLabels,
@@ -106,6 +109,40 @@ const LOCALES = ["en-GB", "cs-CZ", "ar-EG"] as const;
 const RAW_COLOUR =
   /\b(?:bg|text|border|ring|fill|stroke|from|to|decoration)-(?:white|black|(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3})\b|#[0-9a-f]{3,8}\b|rgba?\(/iu;
 
+// Custom content a host passes in place of the default set.
+const CUSTOM_PERSON = { name: "Ada Byron" } as const;
+
+const CUSTOM_MATTER = {
+  id: "fixture-matter",
+  color: "--option-blue",
+  name: "«custom matter»",
+} as const;
+
+const CUSTOM_MATTERS = {
+  matter: CUSTOM_MATTER,
+  team: [CUSTOM_PERSON],
+  tasks: [
+    {
+      name: "«custom task»",
+      status: "in_progress",
+      due: "2026-11-02",
+      assignee: CUSTOM_PERSON,
+      attachment: "«custom file».pdf",
+    },
+  ],
+} as const satisfies MattersPreviewData;
+
+const CUSTOM_BILLING = {
+  invoiceNumber: "INV-1",
+  client: "«custom client»",
+  matter: CUSTOM_MATTER,
+  currency: "GBP",
+  hourlyRate: cents(10_000),
+  entries: [
+    { date: "2026-11-02", description: "Advice call", billedMinutes: 90 },
+  ],
+} as const satisfies BillingPreviewData;
+
 describe("feature previews", () => {
   for (const { name, labels, render } of SCENES) {
     for (const locale of LOCALES) {
@@ -135,5 +172,35 @@ describe("feature previews", () => {
     // 594 billed minutes at EUR 220 an hour.
     expect(markup).toContain("9.9");
     expect(markup).toContain("€2,178.00");
+  });
+
+  test("a scene draws the content its host passes instead of the default", () => {
+    const markup = renderToStaticMarkup(
+      <MattersPreview
+        data={CUSTOM_MATTERS}
+        labels={MATTERS_LABELS}
+        locale="en-GB"
+      />,
+    );
+
+    expect(markup).toContain("«custom matter»");
+    expect(markup).toContain("«custom task»");
+    expect(markup).toContain("«custom file».pdf");
+    expect(markup).not.toContain("Harbour Logistics");
+  });
+
+  test("billing totals custom entries at their own rate and currency", () => {
+    const markup = renderToStaticMarkup(
+      <BillingPreview
+        data={CUSTOM_BILLING}
+        labels={BILLING_LABELS}
+        locale="en-GB"
+      />,
+    );
+
+    // 90 billed minutes at GBP 100 an hour.
+    expect(markup).toContain("«custom client»");
+    expect(markup).toContain("1.5");
+    expect(markup).toContain("£150.00");
   });
 });
