@@ -13,9 +13,12 @@ import path from "node:path";
 
 const WORKFLOWS = path.resolve(import.meta.dirname, "../.github/workflows");
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure|success)\(\)/u;
-// Only these let a job run after a skipped ancestor; `success()` skips with it
-// and `failure()` runs after a failure, not a skip.
-const TOLERATES_SKIP = /\b(?:always|cancelled)\(\)/u;
+// These let a job run after a skipped ancestor: `always()`, any `cancelled()`
+// test (`!cancelled()`), and a negated `failure()` or `success()`. A plain
+// `success()` skips with the ancestor; a plain `failure()` runs only after a
+// failure.
+const TOLERATES_SKIP =
+  /\b(?:always|cancelled)\(\)|!\s*(?:failure|success)\(\)/u;
 
 type Job = { needs?: unknown; if?: unknown };
 
@@ -108,6 +111,12 @@ test("the check finds the child of a tolerant parent and nothing that skips with
     // An explicit success() parent skips with the ancestor too.
     gated: { needs: ["wake"], if: "success()" },
     summary: { needs: ["gated"] },
+    // A negated failure() runs after the skip, so its child must say so.
+    lenient: { needs: ["wake"], if: "!failure()" },
+    publish: { needs: ["lenient"] },
   };
-  expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual(["w.yml#promote"]);
+  expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual([
+    "w.yml#promote",
+    "w.yml#publish",
+  ]);
 });
