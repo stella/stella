@@ -11,6 +11,7 @@ import {
   type VatTreatment,
 } from "@stll/invoicing";
 
+import { groupInvoiceLinesByMatter } from "../matter-groups";
 import {
   buildInvoicePaymentPayload,
   createInvoiceFormatters,
@@ -54,14 +55,21 @@ type InvoiceTemplateData = {
     payment: string;
     notes: string;
   };
-  lines: {
-    description: string;
-    quantity: string | null;
-    unitPrice: string | null;
+  groups: {
+    workspaceId: string;
+    workspaceName: string;
     net: string;
-    vatLabel: string;
     vat: string;
     total: string;
+    lines: {
+      description: string;
+      quantity: string | null;
+      unitPrice: string | null;
+      net: string;
+      vatLabel: string;
+      vat: string;
+      total: string;
+    }[];
   }[];
   totals: {
     net: string;
@@ -251,22 +259,29 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       payment: l.payment,
       notes: l.notes,
     },
-    lines: invoice.lines.map((line) => {
-      const billed = line.quantity !== null && line.unitPrice !== null;
-      return {
-        description: line.description,
-        quantity:
-          billed && line.quantity !== null
-            ? compact([quantity(line.quantity), line.unit]).join(" ")
-            : null,
-        unitPrice:
-          billed && line.unitPrice !== null ? money(line.unitPrice) : null,
-        net: money(line.netAmount),
-        vatLabel: `${treatments[line.vatTreatment]} ${vatRate(line.vatRateBps)}`,
-        vat: money(line.vatAmount),
-        total: money(line.grossAmount),
-      };
-    }),
+    groups: groupInvoiceLinesByMatter(invoice.lines).map((group) => ({
+      workspaceId: group.workspaceId,
+      workspaceName: group.workspaceName,
+      net: money(group.netAmount),
+      vat: money(group.vatAmount),
+      total: money(group.grossAmount),
+      lines: group.lines.map((line) => {
+        const billed = line.quantity !== null && line.unitPrice !== null;
+        return {
+          description: line.description,
+          quantity:
+            billed && line.quantity !== null
+              ? compact([quantity(line.quantity), line.unit]).join(" ")
+              : null,
+          unitPrice:
+            billed && line.unitPrice !== null ? money(line.unitPrice) : null,
+          net: money(line.netAmount),
+          vatLabel: `${treatments[line.vatTreatment]} ${vatRate(line.vatRateBps)}`,
+          vat: money(line.vatAmount),
+          total: money(line.grossAmount),
+        };
+      }),
+    })),
     totals: {
       net: money(totals.netAmountMinor),
       vat: money(totals.vatAmountMinor),

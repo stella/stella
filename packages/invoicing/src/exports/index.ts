@@ -6,6 +6,7 @@ export { buildMoneyS3Xml } from "./money-s3";
 export { buildPohodaXml } from "./pohoda";
 export { buildUblFiles } from "./ubl";
 export {
+  quantityText,
   variableSymbolOf,
   type InvoiceExportLine,
   type InvoiceExportLineSource,

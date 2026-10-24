@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -159,6 +160,95 @@ describe("invoice transition integration", () => {
     await testDb
       .delete(sellerProfiles)
       .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
+  test("refinalizing legacy totals reads VAT without rewriting the issued document", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Legacy invoice seller",
+      vatId: "SK1234567890",
+      vatPayer: true,
+      country: "SK",
+      defaultCurrency: "USD",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    try {
+      await testDb
+        .update(invoices)
+        .set({
+          sellerProfileId,
+          finalizedAt: new Date("2025-01-02T00:00:00Z"),
+          netAmount: null,
+          vatAmount: null,
+          totalAmount: cents(12_300),
+        })
+        .where(eq(invoices.id, invoiceId));
+      await testDb.insert(invoiceLines).values({
+        id: createSafeId<"invoiceLine">(),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        invoiceId,
+        position: 0,
+        description: "Issued legal services",
+        quantity: "1.0000",
+        unit: "h",
+        unitPrice: cents(10_000),
+        vatRateBps: 2300,
+        vatTreatment: "domestic_vat",
+        netAmount: cents(10_000),
+        vatAmount: cents(2300),
+        grossAmount: cents(12_300),
+        source: "manual",
+      });
+      const readDocument = async () =>
+        await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+          with: { lines: true },
+        });
+      const beforeRefusal = await readDocument();
+      const auditEvents: AuditEvent[] = [];
+      expect(await runTransition(invoiceId, "finalize", auditEvents)).toEqual({
+        code: 409,
+        response: {
+          message:
+            "This seller's VAT invoices must state the VAT amount in EUR",
+          hint: "Issue the invoice in EUR; converting the VAT amount from another currency is not supported yet.",
+        },
+      });
+      expect(await readDocument()).toEqual(beforeRefusal);
+      expect(auditEvents).toEqual([]);
+
+      await testDb
+        .update(invoices)
+        .set({ currency: "EUR" })
+        .where(eq(invoices.id, invoiceId));
+      const beforeFinalize = await readDocument();
+      if (beforeFinalize === undefined) {
+        panic("The issued invoice must exist before re-finalizing");
+      }
+      expect(beforeFinalize).toMatchObject({
+        netAmount: null,
+        vatAmount: null,
+        totalAmount: cents(12_300),
+      });
+      expect(beforeFinalize.lines).toHaveLength(1);
+      expect(beforeFinalize.lines.at(0)?.vatAmount).toBe(cents(2300));
+      expect(await runTransition(invoiceId, "finalize")).toEqual({
+        id: invoiceId,
+      });
+      expect(await readDocument()).toEqual({
+        ...beforeFinalize,
+        status: INVOICE_STATUS.FINALIZED,
+        updatedAt: expect.any(Date),
+      });
+    } finally {
+      await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+      await testDb
+        .delete(sellerProfiles)
+        .where(eq(sellerProfiles.id, sellerProfileId));
+    }
   });
 
   test("allocates consecutive default-series numbers and keeps the first through revert and refinalize", async () => {
@@ -360,11 +450,9 @@ describe("invoice transition integration", () => {
         columns: { invoiceId: true, status: true },
       }),
     ).toEqual({ invoiceId: null, status: BILLING_STATUS.APPROVED });
-    expect(auditEvents.map((event) => event.resourceId)).toEqual([
-      invoiceId,
-      timeEntryId,
-      expenseId,
-    ]);
+    expect(auditEvents.map((event) => event.resourceId).toSorted()).toEqual(
+      [invoiceId, timeEntryId, expenseId].toSorted(),
+    );
   });
 });
 

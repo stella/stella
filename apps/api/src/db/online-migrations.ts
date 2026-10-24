@@ -25,6 +25,12 @@ import {
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
 } from "./chat-content-v3-backfill";
+import {
+  CLIENT_INVOICE_BACKFILL,
+  CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
+  CLIENT_INVOICE_CONSTRAINTS,
+  CLIENT_INVOICE_TENANT_KEY,
+} from "./client-invoice-backfill";
 import { CONTACT_VAT_ID_REPAIR } from "./contact-vat-id-repair";
 import {
   CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
@@ -54,6 +60,7 @@ import {
   createOnlineTableGate,
   declaresOnlineBuild,
   dropIndexConcurrently,
+  INVOICE_TENANT_UNIQUE_INDEX,
   reindexIndexConcurrently,
   renameIndex,
   runGatedTableWork,
@@ -387,6 +394,43 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "time_entries_approval_queue_idx",
     tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoice_lines_workspace_organization_idx" ON public."invoice_lines" USING btree (workspace_id, organization_id)',
+    definitionBody:
+      "ON public.invoice_lines USING btree (workspace_id, organization_id)",
+    isUnique: false,
+    name: "invoice_lines_workspace_organization_idx",
+    tableName: "invoice_lines",
+  },
+  INVOICE_TENANT_UNIQUE_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_org_client_created_idx" ON public."invoices" USING btree (organization_id, client_id, created_at, id)',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, client_id, created_at, id)",
+    isUnique: false,
+    name: "invoices_org_client_created_idx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_client_number_uidx" ON public."invoices" USING btree (organization_id, client_id, invoice_number) WHERE workspace_id IS NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, client_id, invoice_number) WHERE (workspace_id IS NULL)",
+    isUnique: true,
+    name: "invoices_client_number_uidx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_client_backfill_idx" ON public."invoices" USING btree (id) WHERE client_id IS NULL AND workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (id) WHERE ((client_id IS NULL) AND (workspace_id IS NOT NULL))",
+    isUnique: false,
+    name: "invoices_client_backfill_idx",
+    tableName: "invoices",
   },
   {
     createSql:
@@ -792,6 +836,9 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CLIENT_INVOICE_TENANT_KEY,
+  CLIENT_INVOICE_BACKFILL,
+  ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
@@ -817,6 +864,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    ...CLIENT_INVOICE_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
     ...DECISION_DATE_CEILING_CONSTRAINTS,
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,

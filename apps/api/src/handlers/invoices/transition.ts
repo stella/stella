@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { INVOICE_COUNTRY_PROFILES, invoiceCountryOf } from "@stll/invoicing";
@@ -10,23 +10,24 @@ import type { SafeDbError } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
-  INVOICE_ATTACHMENT,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
-  timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
-import {
-  lockDraftInvoiceForLines,
-  recalculateInvoiceTotals,
-} from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { hasActiveInvoiceCredit } from "@/api/lib/billing/invoice-document-type";
+import {
+  lockDraftInvoiceForLines,
+  readInvoiceTotals,
+  recalculateInvoiceTotals,
+} from "@/api/lib/billing/invoice-lines";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import {
   allocateNumber,
   findDefaultNumberSeries,
@@ -34,6 +35,12 @@ import {
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import type {
+  AcquiredInvoiceMatterLocks,
+  InvoiceMatterLocks,
+} from "@/api/lib/db/aggregate-lock";
+import { releaseInvoiceTimeEntries } from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
@@ -90,7 +97,7 @@ const validateReverseChargeBuyer = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
+        invoiceInMatter(invoices, workspaceId),
         eq(invoiceLines.vatTreatment, "reverse_charge"),
       ),
     )
@@ -105,35 +112,9 @@ const validateReverseChargeBuyer = async (
     : null;
 };
 
-const linkedCreditError = async (
-  tx: Transaction,
-  invoiceId: SafeId<"invoice">,
-  workspaceId: SafeId<"workspace">,
-) => {
-  const credit = await tx
-    .select({ id: invoices.id })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.workspaceId, workspaceId),
-        eq(invoices.originalInvoiceId, invoiceId),
-        ne(invoices.status, INVOICE_STATUS.VOID),
-      ),
-    )
-    .limit(1);
-  return credit.at(0)
-    ? new HandlerError({
-        status: 409,
-        message:
-          "Void linked credit notes before changing their original invoice",
-      })
-    : null;
-};
-
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
   previousStatus: InvoiceStatus;
-  revertedTimeEntries: { id: SafeId<"timeEntry"> }[];
   revertedExpenses: { id: SafeId<"expense"> }[];
 }): AuditEvent[] => {
   const events: AuditEvent[] = [
@@ -146,20 +127,6 @@ const buildVoidEvents = (params: {
       },
     },
   ];
-  for (const row of params.revertedTimeEntries) {
-    events.push({
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-      resourceId: row.id,
-      changes: {
-        status: {
-          old: BILLING_STATUS.BILLED,
-          new: BILLING_STATUS.APPROVED,
-        },
-        invoiceId: { old: params.invoiceId, new: null },
-      },
-    });
-  }
   for (const row of params.revertedExpenses) {
     events.push({
       action: AUDIT_ACTION.UPDATE,
@@ -178,9 +145,7 @@ const buildVoidEvents = (params: {
 };
 
 type ReleaseInvoiceEntriesOptions = {
-  actorUserId: SafeId<"user">;
-  invoiceId: SafeId<"invoice">;
-  workspaceId: SafeId<"workspace">;
+  matterLocks: AcquiredInvoiceMatterLocks;
   previousStatus: InvoiceStatus;
   now: Date;
   recordAuditEvent: AuditRecorder;
@@ -188,39 +153,20 @@ type ReleaseInvoiceEntriesOptions = {
 const releaseInvoiceEntries = async (
   tx: Transaction,
   {
-    invoiceId,
-    workspaceId,
+    matterLocks,
     previousStatus,
     now,
     recordAuditEvent,
-    actorUserId,
   }: ReleaseInvoiceEntriesOptions,
 ) => {
-  // The caller acquires these locks before the invoice; guard the release too.
-  const runningError = await guardRunningTimeEntries({
-    tx,
-    workspaceId,
-    actorUserId,
-    selection: { type: "invoice", invoiceId },
+  const { invoiceId } = matterLocks;
+  // The caller retains the successful guard's timer-owner, complete matter
+  // and source-row locks; reacquiring them after the invoice would invert order.
+  await releaseInvoiceTimeEntries(tx, {
+    matterLocks,
+    now,
+    recordAuditEvent,
   });
-  if (runningError) {
-    return Result.err(runningError);
-  }
-  const revertedTimeEntries = await tx
-    .update(timeEntries)
-    .set({
-      status: BILLING_STATUS.APPROVED,
-      invoiceId: null,
-      invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(timeEntries.invoiceId, invoiceId),
-        eq(timeEntries.workspaceId, workspaceId),
-      ),
-    )
-    .returning({ id: timeEntries.id });
 
   const revertedExpenses = await tx
     .update(expenses)
@@ -229,12 +175,7 @@ const releaseInvoiceEntries = async (
       invoiceId: null,
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(expenses.invoiceId, invoiceId),
-        eq(expenses.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(expenses.invoiceId, invoiceId)))
     .returning({ id: expenses.id });
 
   // The voided document keeps its lines; releasing them lets the
@@ -245,7 +186,6 @@ const releaseInvoiceEntries = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
         isNull(invoiceLines.releasedAt),
       ),
     );
@@ -255,11 +195,31 @@ const releaseInvoiceEntries = async (
     buildVoidEvents({
       invoiceId,
       previousStatus,
-      revertedTimeEntries,
       revertedExpenses,
     }),
   );
-  return Result.ok(undefined);
+};
+
+type ReadIssuedInvoiceVatOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const readIssuedInvoiceVat = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: ReadIssuedInvoiceVatOptions,
+) => {
+  const invoice = await tx.query.invoices.findFirst({
+    where: {
+      id: { eq: invoiceId },
+      RAW: (table) => invoiceInMatter(table, workspaceId),
+    },
+    with: INVOICE_DETAIL_RELATIONS,
+  });
+  if (invoice === undefined) {
+    panic("The locked issued invoice disappeared before its totals read");
+  }
+  return readInvoiceTotals(invoice).vatAmountMinor;
 };
 
 type VatCurrencyGuardOptions = {
@@ -312,6 +272,31 @@ const duplicateInvoiceNumberError = (
       })
     : null;
 
+type RefreshDraftInvoiceAmountsOptions = {
+  scope: Parameters<typeof lockDraftInvoiceForLines>[1];
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+
+const refreshDraftInvoiceAmounts = async (
+  tx: Transaction,
+  { scope, now, recordAuditEvent }: RefreshDraftInvoiceAmountsOptions,
+) => {
+  const draft = await lockDraftInvoiceForLines(tx, scope, recordAuditEvent);
+  if (draft.isErr()) {
+    return Result.err(draft.error);
+  }
+  const reverseChargeError = await validateReverseChargeBuyer(
+    tx,
+    scope.invoiceId,
+    scope.workspaceId,
+  );
+  if (reverseChargeError !== null) {
+    return Result.err(reverseChargeError);
+  }
+  return await recalculateInvoiceTotals(tx, scope, now, recordAuditEvent);
+};
+
 const transitionInvoice = createSafeHandler(
   {
     contract: "patch",
@@ -350,21 +335,25 @@ const transitionInvoice = createSafeHandler(
     const result = await resultTx(
       safeDb,
       async (tx): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
+        let matterLocks: InvoiceMatterLocks = { type: "acquire" };
         if (body.action === "void" || body.action === "finalize") {
-          const runningError = await guardRunningTimeEntries({
+          const running = await guardRunningTimeEntries({
             tx,
+            organizationId: session.activeOrganizationId,
             workspaceId,
             actorUserId: user.id,
             selection: { type: "invoice", invoiceId: params.invoiceId },
           });
-          if (runningError) {
-            return Result.err(runningError);
+          if (running.isErr()) {
+            return Result.err(running.error);
           }
+          matterLocks = running.value;
         }
         const existing = await lockInvoiceInStatus(tx, {
           invoiceId: params.invoiceId,
           workspaceId,
           status: transition.from,
+          matterLocks,
         });
         if (!existing) {
           return Result.err(
@@ -375,13 +364,18 @@ const transitionInvoice = createSafeHandler(
           );
         }
         if (body.action === "void" || body.action === "revert_to_draft") {
-          const creditError = await linkedCreditError(
-            tx,
-            existing.id,
+          const hasCredit = await hasActiveInvoiceCredit(tx, {
+            invoiceId: existing.id,
             workspaceId,
-          );
-          if (creditError !== null) {
-            return Result.err(creditError);
+          });
+          if (hasCredit) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message:
+                  "Void linked credit notes before changing their original invoice",
+              }),
+            );
           }
         }
         const set: Partial<typeof invoices.$inferInsert> = {
@@ -403,37 +397,27 @@ const transitionInvoice = createSafeHandler(
             workspaceId,
             organizationId: session.activeOrganizationId,
           };
-          const draft = await lockDraftInvoiceForLines(
-            tx,
-            scope,
-            recordAuditEvent,
-          );
-          if (draft.isErr()) {
-            return Result.err(draft.error);
-          }
-          const reverseChargeError = await validateReverseChargeBuyer(
-            tx,
-            existing.id,
-            workspaceId,
-          );
-          if (reverseChargeError !== null) {
-            return Result.err(reverseChargeError);
-          }
-          const totals = await recalculateInvoiceTotals(
-            tx,
-            scope,
-            now,
-            recordAuditEvent,
-          );
-          if (totals.isErr()) {
-            return Result.err(totals.error);
+          let vatAmountMinor = existing.vatAmount;
+          // Re-finalizing changes status, never the previously issued content.
+          if (existing.finalizedAt === null) {
+            const totals = await refreshDraftInvoiceAmounts(tx, {
+              scope: { ...scope, matterLocks },
+              now,
+              recordAuditEvent,
+            });
+            if (totals.isErr()) {
+              return Result.err(totals.error);
+            }
+            vatAmountMinor = totals.value.vatAmountMinor;
+          } else {
+            vatAmountMinor ??= await readIssuedInvoiceVat(tx, scope);
           }
           const currencyError = await vatCurrencyError({
             tx,
             sellerProfileId: existing.sellerProfileId,
             organizationId: session.activeOrganizationId,
             currency: existing.currency,
-            vatAmountMinor: totals.value.vatAmountMinor,
+            vatAmountMinor,
           });
           if (currencyError !== null) {
             return Result.err(currencyError);
@@ -472,7 +456,7 @@ const transitionInvoice = createSafeHandler(
           .where(
             and(
               eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
+              invoiceInMatter(invoices, workspaceId),
               inArray(invoices.status, transition.from),
             ),
           )
@@ -487,17 +471,17 @@ const transitionInvoice = createSafeHandler(
           );
         }
         if (body.action === "void") {
-          const release = await releaseInvoiceEntries(tx, {
-            actorUserId: user.id,
-            invoiceId: row.id,
-            workspaceId,
+          if (matterLocks.type !== "acquired") {
+            return panic(
+              "Invoice release requires the running guard's acquired locks",
+            );
+          }
+          await releaseInvoiceEntries(tx, {
+            matterLocks,
             previousStatus: existing.status,
             now,
             recordAuditEvent,
           });
-          if (release.isErr()) {
-            return Result.err(release.error);
-          }
           await recordBillingCapCrossings(tx, {
             workspaceId,
             recordAuditEvent,

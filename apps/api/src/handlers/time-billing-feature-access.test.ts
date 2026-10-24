@@ -12,6 +12,7 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
+import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
@@ -107,6 +108,7 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, AnyElysia>> = {
   expensesRoute,
   internalTimeEntriesRoute,
   invoicesRoute,
+  clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
   numberSeriesRoute,
@@ -381,6 +383,8 @@ describe("time billing on agent surfaces", () => {
     );
     expect(expectedCapabilities).toContain("time-entries.create");
     expect(expectedCapabilities).toContain("invoices.create");
+    expect(expectedCapabilities).toContain("client-invoices.create");
+    expect(expectedCapabilities).toContain("client-invoices.prefill");
 
     await withTimeBilling(false, async () => {
       for (const mode of MCP_MODES) {

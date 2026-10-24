@@ -512,6 +512,17 @@
     "batchActions": "إجراءات جماعية",
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",
+    "clientComposer": {
+      "flatFeeNote": "أصدر فواتير الملفات القانونية ذات الأتعاب الثابتة من صفحة فواتير الملف القانوني.",
+      "includeMatter": "تضمين {matterName}",
+      "invalidPeriod": "اختر تاريخ انتهاء يوافق تاريخ البداية أو يأتي بعده.",
+      "loadFailed": "تعذر تحميل العمل غير المفوتر. حاول مرة أخرى.",
+      "matterSubtotal": "إجمالي الملف القانوني شامل الضريبة: {amount} · {share} من الفاتورة",
+      "periodEnd": "نهاية الفترة",
+      "periodStart": "بداية الفترة",
+      "title": "فوترة العميل",
+      "visibility": "لا تظهر هذه الفاتورة إلا للأشخاص الذين يمكنهم الوصول إلى جميع الملفات القانونية المشمولة ولمسؤولي الفوترة."
+    },
     "codes": {
       "activity": "النشاط",
       "activityCode": "رمز النشاط",
@@ -654,6 +665,11 @@
       "invoiceDate": "تاريخ الفاتورة",
       "invoiceDetail": "تفاصيل الفاتورة",
       "invoiceNumber": "رقم الفاتورة",
+      "lineOverrides": {
+        "editedRecorded": "عُدّل · المسجّل: {description}، {quantity} × {rate}",
+        "quantity": "الكمية",
+        "resetRecorded": "استعادة القيم المسجّلة"
+      },
       "linkedExpenses": "المصروفات المرتبطة",
       "linkedTimeEntries": "إدخالات الوقت المرتبطة",
       "markPaid": "وضع علامة مدفوع",

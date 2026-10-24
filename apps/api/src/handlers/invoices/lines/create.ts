@@ -9,6 +9,12 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import {
   checkInvoiceLineCapacity,
   expenseLineDraft,
@@ -23,13 +29,7 @@ import {
   tLineUnit,
   tVatRateBps,
   tVatTreatment,
-} from "@/api/handlers/invoices/invoice-lines";
-import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditEvent } from "@/api/lib/audit-log";
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+} from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -184,7 +184,8 @@ const createInvoiceLine = createSafeHandler(
       "price in minor units), an approved unbilled time entry, or an " +
       "approved unbilled expense; an entry line takes its amount from the " +
       "entry and marks the entry billed. Every line carries a VAT rate in " +
-      "basis points and a VAT treatment. Only draft invoices accept lines.",
+      "basis points and a VAT treatment. Only never-issued drafts accept lines; " +
+      "issued invoices require a credit note even after reverting to draft.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -212,25 +213,29 @@ const createInvoiceLine = createSafeHandler(
     const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
-        const runningError = await guardRunningTimeEntries({
+        const running = await guardRunningTimeEntries({
           tx,
+          organizationId: session.activeOrganizationId,
           workspaceId,
           actorUserId: user.id,
           selection: {
-            type: "entries",
-            ids:
+            type: "invoice",
+            runningCheck: "additional",
+            invoiceId: params.invoiceId,
+            additionalIds:
               body.source.type === "time_entry"
                 ? [body.source.timeEntryId]
                 : [],
           },
         });
-        if (runningError) {
-          return Result.err(runningError);
+        if (running.isErr()) {
+          return Result.err(running.error);
         }
         const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
             invoiceId: params.invoiceId,
+            matterLocks: running.value,
             organizationId: session.activeOrganizationId,
             workspaceId,
           },

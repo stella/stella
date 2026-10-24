@@ -11,6 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
+  BILLING_STATUS,
   billingArrangements,
   featureEnrolments,
   INVOICE_ATTACHMENT,
@@ -20,6 +21,8 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -47,6 +50,7 @@ let db: TestDatabase;
 let ids: TestIds;
 const entryIds: SafeId<"timeEntry">[] = [];
 const invoiceIds: SafeId<"invoice">[] = [];
+const auditEvents: AuditEvent[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -80,8 +84,16 @@ afterEach(async () => {
     .where(eq(billingArrangements.workspaceId, ids.wsA2));
   entryIds.length = 0;
   invoiceIds.length = 0;
+  auditEvents.length = 0;
 });
 afterAll(releaseRlsFixture);
+
+const recordAuditEvent = async (
+  _tx: unknown,
+  events: AuditEvent | AuditEvent[],
+) => {
+  auditEvents.push(...(Array.isArray(events) ? events : [events]));
+};
 
 const context = <TContext>(
   _handler: (context: TContext) => unknown,
@@ -103,8 +115,8 @@ const context = <TContext>(
     getWorkspaceAccess: async () => ({ id: ids.wsA2, status: "active" }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
     getAccessibleWorkspaces: async () => [{ id: ids.wsA2, status: "active" }],
-    recordAuditEvent: async () => {},
-    createAuditRecorder: () => async () => {},
+    recordAuditEvent,
+    createAuditRecorder: () => recordAuditEvent,
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
@@ -269,6 +281,7 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
   if (!line) {
     panic("Flat fee line missing");
   }
+  expect(line.unit).not.toBe("hours");
   const entry = await seedEntry();
   const attempts = [
     await createLine.handler(
@@ -294,6 +307,13 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
       context(
         updateLine.handler,
         { unitPriceMinor: 999 },
+        { invoiceId, lineId: line.id },
+      ),
+    ),
+    await updateLine.handler(
+      context(
+        updateLine.handler,
+        { unit: "hours" },
         { invoiceId, lineId: line.id },
       ),
     ),
@@ -372,6 +392,7 @@ test("finalize rechecks a lowered cap atomically and void releases covered marke
       ),
     ),
   ).toHaveProperty("id", flatId);
+  const beforeVoidAudit = auditEvents.length;
   expect(
     await transitionInvoice.handler(
       context(
@@ -381,6 +402,24 @@ test("finalize rechecks a lowered cap atomically and void releases covered marke
       ),
     ),
   ).toHaveProperty("id", flatId);
+  expect(
+    auditEvents
+      .slice(beforeVoidAudit)
+      .filter((event) => event.resourceId === entry),
+  ).toEqual([
+    {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: entry,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: flatId, new: null },
+      },
+    },
+  ]);
   expect(
     await db.query.timeEntries.findFirst({ where: { id: { eq: entry } } }),
   ).toMatchObject({

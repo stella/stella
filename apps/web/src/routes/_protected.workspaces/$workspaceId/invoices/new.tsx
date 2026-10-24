@@ -8,11 +8,11 @@ import { ArrowLeftIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { InvoiceComposer } from "@/components/billing/invoice-composer";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { invoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
-import { InvoiceComposer } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices/new",

@@ -3,6 +3,8 @@ import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
 import {
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCE,
   type InvoiceLineSource,
 } from "@stll/api-contract";
@@ -28,8 +30,6 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import { validateInvoiceDocument } from "@/api/handlers/invoices/document-type";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -38,7 +38,15 @@ import {
 } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { checkInvoiceBillingArrangement } from "@/api/lib/billing/invoice-arrangements";
+import {
+  invoiceContentMutationRefusal,
+  validateInvoiceDocument,
+} from "@/api/lib/billing/invoice-document-type";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import type { InvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
@@ -48,12 +56,13 @@ import type {
 } from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
-const QUANTITY_SCALE = 4;
+const QUANTITY_SCALE = INVOICE_LINE_INPUT_LIMITS.quantityScale;
 const QUANTITY_FACTOR = 10 ** QUANTITY_SCALE;
-const LINE_DESCRIPTION_MAX_CHARS = 10_000;
+const LINE_DESCRIPTION_MAX_CHARS =
+  INVOICE_LINE_INPUT_LIMITS.descriptionMaxChars;
 
 export const tInvoiceLineQuantity = t.String({
-  pattern: `^(0|[1-9][0-9]{0,13})(\\.[0-9]{1,${QUANTITY_SCALE}})?$`,
+  pattern: INVOICE_LINE_QUANTITY_PATTERN,
   description:
     'Non-negative decimal quantity with a dot and at most four decimals, e.g. "1.5"',
 });
@@ -83,11 +92,14 @@ true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
   : never;
 
 export const tLineDescription = t.String({
-  minLength: 1,
+  minLength: INVOICE_LINE_INPUT_LIMITS.descriptionMinChars,
   maxLength: LINE_DESCRIPTION_MAX_CHARS,
 });
 
-export const tLineUnit = t.String({ minLength: 1, maxLength: 32 });
+export const tLineUnit = t.String({
+  minLength: INVOICE_LINE_INPUT_LIMITS.descriptionMinChars,
+  maxLength: INVOICE_LINE_INPUT_LIMITS.unitMaxChars,
+});
 
 export type LineVat = {
   vatRateBps: number;
@@ -114,6 +126,7 @@ export type InvoiceLineDraft = LineVat & {
   billingPurpose: (typeof invoiceLines.$inferSelect)["billingPurpose"];
   timeEntryId: SafeId<"timeEntry"> | null;
   expenseId: SafeId<"expense"> | null;
+  recordedDescription?: string;
 };
 
 type PricedLine = InvoiceLineDraft & {
@@ -165,6 +178,7 @@ export const timeEntryLineDraft = (
     entry.invoiceNarrative,
     entry.narrative,
   ),
+  recordedDescription: lineDescription(entry.invoiceNarrative, entry.narrative),
   quantity: hoursQuantity(entry.billedMinutes),
   unit: "h",
   unitPrice: entry.noCharge ? cents(0) : entry.rateAtEntry,
@@ -196,6 +210,10 @@ export const expenseLineDraft = (
   return {
     description: lineDescription(
       description,
+      expense.invoiceDescription,
+      expense.description,
+    ),
+    recordedDescription: lineDescription(
       expense.invoiceDescription,
       expense.description,
     ),
@@ -306,9 +324,7 @@ export const priceLines = (
   for (const [index, draft] of drafts.entries()) {
     const line = calculated.value.lines[index];
     if (!line) {
-      return Result.err(
-        new HandlerError({ status: 500, message: "Line pricing failed" }),
-      );
+      return panic("Pricing invoice drafts returned fewer lines than supplied");
     }
     priced.push({
       ...draft,
@@ -350,7 +366,7 @@ export const insertInvoiceLines = async (
   const invoice = await tx.query.invoices.findFirst({
     where: {
       id: { eq: scope.invoiceId },
-      workspaceId: { eq: scope.workspaceId },
+      organizationId: { eq: scope.organizationId },
     },
     columns: { documentType: true },
   });
@@ -366,12 +382,7 @@ export const insertInvoiceLines = async (
   const [last] = await tx
     .select({ position: max(invoiceLines.position) })
     .from(invoiceLines)
-    .where(
-      and(
-        eq(invoiceLines.invoiceId, scope.invoiceId),
-        eq(invoiceLines.workspaceId, scope.workspaceId),
-      ),
-    );
+    .where(and(eq(invoiceLines.invoiceId, scope.invoiceId)));
   const start = (last?.position ?? -1) + 1;
   const inserted = await tx
     .insert(invoiceLines)
@@ -382,6 +393,11 @@ export const insertInvoiceLines = async (
         invoiceId: scope.invoiceId,
         position: start + index,
         description: line.description,
+        recordedDescription: line.recordedDescription ?? line.description,
+        recordedQuantity: line.quantity,
+        recordedUnit: line.unit,
+        recordedUnitPrice: line.unitPrice,
+        recordedNetAmount: line.netAmount,
         quantity: line.quantity,
         unit: line.unit,
         unitPrice: line.unitPrice,
@@ -426,10 +442,7 @@ export const checkInvoiceLineCapacity = async (
 ): Promise<Result<void, HandlerError>> => {
   const lineCount = await tx.$count(
     invoiceLines,
-    and(
-      eq(invoiceLines.invoiceId, scope.invoiceId),
-      eq(invoiceLines.workspaceId, scope.workspaceId),
-    ),
+    and(eq(invoiceLines.invoiceId, scope.invoiceId)),
   );
   if (lineCount + adding > LIMITS.invoiceLinesPerInvoice) {
     return Result.err(
@@ -447,10 +460,7 @@ export const checkInvoiceLineCapacity = async (
  * past that bound finds every attached entry a draft can bill; one insert of
  * that many lines (16 bound columns each) stays far below the 65,535-parameter
  * cap.
- */
-const MATERIALISE_LIMIT = LIMITS.invoiceLinesPerInvoice + 1;
-
-/**
+ *
  * Drafts created before invoice lines existed carry attached time entries and
  * expenses but no lines, and their stored total is the sum of those entries.
  * Totals now come from lines alone, so a line edit on such a draft would
@@ -468,71 +478,85 @@ const materialiseAttachedEntryLines = async (
   scope: InvoiceScope,
   recordAuditEvent: AuditRecorder,
 ): Promise<number> => {
-  const unlinedTimeEntries = () =>
-    tx
-      .select({
-        id: timeEntries.id,
-        billedMinutes: timeEntries.billedMinutes,
-        rateAtEntry: timeEntries.rateAtEntry,
-        narrative: timeEntries.narrative,
-        invoiceNarrative: timeEntries.invoiceNarrative,
-        noCharge: timeEntries.noCharge,
-      })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.invoiceId, scope.invoiceId),
-          eq(timeEntries.invoiceAttachment, INVOICE_ATTACHMENT.CHARGED),
-          eq(timeEntries.workspaceId, scope.workspaceId),
-          notExists(
-            tx
-              .select({ id: invoiceLines.id })
-              .from(invoiceLines)
-              .where(
-                and(
-                  eq(invoiceLines.timeEntryId, timeEntries.id),
-                  isNull(invoiceLines.releasedAt),
+  const unlinedTimeEntries = async () =>
+    await readBounded(
+      tx
+        .select({
+          id: timeEntries.id,
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+          narrative: timeEntries.narrative,
+          invoiceNarrative: timeEntries.invoiceNarrative,
+          noCharge: timeEntries.noCharge,
+        })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.invoiceId, scope.invoiceId),
+            eq(timeEntries.invoiceAttachment, INVOICE_ATTACHMENT.CHARGED),
+            eq(timeEntries.workspaceId, scope.workspaceId),
+            notExists(
+              tx
+                .select({ id: invoiceLines.id })
+                .from(invoiceLines)
+                .where(
+                  and(
+                    eq(invoiceLines.timeEntryId, timeEntries.id),
+                    isNull(invoiceLines.releasedAt),
+                  ),
                 ),
-              ),
+            ),
           ),
-        ),
-      )
-      .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-      .limit(MATERIALISE_LIMIT);
-  const unlinedExpenses = () =>
-    tx
-      .select({
-        id: expenses.id,
-        amount: expenses.amount,
-        markup: expenses.markup,
-        description: expenses.description,
-        invoiceDescription: expenses.invoiceDescription,
-      })
-      .from(expenses)
-      .where(
-        and(
-          eq(expenses.invoiceId, scope.invoiceId),
-          eq(expenses.workspaceId, scope.workspaceId),
-          notExists(
-            tx
-              .select({ id: invoiceLines.id })
-              .from(invoiceLines)
-              .where(
-                and(
-                  eq(invoiceLines.expenseId, expenses.id),
-                  isNull(invoiceLines.releasedAt),
+        )
+        .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)),
+      LIMITS.invoiceLinesPerInvoice,
+    );
+  const unlinedExpenses = async () =>
+    await readBounded(
+      tx
+        .select({
+          id: expenses.id,
+          amount: expenses.amount,
+          markup: expenses.markup,
+          description: expenses.description,
+          invoiceDescription: expenses.invoiceDescription,
+        })
+        .from(expenses)
+        .where(
+          and(
+            eq(expenses.invoiceId, scope.invoiceId),
+            eq(expenses.workspaceId, scope.workspaceId),
+            notExists(
+              tx
+                .select({ id: invoiceLines.id })
+                .from(invoiceLines)
+                .where(
+                  and(
+                    eq(invoiceLines.expenseId, expenses.id),
+                    isNull(invoiceLines.releasedAt),
+                  ),
                 ),
-              ),
+            ),
           ),
-        ),
-      )
-      .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
-      .limit(MATERIALISE_LIMIT);
+        )
+        .orderBy(asc(expenses.dateIncurred), asc(expenses.id)),
+      LIMITS.invoiceLinesPerInvoice,
+    );
 
-  const [unlinedEntries, unlinedExpenseRows] = await Promise.all([
+  const [unlinedEntryRead, unlinedExpenseRead] = await Promise.all([
     unlinedTimeEntries(),
     unlinedExpenses(),
   ]);
+  if (
+    unlinedEntryRead.type === "overflow" ||
+    unlinedExpenseRead.type === "overflow"
+  ) {
+    return panic(
+      `Invoice ${scope.invoiceId} has more attached entries than an invoice holds lines`,
+    );
+  }
+  const unlinedEntries = unlinedEntryRead.rows;
+  const unlinedExpenseRows = unlinedExpenseRead.rows;
   const missing = unlinedEntries.length + unlinedExpenseRows.length;
   if (missing > LIMITS.invoiceLinesPerInvoice) {
     return panic(
@@ -556,7 +580,7 @@ const materialiseAttachedEntryLines = async (
 };
 
 /**
- * Locks a draft invoice before its lines change and backfills lines for
+ * Locks a never-issued draft before its lines change and backfills lines for
  * entries attached before lines existed (`materialiseAttachedEntryLines`), so
  * the edit and the `recalculateInvoiceTotals` after it see every billed
  * entry. Backfilled lines are totalled at once, so the invoice stays
@@ -571,14 +595,21 @@ const materialiseAttachedEntryLines = async (
  */
 export const lockDraftInvoiceForLines = async (
   tx: Transaction,
-  scope: InvoiceScope,
+  { matterLocks, ...scope }: InvoiceScope & { matterLocks: InvoiceMatterLocks },
   recordAuditEvent: AuditRecorder,
 ) => {
   const invoice = await lockInvoiceInStatus(tx, {
     invoiceId: scope.invoiceId,
     workspaceId: scope.workspaceId,
     status: INVOICE_STATUS.DRAFT,
+    matterLocks,
   });
+  if (invoice) {
+    const refusal = invoiceContentMutationRefusal(invoice);
+    if (refusal) {
+      return Result.err(refusal);
+    }
+  }
   if (
     invoice &&
     (await materialiseAttachedEntryLines(tx, scope, recordAuditEvent)) > 0
@@ -597,6 +628,7 @@ export const lockDraftInvoiceForLines = async (
 };
 
 type InvoiceEntryChangeLockOptions = InvoiceScope & {
+  matterLocks: InvoiceMatterLocks;
   recordAuditEvent: AuditRecorder;
   conflictMessage: string;
 };
@@ -624,20 +656,25 @@ export const requireDraftInvoiceForEntryChanges = async (
 const calculateInvoiceAmounts = (
   lines: readonly LineAmountInput[],
   documentType: InvoiceDocumentType,
-) =>
-  calculateDocumentTotals({
+) => {
+  const calculated = calculateDocumentTotals({
     documentType,
     lines: lines.map(toLineInput),
-  }).mapError(
-    (error) => new HandlerError({ status: 500, message: error.message }),
-  );
+  });
+  if (calculated.isErr()) {
+    return panic(
+      "Stored invoice amounts violate their validated contract",
+      calculated.error,
+    );
+  }
+  return calculated.value;
+};
 
 /** Invoice totals and VAT breakdown over the given lines. */
 const invoiceTotals = (
   lines: readonly LineAmountInput[],
   documentType: InvoiceDocumentType = "invoice",
-): Result<InvoiceTotals, HandlerError> =>
-  calculateInvoiceAmounts(lines, documentType).map(({ totals }) => totals);
+) => calculateInvoiceAmounts(lines, documentType).totals;
 
 type InvoiceForReadTotals = {
   documentType: InvoiceDocumentType;
@@ -739,30 +776,32 @@ type InvoiceForDocumentLines = Omit<InvoiceForReadTotals, "lines"> & {
 export const readInvoiceDocumentLines = (invoice: InvoiceForDocumentLines) => {
   const source = readInvoiceSourceLines(invoice);
   const sign = invoice.documentType === "credit_note" ? -1 : 1;
-  return calculateInvoiceAmounts(source, invoice.documentType).map(
-    ({ lines, totals }) => ({
-      lines: lines.map((line, index) => {
-        const billed =
-          source[index] ?? panic("A calculated line has no source line");
-        return {
-          ...line,
-          quantity: billed.quantity ?? null,
-          unit: billed.unit ?? null,
-          unitPrice:
-            billed.unitPrice === undefined
-              ? null
-              : cents(sign * Math.abs(billed.unitPrice) || 0),
-          timeEntryId: billed.timeEntryId ?? null,
-          expenseId: billed.expenseId ?? null,
-        };
-      }),
-      totals,
-    }),
+  const { lines, totals } = calculateInvoiceAmounts(
+    source,
+    invoice.documentType,
   );
+  return {
+    lines: lines.map((line, index) => {
+      const billed =
+        source[index] ?? panic("A calculated line has no source line");
+      return {
+        ...line,
+        quantity: billed.quantity ?? null,
+        unit: billed.unit ?? null,
+        unitPrice:
+          billed.unitPrice === undefined
+            ? null
+            : cents(sign * Math.abs(billed.unitPrice) || 0),
+        timeEntryId: billed.timeEntryId ?? null,
+        expenseId: billed.expenseId ?? null,
+      };
+    }),
+    totals,
+  };
 };
 
 export const readInvoiceTotals = (invoice: InvoiceForReadTotals) =>
-  readInvoiceAmounts(invoice).map(({ totals }) => totals);
+  readInvoiceAmounts(invoice).totals;
 
 /**
  * Recomputes the invoice's stored totals from all of its lines (a voided
@@ -778,27 +817,9 @@ export const recalculateInvoiceTotals = async (
   now: Date,
   recordAuditEvent: AuditRecorder,
 ): Promise<Result<InvoiceTotals, HandlerError>> => {
-  const billing = await checkInvoiceBillingArrangement(tx, scope);
-  if (billing.isErr()) {
-    return Result.err(billing.error);
-  }
-  const lines = await tx
-    .select({
-      description: invoiceLines.description,
-      netAmount: invoiceLines.netAmount,
-      vatRateBps: invoiceLines.vatRateBps,
-      vatTreatment: invoiceLines.vatTreatment,
-    })
-    .from(invoiceLines)
-    .where(
-      and(
-        eq(invoiceLines.invoiceId, scope.invoiceId),
-        eq(invoiceLines.workspaceId, scope.workspaceId),
-      ),
-    );
   const invoiceScope = and(
     eq(invoices.id, scope.invoiceId),
-    eq(invoices.workspaceId, scope.workspaceId),
+    invoiceInMatter(invoices, scope.workspaceId),
   );
   const [stored] = await tx
     .select({
@@ -812,27 +833,73 @@ export const recalculateInvoiceTotals = async (
     .from(invoices)
     .where(invoiceScope);
   if (!stored) {
-    return panic("The locked invoice disappeared before recalculation");
+    // Removing the final client-invoice line revokes ordinary member RLS
+    // access. Refuse the enclosing transaction before cap reads or writes.
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Removing these lines would make the invoice inaccessible",
+        hint: "Ask an organization owner or administrator to remove the final line.",
+      }),
+    );
   }
+  const matterRead = await readBounded(
+    tx
+      .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, scope.invoiceId)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  if (matterRead.type === "overflow") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Invoice line selection exceeds the invoice limit",
+      }),
+    );
+  }
+  const matterRows = matterRead.rows;
+  const matterIds = [
+    ...new Set([
+      scope.workspaceId,
+      ...matterRows.map((line) => line.workspaceId),
+    ]),
+  ].toSorted();
+  for (const workspaceId of matterIds) {
+    // db-await-in-loop: each included matter has its own billing cap; caller holds ordered matter locks
+    const billing = await checkInvoiceBillingArrangement(tx, {
+      invoiceId: scope.invoiceId,
+      workspaceId,
+    });
+    if (billing.isErr()) {
+      return Result.err(billing.error);
+    }
+  }
+  const lines = await tx
+    .select({
+      description: invoiceLines.description,
+      netAmount: invoiceLines.netAmount,
+      vatRateBps: invoiceLines.vatRateBps,
+      vatTreatment: invoiceLines.vatTreatment,
+    })
+    .from(invoiceLines)
+    .where(and(eq(invoiceLines.invoiceId, scope.invoiceId)));
   const totals = invoiceTotals(lines, stored.documentType);
-  if (totals.isErr()) {
-    return Result.err(totals.error);
-  }
   const valid = await validateInvoiceDocument(tx, {
     invoiceId: scope.invoiceId,
     workspaceId: scope.workspaceId,
     documentType: stored.documentType,
     originalInvoiceId: stored.originalInvoiceId,
     currency: stored.currency,
-    totalAmount: totals.value.grossAmountMinor,
+    totalAmount: totals.grossAmountMinor,
   });
   if (valid.isErr()) {
     return Result.err(valid.error);
   }
   const next = {
-    netAmount: totals.value.netAmountMinor,
-    vatAmount: totals.value.vatAmountMinor,
-    totalAmount: totals.value.grossAmountMinor,
+    netAmount: totals.netAmountMinor,
+    vatAmount: totals.vatAmountMinor,
+    totalAmount: totals.grossAmountMinor,
   };
   await tx
     .update(invoices)
@@ -857,13 +924,19 @@ export const recalculateInvoiceTotals = async (
     workspaceId: scope.workspaceId,
     recordAuditEvent,
   });
-  return Result.ok(totals.value);
+  return Result.ok(totals);
 };
 
 /** Columns an invoice detail read returns for each line. */
 export const INVOICE_LINE_COLUMNS = {
+  workspaceId: true,
   id: true,
   position: true,
+  recordedDescription: true,
+  recordedQuantity: true,
+  recordedUnit: true,
+  recordedUnitPrice: true,
+  recordedNetAmount: true,
   description: true,
   quantity: true,
   unit: true,
@@ -880,11 +953,10 @@ export const INVOICE_LINE_COLUMNS = {
   releasedAt: true,
 } as const;
 
-// Tenant and parent identifiers come from the scoped invoice detail; line
-// persistence timestamps belong to audit bookkeeping, not the document line.
+// Organization and parent identifiers come from the scoped invoice detail;
+// timestamps belong to audit bookkeeping, not the document line.
 const INVOICE_LINE_OMITTED_COLUMNS = [
   "organizationId",
-  "workspaceId",
   "invoiceId",
   "createdAt",
   "updatedAt",

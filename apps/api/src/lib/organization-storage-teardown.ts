@@ -16,6 +16,8 @@ import {
   fields,
   fileComparisonUploads,
   folioCollabRooms,
+  invoiceLines,
+  invoices,
   pendingUploads,
   propertyDependencies,
   styleSets,
@@ -121,6 +123,20 @@ export class WorkspaceStorageTeardownBoundError extends TaggedError(
   message: string;
   workspaceId: SafeId<"workspace">;
 }> {}
+
+export class WorkspaceBillingHistoryError extends TaggedError(
+  "WorkspaceBillingHistoryError",
+)<{
+  message: string;
+  workspaceId: SafeId<"workspace">;
+}> {}
+
+// These rows retain their matter identity and billing snapshots. The same
+// policy drives the deletion fence and the foreign-key coverage census.
+export const WORKSPACE_DELETION_RETAINED_TABLES = [
+  invoices,
+  invoiceLines,
+] as const;
 
 class WorkspaceStorageTeardownStateError extends TaggedError(
   "WorkspaceStorageTeardownStateError",
@@ -909,6 +925,36 @@ export const completeWorkspaceDeletion = async ({
   tx,
   workspaceId,
 }: WorkspaceStorageTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  // The caller holds the matter row lock; concurrent billing inserts cannot
+  // pass their foreign-key check until this transaction completes.
+  const retained = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+        sql`EXISTS (${sql.join(
+          WORKSPACE_DELETION_RETAINED_TABLES.map(
+            (table) => sql`
+            SELECT 1 FROM ${table}
+            WHERE ${table.workspaceId} = ${workspaceId}
+              AND ${table.organizationId} = ${organizationId}
+          `,
+          ),
+          sql` UNION ALL `,
+        )})`,
+      ),
+    )
+    .limit(1);
+  if (retained.length > 0) {
+    throw new WorkspaceBillingHistoryError({
+      message:
+        "This matter has invoice history and cannot be deleted. Archive it to keep its invoices and lines intact.",
+      workspaceId,
+    });
+  }
+
   const teardown = await recordWorkspaceStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),

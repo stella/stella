@@ -98,14 +98,21 @@
       data.labels.total,
     ).map(h => text(size: 7pt, weight: "semibold", fill: muted, upper(h))),
   ),
-  ..data.lines.map(line => (
-    table.cell(colspan: 6, inset: (x: 5pt, top: 6pt, bottom: 2pt), text(size: 8pt, line.description)),
-    [],
-    if line.quantity != none { [#data.labels.quantity: #line.quantity] } else { [] },
-    if line.unitPrice != none { [#data.labels.unitPrice: #line.unitPrice] } else { [] },
-    line.net,
-    [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
-    text(weight: "medium", line.total),
+  ..data.groups.map(group => (
+    table.cell(colspan: 6, fill: tint, text(weight: "semibold", group.workspaceName)),
+    ..group.lines.map(line => (
+      table.cell(colspan: 6, inset: (x: 5pt, top: 6pt, bottom: 2pt), text(size: 8pt, line.description)),
+      [],
+      if line.quantity != none { [#data.labels.quantity: #line.quantity] } else { [] },
+      if line.unitPrice != none { [#data.labels.unitPrice: #line.unitPrice] } else { [] },
+      line.net,
+      [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
+      text(weight: "medium", line.total),
+    )).flatten(),
+    table.cell(colspan: 3, text(weight: "semibold", data.labels.total + ": " + group.workspaceName)),
+    text(weight: "semibold", group.net),
+    text(weight: "semibold", group.vat),
+    text(weight: "semibold", group.total),
   )).flatten(),
 )
 #v(10pt)

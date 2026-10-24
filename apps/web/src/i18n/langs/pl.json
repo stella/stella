@@ -512,6 +512,17 @@
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
+    "clientComposer": {
+      "flatFeeNote": "Sprawy z wynagrodzeniem ryczałtowym rozliczaj na stronie faktur danej sprawy.",
+      "includeMatter": "Uwzględnij {matterName}",
+      "invalidPeriod": "Wybierz datę końcową nie wcześniejszą niż początkowa.",
+      "loadFailed": "Nie udało się wczytać niezafakturowanej pracy. Spróbuj ponownie.",
+      "matterSubtotal": "Suma sprawy z VAT: {amount} · {share} faktury",
+      "periodEnd": "Koniec okresu",
+      "periodStart": "Początek okresu",
+      "title": "Wystaw fakturę klientowi",
+      "visibility": "Ta faktura jest widoczna tylko dla osób z dostępem do wszystkich uwzględnionych spraw i administratorów rozliczeń."
+    },
     "codes": {
       "activity": "Czynność",
       "activityCode": "Kod czynności",
@@ -654,6 +665,11 @@
       "invoiceDate": "Data wystawienia",
       "invoiceDetail": "Szczegóły faktury",
       "invoiceNumber": "Numer faktury",
+      "lineOverrides": {
+        "editedRecorded": "Zmieniono · zapisano: {description}, {quantity} × {rate}",
+        "quantity": "Ilość",
+        "resetRecorded": "Przywróć zapisane wartości"
+      },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
       "markPaid": "Oznacz jako zapłaconą",

@@ -10,6 +10,8 @@ import {
   invoiceLines,
   invoices,
   sellerProfiles,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoices from "@/api/handlers/invoices/export";
@@ -30,6 +32,8 @@ let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
 const sellerId = createSafeId<"sellerProfile">();
 const issuedId = createSafeId<"invoice">();
 const draftId = createSafeId<"invoice">();
+const clientInvoiceId = createSafeId<"invoice">();
+const clientMatterId = createSafeId<"workspace">();
 
 beforeAll(async () => {
   fixture = await getRlsFixture();
@@ -113,10 +117,16 @@ afterAll(async () => {
   const { testDb } = fixture;
   await testDb
     .delete(invoiceLines)
-    .where(inArray(invoiceLines.invoiceId, [issuedId, draftId]));
+    .where(
+      inArray(invoiceLines.invoiceId, [issuedId, draftId, clientInvoiceId]),
+    );
   await testDb
     .delete(invoices)
-    .where(inArray(invoices.id, [issuedId, draftId]));
+    .where(inArray(invoices.id, [issuedId, draftId, clientInvoiceId]));
+  await testDb
+    .delete(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, clientMatterId));
+  await testDb.delete(workspaces).where(eq(workspaces.id, clientMatterId));
   await testDb.delete(sellerProfiles).where(eq(sellerProfiles.id, sellerId));
   await releaseRlsFixture();
 });
@@ -124,12 +134,17 @@ afterAll(async () => {
 type ExportBody = Parameters<typeof exportInvoices.handler>[0]["body"];
 
 const context = (
-  scope: "own" | "neighbour" | "other",
+  scope: "own" | "neighbour" | "other" | "client",
   body: ExportBody,
   auditEvents: AuditEvent[],
 ) => {
   const { testDb, ids } = fixture;
   const scopes = {
+    client: {
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    },
     own: {
       workspaceId: ids.wsA1,
       organizationId: ids.orgA,
@@ -147,6 +162,8 @@ const context = (
     },
   };
   const { workspaceId, organizationId, userId } = scopes[scope];
+  const accessibleWorkspaceIds =
+    scope === "client" ? [workspaceId, clientMatterId] : [workspaceId];
   const recordAuditEvent = async (
     _tx: unknown,
     events: AuditEvent | AuditEvent[],
@@ -154,10 +171,9 @@ const context = (
     auditEvents.push(...(Array.isArray(events) ? events : [events]));
   };
   return asTestRaw<Parameters<typeof exportInvoices.handler>[0]>({
-    getActiveWorkspaceIds: async () => [workspaceId],
-    getAccessibleWorkspaces: async () => [
-      { id: workspaceId, status: "active" },
-    ],
+    getActiveWorkspaceIds: async () => accessibleWorkspaceIds,
+    getAccessibleWorkspaces: async () =>
+      accessibleWorkspaceIds.map((id) => ({ id, status: "active" })),
     getWorkspaceAccess: async () => ({ id: workspaceId, status: "active" }),
     params: { workspaceId },
     query: {},
@@ -173,8 +189,18 @@ const context = (
       headers: { "Accept-Language": "cs" },
     }),
     route: "/test/invoices/export",
-    safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
-    scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
+    safeDb: createSafeDb(
+      testDb,
+      accessibleWorkspaceIds,
+      organizationId,
+      userId,
+    ),
+    scopedDb: createScopedDb(
+      testDb,
+      accessibleWorkspaceIds,
+      organizationId,
+      userId,
+    ),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -270,4 +296,74 @@ describe("invoice export", () => {
       expect(events).toHaveLength(0);
     },
   );
+
+  test("exports a complete client invoice with each line's matter attribution", async () => {
+    const { testDb, ids } = fixture;
+    await testDb.insert(workspaces).values({
+      id: clientMatterId,
+      organizationId: ids.orgA,
+      clientId: ids.contactA,
+      name: "Client second matter",
+      reference: "REF-CLIENT-2",
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: clientMatterId,
+      userId: ids.userA1,
+    });
+    await testDb.insert(invoices).values({
+      id: clientInvoiceId,
+      organizationId: ids.orgA,
+      clientId: ids.contactA,
+      workspaceId: null,
+      invoiceNumber: "20260017",
+      invoiceDate: "2026-10-01",
+      currency: "CZK",
+      sellerProfileId: sellerId,
+      buyerName: "Invoice buyer",
+      status: INVOICE_STATUS.FINALIZED,
+      netAmount: cents(200),
+      vatAmount: cents(0),
+      totalAmount: cents(200),
+    });
+    await testDb.insert(invoiceLines).values(
+      [ids.wsA1, clientMatterId].map((workspaceId, position) => ({
+        organizationId: ids.orgA,
+        workspaceId,
+        invoiceId: clientInvoiceId,
+        position,
+        description: `Work ${position}`,
+        quantity: "1",
+        unitPrice: cents(100),
+        vatRateBps: 0,
+        vatTreatment: "not_vat_payer" as const,
+        netAmount: cents(100),
+        vatAmount: cents(0),
+        grossAmount: cents(100),
+        source: INVOICE_LINE_SOURCE.MANUAL,
+      })),
+    );
+    const { handler, writes } = capturingExport();
+    const response = await handler.handler(
+      context(
+        "client",
+        { format: "ledes_1998b", invoiceIds: [clientInvoiceId] },
+        [],
+      ),
+    );
+    expect(response).toMatchObject({
+      fileName: "invoice-20260017-ledes-1998b.txt",
+    });
+    const rows = writtenText(writes.at(0)?.data)
+      .trimEnd()
+      .split("\r\n")
+      .slice(2)
+      .map((row) => row.split("|"));
+    expect(rows.map((row) => row.at(3))).toEqual(["REF-A1", "REF-CLIENT-2"]);
+    expect(rows.map((row) => row.at(4))).toEqual(["2.00", "2.00"]);
+    const all = capturingExport();
+    await all.handler.handler(context("client", { format: "ledes_1998b" }, []));
+    expect(writtenText(all.writes.at(0)?.data)).toContain("|20260017|");
+  });
 });

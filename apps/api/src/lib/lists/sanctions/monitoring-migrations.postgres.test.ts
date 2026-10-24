@@ -69,6 +69,24 @@ const withCommittedMonitoring = async (
         await tx.execute(
           sql`DROP TABLE public.sanctions_edition_fanouts, public.sanctions_monitoring_backfills, public.sanctions_contact_marks, public.sanctions_organization_marks, public.sanctions_screening_events, public.sanctions_contact_matches, public.sanctions_contact_screenings`,
         );
+        // Later migrations reference this key; set their foreign keys aside so
+        // the replay starts from the pre-monitoring shape, then restore them.
+        const dependentForeignKeys = await tx.execute<{
+          tableName: string;
+          name: string;
+          definition: string;
+        }>(sql`
+          SELECT conrelid::regclass::text AS "tableName", conname AS name,
+            pg_catalog.pg_get_constraintdef(oid) AS definition
+          FROM pg_catalog.pg_constraint
+          WHERE contype = 'f' AND conindid = 'public.contacts_org_id_unique'::regclass
+          ORDER BY conrelid::regclass::text, conname
+        `);
+        for (const { tableName, name } of dependentForeignKeys) {
+          await tx.execute(
+            sql`ALTER TABLE ${sql.raw(tableName)} DROP CONSTRAINT ${sql.identifier(name)}`,
+          );
+        }
         await tx.execute(
           sql`ALTER TABLE public.contacts DROP COLUMN sanctions_monitoring_mode, DROP CONSTRAINT contacts_org_id_unique`,
         );
@@ -81,6 +99,11 @@ const withCommittedMonitoring = async (
           sql`CREATE UNIQUE INDEX contacts_org_id_unique ON public.contacts (organization_id, id)`,
         );
         await applyMigration(tx, "20261003122800_sanctions_monitoring");
+        for (const { tableName, name, definition } of dependentForeignKeys) {
+          await tx.execute(
+            sql`ALTER TABLE ${sql.raw(tableName)} ADD CONSTRAINT ${sql.identifier(name)} ${sql.raw(definition)}`,
+          );
+        }
         await tx.execute(
           sql.raw(`CREATE ROLE ${OWNER} NOLOGIN NOSUPERUSER NOBYPASSRLS`),
         );
