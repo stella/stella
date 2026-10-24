@@ -965,3 +965,47 @@ test("a failed file annotation cannot inject workflow commands through its name"
   expect(annotation.split("\n")).toHaveLength(1);
   expect(annotation).not.toContain("\n::warning::");
 });
+
+test("a failing gate names each failing test with its first assertion line", async () => {
+  let trial = 0;
+  const report = await executeGate({
+    targets: [
+      targetFor("/fixture", "a.test.ts"),
+      targetFor("/fixture", "b.test.ts"),
+    ],
+    skipped: [],
+    run: async ({ target }) => {
+      trial += 1;
+      if (target.file.endsWith("b.test.ts")) {
+        return {
+          type: "executed",
+          passed: false,
+          status: 134,
+          ranTests: false,
+          failedTests: [],
+          failureDetails: [],
+        };
+      }
+      return {
+        type: "executed",
+        passed: false,
+        status: 1,
+        ranTests: true,
+        failedTests: ["math > adds"],
+        failureDetails: [
+          {
+            name: "math > adds",
+            detail:
+              trial === 1 ? "Expected: 2 Received: 3" : "later trial line",
+          },
+        ],
+      };
+    },
+  });
+  const markdown = renderReport(report);
+  expect(markdown).toContain("math > adds: Expected: 2 Received: 3");
+  expect(markdown).not.toContain("later trial line");
+  expect(markdown).toContain(
+    "a trial failed with exit status 134 and named no test",
+  );
+});
