@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
@@ -6,7 +6,9 @@ import { randomBytes } from "node:crypto";
 import { session } from "@/api/db/auth-schema";
 import { revokeUserSessionById } from "@/api/lib/auth-artifacts";
 import {
+  isPendingRotation,
   SESSION_ABSOLUTE_AGE_MS,
+  SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS,
   SESSION_PRIOR_TOKEN_RECOVERY_MS,
 } from "@/api/lib/auth/session-lifetime";
 import type { SessionLifetimeStore } from "@/api/lib/auth/session-lifetime";
@@ -81,7 +83,11 @@ export const createDatabaseSessionLifetimeStore = (
       );
       // Internal SDK calls can use the resolved token before the client has it.
       const confirmsRotation =
-        current.token === presentedToken && current.priorTokenHash !== null;
+        current.token === presentedToken &&
+        isPendingRotation(current.priorTokenExpiresAt, now);
+      const confirmedGraceEnd = new Date(
+        now.getTime() + SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS,
+      );
       if (
         !confirmsRotation &&
         current.lastSeenAt !== null &&
@@ -98,7 +104,9 @@ export const createDatabaseSessionLifetimeStore = (
         .update(session)
         .set({
           ...(confirmsRotation
-            ? { priorTokenHash: null, priorTokenExpiresAt: null }
+            ? {
+                priorTokenExpiresAt: sql`LEAST(${session.priorTokenExpiresAt}, ${confirmedGraceEnd}::timestamptz)`,
+              }
             : {}),
           lastSeenAt: sql`GREATEST(${session.lastSeenAt}, ${now}::timestamptz)`,
           updatedAt: session.updatedAt,
@@ -108,7 +116,10 @@ export const createDatabaseSessionLifetimeStore = (
             credentialPredicate({ token, now }),
             liveSessionPredicate(now),
             confirmsRotation
-              ? and(eq(session.token, token), isNotNull(session.priorTokenHash))
+              ? and(
+                  eq(session.token, token),
+                  sql`${session.priorTokenExpiresAt} > ${confirmedGraceEnd}::timestamptz`,
+                )
               : staleActivity,
           ),
         )

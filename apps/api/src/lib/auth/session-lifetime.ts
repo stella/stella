@@ -26,6 +26,29 @@ import {
 export { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 
 export const SESSION_PRIOR_TOKEN_RECOVERY_MS = 10 * 60 * 1000;
+// Requests already in flight with the old cookie when the replacement is first
+// presented keep working this long; their refusal would delete the new cookie.
+export const SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS = 60 * 1000;
+
+/**
+ * A rotation stays pending until the replacement is first presented, which
+ * shortens the prior credential's window to the confirmed grace.
+ */
+export const isPendingRotation = (
+  priorTokenExpiresAt: unknown,
+  now: Date,
+): boolean => {
+  const expiresAt =
+    priorTokenExpiresAt instanceof Date ||
+    typeof priorTokenExpiresAt === "string"
+      ? new Date(priorTokenExpiresAt)
+      : null;
+  return (
+    expiresAt !== null &&
+    expiresAt.getTime() > now.getTime() + SESSION_PRIOR_TOKEN_CONFIRMED_GRACE_MS
+  );
+};
+
 // Synthetic and handoff sessions resolve storage on every read, and a pending
 // rotation needs one storage read before its snapshot is reusable; ordinary
 // snapshots retain their cache.
@@ -34,7 +57,7 @@ const cookieCacheVersion = (
 ) => {
   if (
     session.id.startsWith(SYNTHETIC_SESSION_PREFIX) ||
-    typeof session["priorTokenHash"] === "string"
+    isPendingRotation(session["priorTokenExpiresAt"], new Date())
   ) {
     return Bun.randomUUIDv7();
   }

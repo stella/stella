@@ -803,6 +803,11 @@ describe("native authentication session responses", () => {
     expect(
       await (await fixture.requestSession({ requestCookie: newCookie })).json(),
     ).toMatchObject({ session: { id: fixture.original.id } });
+    // A request still in flight with the old cookie keeps working briefly.
+    expect(
+      await (await fixture.requestSession({ disableCookieCache: true })).json(),
+    ).toMatchObject({ session: { id: fixture.original.id } });
+    fixture.advance(60_001);
     expect(
       await (await fixture.requestSession({ disableCookieCache: true })).json(),
     ).toBeNull();
@@ -884,6 +889,14 @@ describe("native authentication session responses", () => {
     expect(await confirmed.json()).toMatchObject({
       session: { token: current.token },
     });
+    // Old-cookie requests already in flight survive the confirmation briefly.
+    const inFlightAfterConfirm = await fixture.requestSession({
+      disableCookieCache: true,
+    });
+    expect(await inFlightAfterConfirm.json()).toMatchObject({
+      session: { token: current.token },
+    });
+    fixture.advance(60_001);
     const stale = await fixture.requestSession({ disableCookieCache: true });
     expect(await stale.json()).toBeNull();
     fixture.advance(1);
