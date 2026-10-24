@@ -90,6 +90,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "documentFetchAttemptedAt",
   "documentFetchAttempts",
   "sourceHash",
+  "sourceHashVersion",
   "sourceObservedAt",
   "sourceObservationOrder",
   "sourceObservationHash",
