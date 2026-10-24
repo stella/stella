@@ -489,14 +489,15 @@ export const runGatedTableWork = async ({
       const backend = (
         await connection.query("SELECT pg_backend_pid() AS pid")
       ).at(0);
-      if (!isRecord(backend) || typeof backend["pid"] !== "number") {
+      const pid = isRecord(backend) ? backend["pid"] : null;
+      if (typeof pid !== "number") {
         panic("Invalid migration backend pid response");
       }
       const attempt = await Result.tryPromise({
         try: async () =>
           await observeMigrationLockAttempt({
             observer,
-            pid: backend["pid"],
+            pid,
             phase: "online",
             step: target.name,
             table: target.tableName,
@@ -582,7 +583,9 @@ export const createUngatedTableGateForTests = (
   lockRetry?: GatedTableWorkOptions["lockRetry"],
 ): OnlineTableGate => ({
   run: async ({ target, work }) => {
-    await work(sessionOn(connection, target, lockRetry));
+    await work(
+      sessionOn({ connection, target, lockRetry, onRetry: () => undefined }),
+    );
     return { type: "complete" };
   },
 });

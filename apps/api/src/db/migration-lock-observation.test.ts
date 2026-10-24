@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -49,6 +51,41 @@ describe("migration query fingerprints", () => {
       ),
     ).toBe("select ? from probe");
   });
+});
+
+test("fingerprints discard every PostgreSQL Unicode dollar-quote tag", () => {
+  const nonAscii = fc
+    .oneof(
+      fc.integer({ min: 0x80, max: 0xd7_ff }),
+      fc.integer({ min: 0xe0_00, max: 0x10_ff_ff }),
+    )
+    .map((codePoint) => String.fromCodePoint(codePoint));
+  const tag = fc
+    .tuple(
+      nonAscii,
+      fc.array(fc.oneof(nonAscii, fc.constantFrom("a", "Z", "_", "0", "9")), {
+        maxLength: 8,
+      }),
+    )
+    .map(([first, rest]) => first + rest.join(""));
+  assertProperty(
+    "fingerprints discard every PostgreSQL Unicode dollar-quote tag",
+    fc.property(tag, (delimiter) => {
+      expect(
+        migrationQueryFingerprint(
+          `SELECT $${delimiter}$SensitiveValue ' /* body */ $${delimiter}$`,
+        ),
+      ).toBe("select ?");
+    }),
+    { numRuns: 200 },
+  );
+  for (const delimiter of ["täg", "tag\u0301", "😀", "العربية", "_tag9"]) {
+    expect(
+      migrationQueryFingerprint(
+        `SELECT $${delimiter}$SensitiveValue$${delimiter}$`,
+      ),
+    ).toBe("select ?");
+  }
 });
 
 test("a deferred online attempt and a failed schema attempt each emit one terminal event with retries spent", async () => {

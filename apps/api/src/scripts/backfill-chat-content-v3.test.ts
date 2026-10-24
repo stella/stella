@@ -15,7 +15,10 @@ test("a terminated repair session preserves the original failure", async () => {
         throw new Error("connection closed");
       }
     },
-    query: async () => [],
+    query: async (query) => {
+      statements.push(query);
+      return [{ acquired: true }];
+    },
     release: () => undefined,
     terminate: async () => undefined,
   };
@@ -29,5 +32,5 @@ test("a terminated repair session preserves the original failure", async () => {
 
   expect(result).toBe(failure);
   expect(statements).toHaveLength(1);
-  expect(statements.at(0)).toContain("pg_advisory_lock");
+  expect(statements.at(0)).toContain("pg_try_advisory_lock");
 });

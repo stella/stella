@@ -42,7 +42,12 @@ export const migrationQueryFingerprint = (query: string): string => {
       tokens.push(" ");
       continue;
     }
-    const dollar = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/u.exec(rest)?.at(0);
+    // PostgreSQL's lexer accepts every non-ASCII byte in dollar-quote tags,
+    // including combining marks and astral characters encoded as UTF-8.
+    const dollar =
+      /^\$(?:[A-Za-z_\u0080-\u{10FFFF}][A-Za-z0-9_\u0080-\u{10FFFF}]*)?\$/u
+        .exec(rest)
+        ?.at(0);
     if (dollar !== undefined) {
       const end = query.indexOf(dollar, offset + dollar.length);
       offset = end === -1 ? query.length : end + dollar.length;
