@@ -93,7 +93,12 @@ for arg in "$@"; do
   esac
 done
 printf '%s\\n' "$endpoint" >> "$FIXTURES.requests"
-jq -ce --arg key "$endpoint" '.[$key]' "$FIXTURES" || {
+# A {"sequence": [...]} fixture answers its nth request with its nth entry
+# (the last one from then on).
+count=$(grep -cxF -- "$endpoint" "$FIXTURES.requests")
+jq -ce --arg key "$endpoint" --argjson n "$count" '.[$key]
+  | if type == "object" and has("sequence")
+    then .sequence[([$n, (.sequence | length)] | min) - 1] else . end' "$FIXTURES" || {
   echo "unexpected request: $endpoint" >&2
   exit 1
 }
@@ -529,9 +534,11 @@ const rerunScript = rerunStep.run;
 type LaterRun = {
   id: number;
   plan?: string;
-  status?: string;
-  // The conclusion of its ci-result; null when it has no ci-result job.
+  // The conclusion its ci-result reports; null when it has no ci-result job.
   conclusion?: string | null;
+  // Its ci-result is still running: deciding = waiting on the code run;
+  // finishing = decided, with steps left before the run completes.
+  state?: "deciding" | "finishing";
   pr?: number;
 };
 const rerunMirrors = (
@@ -552,10 +559,10 @@ const rerunMirrors = (
             // An older metadata run never mirrors this run.
             { id: RUN - 5 },
             ...later,
-          ].map(({ id, status = "completed", pr = PR }: LaterRun) => ({
+          ].map(({ id, state, pr = PR }: LaterRun) => ({
             id,
             head_sha: HEAD,
-            status,
+            status: state === undefined ? "completed" : "in_progress",
             pull_requests: [{ number: pr }],
           })),
         },
@@ -565,17 +572,38 @@ const rerunMirrors = (
     id,
     plan = "ci-metadata-plan",
     conclusion = "failure",
+    state,
   } of later) {
-    fixtures[`repos/${REPO}/actions/runs/${id}/jobs?per_page=100`] = [
-      {
-        jobs: [
-          { name: plan, id: id * 10 },
-          ...(conclusion === null
-            ? []
-            : [{ name: "ci-result", id: id * 10 + 1, conclusion }]),
-        ],
-      },
+    const jobs = (results: Record<string, unknown>[]) => [
+      { jobs: [{ name: plan, id: id * 10 }, ...results] },
     ];
+    const ciResult = (
+      status: string,
+      evaluated: string,
+      reported: string | null,
+    ) => ({
+      name: "ci-result",
+      id: id * 10 + 1,
+      status,
+      conclusion: reported,
+      steps: [{ name: "Evaluate CI outcome", status: evaluated }],
+    });
+    const done = jobs(
+      conclusion === null
+        ? []
+        : [ciResult("completed", "completed", conclusion)],
+    );
+    const jobsKey = `repos/${REPO}/actions/runs/${id}/jobs?per_page=100`;
+    fixtures[jobsKey] = done;
+    if (state === "deciding") {
+      fixtures[jobsKey] = jobs([ciResult("in_progress", "in_progress", null)]);
+    }
+    if (state === "finishing") {
+      fixtures[jobsKey] = {
+        sequence: [jobs([ciResult("in_progress", "completed", null)]), done],
+      };
+      fixtures[`repos/${REPO}/actions/runs/${id}`] = { status: "completed" };
+    }
     if (!rerunFails) {
       fixtures[`repos/${REPO}/actions/jobs/${id * 10 + 1}/rerun`] = {};
     }
@@ -600,13 +628,14 @@ const rerunMirrors = (
       },
     },
   );
-  const reruns = readFileSync(`${fixtureFile}.requests`, "utf-8")
-    .split("\n")
-    .filter((entry) => entry.endsWith("/rerun"));
+  const requests = readFileSync(`${fixtureFile}.requests`, "utf-8").split("\n");
   return {
     exitCode: child.exitCode,
     log: child.stdout.toString() + child.stderr.toString(),
-    reran: reruns.map((entry) => Number(entry.split("/").at(-2))),
+    requests,
+    reran: requests
+      .filter((entry) => entry.endsWith("/rerun"))
+      .map((entry) => Number(entry.split("/").at(-2))),
   };
 };
 
@@ -618,8 +647,8 @@ test("a re-run attempt re-runs only the metadata runs that copied another verdic
     { id: RUN + 2, conclusion: "success" },
     // A newer code run reports its own verdict.
     { id: RUN + 3, plan: "ci-plan" },
-    // Still running, so it reads the latest attempt itself.
-    { id: RUN + 4, status: "in_progress" },
+    // Still waiting on this run, so it reads the latest attempt itself.
+    { id: RUN + 4, state: "deciding" },
     // Another pull request at the same head.
     { id: RUN + 5, pr: PR + 1 },
     // A metadata run without a ci-result job.
@@ -627,6 +656,21 @@ test("a re-run attempt re-runs only the metadata runs that copied another verdic
   ]);
   expect(run.exitCode, run.log).toBe(0);
   expect(run.reran).toEqual([(RUN + 1) * 10 + 1]);
+  // A deciding mirror is never waited on: it waits on this run.
+  expect(run.requests).not.toContain(`repos/${REPO}/actions/runs/${RUN + 4}`);
+});
+
+test("a metadata run that decided but has not completed is re-run once it completes", () => {
+  const run = rerunMirrors("success", [{ id: RUN + 1, state: "finishing" }]);
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.reran).toEqual([(RUN + 1) * 10 + 1]);
+  // The re-run comes only after the run reported completed.
+  const statusRead = run.requests.indexOf(
+    `repos/${REPO}/actions/runs/${RUN + 1}`,
+  );
+  const rerun = run.requests.findIndex((entry) => entry.endsWith("/rerun"));
+  expect(statusRead).toBeGreaterThanOrEqual(0);
+  expect(statusRead).toBeLessThan(rerun);
 });
 
 test("a failed re-run attempt re-runs a metadata run that copied a success", () => {
