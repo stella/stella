@@ -226,6 +226,11 @@ const scanFile = (
       jsx: "preserve",
       reactCompiler: {
         ...REACT_COMPILER_OPTIONS,
+        // Production builds keep `panicThreshold: "none"` so a bailout ships
+        // the uncompiled function instead of failing the build. Since
+        // oxc-transform-react 0.148 that threshold also drops every bailout
+        // diagnostic from lint output, which left this guard reporting none.
+        panicThreshold: "all_errors",
         outputMode: "lint",
       },
     });
@@ -238,7 +243,9 @@ const scanFile = (
         error.message,
       );
     }
-    if (result.fatal) {
+    // Under `all_errors` every diagnostic above also marks the transform
+    // fatal; only a fatal result with no diagnostic is a bailout of its own.
+    if (result.fatal && result.errors.length === 0) {
       addBailout(bailouts, file, code, undefined, "fatal transform");
     }
   } catch (error: unknown) {
@@ -434,6 +441,11 @@ const run = (): number => {
     mode = "write";
   } else if (process.argv.includes("--check")) {
     mode = "check";
+  }
+  // A compiler upgrade can stop reporting bailouts without failing the scan,
+  // which reads as "no bailouts". Prove detection before trusting a result.
+  if (mode !== "report" && runSelfTest() !== 0) {
+    return 1;
   }
   const files = [
     ...new Bun.Glob("apps/web/src/**/*.{ts,tsx}").scanSync("."),
