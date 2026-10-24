@@ -67,7 +67,7 @@ const navigationViolations = async (filePath: string): Promise<string[]> => {
         violations.push(
           `${repoRelativePath(E2E_ROOT, filePath)}:${line + 1} uses ${
             node.expression.name.text
-          } without waitUntil: "commit" or "domcontentloaded"`,
+          } without waitUntil: "commit" or "domcontentloaded"; name one of them, then wait for the UI that makes the route ready instead of the load event`,
         );
       }
     }
