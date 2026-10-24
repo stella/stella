@@ -1405,7 +1405,10 @@ test("code-quality pool preserves every moved check exactly once", () => {
   const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
 
   expect(pooled.map(({ name }) => name)).toEqual(movedNames);
-  expect(pooled.map(withoutPoolMetadata)).toEqual(originals);
+  // A merge base may already carry the pool; normalize both sides alike.
+  expect(pooled.map(withoutPoolMetadata)).toEqual(
+    originals.map(withoutPoolMetadata),
+  );
 });
 
 // A migration-shape test that reads the old shape from the merge base fails
