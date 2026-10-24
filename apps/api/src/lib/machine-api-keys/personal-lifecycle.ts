@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/api-keys/mint";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { holdLiveSessionCredentialFence } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -63,6 +64,15 @@ type Principal = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };
+/**
+ * Issuing a key needs the caller's session to be live under the account's
+ * credential fence, so an access reset cannot miss a key minted concurrently.
+ * Revocation and policy changes only manage existing keys.
+ */
+type KeyMutationAuthority =
+  | { type: "issue"; sessionId: string }
+  | { type: "manage" };
+const MANAGE = { type: "manage" } as const satisfies KeyMutationAuthority;
 type MutationOptions = Principal & {
   recordAuditEvent: AuditRecorder;
   database?: Pick<typeof rootDb, "transaction" | "select">;
@@ -71,7 +81,7 @@ type MutationOptions = Principal & {
 // The auth table denies scoped-role access. These owner-level operations always
 // retain the organization and owner predicates; the role is rechecked under lock.
 const mutatePersonalKeys = async <T>(
-  options: MutationOptions,
+  options: MutationOptions & { authority: KeyMutationAuthority },
   run: (context: {
     tx: Transaction;
     memberRole: AuthorizedMemberRole;
@@ -80,7 +90,22 @@ const mutatePersonalKeys = async <T>(
   Result.tryPromise({
     try: async () =>
       (options.database ?? rootDb).transaction(async (tx) => {
-        // All mint/rotate/policy changes take this lock first. The active limit and
+        // The account fence ranks before the organization row.
+        if (
+          options.authority.type === "issue" &&
+          !(await holdLiveSessionCredentialFence(tx, {
+            userId: options.userId,
+            sessionId: options.authority.sessionId,
+          }))
+        ) {
+          return abortTransaction(
+            new HandlerError({
+              status: 401,
+              message: "Sign in again to create an API key",
+            }),
+          );
+        }
+        // All mint/rotate/policy changes take this lock next. The active limit and
         // policy decision therefore serialize across processes, including first use.
         const [org] = await tx
           .select({ id: organization.id })
@@ -128,6 +153,7 @@ export const readPersonalApiKeyPolicy = async (
 };
 
 type MintPersonalKeyOptions = MutationOptions & {
+  sessionId: string;
   name: string;
   scopes?: PersonalApiKeyScope[] | undefined;
   expiresInDays?: number | undefined;
@@ -259,8 +285,9 @@ const mintPersonalKey = async (
 };
 
 export const createPersonalApiKey = async (options: MintPersonalKeyOptions) =>
-  mutatePersonalKeys(options, async ({ tx, memberRole }) =>
-    mintPersonalKey(tx, { options, memberRole }),
+  mutatePersonalKeys(
+    { ...options, authority: { type: "issue", sessionId: options.sessionId } },
+    async ({ tx, memberRole }) => mintPersonalKey(tx, { options, memberRole }),
   );
 
 type KeyOptions = MutationOptions & { keyId: string };
@@ -302,139 +329,160 @@ const loadPersonalKey = async (
 export const revokePersonalApiKey = async (
   options: KeyOptions & { access: "own" | "organization" },
 ) =>
-  mutatePersonalKeys(options, async ({ tx, memberRole }) => {
-    if (
-      options.access === "organization" &&
-      !hasMemberPermission(memberRole, { organizationSettings: ["update"] })
-    ) {
-      return abortTransaction(
-        new HandlerError({
-          status: 403,
-          message: "Organization administrator access required",
-        }),
-      );
-    }
-    const key = await loadPersonalKeyRow(tx, options);
-    if (key.enabled) {
+  mutatePersonalKeys(
+    { ...options, authority: MANAGE },
+    async ({ tx, memberRole }) => {
+      if (
+        options.access === "organization" &&
+        !hasMemberPermission(memberRole, { organizationSettings: ["update"] })
+      ) {
+        return abortTransaction(
+          new HandlerError({
+            status: 403,
+            message: "Organization administrator access required",
+          }),
+        );
+      }
+      const key = await loadPersonalKeyRow(tx, options);
+      if (key.enabled) {
+        await tx
+          .update(apikey)
+          .set({ enabled: false, updatedAt: new Date() })
+          .where(
+            and(personalScope(options.organizationId), eq(apikey.id, key.id)),
+          );
+        await options.recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+          resourceId: key.id,
+          metadata: {
+            name: key.name,
+            reason: "revoked",
+            ownerUserId: key.referenceId,
+          },
+        });
+      }
+      return { id: key.id, revoked: true };
+    },
+  );
+
+export const rotatePersonalApiKey = async (
+  options: KeyOptions & {
+    sessionId: string;
+    expiresInDays?: number | undefined;
+  },
+) =>
+  mutatePersonalKeys(
+    { ...options, authority: { type: "issue", sessionId: options.sessionId } },
+    async ({ tx, memberRole }) => {
+      const key = await loadPersonalKey(tx, { ...options, access: "own" });
+      if (
+        !key.enabled ||
+        key.expiresAt === null ||
+        key.expiresAt <= new Date()
+      ) {
+        return abortTransaction(
+          new HandlerError({
+            status: 409,
+            message: "API key is revoked or expired",
+          }),
+        );
+      }
+      // Disable inside this transaction before reserving the replacement slot.
+      // A failed mint or audit rolls both operations back.
       await tx
         .update(apikey)
         .set({ enabled: false, updatedAt: new Date() })
         .where(
           and(personalScope(options.organizationId), eq(apikey.id, key.id)),
         );
+      const replacement = await mintPersonalKey(tx, {
+        options: {
+          ...options,
+          name: key.name,
+          scopes: key.scopes,
+          audience: key.audience,
+          permissionCeiling: key.permissions,
+        },
+        memberRole,
+      });
       await options.recordAuditEvent(tx, {
         action: AUDIT_ACTION.DELETE,
         resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
         resourceId: key.id,
-        metadata: {
-          name: key.name,
-          reason: "revoked",
-          ownerUserId: key.referenceId,
-        },
+        metadata: { reason: "rotated", replacementId: replacement.id },
       });
-    }
-    return { id: key.id, revoked: true };
-  });
-
-export const rotatePersonalApiKey = async (
-  options: KeyOptions & { expiresInDays?: number | undefined },
-) =>
-  mutatePersonalKeys(options, async ({ tx, memberRole }) => {
-    const key = await loadPersonalKey(tx, { ...options, access: "own" });
-    if (!key.enabled || key.expiresAt === null || key.expiresAt <= new Date()) {
-      return abortTransaction(
-        new HandlerError({
-          status: 409,
-          message: "API key is revoked or expired",
-        }),
-      );
-    }
-    // Disable inside this transaction before reserving the replacement slot.
-    // A failed mint or audit rolls both operations back.
-    await tx
-      .update(apikey)
-      .set({ enabled: false, updatedAt: new Date() })
-      .where(and(personalScope(options.organizationId), eq(apikey.id, key.id)));
-    const replacement = await mintPersonalKey(tx, {
-      options: {
-        ...options,
-        name: key.name,
-        scopes: key.scopes,
-        audience: key.audience,
-        permissionCeiling: key.permissions,
-      },
-      memberRole,
-    });
-    await options.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.DELETE,
-      resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
-      resourceId: key.id,
-      metadata: { reason: "rotated", replacementId: replacement.id },
-    });
-    return replacement;
-  });
+      return replacement;
+    },
+  );
 
 export const updatePersonalApiKeyPolicy = async (
   options: MutationOptions & {
     policy: (typeof PERSONAL_API_KEY_POLICIES)[number];
   },
 ) =>
-  mutatePersonalKeys(options, async ({ tx, memberRole }) => {
-    if (
-      !hasMemberPermission(memberRole, { organizationSettings: ["update"] })
-    ) {
-      return abortTransaction(
-        new HandlerError({
-          status: 403,
-          message: "Organization administrator access required",
-        }),
-      );
-    }
-    if (options.policy === "disabled") {
-      const revoked = await tx
-        .update(apikey)
-        .set({ enabled: false, updatedAt: new Date() })
-        .where(
-          and(personalScope(options.organizationId), eq(apikey.enabled, true)),
-        )
-        .returning({ id: apikey.id, ownerUserId: apikey.referenceId });
-      if (revoked.length > 0) {
-        await options.recordAuditEvent(
-          tx,
-          revoked.map((key) => ({
-            action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
-            resourceId: key.id,
-            metadata: {
-              reason: "policy_disabled",
-              ownerUserId: key.ownerUserId,
-            },
-          })),
+  mutatePersonalKeys(
+    { ...options, authority: MANAGE },
+    async ({ tx, memberRole }) => {
+      if (
+        !hasMemberPermission(memberRole, { organizationSettings: ["update"] })
+      ) {
+        return abortTransaction(
+          new HandlerError({
+            status: 403,
+            message: "Organization administrator access required",
+          }),
         );
       }
-    }
-    await tx
-      .insert(organizationSettings)
-      .values({
-        id: createSafeId<"organizationSettings">(),
-        organizationId: options.organizationId,
-        personalApiKeyPolicy: options.policy,
-      })
-      .onConflictDoUpdate({
-        target: organizationSettings.organizationId,
-        set: {
+      if (options.policy === "disabled") {
+        const revoked = await tx
+          .update(apikey)
+          .set({ enabled: false, updatedAt: new Date() })
+          .where(
+            and(
+              personalScope(options.organizationId),
+              eq(apikey.enabled, true),
+            ),
+          )
+          .returning({ id: apikey.id, ownerUserId: apikey.referenceId });
+        if (revoked.length > 0) {
+          await options.recordAuditEvent(
+            tx,
+            revoked.map((key) => ({
+              action: AUDIT_ACTION.DELETE,
+              resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+              resourceId: key.id,
+              metadata: {
+                reason: "policy_disabled",
+                ownerUserId: key.ownerUserId,
+              },
+            })),
+          );
+        }
+      }
+      await tx
+        .insert(organizationSettings)
+        .values({
+          id: createSafeId<"organizationSettings">(),
+          organizationId: options.organizationId,
           personalApiKeyPolicy: options.policy,
-          updatedAt: new Date(),
-        },
+        })
+        .onConflictDoUpdate({
+          target: organizationSettings.organizationId,
+          set: {
+            personalApiKeyPolicy: options.policy,
+            updatedAt: new Date(),
+          },
+        });
+      await options.recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: options.organizationId,
+        metadata: { personalApiKeyPolicy: options.policy },
       });
-    await options.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-      resourceId: options.organizationId,
-      metadata: { personalApiKeyPolicy: options.policy },
-    });
-    return { policy: options.policy };
-  });
+      return { policy: options.policy };
+    },
+  );
 
 type ListPersonalKeysOptions = Principal & {
   access: "own" | "organization";

@@ -90,6 +90,7 @@ type CreateCollabServerBaseOptions = {
   maxDebounceMs?: number;
   port: number;
   roomHeartbeatIntervalMs?: number;
+  roomActivityHeartbeatIntervalMs?: number;
   shutdownDrainTimeoutMs?: number;
   snapshotStoreRetryBaseDelayMs?: number;
   snapshotStoreRetryMaxDelayMs?: number;
@@ -144,8 +145,12 @@ const storeSnapshotResponseSchema = v.strictObject({
   storedAt: v.string(),
 });
 
+// An API task of the previous release ignores `includeCanEdit` and omits
+// `canEdit`; the permission then stays as the last authentication or token
+// refresh observed it.
 const heartbeatResponseSchema = v.strictObject({
   activeAt: v.string(),
+  canEdit: v.optional(v.boolean()),
 });
 
 const flushRequestSchema = v.pipe(
@@ -210,6 +215,12 @@ class CollabSnapshotRoomRetiredError extends TaggedError(
 
 class CollabSnapshotPendingError extends TaggedError(
   "CollabSnapshotPendingError",
+)<{
+  message: string;
+}> {}
+
+class CollabPermissionChangedError extends TaggedError(
+  "CollabPermissionChangedError",
 )<{
   message: string;
 }> {}
@@ -368,7 +379,9 @@ export const createCollabServer = async (
     hostname = "0.0.0.0",
     maxDebounceMs = 10_000,
     port,
-    roomHeartbeatIntervalMs = ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
+    roomActivityHeartbeatIntervalMs,
+    roomHeartbeatIntervalMs = roomActivityHeartbeatIntervalMs ??
+      ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
     serviceToken,
     shutdownDrainTimeoutMs = SHUTDOWN_DRAIN_TIMEOUT_MS,
     snapshotStoreRetryBaseDelayMs = SNAPSHOT_STORE_RETRY_BASE_DELAY_MS,
@@ -712,6 +725,14 @@ export const createCollabServer = async (
       if (existing.token !== token) {
         existing.refreshInFlight = null;
       }
+      // Sockets already in the room were admitted under the previous
+      // permission; the shared state must not adopt the new one silently.
+      const requiresReconnect =
+        existing.activeConnections > 0 &&
+        (existing.canEdit !== canEdit || existing.generation !== generation);
+      if (requiresReconnect) {
+        hocuspocus.closeConnections(existing.roomName);
+      }
       existing.token = token;
       existing.tokenExpiresAtMs = tokenExpiresAtMs;
       existing.canEdit = canEdit;
@@ -805,12 +826,21 @@ export const createCollabServer = async (
 
   const heartbeatRoom = async (state: CollabRoomTokenState) => {
     const token = await getFreshRoomToken(state);
-    await postJson({
+    const heartbeat = await postJson({
       apiUrl,
-      body: { roomId: state.roomId, token },
+      body: { roomId: state.roomId, token, includeCanEdit: true },
       path: "/folio-collab-rooms/heartbeat",
       schema: heartbeatResponseSchema,
     });
+    if (
+      heartbeat.canEdit !== undefined &&
+      state.canEdit !== heartbeat.canEdit
+    ) {
+      state.canEdit = heartbeat.canEdit;
+      throw new CollabPermissionChangedError({
+        message: "Collaboration permission changed.",
+      });
+    }
   };
 
   const scheduleRoomHeartbeat = (tokenState: CollabRoomTokenState) => {

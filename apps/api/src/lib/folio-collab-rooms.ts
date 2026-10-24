@@ -158,7 +158,8 @@ export type FolioCollabSnapshotTarget = Pick<
 >;
 
 type FolioCollabSnapshotStoreAuthority =
-  { type: "collab-service" } | { type: "participant"; userId: SafeId<"user"> };
+  | { type: "collab-service" }
+  | { type: "participant"; userId: SafeId<"user"> };
 
 type FolioCollabTokenIssueDb = {
   execute: (query: SQL) => Promise<unknown>;
@@ -711,6 +712,13 @@ const recoverRefusedFolioSnapshot = async ({
             folioCollabRooms.yjsSnapshotRevision,
             snapshotPointer.yjsSnapshotRevision,
           ),
+          sql`EXISTS (
+            SELECT 1
+            FROM ${workspaces}
+            WHERE ${workspaces.id} = ${value.workspaceId}
+              AND ${workspaces.organizationId} = ${value.organizationId}
+              AND ${workspaces.status} = 'active'
+          )`,
         ) ?? panic("Snapshot recovery requires a room predicate"),
       options: {
         from: ["empty", "claimed", "seeded"],
@@ -846,6 +854,14 @@ export const loadFolioCollabSnapshot = async (
           yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
         })
         .from(folioCollabRooms)
+        .innerJoin(
+          workspaces,
+          and(
+            eq(workspaces.id, folioCollabRooms.workspaceId),
+            eq(workspaces.organizationId, value.organizationId),
+            eq(workspaces.status, "active"),
+          ),
+        )
         .innerJoin(
           entityVersions,
           and(

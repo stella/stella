@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "The email-code access reset runs in a Better Auth hook, which aborts only by throwing: an unconfirmed reset and a failed credential revocation must stop the sign-in."
+}

@@ -142,6 +142,24 @@ export const lockAccountRow = async (
   });
 };
 
+/**
+ * Shares the account row while issuing a durable credential. Access recovery
+ * takes {@link lockAccountRow}, which conflicts with this mode, so issuance and
+ * recovery serialize while concurrent issuers do not block each other.
+ */
+export const shareAccountRow = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await withAggregateRowQuery({
+    tx,
+    aggregate: "account",
+    id: userId,
+    mode: "share",
+    select: (lockedTx) => lockedTx.select({ id: user.id }).from(user),
+  });
+};
+
 /** Share the erasure lock before starting or completing account-owned work. */
 export const lockActiveAccountRow = async (
   tx: Transaction,

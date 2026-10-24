@@ -99,9 +99,20 @@ const withFixture = async (
       createdAt: new Date(),
     })),
   );
+  await db.insert(session).values(
+    ids.map((id) => ({
+      id: `session-${id}`,
+      token: `token-${id}`,
+      userId: id,
+      activeOrganizationId: organizationId,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      updatedAt: new Date(),
+    })),
+  );
   const principal = (userId: typeof ownerId) => ({
     organizationId,
     userId,
+    sessionId: `session-${userId}`,
     database,
     name: "Personal key fixture",
     recordAuditEvent: createBackgroundAuditRecorder({
@@ -600,6 +611,7 @@ describe("personal key persistence and receipts", () => {
           const sharedOwner = {
             ...unrelatedOwner,
             userId: own.userId,
+            sessionId: own.sessionId,
             recordAuditEvent: createBackgroundAuditRecorder({
               organizationId: unrelatedOwner.organizationId,
               userId: own.userId,

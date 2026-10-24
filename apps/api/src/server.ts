@@ -1,6 +1,6 @@
 import "./register-schema-formats";
 import cors from "@elysia/cors";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Elysia } from "elysia";
 
 import {
@@ -175,7 +175,10 @@ import {
   LOCAL_CLIENT_IDENTITY_HEADER,
 } from "@/api/lib/mcp-connectors/local-client-support";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
-import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+import {
+  admitMultipartRequest,
+  multipartFormParser,
+} from "@/api/lib/multipart-form-parser";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -197,6 +200,7 @@ import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
 } from "@/api/lib/rate-limit/action-admission";
+import { actionSizeErrorResponse } from "@/api/lib/rate-limit/action-size-limits";
 import {
   closeMcpReadFenceRedis,
   startMcpReadFenceRedis,
@@ -754,11 +758,19 @@ const scopeRequestAsyncStores = (): void => {
   });
   api.wrap((handleRequest) => async (request: Request) => {
     const scopedRequest = async () => {
-      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-        return handleRequest(request);
+      const multipartAdmission = await admitMultipartRequest(request);
+      if (Result.isError(multipartAdmission)) {
+        return decorateActionSizeRefusal(
+          actionSizeErrorResponse(multipartAdmission.error),
+          request,
+        );
       }
-      return withFinalResponseCompletion(request, async () =>
-        runTenantHttpAction(request, {
+      const admittedRequest = multipartAdmission.value;
+      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+        return handleRequest(admittedRequest);
+      }
+      return withFinalResponseCompletion(admittedRequest, async () =>
+        runTenantHttpAction(admittedRequest, {
           handleRequest: async (bounded) => {
             // The private HOC types erase the response type; validate the
             // framework boundary before applying serialized JSON limits.

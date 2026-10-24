@@ -1,10 +1,14 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
 import {
+  admitMultipartRequest,
+  MULTIPART_REQUEST_MAX_BYTES,
   multipartFormParser,
   parseMultipartForm,
 } from "@/api/lib/multipart-form-parser";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const file = (name: string) => new File(["body"], name, { type: "text/plain" });
 
@@ -16,6 +20,11 @@ const formData = (entries: [string, string | File][]): FormData => {
   return data;
 };
 
+type BufferedRequestForm = Awaited<ReturnType<Request["formData"]>>;
+const readForm = async (request: {
+  formData: () => Promise<BufferedRequestForm>;
+}): Promise<BufferedRequestForm> => await request.formData();
+
 /** Round-trips the form through a real request, so the parser sees exactly
  *  what a route hands it. */
 const parse = async (entries: [string, string | File][]) => {
@@ -23,8 +32,11 @@ const parse = async (entries: [string, string | File][]) => {
     method: "POST",
     body: formData(entries),
   });
-  // oxlint-disable-next-line typescript/no-deprecated -- the parser under test consumes exactly this form
-  return parseMultipartForm(await request.formData());
+  return parseMultipartForm(
+    asTestRaw<Parameters<typeof parseMultipartForm>[0]>(
+      await readForm(request),
+    ),
+  );
 };
 
 describe("parseMultipartForm", () => {
@@ -88,6 +100,35 @@ describe("parseMultipartForm", () => {
 });
 
 describe("multipartFormParser plugin", () => {
+  test("refuses a declared oversized multipart body before parsing", async () => {
+    const request = new Request("http://localhost/upload", {
+      method: "POST",
+      body: "not read",
+      headers: {
+        "content-type": "multipart/form-data; boundary=test",
+        "content-length": String(MULTIPART_REQUEST_MAX_BYTES + 1),
+      },
+    });
+
+    const admitted = await admitMultipartRequest(request);
+
+    expect(Result.isError(admitted)).toBe(true);
+    expect(request.bodyUsed).toBe(false);
+  });
+
+  test("leaves non-multipart request bodies unread", async () => {
+    const request = new Request("http://localhost/raw", {
+      method: "POST",
+      body: "raw body",
+      headers: { "content-type": "application/json" },
+    });
+
+    const admitted = await admitMultipartRequest(request);
+
+    expect(Result.isOk(admitted) && admitted.value).toBe(request);
+    expect(request.bodyUsed).toBe(false);
+  });
+
   test("a t.String() field carrying JSON reaches the handler as a string", async () => {
     const app = new Elysia()
       .use(multipartFormParser)

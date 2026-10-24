@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/db/account-row";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -159,6 +160,10 @@ if (!databaseUrl || !runPostgresTests) {
               name: "Correspondence lock fixture",
               slug: `correspondence-lock-${suffix}`,
               createdAt: new Date(),
+            });
+            await recordNewOrganizationAccessState(writerDb, {
+              organizationId,
+              now: new Date(),
             });
             await writerDb.insert(user).values({
               id: userId,
