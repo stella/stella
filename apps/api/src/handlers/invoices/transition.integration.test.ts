@@ -14,8 +14,10 @@ import {
   expenses,
   featureEnrolments,
   INVOICE_STATUS,
+  invoiceLines,
   invoices,
   numberSeries,
+  sellerProfiles,
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -109,6 +111,54 @@ describe("invoice transition integration", () => {
       response: { message: "Cannot finalize invoice from its current status" },
     });
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
+  test("refuses a Slovak VAT invoice in a currency other than euro (zákon 222/2004 Z. z. § 74 ods. 1 písm. i)", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Kancelária Dunaj",
+      vatId: "SK1234567890",
+      vatPayer: true,
+      country: "SK",
+      defaultCurrency: "USD",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId })
+      .where(eq(invoices.id, invoiceId));
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId,
+      position: 0,
+      description: "Právna konzultácia",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(10_000),
+      vatRateBps: 2300,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(10_000),
+      vatAmount: cents(2300),
+      grossAmount: cents(12_300),
+      source: "manual",
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      code: 409,
+      response: {
+        message: "This seller's VAT invoices must state the VAT amount in EUR",
+        hint: "Issue the invoice in EUR; converting the VAT amount from another currency is not supported yet.",
+      },
+    });
+    expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.DRAFT);
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
   });
 
   test("allocates consecutive default-series numbers and keeps the first through revert and refinalize", async () => {
