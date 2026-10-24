@@ -1,9 +1,17 @@
 import { panic } from "better-result";
 
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import type { ParserParityEntry } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
-import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import {
+  euEcjFixture,
+  huBhgyFixture,
+  plNsaFixture,
+  plUodoFixture,
+  skUsFixture,
+} from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 const INGESTION_ROOT = new URL(
   "../../handlers/case-law/ingestion/",
@@ -20,12 +28,25 @@ const parityOutputOf = ({
   sections,
   documentAst,
   parserVersion,
-}: IngestionResult): ParserParityOutput => ({
-  fulltext,
-  sections,
-  documentAst,
-  parserVersion,
-});
+}: IngestionResult): ParserParityOutput => {
+  if (fulltext === undefined || fulltext.trim().length === 0) {
+    return panic(
+      "Parser parity requires a parsed document, not a listing-only outcome",
+    );
+  }
+  return { fulltext, sections, documentAst, parserVersion };
+};
+
+const PARITY_FIXTURES = {
+  [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
+  [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.PL_NSA]: plNsaFixture,
+  [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
+  [ADAPTER_KEYS.SK_US]: skUsFixture,
+} as const satisfies Record<
+  ParserParityEntry["adapterKey"],
+  (documentUrl: URL) => EnrolledAdapterFixture
+>;
 
 export const parserParityOutput = async (
   entry: ParserParityEntry,
@@ -33,8 +54,10 @@ export const parserParityOutput = async (
   const adapter =
     getAdapter(entry.adapterKey) ??
     panic(`Unknown parity adapter ${entry.adapterKey}`);
-  const fixtureFactory = CASE_LAW_CONFORMANCE_FIXTURES[entry.adapterKey];
-  const decision = await fixtureFactory().buildDecision();
+  const fixtureFactory = PARITY_FIXTURES[entry.adapterKey];
+  const decision = await fixtureFactory(
+    new URL(entry.fixture, INGESTION_ROOT),
+  ).buildDecision();
   const reparse = adapter.reparseStoredRaw;
   if (reparse === undefined || decision.sourceRaw === undefined) {
     return parityOutputOf(decision);

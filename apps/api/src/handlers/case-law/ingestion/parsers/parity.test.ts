@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { PARSER_PARITY_MANIFEST } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
 import {
   parityGoldenUrl,
@@ -25,5 +27,18 @@ for (const entry of PARSER_PARITY_MANIFEST) {
     const expected: unknown = await golden.json();
     const actual: unknown = await parserParityOutput(entry);
     expect(actual).toEqual(expected);
+  });
+}
+
+for (const entry of PARSER_PARITY_MANIFEST) {
+  test(`${entry.adapterKey}: changing the manifest input cannot reuse an unrelated capture`, async () => {
+    expect(
+      await rejectionOf(
+        parserParityOutput({
+          ...entry,
+          fixture: "parsers/__fixtures__/missing-parity-capture",
+        }),
+      ),
+    ).toMatchObject({ code: "ENOENT" });
   });
 }

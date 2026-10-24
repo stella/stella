@@ -1,7 +1,7 @@
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
-export type ParserParityEntry = {
+type ParserParitySpec = {
   readonly adapterKey: AdapterKey;
   readonly fixture: string;
 };
@@ -28,4 +28,9 @@ export const PARSER_PARITY_MANIFEST = [
     adapterKey: ADAPTER_KEYS.SK_US,
     fixture: "parsers/__fixtures__/sk-us-iii-us-265-2026.content.json.gz",
   },
-] as const satisfies readonly ParserParityEntry[];
+] as const satisfies readonly ParserParitySpec[];
+
+export type ParserParityEntry = {
+  readonly adapterKey: (typeof PARSER_PARITY_MANIFEST)[number]["adapterKey"];
+  readonly fixture: string;
+};
