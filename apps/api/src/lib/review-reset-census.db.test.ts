@@ -14,6 +14,18 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
+const OWNER_ERASURE_TABLES = [
+  "billing_arrangements",
+  "correspondence_allowed_sender_matters",
+  "correspondence_drop_logs",
+  "invoice_lines",
+  "number_series",
+  "number_series_allocations",
+  "number_series_counters",
+  "seller_profiles",
+  "vat_rates",
+] as const;
+
 describe.skipIf(!enabled)("review reset policy census", () => {
   test("clears every table for former users across matters without feature enrolment", async () => {
     if (databaseUrl === undefined) {
@@ -58,6 +70,16 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           pg_get_expr(p.polqual, p.polrelid) AS using, pg_get_expr(p.polwithcheck, p.polrelid) AS check
         FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND c.relname = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+      expect(
+        policies
+          .filter(
+            (policy) =>
+              OWNER_ERASURE_TABLES.some((table) => table === policy.table) &&
+              policy.name === "review_reset_owner_delete",
+          )
+          .map(({ table }) => table)
+          .toSorted(),
+      ).toEqual([...OWNER_ERASURE_TABLES].toSorted());
       const columns = await client<{ table: string; name: string }[]>`
         SELECT table_name AS table, column_name AS name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
