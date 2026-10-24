@@ -70,13 +70,23 @@ describe("statute AST", () => {
     expect(
       isStatuteAst({
         ...statuteAst,
-        body: [provision, { ...paragraph, anchorId: provision.anchorId }],
+        body: [
+          provision,
+          {
+            ...paragraph,
+            eId: "appended-paragraph",
+            anchorId: provision.anchorId,
+          },
+        ],
       }),
     ).toBe(false);
     expect(
       parseStatuteAst({
         ...statuteAst,
-        body: [provision, { ...paragraph, eId: provision.eId }],
+        body: [
+          provision,
+          { ...paragraph, eId: provision.eId, anchorId: "appended-anchor" },
+        ],
       }),
     ).toBeNull();
   });
