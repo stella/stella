@@ -706,6 +706,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "The eighteen policies add only table-owner SELECT/DELETE access fenced to the reset organization; catalog-only policy creation performs no row scan, with transaction-local 1s lock_timeout and 5s statement_timeout.",
   },
   {
+    migration: "20261024190300_invoice_line_exemption_reason",
+    form: "add-column",
+    reason:
+      "The nullable, default-free exemption basis is a catalog-only addition to invoice lines without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
     migration: "20261019010000_invoice_party_tax_vat_ids",
     form: "add-column",
     reason:

@@ -1,6 +1,8 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { VatRatePresetCountry } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapEden } from "@/lib/errors/api";
@@ -30,7 +32,7 @@ export type VatRateCommand =
   | { type: "create"; values: VatRateInput }
   | { type: "update"; id: string; values: VatRateInput }
   | { type: "archive"; id: string }
-  | { type: "applyPreset"; country: "SK" | "CZ" };
+  | { type: "applyPreset"; country: VatRatePresetCountry };
 export const sendVatRateCommand = async (command: VatRateCommand) => {
   if (command.type === "create") {
     return invokeCapability("vat-rates.create", async (request) =>

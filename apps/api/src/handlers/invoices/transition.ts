@@ -105,6 +105,68 @@ const validateReverseChargeBuyer = async (
     : null;
 };
 
+type PolishExemptionBasisOptions = {
+  tx: Transaction;
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+  sellerProfileId: SafeId<"sellerProfile"> | null;
+  organizationId: SafeId<"organization">;
+};
+
+const validatePolishExemptionBases = async ({
+  tx,
+  invoiceId,
+  workspaceId,
+  sellerProfileId,
+  organizationId,
+}: PolishExemptionBasisOptions) => {
+  if (sellerProfileId === null) {
+    return null;
+  }
+  const seller = await tx.query.sellerProfiles.findFirst({
+    where: {
+      id: { eq: sellerProfileId },
+      organizationId: { eq: organizationId },
+    },
+    columns: { country: true, vatId: true },
+  });
+  if (seller === undefined || invoiceCountryOf(seller) !== "PL") {
+    return null;
+  }
+  const missing = await tx
+    .select({ treatment: invoiceLines.vatTreatment })
+    .from(invoiceLines)
+    .where(
+      and(
+        eq(invoiceLines.invoiceId, invoiceId),
+        eq(invoiceLines.workspaceId, workspaceId),
+        inArray(invoiceLines.vatTreatment, ["exempt", "not_vat_payer"]),
+        // The line schemas refuse blank bases (tExemptionReason).
+        isNull(invoiceLines.exemptionReason),
+      ),
+    )
+    .limit(1);
+  const line = missing.at(0);
+  return line === undefined
+    ? null
+    : new HandlerError({
+        status: 400,
+        message: `Polish ${line.treatment} invoice lines require an exemption basis`,
+        hint: "Add the statutory exemption reason to every exempt or non-VAT-payer line, then finalize again.",
+      });
+};
+
+type FinalizeTaxRequirementsOptions = PolishExemptionBasisOptions;
+
+const validateFinalizeTaxRequirements = async (
+  options: FinalizeTaxRequirementsOptions,
+) =>
+  (await validateReverseChargeBuyer(
+    options.tx,
+    options.invoiceId,
+    options.workspaceId,
+  )) ?? (await validatePolishExemptionBases(options));
+
 const linkedCreditError = async (
   tx: Transaction,
   invoiceId: SafeId<"invoice">,
@@ -411,13 +473,15 @@ const transitionInvoice = createSafeHandler(
           if (draft.isErr()) {
             return Result.err(draft.error);
           }
-          const reverseChargeError = await validateReverseChargeBuyer(
+          const taxRequirementsError = await validateFinalizeTaxRequirements({
             tx,
-            existing.id,
+            invoiceId: existing.id,
             workspaceId,
-          );
-          if (reverseChargeError !== null) {
-            return Result.err(reverseChargeError);
+            sellerProfileId: existing.sellerProfileId,
+            organizationId: session.activeOrganizationId,
+          });
+          if (taxRequirementsError !== null) {
+            return Result.err(taxRequirementsError);
           }
           const totals = await recalculateInvoiceTotals(
             tx,

@@ -24,8 +24,5 @@ export const updateVatRateBody = t.Object({
   validTo: t.Optional(t.Nullable(date)),
 });
 export const applyVatRatePresetBody = t.Object({
-  country: t.Union([
-    t.Literal(VAT_RATE_PRESET_COUNTRIES[0]),
-    t.Literal(VAT_RATE_PRESET_COUNTRIES[1]),
-  ]),
+  country: t.UnionEnum(VAT_RATE_PRESET_COUNTRIES),
 });

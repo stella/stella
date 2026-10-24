@@ -1346,6 +1346,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         unitPrice: v.number(),
         vatRateBps: v.number(),
         vatTreatment: v.string(),
+        exemptionReason: v.nullable(contentText()),
         netAmount: v.number(),
         vatAmount: v.number(),
         grossAmount: v.number(),

@@ -1116,6 +1116,8 @@ export const invoiceLines = p.pgTable(
     unitPrice: centsColumn("unit_price").notNull(),
     vatRateBps: p.integer("vat_rate_bps").notNull(),
     vatTreatment: p.text("vat_treatment", { enum: VAT_TREATMENTS }).notNull(),
+    // The statutory basis printed for exempt and non-VAT-payer invoice lines.
+    exemptionReason: p.text("exemption_reason"),
     netAmount: centsColumn("net_amount").notNull(),
     vatAmount: centsColumn("vat_amount").notNull(),
     grossAmount: centsColumn("gross_amount").notNull(),

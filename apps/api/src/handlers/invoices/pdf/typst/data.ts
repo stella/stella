@@ -7,6 +7,7 @@ import {
   invoiceCountryOf,
   type InvoiceDocumentType,
   type InvoicePartyId,
+  invoiceSellerCountryOf,
   legalNotesFor,
   type VatTreatment,
 } from "@stll/invoicing";
@@ -117,9 +118,9 @@ export const qrSvg = (payload: string, ecc: "L" | "M" = "M") => {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path fill="#000" d="${runs.join("")}"/></svg>`;
 };
 
-const party = (
-  heading: string,
-  l: Labels,
+type PartyOptions = {
+  heading: string;
+  labels: Labels;
   value: {
     name: string | null;
     addressLine1: string | null;
@@ -130,9 +131,18 @@ const party = (
     registrationId: string | null;
     taxId: string | null;
     vatId: string | null;
-  },
-  printedIds: readonly InvoicePartyId[],
-): Party => ({
+  };
+  printedIds: readonly InvoicePartyId[];
+  domesticTaxIdLabel: string | null;
+};
+
+const party = ({
+  heading,
+  labels: l,
+  value,
+  printedIds,
+  domesticTaxIdLabel,
+}: PartyOptions): Party => ({
   heading,
   name: value.name,
   address: compact([
@@ -146,8 +156,18 @@ const party = (
       l.registration,
       printedIds.includes("registration") ? value.registrationId : null,
     ],
-    [l.taxId, printedIds.includes("taxId") ? value.taxId : null],
-    [l.vatId, printedIds.includes("vatId") ? value.vatId : null],
+    [
+      domesticTaxIdLabel !== null && invoiceSellerCountryOf(value) === "PL"
+        ? domesticTaxIdLabel
+        : l.taxId,
+      printedIds.includes("taxId") ? value.taxId : null,
+    ],
+    [
+      domesticTaxIdLabel !== null && invoiceSellerCountryOf(value) === "PL"
+        ? domesticTaxIdLabel
+        : l.vatId,
+      printedIds.includes("vatId") ? value.vatId : null,
+    ],
   ]),
 });
 
@@ -219,16 +239,17 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     seller:
       seller === null
         ? null
-        : party(
-            l.seller,
-            l,
-            { ...seller, name: seller.legalName },
-            profile.partyIds.seller,
-          ),
-    buyer: party(
-      l.buyer,
-      l,
-      {
+        : party({
+            heading: l.seller,
+            labels: l,
+            value: { ...seller, name: seller.legalName },
+            printedIds: profile.partyIds.seller,
+            domesticTaxIdLabel: profile.domesticTaxIdLabel,
+          }),
+    buyer: party({
+      heading: l.buyer,
+      labels: l,
+      value: {
         name: invoice.buyerName,
         addressLine1: invoice.buyerAddressLine1,
         addressLine2: invoice.buyerAddressLine2,
@@ -239,8 +260,9 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         taxId: invoice.buyerTaxId,
         vatId: invoice.buyerVatId,
       },
-      profile.partyIds.buyer,
-    ),
+      printedIds: profile.partyIds.buyer,
+      domesticTaxIdLabel: profile.domesticTaxIdLabel,
+    }),
     labels: {
       description: l.description,
       quantity: l.quantity,
