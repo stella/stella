@@ -4,6 +4,7 @@ import ts from "typescript6";
 import {
   declaredAppFrameScope,
   readDockedChatHosts,
+  renderedImports,
 } from "../helpers/docked-chat-hosts";
 
 test.each(["member", "knowledge", "none"])(
@@ -89,4 +90,20 @@ test("docked chat census follows the frame a route's parent layout selects", () 
       hosts.find((host) => host.template === template)?.surfaces,
     ).toContain("inspector");
   }
+});
+
+test("a preview-only PDF viewer is not followed into its docked chat reader", () => {
+  const imports = (mode: string) =>
+    renderedImports(
+      ts.createSourceFile(
+        "preview.tsx",
+        `import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+export const Preview = () => <PeekPdfViewer interactionMode="${mode}" />;`,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      ),
+    );
+  expect(imports("preview-only")).toEqual([]);
+  expect(imports("with-ai")).toEqual(["@/components/pdf/peek/peek-pdf-viewer"]);
 });
