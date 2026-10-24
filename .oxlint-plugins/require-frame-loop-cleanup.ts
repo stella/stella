@@ -499,6 +499,14 @@ const handleOf = (context: LoopContext, call: AstNode): Handle | null => {
     return null;
   }
   if (parent.type === "VariableDeclarator" && parent.init === current) {
+    const declaration = parentOf(parent);
+    if (
+      declaration?.type === "VariableDeclaration" &&
+      (declaration.kind === "using" || declaration.kind === "await using") &&
+      isGlobalCall(context, call, START_NAMES.interval)
+    ) {
+      return { kind: "transferred" };
+    }
     return assignedHandle(context, unwrapExpression(parent.id));
   }
   if (

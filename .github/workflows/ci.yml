@@ -2271,7 +2271,7 @@ jobs:
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8 # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@a6a6cd30646c18321ef71e344bf0af6b8d3634b8 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -6266,7 +6266,7 @@ jobs:
           sparse-checkout: |
             .github/workflows
             .github/actions
-            .github/ci-job-classification-decisions.json
+            .github/ci-job-classification-decisions
             .github/ci-job-classification-sources.json
             scripts/check-ci-job-classification.ts
             scripts/ci-job-classification

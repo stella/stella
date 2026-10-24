@@ -32,6 +32,19 @@ test("accepts intervals cleared by their owner or handed to the caller", async (
   ).toEqual([]);
 });
 
+test("explicit resource declarations dispose their interval handles", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "export const sync = () => { using id = setInterval(tick, 10); };",
+        "export const asyncOwner = async () => { await using id = setInterval(tick, 10); };",
+        "export const ordinary = () => { const id = setInterval(tick, 10); };",
+      ].join("\n"),
+    ),
+  ).toEqual([3]);
+});
+
 test("requires the effect cleanup to clear an interval the effect starts", async () => {
   expect(
     await lintSingleRule(

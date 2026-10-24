@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.50.1
+
+### Patch Changes
+
+- [#6447](https://github.com/stella/stella/pull/6447) [`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow landing row icons to grow to fit court abbreviations.
+
 ## 0.50.0
 
 ### Minor Changes
