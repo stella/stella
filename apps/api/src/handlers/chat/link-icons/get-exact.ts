@@ -5,7 +5,7 @@ import { getLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
 import {
   createExactIconOrigin,
   ICON_URL_MAX_LENGTH,
-  normalizeExactIconUrl,
+  toExactIconUrl,
 } from "@/api/handlers/chat/link-icons/origin";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
@@ -38,18 +38,18 @@ const readOrigin = createExactIconOrigin();
 const getExactIcon = createSafeRootHandler(
   config,
   async function* ({ query: { url }, user, request, set }) {
-    const normalizedUrl = normalizeExactIconUrl(url);
-    if (normalizedUrl === null) {
+    const target = toExactIconUrl(url);
+    if (target === null) {
       return Result.ok(linkIconBody({ type: "no-icon" }, set));
     }
     const outcome = yield* Result.ok(
       await readLinkIcon({
-        hostname: normalizedUrl,
+        hostname: target,
         userId: user.id,
         ip: resolveClientIp(request, null) ?? "unresolved",
         cache: getLinkIconCache(),
-        readOrigin: async (target) =>
-          await readOrigin(target, grantThirdPartyOutboundPermit()),
+        readOrigin: async (exact) =>
+          await readOrigin(exact.value, grantThirdPartyOutboundPermit()),
       }),
     );
     return Result.ok(linkIconBody(outcome, set));

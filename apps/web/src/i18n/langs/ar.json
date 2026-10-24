@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "خيارات إعادة الصياغة",
     "editWithAI": "التعديل بالذكاء الاصطناعي",
     "keyRequired": {
+      "accountRestricted": "إعدادات موفر الذكاء الاصطناعي غير متاحة لهذا الحساب.",
+      "configUnreadable": "تعذرت قراءة إعدادات موفر الذكاء الاصطناعي. اطلب من مسؤول المؤسسة إعادة توصيله.",
       "cta": "فتح إعدادات الذكاء الاصطناعي",
       "description": "أضِف بيانات اعتماد المزوّد لبدء استخدام ميزات الذكاء الاصطناعي.",
+      "permissionRequired": "يمكن لمسؤول المؤسسة فقط توصيل موفر ذكاء اصطناعي.",
+      "seatRequired": "اطلب من مسؤول المؤسسة تخصيص مقعد لك.",
       "title": "ربط مزوّد الذكاء الاصطناعي"
     },
     "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟",
@@ -3526,6 +3530,12 @@
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
+      "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
+      "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
+      "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
+    },
     "external": {
       "confirmDescription": "أنت على وشك زيارة موقع إلكتروني خارجي.",
       "confirmTitle": "فتح الرابط الخارجي؟",
@@ -4225,6 +4235,22 @@
       "guestStorageUnavailable": "تعذر حفظ التمييزات والملاحظات في هذا التبويب.",
       "highlight": "تمييز",
       "highlightedPassage": "المقطع المميّز",
+      "history": {
+        "colorRestored": "تمت استعادة اللون",
+        "commentRemoved": "تمت إزالة التعليق",
+        "commentRestored": "تمت استعادة التعليق",
+        "highlightRemoved": "تمت إزالة التمييز",
+        "highlightRestored": "تمت استعادة التمييز",
+        "markChanged": "تم تغيير هذا التمييز أو التعليق في مكان آخر في هذه الأثناء، لذا تُرك كما هو.",
+        "markGone": "لم يعد هذا التمييز أو التعليق موجودًا.",
+        "nothingToRedo": "لا يوجد ما يمكن إعادته",
+        "nothingToUndo": "لا يوجد ما يمكن التراجع عنه",
+        "redoShortcut": "إعادة تغيير التمييز أو التعليق",
+        "styleRestored": "تمت استعادة النمط",
+        "textRestored": "تمت استعادة نص التعليق",
+        "undoShortcut": "التراجع عن تغيير التمييز أو التعليق",
+        "visibilityRestored": "تمت استعادة المشاركة"
+      },
       "removeHighlight": "إزالة التمييز",
       "sharedBadge": "مشارك",
       "styleHighlight": "تمييز",

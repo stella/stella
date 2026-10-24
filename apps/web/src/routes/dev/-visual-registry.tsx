@@ -89,6 +89,20 @@ const visualLoaders = {
       return { default: ChatCitationsPlayground };
     },
   },
+  "chat-statute-citations": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_STATUTE_CITATIONS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-statute-citations-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =

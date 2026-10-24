@@ -1674,6 +1674,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
@@ -5407,6 +5408,17 @@ const config = defineConfig({
       excludeFiles: ["apps/web/src/test-dom-environment.ts"],
       rules: {
         "no-direct-dom-unregister/no-direct-dom-unregister": "error",
+      },
+    },
+    {
+      // Rule tests only: the shared runner (lint-single-rule.ts) owns the
+      // one-oxlint-process slot and runs its lone fallbacks in turn.
+      files: [
+        ".oxlint-plugins/__tests__/*.test.ts",
+        ".oxlint-plugins/__fixtures__/no-serial-lint-case.fixture.ts",
+      ],
+      rules: {
+        "no-serial-lint-case/no-serial-lint-case": "error",
       },
     },
     {

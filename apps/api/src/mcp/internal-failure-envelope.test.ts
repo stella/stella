@@ -21,12 +21,9 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const createTimeEntryHandlerMock = mock();
 
-// Stub the backing time-entry create handler so the tool site receives a chosen
-// `Result` error (a curated 4xx business `HandlerError`, or an internal 5xx)
-// without needing a real DB. `save_time_entry`'s create branch calls it after
-// its own auth/schema/workspace pre-checks. Spread the real module so its other
-// exports (utilities imported elsewhere) keep working; only the handler is
-// swapped.
+// Inject the backing time-entry create handler through the request context so
+// the real tool receives a chosen 4xx or 5xx Result after its authorization,
+// schema and matter-access checks. Other handlers use the in-memory DB seam.
 const { MATTER_TOOL_HANDLERS } = await import("@/api/mcp/matter-tools");
 const { BILLING_TOOL_HANDLERS } = await import("@/api/mcp/billing-tools");
 const { DOCUMENT_TOOL_HANDLERS } = await import("@/api/mcp/document-tools");

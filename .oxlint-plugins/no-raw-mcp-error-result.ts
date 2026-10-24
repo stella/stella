@@ -1,28 +1,45 @@
-// MCP failures must preserve the structured envelope and keep implementation
-// details out of tool output. This rule covers direct raw error-message
-// unwrapping at errorResult call sites; semantic aliases outside the call
-// expression remain outside this deliberately narrow syntax guard.
-
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName, isIdentifier, unwrapExpression } from "./utils.ts";
+import {
+  type AstNode,
+  isAstNode,
+  isIdentifier,
+  memberPropertyName,
+  unwrapExpression,
+} from "./utils.ts";
 
-const RAW_ERROR_BINDINGS = new Set(["cause", "err", "error"]);
+const isErrorValueName = (name: string): boolean =>
+  name
+    .replaceAll(/([a-z])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .some((part) => part === "cause" || part === "err" || part === "error");
 
-const isRawErrorMessage = (value: unknown): boolean => {
+const containsErrorValueName = (value: AstNode): boolean => {
   const node = unwrapExpression(value);
-  if (
-    node?.type !== "MemberExpression" ||
-    getPropertyName(node.property) !== "message"
-  ) {
+  if (node === null) {
     return false;
   }
-
-  const owner = unwrapExpression(node.object);
+  if (isIdentifier(node)) {
+    return isErrorValueName(node.name);
+  }
+  if (node.type !== "MemberExpression") {
+    return false;
+  }
+  const property = memberPropertyName(node);
   return (
-    (isIdentifier(owner) && RAW_ERROR_BINDINGS.has(owner.name)) ||
-    (owner?.type === "MemberExpression" &&
-      getPropertyName(owner.property) === "error")
+    (property !== null && isErrorValueName(property)) ||
+    (isAstNode(node.object) && containsErrorValueName(node.object))
+  );
+};
+
+const isInternalErrorMessage = (value: unknown): boolean => {
+  const node = unwrapExpression(value);
+  return (
+    node?.type === "MemberExpression" &&
+    memberPropertyName(node) === "message" &&
+    isAstNode(node.object) &&
+    containsErrorValueName(node.object)
   );
 };
 
@@ -33,22 +50,21 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
-          rawMessage:
-            "Pass the error to internalFailureResult instead of exposing its message through errorResult.",
+          internalMessage:
+            "Do not expose an internal error message in an MCP tool result; pass the error to internalFailureResult instead.",
         },
       },
       createOnce(context) {
         return {
           CallExpression(node) {
-            const callee = unwrapExpression(node.callee);
             if (
-              !isIdentifier(callee, "errorResult") ||
-              !isRawErrorMessage(node.arguments.at(0))
+              !isIdentifier(unwrapExpression(node.callee), "errorResult") ||
+              !Array.isArray(node.arguments) ||
+              !isInternalErrorMessage(node.arguments.at(0))
             ) {
               return;
             }
-
-            context.report({ node, messageId: "rawMessage" });
+            context.report({ node, messageId: "internalMessage" });
           },
         };
       },

@@ -1213,6 +1213,23 @@ describe("parallel code-quality legs", () => {
   // until the job's own timeout.
   test("quality steps stop between their warning budget and their job timeout", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    const pooledChecks = (job: string): Record<string, unknown>[] => {
+      const manifest = `.github/ci-checks/${job}.yml`;
+      if (!existsSync(manifest)) {
+        return [];
+      }
+      const parsed: unknown = Bun.YAML.parse(readFileSync(manifest, "utf-8"));
+      const checks =
+        typeof parsed === "object" && parsed !== null && "checks" in parsed
+          ? parsed.checks
+          : undefined;
+      return Array.isArray(checks)
+        ? checks.filter(
+            (check): check is Record<string, unknown> =>
+              typeof check === "object" && check !== null,
+          )
+        : [];
+    };
     const minutes = (text: string, indent: number) =>
       Number(
         new RegExp(`^ {${indent}}timeout-minutes: (\\d+)$`, "mu").exec(
@@ -1228,13 +1245,19 @@ describe("parallel code-quality legs", () => {
         panic(`Missing job ${job}`);
       const jobBlock = block.split(/\n {2}[\w-]+:\n/u).at(0) ?? block;
       const jobMinutes = minutes(jobBlock, 4);
+      // A check moved into the job's check pool keeps its step fields there.
+      const pool = pooledChecks(job);
       for (const name of names) {
-        const step =
-          jobBlock
-            .split(/\n {6}- name: /u)
-            .find((candidate) => candidate.startsWith(`${name}\n`)) ??
-          panic(`Missing step ${name}`);
-        const stepMinutes = minutes(step, 8);
+        const step = jobBlock
+          .split(/\n {6}- name: /u)
+          .find((candidate) => candidate.startsWith(`${name}\n`));
+        const pooled = pool.find((check) => check["name"] === name);
+        const stepMinutes =
+          step === undefined
+            ? Number(
+                pooled?.["timeout-minutes"] ?? panic(`Missing step ${name}`),
+              )
+            : minutes(step, 8);
         expect(stepMinutes * 60_000, name).toBeGreaterThanOrEqual(
           CODE_CHECK_EXECUTION_BUDGET_MS,
         );
@@ -1555,8 +1578,13 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
         nextJob === -1
           ? workflow.slice(start)
           : workflow.slice(start, start + 1 + nextJob);
-      jobs.set(jobId, job);
-      assertLeg(job, leg);
+      // Pooled checks run from the job's manifest, so it is part of the job.
+      const manifest = `.github/ci-checks/${jobId}.yml`;
+      const withPool = existsSync(manifest)
+        ? `${job}\n${readFileSync(manifest, "utf-8")}`
+        : job;
+      jobs.set(jobId, withPool);
+      assertLeg(withPool, leg);
     }
     expect(
       jobs.get("code-quality-api")?.match(/- name: Result consumption/gu),
