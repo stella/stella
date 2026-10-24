@@ -52,9 +52,8 @@ type FieldValue<TSchema> =
     ? SchemaOutput<TSchema>
     : TSchema extends { readonly wrapped: infer TWrapped }
       ? IsWireSchema<TWrapped> extends true
-        ?
-            | Exclude<SchemaInput<TSchema>, string | readonly string[]>
-            | SchemaOutput<TWrapped>
+        ? | Exclude<SchemaInput<TSchema>, string | readonly string[]>
+          | SchemaOutput<TWrapped>
         : SchemaInput<TSchema>
       : SchemaInput<TSchema>;
 

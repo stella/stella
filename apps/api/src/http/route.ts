@@ -55,11 +55,7 @@ export type RouteConfig = {
  *   `:workspaceId` path segment, in the status its config admits.
  */
 export type RouteAccess =
-  | "public"
-  | "token"
-  | "session"
-  | "member"
-  | "workspace";
+  "public" | "token" | "session" | "member" | "workspace";
 
 /**
  * One stage of the pipeline: answer the request, or pass it on. A stage may
