@@ -18,14 +18,14 @@ import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/cor
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexManifestCoversJurisdiction,
   type CorpusIndexManifest,
+  corpusIndexManifestCoversJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  deriveCorpusIndexProjectionDescriptor,
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
   type CorpusIndexProjectionInput,
+  deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
@@ -835,6 +835,7 @@ const writeDesiredStates = async (
       set: {
         desiredAction: sql`excluded.desired_action`,
         desiredEpoch: sql`excluded.desired_epoch`,
+        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
         desiredFingerprint: sql`excluded.desired_fingerprint`,
         desiredIndexId: sql`excluded.desired_index_id`,
         workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
@@ -1005,6 +1006,46 @@ export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
     );
   }
   await reconcileCorpusProjectionDesiredStateTx(tx, subject);
+};
+
+/**
+ * Retire a canonical row from every active projection without deleting its
+ * database record. Decision aliases use this to keep old UUIDs resolvable
+ * while ensuring only the survivor remains searchable.
+ */
+export const synchronizeRetiredCaseLawProjectionDesiredStateTx = async (
+  tx: Transaction,
+  {
+    lock,
+    subject,
+  }: {
+    lock: ActiveCorpusProjectionSourceLock;
+    subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>;
+  },
+): Promise<void> => {
+  if (lock.family !== subject.family) {
+    return panic(
+      `Corpus projection source lock family ${lock.family} cannot retire ${subject.family}`,
+    );
+  }
+  const locked = await lockProjectionInput(tx, subject);
+  const manifests = await projectionManifests(tx, subject.family);
+  if (manifests.length === 0) {
+    return;
+  }
+  const epoch = locked.epoch + 1n;
+  await setCanonicalProjectionEpoch(tx, subject, epoch);
+  await writeDesiredStates(
+    tx,
+    manifests.map(({ generation }) =>
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor: { action: "erase" },
+      }),
+    ),
+  );
 };
 
 /** Seed one newly registered generation without invalidating existing ones. */

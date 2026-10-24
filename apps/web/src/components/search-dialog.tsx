@@ -37,7 +37,7 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronRightIcon, PanelRightIcon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon, ChevronRightIcon, PanelRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -52,8 +52,8 @@ import { CompanyRegistryPreview } from "@/components/company-registry-preview";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { SavedSearches } from "@/components/saved-searches";
 import {
-  toSearchFilters,
   type SavedSearchCriteria,
+  toSearchFilters,
 } from "@/components/saved-searches.logic";
 import { SearchCaseLawGroup } from "@/components/search-case-law-group";
 import {
@@ -89,14 +89,14 @@ import {
   getCaseLawHitRoute,
   getChatHitRoute,
   getCompanySearchQuery,
-  isLazySearchGroupActive,
-  resolveRegistryResultsPane,
   getEntityHitLocation,
   getEntityLocation,
   getRecentFileLocation,
   getRecentFileRoute,
+  isLazySearchGroupActive,
   resolveEagerSearchTypes,
   resolveEntityDocumentRoute,
+  resolveRegistryResultsPane,
   toAskAIMessageHtml,
 } from "@/components/search-dialog.logic";
 import type { EntityLocation } from "@/components/search-dialog.logic";
@@ -296,8 +296,7 @@ const filtersForMode = (
     : filters;
 
 type SearchFiltersUpdate =
-  | SearchFilters
-  | ((filters: SearchFilters) => SearchFilters);
+  SearchFilters | ((filters: SearchFilters) => SearchFilters);
 
 type SearchResultsStatus =
   | { type: "hidden" }
@@ -1057,6 +1056,16 @@ export const SearchDialog = ({
     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
   };
 
+  const escapeAction = hasVisibleSearch ? "clear" : "close";
+  const handleEscape = (event: ReactKeyboardEvent<HTMLElement>) => {
+    handleSearchDialogEscape({
+      action: escapeAction,
+      clearSearch,
+      event,
+      focusInput: () => searchInputRef.current?.focus(),
+    });
+  };
+
   const handleSummarizeResults = () => {
     const trimmedQuery = searchQuery.trim();
     if (
@@ -1695,18 +1704,9 @@ export const SearchDialog = ({
         onOpenChangeComplete={(nextOpen) => {
           closeActionQueue.complete(nextOpen);
         }}
-        onOpenChange={(nextOpen, eventDetails) => {
+        onOpenChange={(nextOpen) => {
           if (nextOpen) {
             closeActionQueue.cancel();
-          }
-          if (
-            !nextOpen &&
-            eventDetails.reason === "escape-key" &&
-            hasVisibleSearch
-          ) {
-            eventDetails.cancel();
-            clearSearch();
-            return;
           }
           onOpenChange(nextOpen);
         }}
@@ -1720,6 +1720,7 @@ export const SearchDialog = ({
               : "sm:w-[min(960px,calc(100vw-32px))]",
           )}
           layer="search"
+          onKeyDownCapture={handleEscape}
           showCloseButton={false}
         >
           <RenderStormRegion name="search-dialog">
@@ -2108,7 +2109,7 @@ export const SearchDialog = ({
                 here so the input row stays a plain input. */}
               <SearchDialogFooter
                 scope={searchScope}
-                escapeAction={hasVisibleSearch ? "clear" : "close"}
+                escapeAction={escapeAction}
                 canAskAI={canSummarizeSearch}
                 isAskingAI={askAIMutation.isPending}
                 mode={mode.type}
@@ -2368,10 +2369,34 @@ const ESCAPE_HINT_KEYS = {
   close: "search.hintClose",
 } as const;
 
+type SearchDialogEscapeAction = keyof typeof ESCAPE_HINT_KEYS;
+
+type HandleSearchDialogEscapeOptions = {
+  action: SearchDialogEscapeAction;
+  clearSearch: () => void;
+  event: ReactKeyboardEvent<HTMLElement>;
+  focusInput: () => void;
+};
+
+const handleSearchDialogEscape = ({
+  action,
+  clearSearch,
+  event,
+  focusInput,
+}: HandleSearchDialogEscapeOptions) => {
+  if (event.key !== "Escape" || action !== "clear") {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  clearSearch();
+  focusInput();
+};
+
 type SearchDialogFooterProps = {
   scope: SearchScope;
   /** What the next Esc does: it clears an active search before it closes. */
-  escapeAction: keyof typeof ESCAPE_HINT_KEYS;
+  escapeAction: SearchDialogEscapeAction;
   canAskAI: boolean;
   isAskingAI: boolean;
   mode: SearchDialogMode["type"];

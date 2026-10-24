@@ -11,16 +11,16 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowRightIcon,
-  CaseLawIcon,
   Building2Icon,
+  CaseLawIcon,
   CircleHelpIcon,
   FileOutputIcon,
   FileSearchIcon,
+  type LucideIcon,
   PlusIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   XIcon,
-  type LucideIcon,
 } from "@stll/ui/icons";
 import {
   InputGroup,
@@ -191,7 +191,7 @@ export function PublicToolsIndex({
             <h1 className="text-foreground max-w-2xl text-3xl leading-tight font-semibold tracking-tight text-balance">
               {t("publicTools.discovery.heroTitle")}
             </h1>
-            <Prose className="text-muted-foreground mt-2 text-sm leading-6 text-pretty sm:text-base">
+            <Prose tone="muted" size="lede" className="mt-2">
               {t("publicTools.discovery.heroBody")}
             </Prose>
           </div>
@@ -239,7 +239,7 @@ export function PublicToolsIndex({
                 >
                   {t("publicTools.discovery.allTitle")}
                 </h2>
-                <Prose className="text-muted-foreground mt-1 text-sm leading-6">
+                <Prose tone="muted" size="sm" className="mt-1">
                   {t("publicTools.discovery.allBody")}
                 </Prose>
               </div>
@@ -424,7 +424,7 @@ function FeaturedTools() {
             >
               {contractReview.displayName}
             </BidiText>
-            <Prose className="text-muted-foreground mt-2 text-sm leading-6 text-pretty">
+            <Prose tone="muted" size="sm" className="mt-2">
               {t("publicTools.discovery.contractReviewBody")}
             </Prose>
             <p className="text-muted-foreground mt-4 text-xs">
@@ -694,7 +694,7 @@ function CatalogueGroup({
         >
           {t(GROUP_LABEL_KEY[group])}
         </h3>
-        <Prose className="text-muted-foreground mt-1 text-sm leading-6">
+        <Prose tone="muted" size="sm" className="mt-1">
           {t(GROUP_BODY_KEY[group])}
         </Prose>
       </div>

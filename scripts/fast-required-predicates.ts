@@ -29,6 +29,12 @@ export const FAST_REQUIRED_PREDICATE_ATOMS = [
   "needs.ci-plan.outputs.run_required != 'false'",
   "needs.ci-plan.result == 'success'",
   "needs.pr-heavy-gate.result == 'success'",
+  // A repository check waits on the gate only when the plan schedules it; a
+  // push that merges only the base runs its checks ungated.
+  "needs.ci-plan.outputs.pr_heavy_gate_required != 'true'",
+  // A check that waits on the gate past `!cancelled()` still requires its
+  // generated sources explicitly.
+  "needs.generated-sources.result == 'success'",
   "inputs.heavy_only != true",
   "inputs.heavy_only == true",
   "inputs.pr_depth_only != true",

@@ -14,7 +14,7 @@ import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
 } from "../execution-profile";
-import { apiDelete, E2E_API_ORIGIN, apiGet, apiPut } from "../helpers/api";
+import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import {
@@ -27,11 +27,11 @@ import {
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import {
-  type RouteNetworkMetrics,
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
   createNetworkCollector,
   mergeNetworkBaseline,
+  type RouteNetworkMetrics,
   summarizeCapture,
 } from "../helpers/network";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
@@ -41,18 +41,18 @@ import {
   networkBaselineKey,
 } from "../helpers/smoke-route-coverage";
 import {
+  type RouteExpectation,
   SMOKE_ROUTE_DEFS,
   type SmokeRouteDef,
   type SmokeWorld,
-  type RouteExpectation,
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 // Every route retains the former one-second observation floor so delayed

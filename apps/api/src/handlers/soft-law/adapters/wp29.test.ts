@@ -6,10 +6,10 @@ import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 
 import {
-  wp29Adapter,
   parseWp29Archive,
   parseWp29NewsroomDocument,
   parseWp29NewsroomIndex,
+  wp29Adapter,
 } from "./wp29";
 
 const fixture = async (name: string) =>

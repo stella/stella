@@ -22,8 +22,8 @@ import * as v from "valibot";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -173,8 +173,7 @@ export type ReferenceGrading = {
   consensus: ReferenceConsensus;
   impact: ReferenceImpact;
   explanation:
-    | { type: "comparison"; text: string }
-    | { type: "insufficient-evidence" };
+    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
   recommendation: string | null;
   citations: DocxFolioCitation[];
   referenceCitations: {

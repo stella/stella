@@ -7,8 +7,8 @@ import {
   isNull,
   ne,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import {
   alias,

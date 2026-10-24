@@ -24,8 +24,8 @@ import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_CODE,
-  publicCountryUnavailableSchema,
   type PublicCountryUnavailable,
+  publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
@@ -54,7 +54,12 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
+const CLIENT_ERROR_STATUS = 400;
 const TOO_MANY_REQUESTS_STATUS = 429;
+const SERVER_ERROR_STATUS = 500;
+
+const isClientErrorStatus = (status: number): boolean =>
+  status >= CLIENT_ERROR_STATUS && status < SERVER_ERROR_STATUS;
 
 export const shouldRetryAPIRequest = (
   failureCount: number,
@@ -282,7 +287,11 @@ export const apiFieldIssueMessage = (
   error: unknown,
   field: string,
 ): string | undefined => {
-  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+  if (
+    !APIError.is(error) ||
+    error.code !== API_VALIDATION_ERROR_CODE ||
+    !isClientErrorStatus(error.status)
+  ) {
     return undefined;
   }
   const issue = parseApiValidationIssues(error.details).find(
@@ -340,14 +349,20 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }
+  // Only a rejected request (4xx) is a validation answer. An outage that
+  // carries the code must keep the unavailable/retry message.
   const issue =
-    code === API_VALIDATION_ERROR_CODE
+    code === API_VALIDATION_ERROR_CODE && isClientErrorStatus(status)
       ? parseApiValidationIssues(details).at(0)
       : undefined;
   if (issue !== undefined) {
     return validationIssueMessage(issue);
   }
-  if (code && isKnownErrorCode(code)) {
+  if (
+    code &&
+    isKnownErrorCode(code) &&
+    !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
+  ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
   if (

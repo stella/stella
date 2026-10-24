@@ -6,11 +6,11 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   compatCorpusIdInputSchema,
+  type CompatId,
   compatIdInputSchema,
   decodeCompatCorpusId,
   decodeCompatId,
   encodeCompatId,
-  type CompatId,
 } from "@/api/mcp/compat-ids";
 
 /**
