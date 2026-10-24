@@ -360,6 +360,7 @@ export const TAGGED_FAILURE_REASON = {
   S3DeadlineCredentialsError: "tagged_failure",
   S3Error: "tagged_failure",
   S3ObjectBudgetError: "tagged_failure",
+  S3ObjectMissingError: "tagged_failure",
   S3ObjectReadError: "tagged_failure",
   S3PresignError: "tagged_failure",
   SSEBroadcastError: "tagged_failure",

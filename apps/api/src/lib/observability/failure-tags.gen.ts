@@ -350,6 +350,7 @@ export const FAILURE_TAGS = [
   "S3DeadlineCredentialsError",
   "S3Error",
   "S3ObjectBudgetError",
+  "S3ObjectMissingError",
   "S3ObjectReadError",
   "S3PresignError",
   "SSEBroadcastError",
