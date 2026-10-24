@@ -30,12 +30,7 @@ export type LogSeverityNumber =
   (typeof LOG_SEVERITY_NUMBER)[keyof typeof LOG_SEVERITY_NUMBER];
 
 export type LogAttributeValue =
-  | boolean
-  | boolean[]
-  | number
-  | number[]
-  | string
-  | string[];
+  boolean | boolean[] | number | number[] | string | string[];
 
 export type LogAttributes = Record<string, LogAttributeValue>;
 
