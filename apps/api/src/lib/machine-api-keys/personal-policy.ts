@@ -3,8 +3,8 @@ import { panic } from "better-result";
 import { statements } from "@stll/permissions";
 
 import {
-  PERSONAL_API_KEY_DEFAULT_SCOPES,
   parseMachineApiKeyPermissions,
+  PERSONAL_API_KEY_DEFAULT_SCOPES,
 } from "@/api/lib/machine-api-key-config";
 import type { PersonalApiKeyScope } from "@/api/lib/machine-api-key-config";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";

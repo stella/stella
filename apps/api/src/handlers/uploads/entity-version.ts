@@ -1,8 +1,8 @@
 /** Presigned-upload transport for creating a new entity file version. */
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
@@ -42,6 +42,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
@@ -278,6 +280,7 @@ export const finalizeEntityVersion = async function* ({
         // file. The post-promote call below only accelerates the queue handoff,
         // so it resolves the same source file: no property pin, same as there.
         await requestNativeExtractionRun({ entityId, tx });
+        await enqueueEntitySearchRepairs(tx, [entityId]);
       }
       return versionResult;
     });
@@ -298,6 +301,7 @@ export const finalizeEntityVersion = async function* ({
     const finalizedResult =
       finalized ??
       panic("Entity version write completed without finalize result");
+    flushEntitySearchRepairs([entityId]).catch(captureError);
     const afterPromote = () => {
       processExtraction(entityId).catch((error: unknown) => {
         captureError(error, { entityId });

@@ -12,8 +12,8 @@ import {
   createTreemapModel,
   createTreemapNumberFormatter,
   localizedTierLabel,
-  treemapColorDomain,
   treemapCategoryValue,
+  treemapColorDomain,
   type VisualTreemapTree,
 } from "./browser/treemap-model";
 

@@ -42,7 +42,7 @@ test.each([
   ).toEqual(expected);
 });
 
-test("the copy menu stays in the viewport at the minimum width it can reach", () => {
+test("reader copy menu stays in the viewport at its minimum width", () => {
   const TEST_MAX_PX = 2000;
   assertProperty(
     "reader copy menu stays in the viewport at its minimum width",
