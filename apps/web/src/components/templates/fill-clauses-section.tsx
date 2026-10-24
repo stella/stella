@@ -12,8 +12,9 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ClauseSlot = { patchKey: string; name: string; body: ClauseBody };
 
@@ -44,7 +45,7 @@ export const FillClausesSection = ({
       return unwrapEden(response);
     },
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
 

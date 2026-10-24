@@ -18,11 +18,12 @@ import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decision
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { queryView } from "@/lib/query-view.logic";
 import {
   FULL_DATE_MEDIUM_TIME_FORMAT,
   isWithinLast,
 } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * How recent the newest change may be for the corpus to count as current:
@@ -56,7 +57,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const format = useFormatter();
   const relativeTime = useRelativeTime();
   const statusQuery = useQuery(caseLawCorpusStatusOptions(country));
-  const statusView = useQueryView(statusQuery);
+  const statusView = queryView(statusQuery);
   useQueryViewError(statusView);
   const status = statusView.type === "items" ? statusView.items : undefined;
 

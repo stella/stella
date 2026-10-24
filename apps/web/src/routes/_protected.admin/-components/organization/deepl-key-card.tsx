@@ -9,7 +9,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLConfigOptions } from "@/lib/deepl/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { KeySettingsSectionProps } from "./ai-settings-section";
@@ -28,7 +28,7 @@ export const DeepLKeyCard = ({
   const settingsQuery = useQuery(
     deepLConfigOptions({ organizationId: activeOrganizationId }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const deeplConfig =
     settingsView.type === "items" ? settingsView.items : undefined;
 

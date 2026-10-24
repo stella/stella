@@ -63,8 +63,9 @@ import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { organizationOptions } from "@/lib/organization/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
@@ -409,7 +410,7 @@ const OriginChip = ({
     ...organizationOptions(organizationId),
     enabled: origin === "manual" && createdByUserId !== null,
   });
-  const organizationView = useQueryView(organizationQuery);
+  const organizationView = queryView(organizationQuery);
   useQueryViewError(organizationView);
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
@@ -445,7 +446,7 @@ const WorkspaceName = ({
   const dataQuery = useQuery(
     workspacesNavigationOptions({ organizationId, userId }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
@@ -566,7 +567,7 @@ const AssignMenu = ({
 }: AssignMenuProps) => {
   const t = useTranslations();
   const organizationQuery = useQuery(organizationOptions(organizationId));
-  const organizationView = useQueryView(organizationQuery);
+  const organizationView = queryView(organizationQuery);
   useQueryViewError(organizationView);
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;

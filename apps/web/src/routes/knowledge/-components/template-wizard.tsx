@@ -55,7 +55,7 @@ import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import type {
   EditableField,
@@ -868,7 +868,7 @@ const BindingSourceConfigControl = ({
 }) => {
   const t = useTranslations();
   const dataQuery = useQuery(bindingCatalogOptions());
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const sources = optionalArray(data?.sources);
   const firstSource = sources.at(0);

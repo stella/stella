@@ -68,9 +68,10 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   lawHomeDescriptor,
   type LawScope,
@@ -308,7 +309,7 @@ function LawHome() {
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const shelfView = useQueryView(shelfQuery);
+  const shelfView = queryView(shelfQuery);
   useQueryViewError(shelfView);
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 

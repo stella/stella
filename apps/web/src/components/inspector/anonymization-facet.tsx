@@ -62,8 +62,9 @@ import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -205,7 +206,7 @@ export const AnonymizationFacet = ({
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
-  const termsQueryView = useQueryView(termsQuery);
+  const termsQueryView = queryView(termsQuery);
   useQueryViewError(termsQueryView);
   const createMutation = useMutation({
     mutationFn: async (vars: {
@@ -401,7 +402,7 @@ export const AnonymizationFacet = ({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
+  const allowlistQueryView = queryView(allowlistQuery);
   useQueryViewError(allowlistQueryView);
   const allowlistEntries = allowlistQuery.data?.entries;
   const matchesReady =

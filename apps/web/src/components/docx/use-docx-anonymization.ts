@@ -13,7 +13,8 @@ import {
 } from "@/components/inspector/inspector-anonymization-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -52,7 +53,7 @@ export const useDocxAnonymizationHighlights = ({
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
-  const anonymizationTermsQueryView = useQueryView(anonymizationTermsQuery);
+  const anonymizationTermsQueryView = queryView(anonymizationTermsQuery);
   useQueryViewError(anonymizationTermsQueryView);
   const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!anonymizationTermsQuery.data) {
@@ -94,7 +95,7 @@ export const useDocxAnonymizationHighlights = ({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: isAnonymizationActive,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
+  const allowlistQueryView = queryView(allowlistQuery);
   useQueryViewError(allowlistQueryView);
   const policyReady =
     anonymizationTermsQuery.status === "success" &&

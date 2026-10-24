@@ -71,9 +71,10 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 import {
@@ -109,7 +110,8 @@ type ChatHistoryPageProps = {
 };
 
 type DeleteDialog =
-  { type: "closed" } | { type: "confirm"; thread: ChatHistoryItem };
+  | { type: "closed" }
+  | { type: "confirm"; thread: ChatHistoryItem };
 
 /**
  * Every chat the reader has started, newest first, grouped by when it was
@@ -173,7 +175,7 @@ export const ChatHistoryPage = ({
     // Typing refines the list in place instead of blanking it per keystroke.
     placeholderData: keepPreviousData,
   });
-  const threadsView = useQueryView(threadsQuery);
+  const threadsView = queryView(threadsQuery);
   useQueryViewError(threadsView);
   const matterUnavailable =
     threadsView.type === "error" &&
@@ -186,7 +188,7 @@ export const ChatHistoryPage = ({
       userId,
     }),
   );
-  const mattersView = useQueryView(mattersQuery);
+  const mattersView = queryView(mattersQuery);
   useQueryViewError(mattersView);
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per

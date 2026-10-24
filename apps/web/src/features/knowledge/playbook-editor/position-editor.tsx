@@ -113,7 +113,8 @@ import {
   type PositionDecisionSummary,
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
@@ -1241,7 +1242,7 @@ const ClausePicker = ({
   );
 
   const dataQuery = useQuery(clausesOptions(organizationId, { search }));
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => "items" in data && data.items.length === 0,
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -1254,7 +1255,7 @@ const ClausePicker = ({
     ...clauseDetailOptions(organizationId, clauseId),
     enabled: clauseId !== "",
   });
-  const detailView = useQueryView(detailQuery);
+  const detailView = queryView(detailQuery);
   useQueryViewError(detailView);
 
   const resolvedTitle = (() => {

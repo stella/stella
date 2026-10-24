@@ -22,7 +22,7 @@ import { contactPickerSearchOptions } from "@/components/contact-picker-queries"
 import { ContactReadError } from "@/components/contact-read-error";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type ContactResult = {
   id: string;
@@ -76,7 +76,7 @@ export const ContactPicker = ({
     200,
   );
 
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...contactPickerSearchOptions({
         organizationId: activeOrganizationId,

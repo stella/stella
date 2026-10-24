@@ -155,8 +155,9 @@ import {
   playbookDraftTabId,
 } from "@/lib/knowledge/playbook-draft-view";
 import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -178,7 +179,8 @@ type UseChatSessionOptions = {
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
-    (() => DocxEditRepresentation | undefined) | undefined;
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
@@ -318,7 +320,7 @@ export const useChatSession = ({
       userId,
     }),
   );
-  const chatToolGrantsView = useQueryView(chatToolGrantsQuery);
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
   useQueryViewError(chatToolGrantsView);
   const storedChatToolGrants =
     chatToolGrantsView.type === "items"
@@ -1103,7 +1105,7 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const createDocumentMattersView = useQueryView(
+  const createDocumentMattersView = queryView(
     useQuery({
       ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>

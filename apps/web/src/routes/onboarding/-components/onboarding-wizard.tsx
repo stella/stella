@@ -43,8 +43,9 @@ import {
   aiAvailabilityOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import { queryView } from "@/lib/query-view.logic";
 import { afterOnboardingNavigation } from "@/lib/redirect";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
@@ -71,7 +72,12 @@ import { OrganizationStep } from "@/routes/onboarding/-components/steps/organiza
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
 type Step =
-  "organization" | "jurisdiction" | "catalogue" | "ai" | "invite" | "download";
+  | "organization"
+  | "jurisdiction"
+  | "catalogue"
+  | "ai"
+  | "invite"
+  | "download";
 
 type WizardData = {
   orgName: string;
@@ -105,11 +111,11 @@ export const OnboardingWizard = () => {
   const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
   const openGuideDrawer = useGuideDrawerStore((store) => store.open);
-  const sessionView = useQueryView(useQuery(sessionOptions));
+  const sessionView = queryView(useQuery(sessionOptions));
   useQueryViewError(sessionView);
   const sessionData =
     sessionView.type === "items" ? sessionView.items : undefined;
-  const nativeToolView = useQueryView(
+  const nativeToolView = queryView(
     useQuery(nativeToolDeployAvailabilityOptions),
   );
   useQueryViewError(nativeToolView);

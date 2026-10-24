@@ -8,7 +8,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { detached } from "@/lib/detached";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
@@ -97,7 +97,7 @@ function WorkflowsView({
 
   const dataQuery = useQuery(flowRunsOptions({ workspaceId }));
   const { isPending } = dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => "items" in data && data.items.length === 0,
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
