@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createReadDecisionSummaryHandler } from "@/api/handlers/case-law/decisions/summary/get";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { decisionSummaryScalingScenario } from "./decision-summary";
@@ -13,14 +14,16 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const small = await decisionSummaryScalingScenario.measure(
-          10,
-          openClient().db,
-        );
-        const large = await decisionSummaryScalingScenario.measure(
-          200,
-          openClient().db,
-        );
+        const small = await decisionSummaryScalingScenario.measure({
+          size: 10,
+          db: openClient().db,
+          createHandler: createReadDecisionSummaryHandler,
+        });
+        const large = await decisionSummaryScalingScenario.measure({
+          size: 200,
+          db: openClient().db,
+          createHandler: createReadDecisionSummaryHandler,
+        });
         console.info(
           "handler-scaling",
           JSON.stringify({

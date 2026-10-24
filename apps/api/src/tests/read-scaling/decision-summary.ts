@@ -10,7 +10,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import readDecisionSummary, {
-  createReadDecisionSummaryHandler,
+  type createReadDecisionSummaryHandler,
 } from "@/api/handlers/case-law/decisions/summary/get";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -26,10 +26,20 @@ import {
 } from "@/api/tests/helpers/case-law-publication-view-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+type DecisionSummaryMeasurementOptions = {
+  size: number;
+  db: GatedTestDb;
+  createHandler: typeof createReadDecisionSummaryHandler;
+};
+
 export const decisionSummaryScalingScenario = {
   name: "public decision summary",
   handler: readDecisionSummary.handler,
-  measure: async (size: number, db: GatedTestDb) => {
+  measure: async ({
+    size,
+    db,
+    createHandler,
+  }: DecisionSummaryMeasurementOptions) => {
     // Temp relations shadow only this connection; schema/defaults and both
     // publication views come from their production owners.
     for (const table of [
@@ -89,7 +99,7 @@ export const decisionSummaryScalingScenario = {
               : "read committed",
         }),
     );
-    const handler = createReadDecisionSummaryHandler(caseLawDb);
+    const handler = createHandler(caseLawDb);
     // Both cardinalities must include the same real registry read rather
     // than one measurement borrowing another measurement's warm cache.
     resetPublicCaseLawConfigForTesting(caseLawDb);

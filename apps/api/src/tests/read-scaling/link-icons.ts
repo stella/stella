@@ -29,7 +29,8 @@ export const exactIconScalingScenario = {
           },
           send: async (command, args) => {
             redisRoundTrips += 1;
-            return await client.send(command, args);
+            const response: unknown = await client.send(command, args);
+            return response;
           },
           close: () => {
             client.close();

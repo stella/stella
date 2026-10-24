@@ -14,7 +14,9 @@ describe("cursor page traversal", () => {
           ? { items: [1, 2], nextCursor: "last" }
           : { items: [3], nextCursor: null };
       },
-      visit: (page) => events.push(`visit:${page.items.join(",")}`),
+      visit: (page) => {
+        events.push(`visit:${page.items.join(",")}`);
+      },
     });
     expect(events).toEqual(["get:first", "visit:1,2", "get:last", "visit:3"]);
   });
