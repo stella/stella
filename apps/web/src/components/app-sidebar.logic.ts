@@ -54,6 +54,38 @@ export const resolveAutomaticExpandedMatterId = ({
 }): string | null =>
   activeMatterIsVisible && activeWorkspaceId ? activeWorkspaceId : null;
 
+export const MATTER_BILLING_LINK_KINDS = {
+  timesheets: "timesheets",
+  invoices: "invoices",
+} as const;
+
+export type MatterBillingLink = {
+  kind: (typeof MATTER_BILLING_LINK_KINDS)[keyof typeof MATTER_BILLING_LINK_KINDS];
+};
+
+export const getMatterBillingLinks = ({
+  canReadInvoices,
+  canReadTimeEntries,
+  timeBillingPreviewEnabled,
+}: {
+  canReadInvoices: boolean;
+  canReadTimeEntries: boolean;
+  timeBillingPreviewEnabled: boolean;
+}): MatterBillingLink[] => {
+  if (!timeBillingPreviewEnabled) {
+    return [];
+  }
+
+  const links: MatterBillingLink[] = [];
+  if (canReadTimeEntries) {
+    links.push({ kind: MATTER_BILLING_LINK_KINDS.timesheets });
+  }
+  if (canReadInvoices) {
+    links.push({ kind: MATTER_BILLING_LINK_KINDS.invoices });
+  }
+  return links;
+};
+
 type RecentWorkspace = {
   id: string;
   lastActivityAt: Date;

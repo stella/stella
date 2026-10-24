@@ -55,6 +55,15 @@ describe("case-law launch readiness", () => {
     ).toThrow("Launch readiness must contain only complete entries");
   });
 
+  test.each(["2026-02-30", "1900-02-29", "0000-01-01"])(
+    "requires an existing CE census day %s",
+    (lastCensusDate) => {
+      expect(() =>
+        parseCaseLawLaunchReadiness([{ ...readyRow, lastCensusDate }]),
+      ).toThrow("Launch readiness must contain only complete entries");
+    },
+  );
+
   test("requires canonical, sorted, unique countries and ISO dates", () => {
     expect(() =>
       parseCaseLawLaunchReadiness([{ ...readyRow, country: "xaa" }]),

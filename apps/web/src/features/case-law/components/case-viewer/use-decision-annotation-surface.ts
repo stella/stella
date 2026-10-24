@@ -12,7 +12,7 @@ import { useReaderAnnotations } from "@/components/legal-reader/annotations/use-
 import type {
   CommentMarginItem,
   ComposerMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+} from "@/components/legal-reader/margin-notes";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { detached } from "@/lib/detached";

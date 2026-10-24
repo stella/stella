@@ -7056,28 +7056,12 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/legal-reader/annotations/create.logic.test.ts": {
-      "peakMb": 211,
-      "baselineMb": 211,
-      "source": {
-        "runId": "39090756337",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/legal-reader/annotations/locate.logic.test.ts": {
       "peakMb": 213,
       "baselineMb": 213,
       "source": {
         "runId": "39090756337",
         "job": "measure-1"
-      }
-    },
-    "src/handlers/legal-reader/annotations/page.logic.test.ts": {
-      "peakMb": 232,
-      "baselineMb": 232,
-      "source": {
-        "runId": "39090756337",
-        "job": "measure-2"
       }
     },
     "src/handlers/legal-reader/answers/model.test.ts": {
@@ -15030,6 +15014,22 @@
       "source": {
         "runId": "39090756337",
         "job": "measure-3"
+      }
+    },
+    "src/lib/legal-search/reader-annotations/create.logic.test.ts": {
+      "peakMb": 193,
+      "baselineMb": 193,
+      "source": {
+        "runId": "37987009011",
+        "job": "measure-4"
+      }
+    },
+    "src/lib/legal-search/reader-annotations/page.logic.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "37987009011",
+        "job": "measure-2"
       }
     },
     "src/lib/legal-search/reconciliation-payload.property.test.ts": {

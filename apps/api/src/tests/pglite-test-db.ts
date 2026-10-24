@@ -48,6 +48,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteProvisionExtractionState,
+  installPgliteReaderAnnotationClaimComments,
   installPgliteReaderAnswerRls,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteSchedulerJobPauseLog,
@@ -831,6 +832,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatSecretRls(db);
   await installPgliteCitationDoctrineRls(db);
   await installPgliteReaderAnswerRls(db);
+  await installPgliteReaderAnnotationClaimComments(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 

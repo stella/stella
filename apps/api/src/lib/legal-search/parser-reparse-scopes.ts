@@ -173,11 +173,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 7,
+    version: 8,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {

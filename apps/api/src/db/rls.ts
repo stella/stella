@@ -54,6 +54,9 @@ export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
 export const SETTING_USER_ID = "app.user_id";
+export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
+  "app.account_export_organization_id";
+export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
@@ -593,6 +596,48 @@ export const authoredNotePolicies = () => [
     using: sql`${organizationCheck} AND ${userCheck}`,
   }),
 ];
+
+/**
+ * A reader's own notes, some of which belong to a matter. A note without a
+ * workspace is an organization note exactly as in `authoredNotePolicies`; one
+ * with a workspace is reachable only while the caller may open that matter
+ * and `matterRowCheck` (the row the note sits on) admits it, so the matter's
+ * walls bind every author, a shared note included. A new note checks
+ * `matterRowHold` instead: the same test, holding the row until the insert's
+ * transaction ends so the row cannot be deleted under a note being written.
+ */
+export const authoredOptionalMatterNotePolicies = ({
+  matterRowCheck,
+  matterRowHold,
+}: {
+  matterRowCheck: SQL;
+  matterRowHold: SQL;
+}) => {
+  const scope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowCheck}))`;
+  const insertScope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowHold}))`;
+  return [
+    p.pgPolicy("organization_select", {
+      for: "select",
+      to: stella,
+      using: sql`${scope} AND (visibility = 'shared' OR ${userCheck})`,
+    }),
+    p.pgPolicy("author_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${insertScope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_update", {
+      for: "update",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_delete", {
+      for: "delete",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+  ];
+};
 
 const organizationOptionalWorkspaceCheck = sql`(
   ${organizationCheck} AND

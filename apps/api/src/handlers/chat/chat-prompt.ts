@@ -30,8 +30,8 @@ import type {
   ReaderAnnotationColor,
   ReaderAnnotationKind,
   ReaderAnnotationStyle,
-  ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,
+  ReaderDocumentTargetType,
 } from "@stll/api-contract/legal-reader-annotations";
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import type {
@@ -1971,7 +1971,7 @@ export const buildActiveDecisionPrompt = ({
 const ACTIVE_READER_ANNOTATIONS_LIMIT = 200;
 const SHARED_ANNOTATION: ReaderAnnotationVisibility = "shared";
 /** The chat's active document is a decision; a statute's marks are not it. */
-const DECISION_ANNOTATION_TARGET: ReaderAnnotationTargetType = "decision";
+const DECISION_ANNOTATION_TARGET: ReaderDocumentTargetType = "decision";
 const ANNOTATION_QUOTE_MAX_CHARS = 1200;
 const ANNOTATION_BODY_MAX_CHARS = 2000;
 /** The column's own bound. */
@@ -2544,7 +2544,7 @@ export const buildActiveStatutePrompt = ({
     .join("\n\n");
 
 /** The chat's active document is a statute; a decision's marks are not it. */
-const STATUTE_ANNOTATION_TARGET: ReaderAnnotationTargetType = "statute";
+const STATUTE_ANNOTATION_TARGET: ReaderDocumentTargetType = "statute";
 /** Names these reads in a payload-unavailable capture. */
 const ACTIVE_STATUTE_READ_STEP = "chatPrompt.activeStatuteAst";
 const ACTIVE_STATUTE_TEXT_READ_STEP = "chatPrompt.activeStatuteText";

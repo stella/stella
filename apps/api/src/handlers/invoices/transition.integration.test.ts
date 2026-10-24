@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -224,13 +225,16 @@ describe("invoice transition integration", () => {
         .set({ currency: "EUR" })
         .where(eq(invoices.id, invoiceId));
       const beforeFinalize = await readDocument();
+      if (beforeFinalize === undefined) {
+        panic("The issued invoice must exist before re-finalizing");
+      }
       expect(beforeFinalize).toMatchObject({
         netAmount: null,
         vatAmount: null,
         totalAmount: cents(12_300),
       });
-      expect(beforeFinalize?.lines).toHaveLength(1);
-      expect(beforeFinalize?.lines.at(0)?.vatAmount).toBe(cents(2300));
+      expect(beforeFinalize.lines).toHaveLength(1);
+      expect(beforeFinalize.lines.at(0)?.vatAmount).toBe(cents(2300));
       expect(await runTransition(invoiceId, "finalize")).toEqual({
         id: invoiceId,
       });

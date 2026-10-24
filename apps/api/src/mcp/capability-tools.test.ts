@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
 import {
   auditLogs,
+  legalReaderAnnotations,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
@@ -51,6 +52,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -364,6 +366,21 @@ describe("list verification access grants across MCP tools", () => {
       params,
       body: { runId: resourceId, claimIds: [resourceId] },
     },
+    "lists.verifications.claim-comments.create": {
+      params,
+      body: { runId: resourceId, claimId: resourceId, body: "Synthetic note" },
+    },
+    "lists.verifications.claim-comments.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-comments.update": {
+      params: { ...params, annotationId: resourceId },
+      body: { change: "body", body: "Synthetic note" },
+    },
+    "lists.verifications.claim-comments.delete": {
+      params: { ...params, annotationId: resourceId },
+    },
     "lists.items.fact-details.update": {
       params,
       body: {
@@ -391,6 +408,11 @@ describe("list verification access grants across MCP tools", () => {
       body: { filePropertyName: "Documents" },
     },
   } as const;
+  // Irreversible capabilities only run, or validate, once the human confirmed.
+  const confirmation = (capability: string) =>
+    capability === "lists.verifications.claim-comments.delete"
+      ? { confirm: true }
+      : {};
 
   let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
   let previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
@@ -520,12 +542,24 @@ describe("list verification access grants across MCP tools", () => {
         });
       },
       // Row locks (the sample loader's matter lock) read no rows here.
-      execute: async () => {
+      execute: async (statement: SQL) => {
         resourceLookups += 1;
-        return [];
+        return aggregateExecutionRows(statement, false);
       },
       insert: () => ({ values: async () => [] }),
-      update: () => {
+      // A reader comment is written through its own guarded predicate; no
+      // stored comment has the synthetic id, so the write reaches no row.
+      delete: () => {
+        resourceLookups += 1;
+        return { where: () => ({ returning: async () => [] }) };
+      },
+      update: (table: unknown) => {
+        if (table === legalReaderAnnotations) {
+          resourceLookups += 1;
+          return {
+            set: () => ({ where: () => ({ returning: async () => [] }) }),
+          };
+        }
         mutations += 1;
         return {
           set: () => ({
@@ -855,7 +889,12 @@ describe("list verification access grants across MCP tools", () => {
       expect(described.isError).not.toBe(true);
       const result = await handleCapabilityCall({
         context: fixture.context,
-        args: { capability, input, validate_only: true },
+        args: {
+          capability,
+          input,
+          validate_only: true,
+          ...confirmation(capability),
+        },
       });
       expect(
         parseToolPayload<{ valid: boolean; capability: string }>(result),
@@ -923,7 +962,7 @@ describe("list verification access grants across MCP tools", () => {
       const fixture = verificationContext();
       const result = await handleCapabilityCall({
         context: fixture.context,
-        args: { capability, input },
+        args: { capability, input, ...confirmation(capability) },
       });
       if (capability === "lists.items.sources.verification.update") {
         expect(result.isError).not.toBe(true);
@@ -935,7 +974,10 @@ describe("list verification access grants across MCP tools", () => {
       }
       expect(fixture.resourceLookups()).toBeGreaterThan(0);
       expect(fixture.mutations()).toBe(0);
-      if (capability === "lists.verifications.list") {
+      if (
+        capability === "lists.verifications.list" ||
+        capability === "lists.verifications.claim-comments.list"
+      ) {
         expect(result.isError).not.toBe(true);
         expect(parseToolPayload<{ items: unknown[] }>(result)).toMatchObject({
           items: [],

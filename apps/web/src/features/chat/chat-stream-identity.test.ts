@@ -657,7 +657,7 @@ type ToolTargetOptions = {
 /** START reuses the active assistant when its preferred parent has no state.
  * ARGS/END route to the owner recorded by START, identified here by the
  * unique tool-call part already visible in the previous emit. An approval
- * interrupt updates only the active owner containing the awaited call. */
+ * interrupt updates only the unique owner already containing the awaited call. */
 const toolTargetsMessage = ({
   cause,
   message,
@@ -677,13 +677,20 @@ const toolTargetsMessage = ({
         )
       );
     case EventType.RUN_FINISHED:
-      return (
-        message.id === activeAssistantId &&
-        message.parts.some(
-          (part) =>
-            part.type === "tool-call" && awaitedCalls(cause).includes(part.id),
-        )
-      );
+      return awaitedCalls(cause).some((toolCallId) => {
+        const owners = previous.filter(({ parts }) =>
+          parts.some(
+            (part) => part.type === "tool-call" && part.id === toolCallId,
+          ),
+        );
+        return (
+          owners.length === 1 &&
+          owners.at(0)?.id === message.id &&
+          message.parts.some(
+            (part) => part.type === "tool-call" && part.id === toolCallId,
+          )
+        );
+      });
     case EventType.TOOL_CALL_ARGS:
     case EventType.TOOL_CALL_END: {
       const owners = previous.filter(({ parts }) =>
@@ -1100,6 +1107,8 @@ describe("streamed chunks keep what they do not change", () => {
             { kind: "tools", calls: [{ args: ['{"query":""}'] }] },
             { kind: "text", delta: "After tool" },
             { kind: "text", delta: " and more" },
+            { kind: "snapshot" },
+            { kind: "reasoning", delta: "Later assistant activity" },
           ],
         },
       },
@@ -1108,6 +1117,7 @@ describe("streamed chunks keep what they do not change", () => {
     const historyIds = new Set(history.map(({ id }) => id));
     const reached = new Set<StreamChunk["type"]>();
     let unrelatedCloneChecked = false;
+    let earlierAwaitedOwnerReached = false;
     for (const [index, next] of observed.emits.entries()) {
       const previous = observed.emits.at(index - 1);
       const { cause } = next;
@@ -1140,6 +1150,34 @@ describe("streamed chunks keep what they do not change", () => {
         )
       ) {
         reached.add(cause.type);
+        if (cause.type === EventType.RUN_FINISHED) {
+          earlierAwaitedOwnerReached ||= next.shown.some(
+            (message) =>
+              message.id !== activeAssistantId &&
+              toolTargetsMessage({
+                cause,
+                message,
+                historyIds,
+                activeAssistantId,
+                previous: previous.shown,
+              }),
+          );
+          const corrupted = {
+            ...next,
+            shown: next.shown.map((message) =>
+              message.id === activeAssistantId ? { ...message } : message,
+            ),
+          };
+          expect(() =>
+            expectStableStreamIdentity({
+              changed: observed.changed,
+              history,
+              emits: observed.emits.map((emit, emitIndex) =>
+                emitIndex === index ? corrupted : emit,
+              ),
+            }),
+          ).toThrow("expect(received).toBe(expected)");
+        }
         if (
           !unrelatedCloneChecked &&
           cause.type === EventType.TOOL_CALL_START
@@ -1171,6 +1209,7 @@ describe("streamed chunks keep what they do not change", () => {
       }
     }
     expect(unrelatedCloneChecked).toBe(true);
+    expect(earlierAwaitedOwnerReached).toBe(true);
     expect(reached).toEqual(
       new Set([
         EventType.TOOL_CALL_START,

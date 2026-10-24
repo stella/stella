@@ -409,8 +409,8 @@ const transitionInvoice = createSafeHandler(
               return Result.err(totals.error);
             }
             vatAmountMinor = totals.value.vatAmountMinor;
-          } else if (vatAmountMinor === null) {
-            vatAmountMinor = await readIssuedInvoiceVat(tx, scope);
+          } else {
+            vatAmountMinor ??= await readIssuedInvoiceVat(tx, scope);
           }
           const currencyError = await vatCurrencyError({
             tx,

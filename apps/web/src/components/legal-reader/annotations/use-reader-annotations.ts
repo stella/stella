@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -32,6 +32,7 @@ import {
   readerAnnotationsOptions,
 } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { useOptimisticAnnotationMutations } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import { useReaderAnnotationHistory } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -49,13 +50,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
-/** A mark not yet acknowledged by the server, keyed so it can be told apart. */
-const PENDING_ID_PREFIX = "pending:";
-
-/** A mark the server has not stored yet cannot be changed or removed. */
-export const isPendingAnnotationId = (id: string): boolean =>
-  id.startsWith(PENDING_ID_PREFIX);
-
 /** Guest migration is bounded so signing in never opens a request flood. */
 const GUEST_ANNOTATION_MIGRATION_CONCURRENCY = 4;
 
@@ -65,83 +59,6 @@ type ReaderAnnotations = {
   /** Marks this tab holds that no account owns yet. */
   guestCount: number;
   mode: "authenticated" | "guest";
-};
-
-/**
- * The rows a new mark will have once stored, so the text shows it the moment
- * the reader picks a colour. One row per paragraph, under one group when
- * there are several, as the server lays them out.
- */
-const pendingRows = ({
-  author,
-  input,
-  stamp,
-}: {
-  author: { id: string; image: string | null; name: string | null };
-  input: CreateAnnotationInput;
-  stamp: number;
-}): ReaderAnnotation[] => {
-  const groupId =
-    input.spans.length > 1 ? `${PENDING_ID_PREFIX}${stamp}` : null;
-  const now = Temporal.Now.instant().toString();
-  return input.spans.map((span, index) => ({
-    authorId: author.id,
-    authorImage: author.image,
-    authorName: author.name ?? "",
-    blockAnchorId: span.blockAnchorId,
-    body: input.kind === "comment" && index === 0 ? input.body : null,
-    color: input.kind === "highlight" ? input.color : null,
-    createdAt: now,
-    endOffset: span.endOffset,
-    groupId,
-    id: toSafeId<"legalReaderAnnotation">(
-      `${PENDING_ID_PREFIX}${stamp}:${index}`,
-    ),
-    kind: input.kind,
-    mine: true,
-    quote: span.quote,
-    startOffset: span.startOffset,
-    style: input.kind === "highlight" ? input.style : null,
-    updatedAt: now,
-    visibility: input.visibility,
-  }));
-};
-
-/** The rows one change reaches: the whole group of the named row. */
-const rowsOfSame = (
-  rows: readonly ReaderAnnotation[],
-  id: string,
-): ((row: ReaderAnnotation) => boolean) => {
-  const target = rows.find((row) => row.id === id);
-  return (row) =>
-    row.id === id ||
-    (target?.groupId !== null &&
-      target !== undefined &&
-      row.groupId === target.groupId);
-};
-
-const applyChange = (
-  row: ReaderAnnotation,
-  change: UpdateAnnotationInput,
-): ReaderAnnotation => {
-  switch (change.change) {
-    case "body": {
-      return row.body === null ? row : { ...row, body: change.body };
-    }
-    case "color": {
-      return { ...row, color: change.color };
-    }
-    case "style": {
-      return { ...row, style: change.style };
-    }
-    case "visibility": {
-      return { ...row, visibility: change.visibility };
-    }
-    default: {
-      change satisfies never;
-      return panic(`Unhandled change: ${String(change)}`);
-    }
-  }
 };
 
 /**
@@ -160,7 +77,6 @@ export const useReaderAnnotations = (
   const user = useMaybeAuthenticatedUser();
   const storage = useSessionStorage();
   const [localStore, setStore] = useState(EMPTY_GUEST_ANNOTATION_STORE);
-  const pendingSequence = useRef(0);
   const targetKey = readerAnnotationTargetKey(target);
 
   const annotationsQuery = readerAnnotationsOptions({
@@ -174,91 +90,28 @@ export const useReaderAnnotations = (
   useQueryViewError(dataView);
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const patchCache = async (
-    patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
-  ): Promise<{ previous: ReaderAnnotation[] | undefined }> => {
-    await queryClient.cancelQueries({ queryKey });
-    const previous = queryClient.getQueryData(queryKey);
-    queryClient.setQueryData(queryKey, (rows) => patch(optionalArray(rows)));
-    return { previous };
-  };
-
-  const settle = {
-    onError: (
-      error: unknown,
-      _input: unknown,
-      context: { previous: ReaderAnnotation[] | undefined } | undefined,
-    ) => {
-      if (context !== undefined) {
-        queryClient.setQueryData(queryKey, context.previous);
-      }
-      getAnalytics().captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey });
-    },
-  };
-
-  const create = useMutation({
-    mutationFn: async (input: CreateAnnotationInput) => {
+  const { create, remove, update } = useOptimisticAnnotationMutations({
+    create: async (input: CreateAnnotationInput) => {
       const response = await api.reader.annotations.post({
         ...input,
         ...targetKey,
       });
       return unwrapEden(response);
     },
-    onMutate: async (input) => {
-      // Tells pending marks apart within one reader; only ever advanced on a
-      // click, never while rendering.
-      pendingSequence.current += 1;
-      const stamp = pendingSequence.current;
-      return await patchCache((rows) => [
-        ...rows,
-        ...pendingRows({
-          author: {
-            id: user?.id ?? "",
-            image: user?.image ?? null,
-            name: user?.name ?? null,
-          },
-          input,
-          stamp,
-        }),
-      ]);
-    },
-    ...settle,
-  });
-
-  const update = useMutation({
-    mutationFn: async ({ id, ...change }: UpdateAnnotationInput) => {
-      const response = await api.reader
-        .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
-        .patch(change);
-      return unwrapEden(response);
-    },
-    onMutate: async (input) =>
-      await patchCache((rows) => {
-        const touched = rowsOfSame(rows, input.id);
-        return rows.map((row) =>
-          touched(row) ? applyChange(row, input) : row,
-        );
-      }),
-    ...settle,
-  });
-
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
+    pendingInput: (input) => input,
+    queryKey,
+    remove: async (id: string) => {
       const response = await api.reader
         .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
         .delete();
       return unwrapEden(response);
     },
-    onMutate: async (id) =>
-      await patchCache((rows) => {
-        const touched = rowsOfSame(rows, id);
-        return rows.filter((row) => !touched(row));
-      }),
-    ...settle,
+    update: async ({ id, ...change }: UpdateAnnotationInput) => {
+      const response = await api.reader
+        .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
+        .patch(change);
+      return unwrapEden(response);
+    },
   });
 
   // Whatever this tab still holds from before the reader had an account.
@@ -330,15 +183,6 @@ export const useReaderAnnotations = (
     );
   }, [queryClient, signedIn, storage, t]);
 
-  // Steps belong to one document under one account: signing in, switching
-  // organization or opening another document starts a fresh history.
-  const historyScope = [
-    user?.id ?? "guest",
-    user?.activeOrganizationId ?? "",
-    targetKey.targetType,
-    targetKey.targetId,
-  ].join(":");
-
   // The tab's marks as they are now, not as this render saw them: a step
   // taken right after another reads what that one left.
   const currentGuestStore = () =>
@@ -346,34 +190,18 @@ export const useReaderAnnotations = (
 
   const commit = (
     next: typeof guestStore,
-    action: "create" | "delete" | "update",
+    action: GuestAnnotationAction,
   ): Result<void, Error> => {
-    if (storage === null) {
-      notifyUserError(
-        undefined,
-        t("legalReader.annotations.guestStorageUnavailable"),
-      );
-      return Result.err(
-        new ClientOperationError({
-          action: `${action}-guest-reader-annotation`,
-          message: "Guest annotation storage is unavailable",
-        }),
-      );
+    const persisted = persistGuestAnnotationStore({
+      action,
+      next,
+      storage,
+      unavailableMessage: t("legalReader.annotations.guestStorageUnavailable"),
+    });
+    if (Result.isOk(persisted)) {
+      setStore(next);
     }
-    const stored = writeGuestAnnotationStore(storage, next);
-    if (Result.isError(stored)) {
-      getAnalytics().captureError(stored.error, {
-        operation: `legal-reader.guest-annotation.${action}`,
-        type: "detached",
-      });
-      notifyUserError(
-        stored.error,
-        t("legalReader.annotations.guestStorageUnavailable"),
-      );
-      return Result.err(stored.error);
-    }
-    setStore(next);
-    return Result.ok(undefined);
+    return persisted;
   };
 
   const guestWrites: ReaderAnnotationWrites = {
@@ -419,28 +247,17 @@ export const useReaderAnnotations = (
       ),
   };
 
-  // A failed write has already rolled the cache back and told the reader why
-  // (`settle.onError`); the result only says whether it held.
-  const accountWrites: ReaderAnnotationWrites = {
-    create: async (input: CreateAnnotationInput) =>
-      (await Result.tryPromise(async () => create.mutateAsync(input))).map(
-        (created) => created.ids,
-      ),
-    remove: async (id: string) =>
-      (await Result.tryPromise(async () => remove.mutateAsync(id))).map(
-        () => undefined,
-      ),
-    // The cache, not this render: it already holds what a write just stored.
-    rows: () => optionalArray(queryClient.getQueryData(queryKey)),
-    update: async (input: UpdateAnnotationInput) =>
-      (await Result.tryPromise(async () => update.mutateAsync(input))).map(
-        () => undefined,
-      ),
-  };
-
   const controller = useReaderAnnotationHistory({
-    scope: historyScope,
-    writes: user === null ? guestWrites : accountWrites,
+    scope: readerAnnotationHistoryScope(user, targetKey),
+    writes:
+      user === null
+        ? guestWrites
+        : accountAnnotationWrites({
+            mutations: { create, remove, update },
+            // The cache, not this render: it already holds what a write just
+            // stored.
+            rows: () => optionalArray(queryClient.getQueryData(queryKey)),
+          }),
   });
 
   if (user !== null) {
@@ -463,3 +280,89 @@ export const useReaderAnnotations = (
     mode: "guest",
   };
 };
+
+type HistoryScopeUser = {
+  id: string;
+  activeOrganizationId?: string | null | undefined;
+};
+
+/** Steps belong to one document under one account: signing in, switching
+ * organization or opening another document starts a fresh history. */
+function readerAnnotationHistoryScope(
+  user: HistoryScopeUser | null,
+  targetKey: { targetId: string; targetType: string },
+): string {
+  return [
+    user?.id ?? "guest",
+    user?.activeOrganizationId ?? "",
+    targetKey.targetType,
+    targetKey.targetId,
+  ].join(":");
+}
+
+type AccountAnnotationWritesOptions = {
+  mutations: {
+    create: (
+      input: CreateAnnotationInput,
+    ) => Promise<{ ids: readonly string[] }>;
+    remove: (id: string) => Promise<unknown>;
+    update: (input: UpdateAnnotationInput) => Promise<unknown>;
+  };
+  rows: () => readonly ReaderAnnotation[];
+};
+
+/** A failed write has already rolled the cache back and told the reader why
+ * (the mutations' error handler); the result only says whether it held. */
+function accountAnnotationWrites({
+  mutations: { create, remove, update },
+  rows,
+}: AccountAnnotationWritesOptions): ReaderAnnotationWrites {
+  return {
+    create: async (input) =>
+      (await Result.tryPromise(async () => create(input))).map(
+        (created) => created.ids,
+      ),
+    remove: async (id) =>
+      (await Result.tryPromise(async () => remove(id))).map(() => undefined),
+    rows,
+    update: async (input) =>
+      (await Result.tryPromise(async () => update(input))).map(() => undefined),
+  };
+}
+
+type GuestAnnotationAction = "create" | "delete" | "update";
+
+type PersistGuestAnnotationStoreOptions = {
+  action: GuestAnnotationAction;
+  next: Parameters<typeof writeGuestAnnotationStore>[1];
+  storage: Parameters<typeof writeGuestAnnotationStore>[0] | null;
+  unavailableMessage: string;
+};
+
+/** Writes the tab's marks, telling the reader when the tab cannot keep them. */
+function persistGuestAnnotationStore({
+  action,
+  next,
+  storage,
+  unavailableMessage,
+}: PersistGuestAnnotationStoreOptions): Result<void, Error> {
+  if (storage === null) {
+    notifyUserError(undefined, unavailableMessage);
+    return Result.err(
+      new ClientOperationError({
+        action: `${action}-guest-reader-annotation`,
+        message: "Guest annotation storage is unavailable",
+      }),
+    );
+  }
+  const stored = writeGuestAnnotationStore(storage, next);
+  if (Result.isError(stored)) {
+    getAnalytics().captureError(stored.error, {
+      operation: `legal-reader.guest-annotation.${action}`,
+      type: "detached",
+    });
+    notifyUserError(stored.error, unavailableMessage);
+    return Result.err(stored.error);
+  }
+  return Result.ok(undefined);
+}

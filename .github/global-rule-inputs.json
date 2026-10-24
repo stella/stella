@@ -280,7 +280,8 @@
     "scripts/workflow-cache-policy.test.ts",
     "scripts/workflow-call-permissions.test.ts",
     "scripts/workflow-concurrency.test.ts",
-    "scripts/workflow-run-trust.test.ts"
+    "scripts/workflow-run-trust.test.ts",
+    "scripts/workflow-skipped-needs.test.ts"
   ],
   "changeScoped": []
 }

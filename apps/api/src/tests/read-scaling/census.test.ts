@@ -1,19 +1,28 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import api from "@/api/server";
 
 import {
+  ledgerGitEnv,
   ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
+import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import {
+  readScenarioRegistry,
+  scenarioMembershipViolations,
+} from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import {
   apiScalingSurface,
@@ -22,19 +31,87 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   ...readScalingScenarios,
+  ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   clientInvoicePrefillScalingScenario,
+  ...claimCommentScalingScenarios,
 ];
 const measuredApiReads = api.routes
   .filter(({ handler }) =>
     measuredApiScenarios.some((scenario) => scenario.handler === handler),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
+
+test("previously measured scenarios retain their handler or tool identity", async () => {
+  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
+  const readBaseSource = (file: string) => {
+    const result = Bun.spawnSync(["git", "show", `${base}:${file}`], {
+      cwd: repoRoot,
+      env: ledgerGitEnv(),
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) {
+      return panic(
+        `Cannot read base scaling registry ${file}: ${result.stderr.toString()}`,
+      );
+    }
+    return result.stdout.toString();
+  };
+  for (const registry of [
+    {
+      kind: "api",
+      file: "apps/api/src/tests/read-scaling/census.test.ts",
+      symbol: "measuredApiScenarios",
+      runtimeNames: measuredApiScenarios.map(({ name }) => name),
+    },
+    {
+      kind: "mcp",
+      file: "apps/api/src/tests/read-scaling/mcp-scenarios.ts",
+      symbol: "mcpScalingScenarios",
+      runtimeNames: mcpScalingScenarios.map(({ name }) => name),
+    },
+  ] as const) {
+    const current = readScenarioRegistry({
+      ...registry,
+      readSource: (file) => readFileSync(path.join(repoRoot, file), "utf-8"),
+    });
+    expect(current.map(({ name }) => name)).toEqual(registry.runtimeNames);
+    for (const entry of current) {
+      if (entry.kind !== "api") {
+        continue;
+      }
+      const ownerModule: unknown = await import(
+        path.join(repoRoot, entry.handlerOwner.file)
+      );
+      if (!isRecord(ownerModule)) {
+        panic(
+          `Missing scaling handler export ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
+        );
+      }
+      const owner = ownerModule[entry.handlerOwner.exportName];
+      if (!isRecord(owner) || !("handler" in owner)) {
+        panic(
+          `Scaling owner has no handler: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
+        );
+      }
+      expect(owner["handler"]).toBe(
+        measuredApiScenarios.find(({ name }) => name === entry.name)?.handler,
+      );
+    }
+    expect(
+      scenarioMembershipViolations({
+        base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
+        current,
+      }),
+    ).toEqual([]);
+  }
+});
 
 test("every scaling scenario exercises a mounted API handler", () => {
   for (const scenario of measuredApiScenarios) {
