@@ -333,6 +333,8 @@ const createStreamingServer = (
   const burst: Burst = { firstAt: undefined, lastAt: undefined };
   const unexpected: string[] = [];
   let finished = false;
+  // Settles when the chat stream has delivered its last event and closed.
+  const streamClosed = Promise.withResolvers<undefined>();
 
   const threadPage = () =>
     Response.json({
@@ -376,12 +378,15 @@ const createStreamingServer = (
     return new Response(
       new ReadableStream<Uint8Array>({
         pull: async (controller) => {
+          // real-time: the budget is commits per second, so the deltas arrive
+          // at a real pace, as the network delivers them.
           await sleep(DELTA_INTERVAL_MS);
           const event = stream[index];
           index += 1;
           if (event === undefined) {
             finished = true;
             controller.close();
+            streamClosed.resolve(undefined);
             return;
           }
           if (streamChunkKindOf(event) === kind) {
@@ -426,7 +431,13 @@ const createStreamingServer = (
     return Response.json({ message: "Not served" }, { status: 404 });
   };
 
-  return { burst, fetch, finished: () => finished, unexpected };
+  return {
+    burst,
+    closed: streamClosed.promise,
+    fetch,
+    finished: () => finished,
+    unexpected,
+  };
 };
 
 // --- The measurement --------------------------------------------------------
@@ -453,9 +464,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
         id: toSafeId<"chatMessage">(USER_MESSAGE_ID),
       }),
   );
-  for (let wait = 0; wait < 2000 && !server.finished(); wait += 1) {
-    await sleep(5);
-  }
+  await server.closed;
   // Let the page settle what the end of the run started.
   await sleep(100);
   expect(await sent).toEqual(Result.ok(undefined));
