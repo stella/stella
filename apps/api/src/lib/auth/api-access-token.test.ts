@@ -26,7 +26,7 @@ const USER_CLAIMS = {
 /** A provider verifier that accepts any token and hands back `payload`. */
 const verifierReturning =
   (payload: JWTPayload) =>
-  async (_token: string, _options?: unknown): Promise<JWTPayload> =>
+  async (_token: string | undefined, _options?: unknown): Promise<JWTPayload> =>
     await Promise.resolve(payload);
 
 const authenticate = async (payload: JWTPayload) => {
