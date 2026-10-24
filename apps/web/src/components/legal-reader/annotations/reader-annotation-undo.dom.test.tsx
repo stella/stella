@@ -304,7 +304,7 @@ type ScopeHistoryProps = {
   onDispose?: (controller: ReaderAnnotationController) => void;
 };
 
-const scopeHistory = (initialWrites: ReaderAnnotationWrites) =>
+const scopeHistory = (initialProps: ScopeHistoryProps) =>
   renderHook(
     ({ scope, writes, onCommit, onDispose }: ScopeHistoryProps) => {
       const controller = useReaderAnnotationHistory({ scope, writes });
@@ -318,7 +318,7 @@ const scopeHistory = (initialWrites: ReaderAnnotationWrites) =>
       return controller;
     },
     {
-      initialProps: { scope: "A", writes: initialWrites },
+      initialProps,
       wrapper: ({ children }) => (
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ToastProvider>{children}</ToastProvider>
@@ -338,7 +338,7 @@ test("queued undo stays with its requesting scope while another document complet
       return await a.writes.create(input);
     },
   };
-  const view = scopeHistory(delayed);
+  const view = scopeHistory({ scope: "A", writes: delayed });
   const creating = view.result.current.create(scopeInput);
   const undoing = view.result.current.undo();
   await act(async () => {
@@ -364,7 +364,7 @@ test("queued undo stays with its requesting scope while another document complet
 test("returning to a previous document or account starts a fresh history", async () => {
   const a = recordingStore();
   const b = recordingStore();
-  const view = scopeHistory(a.writes);
+  const view = scopeHistory({ scope: "A", writes: a.writes });
   await act(async () => {
     await view.result.current.create(scopeInput);
   });
@@ -387,7 +387,7 @@ test("a previous scope's deferred write cannot repopulate history after returnin
       return await a.writes.create(input);
     },
   };
-  const view = scopeHistory(delayed);
+  const view = scopeHistory({ scope: "A", writes: delayed });
   const creating = view.result.current.create(scopeInput);
   view.rerender({ scope: "B", writes: recordingStore().writes });
   view.rerender({ scope: "A", writes: a.writes });
@@ -405,10 +405,13 @@ test("unmounting discards an undo waiting on an earlier write", async () => {
   const store = recordingStore();
   const pending = Promise.withResolvers<undefined>();
   const view = scopeHistory({
-    ...store.writes,
-    create: async (input) => {
-      await pending.promise;
-      return await store.writes.create(input);
+    scope: "A",
+    writes: {
+      ...store.writes,
+      create: async (input) => {
+        await pending.promise;
+        return await store.writes.create(input);
+      },
     },
   });
   const creating = view.result.current.create(scopeInput);
@@ -429,10 +432,13 @@ test("scope commit retires old work and accepts new writes before passive effect
   const b = recordingStore();
   const pending = Promise.withResolvers<undefined>();
   const view = scopeHistory({
-    ...a.writes,
-    create: async (input) => {
-      await pending.promise;
-      return await a.writes.create(input);
+    scope: "A",
+    writes: {
+      ...a.writes,
+      create: async (input) => {
+        await pending.promise;
+        return await a.writes.create(input);
+      },
     },
   });
   const previous = view.result.current;
@@ -459,7 +465,7 @@ test("scope commit retires old work and accepts new writes before passive effect
 
 test("unmount commit rejects stale writes before passive cleanup", async () => {
   const store = recordingStore();
-  const view = scopeHistory(store.writes);
+  const view = scopeHistory({ scope: "A", writes: store.writes });
   const completed = Promise.withResolvers<Promise<void>>();
   view.rerender({
     scope: "A",
