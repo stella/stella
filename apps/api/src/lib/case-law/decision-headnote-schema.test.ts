@@ -11,9 +11,12 @@ import { LIMITS } from "@/api/lib/limits";
 
 describe("decision headnote preview response schema", () => {
   test("matches the shared contract", () => {
+    // `branded` compares structure: the contract's present branch is an
+    // intersection, which the strict identity check never equates with the
+    // flat object the schema infers.
     expectTypeOf<
       v.InferOutput<typeof decisionHeadnotePreviewSchema>
-    >().toEqualTypeOf<DecisionHeadnotePreview>();
+    >().branded.toEqualTypeOf<DecisionHeadnotePreview>();
   });
 
   test.each([
