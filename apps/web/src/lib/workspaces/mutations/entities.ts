@@ -136,19 +136,19 @@ export const useCreateFolderFromSelection = () => {
       await invokeCapability(
         "entities.folder-from-selection.create",
         async (request) => {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["folder-from-selection"].post(
-              {
-                name,
-                parentId:
-                  parentId === null ? null : toSafeId<"entity">(parentId),
-                entityIds: entityIds.map((entityId) =>
-                  toSafeId<"entity">(entityId),
-                ),
-              },
-              request,
-            );
+          const entitiesRoute = api.entities({
+            workspaceId: toSafeId<"workspace">(workspaceId),
+          });
+          const response = await entitiesRoute["folder-from-selection"].post(
+            {
+              name,
+              parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+              entityIds: entityIds.map((entityId) =>
+                toSafeId<"entity">(entityId),
+              ),
+            },
+            request,
+          );
           return unwrapEden(response);
         },
       ),

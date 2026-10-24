@@ -185,7 +185,11 @@ const config = {
   permissions: { entity: ["create", "update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityRealtimeUpdates,
-  mcp: { type: "covered", by: "save_document" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   body: createFolderFromSelectionBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
