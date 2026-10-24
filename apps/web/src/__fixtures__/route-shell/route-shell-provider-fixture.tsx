@@ -28,12 +28,13 @@ import {
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
 import type { api } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts";
+  suite?: "leaf-shells" | "law-hosts" | "professional-use";
 };
 
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
@@ -68,6 +69,7 @@ const setupFixtureEnvironment = (
 ) => {
   GlobalRegistrator.register({ url: "http://localhost:3000/law" });
   Object.assign(import.meta.env, {
+    DEV: true,
     VITE_PUBLIC_LAW_ENABLED: "true",
     VITE_PUBLIC_KNOWLEDGE_ENABLED:
       mode === "public-knowledge" ? "true" : "false",
@@ -224,6 +226,9 @@ const installFixtureNetwork = () => {
   const state: { audience: FixtureAudience } = {
     audience: FIXTURE_AUDIENCE.anonymous,
   };
+  const professionalUseState: { status: "accepted" | "required" } = {
+    status: "accepted",
+  };
   const user = {
     id: "user-fixture",
     email: "member@example.test",
@@ -296,6 +301,9 @@ const installFixtureNetwork = () => {
         return Response.json({ role: "owner" });
       }
       if (pathname === "/v1/me/professional-use") {
+        if (professionalUseState.status === "required") {
+          return Response.json({ status: "required" });
+        }
         return Response.json({
           status: "accepted",
           statementVersion: "2026-10",
@@ -472,6 +480,7 @@ const installFixtureNetwork = () => {
 
   return {
     state,
+    professionalUseState,
     user,
     requests,
     unexpectedRequests,
@@ -508,6 +517,7 @@ const loadFixtureRuntime = async (
 
   const { routeTree } = await import("@/router");
   const { createAppQueryClient } = await import("@/lib/react-query");
+  const { professionalUseOptions } = await import("@/lib/auth-queries");
   const { createMemoryHistory, createRouter, RouterProvider, useMatches } =
     await import("@tanstack/react-router");
   const {
@@ -518,7 +528,15 @@ const loadFixtureRuntime = async (
   } = await import("@testing-library/react");
   const waitFor = async (assertion: () => void) =>
     waitForDom(assertion, { onTimeout: (error) => error });
-  const { initializeI18n } = await import("@/i18n/i18n-store");
+  const { initializeI18n, useI18nStore } = await import("@/i18n/i18n-store");
+  const initializeFixtureI18n = async () => {
+    if (!Object.hasOwn(useI18nStore, "persist")) {
+      const state = useI18nStore.getState();
+      await state.loadMessages(state.lang);
+      return;
+    }
+    await initializeI18n();
+  };
   const { useFormatter, useLocale } = await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
     await import("@/lib/analytics/route-error-lifecycle-context");
@@ -583,11 +601,11 @@ const loadFixtureRuntime = async (
     (route) => !hasChildren(route) && route.options.component !== undefined,
   );
   const selectedLeaves =
-    suite === "law-hosts"
-      ? []
-      : uiLeaves.filter(
+    suite === "leaf-shells"
+      ? uiLeaves.filter(
           (route) => isLegacyTool(route) === (mode === "legacy-tools"),
-        );
+        )
+      : [];
   const exercised = new Set<string>();
   const expectedCases: string[] = [];
   const usedExceptions = new Set<string>();
@@ -625,6 +643,7 @@ const loadFixtureRuntime = async (
     mode,
     suite,
     createFixtureRouter,
+    professionalUseOptions,
     census,
     registeredRoutes,
     ancestors,
@@ -640,7 +659,7 @@ const loadFixtureRuntime = async (
     cleanup,
     render,
     waitFor,
-    initializeI18n,
+    initializeI18n: initializeFixtureI18n,
     useFormatter,
     useLocale,
     useRouteErrorLifecycle,
@@ -1140,6 +1159,230 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
     }
   }
 };
+const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
+  if (fixture.suite !== "professional-use") {
+    return;
+  }
+  test("the development playground loads without an authentication service", async () => {
+    const requestsBeforeLoad = fixture.requests.length;
+    const { router, queryClient } = fixture.createFixtureRouter(
+      "/dev?visual=control-sizes",
+    );
+    try {
+      await router.load();
+      expect(router.state.location.pathname).toBe("/dev");
+      expect(
+        router.state.matches.find((match) => match.routeId === "/dev")?.status,
+      ).toBe("success");
+      expect(queryClient.getQueryState(sessionOptions.queryKey)).toBeUndefined();
+      expect(
+        fixture.requests.slice(requestsBeforeLoad).filter(
+          (request) =>
+            request.startsWith("/api/auth/") ||
+            request === "/v1/me/professional-use",
+        ),
+      ).toEqual([]);
+    } finally {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+    }
+  });
+  const casePath = "/law/cze/cases/ns/cs/fixture?q=contract";
+  const caseRoute = fixture.registeredRoutes.find(
+    ({ id }) => id === "/law/$country/cases/$court/$language/$slug",
+  );
+  if (caseRoute === undefined) {
+    panic("Missing public case-law fixture route");
+  }
+  const original = { ...caseRoute.options };
+  const CasePage = () => <output data-testid="professional-use-case-page" />;
+
+  const runCase = async (
+    audience: FixtureAudience,
+    status: "accepted" | "required",
+  ) => {
+    fixture.state.audience = audience;
+    fixture.professionalUseState.status = status;
+    fixture.unexpectedRequests.length = 0;
+    caseRoute.update({
+      component: CasePage,
+      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id),
+      loader: () => publicFixtureLoaderData(caseRoute.id),
+    });
+    await fixture.initializeI18n();
+    const runtime = fixture.createFixtureRouter(casePath);
+    return { ...runtime, path: casePath };
+  };
+
+  test.each([
+    ["an accepted account", FIXTURE_AUDIENCE.member, "accepted"],
+    ["an anonymous visitor", FIXTURE_AUDIENCE.anonymous, "accepted"],
+  ] satisfies readonly (readonly [string, FixtureAudience, "accepted"])[])(
+    "%s stays on a public case-law page",
+    async (_name, audience, status) => {
+      const { router, queryClient, caughtErrors, path } = await runCase(
+        audience,
+        status,
+      );
+      try {
+        await fixture.act(async () => {
+          await router.load();
+          fixture.render(<fixture.RouterProvider router={router} />, {
+            container: document,
+          });
+        });
+        await fixture.waitFor(() =>
+          expect(
+            document.querySelector(
+              '[data-testid="professional-use-case-page"]',
+            ),
+          ).not.toBeNull(),
+        );
+        expect(
+          `${router.state.location.pathname}${router.state.location.searchStr}`,
+        ).toBe(path);
+        expect(caughtErrors).toEqual([]);
+        expect(fixture.unexpectedRequests).toEqual([]);
+      } finally {
+        await fixture.act(async () => {
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          fixture.cleanup();
+        });
+        caseRoute.update(original);
+      }
+    },
+  );
+
+  test("a required account returns to the public case-law page after acceptance", async () => {
+    const { router, queryClient, caughtErrors, path } = await runCase(
+      FIXTURE_AUDIENCE.member,
+      "required",
+    );
+    try {
+      await router.load();
+      expect(router.state.location.pathname).toBe("/auth/professional-use");
+      expect(router.state.location.search).toEqual({ redirectTo: path });
+
+      fixture.professionalUseState.status = "accepted";
+      queryClient.removeQueries({
+        queryKey: fixture.professionalUseOptions(fixture.user.id).queryKey,
+      });
+      await fixture.act(async () => {
+        await router.navigate({ to: path });
+        fixture.render(<fixture.RouterProvider router={router} />, {
+          container: document,
+        });
+      });
+      await fixture.waitFor(() =>
+        expect(
+          document.querySelector('[data-testid="professional-use-case-page"]'),
+        ).not.toBeNull(),
+      );
+      expect(
+        `${router.state.location.pathname}${router.state.location.searchStr}`,
+      ).toBe(path);
+      expect(caughtErrors).toEqual([]);
+      expect(fixture.unexpectedRequests).toEqual([]);
+    } finally {
+      await fixture.act(async () => {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+        fixture.cleanup();
+      });
+      caseRoute.update(original);
+    }
+  });
+
+  test.each([
+    ["accepted member", FIXTURE_AUDIENCE.member, "accepted"],
+    ["required member", FIXTURE_AUDIENCE.member, "required"],
+    ["anonymous visitor", FIXTURE_AUDIENCE.anonymous, "accepted"],
+  ] satisfies readonly (readonly [
+    string,
+    FixtureAudience,
+    "accepted" | "required",
+  ])[])(
+    "public SSR leaves auth uncached and hydration checks the %s",
+    async (_name, audience, status) => {
+      const { router, queryClient, caughtErrors, path } = await runCase(
+        FIXTURE_AUDIENCE.anonymous,
+        status,
+      );
+      const serverEnvironment = Object.getOwnPropertyDescriptor(import.meta.env, "SSR");
+      const requestsBeforeSsr = fixture.requests.length;
+      try {
+        Object.assign(import.meta.env, { SSR: true });
+        await router.load();
+        expect(router.state.location.pathname).toBe(
+          new URL(path, window.location.origin).pathname,
+        );
+        expect(
+          queryClient.getQueryState(sessionOptions.queryKey),
+        ).toBeUndefined();
+        expect(
+          fixture.requests
+            .slice(requestsBeforeSsr)
+            .filter(
+              (request) =>
+                request.startsWith("/api/auth/") ||
+                request === "/v1/me/professional-use",
+            ),
+        ).toEqual([]);
+
+        // Bun aliases import.meta.env to process.env, where false becomes "false".
+        expect(Reflect.deleteProperty(import.meta.env, "SSR")).toBe(true);
+        fixture.state.audience = audience;
+        fixture.act(() => {
+          fixture.render(<fixture.RouterProvider router={router} />, {
+            container: document,
+          });
+        });
+        await fixture.waitFor(() => {
+          expect(
+            queryClient.getQueryState(sessionOptions.queryKey)?.status,
+          ).toBe("success");
+          expect(router.state.isLoading).toBe(false);
+          if (status === "required") {
+            expect(router.state.location.pathname).toBe(
+              "/auth/professional-use",
+            );
+            expect(router.state.location.search).toEqual({ redirectTo: path });
+          } else {
+            expect(
+              `${router.state.location.pathname}${router.state.location.searchStr}`,
+            ).toBe(path);
+            expect(
+              document.querySelector(
+                '[data-testid="professional-use-case-page"]',
+              ),
+            ).not.toBeNull();
+          }
+        });
+        const session = queryClient.getQueryData(sessionOptions.queryKey);
+        if (audience === FIXTURE_AUDIENCE.member) {
+          expect(session?.session.userId).toBe(fixture.user.id);
+        } else {
+          expect(session).toBeNull();
+        }
+        expect(caughtErrors).toEqual([]);
+        expect(fixture.unexpectedRequests).toEqual([]);
+      } finally {
+        if (serverEnvironment === undefined) {
+          Reflect.deleteProperty(import.meta.env, "SSR");
+        } else {
+          Object.defineProperty(import.meta.env, "SSR", serverEnvironment);
+        }
+        await fixture.act(async () => {
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          fixture.cleanup();
+        });
+        caseRoute.update(original);
+      }
+    },
+  );
+};
 /** Actual ancestors and public initial pages; leaf guards use recorded fixture data. */
 export const declareRouteShellProviderFixture = async (
   options: RouteShellProviderFixtureOptions,
@@ -1150,6 +1393,7 @@ export const declareRouteShellProviderFixture = async (
   declareCensus(fixture);
   declareLeafCases(fixture);
   await declareLawCases(fixture);
+  declareProfessionalUseCases(fixture);
   const {
     suite,
     selectedLeaves,

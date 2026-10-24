@@ -389,3 +389,53 @@ printf '%s\\n' '[[{"context":"staging/verified","state":"success"},{"context":"m
     }
   }
 }, 35_000);
+
+test("an unmerged release pull request head passes only through the trusted PR-head verifier", () => {
+  const { directory, repo } = fixture();
+  try {
+    git(repo, "switch", "-q", "-c", "release");
+    writeFileSync(path.join(repo, "VERSION"), "1.2.5\n");
+    git(repo, "add", "VERSION");
+    git(repo, "commit", "-qm", "chore: release v1.2.5");
+    const head = git(repo, "rev-parse", "HEAD");
+    const calls = path.join(directory, "verifier-calls");
+    const verifier = path.join(directory, "verifier.sh");
+    writeFileSync(
+      verifier,
+      `printf '%s\\n' "$*" >> "${calls}"\nexit "\${VERIFIER_EXIT:?}"\n`,
+    );
+    const run = (verifierExit: string, proofRepository = "stella/stella") =>
+      Bun.spawnSync(["bash", "scripts/check-release-candidate.sh", head], {
+        cwd: repo,
+        env: {
+          ...process.env,
+          RELEASE_PROOF_REPOSITORY: proofRepository,
+          RELEASE_TREE_PROOF_VERIFIER: verifier,
+          VERIFIER_EXIT: verifierExit,
+        },
+      });
+
+    const accepted = run("0");
+    expect(accepted.exitCode, accepted.stderr.toString()).toBe(0);
+    expect(accepted.stdout.toString()).toBe(
+      `sha=${head}\nvalue=1.2.5\ntag=v1.2.5\n`,
+    );
+    expect(readFileSync(calls, "utf-8")).toBe(
+      `--allow-pr-head stella/stella ${head} ${head}\n`,
+    );
+
+    const refused = run("1");
+    expect(refused.exitCode, "a head the verifier refuses must fail").not.toBe(
+      0,
+    );
+    expect(refused.stdout.toString()).toBe("");
+
+    const untrusted = run("0", "");
+    expect(untrusted.exitCode, "no trusted verifier, no PR head").toBe(1);
+    expect(untrusted.stderr.toString()).toContain(
+      "is not an ancestor of origin/main",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

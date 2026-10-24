@@ -593,6 +593,7 @@
         "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/render-probe": "workspace:*",
+        "@stll/sanctions": "workspace:*",
         "@stll/scripts": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
         "@stll/typescript-config": "workspace:*",
@@ -1449,7 +1450,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.50.1",
+      "version": "0.50.2",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
