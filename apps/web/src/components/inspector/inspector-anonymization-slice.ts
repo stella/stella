@@ -18,7 +18,7 @@ export const createInspectorAnonymizationSlice = (
   anonymizationMatchesByFieldId: {},
   anonymizationPipelineStatusByFieldId: {},
   anonymizationRetryByFieldId: {},
-  anonymizationDetectionConfirmsByFieldId: {},
+  anonymizationDetectionsByFieldId: {},
   anonymizationSelection: {
     canonical: null,
     label: null,
@@ -81,15 +81,29 @@ export const createInspectorAnonymizationSlice = (
       state.anonymizationPipelineStatusByFieldId[fieldId] = "error";
     }),
 
-  retryAnonymizationPipeline: (fieldId) =>
+  retryAnonymizationPipeline: (fieldId) => {
+    const retries: (() => void)[] = [];
     set((state) => {
       state.anonymizationPipelineStatusByFieldId[fieldId] = "idle";
       state.anonymizationRetryByFieldId[fieldId] =
         (state.anonymizationRetryByFieldId[fieldId] ?? 0) + 1;
-    }),
+      for (const registration of state.anonymizationDetectionsByFieldId[
+        fieldId
+      ] ?? []) {
+        retries.push(registration.retry);
+      }
+    });
+    for (const retry of retries) {
+      retry();
+    }
+  },
 
   clearAnonymizationMatches: (fieldId) =>
     set((state) => {
+      // Another mounted editor still owns this field's live detection.
+      if (fieldId in state.anonymizationDetectionsByFieldId) {
+        return;
+      }
       if (
         !(fieldId in state.anonymizationMatchesByFieldId) &&
         !(fieldId in state.anonymizationPipelineStatusByFieldId) &&
@@ -116,35 +130,35 @@ export const createInspectorAnonymizationSlice = (
 
   // Stored as arrays rather than Sets: immer drafts Sets only with its MapSet
   // plugin, and functions are kept by reference, so identity removal works.
-  registerAnonymizationDetection: (fieldId, confirm) =>
+  registerAnonymizationDetection: (fieldId, registration) =>
     set((state) => {
-      const confirms = state.anonymizationDetectionConfirmsByFieldId[fieldId];
+      const confirms = state.anonymizationDetectionsByFieldId[fieldId];
       if (confirms === undefined) {
-        state.anonymizationDetectionConfirmsByFieldId[fieldId] = [confirm];
+        state.anonymizationDetectionsByFieldId[fieldId] = [registration];
         return;
       }
-      if (confirms.includes(confirm)) {
+      if (confirms.some((entry) => entry.confirm === registration.confirm)) {
         return;
       }
-      state.anonymizationDetectionConfirmsByFieldId[fieldId] = [
+      state.anonymizationDetectionsByFieldId[fieldId] = [
         ...confirms,
-        confirm,
+        registration,
       ];
     }),
 
   unregisterAnonymizationDetection: (fieldId, confirm) =>
     set((state) => {
-      const confirms = state.anonymizationDetectionConfirmsByFieldId[fieldId];
+      const confirms = state.anonymizationDetectionsByFieldId[fieldId];
       if (confirms === undefined) {
         return;
       }
-      const remaining = confirms.filter((entry) => entry !== confirm);
+      const remaining = confirms.filter((entry) => entry.confirm !== confirm);
       if (remaining.length > 0) {
-        state.anonymizationDetectionConfirmsByFieldId[fieldId] = remaining;
+        state.anonymizationDetectionsByFieldId[fieldId] = remaining;
         return;
       }
-      state.anonymizationDetectionConfirmsByFieldId = Object.fromEntries(
-        Object.entries(state.anonymizationDetectionConfirmsByFieldId).filter(
+      state.anonymizationDetectionsByFieldId = Object.fromEntries(
+        Object.entries(state.anonymizationDetectionsByFieldId).filter(
           ([id]) => id !== fieldId,
         ),
       );

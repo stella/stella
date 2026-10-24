@@ -66,6 +66,7 @@ const createHarness = ({
   failRequests?: boolean;
 }) => {
   let work = emptyWork();
+  let requestsFail = failRequests;
   const paragraphs = Array.from({ length: paragraphCount }, (_, index) =>
     paragraphText(index),
   );
@@ -103,7 +104,7 @@ const createHarness = ({
       const pairs = text.includes(PERSON)
         ? [{ original: PERSON, label: "person" }]
         : [];
-      if (failRequests) {
+      if (requestsFail) {
         return Promise.reject(new Error("detection failed"));
       }
       if (!holdRequests) {
@@ -167,6 +168,9 @@ const createHarness = ({
     resetWork: () => {
       work = emptyWork();
     },
+    recoverWorker: () => {
+      requestsFail = false;
+    },
     status,
     get work() {
       return work;
@@ -177,7 +181,7 @@ const createHarness = ({
 beforeEach(() => {
   jest.useFakeTimers();
   useInspectorAnonymizationStore.setState({
-    anonymizationDetectionConfirmsByFieldId: {},
+    anonymizationDetectionsByFieldId: {},
     anonymizationPipelineStatusByFieldId: {},
   });
 });
@@ -359,8 +363,7 @@ test("closing the last editor for a field leaves no gate entry in the store", as
   expect(docked.fieldId).toBe(fullView.fieldId);
   await docked.advance(1000);
   const entries = () =>
-    useInspectorAnonymizationStore.getState()
-      .anonymizationDetectionConfirmsByFieldId;
+    useInspectorAnonymizationStore.getState().anonymizationDetectionsByFieldId;
   expect(entries()[docked.fieldId]).toHaveLength(2);
 
   docked.detection.stop();
@@ -368,4 +371,49 @@ test("closing the last editor for a field leaves no gate entry in the store", as
 
   fullView.detection.stop();
   expect(docked.fieldId in entries()).toBe(false);
+});
+
+test("a successful editor cannot hide another editor's failure and retry recovers that editor", async () => {
+  const failed = createHarness({
+    paragraphCount: PARAGRAPHS,
+    failRequests: true,
+  });
+  const successful = createHarness({
+    paragraphCount: PARAGRAPHS,
+    holdRequests: true,
+  });
+  await failed.advance(1000);
+  expect(failed.status()).toBe("error");
+  successful.pending.at(0)?.resolve();
+  await successful.flush();
+  expect(successful.status()).toBe("error");
+  expect(confirmAnonymizationDetectionCurrent(failed.fieldId)).toBe(false);
+
+  failed.recoverWorker();
+  useInspectorAnonymizationStore
+    .getState()
+    .retryAnonymizationPipeline(failed.fieldId);
+  await failed.flush();
+  expect(failed.work.requests).toBe(2);
+  expect(successful.work.requests).toBe(1);
+  expect(failed.status()).toBe("ready");
+  expect(confirmAnonymizationDetectionCurrent(failed.fieldId)).toBe(true);
+  failed.detection.stop();
+  successful.detection.stop();
+});
+
+test("closing one editor preserves the other editor's error and retry state", async () => {
+  const failed = createHarness({
+    paragraphCount: PARAGRAPHS,
+    failRequests: true,
+  });
+  const successful = createHarness({ paragraphCount: PARAGRAPHS });
+  await failed.advance(1000);
+  successful.detection.stop();
+  useInspectorAnonymizationStore
+    .getState()
+    .clearAnonymizationMatches(failed.fieldId);
+  expect(failed.status()).toBe("error");
+  expect(confirmAnonymizationDetectionCurrent(failed.fieldId)).toBe(false);
+  failed.detection.stop();
 });

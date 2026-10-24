@@ -136,14 +136,7 @@ export const useDocxAnonymizationHighlights = ({
       detectionRef.current = null;
       detection.stop();
     };
-  }, [
-    editorView,
-    isAnonymizationActive,
-    policyReady,
-    workspaceId,
-    fieldId,
-    detectionRetry,
-  ]);
+  }, [editorView, isAnonymizationActive, policyReady, workspaceId, fieldId]);
   // Per-doc allowlist: canonicals the user has flagged as false
   // positives. The chat-anon worker filters these out of its
   // detected entities itself; we still need to strip them from

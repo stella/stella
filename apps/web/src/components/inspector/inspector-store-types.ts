@@ -250,13 +250,20 @@ type InspectorCommandState = {
   } | null;
 };
 
-type AnonymizationPipelineStatus = "idle" | "running" | "ready" | "error";
+export type AnonymizationPipelineStatus =
+  "idle" | "running" | "ready" | "error";
 
 /**
  * Asks one open editor's live DOCX detection whether its result covers the
  * current document version; a stale one starts detection and answers false.
  */
 type AnonymizationDetectionConfirm = () => boolean;
+
+type AnonymizationDetectionRegistration = {
+  confirm: AnonymizationDetectionConfirm;
+  readStatus: () => AnonymizationPipelineStatus;
+  retry: () => void;
+};
 
 type InspectorAnonymizationState = {
   anonymizationActiveMountCount: number;
@@ -271,9 +278,9 @@ type InspectorAnonymizationState = {
    * Live DOCX detections per field, one per open editor (docked and full
    * view can both be open). A field without editors has no entry.
    */
-  anonymizationDetectionConfirmsByFieldId: Record<
+  anonymizationDetectionsByFieldId: Record<
     string,
-    readonly AnonymizationDetectionConfirm[]
+    readonly AnonymizationDetectionRegistration[]
   >;
   anonymizationSelection: AnonymizationSelection;
 };
@@ -468,7 +475,7 @@ type InspectorAnonymizationActions = {
   clearAnonymizationMatches: (fieldId: string) => void;
   registerAnonymizationDetection: (
     fieldId: string,
-    confirm: AnonymizationDetectionConfirm,
+    registration: AnonymizationDetectionRegistration,
   ) => void;
   unregisterAnonymizationDetection: (
     fieldId: string,

@@ -1,8 +1,10 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { panic } from "better-result";
 
 import type { AnonymizationTerm } from "@stll/folio-react";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
+import type { AnonymizationPipelineStatus } from "@/components/inspector/inspector-store-types";
 import { getAnalytics } from "@/lib/analytics/provider";
 
 import {
@@ -53,17 +55,50 @@ export const confirmAnonymizationDetectionCurrent = (
   fieldId: string,
 ): boolean => {
   const confirms =
-    useInspectorAnonymizationStore.getState()
-      .anonymizationDetectionConfirmsByFieldId[fieldId];
+    useInspectorAnonymizationStore.getState().anonymizationDetectionsByFieldId[
+      fieldId
+    ];
   if (confirms === undefined) {
     return true;
   }
   let current = true;
   for (const confirm of confirms) {
     // Every detection is asked, so each stale one starts its own run.
-    current = confirm() && current;
+    current = confirm.confirm() && current;
   }
   return current;
+};
+
+/** Each editor owns its status; success never hides another editor's failure. */
+const publishDetectionStatus = (fieldId: string) => {
+  const state = useInspectorAnonymizationStore.getState();
+  const registrations = state.anonymizationDetectionsByFieldId[fieldId];
+  if (registrations === undefined || registrations.length === 0) {
+    return;
+  }
+  let running = false;
+  for (const registration of registrations) {
+    const status = registration.readStatus();
+    switch (status) {
+      case "error":
+        state.markAnonymizationPipelineFailed(fieldId);
+        return;
+      case "idle":
+      case "running":
+        running = true;
+        break;
+      case "ready":
+        break;
+      default:
+        status satisfies never;
+        return panic("Unhandled anonymization detection status");
+    }
+  }
+  if (running) {
+    state.markAnonymizationPipelineStarted(fieldId);
+    return;
+  }
+  state.markAnonymizationPipelineRan(fieldId);
 };
 
 /**
@@ -92,17 +127,7 @@ export const startAnonymizationDetection = ({
 }: StartAnonymizationDetectionOptions): AnonymizationDetection => {
   let cancelled = false;
   let failedKey: string | null = null;
-  // Mark the pipeline as in-flight from mount so the
-  // inspector facet shows "Detecting entities…" right
-  // away instead of flashing "0 entities" during the
-  // 300ms gap before the first `run()` fires (and
-  // before that run can call `markAnonymizationPipelineStarted`
-  // itself). The first `run()` also calls it again
-  // (idempotent set-add); subsequent runs flip it on
-  // around each worker call.
-  useInspectorAnonymizationStore
-    .getState()
-    .markAnonymizationPipelineStarted(fieldId);
+  let status: AnonymizationPipelineStatus = "running";
   // Track the text+exclusions we received *results* for (not
   // just dispatched).
   //
@@ -125,10 +150,10 @@ export const startAnonymizationDetection = ({
       settleTimer = null;
     }
   };
-  const markRan = () =>
-    useInspectorAnonymizationStore
-      .getState()
-      .markAnonymizationPipelineRan(fieldId);
+  const markRan = () => {
+    status = "ready";
+    publishDetectionStatus(fieldId);
+  };
   const readText = (): string => {
     const { doc } = view.state;
     if (lastRead?.doc === doc) {
@@ -195,9 +220,8 @@ export const startAnonymizationDetection = ({
     // (Re-)mark started: handles reruns triggered by
     // edits or allowlist changes after the first run
     // already called `markAnonymizationPipelineRan`.
-    useInspectorAnonymizationStore
-      .getState()
-      .markAnonymizationPipelineStarted(fieldId);
+    status = "running";
+    publishDetectionStatus(fieldId);
     detect({
       text,
       workspaceId,
@@ -240,9 +264,8 @@ export const startAnonymizationDetection = ({
         }
         failedKey = cacheKey;
         getAnalytics().captureError(error);
-        useInspectorAnonymizationStore
-          .getState()
-          .markAnonymizationPipelineFailed(fieldId);
+        status = "error";
+        publishDetectionStatus(fieldId);
       });
   };
   const scheduleRun = () => {
@@ -262,7 +285,15 @@ export const startAnonymizationDetection = ({
   };
   useInspectorAnonymizationStore
     .getState()
-    .registerAnonymizationDetection(fieldId, confirmCurrent);
+    .registerAnonymizationDetection(fieldId, {
+      confirm: confirmCurrent,
+      readStatus: () => status,
+      retry: () => {
+        failedKey = null;
+        run();
+      },
+    });
+  publishDetectionStatus(fieldId);
   // The doc text isn't always populated when the view first captures (lazy
   // DOCX load, async paged rendering); the load itself is a document change
   // and reaches `noteDocChanged`.
@@ -281,6 +312,7 @@ export const startAnonymizationDetection = ({
       useInspectorAnonymizationStore
         .getState()
         .unregisterAnonymizationDetection(fieldId, confirmCurrent);
+      publishDetectionStatus(fieldId);
     },
   };
 };
