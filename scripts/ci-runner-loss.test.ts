@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
@@ -59,9 +60,12 @@ test("the retry workflow agrees with retryDecision", async () => {
     v.object({
       jobs: v.object({
         retry: v.object({
-          steps: v.tuple([
-            v.object({ with: v.object({ script: v.string() }) }),
-          ]),
+          steps: v.array(
+            v.object({
+              name: v.string(),
+              with: v.object({ script: v.string() }),
+            }),
+          ),
         }),
       }),
     }),
@@ -75,7 +79,13 @@ test("the retry workflow agrees with retryDecision", async () => {
       ),
     ),
   );
-  const script = workflow.jobs.retry.steps[0].with.script;
+  const step = workflow.jobs.retry.steps.find(
+    ({ name }) => name === "Retry jobs after runner loss",
+  );
+  if (step === undefined) {
+    panic("Missing runner loss retry step");
+  }
+  const script = step.with.script;
   const executable = new Script(`(async () => { ${script} })()`);
   const fixtures = [
     { jobs: [lost], attempt: 1 },
