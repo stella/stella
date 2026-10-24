@@ -6,8 +6,9 @@ import {
 import { isLoneSectionSign } from "../.oxlint-plugins/no-section-sign-glyph.ts";
 
 const STATIC_MARKUP_GLOB = "{apps,packages}/*/**/*.{html,astro}";
+// Keep the tag name disjoint from attributes to prevent super-linear backtracking.
 const ELEMENT_WITH_TEXT =
-  /<([A-Za-z][\w.:-]*)((?:[^<>"']|"[^"]*"|'[^']*')*)>([^<>]*)<\/\1\s*>/gu;
+  /<([A-Za-z][\w.:-]*)(?=[\s>])((?:[^<>"']|"[^"]*"|'[^']*')*)>([^<>]*)<\/\1\s*>/gu;
 const ATTRIBUTE =
   /([^\s=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|\{\s*(?:"([^"]*)"|'([^']*)')\s*\}|([^\s]+)))?/gu;
 const ELEMENT_TEXT = />([^<>]*)</gu;

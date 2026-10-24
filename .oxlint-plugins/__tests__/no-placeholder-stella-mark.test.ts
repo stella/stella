@@ -30,7 +30,7 @@ test("rejects each placeholder across brand identity attributes and component na
   ];
   const sources: string[] = [];
   for (const opening of openings) {
-    const closing = opening.split(" ").at(0);
+    const closing = opening.replace(/ .*/u, "");
     for (const glyph of ["S", "s", "§", "&sect;", "&#167;"]) {
       sources.push(
         `const mark${sources.length} = <${opening}>${glyph}</${closing}>;`,
