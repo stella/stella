@@ -47,7 +47,8 @@ const chain = (stages: readonly Middleware[], last: Next): Next => {
   let next = last;
   for (const stage of stages.toReversed()) {
     const inner = next;
-    next = (ctx) => stage(ctx, (replacement) => inner(replacement ?? ctx));
+    next = async (ctx) =>
+      stage(ctx, async (replacement) => inner(replacement ?? ctx));
   }
   return next;
 };
