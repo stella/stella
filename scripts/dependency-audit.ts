@@ -1,7 +1,9 @@
 // Dependency vulnerability guard.
 //
-// `bun audit` checks the lockfile against the npm advisory database, but it
-// exits 0 even when advisories exist, so on its own it cannot gate CI. This
+// `bun audit` checks the lockfile against the npm advisory database and exits
+// nonzero when it reports advisories, but an exit code cannot record why a
+// known advisory is accepted or when that acceptance lapses, and it cannot
+// limit a pull request to the dependency resolutions that it changed. This
 // wraps it into a ratchet, mirroring scripts/bundle-baseline.ts: every current
 // high/critical advisory is recorded in scripts/dependency-audit-baseline.json
 // with a reason, and the --check mode fails only when a NEW high/critical
@@ -35,7 +37,8 @@
 // scripts/dependency-audit-acceptance.ts.
 
 import { panic, Result } from "better-result";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -253,7 +256,7 @@ const gatedAdvisoriesFromAuditResult = ({
     ? container["advisories"]
     : container;
 
-  const byId = new Map<string, Advisory>();
+  const byAdvisory = new Map<string, Advisory>();
   for (const [pkg, value] of Object.entries(grouped)) {
     const list = Array.isArray(value) ? value : [value];
     for (const advisory of list) {
@@ -268,8 +271,9 @@ const gatedAdvisoriesFromAuditResult = ({
         continue;
       }
       const id = ghsaId(advisory);
-      if (!byId.has(id)) {
-        byId.set(id, {
+      const key = `${id}\0${pkg}`;
+      if (!byAdvisory.has(key)) {
+        byAdvisory.set(key, {
           id,
           severity,
           package: pkg,
@@ -279,16 +283,19 @@ const gatedAdvisoriesFromAuditResult = ({
       }
     }
   }
-  return [...byId.values()].toSorted((a, b) => compareCodeUnit(a.id, b.id));
+  return [...byAdvisory.values()].toSorted(
+    (a, b) =>
+      compareCodeUnit(a.id, b.id) || compareCodeUnit(a.package, b.package),
+  );
 };
 
 // Runs `bun audit --json` in the repo root and returns the distinct gated
 // (high/critical) advisories. `bun audit` groups advisories by package name.
-type AuditRunner = () => Promise<AuditProcessResult>;
+type AuditRunner = (cwd?: string) => Promise<AuditProcessResult>;
 
-const runAudit: AuditRunner = async () => {
+const runAudit: AuditRunner = async (cwd = REPO_ROOT) => {
   const proc = Bun.spawn(["bun", "audit", "--json"], {
-    cwd: REPO_ROOT,
+    cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -421,17 +428,26 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   );
 };
 
+// One advisory identity everywhere: the same GHSA can affect several
+// packages, and an acceptance covers only the package it names.
+const advisoryKey = ({
+  id,
+  package: pkg,
+}: Pick<Advisory, "id" | "package">): string => `${id}\0${pkg}`;
+
 // Diff current advisories against the baseline. `newlyIntroduced` fails the
 // gate; `resolved` only warns (prompt to ratchet the baseline down).
 export const diffAgainstBaseline = (
   advisories: Advisory[],
   baseline: Baseline,
 ): { newlyIntroduced: Advisory[]; resolved: BaselineEntry[] } => {
-  const currentIds = new Set(advisories.map((a) => a.id));
-  const baselineIds = new Set(baseline.accepted.map((a) => a.id));
+  const currentKeys = new Set(advisories.map(advisoryKey));
+  const baselineKeys = new Set(baseline.accepted.map(advisoryKey));
   return {
-    newlyIntroduced: advisories.filter((a) => !baselineIds.has(a.id)),
-    resolved: baseline.accepted.filter((a) => !currentIds.has(a.id)),
+    newlyIntroduced: advisories.filter(
+      (a) => !baselineKeys.has(advisoryKey(a)),
+    ),
+    resolved: baseline.accepted.filter((a) => !currentKeys.has(advisoryKey(a))),
   };
 };
 
@@ -585,15 +601,17 @@ const checkResult = async (
     today,
     options.latestVersion,
   );
-  const lapsedIds = new Set(lapsed.map(({ id }) => id));
+  const lapsedKeys = new Set(lapsed.map(advisoryKey));
 
   for (const advisory of advisories) {
-    const acceptance = baseline.accepted.find(({ id }) => id === advisory.id);
+    const acceptance = baseline.accepted.find(
+      (entry) => advisoryKey(entry) === advisoryKey(advisory),
+    );
     if (acceptance === undefined) {
       console.info(`${formatAdvisory(advisory)}  NEW`);
       continue;
     }
-    if (lapsedIds.has(advisory.id)) {
+    if (lapsedKeys.has(advisoryKey(advisory))) {
       console.info(`${formatAdvisory(advisory)}  LAPSED`);
       continue;
     }
@@ -727,15 +745,30 @@ const checkDiff = async (baseRevision: string): Promise<number> => {
 
 export const checkRelease = async (
   advisories: Advisory[],
+  previousAdvisories: Advisory[] = [],
   options: CheckOptions = {},
 ): Promise<number> => {
   const baseline = options.baseline ?? (await readBaseline());
-  const result = await checkResult(advisories, { ...options, baseline });
-  const currentIds = new Set(advisories.map(({ id }) => id));
+  const { added, carried, fixed } = classifyAuditDelta(
+    advisories,
+    previousAdvisories,
+    advisoryKey,
+  );
+  const addedKeys = new Set(added.map(advisoryKey));
+  const addedBaseline = {
+    ...baseline,
+    accepted: baseline.accepted.filter((entry) =>
+      addedKeys.has(advisoryKey(entry)),
+    ),
+  };
+  const result = await checkResult(added, {
+    ...options,
+    baseline: addedBaseline,
+  });
   const invalidAcceptanceIds = new Set<string>();
 
   for (const acceptance of baseline.accepted) {
-    if (!currentIds.has(acceptance.id)) {
+    if (!addedKeys.has(advisoryKey(acceptance))) {
       continue;
     }
     console.warn(
@@ -756,14 +789,127 @@ export const checkRelease = async (
     }
   }
 
+  for (const advisory of carried) {
+    const acceptance = baseline.accepted.find(
+      (entry) => advisoryKey(entry) === advisoryKey(advisory),
+    );
+    const detail =
+      acceptance === undefined
+        ? "Add a baseline entry with an owner and an expiry."
+        : `Baseline owner: ${acceptance.owner}; expiry: ${acceptance.expiresOn ?? "missing"}.`;
+    warn(
+      options.warningFormat ?? "github",
+      "Release dependency advisory already in production",
+      `${advisory.id} for ${advisory.package}: production already carries this advisory. ${detail}`,
+    );
+  }
+
+  for (const advisory of fixed) {
+    console.info(
+      `Release dependency audit fixed ${advisory.id} for ${advisory.package}.`,
+    );
+  }
+
   if (invalidAcceptanceIds.size > 0 || result.lapsed.length > 0) {
     return 2;
   }
   return result.status;
 };
 
-const runReleaseCheck = async (): Promise<number> =>
-  checkRelease(await collectGatedAdvisories());
+export const classifyAuditDelta = <T>(
+  current: T[],
+  previous: T[],
+  key: (finding: T) => string,
+): { added: T[]; carried: T[]; fixed: T[] } => {
+  const previousKeys = new Set(previous.map(key));
+  const currentKeys = new Set(current.map(key));
+  return {
+    added: current.filter((finding) => !previousKeys.has(key(finding))),
+    carried: current.filter((finding) => previousKeys.has(key(finding))),
+    fixed: previous.filter((finding) => !currentKeys.has(key(finding))),
+  };
+};
+
+type ReleaseAuditDependencies = {
+  audit?: (cwd?: string) => Promise<Advisory[]>;
+  gitFile?: (revision: string, file: string) => Promise<string>;
+  previousReleaseTag?: () => Promise<string | undefined>;
+};
+
+const previousReleaseTag = async (): Promise<string | undefined> => {
+  const merged = await gitTagList([
+    "--merged",
+    "HEAD",
+    "--sort=-version:refname",
+  ]);
+  const current = new Set(await gitTagList(["--points-at", "HEAD"]));
+  for (const tag of merged) {
+    if (/^v\d+\.\d+\.\d+$/u.test(tag) && !current.has(tag)) {
+      return tag;
+    }
+  }
+  return undefined;
+};
+
+const gitTagList = async (args: string[]): Promise<string[]> => {
+  const proc = Bun.spawn(["git", "tag", ...args], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new AuditCommandError(
+      `Unable to list previous release tags: ${stderr.trim()}`,
+    );
+  }
+  return stdout.split("\n").filter((tag) => tag !== "");
+};
+
+const auditPreviousRelease = async (
+  tag: string,
+  audit: (cwd?: string) => Promise<Advisory[]>,
+  readGitFile: (revision: string, file: string) => Promise<string>,
+): Promise<Advisory[]> => {
+  const directory = mkdtempSync(path.join(tmpdir(), "stella-release-audit-"));
+  try {
+    await Bun.write(
+      path.join(directory, "bun.lock"),
+      await readGitFile(tag, "bun.lock"),
+    );
+    await Bun.write(
+      path.join(directory, "package.json"),
+      await readGitFile(tag, "package.json"),
+    );
+    return await audit(directory);
+  } catch (error) {
+    throw new AuditCommandError(
+      `Unable to audit previous release ${tag}: ${errorMessage(error)}. Verify that the tag contains an auditable bun.lock and package.json, then retry.`,
+      { cause: error },
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+export const runReleaseCheck = async ({
+  audit = async (cwd) =>
+    collectGatedAdvisories({ run: async () => runAudit(cwd) }),
+  gitFile: readGitFile = gitFile,
+  previousReleaseTag: findPreviousReleaseTag = previousReleaseTag,
+}: ReleaseAuditDependencies = {}): Promise<number> => {
+  const current = await audit();
+  const tag = await findPreviousReleaseTag();
+  const previous =
+    tag === undefined
+      ? []
+      : await auditPreviousRelease(tag, audit, readGitFile);
+  return checkRelease(current, previous);
+};
 
 const main = async (): Promise<number> => {
   const arg = process.argv[2];

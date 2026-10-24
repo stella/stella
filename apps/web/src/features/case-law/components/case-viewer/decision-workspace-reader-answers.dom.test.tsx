@@ -20,6 +20,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -333,7 +334,7 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
         return Response.json({ items: [], nextCursor: null, workspaces: [] });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json(aiAvailableResponse());
       }
       throw new TypeError(`Unexpected request: ${request.method} ${path}`);
     },

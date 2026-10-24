@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
@@ -239,8 +240,11 @@ test("a response with the wrong stream content type cancels its body and release
     kind: "protocol",
     message: "Missing reader answer stream",
   });
+  const creationError =
+    hook.result.current.errors.get("create") ??
+    panic("Expected creation failure");
   expect(hook.result.current.failureNotices).toEqual([
-    { type: "operation", error: hook.result.current.errors.get("create") },
+    { type: "operation", error: creationError },
   ]);
   expect(hook.result.current.isCreating).toBe(false);
   expect(hook.result.current.busyAnswerIds.size).toBe(0);
@@ -589,9 +593,11 @@ test("selecting decision text and clicking Explain opens the persisted margin an
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: () => undefined,
-            remove: () => undefined,
-            update: () => undefined,
+            create: async () => undefined,
+            redo: async () => undefined,
+            remove: async () => undefined,
+            undo: async () => undefined,
+            update: async () => undefined,
           }}
           mode="authenticated"
           onClearActive={() => undefined}
@@ -1223,7 +1229,7 @@ test("a dropped reader GET is a request failure and keeps its cause", async () =
   const { client } = setup();
   expect(
     await rejectionOf(
-      client.fetchQuery(
+      client.query(
         readerAnswersOptions({
           decisionId: "decision-1",
           organizationId: user.activeOrganizationId,
@@ -1245,7 +1251,7 @@ test("a non-network reader GET rejection retains the original error", async () =
   const { client } = setup();
   expect(
     await rejectionOf(
-      client.fetchQuery(
+      client.query(
         readerAnswersOptions({
           decisionId: "decision-1",
           organizationId: user.activeOrganizationId,
@@ -1270,7 +1276,7 @@ test("a reader GET API response is unwrapped outside the network conversion", as
   const { client } = setup();
   expect(
     await rejectionOf(
-      client.fetchQuery(
+      client.query(
         readerAnswersOptions({
           decisionId: "decision-1",
           organizationId: user.activeOrganizationId,

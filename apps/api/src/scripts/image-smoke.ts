@@ -1,16 +1,16 @@
 /**
- * Runtime-asset smoke for the compiled API image.
+ * Runtime-asset smoke for the API image.
  *
  * The container loads several runtimes and external assets lazily: the native
- * anonymization engine embedded by Bun, the QuickJS sandbox WASM, compiled
- * YARA rules, worker bundles with their sidecars, OCR models, and the OCR PDF
- * font. apps/api/Dockerfile compiles this entry like the server and runs it in
- * a throwaway stage on top of the runner filesystem; a missing or unloadable
- * dependency fails the image build.
+ * anonymization engine and the QuickJS sandbox WASM from bundle sidecars,
+ * compiled YARA rules, worker bundles with their sidecars, OCR models, and the
+ * OCR PDF font. apps/api/Dockerfile bundles this entry like the server and
+ * runs it in a throwaway stage on top of the runner filesystem; a missing or
+ * unloadable dependency fails the image build.
  *
  * Self-contained on purpose: no env module, no DB client. Each probe drives
  * the real loader; the sanctions probe spawns the same worker path used by
- * the compiled API and checks both cold and cached matching.
+ * the API and checks both cold and cached matching.
  */
 
 import { panic } from "better-result";

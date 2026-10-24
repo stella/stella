@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
 
-import { createStellaEdenClient } from "./index";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { createStellaEdenClient, readEdenTransportFailure } from "./index";
 
 const testApi = new Elysia({ prefix: "/v1" })
   .get("/health", () => ({
@@ -115,5 +117,88 @@ describe("createStellaEdenClient", () => {
     const response = await api.timestamp.get();
 
     expect(String(response.data?.createdAt)).toBe(timestamp);
+  });
+});
+
+describe("Eden transport provenance", () => {
+  test.each([
+    new TypeError("Connection lost"),
+    new RangeError("Fetcher invariant"),
+    undefined,
+  ])("retains the original fetch rejection: %s", async (cause) => {
+    const api = createStellaEdenClient<typeof testApi>(
+      "https://api.example.com",
+      {
+        fetcher: testFetcher(async () => {
+          throw cause;
+        }),
+      },
+    ).v1;
+    const response = await api.health.get();
+    const failure = readEdenTransportFailure(response);
+    expect(failure).not.toBeNull();
+    expect(failure?.cause).toBe(cause);
+  });
+
+  test("an HTTP 503 remains a response, including error-like JSON", async () => {
+    const api = createStellaEdenClient<typeof testApi>(
+      "https://api.example.com",
+      {
+        fetcher: testFetcher(async () =>
+          Response.json(
+            { name: "TypeError", message: "Unavailable" },
+            { status: 503 },
+          ),
+        ),
+      },
+    ).v1;
+    const response = await api.health.get();
+    expect(response.status).toBe(503);
+    expect(readEdenTransportFailure(response)).toBeNull();
+  });
+
+  test("a response-hook failure retains its real HTTP response", async () => {
+    const cause = new TypeError("Response hook invariant");
+    const api = createStellaEdenClient<typeof testApi>(
+      "https://api.example.com",
+      {
+        fetcher: testFetcher(async () => jsonResponse()),
+        onResponse() {
+          throw cause;
+        },
+      },
+    ).v1;
+    const response = await api.health.get();
+    expect(response.error?.value).toBe(cause);
+    expect(readEdenTransportFailure(response)).toBeNull();
+  });
+
+  test("a request-hook rejection remains outside the fetch boundary", async () => {
+    const cause = new TypeError("Request hook invariant");
+    const api = createStellaEdenClient<typeof testApi>(
+      "https://api.example.com",
+      {
+        fetcher: testFetcher(async () => jsonResponse()),
+        onRequest() {
+          throw cause;
+        },
+      },
+    ).v1;
+    expect(await rejectionOf(api.health.get())).toBe(cause);
+  });
+
+  test("a body-parser rejection remains outside the fetch boundary", async () => {
+    const api = createStellaEdenClient<typeof testApi>(
+      "https://api.example.com",
+      {
+        fetcher: testFetcher(
+          async () =>
+            new Response("invalid JSON", {
+              headers: { "content-type": "application/json" },
+            }),
+        ),
+      },
+    ).v1;
+    expect(await rejectionOf(api.health.get())).toBeInstanceOf(SyntaxError);
   });
 });

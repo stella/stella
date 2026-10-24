@@ -617,10 +617,11 @@ export const useReaderAnswers = ({
           setErrors,
         }),
     );
+  const answers = query.data ?? [];
   return {
-    answers: query.data ?? [],
+    answers,
     failureNotices: readerAnswerFailureNotices({
-      answers: query.data ?? [],
+      answers,
       failures,
       queryError: query.error,
     }),

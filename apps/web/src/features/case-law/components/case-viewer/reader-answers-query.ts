@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { Result } from "better-result";
 
+import { readEdenTransportFailure } from "@stll/api-client";
 import type {
   ReaderAnswer,
   ReaderAnswerStreamEvent,
@@ -48,21 +49,31 @@ export const readerAnswersOptions = ({
         };
         const fetched = await Result.tryPromise(async () => {
           // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
-          const { data, error } = await api.reader.answers.get(pageRequest);
-          return error === null ? { data, error: null } : { data: null, error };
-        });
-        const requested = fetched.mapError((error) => {
-          const { cause } = error;
-          if (cause instanceof TypeError) {
-            return new ReaderAnswerFailure({
-              kind: "request",
-              message: "Reader answer request failed",
-              cause,
-            });
+          const response = await api.reader.answers.get(pageRequest);
+          if (response.error !== null) {
+            const transport = readEdenTransportFailure(response);
+            if (transport !== null) {
+              const { cause } = transport;
+              return readQueryResult(
+                Result.err(
+                  cause instanceof TypeError || !(cause instanceof Error)
+                    ? new ReaderAnswerFailure({
+                        kind: "request",
+                        message: "Reader answer request failed",
+                        cause,
+                      })
+                    : cause,
+                ),
+              );
+            }
           }
-          return cause instanceof Error ? cause : error;
+          return unwrapEden(response);
         });
-        const page = unwrapEden(readQueryResult(requested));
+        const page = readQueryResult(
+          fetched.mapError((error) =>
+            error.cause instanceof Error ? error.cause : error,
+          ),
+        );
         answers.push(...page.items);
         cursor = page.nextCursor ?? undefined;
         if (cursor !== undefined) {

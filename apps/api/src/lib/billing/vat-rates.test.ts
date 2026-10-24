@@ -2,7 +2,14 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import { vatRateOnDate } from "@/api/lib/billing/vat-rates";
+
+test("preset application requires organization settings update permission", () => {
+  expect(applyVatRatePreset.config.permissions).toEqual({
+    organizationSettings: ["update"],
+  });
+});
 
 test("VAT date predicate binds the date to an inclusive start and exclusive nullable end", () => {
   const query = new PgDialect().sqlToQuery(

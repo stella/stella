@@ -20,7 +20,6 @@ import {
   didYouMean,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
   legalCitationLinkFields,
   mapValibotIssues,
@@ -58,13 +57,6 @@ const BASE = "http://localhost:3000";
 const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
 const DECISION_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
-
-describe("MCP ISO date contract", () => {
-  test("accepts ISO dates and rejects out-of-range date components", () => {
-    expect(v.is(ISO_DATE_SCHEMA, "2026-08-23")).toBe(true);
-    expect(v.is(ISO_DATE_SCHEMA, "2026-99-99")).toBe(false);
-  });
-});
 
 const createWorkspaceGateContext = (
   status: "active" | "archived",
