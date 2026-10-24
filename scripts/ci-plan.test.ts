@@ -6968,14 +6968,22 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
     }
   }
   expect(planner?.run).toContain('postgres_test_selection={"mode":"all"}');
-  for (const result of ["success", "skipped", "failure"]) {
-    expect(
-      evaluateResult({
-        event: EVENT.pullRequest,
-        results: { "postgres-service-suites": result },
-        plannedOutputs: { postgres_pr_required: "true" },
-      }),
-    ).toBe(result === "success" ? 0 : 1);
+  // The opt-in requires the suites on the armed run; an unarmed push may
+  // skip them with the other queue-only suites.
+  for (const armed of [true, false]) {
+    for (const result of ["success", "skipped", "failure"]) {
+      expect(
+        evaluateResult({
+          event: EVENT.pullRequest,
+          results: { "postgres-service-suites": result },
+          plannedOutputs: {
+            postgres_pr_required: "true",
+            heavy_proof: String(armed),
+          },
+        }),
+        `${armed}/${result}`,
+      ).toBe(result === "success" || (!armed && result === "skipped") ? 0 : 1);
+    }
   }
 });
 

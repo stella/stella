@@ -6901,7 +6901,9 @@ jobs:
           if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
             FAST_REQUIRED="$PILOT_FAST_JOBS"
           fi
-          if [[ "$EVENT" == pull_request ]] && jq -e '.postgres_pr_required == "true"' <<< "$PLAN" >/dev/null; then
+          # The Postgres opt-in runs the service suites on the pull request once
+          # armed, with the other queue-only suites; an unarmed push skips them.
+          if [[ "$EVENT" == pull_request && "${HEAVY_PROOF:-}" == true ]] && jq -e '.postgres_pr_required == "true"' <<< "$PLAN" >/dev/null; then
             FAST_REQUIRED=$(jq -cn --argjson required "$FAST_REQUIRED" '$required + ["service-suites", "postgres-service-suites"] | unique') || exit 1
           fi
           # ci-plan proved this head only merges the base into one whose run
