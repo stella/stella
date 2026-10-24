@@ -9,6 +9,8 @@ import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PageInfo } from "@/lib/pdf/pdf-context";
 import { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFViewerCode } from "@/lib/pdf/pdf-errors";
+import { resolvePDFPageSource } from "@/lib/pdf/pdf-page-source";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
 import type {
   PDFDocumentLoadingTask,
@@ -25,6 +27,7 @@ export type PDFDocument = {
   attachmentLoadingTasks: PDFDocumentLoadingTask[];
   pages: Map<string, PageInfo>;
   attachmentLabels: Map<string, string>;
+  pageSource: PDFPageSource;
   isXfa: boolean;
   baseScale: number;
   toJSON: () => {
@@ -113,6 +116,7 @@ type LoadPDFProps = {
   fileId: string;
   buffer: ArrayBuffer;
   password?: string | undefined;
+  pageSource: PDFPageSource;
 };
 
 /**
@@ -125,6 +129,7 @@ export const loadPDF = async ({
   fileId,
   buffer,
   password,
+  pageSource,
 }: LoadPDFProps): Promise<Result<PDFDocument, PDFViewerError>> => {
   let passwordResponses: PasswordResponses | null = null;
 
@@ -172,10 +177,16 @@ export const loadPDF = async ({
 
   return Result.tryPromise({
     try: async () => {
-      const attachments: unknown = await document.getAttachments();
+      const attachments: unknown =
+        pageSource === "portfolio" ? await document.getAttachments() : null;
       const pdfAttachments = parseAttachments(attachments);
 
-      const isPortfolio = pdfAttachments.length > 0 && document.numPages <= 1;
+      const resolvedPageSource = resolvePDFPageSource({
+        pageSource,
+        documentPageCount: document.numPages,
+        attachmentCount: pdfAttachments.length,
+      });
+      const isPortfolio = resolvedPageSource === "portfolio";
 
       let documentPages: Promise<{ id: string; proxy: PDFPageProxy }>[] = [];
       let attachmentLabels: Map<string, string> = new Map<string, string>();
@@ -253,6 +264,7 @@ export const loadPDF = async ({
         attachmentLoadingTasks,
         pages,
         attachmentLabels,
+        pageSource: resolvedPageSource,
         isXfa,
         baseScale,
         toJSON: () => ({

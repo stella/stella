@@ -23,6 +23,7 @@ import { reloadForStaleDeployment } from "@/lib/preload-error-recovery";
  * that keeps failing shows up by name.
  */
 export type ViewerSurface =
+  | "avt-original-pdf"
   | "chat-draft-docx"
   | "document-docx"
   | "document-office"

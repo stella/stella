@@ -309,6 +309,8 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
       t.Null(),
     ]),
     total: searchTotalSchema,
+    /** Hits on this page appended by the any-word phase, outside `total`. */
+    relaxedHitCount: Type.Integer({ minimum: 0 }),
     nextCursor: nullableBoundedString(
       CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     ),
