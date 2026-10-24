@@ -642,16 +642,12 @@ export const edpbAdapter = {
       const captured = [
         {
           role: "index",
-          contentBase64: Buffer.from(indexResult.value.bytes).toString(
-            "base64",
-          ),
+          contentBase64: Buffer.from(indexResult.value.bytes).toBase64(),
           contentType: indexResult.value.contentType,
         },
         {
           role: "detail",
-          contentBase64: Buffer.from(detailResult.value.bytes).toString(
-            "base64",
-          ),
+          contentBase64: Buffer.from(detailResult.value.bytes).toBase64(),
           contentType: detailResult.value.contentType,
         },
       ];

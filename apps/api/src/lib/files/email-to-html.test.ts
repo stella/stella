@@ -36,7 +36,7 @@ const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
 const SVG_BASE64 = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
-).toString("base64");
+).toBase64();
 
 test("email parsing preserves typed failures and their cause", async () => {
   const cause = new Error("Parser unavailable");

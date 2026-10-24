@@ -949,9 +949,7 @@ export const loadFolioCollabSnapshot = async (
           snapshot: {
             generation: room.generation,
             loadOutcome: loaded.outcome,
-            snapshotBase64: Buffer.from(loaded.snapshotBytes).toString(
-              "base64",
-            ),
+            snapshotBase64: Buffer.from(loaded.snapshotBytes).toBase64(),
             snapshotRevision: room.yjsSnapshotRevision,
           },
           rawSnapshotSha256Hex: hashSha256Hex(snapshotBytes),

@@ -259,6 +259,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
   ]),
+  fixtureRuleOverride("prefer-bun-native.fixture.ts", [
+    "prefer-bun-native/no-buffer-string-encoding",
+    "prefer-bun-native/no-headers-from-entries",
+  ]),
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
   ]),
@@ -1739,6 +1743,7 @@ const config = defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/prefer-bun-native.ts",
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
@@ -3079,6 +3084,40 @@ const config = defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Code Bun runs uses the runtime's native forms, so it gets Bun's own
+      // speedups. Code another runtime runs keeps Node's forms: the published
+      // CLI and the MCP canary server run on Node, the visual preview on a
+      // Node Lambda, and the shared document and MCP app packages and the
+      // web and desktop apps in browsers.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.{ts,tsx}",
+        "apps/*/evals/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+        ".oxlint-plugins/__fixtures__/prefer-bun-native.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/web/**",
+        "apps/desktop/**",
+        "apps/visual-preview/**",
+        "packages/cli/**",
+        "packages/docx-utils/**",
+        "packages/mcp-apps/src/**",
+        "packages/ui/**",
+        "packages/workspace-ui/**",
+        "packages/sha256/src/node.ts",
+        "packages/sha256/src/browser.ts",
+        "packages/sha256/src/encoding.ts",
+        "packages/agent-engine/scripts/mcp-canary-server.ts",
+      ],
+      rules: {
+        "prefer-bun-native/no-buffer-string-encoding": "error",
+        "prefer-bun-native/no-headers-from-entries": "error",
       },
     },
     {

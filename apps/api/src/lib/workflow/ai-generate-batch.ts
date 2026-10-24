@@ -335,7 +335,7 @@ export const generateWorkflowData = async ({
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(file.content).toString("base64"),
+          value: Buffer.from(file.content).toBase64(),
           mimeType: file.mimeType,
         },
       });

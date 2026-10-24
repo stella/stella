@@ -46,7 +46,7 @@ export const encryptAgentClientCredential = async (
   return Result.ok(
     v.parse(
       encryptedCredentialSchema,
-      `${CREDENTIAL_PREFIX}${iv.toString("base64")}:${ciphertext.toString("base64")}`,
+      `${CREDENTIAL_PREFIX}${iv.toBase64()}:${ciphertext.toBase64()}`,
     ),
   );
 };
@@ -126,10 +126,7 @@ export const readAgentClientCredential = async ({
   }
   const iv = Buffer.from(encodedIv, "base64");
   const ciphertext = Buffer.from(encodedCiphertext, "base64");
-  if (
-    ciphertext.length < 16 ||
-    ciphertext.toString("base64") !== encodedCiphertext
-  ) {
+  if (ciphertext.length < 16 || ciphertext.toBase64() !== encodedCiphertext) {
     return Result.err(
       new HandlerError({
         status: 500,

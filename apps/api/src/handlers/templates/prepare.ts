@@ -135,7 +135,7 @@ const prepareTemplate = createSafeRootHandler(
     // parses binary responses as text and corrupts the zip (the same failure
     // the save round-trip hit). The client decodes this back to bytes.
     return Result.ok({
-      docxBase64: Buffer.from(prepared.file.bytes).toString("base64"),
+      docxBase64: Buffer.from(prepared.file.bytes).toBase64(),
       fieldCount: prepared.fields.length,
       unappliedCount: prepared.unapplied.length,
     });

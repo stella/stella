@@ -253,7 +253,7 @@ const fixture = ({
               type: "file",
               encoding: "base64",
               sha: blob,
-              content: Buffer.from(JSON.stringify(store)).toString("base64"),
+              content: Buffer.from(JSON.stringify(store)).toBase64(),
             },
           };
         }

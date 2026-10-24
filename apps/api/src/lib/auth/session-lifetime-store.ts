@@ -144,7 +144,7 @@ export const createDatabaseSessionLifetimeStore = (
         .set({
           ...(rotationEnabled && credentialMode === "cookie"
             ? {
-                token: randomBytes(32).toString("hex"),
+                token: randomBytes(32).toHex(),
                 priorTokenHash: hashSessionToken(token),
                 priorTokenExpiresAt: new Date(
                   now.getTime() + SESSION_PRIOR_TOKEN_GRACE_MS,

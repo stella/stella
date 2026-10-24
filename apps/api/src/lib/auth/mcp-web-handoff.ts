@@ -208,7 +208,7 @@ export const createWebHandoffService = ({
       if (!grant || !hasWebHandoffScopes(grant.scopes)) {
         return null;
       }
-      const code = `sh1_${randomBytes(32).toString("base64url")}`;
+      const code = `sh1_${randomBytes(32).toBase64({ alphabet: "base64url", omitPadding: true })}`;
       const id = Bun.randomUUIDv7();
       const createdAt = now();
       await tx.insert(mcpWebHandoff).values({

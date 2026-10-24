@@ -913,7 +913,7 @@ export const apply = ({
     writeFileSync(
       path.join(out, "blobs", `${sha}.json`),
       JSON.stringify({
-        content: Buffer.from(content.stdout).toString("base64"),
+        content: Buffer.from(content.stdout).toBase64(),
         encoding: "base64",
       }),
     );

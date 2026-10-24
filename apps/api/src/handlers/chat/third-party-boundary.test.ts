@@ -539,9 +539,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
-      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
-        "base64",
-      ),
+      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toBase64(),
     );
   });
 

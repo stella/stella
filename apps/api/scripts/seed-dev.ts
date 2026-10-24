@@ -971,7 +971,7 @@ const isSeedEmailFileName = (fileName: string): fileName is SeedEmailFileName =>
 
 const wrapBase64 = (value: Buffer): string =>
   value
-    .toString("base64")
+    .toBase64()
     .match(/.{1,76}/gu)
     ?.join("\r\n") ?? "";
 

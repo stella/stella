@@ -479,7 +479,10 @@ const discoverOAuthMetadataWithinDeadline = async (
 const randomBase64Url = (byteLength: number): string => {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64url");
+  return Buffer.from(bytes).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 };
 
 export const createPkce = () => {

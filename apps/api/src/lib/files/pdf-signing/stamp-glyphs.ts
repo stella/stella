@@ -50,7 +50,7 @@ const hex4 = (value: number) =>
 
 /** UTF-16BE hex, as ToUnicode and a text string both spell text. */
 const utf16Hex = (text: string) =>
-  Buffer.from(text, "utf16le").swap16().toString("hex").toUpperCase();
+  Buffer.from(text, "utf16le").swap16().toHex().toUpperCase();
 
 /** Consecutive glyphs of one cluster; a shaped run keeps clusters together. */
 const clusterGroups = (run: StampRun) => {

@@ -200,7 +200,7 @@ export const buildWithFault = async <T>({
 
 const leafText = (value: unknown): string => {
   if (value instanceof Uint8Array) {
-    return `bytes:${Buffer.from(value).toString("base64")}`;
+    return `bytes:${Buffer.from(value).toBase64()}`;
   }
   return typeof value === "string" ? value : JSON.stringify(value);
 };

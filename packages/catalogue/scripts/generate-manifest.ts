@@ -246,7 +246,7 @@ function iconLiteralFor(
   const iconSvg = path.join(folder, "icon.svg");
   const inspectedIconPng = getInspectedFilePath(filesystem, iconPng);
   if (inspectedIconPng !== null) {
-    const base64 = readFileSync(inspectedIconPng).toString("base64");
+    const base64 = readFileSync(inspectedIconPng).toBase64();
     return JSON.stringify(`data:image/png;base64,${base64}`);
   }
   const inspectedIconSvg = getInspectedFilePath(filesystem, iconSvg);
@@ -254,7 +254,7 @@ function iconLiteralFor(
     const base64 = Buffer.from(
       readFileSync(inspectedIconSvg, "utf-8"),
       "utf-8",
-    ).toString("base64");
+    ).toBase64();
     return JSON.stringify(`data:image/svg+xml;base64,${base64}`);
   }
   return "null";

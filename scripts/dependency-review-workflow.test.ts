@@ -161,7 +161,7 @@ const selector = ({
                 data: {
                   type: "file",
                   encoding: "base64",
-                  content: Buffer.from(content).toString("base64"),
+                  content: Buffer.from(content).toBase64(),
                 },
               };
             },

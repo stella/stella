@@ -11,7 +11,10 @@ const VERSION_ID = brandPersistedEntityVersionId(
 );
 
 const encodeParts = (parts: unknown): string =>
-  Buffer.from(JSON.stringify(parts)).toString("base64url");
+  Buffer.from(JSON.stringify(parts)).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 
 describe("entity version page cursor", () => {
   test("roundtrips the (versionNumber, id) keyset", () => {
