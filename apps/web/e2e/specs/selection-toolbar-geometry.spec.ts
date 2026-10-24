@@ -180,7 +180,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     await expect
       .poll(async () => (await toolbar.boundingBox())?.width ?? 0)
       .toBeGreaterThan(name === "narrowRightEdge" ? 100 : 200);
-    const rows = expect.poll(() =>
+    const rows = expect.poll(async () =>
       toolbar
         .locator("button")
         .evaluateAll(
