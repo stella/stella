@@ -1,6 +1,7 @@
 import { normalizeCountry } from "@stll/agent-input";
 import { DEFAULT_INVOICE_DUE_DAYS } from "@stll/api-contract";
 import { EU_MEMBER_STATES } from "@stll/catalogue";
+import { invoiceSellerCountryOf } from "@stll/invoicing";
 import type { VatTreatment } from "@stll/invoicing";
 
 import type {
@@ -179,7 +180,11 @@ export type InvoiceVatDecision = {
 
 type DecideInvoiceVatOptions = {
   /** Null when the invoice has no seller profile. */
-  seller: { vatId: string | null; vatPayer: boolean } | null;
+  seller: {
+    country: string | null;
+    vatId: string | null;
+    vatPayer: boolean;
+  } | null;
   buyerVatId: string | null;
   buyerVatPayer: boolean | null;
   /** The country of the client's address, as written on the contact. */
@@ -229,12 +234,17 @@ const crossBorderVat = ({
 }: DecideInvoiceVatOptions & {
   seller: NonNullable<DecideInvoiceVatOptions["seller"]>;
 }): InvoiceVatDecision => {
+  const sellerCountry = invoiceSellerCountryOf(seller);
   const sellerState = euVatPrefix(seller.vatId);
   const buyerPrefix = vatIdCountry(buyerVatId);
-  if (sellerState === null || buyerPrefix === null) {
+  if (
+    sellerCountry === null ||
+    !EU_MEMBER_STATES.has(sellerCountry) ||
+    sellerState === null ||
+    buyerPrefix === null
+  ) {
     return domesticVat(standardRateBps);
   }
-  const sellerCountry = countryOfVatPrefix(sellerState);
   const vatCountry = countryOfVatPrefix(buyerPrefix);
   if (vatCountry === sellerCountry) {
     return domesticVat(standardRateBps);
@@ -275,11 +285,17 @@ export const decideInvoiceVat = (
     };
   }
   // Legal services to a client established outside the EU are supplied where
-  // the client is, whether a business (Art. 44) or a private person
+  // the client is for an EU-established seller, whether a business (Art. 44) or a private person
   // (Art. 59(c)); SK zákon 222/2004 Z. z. § 15 ods. 1 and § 16 ods. 15 and
   // 16 písm. c). The address alone decides; no tax ID is needed.
   const clientCountry = addressCountry(buyerCountry);
-  if (clientCountry !== null && !EU_MEMBER_STATES.has(clientCountry)) {
+  const sellerCountry = invoiceSellerCountryOf(seller);
+  if (
+    sellerCountry !== null &&
+    EU_MEMBER_STATES.has(sellerCountry) &&
+    clientCountry !== null &&
+    !EU_MEMBER_STATES.has(clientCountry)
+  ) {
     return OUTSIDE_SCOPE;
   }
   const crossBorder = crossBorderVat({ ...options, seller });

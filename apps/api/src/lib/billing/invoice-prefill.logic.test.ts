@@ -16,7 +16,11 @@ import type { InvoiceVatReason } from "./invoice-prefill.logic";
 
 type VatCase = {
   name: string;
-  seller: { vatId: string | null; vatPayer: boolean } | null;
+  seller: {
+    country: string | null;
+    vatId: string | null;
+    vatPayer: boolean;
+  } | null;
   buyerVatId: string | null;
   buyerVatPayer: boolean | null;
   buyerCountry: string | null;
@@ -25,16 +29,40 @@ type VatCase = {
 
 const VAT_CASES: VatCase[] = [
   {
+    name: "a British seller billing a British client retains its configured domestic rate",
+    seller: { country: "GB", vatId: "GB123456789", vatPayer: true },
+    buyerVatId: "GB987654321",
+    buyerVatPayer: true,
+    buyerCountry: "GB",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+  {
+    name: "a non-EU establishment does not acquire EU rules through a secondary VAT registration",
+    seller: { country: "GB", vatId: "SK2120123456", vatPayer: true },
+    buyerVatId: null,
+    buyerVatPayer: null,
+    buyerCountry: "GB",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+  {
+    name: "the seller's German establishment decides whether the buyer is domestic",
+    seller: { country: "Germany", vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "DE298765432",
+    buyerVatPayer: true,
+    buyerCountry: "DE",
+    expected: ["domestic_vat", 2100, "domestic_rate"],
+  },
+  {
     name: "a private client outside the EU is outside the scope (zákon 222/2004 Z. z. § 16 ods. 15, 16 písm. c)",
-    seller: { vatId: "SK2120123456", vatPayer: true },
+    seller: { country: null, vatId: "SK2120123456", vatPayer: true },
     buyerVatId: null,
     buyerVatPayer: null,
     buyerCountry: "US",
     expected: ["outside_scope", 0, "outside_scope"],
   },
   {
-    name: "a non-payer outside the EU client is outside the scope too",
-    seller: { vatId: null, vatPayer: false },
+    name: "an EU-established non-payer billing a non-EU client is outside the scope too",
+    seller: { country: "SK", vatId: null, vatPayer: false },
     buyerVatId: null,
     buyerVatPayer: null,
     buyerCountry: "CH",
@@ -42,7 +70,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a non-payer with a VAT ID billing an EU business is reverse charged (§ 72 ods. 2, § 74 ods. 1 písm. k)",
-    seller: { vatId: "SK2120123456", vatPayer: false },
+    seller: { country: null, vatId: "SK2120123456", vatPayer: false },
     buyerVatId: "DE298765432",
     buyerVatPayer: null,
     buyerCountry: "DE",
@@ -50,7 +78,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a non-payer billing a domestic client charges none",
-    seller: { vatId: "SK2120123456", vatPayer: false },
+    seller: { country: null, vatId: "SK2120123456", vatPayer: false },
     buyerVatId: "SK2020123456",
     buyerVatPayer: null,
     buyerCountry: "SK",
@@ -66,7 +94,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a seller who is not a VAT payer charges none",
-    seller: { vatId: null, vatPayer: false },
+    seller: { country: null, vatId: null, vatPayer: false },
     buyerVatId: "DE298765432",
     buyerVatPayer: null,
     buyerCountry: "DE",
@@ -74,7 +102,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a registered person with a VAT ID who is not a payer charges none",
-    seller: { vatId: "CZ12345678", vatPayer: false },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: false },
     buyerVatId: null,
     buyerVatPayer: null,
     buyerCountry: null,
@@ -82,7 +110,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a business in another member state with a matching address is reverse charged",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "de 298 765 432",
     buyerVatPayer: null,
     buyerCountry: "DE",
@@ -90,7 +118,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a country written out in full confirms the VAT ID",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE298765432",
     buyerVatPayer: null,
     buyerCountry: "Germany",
@@ -98,7 +126,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a Greek VAT ID (EL) matches a Greek address (GR)",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "EL123456789",
     buyerVatPayer: null,
     buyerCountry: "GR",
@@ -106,7 +134,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a business client outside the EU is outside the scope of VAT",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "GB123456789",
     buyerVatPayer: null,
     buyerCountry: "United Kingdom",
@@ -114,7 +142,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a Northern Ireland VAT ID (XI) is a UK service client, not an EU one",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "XI123456789",
     buyerVatPayer: null,
     buyerCountry: "GB",
@@ -122,7 +150,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a free-text tax ID of a Czech client keeps the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "HRB123456",
     buyerVatPayer: null,
     buyerCountry: "CZ",
@@ -130,7 +158,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a prefixed tax ID without the member state's VAT ID syntax keeps the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DEAB",
     buyerVatPayer: null,
     buyerCountry: "DE",
@@ -138,7 +166,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a client outside the EU is outside the scope whatever its tax ID (Art. 44, 59(c))",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "GBAB",
     buyerVatPayer: null,
     buyerCountry: "GB",
@@ -146,7 +174,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a Swiss business tax ID is outside the scope of VAT",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "CHE-123.456.789 MWST",
     buyerVatPayer: null,
     buyerCountry: "CH",
@@ -154,7 +182,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a short arbitrary tax ID of a client outside the EU is outside the scope",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "USAB12",
     buyerVatPayer: null,
     buyerCountry: "US",
@@ -162,7 +190,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a German VAT ID one digit short keeps the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE29876543",
     buyerVatPayer: null,
     buyerCountry: "DE",
@@ -170,7 +198,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a VAT ID the address does not confirm keeps the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE298765432",
     buyerVatPayer: null,
     buyerCountry: "AT",
@@ -178,7 +206,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a missing address country keeps the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE298765432",
     buyerVatPayer: null,
     buyerCountry: null,
@@ -186,7 +214,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a client in the seller's own state pays the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "CZ87654321",
     buyerVatPayer: null,
     buyerCountry: "DE",
@@ -194,7 +222,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a bare registration number names no country",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "27145689",
     buyerVatPayer: null,
     buyerCountry: "CZ",
@@ -202,7 +230,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a registered non-payer business with a foreign VAT ID is reverse charged",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE298765432",
     buyerVatPayer: false,
     buyerCountry: "DE",
@@ -210,7 +238,7 @@ const VAT_CASES: VatCase[] = [
   },
   {
     name: "a private client pays the standard rate",
-    seller: { vatId: "CZ12345678", vatPayer: true },
+    seller: { country: null, vatId: "CZ12345678", vatPayer: true },
     buyerVatId: null,
     buyerVatPayer: null,
     buyerCountry: "AT",
@@ -240,7 +268,7 @@ describe("invoice VAT decision", () => {
   test("a VAT payer without a configured rate says so instead of inventing one", () => {
     expect(
       decideInvoiceVat({
-        seller: { vatId: "CZ12345678", vatPayer: true },
+        seller: { country: null, vatId: "CZ12345678", vatPayer: true },
         buyerVatId: null,
         buyerVatPayer: null,
         buyerCountry: null,
