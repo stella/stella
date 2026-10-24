@@ -150,7 +150,8 @@ test("an armed pull request builds the landing at merge-group scope", () => {
     computeChangedFileScope(
       {
         ...detectorInput("pull_request"),
-        changedFiles: ["packages/ui/src/button.tsx"],
+        // A landing input outside e2e-landing, which builds the landing itself.
+        changedFiles: ["docs/changelog/v1.md"],
         armed,
       },
       detectors({ landingBuild: () => false, landingDeploy: () => false }),
