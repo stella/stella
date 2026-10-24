@@ -57,10 +57,12 @@ test("a timeout still pending when its test ends is cancelled and reported with 
 
 test("an interval left running is stopped and reported", async () => {
   let ticks = 0;
-  setInterval(() => {
+  const interval = setInterval(() => {
     ticks += 1;
   }, 1);
   const leaks = leaksAtTestEnd();
+  expect(isLiveTimer(interval)).toBe(false);
+  clearInterval(interval);
   const stopped = ticks;
   await Bun.sleep(10);
   expect(leaks).toHaveLength(1);

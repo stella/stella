@@ -206,3 +206,138 @@ for (const callback of [
     });
   }
 }
+
+for (const [progress, comparison, bounded] of [
+  ["n++", "n < 10", true],
+  ["n++", "n <= 10", true],
+  ["n++", "n > 0", false],
+  ["n++", "n >= 0", false],
+  ["n--", "n > -10", true],
+  ["n--", "n >= -10", true],
+  ["n--", "n < 10", false],
+  ["n--", "n <= 10", false],
+  ["n += 2", "10 > n", true],
+  ["n -= 2", "-10 < n", true],
+  ["n += 0", "n < 10", false],
+  ["if (ready()) n++", "n < 10", false],
+  ["n++; n = 0", "n < 10", false],
+  ["n++; n--", "n < 10", false],
+  ["n++", "n < limit", false],
+  ["n++", "n < Infinity", false],
+] as const) {
+  test(`retry budget requires monotonic progress: ${progress}; ${comparison}`, async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          "export const retry = () => { let n = 0;",
+          `const tick = () => { ${progress};`,
+          `if (${comparison}) requestAnimationFrame(tick);`,
+          "};",
+          "requestAnimationFrame(tick); };",
+        ].join("\n"),
+      ),
+    ).toEqual(bounded ? [] : [3, 5]);
+  });
+}
+
+for (const [condition, bounded] of [
+  ["ready() || n >= 10", true],
+  ["ready() && n >= 10", false],
+  ["n >= 10 || ready()", true],
+  ["n >= 10 && ready()", false],
+  ["!(n < 10)", true],
+  ["ready() || (other() && n >= 10)", false],
+  ["ready() && (other() || n >= 10)", false],
+] as const) {
+  test(`early exit must bound every continuing path: ${condition}`, async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          "export const retry = () => { let n = 0;",
+          `const tick = () => { if (${condition}) return; n++;`,
+          "requestAnimationFrame(tick);",
+          "};",
+          "requestAnimationFrame(tick); };",
+        ].join("\n"),
+      ),
+    ).toEqual(bounded ? [] : [3, 5]);
+  });
+}
+
+for (const guard of [
+  "if (n >= 10) { if (ready()) return; }",
+  "if (n < 10) {} else if (ready()) return;",
+]) {
+  test(`conditional return does not establish a retry budget: ${guard}`, async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          "export const retry = () => { let n = 0;",
+          `const tick = () => { ${guard} n++;`,
+          "requestAnimationFrame(tick);",
+          "};",
+          "requestAnimationFrame(tick); };",
+        ].join("\n"),
+      ),
+    ).toEqual([3, 5]);
+  });
+}
+
+test("accepts immediate native timer close while requiring ownership for unref and refresh", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "setInterval(tick, 10).close();",
+        "setInterval(tick, 10).unref();",
+        "setInterval(tick, 10).refresh();",
+        "setInterval(tick, 10).close;",
+        "setInterval(tick, 10)[close]();",
+        "setInterval(tick, 10).close?.();",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 3, 4, 5, 6]);
+});
+
+for (const condition of ["n < LIMIT", "LIMIT > n"]) {
+  test(`a stable numeric retry limit can appear on either side: ${condition}`, async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          "const LIMIT = 12; export const retry = () => { let n = 0;",
+          `const tick = () => { n++; if (${condition}) requestAnimationFrame(tick); };`,
+          "requestAnimationFrame(tick); };",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+}
+
+for (const [schedule, bounded] of [
+  ["n < 10 && requestAnimationFrame(tick)", true],
+  ["n >= 10 || requestAnimationFrame(tick)", true],
+  ["n >= 0 && requestAnimationFrame(tick)", false],
+  ["n < 10 || requestAnimationFrame(tick)", false],
+  ["n < 10 ? requestAnimationFrame(tick) : undefined", true],
+  ["n >= 10 ? undefined : requestAnimationFrame(tick)", true],
+  ["n < 10 ? undefined : requestAnimationFrame(tick)", false],
+  ["while (true) { if (n < 10) requestAnimationFrame(tick); }", false],
+] as const) {
+  test(`every reschedule path must reach its counter limit: ${schedule}`, async () => {
+    expect(
+      await lintSingleRule(
+        RULE,
+        [
+          "export const retry = () => { let n = 0; const tick = () => { n++;",
+          `${schedule};`,
+          "};",
+          "requestAnimationFrame(tick); };",
+        ].join("\n"),
+      ),
+    ).toEqual(bounded ? [] : [2, 4]);
+  });
+}

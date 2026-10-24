@@ -85,7 +85,6 @@ const CONDITIONAL_PARENTS = new Set([
   "SwitchCase",
   "WhileStatement",
 ]);
-const COMPARISON_OPERATORS = new Set(["<", "<=", ">", ">="]);
 
 type LoopKind = "frame" | "interval";
 
@@ -212,8 +211,27 @@ const exitsEarly = (statement: unknown): boolean => {
 
 // The guard expressions a reschedule depends on inside `loop`, or an empty
 // list when it runs unconditionally on every frame.
-const rescheduleGuards = (call: AstNode, loop: AstNode): AstNode[] | null => {
-  const guards: AstNode[] = [];
+type Guard = { expression: AstNode; outcome: "truthy" | "falsy" };
+
+const alwaysExits = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
+    return true;
+  }
+  if (node.type === "BlockStatement" && Array.isArray(node.body)) {
+    return node.body.some(alwaysExits);
+  }
+  return (
+    node.type === "IfStatement" &&
+    alwaysExits(node.consequent) &&
+    alwaysExits(node.alternate)
+  );
+};
+
+const rescheduleGuards = (call: AstNode, loop: AstNode): Guard[] | null => {
+  const guards: Guard[] = [];
   let conditional = false;
   let current = call;
   let parent = parentOf(current);
@@ -221,7 +239,10 @@ const rescheduleGuards = (call: AstNode, loop: AstNode): AstNode[] | null => {
     if (parent.type === "IfStatement" && parent.test !== current) {
       conditional = true;
       if (isAstNode(parent.test)) {
-        guards.push(parent.test);
+        guards.push({
+          expression: parent.test,
+          outcome: parent.consequent === current ? "truthy" : "falsy",
+        });
       }
     } else if (
       parent.type === "ConditionalExpression" &&
@@ -229,15 +250,24 @@ const rescheduleGuards = (call: AstNode, loop: AstNode): AstNode[] | null => {
     ) {
       conditional = true;
       if (isAstNode(parent.test)) {
-        guards.push(parent.test);
+        guards.push({
+          expression: parent.test,
+          outcome: parent.consequent === current ? "truthy" : "falsy",
+        });
       }
     } else if (
       parent.type === "LogicalExpression" &&
       parent.right === current
     ) {
       conditional = true;
-      if (isAstNode(parent.left)) {
-        guards.push(parent.left);
+      if (
+        isAstNode(parent.left) &&
+        (parent.operator === "&&" || parent.operator === "||")
+      ) {
+        guards.push({
+          expression: parent.left,
+          outcome: parent.operator === "&&" ? "truthy" : "falsy",
+        });
       }
     } else if (CONDITIONAL_PARENTS.has(parent.type)) {
       conditional = true;
@@ -250,7 +280,14 @@ const rescheduleGuards = (call: AstNode, loop: AstNode): AstNode[] | null => {
   }
   for (const exit of precedingExits(call, loop)) {
     conditional = true;
-    guards.push(exit);
+    if (exit.type === "IfStatement" && isAstNode(exit.test)) {
+      if (alwaysExits(exit.consequent)) {
+        guards.push({ expression: exit.test, outcome: "falsy" });
+      }
+      if (alwaysExits(exit.alternate)) {
+        guards.push({ expression: exit.test, outcome: "truthy" });
+      }
+    }
   }
   return conditional ? guards : null;
 };
@@ -429,6 +466,21 @@ const handleOf = (context: LoopContext, call: AstNode): Handle | null => {
   ) {
     return assignedHandle(context, unwrapExpression(parent.left));
   }
+  // Bun/Node timer handles can also be closed immediately at creation.
+  const closeCall = parentOf(parent);
+  if (
+    parent.type === "MemberExpression" &&
+    parent.computed !== true &&
+    parent.optional !== true &&
+    parent.object === current &&
+    getPropertyName(parent.property) === "close" &&
+    closeCall?.type === "CallExpression" &&
+    closeCall.optional !== true &&
+    closeCall.callee === parent &&
+    callArguments(closeCall).length === 0
+  ) {
+    return { kind: "transferred" };
+  }
   const handedOver =
     parent.type === "ReturnStatement" ||
     (parent.type === "ArrowFunctionExpression" && parent.body === current) ||
@@ -538,55 +590,209 @@ const isOwned = (
   );
 };
 
-// Variables the loop advances itself: `n += 1`, `n -= 1`, `n++`, `n--`.
-const advancedCounters = (
-  context: LoopContext,
-  loop: AstNode,
-): Set<Variable> => {
-  const advanced = new Set<Variable>();
-  for (const node of everyNode(loop.body)) {
-    const target =
-      node.type === "UpdateExpression"
-        ? node.argument
-        : node.type === "AssignmentExpression" &&
-            (node.operator === "+=" || node.operator === "-=")
-          ? node.left
-          : null;
-    const identifier = unwrapExpression(target);
-    if (isIdentifierReference(identifier)) {
-      const variable = resolveVariable(context, identifier);
-      if (variable !== null) {
-        advanced.add(variable);
-      }
-    }
+// Only literal integer progress and limits establish a finite retry budget.
+const integerValue = (node: unknown): number | null => {
+  const value = unwrapExpression(node);
+  if (value === null) {
+    return null;
   }
-  return advanced;
+  if (typeof value.value === "number" && Number.isSafeInteger(value.value)) {
+    return value.value;
+  }
+  if (value.type === "UnaryExpression" && value.operator === "-") {
+    const argument = integerValue(value.argument);
+    return argument === null ? null : -argument;
+  }
+  return null;
 };
 
-// A guard comparing a counter the loop advances itself.
-const isBoundedBy = (
-  context: LoopContext,
-  guards: AstNode[],
-  loop: AstNode,
-): boolean => {
-  const advanced = advancedCounters(context, loop);
-  const isCounter = (side: unknown): boolean => {
-    const operand = unwrapExpression(side);
-    if (!isIdentifierReference(operand)) {
+// A standalone write earlier on the call's path runs before every reschedule.
+type PrecedesOnPathOptions = { write: AstNode; call: AstNode; loop: AstNode };
+
+const precedesOnPath = ({
+  write,
+  call,
+  loop,
+}: PrecedesOnPathOptions): boolean => {
+  const statement = parentOf(write);
+  const block = statement === null ? null : parentOf(statement);
+  if (
+    statement?.type !== "ExpressionStatement" ||
+    block?.type !== "BlockStatement" ||
+    !Array.isArray(block.body)
+  ) {
+    return false;
+  }
+  let current = call;
+  while (current !== loop) {
+    const parent = parentOf(current);
+    if (parent === block) {
+      return block.body.indexOf(statement) < block.body.indexOf(current);
+    }
+    if (
+      parent === null ||
+      isFunctionNode(parent) ||
+      CONDITIONAL_PARENTS.has(parent.type)
+    ) {
       return false;
     }
-    const variable = resolveVariable(context, operand);
-    return variable !== null && advanced.has(variable);
-  };
-  return guards.some((guard) =>
-    everyNode(guard).some(
-      (node) =>
-        node.type === "BinaryExpression" &&
-        typeof node.operator === "string" &&
-        COMPARISON_OPERATORS.has(node.operator) &&
-        (isCounter(node.left) || isCounter(node.right)),
-    ),
-  );
+    current = parent;
+  }
+  return false;
+};
+
+type CounterDirection = "increasing" | "decreasing";
+
+type CounterDirectionOptions = {
+  variable: Variable;
+  call: AstNode;
+  loop: AstNode;
+};
+
+const counterDirection = ({
+  variable,
+  call,
+  loop,
+}: CounterDirectionOptions): CounterDirection | null => {
+  const definition = variable.defs.at(0);
+  if (
+    variable.defs.length !== 1 ||
+    definition?.type !== "Variable" ||
+    !isAstNode(definition.node) ||
+    definition.node.type !== "VariableDeclarator" ||
+    isWithin(definition.node, loop) ||
+    integerValue(definition.node.init) === null
+  ) {
+    return null;
+  }
+  let direction: CounterDirection | null = null;
+  for (const reference of variable.references) {
+    if (!reference.isWrite() || reference.init) {
+      continue;
+    }
+    if (!isAstNode(reference.identifier)) {
+      return null;
+    }
+    const write = parentOf(reference.identifier);
+    if (
+      write === null ||
+      !isWithin(write, loop) ||
+      !precedesOnPath({ write, call, loop })
+    ) {
+      return null;
+    }
+    const step =
+      write.type === "UpdateExpression"
+        ? write.operator === "++"
+          ? 1
+          : write.operator === "--"
+            ? -1
+            : null
+        : write.type === "AssignmentExpression" &&
+            (write.operator === "+=" || write.operator === "-=")
+          ? integerValue(write.right)
+          : null;
+    if (step === null || step === 0) {
+      return null;
+    }
+    const delta =
+      write.type === "AssignmentExpression" && write.operator === "-="
+        ? -step
+        : step;
+    const next = delta > 0 ? "increasing" : "decreasing";
+    if (direction !== null && direction !== next) {
+      return null;
+    }
+    direction = next;
+  }
+  return direction;
+};
+
+type BoundedGuardOptions = {
+  context: LoopContext;
+  guard: Guard;
+  call: AstNode;
+  loop: AstNode;
+};
+
+const boundedGuard = ({
+  context,
+  guard: { expression, outcome },
+  call,
+  loop,
+}: BoundedGuardOptions): boolean => {
+  const node = unwrapExpression(expression);
+  if (node === null) {
+    return false;
+  }
+  const recurse = (child: unknown, nextOutcome = outcome): boolean =>
+    isAstNode(child) &&
+    boundedGuard({
+      context,
+      guard: { expression: child, outcome: nextOutcome },
+      call,
+      loop,
+    });
+  if (node.type === "UnaryExpression" && node.operator === "!") {
+    return recurse(node.argument, outcome === "truthy" ? "falsy" : "truthy");
+  }
+  if (
+    node.type === "LogicalExpression" &&
+    (node.operator === "&&" || node.operator === "||")
+  ) {
+    const bothRequired = (node.operator === "&&") === (outcome === "falsy");
+    return bothRequired
+      ? recurse(node.left) && recurse(node.right)
+      : recurse(node.left) || recurse(node.right);
+  }
+  if (node.type !== "BinaryExpression") {
+    return false;
+  }
+  const left = unwrapExpression(node.left);
+  const right = unwrapExpression(node.right);
+  for (const [counter, bound, counterSide] of [
+    [left, right, "left"],
+    [right, left, "right"],
+  ] as const) {
+    if (!isIdentifierReference(counter)) {
+      continue;
+    }
+    const boundVariable = isIdentifierReference(bound)
+      ? resolveVariable(context, bound)
+      : null;
+    const limit = integerValue(
+      boundVariable === null ? bound : stableInitializer(boundVariable),
+    );
+    if (limit === null) {
+      continue;
+    }
+    const variable = resolveVariable(context, counter);
+    const direction =
+      variable === null ? null : counterDirection({ variable, call, loop });
+    if (direction === null) {
+      continue;
+    }
+    const ascendingComparison =
+      counterSide === "left"
+        ? node.operator === "<" || node.operator === "<="
+        : node.operator === ">" || node.operator === ">=";
+    const descendingComparison =
+      counterSide === "left"
+        ? node.operator === ">" || node.operator === ">="
+        : node.operator === "<" || node.operator === "<=";
+    const bounded =
+      direction === "increasing"
+        ? outcome === "truthy"
+          ? ascendingComparison
+          : descendingComparison
+        : outcome === "truthy"
+          ? descendingComparison
+          : ascendingComparison;
+    if (bounded) {
+      return true;
+    }
+  }
+  return false;
 };
 
 // Every frame call that enters a loop function, reschedules and kick-offs,
@@ -642,7 +848,11 @@ const frameLoopReports = (
           messageId: "idleFrameLoop",
           node: reschedule,
         });
-      } else if (!isBoundedBy(context, guards, loop)) {
+      } else if (
+        !guards.some((guard) =>
+          boundedGuard({ context, guard, loop, call: reschedule }),
+        )
+      ) {
         bounded = false;
       }
     }
