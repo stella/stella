@@ -9,6 +9,7 @@ import {
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
+import { claimCommentScalingScenarios } from "./claim-comments";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
@@ -26,6 +27,7 @@ const measuredApiScenarios = [
   ...readScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  ...claimCommentScalingScenarios,
 ];
 const measuredApiReads = api.routes
   .filter(({ handler }) =>
