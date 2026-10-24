@@ -8,15 +8,21 @@ import {
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import {
+  createMembershipSafeDb,
+  createScopedDb,
+  markRlsDatabase,
+} from "@/api/db/scoped";
 import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
 import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
 import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
 import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   createTestHandlerContext,
@@ -33,6 +39,8 @@ type ClaimCommentTenant = {
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"legalListVerificationRun">;
   claimId: SafeId<"legalListClaim">;
+  /** The request's feature decisions, resolved once as the auth plugin does. */
+  featureAccessSnapshot: FeatureAccessSnapshot;
 };
 
 export type ClaimCommentScalingFixture = {
@@ -55,12 +63,15 @@ const handlerContext = (db: GatedTestDb, tenant: ClaimCommentTenant) => ({
   workspaceId: tenant.workspaceId,
   session: { activeOrganizationId: tenant.organizationId },
   user: { id: tenant.userId },
-  safeDb: createSafeDb(
-    markRlsDatabase(db),
-    [tenant.workspaceId],
-    tenant.organizationId,
-    tenant.userId,
-  ),
+  // An authenticated request's scope: membership walls, and the feature
+  // decisions it was admitted with, so no transaction reads them again.
+  featureAccessSnapshot: tenant.featureAccessSnapshot,
+  safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+    organizationId: tenant.organizationId,
+    serverValidatedWorkspaceIds: [tenant.workspaceId],
+    userId: tenant.userId,
+    featureAccessSnapshot: tenant.featureAccessSnapshot,
+  }),
   audit: createAuditRecorder({
     organizationId: tenant.organizationId,
     workspaceId: tenant.workspaceId,
@@ -112,7 +123,7 @@ export const seedClaimCommentScaling = async ({
   size,
   grantFeature,
 }: SeedClaimCommentScalingOptions): Promise<ClaimCommentScalingFixture> => {
-  const tenant: ClaimCommentTenant = {
+  const ids = {
     organizationId: toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`),
     userId: toSafeId<"user">(`usr_${Bun.randomUUIDv7()}`),
     workspaceId: createSafeId<"workspace">(),
@@ -121,39 +132,39 @@ export const seedClaimCommentScaling = async ({
   };
   const entityId = createSafeId<"entity">();
   await db.insert(organization).values({
-    id: tenant.organizationId,
+    id: ids.organizationId,
     name: "Claim comment scaling firm",
-    slug: tenant.organizationId,
+    slug: ids.organizationId,
     createdAt: new Date(),
   });
   await db.insert(user).values({
-    id: tenant.userId,
+    id: ids.userId,
     name: "Reviewer",
-    email: `${tenant.userId}@example.test`,
+    email: `${ids.userId}@example.test`,
     emailVerified: true,
   });
   await db.insert(member).values({
     id: Bun.randomUUIDv7(),
-    userId: tenant.userId,
-    organizationId: tenant.organizationId,
+    userId: ids.userId,
+    organizationId: ids.organizationId,
     role: "owner",
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
-    id: tenant.workspaceId,
-    organizationId: tenant.organizationId,
+    id: ids.workspaceId,
+    organizationId: ids.organizationId,
     name: "Claim comment scaling matter",
-    reference: tenant.workspaceId,
+    reference: ids.workspaceId,
   });
   await db.insert(entities).values({
     id: entityId,
-    workspaceId: tenant.workspaceId,
+    workspaceId: ids.workspaceId,
     name: "Verified document",
   });
   await db.insert(legalListVerificationRuns).values({
-    id: tenant.runId,
-    organizationId: tenant.organizationId,
-    workspaceId: tenant.workspaceId,
+    id: ids.runId,
+    organizationId: ids.organizationId,
+    workspaceId: ids.workspaceId,
     entityId,
     fileFieldId: createSafeId<"field">(),
     entityVersionId: createSafeId<"entityVersion">(),
@@ -163,15 +174,15 @@ export const seedClaimCommentScaling = async ({
   });
   await createScopedDb(
     markRlsDatabase(db),
-    [tenant.workspaceId],
-    tenant.organizationId,
-    tenant.userId,
+    [ids.workspaceId],
+    ids.organizationId,
+    ids.userId,
   )(
     async (tx) =>
       await tx.insert(legalListClaims).values({
-        id: tenant.claimId,
-        runId: tenant.runId,
-        workspaceId: tenant.workspaceId,
+        id: ids.claimId,
+        runId: ids.runId,
+        workspaceId: ids.workspaceId,
         position: 0,
         type: "fact",
         framing: "asserted",
@@ -180,7 +191,23 @@ export const seedClaimCommentScaling = async ({
         anchor: { type: "docx-block", blockId: "p1", start: 0, end: 27 },
       }),
   );
-  grantFeature(tenant.organizationId);
+  grantFeature(ids.organizationId);
+  const tenant: ClaimCommentTenant = {
+    ...ids,
+    featureAccessSnapshot: await createScopedDb(
+      markRlsDatabase(db),
+      [ids.workspaceId],
+      ids.organizationId,
+      ids.userId,
+    )(
+      async (tx) =>
+        await resolveFeatureAccessSnapshot({
+          tx,
+          organizationId: ids.organizationId,
+          userId: ids.userId,
+        }),
+    ),
+  };
   const commentIds: SafeId<"legalReaderAnnotation">[] = [];
   for (let index = 0; index < size; index += 1) {
     commentIds.push(createdId(await createComment(db, tenant)));
