@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "professionalUse": {
-      "description": "Fiókja létrehozásakor ez a nyilatkozat nem jelent meg Önnek. A folytatáshoz fogadja el.",
       "title": "Szakmai célú használat megerősítése"
     },
     "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
@@ -4235,6 +4234,22 @@
       "guestStorageUnavailable": "A kiemeléseket és jegyzeteket nem sikerült menteni ezen a lapon.",
       "highlight": "Kiemelés",
       "highlightedPassage": "Kiemelt részlet",
+      "history": {
+        "colorRestored": "Szín visszaállítva",
+        "commentRemoved": "Megjegyzés eltávolítva",
+        "commentRestored": "Megjegyzés visszaállítva",
+        "highlightRemoved": "Kiemelés eltávolítva",
+        "highlightRestored": "Kiemelés visszaállítva",
+        "markChanged": "Ez a kiemelés vagy megjegyzés időközben máshol módosult, ezért változatlan maradt.",
+        "markGone": "Ez a kiemelés vagy megjegyzés már nem létezik.",
+        "nothingToRedo": "Nincs mit megismételni",
+        "nothingToUndo": "Nincs mit visszavonni",
+        "redoShortcut": "Kiemelés vagy megjegyzés módosításának megismétlése",
+        "styleRestored": "Stílus visszaállítva",
+        "textRestored": "Megjegyzés szövege visszaállítva",
+        "undoShortcut": "Kiemelés vagy megjegyzés módosításának visszavonása",
+        "visibilityRestored": "Megosztás visszaállítva"
+      },
       "removeHighlight": "Kiemelés eltávolítása",
       "sharedBadge": "Megosztva",
       "styleHighlight": "Kiemelés",

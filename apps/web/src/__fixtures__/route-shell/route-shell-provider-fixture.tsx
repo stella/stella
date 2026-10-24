@@ -1290,7 +1290,9 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
       try {
         Object.assign(import.meta.env, { SSR: true });
         await router.load();
-        expect(router.state.location.pathname).toBe(path.split("?").at(0));
+        expect(router.state.location.pathname).toBe(
+          new URL(path, window.location.origin).pathname,
+        );
         expect(
           queryClient.getQueryState(sessionOptions.queryKey),
         ).toBeUndefined();
@@ -1315,6 +1317,7 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
           expect(
             queryClient.getQueryState(sessionOptions.queryKey)?.status,
           ).toBe("success");
+          expect(router.state.isLoading).toBe(false);
           if (status === "required") {
             expect(router.state.location.pathname).toBe(
               "/auth/professional-use",
