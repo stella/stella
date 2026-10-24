@@ -616,6 +616,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/routes/**",
       "apps/web/vite.config.ts",
       "apps/web/route-tree.config.ts",
+      "apps/web/scripts/route-template-manifest.ts",
       "apps/web/scripts/generate-route-tree.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
       "packages/scripts/src/generated-input-identity.ts",
