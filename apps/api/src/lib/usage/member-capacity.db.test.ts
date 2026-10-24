@@ -51,6 +51,7 @@ import {
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
   memberCapacityOf,
   memberMayUseAI,
+  ORGANIZATION_ACCESS_STATE_REQUIRED_ERROR_CODE,
   readOrganizationMemberCapacity,
 } from "@/api/lib/usage/member-capacity";
 import {
@@ -389,6 +390,53 @@ describe("member insert guard", () => {
 });
 
 describe("checkMemberAdmission", () => {
+  test("missing access state admits only the creation membership and then fails closed", async () => {
+    enforce();
+    await withRolledBackTx(async (tx) => {
+      const organizationId = await insertOrganization(tx, {
+        state: null,
+        entitlement: { priceBasis: "per_seat", maxMembers: 1, seats: 1 },
+      });
+      const creatorId = await insertUser(tx);
+      await insertMember(tx, organizationId, creatorId);
+
+      expect(await memberMayUseAI(tx, organizationId, creatorId)).toBe(false);
+      const admission = await checkMemberAdmission(tx, {
+        organizationId,
+        kind: "membership",
+      });
+      expect(Result.isError(admission) && admission.error.code).toBe(
+        ORGANIZATION_ACCESS_STATE_REQUIRED_ERROR_CODE,
+      );
+
+      const refused = await Result.tryPromise(
+        async () =>
+          await tx.transaction(
+            async (savepoint) =>
+              await insertMember(
+                savepoint,
+                organizationId,
+                await insertUser(tx),
+              ),
+          ),
+      );
+      expect(Result.isError(refused)).toBe(true);
+      if (Result.isError(refused)) {
+        expect(errorChainText(refused.error)).toContain(
+          "organization access state missing",
+        );
+      }
+
+      const capacityChange = await checkMemberCapacityChange(tx, {
+        organizationId,
+        nextCapacity: 1,
+      });
+      expect(Result.isError(capacityChange) && capacityChange.error.code).toBe(
+        ORGANIZATION_ACCESS_STATE_REQUIRED_ERROR_CODE,
+      );
+    });
+  });
+
   test("refuses readably where the database bound applies, whatever the flag", async () => {
     env.FEATURE_ORG_ACCESS_STATE = false;
     await withRolledBackTx(async (tx) => {
@@ -573,6 +621,7 @@ describe("AI access for members", () => {
   let unlimitedPolicyOrgId: SafeId<"organization">;
   let assignedUserId: SafeId<"user">;
   let unassignedUserId: SafeId<"user">;
+  let departedUserId: SafeId<"user">;
   const fixtureOrgIds: SafeId<"organization">[] = [];
   const fixtureUserIds: SafeId<"user">[] = [];
 
@@ -592,7 +641,8 @@ describe("AI access for members", () => {
     const owner = asTestRaw<Transaction>(testDb);
     assignedUserId = await insertUser(owner);
     unassignedUserId = await insertUser(owner);
-    fixtureUserIds.push(assignedUserId, unassignedUserId);
+    departedUserId = await insertUser(owner);
+    fixtureUserIds.push(assignedUserId, unassignedUserId, departedUserId);
     boundedOrgId = await insertOrganization(owner, {
       state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
       entitlement: { priceBasis: "per_seat", maxMembers: 10, seats: 2 },
@@ -694,6 +744,33 @@ describe("AI access for members", () => {
         unassignedUserId,
       ),
     ).toBe(true);
+  });
+
+  test("current membership is required even while access-state enforcement is off", async () => {
+    expect(
+      await memberMayUseAI(
+        asTestRaw<Transaction>(testDb),
+        boundedOrgId,
+        departedUserId,
+      ),
+    ).toBe(false);
+    expect(
+      await loadOrgAISettings(testDb, {
+        organizationId: boundedOrgId,
+        userId: departedUserId,
+      }),
+    ).toMatchObject({
+      status: "error",
+      error: { code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE },
+    });
+    enforce();
+    expect(
+      await memberMayUseAI(
+        asTestRaw<Transaction>(testDb),
+        boundedOrgId,
+        departedUserId,
+      ),
+    ).toBe(false);
   });
 
   test("an unassigned member is refused even on the organization's own key", async () => {
@@ -800,13 +877,19 @@ describe("the free floor", () => {
     organizationId: SafeId<"organization">,
   ) => {
     const now = Date.now();
-    await db.insert(organizationAccessStates).values({
-      organizationId,
+    const ended = {
       state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
       evaluationStartedAt: new Date(now - 30 * DAY_IN_MS),
       evaluationEndsAt: new Date(now - DAY_IN_MS),
       evaluationEndedAt: new Date(now - DAY_IN_MS),
-    });
+    } as const;
+    await db
+      .insert(organizationAccessStates)
+      .values({ organizationId, ...ended })
+      .onConflictDoUpdate({
+        target: organizationAccessStates.organizationId,
+        set: ended,
+      });
   };
 
   test("a downgraded organization keeps every member, admits nobody new, and keeps AI for all", async () => {
@@ -814,7 +897,7 @@ describe("the free floor", () => {
     await withRolledBackTx(async (tx) => {
       await insertFreePolicy(tx);
       const organizationId = await insertOrganization(tx, {
-        state: null,
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
         entitlement: null,
       });
       const members = [await insertUser(tx), await insertUser(tx)];

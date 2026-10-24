@@ -21,17 +21,7 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import {
-  and,
-  count,
-  eq,
-  exists,
-  gt,
-  inArray,
-  isNotNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, count, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
@@ -42,12 +32,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
-import {
-  ac,
-  assignableRoles,
-  CLIENT_MATTER_ADMIN_ROLES,
-  roles,
-} from "@stll/permissions";
+import { ac, assignableRoles, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
@@ -66,7 +51,6 @@ import {
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import {
@@ -88,6 +72,7 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
+import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
@@ -227,6 +212,11 @@ import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  resolveWorkspaceMemberAccess,
+  resolveWorkspaceMemberAuthority,
+  workspaceMemberAccessCondition,
+} from "@/api/lib/db/member-authority";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
@@ -337,6 +327,8 @@ import {
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+
+export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
 
 /** Access token lifetime in seconds (15 minutes). */
 const syntheticSessionAuthorityReader =
@@ -819,13 +811,12 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
  * `before` hook, ahead of each endpoint's own session middleware) and refuses
  * a request whose session storage no longer holds, such as a revoked one.
  *
- * One deployment shape is exempt: transactional email is optional, and an
- * instance without a transport cannot deliver a manage code at all, so
- * requiring one would leave first-time enrollment unreachable there. Those
- * users enroll on the two-factor plugin's own password check, which for a
- * credential account is the same factor their sign-in uses. An account that
- * already carries a second factor still needs the code for every transition,
- * on every deployment.
+ * One deployment shape uses the account password instead: transactional email
+ * is optional, so a credential account on an instance without a transport
+ * cannot receive a manage code. Passwordless accounts have no independent
+ * step-up in that shape and must fail closed instead of authorizing enrollment
+ * from the active session alone. An account that already carries a second
+ * factor still needs the code for every transition, on every deployment.
  */
 const requireTwoFactorManageOtp = async ({
   body,
@@ -844,7 +835,22 @@ const requireTwoFactorManageOtp = async ({
     session.user["twoFactorEnabled"] !== true &&
     !isTransactionalEmailConfigured()
   ) {
-    return Result.ok(undefined);
+    const credentialAccount = await rootDb.query.account.findFirst({
+      where: {
+        userId: session.user.id,
+        providerId: "credential",
+      },
+      columns: { id: true },
+    });
+    if (credentialAccount) {
+      return Result.ok(undefined);
+    }
+    return Result.err(
+      new APIError("FORBIDDEN", {
+        message:
+          "Two-factor enrollment requires transactional email or a password account",
+      }),
+    );
   }
 
   if (!isSixDigitOtpBody(body)) {
@@ -890,6 +896,10 @@ const MEMBERSHIP_UPDATE_FAILED = failureSink({
 });
 const MEMBERSHIP_REMOVAL_FAILED = failureSink({
   event: "auth.membership_removal_failed",
+  expected: [],
+});
+const EMAIL_OTP_ACCESS_RESET_REVOCATION_FAILED = failureSink({
+  event: "auth.email_otp_access_reset_revocation_failed",
   expected: [],
 });
 
@@ -1152,9 +1162,9 @@ const socialSignInTwoFactorRedirectPlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
-        // oxlint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
         handler: createAuthMiddleware(async (ctx) => {
-          if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
+          const returned = await Promise.resolve(ctx.context.returned);
+          if (!isTwoFactorRedirectResponse(returned)) {
             return;
           }
           throw ctx.redirect(`${env.FRONTEND_URL}${TWO_FACTOR_CHALLENGE_PATH}`);
@@ -1371,6 +1381,11 @@ export const createAuth = (
     // enable/disable/verify never require a password fallback.
     allowPasswordless: true,
     issuer: TWO_FACTOR_ISSUER,
+    // Better Auth 1.7.6 binds trusted-device grants only to a user and expiry.
+    // It does not revoke every browser's grant when MFA is disabled or replaced,
+    // so an old grant can bypass the new factor. Keep the feature disabled until
+    // grants are bound to an enrollment generation.
+    trustDeviceMaxAge: 0,
   });
 
   const twoFactorWithSignInGate = withStellaTwoFactorSignInGate(
@@ -1389,7 +1404,7 @@ export const createAuth = (
     // APIError it throws.
     if (Result.isError(admission)) {
       throw new APIError("FORBIDDEN", {
-        error: MEMBER_CAPACITY_REACHED_ERROR_CODE,
+        error: admission.error.code ?? MEMBER_CAPACITY_REACHED_ERROR_CODE,
         message: admission.error.message,
       });
     }
@@ -1546,14 +1561,18 @@ export const createAuth = (
     };
   };
 
+  const recordOrganizationAccessState = async (
+    organizationId: SafeId<"organization">,
+  ): Promise<void> =>
+    await recordNewOrganizationAccessState(rootDb, {
+      organizationId,
+      now: new Date(),
+    });
+
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
-    recordAccessState: async (organizationId: SafeId<"organization">) =>
-      await recordNewOrganizationAccessState(rootDb, {
-        organizationId,
-        now: new Date(),
-      }),
+    recordAccessState: recordOrganizationAccessState,
     // Insert-once on the owner connection, audited in the same transaction.
     // A creator who has not accepted yet records nothing here; the
     // organization is recorded when an owner accepts.
@@ -1752,6 +1771,13 @@ export const createAuth = (
               message: "Select one product membership role.",
             });
           }
+          // Better Auth creates the owner membership before its
+          // afterCreateOrganization hook. Initialize the fail-closed access
+          // row before capacity admission; the lifecycle hook repeats this
+          // insert after creation and the owner is idempotent.
+          await recordOrganizationAccessState(
+            brandPersistedOrganizationId(org.id),
+          );
         } else {
           await requireAssignableMemberRole(
             brandPersistedOrganizationId(org.id),
@@ -2483,6 +2509,31 @@ export const createAuth = (
           adapter: ctx.context.adapter,
           internalAdapter: ctx.context.internalAdapter,
         });
+        if (Result.isError(resetConfirmation)) {
+          throw resetConfirmation.error;
+        }
+        if (resetConfirmation.value.type === "confirmed") {
+          const { userId } = resetConfirmation.value;
+          const revoked = await Result.tryPromise(async () => {
+            await withAggregateTransaction(
+              rootDb,
+              async (tx) =>
+                await revokeAllUserDurableCredentials(
+                  tx,
+                  toSafeId<"user">(userId),
+                ),
+            );
+          });
+          if (Result.isError(revoked)) {
+            observeFailure(revoked.error, {
+              sink: EMAIL_OTP_ACCESS_RESET_REVOCATION_FAILED,
+              ctx: { source: "email-otp-access-reset" },
+            });
+            throw new APIError("INTERNAL_SERVER_ERROR", {
+              message: "Could not reset account access.",
+            });
+          }
+        }
 
         const loopbackRegistration =
           resolveLoopbackClientRegistrationOverride(ctx);
@@ -2490,14 +2541,12 @@ export const createAuth = (
           return loopbackRegistration;
         }
 
-        const authoritative = await resetConfirmation.andThenAsync(
-          async () =>
-            await resolveAuthoritativeSessionForSensitiveAuthPath({
-              ctx,
-              resolveSession: async ({ path }) =>
-                await getAuthoritativeSessionFromCtx({ ...ctx, path }),
-            }),
-        );
+        const authoritative =
+          await resolveAuthoritativeSessionForSensitiveAuthPath({
+            ctx,
+            resolveSession: async ({ path, request }) =>
+              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+          });
         // Better Auth rejects a request from a `before` hook by the APIError
         // it throws.
         if (Result.isError(authoritative)) {
@@ -2588,29 +2637,68 @@ export type { MemberRole } from "@/api/lib/member-roles";
 
 type AuthSessionReadOptions = {
   headers: Headers | Record<string, string>;
+  query?: {
+    disableCookieCache: true;
+    disableRefresh: true;
+  };
   returnHeaders: true;
 };
 const readAuthSession = async (options: AuthSessionReadOptions) =>
   await getAuth().api.getSession(options);
 type AuthSessionReader = typeof readAuthSession;
 
+const API_KEYS_ROUTE_PATH = "/api-keys";
+const COOKIE_CACHE_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const AUTHORITATIVE_SESSION_QUERY = {
+  disableCookieCache: true,
+  disableRefresh: true,
+} as const;
+
+export const requiresAuthoritativeApiSession = (request: Request): boolean => {
+  if (COOKIE_CACHE_SAFE_METHODS.has(request.method)) {
+    return false;
+  }
+  const pathname = new URL(request.url).pathname;
+  return (
+    pathname.endsWith(API_KEYS_ROUTE_PATH) ||
+    pathname.includes(`${API_KEYS_ROUTE_PATH}/`)
+  );
+};
+
+type ReadRequestAuthSessionOptions = {
+  getSession: AuthSessionReader;
+  request: Request;
+};
+
+export const readRequestAuthSession = async ({
+  getSession,
+  request,
+}: ReadRequestAuthSessionOptions) =>
+  await getSession({
+    headers: request.headers,
+    returnHeaders: true,
+    ...(requiresAuthoritativeApiSession(request)
+      ? { query: AUTHORITATIVE_SESSION_QUERY }
+      : {}),
+  });
+
 type GetSessionAndMemberAuthorizationOptions = {
   getSession?: AuthSessionReader | undefined;
-  headers: Headers | Record<string, string>;
+  request: Request;
   responseHeaders: Context["set"]["headers"];
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 const getSessionAndMemberAuthorization = async ({
   getSession = readAuthSession,
-  headers,
+  request,
   responseHeaders,
   workspaceId,
 }: GetSessionAndMemberAuthorizationOptions) => {
   const sessionResult = await Result.tryPromise(async () => {
-    const resolved = await getSession({
-      headers,
-      returnHeaders: true,
+    const resolved = await readRequestAuthSession({
+      getSession,
+      request,
     });
     forwardAuthResponseCookies(responseHeaders, resolved.headers);
     return resolved.response;
@@ -2820,58 +2908,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
 
 const ACTIVE_WORKSPACE_STATUS = "active";
 
-const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
-  // sql-perf-allow: bounded by one target workspace and organization membership keys
-  return or(
-    membershipExists,
-    and(
-      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-      isNotNull(workspaces.clientId),
-    ),
-  );
-};
-
-type WorkspaceMemberLookup = {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-};
-
-/** Recheck a worker's matter membership inside its RLS transaction. */
-export const resolveWorkspaceMemberAccess = async (
-  { organizationId, userId, workspaceId }: WorkspaceMemberLookup,
-  db: MemberAuthorizationDb,
-): Promise<AccessibleWorkspace | null> => {
-  const row = await db
-    .select({ id: workspaces.id, status: workspaces.status })
-    .from(member)
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.organizationId, member.organizationId),
-        memberWorkspaceAccess(db),
-      ),
-    )
-    .where(
-      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
-    )
-    .limit(1)
-    .then((rows) => rows.at(0));
-  return row ?? null;
-};
-
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
   db: MemberAuthorizationDb,
@@ -2935,7 +2971,7 @@ export const resolveMemberAuthorization = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        memberWorkspaceAccess(db),
+        workspaceMemberAccessCondition(db),
       ),
     )
     .where(
@@ -3110,7 +3146,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
-        memberWorkspaceAccess(db),
+        workspaceMemberAccessCondition(db),
       ),
     )
     .limit(uniqueSessionIds.length);
@@ -3301,6 +3337,59 @@ const hasSyntheticSessionAuthority = async (current: {
   );
 };
 
+/**
+ * Rebuild the live authority needed by a delayed credential-bound operation.
+ *
+ * Chat tool calls can execute after a human approval pause, so request-start
+ * workspace lists and database handles are no longer current authority. This
+ * resolver creates new membership-scoped handles, enumerates the caller's
+ * current matters, and validates any later pin against that fresh set. The
+ * execution handles deliberately keep their server-validated list empty:
+ * each database transaction must still satisfy live membership RLS, including
+ * when access changes between this lookup and the transaction itself.
+ */
+export const resolveCredentialMemberExecutionContext = async ({
+  organizationId,
+  userId,
+}: MemberAuthorizationLookup) => {
+  const authorization = await resolveCredentialMemberAuthorization({
+    organizationId,
+    userId,
+  });
+  if (authorization === null) {
+    return null;
+  }
+
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
+    organizationId,
+    userId,
+    authorization,
+  });
+  const { safeDb, scopedDb } = createAuthDatabases({
+    organizationId,
+    serverValidatedWorkspaceIds: [],
+    userId,
+  });
+  const accessibleWorkspaces = await readOrganizationWorkspaces(
+    scopedDb,
+    organizationId,
+  );
+  const accessibleWorkspaceIds = new Set(
+    accessibleWorkspaces.map(({ id }) => id),
+  );
+
+  return {
+    accessibleWorkspaces,
+    featureAccessSnapshot,
+    pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) =>
+      accessibleWorkspaceIds.has(workspaceId),
+    role: authorization.role,
+    safeDb,
+    scopedDb,
+    userEmail: authorization.email,
+  };
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3311,7 +3400,7 @@ const resolveValidateAuth = async ({
   const { sessionResult, memberAuthorizationResult } =
     await getSessionAndMemberAuthorization({
       getSession,
-      headers: request.headers,
+      request,
       responseHeaders,
       workspaceId: initialWorkspaceId ?? undefined,
     });

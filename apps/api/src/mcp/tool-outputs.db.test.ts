@@ -15,6 +15,7 @@ import {
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -417,6 +418,10 @@ const createOrganization = async (): Promise<Caller> => {
     name: "Firm",
     slug: `firm-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
   await testDb.insert(member).values({
     id: mintAuthProviderIdValue(),

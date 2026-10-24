@@ -163,24 +163,29 @@ const readUnverifiedIssuer = (assertion: string): string | undefined => {
   return typeof iss === "string" ? iss : undefined;
 };
 
+const attestationPolicySchema = v.strictObject({
+  requiredAmr: v.pipe(
+    v.array(v.pipe(v.string(), v.minLength(1))),
+    v.minLength(1),
+  ),
+});
+
 const requiredAmrSatisfied = (
   attestationPolicy: unknown,
   payload: JWTPayload,
 ): boolean => {
-  if (!isRecord(attestationPolicy)) {
+  if (attestationPolicy === null) {
     return true;
   }
-  const required = attestationPolicy["requiredAmr"];
-  if (!Array.isArray(required) || required.length === 0) {
-    return true;
+  const parsed = v.safeParse(attestationPolicySchema, attestationPolicy);
+  if (!parsed.success) {
+    return false;
   }
   const amr = payload["amr"];
   const presented = Array.isArray(amr)
     ? amr.filter((entry): entry is string => typeof entry === "string")
     : [];
-  return required.every(
-    (entry) => typeof entry === "string" && presented.includes(entry),
-  );
+  return parsed.output.requiredAmr.every((entry) => presented.includes(entry));
 };
 
 // We always resolve/auto-provision by the `email` claim, so that specific

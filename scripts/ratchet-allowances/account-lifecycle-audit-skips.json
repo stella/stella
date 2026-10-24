@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "API key revocation runs inside account recovery or deletion, which records the revocation; organization creation records its initial access state inline instead of through ledger entries, and the creation itself is audited."
+}

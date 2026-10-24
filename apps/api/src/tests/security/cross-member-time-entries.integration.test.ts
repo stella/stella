@@ -60,6 +60,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
@@ -117,6 +118,10 @@ beforeAll(async () => {
     name: "Time firm",
     slug: `time-firm-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
 
   await testDb.insert(organizationSettings).values({

@@ -2,8 +2,15 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, inArray, sql } from "drizzle-orm";
 
-import { apikey, member, organization, user } from "@/api/db/auth-schema";
+import {
+  apikey,
+  member,
+  organization,
+  session,
+  user,
+} from "@/api/db/auth-schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
   createPersonalApiKey,
@@ -14,6 +21,14 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+
+const liveSessionRow = (userId: string) => ({
+  id: `session-${userId}`,
+  token: `token-${userId}`,
+  userId,
+  expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  updatedAt: new Date(),
+});
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -63,12 +78,16 @@ if (!databaseUrl || !runPostgres) {
           role: "member",
           createdAt: new Date(),
         });
+        const liveSession = liveSessionRow(userId);
+        await firstDb.insert(session).values(liveSession);
+        const sessionId = liveSession.id;
         try {
           const create = async (database: typeof firstDb) =>
             await createPersonalApiKey({
               name: "Parallel key",
               organizationId,
               userId,
+              sessionId,
               recordAuditEvent,
               database,
             });
@@ -162,6 +181,107 @@ if (!databaseUrl || !runPostgres) {
             .delete(organization)
             .where(eq(organization.id, organizationId));
           await firstDb.delete(user).where(eq(user.id, userId));
+        }
+      });
+    }, 15_000);
+
+    test("a mint racing an access reset either is revoked by it or finds its session ended", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: mintDb } = openClient();
+        const { db: resetDb } = openClient();
+        const { db: observerDb } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
+        await mintDb.insert(user).values({
+          id: userId,
+          name: "Fixture member",
+          email: `${userId}@example.test`,
+          emailVerified: true,
+        });
+        await mintDb.insert(organization).values({
+          id: organizationId,
+          name: "Key reset fixture",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        await mintDb.insert(member).values({
+          id: mintAuthProviderIdValue(),
+          organizationId,
+          userId,
+          role: "member",
+          createdAt: new Date(),
+        });
+        const liveSession = liveSessionRow(userId);
+        await mintDb.insert(session).values(liveSession);
+        const sessionId = liveSession.id;
+        const [mintWorker] = await mintDb
+          .select({ pid: sql<number>`pg_backend_pid()` })
+          .from(organization)
+          .where(eq(organization.id, organizationId));
+        if (!mintWorker) {
+          panic("The mint session must exist");
+        }
+        try {
+          let pending: ReturnType<typeof createPersonalApiKey> | undefined;
+          // The reset holds the credential fence while the mint arrives; the
+          // mint must wait for it and then see the session the reset ended.
+          await resetDb.transaction(async (tx) => {
+            await revokeAllUserDurableCredentials(tx, userId);
+            pending = createPersonalApiKey({
+              name: "Racing key",
+              organizationId,
+              userId,
+              sessionId,
+              recordAuditEvent: createBackgroundAuditRecorder({
+                organizationId,
+                userId,
+                workspaceId: null,
+                execution: {
+                  performer: { type: "user", id: userId },
+                  trigger: {
+                    type: "system",
+                    source: "personal_key_concurrency_test",
+                  },
+                },
+              }),
+              database: mintDb,
+            });
+            const deadline = performance.now() + 5000;
+            while (performance.now() < deadline) {
+              const [snapshot] = await observerDb
+                .select({
+                  waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
+                    WHERE pid = ${mintWorker.pid} AND wait_event_type = 'Lock')`,
+                })
+                .from(organization)
+                .where(eq(organization.id, organizationId));
+              if (snapshot?.waiting === 1) {
+                return;
+              }
+              await Bun.sleep(10);
+            }
+            panic("The mint must wait at the account credential fence");
+          });
+          if (pending === undefined) {
+            panic("The racing mint must have started");
+          }
+          const minted = await pending;
+          expect(minted.isErr()).toBe(true);
+          if (minted.isErr()) {
+            expect(minted.error.status).toBe(401);
+          }
+          expect(
+            await mintDb
+              .select({ id: apikey.id })
+              .from(apikey)
+              .where(eq(apikey.referenceId, userId)),
+          ).toEqual([]);
+        } finally {
+          await mintDb.delete(apikey).where(eq(apikey.referenceId, userId));
+          await mintDb
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await mintDb.delete(user).where(eq(user.id, userId));
         }
       });
     }, 15_000);

@@ -4,9 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { DialogFormState } from "@stll/ui/dialog";
-import { Field, FieldLabel } from "@stll/ui/field";
 import {
   Frame,
   FrameDescription,
@@ -40,7 +38,6 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
   const [mode, setMode] = useState<TwoFactorMode>("totp");
   const [totp, setTotp] = useState("");
   const [backupCode, setBackupCode] = useState("");
-  const [trustDevice, setTrustDevice] = useState(false);
   const { isPulsing: isTotpPulsing, pulse: pulseTotp } = usePulse(600);
 
   const verifyTwoFactor = useMutation({
@@ -49,11 +46,9 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
         input.mode === "totp"
           ? await authClient.twoFactor.verifyTotp({
               code: input.code,
-              trustDevice,
             })
           : await authClient.twoFactor.verifyBackupCode({
               code: input.code,
-              trustDevice,
             });
 
       if (error) {
@@ -93,11 +88,10 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
   return (
     <Frame className={cn("w-full max-w-md", className)}>
       <DialogFormState
-        dirty={totp !== "" || backupCode !== "" || trustDevice}
+        dirty={totp !== "" || backupCode !== ""}
         onDiscard={() => {
           setTotp("");
           setBackupCode("");
-          setTrustDevice(false);
           setMode("totp");
         }}
       />
@@ -184,18 +178,6 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
             </Button>
           </div>
         )}
-
-        <Field className="mt-4 flex-row items-center gap-2">
-          <Checkbox
-            checked={trustDevice}
-            disabled={verifyTwoFactor.isPending}
-            id="two-factor-trust-device"
-            onCheckedChange={setTrustDevice}
-          />
-          <FieldLabel htmlFor="two-factor-trust-device">
-            {t("auth.twoFactor.trustDevice")}
-          </FieldLabel>
-        </Field>
 
         <div className="mt-3 flex justify-center">
           <Button

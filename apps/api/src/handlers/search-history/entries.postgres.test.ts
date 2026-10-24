@@ -32,6 +32,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -94,6 +95,12 @@ const withHistory = async (
           createdAt: new Date(),
         })),
       );
+      for (const id of organizationIds) {
+        await recordNewOrganizationAccessState(db, {
+          organizationId: id,
+          now: new Date(),
+        });
+      }
       await db.insert(member).values([
         {
           id: memberId,

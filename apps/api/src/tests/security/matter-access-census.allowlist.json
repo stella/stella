@@ -21,38 +21,26 @@
       "workspaceArrayCheck": 1
     }
   },
-  "apps/api/src/lib/auth.ts::derives-matter-access": {
-    "reason": "Route authorization and realtime audience resolution run on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "memberWorkspaceAccess.membershipExists": 3,
-      "memberWorkspaceAccess.membershipExists.id": 1
-    }
-  },
-  "apps/api/src/lib/auth.ts::names-matter-role-rule": {
-    "reason": "Request authorization checks matter reach in the query that reads the member on every request, as an indexed point lookup; it moves onto the database access function when the view and policies are rebuilt on it.",
-    "sites": {
-      "memberWorkspaceAccess": 1
-    }
-  },
   "apps/api/src/lib/auth.ts::owner-connection-workspace-set": {
     "reason": "Builds the request matter set from the authorization view inside a scoped transaction; the set only ever holds ids the row policies admitted, and later reads still pass the policies.",
     "sites": {
       "<module>#rootDb": 1,
       "claimDesktopAccountGrant.db#rootDb": 1,
       "createAuth.auth.databaseHooks.user.create.after#rootDb": 1,
+      "createAuth.auth.hooks.before.revoked#rootDb": 1,
       "createAuth.auth.plugins.customAccessTokenClaims.row#rootDb": 1,
       "createAuth.auth.plugins.postLogin.shouldRedirect.memberships#rootDb": 1,
       "createAuth.hasSessionMembership#rootDb": 1,
       "createAuth.membershipAuthAdapter.adapter.admitClient.execute#rootDb": 1,
       "createAuth.membershipAuthAdapter.adapter.protectCreate#rootDb": 1,
       "createAuth.membershipAuthAdapter.adapter.touchClient.touched#rootDb": 1,
-      "createAuth.organizationLifecycleHooks.recordAccessState#rootDb": 1,
       "createAuth.organizationLifecycleHooks.recordProfessionalUse#rootDb": 1,
       "createAuth.organizationLifecycleHooks.seedDefaultDocumentTypes#rootDb": 1,
       "createAuth.organizationLifecycleHooks.seedMemberDefaults#rootDb": 1,
       "createAuth.organizationPlugin.organizationHooks.beforeDeleteOrganization.teardown.try#rootDb": 1,
       "createAuth.organizationPlugin.organizationHooks.beforeRemoveMember.removal.try#rootDb": 1,
       "createAuth.rawAuthAdapter#rootDb": 1,
+      "createAuth.recordOrganizationAccessState#rootDb": 1,
       "createAuth.refuseBeyondMemberCapacity.admission#rootDb": 1,
       "createAuth.refuseLastOwnerChange#rootDb": 1,
       "createAuth.requireAssignableMemberRole.actor#rootDb": 1,
@@ -64,11 +52,27 @@
       "readAccountProfessionalUse#rootDb": 1,
       "realtimeAuthorizers.user#rootDb": 1,
       "realtimeAuthorizers.workspace#rootDb": 1,
+      "requireTwoFactorManageOtp.credentialAccount#rootDb": 1,
       "resolveCredentialMemberAuthorization#rootDb": 1,
+      "resolveCredentialMemberExecutionContext.accessibleWorkspaceIds": 1,
+      "resolveCredentialMemberExecutionContext.pinServerValidatedWorkspaceId": 1,
       "resolveValidateAuth.getActiveWorkspaceIds": 2,
       "resolveValidateAuth.getActiveWorkspaceIds.activeWorkspaceIds": 1,
       "resolveValidateAuth.getWorkspaceAccess#rootDb": 1,
       "resolveValidateAuth.orgSettings#rootDb": 1
+    }
+  },
+  "apps/api/src/lib/db/member-authority.ts::derives-matter-access": {
+    "reason": "Route authorization, realtime audience resolution and deferred member actions read matter reach on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
+    "sites": {
+      "workspaceMemberAccessCondition.membershipExists": 3,
+      "workspaceMemberAccessCondition.membershipExists.id": 1
+    }
+  },
+  "apps/api/src/lib/db/member-authority.ts::names-matter-role-rule": {
+    "reason": "Member authority checks matter reach in the query that reads the member, as an indexed point lookup; it moves onto the database access function when the view and policies are rebuilt on it.",
+    "sites": {
+      "workspaceMemberAccessCondition": 1
     }
   },
   "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {

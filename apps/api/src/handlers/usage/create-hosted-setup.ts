@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 
 import type { Transaction } from "@/api/db/root";
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   hostedCheckoutClaims,
@@ -24,6 +25,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createHostedSetupSession,
@@ -93,6 +95,24 @@ type HostedCheckoutRequest = {
 };
 
 type HostedCheckoutSession = { hostedSessionId: string; url: string };
+
+const requireHostedCheckoutDisclosure = async ({
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}) =>
+  await abortableTx(safeDb, async (tx) => {
+    await requireCurrentOrganizationMemberPermission({
+      db: tx,
+      organizationId,
+      userId,
+      permissions: { organizationSettings: ["update"] },
+    });
+  });
 
 type RecordedSessionColumns = {
   hostedSessionId: string | null;
@@ -577,6 +597,13 @@ const createHostedSetup = createSafeRootHandler(
       case "ok":
         break;
       case "reuse":
+        yield* Result.await(
+          requireHostedCheckoutDisclosure({
+            organizationId: session.activeOrganizationId,
+            safeDb,
+            userId: user.id,
+          }),
+        );
         return Result.ok(dbResult.session);
       case "await": {
         const awaited = yield* Result.await(
@@ -589,6 +616,13 @@ const createHostedSetup = createSafeRootHandler(
         );
         switch (awaited.kind) {
           case "reuse":
+            yield* Result.await(
+              requireHostedCheckoutDisclosure({
+                organizationId: session.activeOrganizationId,
+                safeDb,
+                userId: user.id,
+              }),
+            );
             return Result.ok(awaited.session);
           case "released":
             return Result.err(hostedSessionUnavailableError());
@@ -670,6 +704,14 @@ const createHostedSetup = createSafeRootHandler(
     if (Result.isError(sessionResult)) {
       return Result.err(hostedSessionUnavailableError(sessionResult.error));
     }
+
+    yield* Result.await(
+      requireHostedCheckoutDisclosure({
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+      }),
+    );
 
     return Result.ok({
       hostedSessionId: sessionResult.value.id,

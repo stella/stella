@@ -23,6 +23,7 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit";
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.get";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -54,6 +55,10 @@ const seed = async (db: GatedTestDb) => {
     name: "Read audit firm",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values(
     [actor, otherActor].map((id) => ({

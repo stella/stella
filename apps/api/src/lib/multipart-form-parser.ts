@@ -18,10 +18,29 @@
  * against the real schemas to keep it so.
  */
 
+import { Result } from "better-result";
 import { Elysia } from "elysia";
+
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { boundActionRequest } from "@/api/lib/rate-limit/action-size-limits";
 
 /** Keys that would walk up the prototype chain if written onto the body. */
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/** Largest accepted file plus bounded multipart headers and scalar fields. */
+export const MULTIPART_REQUEST_MAX_BYTES =
+  FILE_SIZE_LIMIT_BYTES.document + 1024 * 1024;
+
+const isMultipartFormDataRequest = (request: Request): boolean =>
+  request.headers
+    .get("content-type")
+    ?.toLowerCase()
+    .startsWith("multipart/form-data") === true;
+
+export const admitMultipartRequest = async (request: Request) =>
+  isMultipartFormDataRequest(request)
+    ? await boundActionRequest(request, MULTIPART_REQUEST_MAX_BYTES)
+    : Result.ok(request);
 
 /** The form type `Request.formData()` actually resolves to, and its entries. */
 type RequestFormData = Awaited<ReturnType<Request["formData"]>>;
@@ -89,7 +108,7 @@ export const multipartFormParser = new Elysia({
 })
   .parser("none", () => null)
   .onParse({ as: "global" }, async ({ request, contentType }) =>
-    contentType.startsWith("multipart/form-data")
+    contentType.toLowerCase().startsWith("multipart/form-data")
       ? parseMultipartForm(await readForm(request))
       : undefined,
   );
