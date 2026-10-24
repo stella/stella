@@ -646,7 +646,7 @@ test("completion evidence inputs contain exactly one JSON document", () => {
     ["JOB_SCOPES", "{} {}"],
     ["FAST_JOB_SCOPES", "{} {}"],
     ["NEEDS", "{} {}"],
-  ]) {
+  ] as const) {
     expect(
       recordEvidence(allSucceeded, { env: { [name]: value } }),
       name,
