@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Retries failed pull-request jobs once after verified runner loss; no publication or deployment.",
+  "reviewedDigest": "2daf0b05ea6d130bfaa3bd678e69aa308224fdba2ce5c74020325dd8b86afc1c"
+}
