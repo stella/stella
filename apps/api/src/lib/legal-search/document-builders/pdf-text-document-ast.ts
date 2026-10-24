@@ -177,6 +177,40 @@ type PageSplit = {
   notes: Footnote[];
 };
 
+/**
+ * The marks a page may reference: its own notes, in order. A footnote is
+ * printed on the page that references it, so a candidate mark is accepted
+ * only when it is one of this page's notes not yet passed; one missed
+ * reference skips that mark instead of stalling every reference after it.
+ */
+class ReferenceCursor {
+  private readonly labels: readonly number[];
+  private index = 0;
+
+  constructor(labels: readonly number[]) {
+    this.labels = labels;
+  }
+
+  take(label: number): boolean {
+    return this.takeRun([label]);
+  }
+
+  /** Consume a run of marks only when they are this page's next notes in turn. */
+  takeRun(labels: readonly number[]): boolean {
+    const first = labels.at(0);
+    const start =
+      first === undefined ? -1 : this.labels.indexOf(first, this.index);
+    if (
+      start === -1 ||
+      labels.some((label, offset) => this.labels[start + offset] !== label)
+    ) {
+      return false;
+    }
+    this.index = start + labels.length;
+    return true;
+  }
+}
+
 type ReadNotesOptions = {
   lines: readonly string[];
   start: number;
@@ -273,40 +307,6 @@ const splitFootnotes = (lines: readonly string[], after: number): PageSplit => {
   }
   return { body: [...lines], carried: [], notes: [] };
 };
-
-/**
- * The marks a page may reference: its own notes, in order. A footnote is
- * printed on the page that references it, so a candidate mark is accepted
- * only when it is one of this page's notes not yet passed; one missed
- * reference skips that mark instead of stalling every reference after it.
- */
-class ReferenceCursor {
-  private readonly labels: readonly number[];
-  private index = 0;
-
-  constructor(labels: readonly number[]) {
-    this.labels = labels;
-  }
-
-  take(label: number): boolean {
-    return this.takeRun([label]);
-  }
-
-  /** Consume a run of marks only when they are this page's next notes in turn. */
-  takeRun(labels: readonly number[]): boolean {
-    const first = labels.at(0);
-    const start =
-      first === undefined ? -1 : this.labels.indexOf(first, this.index);
-    if (
-      start === -1 ||
-      labels.some((label, offset) => this.labels[start + offset] !== label)
-    ) {
-      return false;
-    }
-    this.index = start + labels.length;
-    return true;
-  }
-}
 
 /** The line with the marks glued into it lifted out of its text. */
 const liftGluedMarks = (text: string, cursor: ReferenceCursor): Line => {

@@ -288,7 +288,7 @@ describe.each(REPLAYS)("replaying $name", (replay) => {
 test("unseparated captured PDF notes retain their labels and text", async () => {
   const replay = REPLAYS.find(({ format }) => format === "pdf");
   if (replay === undefined) {
-    return panic("The captured PDF replay is missing");
+    panic("The captured PDF replay is missing");
   }
   const ast = await buildReplay(replay);
   const note = ast.blocks.find(({ id }) => id === "fn-97");
