@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { installBrowserClock } from "../testing/browser-clock";
+
 const fixturePath = "/src/components/fixtures/date-picker.fixture.html";
 
 const openFixture = async (page: Page) => {
@@ -149,7 +151,7 @@ test.describe("an open picker across local midnight", () => {
   test("follows today until navigation and keeps the chosen month after rollover and focus", async ({
     page,
   }) => {
-    await page.clock.install({ time: new Date("2026-08-31T21:59:50Z") });
+    await installBrowserClock(page, new Date("2026-08-31T21:59:50Z"));
     await openFixture(page);
     await page.locator("#empty-field").click();
     const popup = page.locator('[data-slot="date-picker-popup"]');
