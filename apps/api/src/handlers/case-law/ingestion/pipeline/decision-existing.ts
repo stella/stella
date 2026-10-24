@@ -450,7 +450,10 @@ export const resolveExistingDecisionPolicy = async ({
     return null;
   }
 
-  let comparedSourceHash = existing.sourceHash;
+  let comparedSourceHash =
+    existing.sourceHashVersion === sourceFingerprintVersion
+      ? existing.sourceHash
+      : null;
   if (
     existing.sourceHashVersion < sourceFingerprintVersion &&
     existing.sourceRawS3Key !== null

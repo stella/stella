@@ -48,14 +48,16 @@ export const sourceContractForAdapter = (
   adapterKey: string,
 ): SourceContract => {
   const membership = sourceRegistryMembership(adapterKey);
+  let sourceFingerprintVersion = 0;
+  if (membership.type === "registered") {
+    sourceFingerprintVersion =
+      SOURCE_FINGERPRINT_VERSIONS[membership.adapterKey];
+  } else if (isImportSourceKey(adapterKey)) {
+    sourceFingerprintVersion = SOURCE_FINGERPRINT_VERSIONS[adapterKey];
+  }
   return {
     metadataUrlSchema: metadataUrlSchemaForAdapter(adapterKey),
-    sourceFingerprintVersion:
-      membership.type === "registered"
-        ? SOURCE_FINGERPRINT_VERSIONS[membership.adapterKey]
-        : isImportSourceKey(adapterKey)
-          ? SOURCE_FINGERPRINT_VERSIONS[adapterKey]
-          : 0,
+    sourceFingerprintVersion,
     statedEcliIdentity: statedEcliIdentityForAdapter(adapterKey),
   };
 };

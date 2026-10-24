@@ -580,6 +580,46 @@ test("a stale equal fingerprint advances its version once without rewriting", as
   expect(reads).toBe(1);
 });
 
+test("a stale equal hash without stored raw follows the changed path", async () => {
+  const caseNumber = "30 Cdo 310/2024";
+  const rawHash = "same-fingerprint-output";
+  await ingest(withDocument(caseNumber, rawHash), canonical);
+  const first = await storedRow(caseNumber);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET source_raw_s3_key = NULL, source_hash_version = 0
+     WHERE id = ${first.id}::uuid
+  `);
+  let reads = 0;
+  order += 1n;
+  const outcome = await processDecision(
+    {
+      input: withDocument(caseNumber, rawHash),
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 23, 18, 0, Number(order))),
+      corpus: canonical,
+      sourceFingerprintFromStoredRaw: async () => {
+        reads += 1;
+        return await Promise.resolve(rawHash);
+      },
+    },
+    async () =>
+      await Promise.resolve({
+        metadataUrlSchema: undefined,
+        sourceFingerprintVersion: 1,
+        statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+      }),
+  );
+  expect(outcome.inserted).toBe(true);
+  expect(reads).toBe(0);
+  expect(await storedRow(caseNumber)).toMatchObject({
+    sourceHash: rawHash,
+    sourceHashVersion: 1,
+  });
+});
+
 test("a stale unequal fingerprint follows the changed path", async () => {
   const caseNumber = "30 Cdo 306/2024";
   await ingest(withDocument(caseNumber, "old-algorithm"), canonical);
