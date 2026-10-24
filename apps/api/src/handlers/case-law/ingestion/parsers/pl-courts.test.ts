@@ -4,8 +4,8 @@ import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
-  PlKioHtmlBudgetError,
   PL_KIO_HTML_BUDGET,
+  PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 

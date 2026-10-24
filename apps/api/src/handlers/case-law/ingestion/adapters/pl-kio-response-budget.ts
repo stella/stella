@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 import { isText } from "domhandler";
 import { Buffer } from "node:buffer";

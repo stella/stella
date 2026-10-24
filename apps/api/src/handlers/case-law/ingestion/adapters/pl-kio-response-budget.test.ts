@@ -7,9 +7,9 @@ import { assertProperty } from "@stll/property-testing";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
 import {
-  readPlKioHtml,
   PL_KIO_DOCUMENT_REJECTION,
   PL_KIO_HTML_BUDGET,
+  readPlKioHtml,
 } from "./pl-kio-response-budget";
 
 const TEST_BYTE_CAP = 2 * 1024 * 1024;
