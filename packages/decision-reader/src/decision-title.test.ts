@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  DECISION_TITLE_SEPARATOR,
-  decisionTitle,
-} from "@/features/case-law/decision-title";
+import { DECISION_TITLE_SEPARATOR, decisionTitle } from "./decision-title";
 
 describe("decisionTitle", () => {
   test("qualifies the case number with the court", () => {
