@@ -8,7 +8,8 @@ type ReadBaseLedgerOptions = {
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
   normalizeBaseEntries?:
-    ((entries: string[], baseCommit: string) => string[]) | undefined;
+    | ((entries: string[], baseCommit: string) => string[])
+    | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
@@ -16,7 +17,8 @@ type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
 };
 
 type CompareLedgerMembershipResult =
-  { type: "unresolved-base" } | { type: "compared"; added: string[] };
+  | { type: "unresolved-base" }
+  | { type: "compared"; added: string[] };
 
 const compareLedgerMembership = ({
   baseRef,
@@ -40,7 +42,21 @@ const compareLedgerMembership = ({
   if (resolved.exitCode !== 0) {
     return { type: "unresolved-base" };
   }
-  const commit = resolved.stdout.toString().trim();
+  // A commit the base already contains adds nothing to the base's ledger: a
+  // later shrink on the base is not growth here. Its own ledger is the base,
+  // so only edits on top of it count.
+  const contained =
+    Bun.spawnSync(
+      [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "HEAD",
+        resolved.stdout.toString().trim(),
+      ],
+      { cwd: repoRoot, stderr: "pipe" },
+    ).exitCode === 0;
+  const commit = contained ? "HEAD" : resolved.stdout.toString().trim();
   const base = readBaseLedger({
     baseRef: commit,
     ledgerRel,
