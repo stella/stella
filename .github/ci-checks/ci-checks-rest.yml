@@ -177,10 +177,9 @@ checks:
     run: bun scripts/check-resolution-ranges.ts
 
   - name: Quarantine-exclude guards
-    continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Reads wall clock to validate dated waivers or quarantine expiry."
+      CI_CHECK_CONTEXT: "Reads wall clock to reject first-party exclusion dates in the future."
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Quarantine-exclude guards')) }}
     # The 5-day release-age quarantine is excluded per package for
     # first-party @stll/* code, and bun matches those entries EXACTLY (a
@@ -189,8 +188,9 @@ checks:
     # stay quarantined — and a quarantined optionalDependency is skipped
     # SILENTLY, so the package imports fine and throws on first use. This
     # fails when the exclude list stops covering everything in the lock.
-    # Temporary third-party exemptions carry an exact expiry so the same
-    # check also fails once Bun's release-age gate can take over again.
+    # Temporary third-party exemptions must carry an exact expiry;
+    # scripts/dated-waivers.ts owns that expiry, and an elapsed one stops
+    # exempting new pins in the lockfile release-age guard.
     run: |
       bun test scripts/check-stll-quarantine-excludes.test.ts
       bun scripts/check-stll-quarantine-excludes.ts
@@ -668,10 +668,11 @@ checks:
 
   - name: Suppression waiver ledger
     env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Reads wall clock to validate dated waivers or quarantine expiry."
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
       STELLA_VERIFY: check
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Suppression waiver ledger')) }}
+    id: static_check_123
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Suppression waiver ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_123 != 'true') }}
     # The ratchet budgets cap how many suppressions each lint rule carries.
     # For the security tier — tenancy, authorization, credential and audit
     # rules — a count is not enough, because two waivers of the same rule
@@ -679,7 +680,7 @@ checks:
     # one (rule, file, anchoring symbol, reason, evidence) and this guard
     # mirrors it against the tree in both directions, so adding a
     # suppression is a reviewable ledger edit and a stale entry cannot rot
-    # in place. Temporary waivers fail once their expiry passes. The
+    # in place. scripts/dated-waivers.ts owns temporary waiver expiry. The
     # --self-test run first proves the guard still detects each kind of
     # drift. Draft entries: `bun scripts/suppression-waivers.ts --seed`.
     run: |

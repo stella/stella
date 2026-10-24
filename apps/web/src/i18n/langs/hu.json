@@ -159,7 +159,6 @@
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "professionalUse": {
-      "description": "Fiókja létrehozásakor ez a nyilatkozat nem jelent meg Önnek. A folytatáshoz fogadja el.",
       "title": "Szakmai célú használat megerősítése"
     },
     "professionalUseStatement": "A fiók létrehozásával megerősíti, hogy a stellát szakmai célokra használja, és tudomásul veszi, hogy a stella jogi szakembereknek szóló eszköz, és nem helyettesíti a jogi tanácsadást.",
@@ -4762,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
+    "caseLawEmptyState": "Kezdjen el gépelni a bírósági határozatok közötti kereséshez.",
     "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",
     "continueInChat": "Folytatás a csevegésben",
@@ -4819,6 +4819,7 @@
     "savedSearchesEmpty": "Mentse el a keresést későbbi használatra.",
     "scopeFilter": "Keresési hatókör",
     "scopePlaceholderAll": "Keresés az összes <scope>forrásban</scope>…",
+    "scopePlaceholderCaseLaw": "Keresés az <scope>ítélkezési gyakorlatban</scope>…",
     "scopePlaceholderMatters": "Keresés az összes <scope>ügyben</scope>…",
     "scopePlaceholderRegistries": "Keresés a <scope>nyilvántartásokban</scope>…",
     "scopeRegistries": "Nyilvántartások",
