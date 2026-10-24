@@ -16,12 +16,10 @@ const diagnosticReport = v.object({
   ),
 });
 
-// A design system that cannot load is one failure per rule and linted file.
-// The plugin otherwise re-reports it at every class, which reads like a set of
-// real class errors. Each rule reports it once with its own severity, keyed by
-// the file's parsed tree, so a warning-level rule cannot absorb an error-level
-// one and nothing carries over between files.
-test("an unavailable Tailwind design system fails as one typed error per rule and file", async () => {
+// A design system that cannot load is one setup failure per rule for the lint
+// process. Each rule reports on the first file it meets; later files bail until
+// the lint session restarts, matching the process-sticky service failure.
+test("an unavailable Tailwind design system fails once across rules and files", async () => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-design-system-"),
   );
@@ -40,8 +38,8 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
         rules: {
           // A warning-level rule that needs the design system must not absorb
           // the error-level reports.
-          "tailwindcss/no-conflicting-classes": "warn",
-          "tailwindcss/no-unknown-classes": "error",
+          "tailwindcss/no-unknown-classes": "warn",
+          "tailwindcss/no-conflicting-classes": "error",
           // Duplicate detection needs no design system and reports nothing.
           "tailwindcss/no-duplicate-classes": "error",
         },
@@ -73,22 +71,18 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
     expect(stderr).not.toContain("Failed to load");
     expect(exitCode).toBe(1);
     const { diagnostics } = v.parse(diagnosticReport, JSON.parse(stdout));
+    expect(diagnostics, stdout).toHaveLength(2);
     expect(
-      diagnostics
-        .map(
-          ({ filename, code, severity }) =>
-            `${path.basename(filename)} ${code} ${severity}`,
-        )
-        .toSorted(),
-      stdout,
-    ).toEqual(
-      ["first.tsx", "second.tsx"].flatMap((file) => [
-        `${file} tailwindcss(no-conflicting-classes) warning`,
-        `${file} tailwindcss(no-unknown-classes) error`,
-      ]),
-    );
+      diagnostics.map(({ code, severity }) => ({ code, severity })),
+    ).toEqual([
+      { code: "tailwindcss(no-unknown-classes)", severity: "warning" },
+      { code: "tailwindcss(no-conflicting-classes)", severity: "error" },
+    ]);
     for (const { message } of diagnostics) {
       expect(message).toStartWith("tailwind design system not loaded: ");
+      expect(message).toContain(
+        "Every Tailwind rule is skipped for this stylesheet in this run.",
+      );
     }
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -98,22 +92,29 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
 type WorkerHook =
   | "busy-load"
   | "busy-request"
+  | "fail-load"
   | "slow-heartbeat"
+  | "stall-first-load"
   | "stop-heartbeat"
+  | "trace-load"
   | "throw-outside-main";
 
 type WorkerHookOptions = {
+  css?: string;
   delayMs?: number;
   heartbeatLimitMs: number;
   loadHeartbeatLimitMs?: number;
+  multipleRulesAndFiles?: boolean;
 };
 
 const runWorkerHook = async (
   hook: WorkerHook,
   {
+    css = '@import "tailwindcss";\n',
     delayMs = 11_000,
     heartbeatLimitMs,
     loadHeartbeatLimitMs = heartbeatLimitMs,
+    multipleRulesAndFiles = false,
   }: WorkerHookOptions,
 ) => {
   const fixtureRoot = path.join(repositoryRoot, "node_modules/.cache");
@@ -123,7 +124,7 @@ const runWorkerHook = async (
   );
   try {
     const entryPoint = path.join(directory, "app.css");
-    await Bun.write(entryPoint, '@import "tailwindcss";\n');
+    await Bun.write(entryPoint, css);
     const config = path.join(directory, "oxlintrc.json");
     await Bun.write(
       config,
@@ -133,26 +134,38 @@ const runWorkerHook = async (
           path.join(repositoryRoot, "node_modules/oxlint-tailwindcss"),
         ],
         settings: { tailwindcss: { entryPoint } },
-        rules: { "tailwindcss/no-unknown-classes": "error" },
+        rules: multipleRulesAndFiles
+          ? {
+              "tailwindcss/no-conflicting-classes": "error",
+              "tailwindcss/no-unknown-classes": "error",
+            }
+          : { "tailwindcss/no-unknown-classes": "error" },
       }),
     );
-    const input = path.join(directory, "input.tsx");
-    await Bun.write(
-      input,
-      'export const A = () => <span className="bg-red-5000" />;\n',
-    );
+    const inputs = (
+      multipleRulesAndFiles
+        ? ["first.tsx", "second.tsx", "third.tsx"]
+        : ["input.tsx"]
+    ).map((name) => path.join(directory, name));
+    const tracePath = path.join(directory, "worker-loads.txt");
+    for (const input of inputs) {
+      await Bun.write(
+        input,
+        'export const A = () => <span className="flex grid bg-red-5000" />;\n',
+      );
+    }
     // Populate the disk precompute before applying the worker-service hook.
     // The hook assertions target the persistent declarations worker, while the
     // precompute path has its own shared liveness protocol.
     const warm = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
+      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", ...inputs],
       { cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
     );
     await warm.exited;
 
     const started = performance.now();
     const child = Bun.spawn(
-      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
+      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", ...inputs],
       {
         cwd: repositoryRoot,
         stdout: "pipe",
@@ -165,6 +178,7 @@ const runWorkerHook = async (
             String(loadHeartbeatLimitMs),
           OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS: String(delayMs),
           OXLINT_TAILWINDCSS_WORKER_TEST_HOOK: hook,
+          OXLINT_TAILWINDCSS_WORKER_TEST_TRACE_PATH: tracePath,
         },
       },
     );
@@ -173,16 +187,44 @@ const runWorkerHook = async (
       new Response(child.stderr).text(),
       child.exited,
     ]);
+    const trace = Bun.file(tracePath);
     return {
       diagnostics: v.parse(diagnosticReport, JSON.parse(stdout)).diagnostics,
       elapsedMs: performance.now() - started,
       exitCode,
       stderr,
+      workerLoads: (await trace.exists())
+        ? (await trace.text()).trim().split("\n").filter(Boolean)
+        : [],
     };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 };
+
+test("a stalled first load is retried once with a fresh worker", async () => {
+  const result = await runWorkerHook("stall-first-load", {
+    heartbeatLimitMs: 1000,
+  });
+  expect(result.stderr).not.toContain("stopped answering");
+  expect(result.exitCode).toBe(1);
+  expect(result.workerLoads).toEqual(["0", "1"]);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining('"bg-red-5000" is not a valid Tailwind class'),
+  ]);
+}, 120_000);
+
+test("a worker-reported design-system load error is not retried", async () => {
+  const result = await runWorkerHook("fail-load", {
+    heartbeatLimitMs: 1000,
+  });
+  expect(result.exitCode).toBe(1);
+  expect(result.workerLoads).toEqual(["0"]);
+  expect(result.diagnostics).toHaveLength(1);
+  expect(result.diagnostics[0]?.message).toContain(
+    "injected declarations worker load failure",
+  );
+}, 120_000);
 
 test("a slow worker with a live heartbeat is allowed past the liveness bound", async () => {
   const result = await runWorkerHook("slow-heartbeat", {
@@ -199,14 +241,17 @@ test("a slow worker with a live heartbeat is allowed past the liveness bound", a
 test("a worker with a stopped heartbeat fails promptly with its phase", async () => {
   const result = await runWorkerHook("stop-heartbeat", {
     heartbeatLimitMs: 1000,
+    multipleRulesAndFiles: true,
   });
   expect(result.elapsedMs).toBeLessThan(10_000);
   expect(result.exitCode).toBe(1);
-  expect(result.diagnostics.map(({ message }) => message)).toEqual([
-    expect.stringContaining(
+  expect(result.diagnostics).toHaveLength(2);
+  for (const { message } of result.diagnostics) {
+    expect(message).toContain(
       "declarations worker stopped answering while compiling the design system",
-    ),
-  ]);
+    );
+  }
+  expect(result.workerLoads).toEqual(["0", "1"]);
 }, 120_000);
 
 test("a synchronous design-system load uses the longer load heartbeat bound", async () => {
@@ -229,7 +274,7 @@ test("a synchronous design-system load fails at its load heartbeat bound", async
     heartbeatLimitMs: 1000,
     loadHeartbeatLimitMs: 2000,
   });
-  expect(result.elapsedMs).toBeLessThan(5000);
+  expect(result.elapsedMs).toBeLessThan(10_000);
   expect(result.exitCode).toBe(1);
   expect(result.diagnostics.map(({ message }) => message)).toEqual([
     expect.stringContaining(

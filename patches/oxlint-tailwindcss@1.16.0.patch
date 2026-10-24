@@ -1,41 +1,40 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5790244af 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..d40850d222cc44567bc5199e47d4502fcd9f03b2 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -2480,7 +2480,8 @@ function isFatalError(err) {
+@@ -2480,7 +2480,9 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
  function formatFatalError(err) {
 -	return err.hint ? `${err.message}\n\nHint: ${err.hint}` : err.message;
 +	const message = `tailwind design system not loaded: ${err.message}`;
-+	return err.hint ? `${message}\n\nHint: ${err.hint}` : message;
++	const detail = err.hint ? `${message}\n\nHint: ${err.hint}` : message;
++	return `${detail}\n\nEvery Tailwind rule is skipped for this stylesheet in this run.`;
  }
  /**
  * Helper for DS-dependent rules to convert a caught fatal error into a
-@@ -2488,8 +2489,22 @@ function formatFatalError(err) {
+@@ -2488,12 +2490,19 @@ function formatFatalError(err) {
  * visitor should bail out), `false` otherwise — the rule layer rethrows
  * non-fatal errors to surface real bugs.
  */
-+const reportedFatalDsErrors = /* @__PURE__ */ new WeakMap();
++// Long-lived lint hosts report a sticky load failure on the first file each
++// rule meets. Restarting the lint session resets both this set and the service.
++const reportedFatalDsErrors = /* @__PURE__ */ new Set();
  function reportFatalDsError(context, err, node) {
  	if (!isFatalError(err)) return false;
-+	// One unavailable design system is one failure per rule and linted file, not
-+	// one per class. Each rule reports it once, so its own severity still
-+	// applies. The parsed tree is new on every lint, so a long-lived lint host
-+	// reports the failure again on its next run.
 +	const reported = formatFatalError(err);
-+	const tree = context.sourceCode?.ast;
-+	if (tree !== void 0) {
-+		const key = `${context.id}\0${reported}`;
-+		const seen = reportedFatalDsErrors.get(tree) ?? /* @__PURE__ */ new Set();
-+		if (seen.has(key)) return true;
-+		seen.add(key);
-+		reportedFatalDsErrors.set(tree, seen);
-+	}
++	const reportKey = `${context.id}\0${reported}`;
++	if (reportedFatalDsErrors.has(reportKey)) return true;
++	reportedFatalDsErrors.add(reportKey);
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -2890,11 +2905,25 @@ const PRECOMPUTE_SCRIPT = `
+-		data: { message: formatFatalError(err) }
++		data: { message: reported }
+ 	});
+ 	return true;
+ }
+@@ -2890,11 +2899,25 @@ const PRECOMPUTE_SCRIPT = `
  // -1=error), mirroring sort-service.ts / canonicalize-service.ts.
  const { workerData } = require('worker_threads');
  const { tailwindNodePath, cssPath: WD_CSS_PATH, cachePath: WD_CACHE_PATH, tmpPath: WD_TMP_PATH, sharedBuffer } = workerData;
@@ -64,7 +63,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  function signalError(e) {
    try {
      const msg = Buffer.from(String((e && e.message) || e || 'unknown precompute error'), 'utf-8');
-@@ -2902,9 +2931,12 @@ function signalError(e) {
+@@ -2902,9 +2925,12 @@ function signalError(e) {
      errDataArea.set(msg.subarray(0, n), 0);
      errLengthView.setUint32(0, n);
    } catch {}
@@ -77,7 +76,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  // Everything below — including the top-level require()s — runs inside this try
  // so any SYNCHRONOUS module-scope failure (a broken @tailwindcss/node install,
  // missing fs/path) is routed through signalError. Without it the worker would
-@@ -2916,6 +2948,7 @@ try {
+@@ -2916,6 +2942,7 @@ try {
  // workspaces (the module lives under node_modules/.pnpm/... which is not on the
  // resolution path from the consumer's project root).
  const { __unstable__loadDesignSystem } = require(tailwindNodePath);
@@ -85,18 +84,19 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  const { readFileSync, writeFileSync, renameSync } = require('fs');
  const { dirname, resolve } = require('path');
  
-@@ -3069,7 +3102,9 @@ async function main() {
+@@ -3069,8 +3096,10 @@ async function main() {
  
    const cssPath = WD_CSS_PATH;
    const css = readFileSync(cssPath, 'utf-8');
 +  setPhase(3);
    const base = dirname(cssPath);
-+  setPhase(4);
 -  const ds = await __unstable__loadDesignSystem(css, { base });
++  setPhase(4);
 +  const ds = await __unstable__loadDesignSystem(css, { base }); setPhase(8);
    phase('load');
  
-@@ -3104,6 +3139,7 @@ async function main() {
+   // Tailwind v4 project prefix (\`@import "tailwindcss" prefix(tw)\`). getClassList()
+@@ -3104,6 +3133,7 @@ async function main() {
    // invisible to no-conflicting-classes (\`rounded rounded-lg\` never reported).
    const declCss = {};
    for (let i = 0; i < classNames.length; i++) {
@@ -104,7 +104,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
      if (cssResults[i] != null) declCss[classNames[i]] = cssResults[i];
    }
  
-@@ -3149,6 +3185,7 @@ async function main() {
+@@ -3149,6 +3179,7 @@ async function main() {
      // without the prefix (the prefix only affects the selector).
      const arbResults = ds.candidatesToCss(arbForms.map(pfx));
      for (let i = 0; i < candidates.length; i++) {
@@ -112,7 +112,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
        if (!arbResults[i]) continue;
        if (extractDeclarations(arbResults[i]) === extractDeclarations(candidates[i].namedCss)) {
          arbitraryEquivalents[candidates[i].arbitraryForm] = candidates[i].namedCls;
-@@ -3211,6 +3248,7 @@ async function main() {
+@@ -3211,6 +3242,7 @@ async function main() {
    if (extraCandidates.length > 0) {
      const extraResults = ds.candidatesToCss(extraCandidates.map(pfx));
      for (let i = 0; i < extraCandidates.length; i++) {
@@ -120,7 +120,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
        if (extraResults[i] != null) {
          validClasses.push(extraCandidates[i]);
          validSet.add(extraCandidates[i]);
-@@ -3233,6 +3271,7 @@ async function main() {
+@@ -3233,6 +3265,7 @@ async function main() {
    if (negativeProbes.length > 0) {
      const negResults = ds.candidatesToCss(negativeProbes.map(pfx));
      for (let i = 0; i < negativeProbes.length; i++) {
@@ -128,7 +128,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
        if (negResults[i] != null && !validSet.has(negativeProbes[i])) {
          validClasses.push(negativeProbes[i]);
          validSet.add(negativeProbes[i]);
-@@ -3425,6 +3464,7 @@ async function main() {
+@@ -3425,6 +3458,7 @@ async function main() {
    const declIds = new Map();
    const table = [];
    for (let i = 0; i < sortedKeys.length; i++) {
@@ -136,7 +136,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
      declIds.set(sortedKeys[i], i);
      const parts = sortedKeys[i].split('|');
      table.push(
-@@ -3479,6 +3519,7 @@ async function main() {
+@@ -3479,6 +3513,7 @@ async function main() {
    const variantOrder = {};
    const variants = ds.getVariants();
    for (let i = 0; i < variants.length; i++) {
@@ -144,7 +144,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
      if (!variants[i].isArbitrary) {
        variantOrder[variants[i].name] = i;
      }
-@@ -3544,6 +3585,7 @@ async function main() {
+@@ -3544,6 +3579,7 @@ async function main() {
    // pushing one entry per occurrence only inflated the cache artifact.
    const attrClassRe = /\\[class~="([^"]+)"\\]/g;
    for (let i = 0; i < cssResults.length; i++) {
@@ -152,7 +152,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
      if (cssResults[i]) {
        let acm;
        attrClassRe.lastIndex = 0;
-@@ -3631,6 +3673,7 @@ async function main() {
+@@ -3631,6 +3667,7 @@ async function main() {
      const probes = [...knownPrefixes];
      const probeResults = ds.candidatesToCss(probes.map(p => pfx(p + '-1')));
      for (let i = 0; i < probes.length; i++) {
@@ -160,7 +160,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
        const css = probeResults[i];
        if (!css) continue;
        // \`size-1\` emits width AND height, both reading the unit — one match is enough.
-@@ -3668,7 +3711,7 @@ async function main() {
+@@ -3668,7 +3705,7 @@ async function main() {
    renameSync(WD_TMP_PATH, WD_CACHE_PATH);
  }
  main()
@@ -169,7 +169,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
    .catch((e) => signalError(e));
  } catch (e) {
    signalError(e);
-@@ -3973,6 +4016,48 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -3973,6 +4010,48 @@ function precomputeLoadError(resolvedPath, cause) {
  	return new DesignSystemLoadError(`Failed to precompute design system from "${resolvedPath}": ${causeError?.message ?? String(cause)}`, precomputeHint(cause), { cause: causeError });
  }
  /**
@@ -218,9 +218,12 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  * Run the precompute in a worker_thread (not a forked child). The worker loads
  * the design system in-process, writes the JSON straight to `cachePath`, and
  * signals completion over a SharedArrayBuffer; the main thread blocks on
-@@ -3986,9 +4071,9 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -3984,11 +4063,11 @@ function precomputeLoadError(resolvedPath, cause) {
+ * The worker writes the result itself, so this returns nothing — callers read
+ * it back from `cachePath`.
  */
- function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
+-function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
++function runPrecomputeViaWorkerOnce(resolvedPath, tailwindNodePath, cachePath, timeout) {
  	const sharedBuffer = new SharedArrayBuffer(ERR_BUFFER_SIZE);
 -	const control = new Int32Array(sharedBuffer, 0, 4);
 -	const errLengthView = new DataView(sharedBuffer, 16, 4);
@@ -231,17 +234,33 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  	const tmpPath = `${cachePath}.tmp.${process.pid}.${node_worker_threads.threadId}.${precomputeSeq++}`;
  	try {
  		new Function(PRECOMPUTE_SCRIPT);
-@@ -4012,7 +4097,8 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+@@ -4012,7 +4091,8 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
  	}
  	worker.on("error", () => {});
  	try {
 -		if (Atomics.wait(control, PRECOMPUTE_SIGNAL_INDEX, 0, timeout) === "timed-out") throw new DesignSystemLoadError(`Timed out precomputing design system from "${resolvedPath}" after ${timeout}ms.`, "Raise `settings.tailwindcss.timeout` if your machine or CI runner is slow, or verify the CSS imports resolve.");
 +		const outcome = waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`);
-+		if (!outcome.answered) throw new DesignSystemLoadError(`The design-system precompute stopped answering while ${outcome.phase} from "${resolvedPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The precompute worker stopped answering; verify the CSS imports resolve.");
++		if (!outcome.answered) throw new RetryableWorkerLoadError(`The design-system precompute stopped answering while ${outcome.phase} from "${resolvedPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The precompute worker stopped answering after one retry; verify the CSS imports resolve.");
  		if (control[PRECOMPUTE_SIGNAL_INDEX] === -1) {
  			const len = errLengthView.getUint32(0);
  			throw precomputeLoadError(resolvedPath, len > 0 ? new Error(Buffer.from(errDataArea.slice(0, len)).toString("utf-8")) : /* @__PURE__ */ new Error("precompute worker exited without reporting a cause (it may have been killed by the OS, e.g. under memory pressure)"));
-@@ -4388,9 +4474,9 @@ function allowUntestedEngineFromSettings(settings) {
+@@ -4029,6 +4109,15 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+ * malformed payload surfaces as a clear diagnostic here instead of crashing
+ * later in `DesignSystemCache.fromPrecomputed`.
+ */
++function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
++	try {
++		runPrecomputeViaWorkerOnce(resolvedPath, tailwindNodePath, cachePath, timeout);
++		return;
++	} catch (err) {
++		if (!(err instanceof RetryableWorkerLoadError)) throw err;
++	}
++	runPrecomputeViaWorkerOnce(resolvedPath, tailwindNodePath, cachePath, timeout);
++}
+ function precomputeAndRead(resolvedPath, tailwindNodePath, cachePath, timeout) {
+ 	runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout);
+ 	const data = tryReadCache(cachePath);
+@@ -4388,13 +4477,14 @@ function allowUntestedEngineFromSettings(settings) {
  * the DS-optional caller of the declaration service catches it and degrades.
  */
  const BUFFER_SIZE = 4194304;
@@ -254,7 +273,12 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  const INIT_TIMEOUT = 6e4;
  const REQUEST_TIMEOUT = 3e4;
  const MAX_CONSECUTIVE_REQUEST_FAILURES = 3;
-@@ -4432,46 +4518,77 @@ const MAX_WORKERS = 8;
+ const REQUEST_STICKY_BACKOFF_MS = 6e4;
++var RetryableWorkerLoadError = class extends SortServiceError {};
+ /**
+ * Per-request timeout override for slow-but-functional machines (#145). A
+ * machine whose cold canonicalize sits close to the 30 s default times out
+@@ -4432,46 +4522,83 @@ const MAX_WORKERS = 8;
  */
  function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
  	return `
@@ -336,11 +360,17 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
 +    setPhase(3);
 +    base = dirname(workerData.cssPath);
 +    setPhase(4);
++    if (workerData.testTracePath) require('fs').appendFileSync(workerData.testTracePath, String(workerData.loadAttempt) + '\\n');
++    if (workerData.testHook === 'stall-first-load' && workerData.loadAttempt === 0) {
++      stopHeartbeat();
++      await new Promise(() => {});
++    }
 +    if (workerData.testHook === 'stop-heartbeat') {
 +      stopHeartbeat();
 +      await new Promise(() => {});
 +    }
 +    if (workerData.testHook === 'slow-heartbeat') await new Promise((resolve) => setTimeout(resolve, workerData.testDelayMs));
++    if (workerData.testHook === 'fail-load') throw new Error('injected declarations worker load failure');
 +    if (workerData.testHook === 'busy-load') {
 +      const until = performance.now() + workerData.testDelayMs;
 +      while (performance.now() < until) {}
@@ -358,7 +388,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
    let stockPromise = null;
    const env = {
      loadStock() {
-@@ -4479,50 +4596,47 @@ async function main() {
+@@ -4479,50 +4606,47 @@ async function main() {
        return stockPromise;
      },
    };
@@ -424,7 +454,40 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  `;
  }
  var DesignSystemWorker = class {
-@@ -4616,7 +4730,7 @@ var DesignSystemWorker = class {
+@@ -4581,9 +4705,9 @@ var DesignSystemWorker = class {
+ 		const existing = this.workers.get(cssPath);
+ 		if (existing && !existing.ready) {
+ 			this.workers.delete(cssPath);
+-			this.waitReady(existing);
+-			this.workers.set(cssPath, existing);
+-			return existing;
++			const ready = this.waitReadyWithRetry(existing);
++			this.workers.set(cssPath, ready);
++			return ready;
+ 		}
+ 		if (existing) {
+ 			this.workers.delete(cssPath);
+@@ -4591,10 +4715,10 @@ var DesignSystemWorker = class {
+ 			return existing;
+ 		}
+ 		const state = this.spawn(cssPath);
+-		this.waitReady(state);
+-		this.workers.set(cssPath, state);
++		const ready = this.waitReadyWithRetry(state);
++		this.workers.set(cssPath, ready);
+ 		this.evictIfNeeded();
+-		return state;
++		return ready;
+ 	}
+ 	/**
+ 	* Start the worker for `cssPath` without waiting for it: it loads the design
+@@ -4611,12 +4735,12 @@ var DesignSystemWorker = class {
+ 		} catch {}
+ 	}
+ 	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
+-	spawn(cssPath, warm) {
++	spawn(cssPath, warm, loadAttempt = 0) {
+ 		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
  		const controlArray = new Int32Array(sharedBuffer, 0, HEADER_INTS);
@@ -433,19 +496,42 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  		const dataArea = new Uint8Array(sharedBuffer, DATA_OFFSET);
  		let worker;
  		try {
-@@ -4626,7 +4740,9 @@ var DesignSystemWorker = class {
+@@ -4626,7 +4750,11 @@ var DesignSystemWorker = class {
  					sharedBuffer,
  					cssPath,
  					tailwindNodePath,
 -					warm
 +					warm,
 +					testHook: process.env.OXLINT_TAILWINDCSS_WORKER_TEST_HOOK,
++					testTracePath: process.env.OXLINT_TAILWINDCSS_WORKER_TEST_TRACE_PATH,
++					loadAttempt,
 +					testDelayMs: parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS) ?? 0
  				}
  			});
  		} catch (cause) {
-@@ -4650,9 +4766,10 @@ var DesignSystemWorker = class {
- 	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
+@@ -4647,12 +4775,30 @@ var DesignSystemWorker = class {
+ 			ready: false
+ 		};
+ 	}
+-	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
++	/** Retry one silent initial load with a fresh worker before making it sticky. */
++	waitReadyWithRetry(state) {
++		try {
++			this.waitReady(state);
++			return state;
++		} catch (err) {
++			if (!(err instanceof RetryableWorkerLoadError)) throw err;
++		}
++		const retry = this.spawn(state.cssPath, void 0, 1);
++		try {
++			this.waitReady(retry);
++			return retry;
++		} catch (err) {
++			if (err instanceof RetryableWorkerLoadError) throw this.remember(state.cssPath, err);
++			throw err;
++		}
++	}
++	/** Wait for a spawned worker's design system; worker-reported errors are sticky. */
  	waitReady(state) {
  		const { worker, controlArray, lengthView, dataArea, cssPath } = state;
 -		if (Atomics.wait(controlArray, 2, 0, INIT_TIMEOUT) === "timed-out") {
@@ -453,11 +539,11 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
 +		if (!outcome.answered) {
  			this.terminateWorker(worker);
 -			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker timed out loading the design system from "${cssPath}" after ${INIT_TIMEOUT}ms.`, "Verify the CSS imports resolve; this can also happen if the machine or CI runner is heavily loaded."));
-+			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The worker stopped answering; verify the CSS imports resolve."));
++			throw new RetryableWorkerLoadError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The worker stopped answering after one retry; verify the CSS imports resolve.");
  		}
  		if (controlArray[2] === -1) {
  			const len = lengthView.getUint32(0);
-@@ -4679,12 +4796,16 @@ var DesignSystemWorker = class {
+@@ -4679,12 +4825,16 @@ var DesignSystemWorker = class {
  	callSync(cssPath, req) {
  		const state = this.ensure(cssPath);
  		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
@@ -476,7 +562,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
  		const responseLen = state.lengthView.getUint32(0);
  		const responseStr = Buffer.from(state.dataArea.slice(0, responseLen)).toString("utf-8");
  		Atomics.store(state.controlArray, 1, 0);
-@@ -5503,6 +5624,7 @@ const declWorker = new DesignSystemWorker({
+@@ -5503,6 +5653,7 @@ const declWorker = new DesignSystemWorker({
    // stays lenient instead of flagging a transient false "unknown class") from a
    // FALSY result (compiles to nothing → invalid).
    for (let i = 0; i < request.classes.length; i++) {
@@ -485,43 +571,42 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
      let one;
      try {
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3eaca0a90b 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..1247d6f3a711f3469470f9becb7adf2e8ae4a7dc 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -2483,7 +2483,8 @@ function isFatalError(err) {
+@@ -2483,7 +2483,9 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
  function formatFatalError(err) {
 -	return err.hint ? `${err.message}\n\nHint: ${err.hint}` : err.message;
 +	const message = `tailwind design system not loaded: ${err.message}`;
-+	return err.hint ? `${message}\n\nHint: ${err.hint}` : message;
++	const detail = err.hint ? `${message}\n\nHint: ${err.hint}` : message;
++	return `${detail}\n\nEvery Tailwind rule is skipped for this stylesheet in this run.`;
  }
  /**
  * Helper for DS-dependent rules to convert a caught fatal error into a
-@@ -2491,8 +2492,22 @@ function formatFatalError(err) {
+@@ -2491,12 +2493,19 @@ function formatFatalError(err) {
  * visitor should bail out), `false` otherwise — the rule layer rethrows
  * non-fatal errors to surface real bugs.
  */
-+const reportedFatalDsErrors = /* @__PURE__ */ new WeakMap();
++// Long-lived lint hosts report a sticky load failure on the first file each
++// rule meets. Restarting the lint session resets both this set and the service.
++const reportedFatalDsErrors = /* @__PURE__ */ new Set();
  function reportFatalDsError(context, err, node) {
  	if (!isFatalError(err)) return false;
-+	// One unavailable design system is one failure per rule and linted file, not
-+	// one per class. Each rule reports it once, so its own severity still
-+	// applies. The parsed tree is new on every lint, so a long-lived lint host
-+	// reports the failure again on its next run.
 +	const reported = formatFatalError(err);
-+	const tree = context.sourceCode?.ast;
-+	if (tree !== void 0) {
-+		const key = `${context.id}\0${reported}`;
-+		const seen = reportedFatalDsErrors.get(tree) ?? /* @__PURE__ */ new Set();
-+		if (seen.has(key)) return true;
-+		seen.add(key);
-+		reportedFatalDsErrors.set(tree, seen);
-+	}
++	const reportKey = `${context.id}\0${reported}`;
++	if (reportedFatalDsErrors.has(reportKey)) return true;
++	reportedFatalDsErrors.add(reportKey);
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -2893,11 +2908,25 @@ const PRECOMPUTE_SCRIPT = `
+-		data: { message: formatFatalError(err) }
++		data: { message: reported }
+ 	});
+ 	return true;
+ }
+@@ -2893,11 +2902,25 @@ const PRECOMPUTE_SCRIPT = `
  // -1=error), mirroring sort-service.ts / canonicalize-service.ts.
  const { workerData } = require('worker_threads');
  const { tailwindNodePath, cssPath: WD_CSS_PATH, cachePath: WD_CACHE_PATH, tmpPath: WD_TMP_PATH, sharedBuffer } = workerData;
@@ -550,7 +635,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  function signalError(e) {
    try {
      const msg = Buffer.from(String((e && e.message) || e || 'unknown precompute error'), 'utf-8');
-@@ -2905,9 +2934,12 @@ function signalError(e) {
+@@ -2905,9 +2928,12 @@ function signalError(e) {
      errDataArea.set(msg.subarray(0, n), 0);
      errLengthView.setUint32(0, n);
    } catch {}
@@ -563,7 +648,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  // Everything below — including the top-level require()s — runs inside this try
  // so any SYNCHRONOUS module-scope failure (a broken @tailwindcss/node install,
  // missing fs/path) is routed through signalError. Without it the worker would
-@@ -2919,6 +2951,7 @@ try {
+@@ -2919,6 +2945,7 @@ try {
  // workspaces (the module lives under node_modules/.pnpm/... which is not on the
  // resolution path from the consumer's project root).
  const { __unstable__loadDesignSystem } = require(tailwindNodePath);
@@ -571,18 +656,19 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  const { readFileSync, writeFileSync, renameSync } = require('fs');
  const { dirname, resolve } = require('path');
  
-@@ -3072,7 +3105,9 @@ async function main() {
+@@ -3072,8 +3099,10 @@ async function main() {
  
    const cssPath = WD_CSS_PATH;
    const css = readFileSync(cssPath, 'utf-8');
 +  setPhase(3);
    const base = dirname(cssPath);
-+  setPhase(4);
 -  const ds = await __unstable__loadDesignSystem(css, { base });
++  setPhase(4);
 +  const ds = await __unstable__loadDesignSystem(css, { base }); setPhase(8);
    phase('load');
  
-@@ -3107,6 +3142,7 @@ async function main() {
+   // Tailwind v4 project prefix (\`@import "tailwindcss" prefix(tw)\`). getClassList()
+@@ -3107,6 +3136,7 @@ async function main() {
    // invisible to no-conflicting-classes (\`rounded rounded-lg\` never reported).
    const declCss = {};
    for (let i = 0; i < classNames.length; i++) {
@@ -590,7 +676,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
      if (cssResults[i] != null) declCss[classNames[i]] = cssResults[i];
    }
  
-@@ -3152,6 +3188,7 @@ async function main() {
+@@ -3152,6 +3182,7 @@ async function main() {
      // without the prefix (the prefix only affects the selector).
      const arbResults = ds.candidatesToCss(arbForms.map(pfx));
      for (let i = 0; i < candidates.length; i++) {
@@ -598,7 +684,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
        if (!arbResults[i]) continue;
        if (extractDeclarations(arbResults[i]) === extractDeclarations(candidates[i].namedCss)) {
          arbitraryEquivalents[candidates[i].arbitraryForm] = candidates[i].namedCls;
-@@ -3214,6 +3251,7 @@ async function main() {
+@@ -3214,6 +3245,7 @@ async function main() {
    if (extraCandidates.length > 0) {
      const extraResults = ds.candidatesToCss(extraCandidates.map(pfx));
      for (let i = 0; i < extraCandidates.length; i++) {
@@ -606,7 +692,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
        if (extraResults[i] != null) {
          validClasses.push(extraCandidates[i]);
          validSet.add(extraCandidates[i]);
-@@ -3236,6 +3274,7 @@ async function main() {
+@@ -3236,6 +3268,7 @@ async function main() {
    if (negativeProbes.length > 0) {
      const negResults = ds.candidatesToCss(negativeProbes.map(pfx));
      for (let i = 0; i < negativeProbes.length; i++) {
@@ -614,7 +700,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
        if (negResults[i] != null && !validSet.has(negativeProbes[i])) {
          validClasses.push(negativeProbes[i]);
          validSet.add(negativeProbes[i]);
-@@ -3428,6 +3467,7 @@ async function main() {
+@@ -3428,6 +3461,7 @@ async function main() {
    const declIds = new Map();
    const table = [];
    for (let i = 0; i < sortedKeys.length; i++) {
@@ -622,7 +708,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
      declIds.set(sortedKeys[i], i);
      const parts = sortedKeys[i].split('|');
      table.push(
-@@ -3482,6 +3522,7 @@ async function main() {
+@@ -3482,6 +3516,7 @@ async function main() {
    const variantOrder = {};
    const variants = ds.getVariants();
    for (let i = 0; i < variants.length; i++) {
@@ -630,7 +716,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
      if (!variants[i].isArbitrary) {
        variantOrder[variants[i].name] = i;
      }
-@@ -3547,6 +3588,7 @@ async function main() {
+@@ -3547,6 +3582,7 @@ async function main() {
    // pushing one entry per occurrence only inflated the cache artifact.
    const attrClassRe = /\\[class~="([^"]+)"\\]/g;
    for (let i = 0; i < cssResults.length; i++) {
@@ -638,7 +724,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
      if (cssResults[i]) {
        let acm;
        attrClassRe.lastIndex = 0;
-@@ -3634,6 +3676,7 @@ async function main() {
+@@ -3634,6 +3670,7 @@ async function main() {
      const probes = [...knownPrefixes];
      const probeResults = ds.candidatesToCss(probes.map(p => pfx(p + '-1')));
      for (let i = 0; i < probes.length; i++) {
@@ -646,7 +732,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
        const css = probeResults[i];
        if (!css) continue;
        // \`size-1\` emits width AND height, both reading the unit — one match is enough.
-@@ -3671,7 +3714,7 @@ async function main() {
+@@ -3671,7 +3708,7 @@ async function main() {
    renameSync(WD_TMP_PATH, WD_CACHE_PATH);
  }
  main()
@@ -655,7 +741,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
    .catch((e) => signalError(e));
  } catch (e) {
    signalError(e);
-@@ -3976,6 +4019,48 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -3976,6 +4013,48 @@ function precomputeLoadError(resolvedPath, cause) {
  	return new DesignSystemLoadError(`Failed to precompute design system from "${resolvedPath}": ${causeError?.message ?? String(cause)}`, precomputeHint(cause), { cause: causeError });
  }
  /**
@@ -704,9 +790,12 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  * Run the precompute in a worker_thread (not a forked child). The worker loads
  * the design system in-process, writes the JSON straight to `cachePath`, and
  * signals completion over a SharedArrayBuffer; the main thread blocks on
-@@ -3989,9 +4074,9 @@ function precomputeLoadError(resolvedPath, cause) {
+@@ -3987,11 +4066,11 @@ function precomputeLoadError(resolvedPath, cause) {
+ * The worker writes the result itself, so this returns nothing — callers read
+ * it back from `cachePath`.
  */
- function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
+-function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
++function runPrecomputeViaWorkerOnce(resolvedPath, tailwindNodePath, cachePath, timeout) {
  	const sharedBuffer = new SharedArrayBuffer(ERR_BUFFER_SIZE);
 -	const control = new Int32Array(sharedBuffer, 0, 4);
 -	const errLengthView = new DataView(sharedBuffer, 16, 4);
@@ -717,17 +806,33 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  	const tmpPath = `${cachePath}.tmp.${process.pid}.${threadId}.${precomputeSeq++}`;
  	try {
  		new Function(PRECOMPUTE_SCRIPT);
-@@ -4015,7 +4100,8 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+@@ -4015,7 +4094,8 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
  	}
  	worker.on("error", () => {});
  	try {
 -		if (Atomics.wait(control, PRECOMPUTE_SIGNAL_INDEX, 0, timeout) === "timed-out") throw new DesignSystemLoadError(`Timed out precomputing design system from "${resolvedPath}" after ${timeout}ms.`, "Raise `settings.tailwindcss.timeout` if your machine or CI runner is slow, or verify the CSS imports resolve.");
 +		const outcome = waitForWorkerSignal(control, PRECOMPUTE_SIGNAL_INDEX, () => `the design-system precompute of "${resolvedPath}"`);
-+		if (!outcome.answered) throw new DesignSystemLoadError(`The design-system precompute stopped answering while ${outcome.phase} from "${resolvedPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The precompute worker stopped answering; verify the CSS imports resolve.");
++		if (!outcome.answered) throw new RetryableWorkerLoadError(`The design-system precompute stopped answering while ${outcome.phase} from "${resolvedPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The precompute worker stopped answering after one retry; verify the CSS imports resolve.");
  		if (control[PRECOMPUTE_SIGNAL_INDEX] === -1) {
  			const len = errLengthView.getUint32(0);
  			throw precomputeLoadError(resolvedPath, len > 0 ? new Error(Buffer.from(errDataArea.slice(0, len)).toString("utf-8")) : /* @__PURE__ */ new Error("precompute worker exited without reporting a cause (it may have been killed by the OS, e.g. under memory pressure)"));
-@@ -4391,9 +4477,9 @@ function allowUntestedEngineFromSettings(settings) {
+@@ -4032,6 +4112,15 @@ function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeo
+ * malformed payload surfaces as a clear diagnostic here instead of crashing
+ * later in `DesignSystemCache.fromPrecomputed`.
+ */
++function runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout) {
++	try {
++		runPrecomputeViaWorkerOnce(resolvedPath, tailwindNodePath, cachePath, timeout);
++		return;
++	} catch (err) {
++		if (!(err instanceof RetryableWorkerLoadError)) throw err;
++	}
++	runPrecomputeViaWorkerOnce(resolvedPath, tailwindNodePath, cachePath, timeout);
++}
+ function precomputeAndRead(resolvedPath, tailwindNodePath, cachePath, timeout) {
+ 	runPrecomputeViaWorker(resolvedPath, tailwindNodePath, cachePath, timeout);
+ 	const data = tryReadCache(cachePath);
+@@ -4391,13 +4480,14 @@ function allowUntestedEngineFromSettings(settings) {
  * the DS-optional caller of the declaration service catches it and degrades.
  */
  const BUFFER_SIZE = 4194304;
@@ -740,7 +845,12 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  const INIT_TIMEOUT = 6e4;
  const REQUEST_TIMEOUT = 3e4;
  const MAX_CONSECUTIVE_REQUEST_FAILURES = 3;
-@@ -4435,46 +4521,77 @@ const MAX_WORKERS = 8;
+ const REQUEST_STICKY_BACKOFF_MS = 6e4;
++var RetryableWorkerLoadError = class extends SortServiceError {};
+ /**
+ * Per-request timeout override for slow-but-functional machines (#145). A
+ * machine whose cold canonicalize sits close to the 30 s default times out
+@@ -4435,46 +4525,83 @@ const MAX_WORKERS = 8;
  */
  function makeWorkerScript(handlerExpr, preamble = "", warmupExpr = "") {
  	return `
@@ -822,11 +932,17 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
 +    setPhase(3);
 +    base = dirname(workerData.cssPath);
 +    setPhase(4);
++    if (workerData.testTracePath) require('fs').appendFileSync(workerData.testTracePath, String(workerData.loadAttempt) + '\\n');
++    if (workerData.testHook === 'stall-first-load' && workerData.loadAttempt === 0) {
++      stopHeartbeat();
++      await new Promise(() => {});
++    }
 +    if (workerData.testHook === 'stop-heartbeat') {
 +      stopHeartbeat();
 +      await new Promise(() => {});
 +    }
 +    if (workerData.testHook === 'slow-heartbeat') await new Promise((resolve) => setTimeout(resolve, workerData.testDelayMs));
++    if (workerData.testHook === 'fail-load') throw new Error('injected declarations worker load failure');
 +    if (workerData.testHook === 'busy-load') {
 +      const until = performance.now() + workerData.testDelayMs;
 +      while (performance.now() < until) {}
@@ -844,7 +960,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
    let stockPromise = null;
    const env = {
      loadStock() {
-@@ -4482,50 +4599,47 @@ async function main() {
+@@ -4482,50 +4609,47 @@ async function main() {
        return stockPromise;
      },
    };
@@ -910,7 +1026,40 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  `;
  }
  var DesignSystemWorker = class {
-@@ -4619,7 +4733,7 @@ var DesignSystemWorker = class {
+@@ -4584,9 +4708,9 @@ var DesignSystemWorker = class {
+ 		const existing = this.workers.get(cssPath);
+ 		if (existing && !existing.ready) {
+ 			this.workers.delete(cssPath);
+-			this.waitReady(existing);
+-			this.workers.set(cssPath, existing);
+-			return existing;
++			const ready = this.waitReadyWithRetry(existing);
++			this.workers.set(cssPath, ready);
++			return ready;
+ 		}
+ 		if (existing) {
+ 			this.workers.delete(cssPath);
+@@ -4594,10 +4718,10 @@ var DesignSystemWorker = class {
+ 			return existing;
+ 		}
+ 		const state = this.spawn(cssPath);
+-		this.waitReady(state);
+-		this.workers.set(cssPath, state);
++		const ready = this.waitReadyWithRetry(state);
++		this.workers.set(cssPath, ready);
+ 		this.evictIfNeeded();
+-		return state;
++		return ready;
+ 	}
+ 	/**
+ 	* Start the worker for `cssPath` without waiting for it: it loads the design
+@@ -4614,12 +4738,12 @@ var DesignSystemWorker = class {
+ 		} catch {}
+ 	}
+ 	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
+-	spawn(cssPath, warm) {
++	spawn(cssPath, warm, loadAttempt = 0) {
+ 		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
  		const controlArray = new Int32Array(sharedBuffer, 0, HEADER_INTS);
@@ -919,19 +1068,42 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  		const dataArea = new Uint8Array(sharedBuffer, DATA_OFFSET);
  		let worker;
  		try {
-@@ -4629,7 +4743,9 @@ var DesignSystemWorker = class {
+@@ -4629,7 +4753,11 @@ var DesignSystemWorker = class {
  					sharedBuffer,
  					cssPath,
  					tailwindNodePath,
 -					warm
 +					warm,
 +					testHook: process.env.OXLINT_TAILWINDCSS_WORKER_TEST_HOOK,
++					testTracePath: process.env.OXLINT_TAILWINDCSS_WORKER_TEST_TRACE_PATH,
++					loadAttempt,
 +					testDelayMs: parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS) ?? 0
  				}
  			});
  		} catch (cause) {
-@@ -4653,9 +4769,10 @@ var DesignSystemWorker = class {
- 	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
+@@ -4650,12 +4778,30 @@ var DesignSystemWorker = class {
+ 			ready: false
+ 		};
+ 	}
+-	/** Wait for a spawned worker's design system; throws (and remembers) on failure. */
++	/** Retry one silent initial load with a fresh worker before making it sticky. */
++	waitReadyWithRetry(state) {
++		try {
++			this.waitReady(state);
++			return state;
++		} catch (err) {
++			if (!(err instanceof RetryableWorkerLoadError)) throw err;
++		}
++		const retry = this.spawn(state.cssPath, void 0, 1);
++		try {
++			this.waitReady(retry);
++			return retry;
++		} catch (err) {
++			if (err instanceof RetryableWorkerLoadError) throw this.remember(state.cssPath, err);
++			throw err;
++		}
++	}
++	/** Wait for a spawned worker's design system; worker-reported errors are sticky. */
  	waitReady(state) {
  		const { worker, controlArray, lengthView, dataArea, cssPath } = state;
 -		if (Atomics.wait(controlArray, 2, 0, INIT_TIMEOUT) === "timed-out") {
@@ -939,11 +1111,11 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
 +		if (!outcome.answered) {
  			this.terminateWorker(worker);
 -			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker timed out loading the design system from "${cssPath}" after ${INIT_TIMEOUT}ms.`, "Verify the CSS imports resolve; this can also happen if the machine or CI runner is heavily loaded."));
-+			throw this.remember(cssPath, new SortServiceError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The worker stopped answering; verify the CSS imports resolve."));
++			throw new RetryableWorkerLoadError(`${this.opts.serviceName} worker stopped answering while ${outcome.phase} from "${cssPath}" (no heartbeat for ${Math.round(outcome.silentMs / 1e3)} s).`, "The worker stopped answering after one retry; verify the CSS imports resolve.");
  		}
  		if (controlArray[2] === -1) {
  			const len = lengthView.getUint32(0);
-@@ -4682,12 +4799,16 @@ var DesignSystemWorker = class {
+@@ -4682,12 +4828,16 @@ var DesignSystemWorker = class {
  	callSync(cssPath, req) {
  		const state = this.ensure(cssPath);
  		const requestBytes = Buffer.from(JSON.stringify(req), "utf-8");
@@ -962,7 +1134,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
  		const responseLen = state.lengthView.getUint32(0);
  		const responseStr = Buffer.from(state.dataArea.slice(0, responseLen)).toString("utf-8");
  		Atomics.store(state.controlArray, 1, 0);
-@@ -5506,6 +5627,7 @@ const declWorker = new DesignSystemWorker({
+@@ -5506,6 +5656,7 @@ const declWorker = new DesignSystemWorker({
    // stays lenient instead of flagging a transient false "unknown class") from a
    // FALSY result (compiles to nothing → invalid).
    for (let i = 0; i < request.classes.length; i++) {
