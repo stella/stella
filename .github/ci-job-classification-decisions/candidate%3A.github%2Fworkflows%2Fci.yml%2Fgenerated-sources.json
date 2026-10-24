@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Produces generated-source artifacts required by merge-gating package checks.",
+  "reviewedDigest": "e9d3b0c8712d60465d6a9fdc941b4ebdfeb6406c0466bb8a414510b3341676b1"
+}
