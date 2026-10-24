@@ -739,6 +739,12 @@ const isPreDeployRowCopy = (text: string): boolean =>
     /\bCREATE\s+MATERIALIZED\s+VIEW\b/iu.test(text)) &&
     !/\bWITH\s+NO\s+DATA\b/iu.test(text));
 
+// SQL `SELECT ... INTO t` creates and fills table t. Inside a PL/pgSQL body
+// the same words assign a variable, so callers apply it to top-level
+// statements and EXECUTE command strings only.
+const isSelectIntoTable = (text: string): boolean =>
+  /^\s*(?:WITH\b[\s\S]*?)?\bSELECT\b[\s\S]*?\bINTO\b/iu.test(text);
+
 // A command string a DO block runs through EXECUTE, judged by the same
 // detectors as a plain statement. format() placeholders (`%I`, `%1$s`) stand
 // in for names, so they are read as one.
@@ -747,6 +753,7 @@ const isRefusedPreDeployCommand = (command: string): boolean =>
     (statement) =>
       isPreDeployUpdate(statement) ||
       isPreDeployRowCopy(statement.text) ||
+      isSelectIntoTable(statement.text) ||
       isPreDeployValidateConstraint(statement.text),
   );
 
@@ -778,7 +785,10 @@ const STATEMENT_INVARIANT_RULES = [
     id: "pre-deploy-row-copy",
     description:
       "copies or materialises existing rows (INSERT ... SELECT, MERGE, CREATE TABLE AS, a populated materialized view) during the pre-deploy phase",
-    matches: ({ deferred, text }) => !deferred && isPreDeployRowCopy(text),
+    matches: ({ deferred, enclosingLine, text }) =>
+      !deferred &&
+      (isPreDeployRowCopy(text) ||
+        (enclosingLine === undefined && isSelectIntoTable(text))),
     guidance: ONLINE_BACKFILL_GUIDANCE,
   },
   {

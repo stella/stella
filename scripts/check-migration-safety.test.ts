@@ -366,6 +366,14 @@ describe("check-migration-safety", () => {
           "pre-deploy-row-copy",
         ],
         [
+          `SELECT * INTO "documents_copy" FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE 'SELECT * INTO documents_copy FROM documents'; END $$;`,
+          "pre-deploy-dynamic-sql",
+        ],
+        [
           `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents";`,
           "pre-deploy-row-copy",
         ],
@@ -439,6 +447,7 @@ describe("check-migration-safety", () => {
         `CREATE TABLE "documents_shape" AS SELECT * FROM "documents" WITH NO DATA;`,
         `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents" WITH NO DATA;`,
         `DO $$ BEGIN EXECUTE 'ALTER TABLE documents ADD COLUMN state text'; END $$;`,
+        `DO $$ DECLARE total bigint; BEGIN SELECT count(*) INTO total FROM pg_class; RAISE NOTICE '%', total; END $$;`,
         `DO $$ BEGIN EXECUTE 'GRANT SELECT, UPDATE ON documents TO stella'; END $$;`,
         `DO $$ BEGIN EXECUTE 'CREATE TABLE documents_shape AS SELECT * FROM documents WITH NO DATA'; END $$;`,
       ]) {
