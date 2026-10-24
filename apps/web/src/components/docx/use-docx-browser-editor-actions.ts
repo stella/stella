@@ -62,8 +62,8 @@ export const useDocxBrowserEditorActions = ({
   const { finalize: finalizeActiveSession, state } = editSession;
 
   // Registers this render's action handles into the parent-provided ref
-  // and/or keyed map. Wrapped in useCallback (stable unless actionsKey /
-  // actionsMapRef / actionsRef change) so useImperativeHandle only
+  // and/or keyed map. The React Compiler keeps it stable unless actionsKey /
+  // actionsMapRef / actionsRef change, so useImperativeHandle only
   // re-attaches for those changes or for its own dep list below.
   const registerActions = (actions: DocxBrowserEditorActions | null) => {
     if (!actions) {
