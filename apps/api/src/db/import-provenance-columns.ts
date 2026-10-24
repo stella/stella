@@ -8,6 +8,15 @@ import {
 
 import { timestamptz } from "./columns";
 
+export const IMPORT_PROVENANCE_TABLES = [
+  "contacts",
+  "workspaces",
+  "time_entries",
+  "expenses",
+  "invoices",
+  "correspondence",
+] as const;
+
 /**
  * Provenance of a row brought in by an import: the system it came from, its
  * identifier there, and when the import last wrote it. All three stay null
@@ -34,7 +43,7 @@ type ImportProvenanceTable = {
  * ref is whole (source with id) and always stamped with its import time.
  */
 export const importProvenanceConstraints = (
-  tableName: string,
+  tableName: (typeof IMPORT_PROVENANCE_TABLES)[number],
   table: ImportProvenanceTable,
 ) => [
   p

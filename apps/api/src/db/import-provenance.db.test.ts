@@ -4,13 +4,19 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { organization } from "@/api/db/auth-schema";
 import { contacts } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
+import { IMPORT_PROVENANCE_TABLES } from "./import-provenance-columns";
+import {
+  ONLINE_CONSTRAINT_VALIDATIONS,
+  ONLINE_MIGRATION_INDEXES,
+} from "./online-migrations";
 
 /**
  * Migration `20261014130000_import_provenance`: `external_source`,
@@ -28,15 +34,6 @@ const MIGRATION_SQL = readFileSync(
   ),
   "utf-8",
 );
-
-const IMPORTABLE_TABLES = [
-  "contacts",
-  "workspaces",
-  "time_entries",
-  "expenses",
-  "invoices",
-  "correspondence",
-] as const;
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -102,7 +99,7 @@ afterAll(async () => {
 });
 
 describe("import provenance schema", () => {
-  test.each(IMPORTABLE_TABLES)(
+  test.each(IMPORT_PROVENANCE_TABLES)(
     "%s carries the columns, unique index and registered online index",
     async (table) => {
       const columns = await db.execute<{ name: string; type: string }>(sql`
@@ -135,15 +132,20 @@ describe("import provenance schema", () => {
     },
   );
 
-  test("the migration's index and CHECK statements are the schema's", async () => {
+  test("pre-deploy adds CHECKs and leaves scans to the online registry", async () => {
     const indexStatements = migrationStatements(
       /^CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "\w+_org_external_uidx"/u,
     );
-    expect(indexStatements).toHaveLength(IMPORTABLE_TABLES.length);
+    expect(indexStatements).toHaveLength(0);
 
-    const checkNames = IMPORTABLE_TABLES.map(
+    const checkNames = IMPORT_PROVENANCE_TABLES.map(
       (table) => `${table}_external_ref_check`,
     );
+    expect(
+      ONLINE_CONSTRAINT_VALIDATIONS.filter(({ constraintName }) =>
+        checkNames.some((name) => name === constraintName),
+      ).map(({ constraintName }) => constraintName),
+    ).toEqual(checkNames);
     const checkDefinitions = async () =>
       Object.fromEntries(
         (
@@ -158,13 +160,15 @@ describe("import provenance schema", () => {
         ).rows.map(({ name, definition }) => [name, definition]),
       );
     const fromSchema = await checkDefinitions();
-    expect(Object.keys(fromSchema).toSorted()).toEqual(checkNames.toSorted());
+    expect(Object.keys(fromSchema).toSorted(compareCodeUnit)).toEqual(
+      checkNames.toSorted(compareCodeUnit),
+    );
 
     const checkStatements = migrationStatements(
       /^ALTER TABLE "\w+" ADD CONSTRAINT "\w+_external_ref_check"/u,
     );
-    expect(checkStatements).toHaveLength(IMPORTABLE_TABLES.length);
-    for (const table of IMPORTABLE_TABLES) {
+    expect(checkStatements).toHaveLength(IMPORT_PROVENANCE_TABLES.length);
+    for (const table of IMPORT_PROVENANCE_TABLES) {
       await db.execute(
         sql.raw(
           `ALTER TABLE "${table}" DROP CONSTRAINT "${table}_external_ref_check"`,
@@ -174,7 +178,7 @@ describe("import provenance schema", () => {
     for (const statement of checkStatements) {
       await db.execute(sql.raw(statement));
     }
-    for (const table of IMPORTABLE_TABLES) {
+    for (const table of IMPORT_PROVENANCE_TABLES) {
       await db.execute(
         sql.raw(
           `ALTER TABLE "${table}" VALIDATE CONSTRAINT "${table}_external_ref_check"`,

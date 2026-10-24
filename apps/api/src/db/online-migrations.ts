@@ -39,6 +39,10 @@ import {
 } from "./decision-date-ceiling-repair";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import {
+  IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  IMPORT_PROVENANCE_CONSTRAINTS,
+} from "./import-provenance-constraint-validation";
+import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
 } from "./list-verification-constraint-validation";
@@ -833,6 +837,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that
@@ -854,6 +859,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 
 type PresentIndexState = {
