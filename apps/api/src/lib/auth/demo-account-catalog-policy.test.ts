@@ -168,6 +168,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/vat-rates/archive.ts",
   "apps/api/src/handlers/vat-rates/create.ts",
   "apps/api/src/handlers/vat-rates/list.ts",
+  "apps/api/src/handlers/vat-rates/presets/create.ts",
   "apps/api/src/handlers/vat-rates/update.ts",
   "apps/api/src/handlers/views/table/export.ts",
   "apps/api/src/handlers/workspaces/correspondence/address/create.ts",

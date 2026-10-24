@@ -47,6 +47,7 @@ import {
   vatRateStatus,
 } from "@/routes/_protected.admin/-components/organization/vat-rate-display";
 import { VatRateForm } from "@/routes/_protected.admin/-components/organization/vat-rate-form";
+import { presetResultWhenCommandStarts } from "@/routes/_protected.admin/-components/organization/vat-rates-card.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 type RateDialog =
@@ -74,6 +75,10 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
   const t = useTranslations();
   const query = useInfiniteQuery(vatRatesOptions(organizationId));
   const [dialog, setDialog] = useState<RateDialog>({ type: "closed" });
+  const [presetResult, setPresetResult] = useState<{
+    added: number;
+    skipped: number;
+  } | null>(null);
   const mutation = useSettingsMutation({
     mutationFn: sendVatRateCommand,
     invalidate: vatRatesKeys.all(organizationId),
@@ -98,10 +103,16 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
     if (mutation.isPending) {
       return;
     }
+    setPresetResult((current) =>
+      presetResultWhenCommandStarts(command, current),
+    );
     const result = await Result.tryPromise(async () =>
       mutation.mutateAsync(command),
     );
     if (Result.isOk(result)) {
+      if (command.type === "applyPreset" && "added" in result.value) {
+        setPresetResult(result.value);
+      }
       setDialog({ type: "closed" });
       mutation.reset();
     }
@@ -133,13 +144,47 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
               {t("billing.vatRates.description")}
             </p>
           </div>
-          <Button
-            onClick={() => open({ type: "create" })}
-            disabled={mutation.isPending}
-          >
-            {t("billing.vatRates.add")}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() =>
+                detached(
+                  run({ type: "applyPreset", country: "SK" }),
+                  "vat-rates.preset-sk",
+                )
+              }
+            >
+              {t("billing.vatRates.addSlovakia")}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() =>
+                detached(
+                  run({ type: "applyPreset", country: "CZ" }),
+                  "vat-rates.preset-cz",
+                )
+              }
+            >
+              {t("billing.vatRates.addCzechia")}
+            </Button>
+            <Button
+              onClick={() => open({ type: "create" })}
+              disabled={mutation.isPending}
+            >
+              {t("billing.vatRates.add")}
+            </Button>
+          </div>
         </div>
+        {presetResult !== null && (
+          <p className="text-muted-foreground text-sm" role="status">
+            {t("billing.vatRates.presetResult", {
+              added: String(presetResult.added),
+              skipped: String(presetResult.skipped),
+            })}
+          </p>
+        )}
         {query.isPending && (
           <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
         )}
