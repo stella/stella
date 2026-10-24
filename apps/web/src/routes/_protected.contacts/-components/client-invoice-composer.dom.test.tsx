@@ -193,7 +193,9 @@ const { ClientInvoiceComposer } = await import("./client-invoice-composer");
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
   await act(async () => cleanup());
-  for (const client of clients) client.clear();
+  for (const client of clients) {
+    client.clear();
+  }
   clients.length = 0;
   requests.length = 0;
 });
