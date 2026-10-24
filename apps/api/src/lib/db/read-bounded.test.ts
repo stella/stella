@@ -29,7 +29,7 @@ describe("complete reads bounded per group", () => {
         },
         {
           cap,
-          readRows: (builder) => {
+          readRows: async (builder) => {
             expect(builder).toBe(limited);
             return Promise.resolve(
               sourceRows.filter(({ index }) => index < builder.perGroupLimit),
@@ -66,7 +66,7 @@ describe("complete reads bounded per group", () => {
       },
       {
         cap,
-        readRows: (limited) => {
+        readRows: async (limited) => {
           reads += 1;
           return Promise.resolve(limited);
         },
@@ -88,7 +88,7 @@ describe("complete reads bounded per group", () => {
       { limit: () => rows },
       {
         cap: 2,
-        readRows: () => Promise.reject(failure).then(() => rows),
+        readRows: async () => Promise.reject(failure).then(() => rows),
         groupKeyOf: (row) => row.group,
       },
     ).then(
