@@ -82,19 +82,15 @@ export const writePersistedSidebarOpen = (
 ) => {
   const value = sidebarStateValue(open);
   document.documentElement.setAttribute(SIDEBAR_STATE_ATTRIBUTE, value);
-  if (!("cookieStore" in globalThis)) {
-    // Serialize responses so a slower earlier toggle cannot replace the
-    // cookie written by the user's latest choice.
-    const save = async () => {
+  const cookieStore =
+    "cookieStore" in globalThis ? globalThis.cookieStore : undefined;
+  // Both persistence paths retain toggle order when an earlier write is slow.
+  const save = async () => {
+    if (cookieStore === undefined) {
       await persist({ data: open });
-    };
-    const pending = sidebarPersistence.then(save, save);
-    sidebarPersistence = pending;
-    detached(pending, "sidebar-state.persist");
-    return;
-  }
-  detached(
-    globalThis.cookieStore.set({
+      return;
+    }
+    await cookieStore.set({
       name: SIDEBAR_STATE_COOKIE,
       value,
       path: "/",
@@ -102,7 +98,9 @@ export const writePersistedSidebarOpen = (
       expires: Temporal.Now.instant().add({
         hours: SIDEBAR_STATE_LIFETIME_HOURS,
       }).epochMilliseconds,
-    }),
-    "sidebar-state.persist",
-  );
+    });
+  };
+  const pending = sidebarPersistence.then(save, save);
+  sidebarPersistence = pending;
+  detached(pending, "sidebar-state.persist");
 };
