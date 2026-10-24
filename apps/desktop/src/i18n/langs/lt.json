@@ -38,7 +38,7 @@
     "reconnectAccount": "Iš naujo prisijungti prie stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
+    "checkpointDelayedBody": "{fileName}: pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
     "checkpointDelayedTitle": "Kontrolinio taško sinchronizavimas atidėtas",
     "diagnosticsCopiedBody": "Įklijuokite ją į savo palaikymo užklausą, kai reikės.",
     "diagnosticsCopiedTitle": "Diagnostika nukopijuota",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Vietiniai atkūrimo duomenys buvo atstatyti",
     "revisionCreatedBody": "{fileName} išsaugotas kaip versija {versionNumber}. Darbalaukio redagavimas baigtas",
     "revisionCreatedTitle": "stella versija sukurta",
-    "sessionClosedSaved": "{fileName} — Vietinė kopija išsaugoma Laikinose darbinėse kopijose",
-    "sessionClosedUnsaved": "{fileName} — Turite neišsaugotų vietinių pakeitimų. Savo kopiją rasite Laikinose darbinėse kopijose.",
-    "takenOverBody": "{fileName} — Iš naujo atidarykite iš stella, kad susigrąžintumėte redagavimą",
+    "sessionClosedSaved": "{fileName}: vietinė kopija išsaugoma Laikinose darbinėse kopijose",
+    "sessionClosedUnsaved": "{fileName}: turite neišsaugotų vietinių pakeitimų. Savo kopiją rasite Laikinose darbinėse kopijose.",
+    "takenOverBody": "{fileName}: iš naujo atidarykite iš stella, kad susigrąžintumėte redagavimą",
     "takenOverLocalError": "Darbalaukio redagavimas perkeltas į kitą įrenginį. Ši vietinė kopija yra išsaugota.",
     "takenOverTitle": "Redagavimas perkeltas į kitą įrenginį"
   },

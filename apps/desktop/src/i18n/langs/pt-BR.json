@@ -38,7 +38,7 @@
     "reconnectAccount": "Reconectar ao stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — As alterações permanecem locais e serão reenviadas automaticamente",
+    "checkpointDelayedBody": "{fileName}: as alterações permanecem locais e serão reenviadas automaticamente",
     "checkpointDelayedTitle": "Sincronização do ponto de controle atrasada",
     "diagnosticsCopiedBody": "Cole no seu pedido de suporte quando precisar.",
     "diagnosticsCopiedTitle": "Diagnósticos copiados",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Os dados locais de recuperação foram redefinidos",
     "revisionCreatedBody": "{fileName} salvo como versão {versionNumber}. Edição no desktop concluída",
     "revisionCreatedTitle": "Revisão da stella criada",
-    "sessionClosedUnsaved": "{fileName} — Você tem edições locais não salvas. Encontre sua cópia em Cópias de trabalho temporárias.",
-    "sessionClosedSaved": "{fileName} — A cópia local permanece preservada em Cópias de trabalho temporárias",
-    "takenOverBody": "{fileName} — Reabra pela stella aqui para retomar a edição",
+    "sessionClosedUnsaved": "{fileName}: você tem edições locais não salvas. Encontre sua cópia em Cópias de trabalho temporárias.",
+    "sessionClosedSaved": "{fileName}: a cópia local permanece preservada em Cópias de trabalho temporárias",
+    "takenOverBody": "{fileName}: reabra pela stella aqui para retomar a edição",
     "takenOverTitle": "A edição foi movida para outro dispositivo",
     "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada."
   },
