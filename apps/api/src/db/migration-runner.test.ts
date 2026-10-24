@@ -358,3 +358,34 @@ test("the schema ladder restores the session lock timeout after a failure", asyn
     "RESET lock_timeout",
   ]);
 });
+
+test("a terminated schema session preserves the observation failure without resetting it", async () => {
+  const failure = new Error("observation failed");
+  const statements: string[] = [];
+  let connectionState: "open" | "terminated" = "open";
+  const rejection = await applySchemaMigrationsRetryingLockWaits({
+    connection: {
+      unsafe: async (statement) => {
+        statements.push(statement);
+        throw new Error("connection closed");
+      },
+    },
+    connectionState: () => connectionState,
+    apply: async () => {
+      connectionState = "terminated";
+      throw failure;
+    },
+    ledgerUnchanged: async () => true,
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBe(failure);
+  expect(statements).toEqual([]);
+});
