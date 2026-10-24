@@ -1,9 +1,9 @@
 import { panic } from "better-result";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
+import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -12,11 +12,11 @@ import { measureReadFilesystemTree } from "@/api/tests/read-scaling/filesystem-t
 
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
-/** The same handler objects are mounted by Elysia and exercised by the harness. */
+/** The same endpoint definitions are mounted by the API and exercised by the harness. */
 export const readScalingScenarios = [
   {
     name: "entity list",
-    handler: readEntities.handler,
+    definition: readEntities,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await readEntities.handler(
@@ -31,7 +31,7 @@ export const readScalingScenarios = [
             route: "/v1/entities/:workspaceId/query",
           }),
         );
-        if (response instanceof ElysiaCustomStatusResponse) {
+        if (response instanceof HttpStatusResponse) {
           panic("Entity list scaling requires a successful handler response");
         }
         return {
@@ -44,12 +44,12 @@ export const readScalingScenarios = [
   },
   {
     name: "filesystem tree",
-    handler: readFilesystemTree.handler,
+    definition: readFilesystemTree,
     measure: measureReadFilesystemTree,
   },
   {
     name: "version history",
-    handler: readVersions.handler,
+    definition: readVersions,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const response = await readVersions.handler(
@@ -65,7 +65,7 @@ export const readScalingScenarios = [
             route: "/v1/entities/:workspaceId/entity/:entityId/versions",
           }),
         );
-        if (response instanceof ElysiaCustomStatusResponse) {
+        if (response instanceof HttpStatusResponse) {
           panic("Version scaling requires a successful handler response");
         }
         return {

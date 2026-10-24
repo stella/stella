@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 
 import {
   ledgerMergeBase,
@@ -27,25 +27,27 @@ const measuredApiScenarios = [
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
 ];
-const measuredApiReads = api.routes
-  .filter(({ handler }) =>
-    measuredApiScenarios.some((scenario) => scenario.handler === handler),
+const measuredApiReads = apiApp.routes
+  .filter(({ definition }) =>
+    measuredApiScenarios.some((scenario) => scenario.definition === definition),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
 test("every scaling scenario exercises a mounted API handler", () => {
   for (const scenario of measuredApiScenarios) {
-    expect(api.routes.some(({ handler }) => handler === scenario.handler)).toBe(
-      true,
-    );
+    expect(
+      apiApp.routes.some(
+        ({ definition }) => definition === scenario.definition,
+      ),
+    ).toBe(true);
   }
 });
 
 test("removing any mounted read scenario makes its coverage fail", () => {
-  const surface = apiScalingSurface(api.routes);
+  const surface = apiScalingSurface(apiApp.routes);
   for (const scenario of measuredApiScenarios) {
-    const mounted = api.routes.filter(
-      ({ handler }) => handler === scenario.handler,
+    const mounted = apiApp.routes.filter(
+      ({ definition }) => definition === scenario.definition,
     );
     expect(mounted.length, scenario.name).toBeGreaterThan(0);
     for (const { method, path: routePath } of mounted) {
@@ -78,18 +80,27 @@ test("every MCP scenario names a registered tool", () => {
   }
 });
 
-for (const { kind, surface, ledger, measured } of [
+// The HTTP core lists a route without the trailing slash Elysia gave a
+// prefix's index route; a base ledger may still spell it with one.
+const withoutTrailingSlash = (entries: string[]) =>
+  entries.map((entry) =>
+    entry.endsWith("/") && !entry.endsWith(" /") ? entry.slice(0, -1) : entry,
+  );
+
+for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
   {
     kind: "api",
-    surface: apiScalingSurface(api.routes),
+    surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
+    normalizeBaseEntries: withoutTrailingSlash,
   },
   {
     kind: "mcp",
     surface: mcpScalingSurface(DEFAULT_MCP_TOOL_DEFINITIONS),
     ledger: mcpLedger,
     measured: mcpScalingScenarios.map(({ name }) => name),
+    normalizeBaseEntries: undefined,
   },
 ]) {
   describe(`${kind} scaling census`, () => {
@@ -121,6 +132,7 @@ for (const { kind, surface, ledger, measured } of [
           ledgerRel: `apps/api/src/tests/read-scaling/${kind}-scaling-ledger.json`,
           repoRoot,
           parseLedger: parseScalingLedger,
+          normalizeBaseEntries,
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",

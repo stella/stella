@@ -1,3 +1,4 @@
+import type { BunRequest } from "bun";
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -23,6 +24,7 @@ import {
   runWithRequestScope,
 } from "@/api/lib/observability/request-scope";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Yield to the microtask queue so two counter contexts interleave their
 // increments; this is what would break a shared (non-ALS) counter.
@@ -215,40 +217,53 @@ describe("db query counter HTTP header", () => {
   test("integration HTTP requests reject per-row SQL through the server request scope", async () => {
     const httpScope: Middleware = async (_ctx, inner) =>
       await runWithHttpRequestScope(async () => await inner());
-    await using measured = serveForTest(
-      createHttpApp({
-        middleware: [httpScope],
-        routes: routes({
-          "/queries/:count": {
-            GET: {
-              access: "public",
-              config: {},
-              run: async ({ ctx }) => {
-                for (
-                  let index = 0;
-                  index < Number(ctx.params["count"]);
-                  index += 1
-                ) {
-                  queryCountLogger.logQuery(
-                    "SELECT id FROM matters WHERE id = $1",
-                    [index],
-                  );
-                }
-                return "ok";
-              },
+    const app = createHttpApp({
+      middleware: [httpScope],
+      routes: routes({
+        "/queries/:count": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              for (
+                let index = 0;
+                index < Number(ctx.params["count"]);
+                index += 1
+              ) {
+                queryCountLogger.logQuery(
+                  "SELECT id FROM matters WHERE id = $1",
+                  [index],
+                );
+              }
+              return "ok";
             },
           },
-        }),
+        },
       }),
-    );
-
-    const single = await measured.fetch("http://localhost/queries/1");
-    expect(single.status).toBe(200);
-    expect(await single.text()).toBe("ok");
-    // The repeated fingerprint fails the request once it settles; the unit
-    // tests above pin the error it fails with.
-    const repeated = await measured.fetch("http://localhost/queries/2");
-    expect(repeated.status).toBe(500);
+    });
+    // The mounted route, called in process: the measured scope fails the
+    // request after it settles, and that rejection is what is asserted.
+    const route = app.serveOptions.routes["/queries/:count"];
+    if (route === undefined) {
+      throw new TypeError("The probe route is not mounted");
+    }
+    const host = Bun.serve({ port: 0, fetch: () => new Response(null) });
+    const request = (count: string) =>
+      asTestRaw<BunRequest>(
+        Object.assign(new Request(`http://localhost/queries/${count}`), {
+          params: { count },
+        }),
+      );
+    try {
+      const single = await route(request("1"), host);
+      expect(single.status).toBe(200);
+      expect(await single.text()).toBe("ok");
+      expect(await rejectionOf(route(request("2"), host))).toMatchObject({
+        cause: expect.any(RepeatedQueryFingerprintError),
+      });
+    } finally {
+      await host.stop(true);
+    }
   });
 
   test("a request counts its own queries and no others", async () => {

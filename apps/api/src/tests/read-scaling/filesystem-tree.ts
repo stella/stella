@@ -1,7 +1,7 @@
 import { panic } from "better-result";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,7 +31,7 @@ export const measureReadFilesystemTree = async (
         route: "/v1/entities/:workspaceId/filesystem-tree",
       }),
     );
-    if (response instanceof ElysiaCustomStatusResponse) {
+    if (response instanceof HttpStatusResponse) {
       panic("Filesystem scaling requires a successful handler response");
     }
     return {
