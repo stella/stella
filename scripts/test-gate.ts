@@ -18,11 +18,11 @@ import {
 } from "./e2e-shard-plan-pin";
 import { allE2eShards } from "./e2e-spec-shards-core";
 import {
-  contextFromNested,
-  conjunctiveOutputConditions,
   compileOutputAliases,
-  type OutputAliasDefinition,
+  conjunctiveOutputConditions,
+  contextFromNested,
   evaluate,
+  type OutputAliasDefinition,
 } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
@@ -40,9 +40,9 @@ import {
   serviceConditionEvaluator,
 } from "./test-gate-service";
 import {
+  shardPackages,
   TEST_JOB_SHARDS,
   TEST_SHARD_IDS,
-  shardPackages,
   workspacePackages,
 } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -2523,11 +2523,7 @@ const packageScripts = (packageFile: string): PackageScripts | undefined => {
 type ShellToken = {
   readonly value: string;
   readonly role:
-    | "command"
-    | "argument"
-    | "assignment"
-    | "redirect"
-    | "operator";
+    "command" | "argument" | "assignment" | "redirect" | "operator";
 };
 
 const shellCommandSpan = (tokens: readonly ShellToken[], start: number) => {
@@ -4436,8 +4432,7 @@ type ValidatedRepositoryTestExecutionTopology =
   };
 
 let cachedRepositoryTestExecutionTopology:
-  | ValidatedRepositoryTestExecutionTopology
-  | undefined;
+  ValidatedRepositoryTestExecutionTopology | undefined;
 
 export const repositoryTestExecutionTopology =
   (): ValidatedRepositoryTestExecutionTopology => {
@@ -4715,13 +4710,11 @@ const configFieldRead = (
 ): boolean => {
   const node = wrappedConfigReference(identifier);
   const parent = node.parent;
-  if (
-    !(
-      (ts.isPropertyAssignment(parent) && parent.initializer === node) ||
-      (ts.isArrayLiteralExpression(parent) &&
-        parent.elements.some((element) => element === node))
-    )
-  ) {
+  if (!(
+    (ts.isPropertyAssignment(parent) && parent.initializer === node) ||
+    (ts.isArrayLiteralExpression(parent) &&
+      parent.elements.some((element) => element === node))
+  )) {
     return false;
   }
   let current: ts.Node = parent;
