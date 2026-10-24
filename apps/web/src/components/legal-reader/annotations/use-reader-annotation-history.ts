@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -28,8 +28,6 @@ import type {
   ReaderAnnotationStepOutcome,
   ReaderAnnotationWrites,
 } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 /** What a reader does to a mark, and the way back from it. */
@@ -83,17 +81,21 @@ export const useReaderAnnotationHistory = ({
     inFlight: new Set<Promise<void>>(),
     queue: Promise.resolve(),
   });
-  const latest = useLatestCallback(() => ({ identity: currentScope, writes }));
+  const latest = useRef({ identity: currentScope, writes });
+  // Async writes must see the committed scope before passive effects run.
+  useLayoutEffect(() => {
+    latest.current = { identity: currentScope, writes };
+  });
   const mounted = useRef(true);
-  useMountEffect(() => {
+  useLayoutEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
-  });
+  }, []);
 
   const current = () => {
-    if (!mounted.current || latest().identity !== currentScope) {
+    if (!mounted.current || latest.current.identity !== currentScope) {
       return null;
     }
     if (state.current.scope !== currentScope) {
@@ -112,7 +114,7 @@ export const useReaderAnnotationHistory = ({
     session: NonNullable<ReturnType<typeof current>>,
     change: (history: ReaderAnnotationHistory) => ReaderAnnotationHistory,
   ) => {
-    if (mounted.current && latest().identity === session.scope) {
+    if (mounted.current && latest.current.identity === session.scope) {
       session.history = change(session.history);
     }
   };
@@ -165,11 +167,11 @@ export const useReaderAnnotationHistory = ({
       return;
     }
     const run = async () => {
-      if (!mounted.current || latest().identity !== session.scope) {
+      if (!mounted.current || latest.current.identity !== session.scope) {
         return;
       }
       await Promise.allSettled([...session.inFlight]);
-      if (!mounted.current || latest().identity !== session.scope) {
+      if (!mounted.current || latest.current.identity !== session.scope) {
         return;
       }
       const taken = takeReaderAnnotationStep(session.history, direction);
@@ -185,10 +187,10 @@ export const useReaderAnnotationHistory = ({
       setHistory(session, () => taken.history);
       const { entry } = taken;
       const result = await performReaderAnnotationStep(
-        latest().writes,
+        latest.current.writes,
         entry.inverse,
       );
-      if (!mounted.current || latest().identity !== session.scope) {
+      if (!mounted.current || latest.current.identity !== session.scope) {
         return;
       }
       setHistory(session, (history) =>

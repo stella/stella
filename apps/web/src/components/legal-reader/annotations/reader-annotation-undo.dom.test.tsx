@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
@@ -10,6 +10,8 @@ import type { CreateAnnotationInput } from "@/components/legal-reader/annotation
 import type { GuestAnnotationStore } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
 import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import type { ReaderAnnotationController } from "./use-reader-annotation-history";
 
 GlobalRegistrator.register({ url: "https://app.example.test/reader" });
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =
@@ -295,12 +297,28 @@ const scopeInput = {
   ],
 } satisfies CreateAnnotationInput;
 
-const scopeHistory = (writes: ReaderAnnotationWrites) =>
+type ScopeHistoryProps = {
+  scope: string;
+  writes: ReaderAnnotationWrites;
+  onCommit?: (controller: ReaderAnnotationController) => void;
+  onDispose?: (controller: ReaderAnnotationController) => void;
+};
+
+const scopeHistory = (initialWrites: ReaderAnnotationWrites) =>
   renderHook(
-    (props: { scope: string; writes: ReaderAnnotationWrites }) =>
-      useReaderAnnotationHistory(props),
+    ({ scope, writes, onCommit, onDispose }: ScopeHistoryProps) => {
+      const controller = useReaderAnnotationHistory({ scope, writes });
+      useLayoutEffect(() => {
+        onCommit?.(controller);
+      });
+      useLayoutEffect(
+        () => () => onDispose?.(controller),
+        [controller, onDispose],
+      );
+      return controller;
+    },
     {
-      initialProps: { scope: "A", writes },
+      initialProps: { scope: "A", writes: initialWrites },
       wrapper: ({ children }) => (
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ToastProvider>{children}</ToastProvider>
@@ -404,4 +422,53 @@ test("unmounting discards an undo waiting on an earlier write", async () => {
     await Promise.all([creating, undoing]);
   });
   expect(store.calls).toHaveLength(1);
+});
+
+test("scope commit retires old work and accepts new writes before passive effects", async () => {
+  const a = recordingStore();
+  const b = recordingStore();
+  const pending = Promise.withResolvers<undefined>();
+  const view = scopeHistory({
+    ...a.writes,
+    create: async (input) => {
+      await pending.promise;
+      return await a.writes.create(input);
+    },
+  });
+  const previous = view.result.current;
+  const creating = previous.create(scopeInput);
+  const undoing = previous.undo();
+  const next = Promise.withResolvers<Promise<void>[]>();
+  view.rerender({
+    scope: "B",
+    writes: b.writes,
+    onCommit: (controller) => {
+      pending.resolve(undefined);
+      next.resolve([
+        previous.create(scopeInput),
+        controller.create(scopeInput),
+      ]);
+    },
+  });
+  await act(async () => {
+    await Promise.all([creating, undoing, ...(await next.promise)]);
+  });
+  expect(a.calls).toHaveLength(1);
+  expect(b.calls).toHaveLength(1);
+});
+
+test("unmount commit rejects stale writes before passive cleanup", async () => {
+  const store = recordingStore();
+  const view = scopeHistory(store.writes);
+  const completed = Promise.withResolvers<Promise<void>>();
+  view.rerender({
+    scope: "A",
+    writes: store.writes,
+    onDispose: (controller) => completed.resolve(controller.create(scopeInput)),
+  });
+  view.unmount();
+  await act(async () => {
+    await completed.promise;
+  });
+  expect(store.calls).toEqual([]);
 });
