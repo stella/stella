@@ -1467,6 +1467,8 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
         "$TURBO_ROOT$/scripts/check-write-contracts.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-contender.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-writer-gap.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
