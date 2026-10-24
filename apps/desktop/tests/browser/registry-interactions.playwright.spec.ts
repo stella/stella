@@ -90,6 +90,7 @@ const SNAPSHOT = {
   sourceAppExclusionLimit: 128,
   sourceAppExclusions: [],
   sourceAppVisuals: [],
+  welcomeStatus: "completed",
 } satisfies ClipboardSnapshot;
 
 type Connection =
@@ -113,6 +114,7 @@ type BoundaryMode =
   | "reject-disconnect";
 type BoundaryOptions = {
   mode?: BoundaryMode;
+  welcome?: boolean;
   settings?: boolean;
 };
 const SETTINGS_SNAPSHOT = {
@@ -303,6 +305,8 @@ const installNativeBoundary = async (
               return navigator.language === "ar" ? "ar" : "en";
             case "clipboard_get_snapshot":
               return clipboardSnapshot;
+            case "clipboard_complete_welcome":
+              return { ...clipboardSnapshot, welcomeStatus: "completed" };
             case "get_state":
               return settingsSnapshot;
             case "shortcut_get_snapshot":
@@ -324,6 +328,8 @@ const installNativeBoundary = async (
                 throw new TypeError("Deliberate connect failure");
               }
               return undefined;
+            case "is_autostart_enabled":
+              return false;
             case "plugin:event|listen":
               return args["handler"];
             case "plugin:event|unlisten":
@@ -409,7 +415,10 @@ const installNativeBoundary = async (
       formatResponse: FORMAT_RESPONSE,
       searchResponse: SEARCH_RESPONSE,
       secondResponse: SECOND_RESPONSE,
-      clipboardSnapshot: SNAPSHOT,
+      clipboardSnapshot: {
+        ...SNAPSHOT,
+        welcomeStatus: configuration.welcome ? "pending" : "completed",
+      },
       settingsSnapshot: SETTINGS_SNAPSHOT,
       accountSnapshot: account,
       windowLabel: configuration.settings ? "main" : "clipboard",
@@ -1228,6 +1237,115 @@ for (const language of ["en", "ar"] as const) {
     test.use({ locale: language });
     const messages = language === "ar" ? arMessages : enMessages;
 
+    test("welcome connects through the existing account action without clipboard data", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect(welcome).toHaveCSS(
+        "direction",
+        language === "ar" ? "rtl" : "ltr",
+      );
+      const connect = welcome.getByRole("button", {
+        name: messages.settings.connectToStella,
+        exact: true,
+      });
+      await expect(connect).toBeVisible();
+      await connect.click();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+      await expect(welcome).toBeVisible();
+    });
+
+    for (const status of [
+      "connected",
+      "disconnected",
+      "expired",
+      "reconnectRequired",
+    ] as const) {
+      test(`${status} welcome can finish without linking or opening an account`, async ({
+        page,
+      }) => {
+        const connection = (
+          status === "connected" ? connected() : { status }
+        ) satisfies Connection;
+        await installNativeBoundary(page, connection, { welcome: true });
+        await page.goto("/");
+        const welcome = page.getByRole("dialog");
+        await expect(welcome).toBeVisible();
+        await welcome
+          .getByRole("button", {
+            name: messages.clipboard.welcomeStart,
+            exact: true,
+          })
+          .click();
+        await expect(welcome).toHaveCount(0);
+        await expect
+          .poll(async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) => command === "clipboard_complete_welcome",
+            ),
+          )
+          .toEqual([{ command: "clipboard_complete_welcome", args: {} }]);
+        expect(
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        ).toEqual([]);
+        await expect(
+          page.locator('[data-clipboard-id="private-clip"]'),
+        ).toBeVisible();
+      });
+    }
+
+    test("expired welcome explains expiry and reconnects through the existing account action", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "expired" },
+        { welcome: true },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(
+        welcome.getByText(messages.settings.connectionExpiredDescription, {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await welcome
+        .getByRole("button", {
+          name: messages.settings.reconnectToStella,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+      await expect(welcome).toBeVisible();
+    });
+
     test("Settings can disable and re-enable crash and error reporting", async ({
       page,
     }) => {
@@ -1328,7 +1446,7 @@ for (const language of ["en", "ar"] as const) {
         .toEqual([{ command: "open_stella_account", args: {} }]);
     });
 
-    for (const surface of ["settings", "registry"] as const) {
+    for (const surface of ["welcome", "settings", "registry"] as const) {
       for (const mode of ["normal", "reject-disconnect"] as const) {
         test(`${surface} missing device key reconnect ${mode} clears credentials before opening the account`, async ({
           page,
@@ -1338,6 +1456,7 @@ for (const language of ["en", "ar"] as const) {
             { status: "reconnectRequired" },
             {
               mode,
+              welcome: surface === "welcome",
               settings: surface === "settings",
             },
           );
@@ -1346,7 +1465,7 @@ for (const language of ["en", "ar"] as const) {
             await activateRegistry(page, "Synthetic company");
             expect(await searches(page)).toEqual([]);
           }
-          const area = page;
+          const area = surface === "welcome" ? page.getByRole("dialog") : page;
           if (surface === "settings") {
             await expect(
               page.getByText(messages.settings.reconnectNeeded, {
@@ -1400,9 +1519,182 @@ for (const language of ["en", "ar"] as const) {
             ).toBeVisible();
           }
           expect(await searches(page)).toEqual([]);
+          if (surface === "welcome") {
+            await expect(page.getByRole("dialog")).toBeVisible();
+          }
         });
       }
     }
+
+    test("connected welcome omits the connect prompt", async ({ page }) => {
+      await installNativeBoundary(page, connected(), { welcome: true });
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) => command === "registry_get_state",
+            ).length,
+        )
+        .toBeGreaterThan(0);
+      await page.evaluate(async () => {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+          });
+        });
+      });
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByText(messages.settings.connectToStellaDescription, {
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+    });
+
+    test("loading welcome never pretends the account is disconnected", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true, mode: "defer-first-state" },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      // Wait for the requested messages before asserting the loading state.
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.tryAgain,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect
+        .poll(
+          async () =>
+            (await readInvocations(page)).filter(
+              ({ command }) => command === "registry_get_state",
+            ).length,
+        )
+        .toBe(1);
+      await page.evaluate(() => {
+        const resolve = Reflect.get(window, "__STELLA_RESOLVE_FIRST_STATE__");
+        if (typeof resolve !== "function") {
+          throw new TypeError("Missing state resolver");
+        }
+        resolve();
+      });
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toBeVisible();
+    });
+
+    test("failed connection lookup exposes retry and recovers", async ({
+      page,
+    }) => {
+      await installNativeBoundary(page, connected(), {
+        welcome: true,
+        mode: "reject-first-state",
+      });
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome.getByRole("alert")).toHaveText(
+        messages.clipboard.registryErrorState,
+      );
+      expect(
+        (await readInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ),
+      ).toHaveLength(1);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await welcome
+        .getByRole("button", { name: messages.settings.tryAgain, exact: true })
+        .click();
+      await expect(welcome.getByRole("alert")).toHaveCount(0);
+      expect(
+        (await readInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ),
+      ).toHaveLength(2);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.tryAgain,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+    });
+
+    test("failed connect remains recoverable through the same account action", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true, mode: "reject-first-connect" },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      const connect = welcome.getByRole("button", {
+        name: messages.settings.connectToStella,
+        exact: true,
+      });
+      await connect.click();
+      await expect(welcome.getByRole("alert")).toHaveText(
+        messages.clipboard.registryErrorConnect,
+      );
+      await connect.click();
+      await expect(welcome.getByRole("alert")).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          (await readInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([
+          { command: "open_stella_account", args: {} },
+          { command: "open_stella_account", args: {} },
+        ]);
+    });
 
     for (const status of ["connected", "disconnected"] as const) {
       test(`${status} Settings header keeps its complete subtitle at the native window size`, async ({
