@@ -62,7 +62,7 @@ describe("extractMcpSession", () => {
       if (authenticated.isErr()) {
         panic("The valid export token must authenticate", authenticated.error);
       }
-      expect(authenticated.value.scopes).toEqual(expectedScopes);
+      expect(authenticated.value.scopes).toEqual([...expectedScopes]);
       for (const access of ["read", "write"] as const) {
         expect(
           hasAccountExportAuthority(
