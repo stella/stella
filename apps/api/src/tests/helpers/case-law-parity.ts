@@ -51,6 +51,15 @@ const PARITY_FIXTURES = {
   (documentUrl: URL) => EnrolledAdapterFixture
 >;
 
+export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) => {
+  const originalFetch = globalThis.fetch;
+  try {
+    return await fixture.buildDecision();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+};
+
 export const parserParityOutput = async (
   entry: ParserParityEntry,
 ): Promise<ParserParityOutput> => {
@@ -58,9 +67,9 @@ export const parserParityOutput = async (
     getAdapter(entry.adapterKey) ??
     panic(`Unknown parity adapter ${entry.adapterKey}`);
   const fixtureFactory = PARITY_FIXTURES[entry.adapterKey];
-  const decision = await fixtureFactory(
-    new URL(entry.fixture, INGESTION_ROOT),
-  ).buildDecision();
+  const decision = await buildCaseLawFixture(
+    fixtureFactory(new URL(entry.fixture, INGESTION_ROOT)),
+  );
   const reparse = adapter.reparseStoredRaw;
   if (reparse === undefined || decision.sourceRaw === undefined) {
     return parityOutputOf(decision);

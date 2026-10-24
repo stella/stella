@@ -4,7 +4,7 @@
  * The fixture and adapter maps are both total over the registry. Adding an
  * adapter therefore enrolls it here without another hand-maintained list.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -17,11 +17,10 @@ import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion"
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
+  buildCaseLawFixture,
   replayParsedOutput as parsedOutput,
   replayParserFingerprint as fingerprint,
 } from "@/api/tests/helpers/case-law-parity";
-
-const originalFetch = globalThis.fetch;
 
 const compareCodeUnits = (left: string, right: string): number => {
   if (left === right) {
@@ -29,10 +28,6 @@ const compareCodeUnits = (left: string, right: string): number => {
   }
   return left < right ? -1 : 1;
 };
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
 
 type DurableRow = {
   readonly id: string;
@@ -112,8 +107,10 @@ describe("every case-law adapter is replay safe", () => {
   for (const adapter of listAdapters()) {
     test(`${adapter.key}: fixture output and transactional replay conform`, async () => {
       const fixture = CASE_LAW_CONFORMANCE_FIXTURES[adapter.key];
-      const first = await fixture().buildDecision();
-      const replay = await fixture().buildDecision();
+      const originalFetch = globalThis.fetch;
+      const first = await buildCaseLawFixture(fixture());
+      const replay = await buildCaseLawFixture(fixture());
+      expect(globalThis.fetch).toBe(originalFetch);
 
       expect(identityOf(replay), "replay changed the durable identity").toBe(
         identityOf(first),

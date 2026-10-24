@@ -5,6 +5,7 @@ import { PARSER_PARITY_MANIFEST } from "@/api/handlers/case-law/ingestion/parser
 import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
+  buildCaseLawFixture,
   parityGoldenUrl,
   parserParityOutput,
   replayParserFingerprint,
@@ -20,26 +21,20 @@ for (const entry of PARSER_PARITY_MANIFEST) {
 }
 
 // Outside a test runner, fixture publisher requests use Redis coordination.
-const fingerprints: Record<string, { version: number; fingerprint: string }> =
-  {};
-const originalFetch = globalThis.fetch;
-try {
-  for (const adapter of listAdapters()) {
-    const fixture = CASE_LAW_CONFORMANCE_FIXTURES[adapter.key];
-    const decision = await fixture().buildDecision();
-    fingerprints[adapter.key] = {
-      version: PARSER_VERSIONS[adapter.key],
-      fingerprint: replayParserFingerprint(decision),
-    };
-    globalThis.fetch = originalFetch;
-  }
-} finally {
-  globalThis.fetch = originalFetch;
+const fingerprints = new Map<
+  string,
+  { version: number; fingerprint: string }
+>();
+for (const adapter of listAdapters()) {
+  const fixture = CASE_LAW_CONFORMANCE_FIXTURES[adapter.key];
+  const decision = await buildCaseLawFixture(fixture());
+  fingerprints.set(adapter.key, {
+    version: PARSER_VERSIONS[adapter.key],
+    fingerprint: replayParserFingerprint(decision),
+  });
 }
 const ordered = Object.fromEntries(
-  Object.entries(fingerprints).toSorted(([left], [right]) =>
-    compareCodeUnit(left, right),
-  ),
+  [...fingerprints].toSorted(([left], [right]) => compareCodeUnit(left, right)),
 );
 await Bun.write(
   new URL(
