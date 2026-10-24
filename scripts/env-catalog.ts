@@ -1571,6 +1571,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_WEB_STATUTES_URL",
   "JOURNEY_WEB_URL",
   "LANDING_SITE",
+  // Release pull request refresh: the main commit it plans from.
+  "MAIN_SHA",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
   "MARKETING_THEME",
@@ -1647,6 +1649,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_GATE_DIR",
+  // Release pull request refresh: open release numbers and the release to update.
+  "RELEASE_NUMBERS",
+  "RELEASE_PULL_REQUEST",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
