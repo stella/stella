@@ -5,8 +5,8 @@ defaults:
     shell: bash
 
 on:
-  schedule:
-    - cron: "26 * * * *"
+  # Release-candidate staging runs these journeys itself; staging is off
+  # otherwise, so a standing schedule would only fail or wake it.
   workflow_dispatch:
     inputs:
       target:
@@ -190,9 +190,7 @@ jobs:
 
   scheduled:
     name: Scheduled target journeys
-    if: >-
-      github.event_name == 'schedule'
-      || (github.event_name == 'workflow_dispatch' && inputs.target == 'scheduled')
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'scheduled'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
