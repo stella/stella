@@ -699,6 +699,24 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261022233000_mcp_web_handoff",
+    form: "create-table-references",
+    reason:
+      "Foreign keys are installed with a new empty table, so no existing rows are scanned; the 1s lock_timeout bounds referenced-table lock acquisition.",
+  },
+  {
+    migration: "20261022233000_mcp_web_handoff",
+    form: "add-column",
+    reason:
+      "The two session columns are nullable and default-free catalog additions under a 1s lock_timeout, without a heap rewrite.",
+  },
+  {
+    migration: "20261022233000_mcp_web_handoff",
+    form: "add-foreign-key",
+    reason:
+      "The session foreign key is added NOT VALID, avoiding an existing-row scan while the 1s lock_timeout bounds locks on session and oauth_consent.",
+  },
+  {
     migration: "20261015060000_folio_collab_saved_snapshot_cut",
     form: "add-column",
     reason:

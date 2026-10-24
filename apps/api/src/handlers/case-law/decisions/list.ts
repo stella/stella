@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import { isUuid } from "@stll/uuid-codec";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -149,11 +149,19 @@ const decisionFilterConditions = (
     conditions.push(eq(decision.court, query.court));
   }
   conditions.push(eq(decision.country, query.country));
+  // Date bounds compare the walk's own sort key, so both browse indexes take
+  // them as a range of the walk; on the bare column they filter a walk that
+  // starts at the newest decision. The key gives undated rows `-infinity`: a
+  // lower bound excludes them, an upper bound alone must exclude them itself.
+  const sortKey = decisionDateSortKeySql(decision.decisionDate);
   if (query.dateFrom) {
-    conditions.push(sql`${decision.decisionDate} >= ${query.dateFrom}`);
+    conditions.push(sql`${sortKey} >= ${query.dateFrom}::date`);
   }
   if (query.dateTo) {
-    conditions.push(sql`${decision.decisionDate} <= ${query.dateTo}`);
+    conditions.push(sql`${sortKey} <= ${query.dateTo}::date`);
+    if (!query.dateFrom) {
+      conditions.push(sql`${sortKey} > '-infinity'::date`);
+    }
   }
   if (query.decisionType) {
     conditions.push(

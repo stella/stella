@@ -39,7 +39,7 @@ test("abort waits for backend cancellation before closing the session", async ()
         started.resolve(undefined);
         return await query.promise;
       },
-      release: () => {
+      release: async () => {
         events.push("release");
       },
       close: async () => {
@@ -82,7 +82,7 @@ test("abort between statements refuses the next statement", async () => {
         statements.push(statement);
         return statement.includes("pg_backend_pid") ? [{ pid: 42 }] : [];
       },
-      release: () => {},
+      release: async () => {},
       close: async () => {},
     }),
     cancelBackend: async () => {},
@@ -113,7 +113,9 @@ test("failed backend cancellation is reported before the session closes", async 
     const run = withDedicatedReservedSession({
       reserve: async () => ({
         unsafe: async () => [{ pid: 42 }],
-        release: () => events.push("release"),
+        release: async () => {
+          events.push("release");
+        },
         close: async () => {
           expect(
             logs.records.some(

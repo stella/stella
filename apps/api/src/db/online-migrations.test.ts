@@ -20,14 +20,14 @@ import type {
 } from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
+  ensureOnlineIndexValid,
   ONLINE_CONSTRAINT_VALIDATIONS,
   ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
-  ensureOnlineIndexValid,
-  runOnlineMigrations as runOnlineMigrationsWithGate,
   type OnlineRepairOptions,
+  runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
@@ -71,6 +71,9 @@ const reserveHealthyObserver =
     query: async (query) => {
       if (query.includes("pg_backend_pid() AS pid")) {
         return [{ pid: 2, database: "test" }];
+      }
+      if (query.includes('"stateAgeMs"')) {
+        return [];
       }
       if (query.includes("ageMs")) {
         return [{ ageMs: 0, observedAt: new Date(testClock()).toISOString() }];
@@ -1556,7 +1559,7 @@ const createHarness = ({
           }
           if (
             query.trim() ===
-            "SELECT to_regprocedure('public.entity_feature_gate_finish()') IS NOT NULL AS installed"
+            "SELECT to_regproc('public.entity_feature_gate_finish') IS NOT NULL AS installed"
           ) {
             return [{ installed: false }];
           }

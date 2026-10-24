@@ -11,12 +11,12 @@ import { copyRichToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
+  AddCommentIcon,
   Building2Icon,
   ChevronDownIcon,
   CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
-  AddCommentIcon,
   SparklesIcon,
   StrikethroughIcon,
   Trash2Icon,
@@ -57,7 +57,8 @@ import {
   selectionAnchorsFrom,
 } from "@/components/legal-reader/annotations/selection-anchor";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
-import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
+import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
+import { useReaderAnnotationShortcuts } from "@/components/legal-reader/annotations/use-reader-annotation-shortcuts";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
@@ -186,6 +187,13 @@ export const AnnotationToolbar = ({
   );
   const activateAnnotation = useLatestCallback(onActivateAnnotation);
   const clearActive = useLatestCallback(onClearActive);
+
+  useReaderAnnotationShortcuts({
+    onRedo: controller.redo,
+    onUndo: controller.undo,
+    scrollContainerRef,
+    surfaceRefs: [barRef, copyMenuRef],
+  });
 
   useMountEffect(() => {
     const root = scrollContainerRef.current;

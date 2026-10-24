@@ -38,7 +38,7 @@ describe("online DDL lock census", () => {
   });
 
   test("unknown DDL in a gated SQL template fails the census", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`CREATE MATERIALIZED VIEW probe_view AS SELECT 1\`);`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`CREATE MATERIALIZED VIEW probe_view AS SELECT 1\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /unknown|unclassified|unsupported/iu,
     );
@@ -52,57 +52,57 @@ describe("online DDL lock census", () => {
   });
 
   test("the dynamic create SQL exception is scoped to its checked builder", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", createSql);`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: createSql });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /createSql pass-through lacks an anchored concurrent-index AST proof/iu,
     );
   });
 
   test("every lock-taking conditional branch must resolve to literal SQL", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", condition ? "ALTER TABLE probe ADD COLUMN added text" : suppliedSql);`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: condition ? "ALTER TABLE probe ADD COLUMN added text" : suppliedSql });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /lockTaking SQL argument .* unresolved SQL variant/iu,
     );
   });
 
   test("a template substitution is unresolved even when its value could contain SQL", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`ALTER TABLE probe ADD COLUMN added text \${suppliedSql}\`);`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`ALTER TABLE probe ADD COLUMN added text \${suppliedSql}\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /lockTaking SQL argument .* unresolved SQL variant/iu,
     );
   });
 
   test("a raw string interpolation is unresolved", () => {
-    const source = `${ownerSource}\nconst rawSql = "NOT NULL; DROP TABLE probe";\nconst fixture = lockTaking("probe", \`ALTER TABLE probe ADD COLUMN added text \${rawSql}\`);`;
+    const source = `${ownerSource}\nconst rawSql = "NOT NULL; DROP TABLE probe";\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`ALTER TABLE probe ADD COLUMN added text \${rawSql}\` });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /lockTaking SQL argument .* unresolved SQL variant/iu,
     );
   });
 
   test("the quoted-identifier interpolation allowance resolves", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`ANALYZE public.\${quoteIdentifier(tableName)}\`);`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`ANALYZE public.\${quoteIdentifier(tableName)}\` });`;
     expect(censusOnlineDdlSource(source)).toEqual([]);
   });
 
   test("the literal-branch interpolation allowance resolves every branch", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", \`DROP INDEX CONCURRENTLY \${ifExists ? "IF EXISTS " : ""}public.probe_idx\`);`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: \`DROP INDEX CONCURRENTLY \${ifExists ? "IF EXISTS " : ""}public.probe_idx\` });`;
     expect(censusOnlineDdlSource(source)).toEqual([]);
   });
 
   test("a fully literal lock-taking conditional classifies every branch", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", condition ? "ALTER TABLE probe ADD COLUMN first text" : "ALTER TABLE probe ADD COLUMN second text");`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: condition ? "ALTER TABLE probe ADD COLUMN first text" : "ALTER TABLE probe ADD COLUMN second text" });`;
     expect(censusOnlineDdlSource(source)).toEqual([]);
   });
 
   test("every resolved lock-taking conditional branch must be classified", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", condition ? "ALTER TABLE probe ADD COLUMN added text" : "SELECT 1; CREATE MATERIALIZED VIEW hidden AS SELECT 1;");`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: condition ? "ALTER TABLE probe ADD COLUMN added text" : "SELECT 1; CREATE MATERIALIZED VIEW hidden AS SELECT 1;" });`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /unclassified SQL statement: SELECT 1/iu,
     );
   });
 
   test("every statement in a lock-taking literal must be classified", () => {
-    const source = `${ownerSource}\nconst fixture = lockTaking("probe", "ALTER TABLE probe ADD COLUMN first text; ALTER TABLE probe ADD COLUMN second text;");`;
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", lockQueue: "blocks_writers", text: "ALTER TABLE probe ADD COLUMN first text; ALTER TABLE probe ADD COLUMN second text;" });`;
     expect(censusOnlineDdlSource(source)).toEqual([]);
   });
 
@@ -114,7 +114,7 @@ describe("online DDL lock census", () => {
   });
 
   test("table sessions cannot be constructed outside the approved gates", () => {
-    const source = `${ownerSource}\nconst fixture = sessionOn(connection, target).run(async () => {});`;
+    const source = `${ownerSource}\nconst fixture = sessionOn(connection, target, lockRetry).run(async () => {});`;
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /sessionOn .* is outside runGatedTableWork or createUngatedTableGateForTests/iu,
     );
@@ -122,12 +122,52 @@ describe("online DDL lock census", () => {
 
   test("gated table work must use the connection passed to runtime.attempt", () => {
     const source = ownerSource.replace(
-      "sessionOn(guardedConnection, target)",
-      "sessionOn(connection, target)",
+      "sessionOn(guardedConnection, target, lockRetry)",
+      "sessionOn(connection, target, lockRetry)",
     );
     expect(source).not.toBe(ownerSource);
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /sessionOn .* must use the guarded runtime\.attempt connection/iu,
+    );
+  });
+  test("writer-blocking SQL cannot use the beside-writers queue", () => {
+    const source = `${ownerSource}\nconst fixture = lockTaking({ tableName: "probe", text: "ALTER TABLE probe ADD COLUMN added text", lockQueue: "beside_writers" });`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /must use blocks_writers/iu,
+    );
+  });
+
+  test("a block cannot hide an unresolved statement array", () => {
+    const source = `${ownerSource}\nconst fixture = accessExclusive(tableName, suppliedStatements);`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /literal statement array/iu,
+    );
+  });
+
+  test.each([
+    ['text.includes(";") || text.includes(BLOCK_TAG)', 'text.includes(";")'],
+    ['lockQueue: "blocks_writers",', 'lockQueue: "beside_writers",'],
+    ["const builtTable = match?.at(2);", "const builtTable = match?.at(1);"],
+    ["text: spliced(createSql),", "text: createSql,"],
+    ['mode: "enable" | "force",', "mode: string,"],
+    ["if (!declaration.online)", "if (false)"],
+    ['return `"${identifier}"`;', "return identifier;"],
+  ])("the owner proof rejects weakened SQL boundaries: %s", (before, after) => {
+    const source = ownerSource.replace(before, after);
+    expect(source).not.toBe(ownerSource);
+    expect(censusOnlineDdlSource(source).length).toBeGreaterThan(0);
+  });
+
+  test("a private policy SQL builder cannot escape the branded execution path", () => {
+    const source = `${ownerSource}\nconst escaped = createPolicyText(policy);`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /ACCESS EXCLUSIVE.*lockTaking/iu,
+    );
+  });
+  test("an ungated anonymous block cannot hide writer-blocking DDL", () => {
+    const source = `${ownerSource}\nconst fixture = \`DO $$ BEGIN ALTER TABLE public.probe ADD COLUMN added text; END $$\`;`;
+    expect(censusOnlineDdlSource(source).join("\n")).toMatch(
+      /ACCESS EXCLUSIVE.*lockTaking/iu,
     );
   });
 });

@@ -3,9 +3,9 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/utils";
 
 import {
+  FLOW_RUN_STATUS_LABEL_KEYS,
   FLOW_STATUS_STYLES,
   FLOW_STEP_STATUS_LABEL_KEYS,
-  FLOW_RUN_STATUS_LABEL_KEYS,
   FLOW_TRIGGER_TYPE_ICONS,
   FLOW_TRIGGER_TYPE_LABEL_KEYS,
   type FlowRunStatus,

@@ -18,13 +18,10 @@ import {
 } from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
-import {
-  ChatSubmitPreservedError,
-  useChatComposerWiring,
-} from "@/components/chat-editor-provider";
+import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
-  ChatInputDraft,
+  ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
@@ -32,8 +29,8 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import {
-  ComposerPlusMenu,
   type ComposerContextMenuProps,
+  ComposerPlusMenu,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -62,7 +59,7 @@ type ChatInputSurfaceProps = {
    * Both variants keep the (+) at the start of the bottom action row.
    */
   variant?: "compact" | "large";
-  onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  onSubmit: ChatSend;
   onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
    * When set, the surface renders an in-line stop button while
@@ -175,9 +172,6 @@ export const ChatInputSurface = ({
   // failure into telemetry alone leaves the send silently lost.
   const handleSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
       getAnalytics().captureError(error);
       notifyUserError(error, t("common.somethingWentWrong"));
     },
