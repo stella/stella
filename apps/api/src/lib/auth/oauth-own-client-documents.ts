@@ -2,8 +2,8 @@ import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
 
 import {
   buildMobileClientMetadataDocument,
-  mobileClientMetadataUrl,
   type MobileClientMetadataDocument,
+  mobileClientMetadataUrl,
 } from "@stll/api-contract/mobile-client";
 import {
   buildCliClientMetadataDocument,
@@ -29,8 +29,7 @@ export const getCliClientMetadataDocument = ():
  * there.
  */
 export const getMobileClientMetadataDocument = ():
-  | MobileClientMetadataDocument
-  | undefined => {
+  MobileClientMetadataDocument | undefined => {
   const clientId = mobileClientMetadataUrl(getAuthIssuerUrl());
   return clientId ? buildMobileClientMetadataDocument(clientId) : undefined;
 };
