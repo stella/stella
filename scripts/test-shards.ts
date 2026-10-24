@@ -4,8 +4,8 @@
 //
 // The `test` task is the longest step in CI, so it runs as a matrix of shards
 // (ci-tests in .github/workflows/ci.yml) instead of one serial job; within the
-// api shard, apps/api/scripts/run-tests.ts runs batches in parallel lanes sized
-// to the runner's cores and memory. A shard is expressed as an exclusion of every package it
+// api shard, apps/api/scripts/run-tests.ts runs `bun test --parallel` workers
+// sized to the runner's cores. A shard is expressed as an exclusion of every package it
 // does not own, because Turbo unions positive filters and subtracts negative
 // ones: adding `--filter=@stll/web` to the scope filters that
 // scripts/test-scope.ts prints would widen the run, while `--filter=!@stll/web`

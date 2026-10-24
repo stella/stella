@@ -189,10 +189,7 @@ test("API sub-shards cover every discovered file exactly once, including new fil
   expect(new Set(selected).size).toBe(input.length);
 });
 
-const FULL_API_SUITE_EXEMPTIONS = {
-  ".github/workflows/api-test-memory.yml/measure/Measure every test in this shard":
-    "The memory profiler uses a dedicated numeric matrix to measure every API file serially.",
-} as const;
+const FULL_API_SUITE_EXEMPTIONS: Readonly<Record<string, string>> = {};
 
 const WorkflowCensusSchema = v.object({
   jobs: v.record(

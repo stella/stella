@@ -3,65 +3,6 @@ import { panic } from "better-result";
 import { printError } from "@stll/errors";
 
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
-import { testFileDurationWeights } from "./test-timings";
-
-export const API_TEST_LANES_ENV = "API_TEST_LANES";
-
-/**
- * Upper bound for the derived CI lane count. Every batch is its own `bun test`
- * process, and PGlite's WASM and the garbage collector keep more than one
- * thread busy per process, so a fourth lane on a four-core runner mostly adds
- * contention instead of throughput.
- */
-export const MAX_DERIVED_TEST_LANES = 3;
-
-const BYTES_PER_MB = 1024 * 1024;
-const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/u;
-const DISABLED_FLAG_VALUES = new Set(["", "0", "false"]);
-
-type DeriveTestLaneCountOptions = {
-  availableParallelism: number;
-  env: Readonly<Record<string, string | undefined>>;
-  /** The largest per-batch peak-RSS budget one lane may hold at once. */
-  laneMemoryBudgetMb: number;
-  totalMemoryBytes: number;
-};
-
-/**
- * How many test batches run at the same time. An explicit `API_TEST_LANES`
- * wins. On CI the count follows the runner: one core stays free for the
- * runner itself, and each lane must fit the largest batch budget in physical
- * memory, so a smaller runner degrades to fewer lanes (down to serial) rather
- * than running out of memory. Local runs stay serial unless asked, keeping
- * their output streamed live.
- */
-export const deriveTestLaneCount = ({
-  availableParallelism,
-  env,
-  laneMemoryBudgetMb,
-  totalMemoryBytes,
-}: DeriveTestLaneCountOptions): number => {
-  const explicit = env[API_TEST_LANES_ENV]?.trim();
-  if (explicit !== undefined && explicit.length > 0) {
-    if (!POSITIVE_INTEGER_PATTERN.test(explicit)) {
-      panic(
-        `${API_TEST_LANES_ENV} must be a positive integer, received "${explicit}"`,
-      );
-    }
-    return Number(explicit);
-  }
-
-  const ci = env["CI"]?.trim().toLowerCase();
-  if (ci === undefined || DISABLED_FLAG_VALUES.has(ci)) {
-    return 1;
-  }
-
-  const coreLanes = Math.floor(availableParallelism) - 1;
-  const memoryLanes = Math.floor(
-    totalMemoryBytes / BYTES_PER_MB / laneMemoryBudgetMb,
-  );
-  return Math.max(1, Math.min(MAX_DERIVED_TEST_LANES, coreLanes, memoryLanes));
-};
 
 /**
  * Heavy batches carry the largest peak-RSS budget; running one at a time
@@ -71,31 +12,6 @@ export const isExclusiveTestBatch = (kind: TestBatchKind): boolean =>
   kind === TEST_BATCH_KIND.heavyLogic || kind === TEST_BATCH_KIND.heavyDb;
 
 type LaneBatch = { readonly kind: TestBatchKind };
-
-/** Stable longest-expected-first order; execution constraints stay in runInLanes. */
-export const orderBatchesForLanes = <
-  TBatch extends LaneBatch & { readonly testFiles: readonly string[] },
->(
-  batches: readonly TBatch[],
-  durations: Readonly<Record<string, number>>,
-): TBatch[] => {
-  const weights = testFileDurationWeights(
-    batches.flatMap(({ testFiles }) => testFiles),
-    durations,
-  );
-  return batches
-    .map((batch) => ({
-      batch,
-      seconds: batch.testFiles.reduce(
-        (total, file) =>
-          total +
-          (weights[file] ?? panic(`Missing resolved duration for ${file}`)),
-        0,
-      ),
-    }))
-    .toSorted((left, right) => right.seconds - left.seconds)
-    .map(({ batch }) => batch);
-};
 
 export type LaneOutcome<TBatch> = {
   readonly batch: TBatch;
@@ -207,20 +123,4 @@ export const runInLanes = async <TBatch extends LaneBatch>({
     batch,
     exitCode: exitCodes.at(index) ?? null,
   }));
-};
-
-/**
- * The run's exit code: the first failing batch's, in start order. A run that
- * left batches unstarted without a failure was interrupted, never a pass.
- */
-export const laneRunExitCode = (
-  outcomes: readonly LaneOutcome<unknown>[],
-): number => {
-  const failureExitCode = outcomes
-    .map(({ exitCode }) => exitCode)
-    .find((exitCode) => exitCode !== null && exitCode !== 0);
-  if (failureExitCode !== undefined && failureExitCode !== null) {
-    return failureExitCode;
-  }
-  return outcomes.some(({ exitCode }) => exitCode === null) ? 1 : 0;
 };

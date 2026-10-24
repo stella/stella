@@ -12,8 +12,8 @@ import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopbac
  * auth handler, with only the browser and the loopback listener simulated.
  *
  * The deployment's public address is https here, as in production, so this
- * file runs in a process of its own (`SOLO_TEST_PATHS`) and sets it before
- * anything reads the environment. Requests to it are served in process by
+ * file sets it before anything reads the environment; `bun test --parallel`
+ * keeps the change inside this file. Requests to it are served in process by
  * the local server.
  */
 

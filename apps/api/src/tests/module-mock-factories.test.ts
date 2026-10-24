@@ -7,11 +7,25 @@ import {
   readModuleExports,
   readModuleMockFactories,
   resolveModuleFile,
+  resolveModuleSpecifier,
 } from "./module-mock-factories";
+
+test("canonicalizes alias, relative, and bare specifiers", () => {
+  expect(
+    resolveModuleSpecifier("@/api/lib/analytics/capture", "src/x.test.ts"),
+  ).toBe("src/lib/analytics/capture");
+  expect(
+    resolveModuleSpecifier("../analytics/capture", "src/lib/chat/x.test.ts"),
+  ).toBe("src/lib/analytics/capture");
+  expect(
+    resolveModuleSpecifier("./capture.ts", "src/lib/analytics/x.test.ts"),
+  ).toBe("src/lib/analytics/capture");
+  expect(resolveModuleSpecifier("bullmq", "src/x.test.ts")).toBe("bullmq");
+});
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 // Assembled so this file does not read as a module-mock call site to the
-// runner's scan (scripts/run-tests.ts) or to the batcher.
+// call-site census below.
 const MOCK_CALL = ["mock", "module("].join(".");
 
 const apiSourceFiles = [

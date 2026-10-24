@@ -1440,11 +1440,10 @@
         "generate:capability-runtime"
       ],
       "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
-      // Lane count and diagnostics destinations never change test results;
-      // pass them through without entering the cache key.
+      // Report and timing destinations never change test results; pass
+      // them through without entering the cache key.
       "passThroughEnv": [
         "API_TEST_ARTIFACT_DIR",
-        "API_TEST_LANES",
         "API_TEST_TIMINGS_DIR",
         "API_TEST_DURATIONS_FILE"
       ],

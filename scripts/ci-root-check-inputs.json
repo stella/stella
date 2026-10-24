@@ -480,7 +480,6 @@
     "Test changed e2e shard selection": [
       "apps/web/e2e/shard-count.ts",
       "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
-      "apps/api/src/tests/module-mock-batching.ts",
       ".github/workflows/ci.yml",
       "scripts/**"
     ],
