@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+
 import messages from "@/i18n/langs/en.json";
 import type { AccountDataExportStatus } from "@/lib/account/account-data-export-queries";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -22,6 +24,7 @@ let latestExport: AccountDataExportStatus | null = null;
 let deferredLatestExportResponse: Promise<Response> | null = null;
 let deferredPostResponse: Promise<Response> | null = null;
 const requestedPaths: string[] = [];
+const declaredExportCapabilities: (string | null)[] = [];
 const latestGetSignals: AbortSignal[] = [];
 
 const requestUrl = (input: RequestInfo | URL): string => {
@@ -51,6 +54,11 @@ globalThis.fetch = Object.assign(
       return Response.json({ latest: latestExport });
     }
     if (url.pathname === "/v1/me/data-exports" && method === "POST") {
+      declaredExportCapabilities.push(
+        new Headers(init?.headers ?? request?.headers).get(
+          CAPABILITY_REQUEST_HEADER,
+        ),
+      );
       if (deferredPostResponse) {
         const response = deferredPostResponse;
         deferredPostResponse = null;
@@ -82,6 +90,7 @@ afterEach(async () => {
   deferredLatestExportResponse = null;
   deferredPostResponse = null;
   requestedPaths.length = 0;
+  declaredExportCapabilities.length = 0;
   latestGetSignals.length = 0;
 });
 
@@ -131,6 +140,7 @@ test("a person requests, waits for, and downloads their account export", async (
   );
   expect(await screen.findByText("Preparing your export…")).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
+  expect(declaredExportCapabilities).toEqual(["account-exports.create"]);
 
   latestExport = {
     id: "0199d851-071b-7000-8000-000000000001",

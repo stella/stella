@@ -22,6 +22,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -44,7 +45,10 @@ export const PersonalDataExportCard = () => {
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: latestOptions.queryKey });
     },
-    mutationFn: async () => unwrapEden(await api.me["data-exports"].post()),
+    mutationFn: async () =>
+      await invokeCapability("account-exports.create", async (request) =>
+        unwrapEden(await api.me["data-exports"].post(undefined, request)),
+      ),
     onSuccess: async (status) => {
       queryClient.setQueryData(latestOptions.queryKey, status);
       await queryClient.invalidateQueries({ queryKey: latestOptions.queryKey });

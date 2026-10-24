@@ -112,7 +112,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       await expectStepUp(
         await accountExportsRoute.handle(
           new Request(
-            `http://localhost${path.replaceAll(":exportId", Bun.randomUUIDv7())}`,
+            `http://localhost${path.replaceAll(":exportId", () => Bun.randomUUIDv7())}`,
             { method, headers },
           ),
         ),
@@ -218,7 +218,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       panic("Expected the signed-in account snapshot");
     }
     const sessionId = snapshot.response.session.id;
-    await db.delete(session).where(eq(session.id, sessionId));
+    await getAuth().api.signOut({ headers: human.browser.headers() });
     expect(
       await db
         .select({ id: session.id })
