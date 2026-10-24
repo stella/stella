@@ -251,7 +251,7 @@ jobs:
 
       # Install hooks run before a write-capable credential exists in the job.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash scripts/retry.sh bun install --frozen-lockfile
 
       - name: Version the pending changesets into the release
         id: refresh

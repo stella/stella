@@ -85,7 +85,7 @@ export const ghRetryRequest: GitHubRequest = async (args, input) => {
   ]);
   if (exit !== 0) {
     throw new ReleaseRefreshError(
-      `gh api ${String(args.at(0))} failed with exit code ${String(exit)}`,
+      `GitHub request ${String(args.at(0))} failed with exit code ${String(exit)}`,
     );
   }
   return stdout.trim() === "" ? null : JSON.parse(stdout);
