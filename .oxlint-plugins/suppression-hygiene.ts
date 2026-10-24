@@ -9,10 +9,10 @@
 //     (the `// SAFETY:` convention used for `as` casts). Catches bare
 //     directives that silence a rule with no rationale.
 //
-//   no-foreign-directive — bans `biome-ignore` / `prettier-ignore`
-//     comments. The toolchain is oxlint + oxfmt; biome is never run,
-//     so its directives are dead, and oxfmt formatting belongs in the
-//     code, not behind a prettier directive. Also bans the
+//   no-foreign-directive — bans `biome-ignore` / `oxfmt-ignore`
+//     comments. The toolchain is oxlint + bun fmt; neither biome nor
+//     oxfmt runs, so their directives are dead. bun fmt honours
+//     `prettier-ignore`. Also bans the
 //     `eslint-disable` / `eslint-enable` spelling: oxlint honours it as
 //     an alias, but one directive with one spelling keeps every
 //     suppression findable with a single search.
@@ -35,7 +35,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 const DISABLE_RE = /\b(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
 const ENABLE_RE = /\b(?:eslint|oxlint)-enable\b/u;
 const INLINE_DESCRIPTION_RE = /--\s*\S/u;
-const FOREIGN_RE = /\b(?:biome-ignore|prettier-ignore)\b/u;
+const FOREIGN_RE = /\b(?:biome-ignore|oxfmt-ignore)\b/u;
 // Anchored at the comment start, where oxlint reads a directive, so prose
 // that mentions the spelling mid-sentence stays allowed.
 const LEGACY_SPELLING_RE = /^\s*(eslint-(?:disable|enable))\b/u;
@@ -167,8 +167,8 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           noForeignDirective:
-            "`{{kind}}` is not honoured by this toolchain (oxlint + oxfmt). " +
-            "Remove it; use an oxlint disable directive or oxfmt formatting.",
+            "`{{kind}}` is not honoured by this toolchain (oxlint + bun fmt). " +
+            "Remove it; use an oxlint disable directive or `prettier-ignore`.",
           legacySpelling:
             "Write `{{kind}}` with the `oxlint-` prefix; the `eslint-` " +
             "spelling is a legacy alias.",

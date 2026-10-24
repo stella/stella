@@ -14,13 +14,13 @@ import {
   inspectorStateStorageKey,
 } from "@/components/inspector/inspector-storage-keys";
 import {
-  FILE_FACETS,
-  parseSkillResourceSource,
   type ChatTab,
+  FILE_FACETS,
   type FileTab,
   type InspectorTab,
   type InspectorTabGroup,
   type InspectorTabsStore,
+  parseSkillResourceSource,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import {
@@ -89,8 +89,7 @@ type InspectorBroadcastTab =
   | LegacyDecisionChatTab;
 
 type InspectorBroadcastMessage =
-  | InspectorTabsRequestMessage
-  | InspectorTabsSyncMessage;
+  InspectorTabsRequestMessage | InspectorTabsSyncMessage;
 
 type InspectorBroadcastSession = {
   dispose: () => void;
@@ -147,15 +146,33 @@ const RESTORE_SETTLE_DELAY_MS = 2000;
 const restorePendingKey = (scope: InspectorBroadcastScope) =>
   inspectorRestorePendingStorageKey(scope);
 
-// The flag records which page load set it. Another start in the same page (a
-// shell that attaches the store after a client navigation) sees this page's
-// own unsettled restore, which is not a stalled earlier load.
-let pageLoadId = createUuid();
-
-/** Tests model a reload by starting again in a new page load. */
-export const startNewPageLoadForTest = (): void => {
-  pageLoadId = createUuid();
+// Everything one page load owns. In the browser a reload starts the module
+// again; tests model one by replacing the whole record, so nothing an earlier
+// page held (a pending settle, an unreleased viewer hold, a store attachment)
+// carries into the next.
+type PageLoad = {
+  // The flag records which page load set it. Another start in the same page (a
+  // shell that attaches the store after a client navigation) sees this page's
+  // own unsettled restore, which is not a stalled earlier load.
+  readonly id: string;
+  // Viewers the restore mounted that have not loaded their document yet. The
+  // flag stays until every one has loaded and the page then stays responsive:
+  // a document that arrives after the delay could still stall the page.
+  restoreHolds: number;
+  settlingScope: InspectorBroadcastScope | null;
+  settleTimer: ReturnType<typeof setTimeout> | null;
+  readonly scopeOwnership: WeakMap<StoreApi<InspectorTabsStore>, string>;
 };
+
+const createPageLoad = (): PageLoad => ({
+  id: createUuid(),
+  restoreHolds: 0,
+  settlingScope: null,
+  settleTimer: null,
+  scopeOwnership: new WeakMap(),
+});
+
+let pageLoad = createPageLoad();
 
 const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
@@ -165,7 +182,7 @@ const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
     .andThen((storage) =>
       Result.try(() => storage.getItem(restorePendingKey(scope))),
     )
-    .map((value) => value !== null && value !== pageLoadId)
+    .map((value) => value !== null && value !== pageLoad.id)
     .unwrapOr(false);
 };
 
@@ -180,7 +197,7 @@ const writeRestorePending = (
     .andThen((storage) =>
       Result.try(() => {
         if (pending) {
-          storage.setItem(restorePendingKey(scope), pageLoadId);
+          storage.setItem(restorePendingKey(scope), pageLoad.id);
         } else {
           storage.removeItem(restorePendingKey(scope));
         }
@@ -189,30 +206,34 @@ const writeRestorePending = (
     .unwrapOr(undefined);
 };
 
-// Viewers the restore mounted that have not loaded their document yet. The
-// flag stays until every one has loaded and the page then stays responsive:
-// a document that arrives after the delay could still stall the page.
-let restoreHolds = 0;
-let settlingScope: InspectorBroadcastScope | null = null;
-let settleTimer: ReturnType<typeof setTimeout> | null = null;
+/** Only the current page load settles its restore: a callback an earlier load
+ *  left queued must not clear the flag a later load set. */
+const settleRestore = (
+  load: PageLoad,
+  scope: InspectorBroadcastScope,
+): void => {
+  if (load === pageLoad && load.settlingScope === scope) {
+    writeRestorePending(scope, false);
+    load.settlingScope = null;
+  }
+};
 
 /** Clears the flag once nothing restored is still loading and the page has
  *  stayed responsive for a moment: a busy main thread runs neither the timer
  *  nor the idle callback. */
-const scheduleRestoreSettle = (): void => {
-  const scope = settlingScope;
-  if (scope === null || restoreHolds > 0) {
+const scheduleRestoreSettle = (load: PageLoad): void => {
+  const scope = load.settlingScope;
+  if (load !== pageLoad || scope === null || load.restoreHolds > 0) {
     return;
   }
-  if (settleTimer !== null) {
-    clearTimeout(settleTimer);
+  if (load.settleTimer !== null) {
+    clearTimeout(load.settleTimer);
   }
-  settleTimer = setTimeout(() => {
-    settleTimer = null;
+  load.settleTimer = setTimeout(() => {
+    load.settleTimer = null;
     const clear = () => {
-      if (restoreHolds === 0 && settlingScope === scope) {
-        writeRestorePending(scope, false);
-        settlingScope = null;
+      if (load.restoreHolds === 0) {
+        settleRestore(load, scope);
       }
     };
     if (typeof globalThis.requestIdleCallback === "function") {
@@ -226,34 +247,30 @@ const scheduleRestoreSettle = (): void => {
 const clearRestorePendingWhenSettled = (
   scope: InspectorBroadcastScope,
 ): void => {
-  settlingScope = scope;
-  scheduleRestoreSettle();
+  const load = pageLoad;
+  load.settlingScope = scope;
+  scheduleRestoreSettle(load);
   // A page that can run its pagehide handler is not stuck, so leaving it
   // (a reload, a navigation) settles the restore even inside the delay.
   if (typeof globalThis.addEventListener === "function") {
-    globalThis.addEventListener(
-      "pagehide",
-      () => {
-        if (settlingScope === scope) {
-          writeRestorePending(scope, false);
-          settlingScope = null;
-        }
-      },
-      { once: true },
-    );
+    globalThis.addEventListener("pagehide", () => settleRestore(load, scope), {
+      once: true,
+    });
   }
 };
 
 /**
  * Held by a restored viewer from mount until its document has loaded (or
  * failed), so the restore counts as settled only after the viewer is ready.
- * The returned release is idempotent.
+ * The returned release is idempotent and counts only against the page load
+ * that took the hold.
  */
 export const holdInspectorRestoreSettle = (): (() => void) => {
-  restoreHolds += 1;
-  if (settleTimer !== null) {
-    clearTimeout(settleTimer);
-    settleTimer = null;
+  const load = pageLoad;
+  load.restoreHolds += 1;
+  if (load.settleTimer !== null) {
+    clearTimeout(load.settleTimer);
+    load.settleTimer = null;
   }
   let released = false;
   return () => {
@@ -261,17 +278,23 @@ export const holdInspectorRestoreSettle = (): (() => void) => {
       return;
     }
     released = true;
-    restoreHolds -= 1;
-    scheduleRestoreSettle();
+    load.restoreHolds -= 1;
+    scheduleRestoreSettle(load);
   };
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
 let failedPersistenceScope: string | null = null;
-const inspectorScopeOwnership = new WeakMap<
-  StoreApi<InspectorTabsStore>,
-  string
->();
+let persistenceFailureOccurrence = 0;
+
+/** Tests model a reload by starting again in a new page load. */
+export const startNewPageLoadForTest = (): void => {
+  if (pageLoad.settleTimer !== null) {
+    clearTimeout(pageLoad.settleTimer);
+    pageLoad.settleTimer = null;
+  }
+  pageLoad = createPageLoad();
+};
 
 /* oxlint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
 const postInspectorBroadcastMessage = (
@@ -738,11 +761,12 @@ const writePersistedInspectorState = (
     return;
   }
   failedPersistenceScope = storageKey;
-  getAnalytics().captureError(writeResult.error, {
-    type: "detached",
-    operation: "inspector-tabs.persist",
-  });
-  notifyUserError(undefined, getTranslator()("inspector.groups.saveFailed"));
+  persistenceFailureOccurrence += 1;
+  notifyUserError(
+    writeResult.error,
+    getTranslator()("inspector.groups.saveFailed"),
+    { occurrence: persistenceFailureOccurrence },
+  );
 };
 
 const subscribeInspectorPersistence = (
@@ -916,7 +940,7 @@ const initializeInspectorScope = (
   scope: InspectorBroadcastScope,
 ) => {
   const scopeKey = `${scope.organizationId}:${scope.userId}`;
-  const previousScopeKey = inspectorScopeOwnership.get(store);
+  const previousScopeKey = pageLoad.scopeOwnership.get(store);
   const switchingScope =
     previousScopeKey !== undefined && previousScopeKey !== scopeKey;
   if (
@@ -925,7 +949,7 @@ const initializeInspectorScope = (
   ) {
     inspectorBroadcastSession.dispose();
   }
-  inspectorScopeOwnership.set(store, scopeKey);
+  pageLoad.scopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
   // The previous restore never settled: keep the pane closed this time.
   const recovering = readRestorePending(scope);
@@ -1002,7 +1026,7 @@ export const initializeInspectorTabBroadcast = (
   const unsubscribeOwner = onStorageOwnerChange(() => {
     disconnect();
     disconnect = noopInspectorBroadcastCleanup;
-    inspectorScopeOwnership.delete(store);
+    pageLoad.scopeOwnership.delete(store);
     store.setState({
       tabs: [],
       groups: [],

@@ -14,8 +14,8 @@ import {
 } from "@stll/anonymize-chat";
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
-  CHAT_TURN_INTENT,
   CHAT_TURN_ID_HEADER,
+  CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -42,23 +42,23 @@ import {
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import {
   applyChatModelChange,
+  type ChatThreadFetched,
   chatThreadOptions,
   chatThreadTitleOptions,
   fileChatThreadOptions,
   groupedChatThreadsOptions,
-  invalidateGroupedChatThreads,
   invalidateChatThreadLists,
+  invalidateGroupedChatThreads,
   listChatHistoryItems,
   matchesChatThread,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
-  type ChatThreadFetched,
 } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
-import { toSafeId, type SafeId } from "@/lib/safe-id";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({

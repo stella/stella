@@ -19,7 +19,7 @@ import type {
 import { MODEL_BENCHMARK_RATINGS } from "./benchmarks.gen";
 import { getModelRate } from "./index";
 import type { OfferedBYOKModelId } from "./index";
-import { MODEL_RATE_UNITS_PER_USD, getStandardModelRate } from "./model-rate";
+import { getStandardModelRate, MODEL_RATE_UNITS_PER_USD } from "./model-rate";
 
 export {
   MODEL_BENCHMARK_CATEGORY,

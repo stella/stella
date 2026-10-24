@@ -1,14 +1,14 @@
 import {
+  SCOUT_KEY,
   SIGNAL_ORIGIN,
   SIGNAL_SEVERITY,
-  SCOUT_KEY,
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 import type {
   OpenWorkObligationStatus,
+  ScoutKey,
   SignalOrigin,
   SignalSeverity,
-  ScoutKey,
   SuggestionKind,
 } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";

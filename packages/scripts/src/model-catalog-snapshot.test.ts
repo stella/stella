@@ -17,9 +17,9 @@ import {
 import {
   CatalogSnapshotRefreshTimeoutError,
   MODEL_CATALOG_INPUT_DIR,
-  refreshModelCatalogInputs,
   reduceModelsDevInput,
   reduceOpenRouterInput,
+  refreshModelCatalogInputs,
   serializeCatalogInput,
 } from "./model-catalog-snapshot";
 

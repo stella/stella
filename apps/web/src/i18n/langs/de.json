@@ -9,13 +9,12 @@
       "noOtherSessions": "Keine weiteren aktiven Sitzungen",
       "revokeOtherSessions": "Andere Geräte abmelden",
       "revokeOtherSessionsConfirm": "Dadurch werden alle Sitzungen außer Ihrer aktuellen beendet.",
+      "signedInFrom": "Angemeldet über {clientName}",
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
   "admin": {
     "ai": "KI",
-    "backToApp": "Zurück zur App",
-    "billingAndUsage": "Abrechnung und Nutzung",
     "billingProfiles": "Abrechnungsprofile",
     "deleteDescription": "Diese Organisation und ihre Daten werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
     "deleteOrganization": "Organisation löschen",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Organisation verlassen",
     "leaveRefusedOnlyOwner": "Sie sind der einzige Inhaber. Machen Sie ein anderes Mitglied zum Inhaber, bevor Sie die Organisation verlassen.",
     "modelsAndProviders": "Modelle und Anbieter",
-    "noPlan": "Kein aktiver Tarif",
     "organizationDeleted": "Die Organisation wurde gelöscht.",
     "organizationId": "Organisations-ID",
     "organizationLeft": "Sie haben die Organisation verlassen.",
-    "overviewDescription": "Verwalten Sie Ihre Organisation, Personen und Werkzeuge.",
-    "people": "Personen",
     "planAndUsage": "Tarif und Nutzung",
     "title": "Organisationsverwaltung",
     "toolsDescription": "Aktivieren oder deaktivieren Sie integrierte Werkzeuge für alle in dieser Organisation."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Ihr Assistent fragt nach dieser Adresse",
-    "copiedToast": "Anweisungen kopiert. Fügen Sie sie in einen Chat mit Ihrem Assistenten ein.",
     "copy": "Anweisungen für ihn kopieren",
     "description": "Fragen Sie Claude oder ChatGPT zu Ihren Akten und Dokumenten. Wählen Sie Ihren Assistenten für eine kurze Anleitung; es dauert etwa eine Minute.",
     "instructions": "Verbinde mich mit stella, meinem juristischen Arbeitsbereich. Folge den Anweisungen für KI-Agenten unter {guideUrl} und verwende diese Serveradresse: {mcpUrl}",
     "openGuide": "Anleitung für {assistant} öffnen",
+    "pasteHint": "Fügen Sie sie in einen Chat mit Ihrem Assistenten ein.",
     "selfSetupHint": "Sie nutzen Claude Code oder Codex?",
     "title": "stella in Ihrem KI-Assistenten nutzen"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
     "keyRequired": {
+      "accountRestricted": "Die Einstellungen des KI-Anbieters sind für dieses Konto nicht verfügbar.",
+      "configUnreadable": "Die Konfiguration des KI-Anbieters kann nicht gelesen werden. Bitten Sie eine Organisationsadministration, ihn erneut zu verbinden.",
       "cta": "KI-Einstellungen öffnen",
       "description": "Fügen Sie Anbieter-Zugangsdaten hinzu, um KI-Funktionen zu nutzen.",
+      "permissionRequired": "Nur eine Organisationsadministration kann einen KI-Anbieter verbinden.",
+      "seatRequired": "Bitten Sie eine Organisationsadministration, Ihnen einen Platz zuzuweisen.",
       "title": "KI-Anbieter verbinden"
     },
     "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
@@ -142,6 +142,8 @@
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
+    "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",
+    "handoffTitle": "Weiter zu stella",
     "headline": "Klarheit für jeden Fall.",
     "invitation": {
       "declined": "Einladung abgelehnt",
@@ -157,11 +159,11 @@
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
     "professionalUse": {
-      "description": "Bei der Einrichtung Ihres Kontos wurde Ihnen diese Erklärung nicht angezeigt. Nehmen Sie sie an, um fortzufahren.",
       "title": "Berufliche Nutzung bestätigen"
     },
     "professionalUseStatement": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie stella für berufliche Zwecke nutzen, und nehmen zur Kenntnis, dass stella ein Werkzeug für Rechtsfachleute ist und keine Rechtsberatung ersetzt.",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
+    "reauthenticationRequired": "Melden Sie sich erneut an, um diese Aktion fortzusetzen.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
@@ -931,13 +933,10 @@
     },
     "coverage": {
       "completeness": "Vollständigkeit",
-      "countedOn": "Gezählt am {date}",
       "courtsHeading": "Nach Gericht",
       "courtsUnavailable": "Die Aufschlüsselung nach Gerichten ist derzeit nicht verfügbar.",
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
-      "exceedsReportedTotal": "Enthält mehr als die zuletzt vom Herausgeber genannte Gesamtzahl vom {date}",
-      "gapStatusUnknown": "Lückenstatus unbekannt",
       "generatedAt": "Zahlen vom {date}",
       "globeLabel": "Länder, deren Rechtsprechung der Korpus enthält, auf einem Globus",
       "healthCurrent": "Aktuell",
@@ -958,7 +957,8 @@
       "searchable": "Durchsuchbar",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
-      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
+      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar.",
+      "unreadListingPeriods": "Nicht gelesene Zeiträume der Liste"
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "decisionTypes": {
@@ -3529,6 +3529,12 @@
       "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
+      "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
+      "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."
+    },
     "external": {
       "confirmDescription": "Sie sind dabei, eine externe Website zu besuchen.",
       "confirmTitle": "Externen Link öffnen?",
@@ -4228,6 +4234,22 @@
       "guestStorageUnavailable": "Hervorhebungen und Notizen konnten in diesem Tab nicht gespeichert werden.",
       "highlight": "Hervorheben",
       "highlightedPassage": "Hervorgehobene Textstelle",
+      "history": {
+        "colorRestored": "Farbe wiederhergestellt",
+        "commentRemoved": "Kommentar entfernt",
+        "commentRestored": "Kommentar wiederhergestellt",
+        "highlightRemoved": "Hervorhebung entfernt",
+        "highlightRestored": "Hervorhebung wiederhergestellt",
+        "markChanged": "Diese Hervorhebung oder dieser Kommentar wurde inzwischen an anderer Stelle geändert und bleibt daher unverändert.",
+        "markGone": "Diese Hervorhebung oder dieser Kommentar existiert nicht mehr.",
+        "nothingToRedo": "Nichts zum Wiederholen",
+        "nothingToUndo": "Nichts zum Rückgängigmachen",
+        "redoShortcut": "Änderung an Hervorhebung oder Kommentar wiederholen",
+        "styleRestored": "Stil wiederhergestellt",
+        "textRestored": "Kommentartext wiederhergestellt",
+        "undoShortcut": "Änderung an Hervorhebung oder Kommentar rückgängig machen",
+        "visibilityRestored": "Freigabe wiederhergestellt"
+      },
       "removeHighlight": "Hervorhebung entfernen",
       "sharedBadge": "Geteilt",
       "styleHighlight": "Markierung",
@@ -4739,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
+    "caseLawEmptyState": "Tippen Sie, um Gerichtsentscheidungen zu durchsuchen.",
     "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "continueInChat": "Im Chat fortsetzen",
@@ -4796,6 +4819,7 @@
     "savedSearchesEmpty": "Speichern Sie eine Suche, um sie erneut zu verwenden.",
     "scopeFilter": "Suchbereich",
     "scopePlaceholderAll": "In allen <scope>Quellen</scope> suchen …",
+    "scopePlaceholderCaseLaw": "In der <scope>Rechtsprechung</scope> suchen …",
     "scopePlaceholderMatters": "In allen <scope>Akten</scope> suchen …",
     "scopePlaceholderRegistries": "In <scope>Registern</scope> suchen …",
     "scopeRegistries": "Register",
@@ -4945,7 +4969,7 @@
       "description": "Nutzen Sie stella in Ihrem KI-Assistenten und sehen Sie, was auf Ihr Konto zugreifen kann.",
       "developerDescription": "Serveradressen und das Kommandozeilen-Tool für technische Einrichtungen.",
       "developerTitle": "Entwicklerzugang",
-      "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden.",
+      "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden. Browsersitzungen, die über diese Verbindung erstellt wurden, werden ebenfalls abgemeldet.",
       "disconnectConfirmTitle": "{clientName} trennen?",
       "disconnectSuccess": "{clientName} wurde getrennt",
       "integrationsDescription": "Externe Dienste, die die KI für Sie nutzen kann, etwa Ihre Dokumentenablage.",
@@ -5998,6 +6022,7 @@
       "downloadFailed": "Download fehlgeschlagen",
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
+      "emptyFile": "Die Datei ist leer.",
       "includeReferenceNumber": "Aktenzeichen einfügen",
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",

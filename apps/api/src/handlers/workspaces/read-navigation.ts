@@ -7,8 +7,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
-  avtViewAccessStatus,
   avtLayoutVisibilityCondition,
+  avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";

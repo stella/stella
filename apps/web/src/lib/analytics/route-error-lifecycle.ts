@@ -1,4 +1,5 @@
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import type {
   Analytics,
   RouteErrorLifecycleProperties,
@@ -110,9 +111,11 @@ export const createRouteErrorLifecycleController = (
     shown: (options) => {
       if (capturedReference !== options.reference) {
         capturedReference = options.reference;
-        analytics.captureError(options.error, {
-          reference: options.reference,
-          type: "recovery",
+        reportErrorOnce(options.error, (error) => {
+          analytics.captureError(error, {
+            reference: options.reference,
+            type: "recovery",
+          });
         });
       }
       detached(

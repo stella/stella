@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { applyUpdate, Doc, encodeStateAsUpdate } from "yjs";
 
 import {
-  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
@@ -20,7 +20,9 @@ type FakeStellaApiOptions = {
   generation?: number;
   holdFirstStore?: boolean;
   initialSnapshotBase64?: string | null;
+  loadFailureStatus?: number;
   refreshedToken?: string;
+  refreshedTokenTtlMs?: number;
   replacementToken?: string;
   roomId?: string;
   token?: string;
@@ -40,6 +42,7 @@ type FakeStellaApi = {
   setGeneration: (generation: number) => void;
   setAuthorizedGeneration: (generation: number) => void;
   setLoadResponse: (response: FolioCollabSnapshotLoadResponse) => void;
+  setStoreFailureStatus: (status: number | null) => void;
   snapshotAuthorizationHeaders: () => (string | null)[];
   storeRequestBodies: () => Record<string, unknown>[];
   storeRequests: () => number;
@@ -120,7 +123,9 @@ const createFakeStellaApi = ({
   generation = 0,
   holdFirstStore = false,
   initialSnapshotBase64 = null,
+  loadFailureStatus,
   refreshedToken = "collab_token_refreshed",
+  refreshedTokenTtlMs = 60 * 60 * 1000,
   replacementToken,
   roomId = TEST_ROOM_ID,
   token = "collab_token_test",
@@ -143,6 +148,7 @@ const createFakeStellaApi = ({
   const snapshotAuthorizationHeaders: (string | null)[] = [];
   const storeRequestBodies: Record<string, unknown>[] = [];
   let storeRequests = 0;
+  let storeFailureStatus: number | null = null;
   let currentToken = token;
   let tokenGeneration = generation;
   const firstStoreGate = Promise.withResolvers<undefined>();
@@ -207,7 +213,9 @@ const createFakeStellaApi = ({
           canEdit,
           generation: roomGenerations.get(String(body["roomId"])),
           token: refreshedToken,
-          tokenExpiresAt: farFutureTokenExpiresAt(),
+          tokenExpiresAt: new Date(
+            Date.now() + refreshedTokenTtlMs,
+          ).toISOString(),
         });
       }
 
@@ -232,6 +240,12 @@ const createFakeStellaApi = ({
             `Bearer ${TEST_SERVICE_TOKEN}`
         ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
+        }
+        if (loadFailureStatus !== undefined) {
+          return Response.json(
+            { message: "Snapshot load failed." },
+            { status: loadFailureStatus },
+          );
         }
 
         return Response.json(
@@ -263,6 +277,12 @@ const createFakeStellaApi = ({
           );
         }
 
+        if (storeFailureStatus !== null) {
+          return Response.json(
+            { message: "Snapshot store failed." },
+            { status: storeFailureStatus },
+          );
+        }
         storeRequests += 1;
         if (firstStoreHeld) {
           firstStoreHeld = false;
@@ -321,6 +341,9 @@ const createFakeStellaApi = ({
       loadResponse = response;
       latestSnapshotBase64 = response.snapshotBase64;
       latestSnapshotRevision = response.snapshotRevision;
+    },
+    setStoreFailureStatus: (status) => {
+      storeFailureStatus = status;
     },
     snapshotAuthorizationHeaders: () => snapshotAuthorizationHeaders,
     storeRequestBodies: () => storeRequestBodies,
@@ -1236,8 +1259,16 @@ describe("collaboration server", () => {
         });
         fakeApi.releaseFirstStore();
         const storeError = await storeResult;
-        expect(storeError).toBeInstanceOf(FetchBoundaryError);
-        expect(storeError).toHaveProperty("status", 428);
+        // The refusal retires the room, so the store is not retried.
+        expect(storeError).toHaveProperty(
+          "_tag",
+          "CollabSnapshotRoomRetiredError",
+        );
+        expect(storeError).toHaveProperty(
+          "cause",
+          expect.any(FetchBoundaryError),
+        );
+        expect(storeError).toHaveProperty("cause.status", 428);
         expect(fakeApi.loadRequestBodies()).toHaveLength(2);
         if (resetGeneration === 0) {
           await waitFor(
@@ -1385,6 +1416,266 @@ describe("collaboration server", () => {
       destroyed = true;
 
       expect(Date.now() - startedAt).toBeLessThan(1000);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      if (!destroyed) {
+        await collabServer.destroy();
+      }
+      await fakeApi.destroy();
+    }
+  });
+
+  test("a failed room load releases its heartbeat and token refresh", async () => {
+    // The join refreshes its near-expiry token once; each refreshed token
+    // expires again soon, so an armed refresh timer keeps firing.
+    const fakeApi = createFakeStellaApi({
+      loadFailureStatus: 500,
+      refreshedTokenTtlMs: 600,
+      tokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      port: 0,
+      roomHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const ydoc = new Doc();
+    let authenticationFailed = false;
+    const provider = new HocuspocusProvider({
+      document: ydoc,
+      name: TEST_ROOM_NAME,
+      onAuthenticationFailed: () => {
+        authenticationFailed = true;
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+    });
+
+    try {
+      await waitFor(
+        () => authenticationFailed,
+        "Provider was not refused after the room load failed.",
+      );
+      provider.destroy();
+      expect(fakeApi.loadRequestBodies()).toHaveLength(1);
+      expect(collabServer.hocuspocus.getDocumentsCount()).toBe(0);
+      const heartbeatsAfterRefusal = fakeApi.heartbeatRequestBodies().length;
+      const refreshesAfterRefusal = fakeApi.refreshRequests();
+      // The join itself renewed both, so the fixture reaches the timers.
+      expect(heartbeatsAfterRefusal).toBeGreaterThan(0);
+      expect(refreshesAfterRefusal).toBeGreaterThan(0);
+
+      // 45 heartbeat intervals and three refresh delays.
+      await Bun.sleep(900);
+
+      expect(fakeApi.heartbeatRequestBodies()).toHaveLength(
+        heartbeatsAfterRefusal,
+      );
+      expect(fakeApi.refreshRequests()).toBe(refreshesAfterRefusal);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test.each([
+    { reason: "an unavailable API", status: 503 },
+    { reason: "a snapshot above the API size limit", status: 413 },
+  ])(
+    "retries a snapshot store refused by $reason until it lands after the last client leaves",
+    async ({ status }) => {
+      const fakeApi = createFakeStellaApi();
+      const collabServer = await createCollabServer({
+        apiUrl: fakeApi.url,
+        debounceMs: 20,
+        maxDebounceMs: 100,
+        port: 0,
+        serviceToken: TEST_SERVICE_TOKEN,
+        snapshotStoreRetryBaseDelayMs: 10,
+        snapshotStoreRetryMaxDelayMs: 40,
+      });
+      const ydoc = new Doc();
+      const provider = createProvider({
+        name: TEST_ROOM_NAME,
+        token: "collab_token_test",
+        url: collabServer.websocketUrl,
+        ydoc,
+      });
+
+      try {
+        await waitFor(
+          () =>
+            provider.isAuthenticated &&
+            collabServer.hocuspocus.getDocumentsCount() === 1,
+          "Provider did not load the room.",
+        );
+        fakeApi.setStoreFailureStatus(status);
+        ydoc.getText("body").insert(0, "kept until stored");
+
+        await waitFor(
+          () => fakeApi.storeRequestBodies().length >= 2,
+          "Server did not retry the refused snapshot store.",
+        );
+        provider.destroy();
+        const attemptsAtLastDisconnect = fakeApi.storeRequestBodies().length;
+        await waitFor(
+          () =>
+            fakeApi.storeRequestBodies().length >= attemptsAtLastDisconnect + 2,
+          "Server stopped retrying once the last client left.",
+        );
+        expect(collabServer.hocuspocus.getDocumentsCount()).toBe(1);
+        expect(fakeApi.latestSnapshotRevision()).toBe(0);
+
+        fakeApi.setStoreFailureStatus(null);
+
+        await waitFor(
+          () =>
+            fakeApi.latestSnapshotRevision() === 1 &&
+            collabServer.hocuspocus.getDocumentsCount() === 0,
+          "Server did not store and release the room once the API accepted it.",
+        );
+        const restored = new Doc();
+        applyUpdate(
+          restored,
+          Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+        );
+        expect(getTextContent(restored, "body")).toBe("kept until stored");
+        restored.destroy();
+      } finally {
+        provider.destroy();
+        ydoc.destroy();
+        await collabServer.destroy();
+        await fakeApi.destroy();
+      }
+    },
+  );
+
+  test("retires a snapshot store whose retry finds a newer room generation without an unhandled rejection", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+      snapshotStoreRetryBaseDelayMs: 50,
+      snapshotStoreRetryMaxDelayMs: 50,
+    });
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          collabServer.hocuspocus.getDocumentsCount() === 1,
+        "Provider did not load the room.",
+      );
+      fakeApi.setStoreFailureStatus(503);
+      ydoc.getText("body").insert(0, "retired state");
+
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 1,
+        "Initial snapshot store did not fail.",
+      );
+      collabServer.hocuspocus.storeDocumentHooks = async (
+        _document,
+        payload,
+      ) => {
+        await collabServer.hocuspocus.hooks("onStoreDocument", payload);
+      };
+      fakeApi.setStoreFailureStatus(null);
+      fakeApi.setGeneration(1);
+
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 2,
+        "Snapshot store retry did not reach the newer generation.",
+      );
+      await Bun.sleep(100);
+
+      expect(unhandledRejections).toEqual([]);
+      expect(fakeApi.latestSnapshotRevision()).toBe(0);
+      expect(fakeApi.storeRequestBodies()).toHaveLength(2);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("stores a room whose last-disconnect store failed when the server shuts down", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+      shutdownDrainTimeoutMs: 2000,
+      snapshotStoreRetryBaseDelayMs: 60_000,
+    });
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    let destroyed = false;
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          collabServer.hocuspocus.getDocumentsCount() === 1,
+        "Provider did not load the room.",
+      );
+      fakeApi.setStoreFailureStatus(503);
+      ydoc.getText("body").insert(0, "stored at shutdown");
+      provider.flushPendingUpdates();
+      await waitFor(
+        () =>
+          collabServer.hocuspocus.documents
+            .get(TEST_ROOM_NAME)
+            ?.getText("body")
+            .toJSON() === "stored at shutdown",
+        "Server did not receive the edit.",
+      );
+      provider.destroy();
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 1,
+        "Server did not attempt the last-disconnect store.",
+      );
+      expect(fakeApi.latestSnapshotRevision()).toBe(0);
+
+      fakeApi.setStoreFailureStatus(null);
+      await collabServer.destroy();
+      destroyed = true;
+
+      expect(fakeApi.storeRequestBodies()).toHaveLength(2);
+      expect(fakeApi.latestSnapshotRevision()).toBe(1);
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "body")).toBe("stored at shutdown");
+      restored.destroy();
     } finally {
       provider.destroy();
       ydoc.destroy();
