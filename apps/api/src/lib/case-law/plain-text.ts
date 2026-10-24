@@ -15,8 +15,8 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import {
   MetadataUrlDefect,
-  toMetadataUrl,
   type SafeHref,
+  toMetadataUrl,
 } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 

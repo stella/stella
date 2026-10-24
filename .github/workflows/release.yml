@@ -1,4 +1,8 @@
 name: Release Artifacts
+# The run name carries the tag for a tag push and a dispatch alike: a
+# dispatched run's head branch is main. Release Desktop App and the desktop
+# release canary find a tag's runs by this name.
+run-name: Release Artifacts ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
 
 # release-chain-alert
 defaults:
@@ -483,20 +487,6 @@ jobs:
             echo "reused=true"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Resolve the currently deployed web image
-        if: steps.existing.outputs.reused != 'true'
-        id: previous-web
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
-        run: |
-          set -euo pipefail
-          if digest="$(docker buildx imagetools inspect "${IMAGE}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null)"; then
-            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Deployed web image has an invalid digest."; exit 1; }
-            echo "image=${IMAGE}@${digest}" >> "$GITHUB_OUTPUT"
-          else
-            echo "image=" >> "$GITHUB_OUTPUT"
-          fi
-
       # Keep current workflow tooling separate from the selected release source.
       # The action code comes from the workflow revision; the browser build
       # contract remains bound to the release source and fails closed when absent.
@@ -534,7 +524,6 @@ jobs:
           posthog-project-id: ${{ vars.POSTHOG_PROJECT_ID }}
           source-path: .release-source
           tooling-path: .workflow-source
-          previous-web-image: ${{ steps.previous-web.outputs.image }}
 
       - name: Write web image publication predicate
         if: steps.existing.outputs.reused != 'true'

@@ -85,6 +85,7 @@ const SNAPSHOT = {
     },
   ],
   persistence: { imageCleanup: "idle", status: "encrypted" },
+  revision: 0,
   retention: "month",
   screenCapture: "hidden",
   sourceAppExclusionLimit: 128,
@@ -252,8 +253,7 @@ const installNativeBoundary = async (
       let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
-        | ((value: DesktopRegistrySearchResponse) => void)
-        | null = null;
+        ((value: DesktopRegistrySearchResponse) => void) | null = null;
       Reflect.set(window, "__STELLA_RESOLVE_FIRST_STATE__", () =>
         resolveFirstState?.(currentConnection),
       );

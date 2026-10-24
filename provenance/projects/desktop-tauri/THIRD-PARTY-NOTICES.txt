@@ -108,7 +108,7 @@ Project: desktop-tauri
 - cssparser-macros 0.7.1 — MPL-2.0
 - ctor 1.0.13 — Apache-2.0 OR MIT
 - ctr 0.10.1 — Apache-2.0 OR MIT
-- ctutils 0.4.2 — Apache-2.0 OR MIT
+- ctutils 0.4.5 — Apache-2.0 OR MIT
 - darling 0.23.0 — MIT
 - darling_core 0.23.0 — MIT
 - darling_macro 0.23.0 — MIT

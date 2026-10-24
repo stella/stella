@@ -11,6 +11,23 @@ import path from "node:path";
 
 const roots: string[] = [];
 const script = path.join(import.meta.dir, "merge-web-assets.sh");
+const validateImage = path.join(
+  import.meta.dir,
+  "validate-previous-web-image.sh",
+);
+
+test.each([
+  [`ghcr.io/example/web@sha256:${"a".repeat(64)}`, 0],
+  [`registry.example:5000/example/web:release@sha256:${"b".repeat(64)}`, 0],
+  ["ghcr.io/example/web:latest", 1],
+  [`ghcr.io/example/web@sha256:${"a".repeat(63)}`, 1],
+  [`ghcr.io/example/web@sha256:${"A".repeat(64)}`, 1],
+  [`ghcr.io/example/web@sha256:${"a".repeat(64)}\nother`, 1],
+  ["runtime-base", 1],
+  ["", 1],
+])("validates immutable previous image %s", (image, exitCode) => {
+  expect(Bun.spawnSync(["sh", validateImage, image]).exitCode).toBe(exitCode);
+});
 
 afterEach(() => {
   for (const root of roots.splice(0)) {

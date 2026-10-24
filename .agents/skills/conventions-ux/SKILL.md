@@ -74,7 +74,7 @@ Small, almost invisible touches. Linear is a good reference.
   Legal cliché is decoration every product in the category already
   uses; name the concept instead — a court is `Landmark`, a decision
   `FileText` (`Library` for a collection of them), and the case-law
-  section is `CaseLawIcon`. `no-legal-cliche-glyph` enforces it.
+  section is `CaseLawIcon`. `no-banned-glyph` enforces it.
 
 ## Review chrome
 
@@ -110,6 +110,7 @@ through Folio gains one it does not have.
 
 ## Typography Polish
 
+- Do not style one heading word differently for decoration; emphasis inside a heading must communicate meaning or interaction.
 - `-webkit-font-smoothing: antialiased` on macOS for crisper
   text on light backgrounds. Apply globally in the base stylesheet.
 - `font-variant-numeric: tabular-nums` on any element whose

@@ -113,8 +113,12 @@ describe("web container platform boundary", () => {
   });
 
   test("carries only the previous build manifest and keeps current files", () => {
-    expect(dockerfile).toContain("ARG PREVIOUS_WEB_IMAGE=");
+    expect(dockerfile).toContain("ARG PREVIOUS_WEB_IMAGE=runtime-base");
     const previous = stagesByName.get("previous-web-image")?.body;
+    expect(previous).toContain("ARG PREVIOUS_WEB_IMAGE");
+    expect(previous).toContain(
+      '/usr/local/bin/validate-previous-web-image "$PREVIOUS_WEB_IMAGE"',
+    );
     expect(previous).toContain("/app/apps/web/dist/.stella-client-assets");
     expect(previous).toContain("/usr/local/bin/merge-web-assets");
     const builder = stagesByName.get("builder")?.body;

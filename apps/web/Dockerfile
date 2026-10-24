@@ -1,21 +1,26 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim).
+# Pin to digest for supply-chain integrity (oven/bun:1.4.4-slim).
 # Run the JavaScript toolchain on the native build host. Cross-platform
 # installs select the target's optional native packages explicitly; the final
 # image alone belongs to the deployment target.
-ARG PREVIOUS_WEB_IMAGE=oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288
+ARG PREVIOUS_WEB_IMAGE=runtime-base
 
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS build-base
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS build-base
 WORKDIR /app
 
-FROM --platform=$TARGETPLATFORM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS runtime-base
+FROM --platform=$TARGETPLATFORM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS runtime-base
 WORKDIR /app
 
-# An omitted PREVIOUS_WEB_IMAGE resolves to the empty runtime base above. Official
-# release builds set it to the immutable digest currently deployed.
+# Standalone image builds may carry assets from one immutable previous image.
+# Omission reuses the pinned runtime base, which contains no previous assets.
 FROM --platform=$TARGETPLATFORM ${PREVIOUS_WEB_IMAGE} AS previous-web-image
+ARG PREVIOUS_WEB_IMAGE
 USER root
 COPY --chmod=0755 scripts/merge-web-assets.sh /usr/local/bin/merge-web-assets
-RUN mkdir -p /previous-web-assets && : > /previous-web-assets.manifest && \
+COPY --chmod=0755 scripts/validate-previous-web-image.sh /usr/local/bin/validate-previous-web-image
+RUN if [ "$PREVIOUS_WEB_IMAGE" != runtime-base ]; then \
+      /usr/local/bin/validate-previous-web-image "$PREVIOUS_WEB_IMAGE"; \
+    fi && \
+    mkdir -p /previous-web-assets && : > /previous-web-assets.manifest && \
     if [ -f /app/apps/web/dist/.stella-client-assets ]; then \
       /usr/local/bin/merge-web-assets \
         /app/apps/web/dist/client \

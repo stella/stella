@@ -17,8 +17,7 @@ const HEX = /^[0-9A-Fa-f]+$/u;
 type Cursor = { chars: readonly string[]; index: number };
 
 type ReadEscapeResult =
-  | { status: "ok"; codePoint: number }
-  | { status: "error"; message: string };
+  { status: "ok"; codePoint: number } | { status: "error"; message: string };
 
 const readHex = (hex: string): ReadEscapeResult =>
   HEX.test(hex)

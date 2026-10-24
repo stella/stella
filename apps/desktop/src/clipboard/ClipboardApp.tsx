@@ -3,8 +3,8 @@ import {
   useDeferredValue,
   useEffect,
   useEffectEvent,
-  useRef,
   useReducer,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -39,10 +39,10 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -53,10 +53,10 @@ import {
   ArrowRightIcon,
   Building2Icon,
   ChevronsUpDownIcon,
-  ClipboardIcon,
   CircleHelpIcon,
-  CopyPlusIcon,
+  ClipboardIcon,
   ClockIcon,
+  CopyPlusIcon,
   EllipsisVerticalIcon,
   FileTextIcon,
   FolderInputIcon,
@@ -80,9 +80,9 @@ import type { LucideIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
+  type InlineDropPosition,
   reorderInlineIds,
   toInlineDropPosition,
-  type InlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import {
   InputGroup,
@@ -117,16 +117,19 @@ import {
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
+  adjacentClipboardScope,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  CLIPBOARD_SEARCH_SCOPES,
+  clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
@@ -134,20 +137,19 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
+  clipboardScopeKeyAction,
   clipboardSourceIdentity,
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  CLIPBOARD_SEARCH_SCOPES,
-  adjacentClipboardScope,
-  clipboardControlsKeyAction,
-  clipboardScopeKeyAction,
   clipboardTimelineKeyAction,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
@@ -167,17 +169,20 @@ import {
 import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
+  isClipboardCaptureRevision,
+  isClipboardCaptureUpdate,
   isClipboardCopyError,
   isClipboardSnapshot,
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
-  ClipboardCopyFormat,
+  ClipboardCaptureUpdate,
   ClipboardCopyErrorKind,
-  ClipboardRetention,
+  ClipboardCopyFormat,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
+  ClipboardRetention,
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
@@ -192,7 +197,6 @@ import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const MAX_ITEM_NAME_CHARACTERS = 80;
 const RETENTION_LABEL_KEYS = {
   week: "retentionWeek",
   month: "retentionMonth",
@@ -251,6 +255,7 @@ const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
   !navigator.userAgent.includes("Linux");
 
 const EMPTY_SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   // Native owns the limit; fail closed until the first runtime snapshot.
   groupLimit: 0,
@@ -508,11 +513,10 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const link = clipboardItemLink(item);
-  const fallbackName =
-    item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
-  // An unnamed browser copy is named after the page it came from.
-  const untitledName =
-    item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
+  const untitledName = clipboardUntitledName(item, {
+    image: t("image"),
+    text: t("unnamedClip"),
+  });
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -694,7 +698,7 @@ const ClipboardCard = ({
             className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
             fill
-            maxLength={MAX_ITEM_NAME_CHARACTERS}
+            maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
             onCancel={() => {
               setEditingName(false);
               setNameDraft(item.name ?? "");
@@ -1603,6 +1607,9 @@ const ClipboardApp = () => {
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
+  const captureUpdatesRef = useRef<ClipboardCaptureUpdate[]>([]);
+  const snapshotPendingRef = useRef(false);
+  const appliedRevisionRef = useRef(0);
   const [ageReferenceTime, setAgeReferenceTime] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
@@ -1647,7 +1654,10 @@ const ClipboardApp = () => {
     markClipboardShellCommit();
     const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
+    let notifiedRevision = 0;
     const readSnapshot = () => {
+      captureUpdatesRef.current = [];
+      snapshotPendingRef.current = true;
       const requestId = snapshotRequestIdRef.current + 1;
       snapshotRequestIdRef.current = requestId;
       void measureClipboardSnapshotRequest(
@@ -1657,7 +1667,9 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return undefined;
           }
+          snapshotPendingRef.current = false;
           if (!isClipboardSnapshot(value)) {
+            captureUpdatesRef.current = [];
             reportDesktopError({
               code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
@@ -1667,6 +1679,32 @@ const ClipboardApp = () => {
             return undefined;
           }
           dispatchClipboard({ type: "snapshotReceived", snapshot: value });
+          appliedRevisionRef.current = Math.max(
+            appliedRevisionRef.current,
+            value.revision,
+          );
+          let refreshRequired = false;
+          const pendingUpdates = [...captureUpdatesRef.current].sort(
+            (left, right) => left.revision - right.revision,
+          );
+          for (const update of pendingUpdates) {
+            if (update.revision <= appliedRevisionRef.current) {
+              continue;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              refreshRequired = true;
+              continue;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+          }
+          captureUpdatesRef.current = [];
+          if (
+            refreshRequired ||
+            notifiedRevision > appliedRevisionRef.current
+          ) {
+            readSnapshot();
+          }
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
@@ -1674,6 +1712,8 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return;
           }
+          snapshotPendingRef.current = false;
+          captureUpdatesRef.current = [];
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             detail: describeError(error),
@@ -1684,9 +1724,88 @@ const ClipboardApp = () => {
         });
     };
     readSnapshot();
-    const stopListening = subscribeDesktopEvent({
+    const stopListening = subscribeDesktopEvent<unknown>({
       event: CLIPBOARD_HISTORY_CHANGED_EVENT,
-      handler: readSnapshot,
+      handler: ({ payload }) => {
+        if (payload === null) {
+          readSnapshot();
+          return;
+        }
+        if (!isClipboardCaptureRevision(payload)) {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({ message: errorReadHistory, source: "read" });
+          return;
+        }
+        notifiedRevision = Math.max(notifiedRevision, payload.revision);
+        if (
+          payload.revision <= appliedRevisionRef.current ||
+          snapshotPendingRef.current
+        ) {
+          return;
+        }
+        void invoke<unknown>("clipboard_get_capture_update", {
+          revision: payload.revision,
+        })
+          .then((update) => {
+            if (disposed) {
+              return undefined;
+            }
+            // Only the most recent capture is retained natively. A gap or a
+            // mutation invalidating it recovers through the authorized snapshot.
+            if (update === null) {
+              if (
+                !snapshotPendingRef.current &&
+                notifiedRevision > appliedRevisionRef.current
+              ) {
+                readSnapshot();
+              }
+              return undefined;
+            }
+            if (
+              !isClipboardCaptureUpdate(update) ||
+              update.revision !== payload.revision
+            ) {
+              reportDesktopError({
+                code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+                operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+                window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+              });
+              setError({ message: errorReadHistory, source: "read" });
+              return undefined;
+            }
+            if (update.revision <= appliedRevisionRef.current) {
+              return undefined;
+            }
+            if (snapshotPendingRef.current) {
+              captureUpdatesRef.current.push(update);
+              return undefined;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              readSnapshot();
+              captureUpdatesRef.current.push(update);
+              return undefined;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            if (disposed) {
+              return;
+            }
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+            });
+            setError({ message: errorReadHistory, source: "read" });
+          });
+      },
       onError: () => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
@@ -1901,6 +2020,10 @@ const ClipboardApp = () => {
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
+            appliedRevisionRef.current = Math.max(
+              appliedRevisionRef.current,
+              value.revision,
+            );
             dispatchClipboard({ type: "snapshotReceived", snapshot: value });
             onSuccess?.();
             return undefined;
