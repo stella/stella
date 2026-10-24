@@ -43,6 +43,7 @@ import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-ti
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -2296,19 +2297,21 @@ export const withInvoiceMatterLocks = async (
   workspaceIds: readonly SafeId<"workspace">[],
 ) => {
   const ids = [...new Set(workspaceIds)].toSorted();
+  if (ids.length === 0) {
+    panic("Invoice matter locks require at least one matter");
+  }
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,
     )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
   );
-  await tx
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(inArray(workspaces.id, ids))
-    .orderBy(workspaces.id)
-    .limit(ids.length)
-    .for("no key update");
+  await withAggregateParentBatch({
+    tx,
+    organizationIds: [],
+    workspaceIds: ids,
+    mode: "no key update",
+  });
   for (const id of ids) {
     // db-await-in-loop: bounded invoice matter set, advisory locks already acquired together
     await lockBillingArrangement(tx, id);
@@ -2352,11 +2355,17 @@ export const lockInvoiceInStatus = async (
   tx: Transaction,
   { invoiceId, workspaceId, status, matterLocks }: LockInvoiceOptions,
 ) => {
-  const lineMatters = await tx
-    .selectDistinct({ workspaceId: invoiceLines.workspaceId })
-    .from(invoiceLines)
-    .where(eq(invoiceLines.invoiceId, invoiceId))
-    .limit(LIMITS.invoiceLinesPerInvoice);
+  const lineMattersRead = await readBounded(
+    tx
+      .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, invoiceId)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  if (lineMattersRead.type === "overflow") {
+    return undefined;
+  }
+  const lineMatters = lineMattersRead.rows;
   const matterIds = [
     ...new Set([workspaceId, ...lineMatters.map((line) => line.workspaceId)]),
   ].toSorted();
@@ -2418,11 +2427,17 @@ export const lockInvoiceInStatus = async (
   // A concurrent writer can add a participating matter while this acquisition
   // waits. The invoice row now fences new participation; refuse a stale
   // lock set before callers mutate or acquire missing matter locks out of order.
-  const currentMatters = await tx
-    .selectDistinct({ workspaceId: invoiceLines.workspaceId })
-    .from(invoiceLines)
-    .where(eq(invoiceLines.invoiceId, invoiceId))
-    .limit(LIMITS.invoiceLinesPerInvoice);
+  const currentMattersRead = await readBounded(
+    tx
+      .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, invoiceId)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  if (currentMattersRead.type === "overflow") {
+    return undefined;
+  }
+  const currentMatters = currentMattersRead.rows;
   const lockedMatterIds = new Set(matterIds);
   if (currentMatters.some((line) => !lockedMatterIds.has(line.workspaceId))) {
     return undefined;

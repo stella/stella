@@ -900,8 +900,8 @@ if (!databaseUrl || !runPostgres) {
           totalAmount: cents(242),
         })
         .where(eq(invoices.id, scenario.invoiceId));
-      const readQuota = () =>
-        scoped(
+      const readQuota = async () =>
+        await scoped(
           scenario,
           scenario.actors.full,
         )(

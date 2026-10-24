@@ -46,6 +46,7 @@ import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import type { InvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
@@ -459,10 +460,7 @@ export const checkInvoiceLineCapacity = async (
  * past that bound finds every attached entry a draft can bill; one insert of
  * that many lines (16 bound columns each) stays far below the 65,535-parameter
  * cap.
- */
-const MATERIALISE_LIMIT = LIMITS.invoiceLinesPerInvoice + 1;
-
-/**
+ *
  * Drafts created before invoice lines existed carry attached time entries and
  * expenses but no lines, and their stored total is the sum of those entries.
  * Totals now come from lines alone, so a line edit on such a draft would
@@ -480,71 +478,85 @@ const materialiseAttachedEntryLines = async (
   scope: InvoiceScope,
   recordAuditEvent: AuditRecorder,
 ): Promise<number> => {
-  const unlinedTimeEntries = () =>
-    tx
-      .select({
-        id: timeEntries.id,
-        billedMinutes: timeEntries.billedMinutes,
-        rateAtEntry: timeEntries.rateAtEntry,
-        narrative: timeEntries.narrative,
-        invoiceNarrative: timeEntries.invoiceNarrative,
-        noCharge: timeEntries.noCharge,
-      })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.invoiceId, scope.invoiceId),
-          eq(timeEntries.invoiceAttachment, INVOICE_ATTACHMENT.CHARGED),
-          eq(timeEntries.workspaceId, scope.workspaceId),
-          notExists(
-            tx
-              .select({ id: invoiceLines.id })
-              .from(invoiceLines)
-              .where(
-                and(
-                  eq(invoiceLines.timeEntryId, timeEntries.id),
-                  isNull(invoiceLines.releasedAt),
+  const unlinedTimeEntries = async () =>
+    await readBounded(
+      tx
+        .select({
+          id: timeEntries.id,
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+          narrative: timeEntries.narrative,
+          invoiceNarrative: timeEntries.invoiceNarrative,
+          noCharge: timeEntries.noCharge,
+        })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.invoiceId, scope.invoiceId),
+            eq(timeEntries.invoiceAttachment, INVOICE_ATTACHMENT.CHARGED),
+            eq(timeEntries.workspaceId, scope.workspaceId),
+            notExists(
+              tx
+                .select({ id: invoiceLines.id })
+                .from(invoiceLines)
+                .where(
+                  and(
+                    eq(invoiceLines.timeEntryId, timeEntries.id),
+                    isNull(invoiceLines.releasedAt),
+                  ),
                 ),
-              ),
+            ),
           ),
-        ),
-      )
-      .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-      .limit(MATERIALISE_LIMIT);
-  const unlinedExpenses = () =>
-    tx
-      .select({
-        id: expenses.id,
-        amount: expenses.amount,
-        markup: expenses.markup,
-        description: expenses.description,
-        invoiceDescription: expenses.invoiceDescription,
-      })
-      .from(expenses)
-      .where(
-        and(
-          eq(expenses.invoiceId, scope.invoiceId),
-          eq(expenses.workspaceId, scope.workspaceId),
-          notExists(
-            tx
-              .select({ id: invoiceLines.id })
-              .from(invoiceLines)
-              .where(
-                and(
-                  eq(invoiceLines.expenseId, expenses.id),
-                  isNull(invoiceLines.releasedAt),
+        )
+        .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)),
+      LIMITS.invoiceLinesPerInvoice,
+    );
+  const unlinedExpenses = async () =>
+    await readBounded(
+      tx
+        .select({
+          id: expenses.id,
+          amount: expenses.amount,
+          markup: expenses.markup,
+          description: expenses.description,
+          invoiceDescription: expenses.invoiceDescription,
+        })
+        .from(expenses)
+        .where(
+          and(
+            eq(expenses.invoiceId, scope.invoiceId),
+            eq(expenses.workspaceId, scope.workspaceId),
+            notExists(
+              tx
+                .select({ id: invoiceLines.id })
+                .from(invoiceLines)
+                .where(
+                  and(
+                    eq(invoiceLines.expenseId, expenses.id),
+                    isNull(invoiceLines.releasedAt),
+                  ),
                 ),
-              ),
+            ),
           ),
-        ),
-      )
-      .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
-      .limit(MATERIALISE_LIMIT);
+        )
+        .orderBy(asc(expenses.dateIncurred), asc(expenses.id)),
+      LIMITS.invoiceLinesPerInvoice,
+    );
 
-  const [unlinedEntries, unlinedExpenseRows] = await Promise.all([
+  const [unlinedEntryRead, unlinedExpenseRead] = await Promise.all([
     unlinedTimeEntries(),
     unlinedExpenses(),
   ]);
+  if (
+    unlinedEntryRead.type === "overflow" ||
+    unlinedExpenseRead.type === "overflow"
+  ) {
+    return panic(
+      `Invoice ${scope.invoiceId} has more attached entries than an invoice holds lines`,
+    );
+  }
+  const unlinedEntries = unlinedEntryRead.rows;
+  const unlinedExpenseRows = unlinedExpenseRead.rows;
   const missing = unlinedEntries.length + unlinedExpenseRows.length;
   if (missing > LIMITS.invoiceLinesPerInvoice) {
     return panic(
@@ -831,11 +843,22 @@ export const recalculateInvoiceTotals = async (
       }),
     );
   }
-  const matterRows = await tx
-    .selectDistinct({ workspaceId: invoiceLines.workspaceId })
-    .from(invoiceLines)
-    .where(eq(invoiceLines.invoiceId, scope.invoiceId))
-    .limit(LIMITS.invoiceLinesPerInvoice);
+  const matterRead = await readBounded(
+    tx
+      .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, scope.invoiceId)),
+    LIMITS.invoiceLinesPerInvoice,
+  );
+  if (matterRead.type === "overflow") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Invoice line selection exceeds the invoice limit",
+      }),
+    );
+  }
+  const matterRows = matterRead.rows;
   const matterIds = [
     ...new Set([
       scope.workspaceId,

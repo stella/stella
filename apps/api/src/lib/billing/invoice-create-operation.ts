@@ -41,6 +41,7 @@ import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   claimInvoiceExpenses,
   claimInvoiceTimeEntries,
@@ -574,16 +575,28 @@ const checkCreation = async (
           }),
         );
       }
-      const participants = await tx
-        .selectDistinct({ workspaceId: invoiceLines.workspaceId })
-        .from(invoiceLines)
-        .where(
-          and(
-            eq(invoiceLines.organizationId, organizationId),
-            eq(invoiceLines.invoiceId, originalInvoiceId),
+      const participantRead = await readBounded(
+        tx
+          .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+          .from(invoiceLines)
+          .where(
+            and(
+              eq(invoiceLines.organizationId, organizationId),
+              eq(invoiceLines.invoiceId, originalInvoiceId),
+            ),
           ),
-        )
-        .limit(LIMITS.invoiceLinesPerInvoice + 1);
+        LIMITS.invoiceLinesPerInvoice,
+      );
+      if (participantRead.type === "overflow") {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            code: "invoice_participation_changed",
+            message: "Invoice matters changed; reload and try again",
+          }),
+        );
+      }
+      const participants = participantRead.rows;
       if (originalScope.workspaceId !== null) {
         quotaMatters.add(originalScope.workspaceId);
       }
@@ -592,10 +605,7 @@ const checkCreation = async (
       }
       // validateInvoiceDocument holds the original row. Refuse a snapshot
       // expansion without acquiring any new matter lock after it.
-      if (
-        participants.length > LIMITS.invoiceLinesPerInvoice ||
-        [...quotaMatters].some((id) => !matterLocks.workspaceIds.has(id))
-      ) {
+      if ([...quotaMatters].some((id) => !matterLocks.workspaceIds.has(id))) {
         return Result.err(
           new HandlerError({
             status: 409,

@@ -209,7 +209,7 @@ test.each([
       });
       expect(refused.isErr()).toBe(true);
       if (refused.isErr()) {
-        expect(String(refused.error)).toContain(
+        expect(refused.error.message).toContain(
           "Invoice tenant key index is missing, stale or not ready",
         );
       }
@@ -246,7 +246,7 @@ test("a same-named foreign key with another identity is refused before attachmen
   );
   expect(refused.isErr()).toBe(true);
   if (refused.isErr()) {
-    expect(String(refused.error)).toContain(
+    expect(refused.error.message).toContain(
       "Invoice tenant constraints have an unexpected identity",
     );
   }

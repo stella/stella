@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
@@ -17,6 +17,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { hasActiveInvoiceCredit } from "@/api/lib/billing/invoice-document-type";
 import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
@@ -232,18 +233,11 @@ const transitionInvoice = createSafeHandler(
           );
         }
         if (body.action === "void" || body.action === "revert_to_draft") {
-          const credit = await tx
-            .select({ id: invoices.id })
-            .from(invoices)
-            .where(
-              and(
-                invoiceInMatter(invoices, workspaceId),
-                eq(invoices.originalInvoiceId, existing.id),
-                ne(invoices.status, INVOICE_STATUS.VOID),
-              ),
-            )
-            .limit(1);
-          if (credit.at(0)) {
+          const hasCredit = await hasActiveInvoiceCredit(tx, {
+            invoiceId: existing.id,
+            workspaceId,
+          });
+          if (hasCredit) {
             return Result.err(
               new HandlerError({
                 status: 409,

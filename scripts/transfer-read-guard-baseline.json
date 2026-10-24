@@ -1022,20 +1022,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/lib/billing/invoice-lines.ts",
-    "function": "module/materialiseAttachedEntryLines/unlinedExpenses",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/lib/billing/invoice-lines.ts",
-    "function": "module/materialiseAttachedEntryLines/unlinedTimeEntries",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",
     "function": "module/guardRunningTimeEntries",
     "kind": "constant-limit",
@@ -1866,20 +1852,6 @@
     "function": "module/useAutocompleteStream/fireRequest",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/billing/invoice-pdf-download-button.tsx",
-    "function": "module/InvoicePdfDownloadButton",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/components/billing/invoice-pdf-download-button.tsx",
-    "function": "module/InvoicePdfDownloadButton",
-    "kind": "total-timeout-body",
-    "count": 2,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {

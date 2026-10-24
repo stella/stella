@@ -13,6 +13,12 @@ type ClientInvoiceMatterSelection = {
 export const validateClientInvoiceSelection = (
   matters: readonly ClientInvoiceMatterSelection[],
 ) => {
+  const first = matters.at(0);
+  if (first === undefined) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Select a matter" }),
+    );
+  }
   const ids = matters.map((m) => m.workspaceId);
   if (
     matters.some((m) => m.timeEntryIds.length + m.expenseIds.length === 0) ||
@@ -29,5 +35,5 @@ export const validateClientInvoiceSelection = (
       }),
     );
   }
-  return Result.ok(ids);
+  return Result.ok({ ids, first });
 };

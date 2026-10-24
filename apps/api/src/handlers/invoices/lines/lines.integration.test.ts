@@ -927,11 +927,11 @@ describe("invoice lines", () => {
             .where(eq(invoiceLines.id, lineId));
           expect(editedRows.at(0)).toMatchObject({
             description: "Adjusted invoice narrative",
-            recordedDescription: recorded?.description,
-            recordedQuantity: recorded?.quantity,
-            recordedUnit: recorded?.unit,
-            recordedUnitPrice: recorded?.unitPrice,
-            recordedNetAmount: recorded?.netAmount,
+            recordedDescription: recorded.description,
+            recordedQuantity: recorded.quantity,
+            recordedUnit: recorded.unit,
+            recordedUnitPrice: recorded.unitPrice,
+            recordedNetAmount: recorded.netAmount,
           });
           expect(
             await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
@@ -941,11 +941,11 @@ describe("invoice lines", () => {
             .from(invoiceLines)
             .where(eq(invoiceLines.id, lineId));
           expect(resetRows.at(0)).toMatchObject({
-            description: recorded?.description,
-            quantity: recorded?.quantity,
-            unit: recorded?.unit,
-            unitPrice: recorded?.unitPrice,
-            netAmount: recorded?.netAmount,
+            description: recorded.description,
+            quantity: recorded.quantity,
+            unit: recorded.unit,
+            unitPrice: recorded.unitPrice,
+            netAmount: recorded.netAmount,
           });
           expect(
             await testDb
@@ -1046,8 +1046,8 @@ describe("invoice lines", () => {
         {
           name: "create manual line",
           successKey: "id",
-          run: () =>
-            createInvoiceLine.handler(
+          run: async () =>
+            await createInvoiceLine.handler(
               contextFor(createInvoiceLine.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1061,8 +1061,8 @@ describe("invoice lines", () => {
         {
           name: "create time line",
           successKey: "id",
-          run: () =>
-            createInvoiceLine.handler(
+          run: async () =>
+            await createInvoiceLine.handler(
               contextFor(createInvoiceLine.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1077,8 +1077,8 @@ describe("invoice lines", () => {
         {
           name: "create expense line",
           successKey: "id",
-          run: () =>
-            createInvoiceLine.handler(
+          run: async () =>
+            await createInvoiceLine.handler(
               contextFor(createInvoiceLine.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1093,8 +1093,8 @@ describe("invoice lines", () => {
         {
           name: "update line",
           successKey: "id",
-          run: () =>
-            updateInvoiceLine.handler(
+          run: async () =>
+            await updateInvoiceLine.handler(
               contextFor(updateInvoiceLine.handler, {
                 params: lineParams,
                 auditEvents,
@@ -1105,8 +1105,8 @@ describe("invoice lines", () => {
         {
           name: "reset line",
           successKey: "id",
-          run: () =>
-            updateInvoiceLine.handler(
+          run: async () =>
+            await updateInvoiceLine.handler(
               contextFor(updateInvoiceLine.handler, {
                 params: lineParams,
                 auditEvents,
@@ -1117,8 +1117,8 @@ describe("invoice lines", () => {
         {
           name: "attach time",
           successKey: "totalAmount",
-          run: () =>
-            addEntries.handler(
+          run: async () =>
+            await addEntries.handler(
               contextFor(addEntries.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1129,8 +1129,8 @@ describe("invoice lines", () => {
         {
           name: "attach expense",
           successKey: "totalAmount",
-          run: () =>
-            addEntries.handler(
+          run: async () =>
+            await addEntries.handler(
               contextFor(addEntries.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1141,8 +1141,8 @@ describe("invoice lines", () => {
         {
           name: "remove time",
           successKey: "success",
-          run: () =>
-            removeEntries.handler(
+          run: async () =>
+            await removeEntries.handler(
               contextFor(removeEntries.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1153,8 +1153,8 @@ describe("invoice lines", () => {
         {
           name: "remove expense",
           successKey: "success",
-          run: () =>
-            removeEntries.handler(
+          run: async () =>
+            await removeEntries.handler(
               contextFor(removeEntries.handler, {
                 params: invoiceParams,
                 auditEvents,
@@ -1165,8 +1165,8 @@ describe("invoice lines", () => {
         {
           name: "delete line",
           successKey: "id",
-          run: () =>
-            deleteInvoiceLine.handler(
+          run: async () =>
+            await deleteInvoiceLine.handler(
               contextFor(deleteInvoiceLine.handler, {
                 params: lineParams,
                 auditEvents,
@@ -1176,8 +1176,8 @@ describe("invoice lines", () => {
         {
           name: "delete invoice",
           successKey: "deleted",
-          run: () =>
-            deleteInvoice.handler(
+          run: async () =>
+            await deleteInvoice.handler(
               contextFor(deleteInvoice.handler, {
                 params: invoiceParams,
                 auditEvents,

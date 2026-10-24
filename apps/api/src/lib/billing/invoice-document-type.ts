@@ -153,3 +153,26 @@ export const validateInvoiceDocument = async (
   }
   return Result.ok(undefined);
 };
+
+type ActiveInvoiceCreditOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const hasActiveInvoiceCredit = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: ActiveInvoiceCreditOptions,
+) => {
+  const credits = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(
+      and(
+        invoiceInMatter(invoices, workspaceId),
+        eq(invoices.originalInvoiceId, invoiceId),
+        ne(invoices.status, INVOICE_STATUS.VOID),
+      ),
+    )
+    .limit(1);
+  return credits.length > 0;
+};

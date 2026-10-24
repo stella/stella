@@ -51,14 +51,18 @@ type ScopedDbMockOptions = {
   };
 };
 
+const awaitableRows = <TRow>(rows: TRow[]) => {
+  const result = Promise.resolve(rows);
+  return { then: result.then.bind(result) };
+};
+
 // Query fixtures provide the rows matching their select boundary. Keep the
 // awaitable builder shape intact for locking and bounded reads.
 export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   let rowOffset = 0;
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
-    return Object.assign(Promise.resolve(selected), {
+    return Object.assign(awaitableRows(selected), {
       for: async () => await Promise.resolve(selected),
     });
   };
@@ -66,9 +70,8 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     rowOffset = count;
     return { limit };
   };
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its query methods
   const where = () =>
-    Object.assign(Promise.resolve(rows), {
+    Object.assign(awaitableRows(rows), {
       limit,
       offset,
       for: async () => await Promise.resolve(rows),
@@ -76,7 +79,7 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     });
   return {
     from: () =>
-      Object.assign(Promise.resolve(rows), {
+      Object.assign(awaitableRows(rows), {
         where,
         innerJoin: () => ({ where }),
         leftJoin: () => ({ where }),

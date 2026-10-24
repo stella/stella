@@ -59,7 +59,7 @@ const readInvoiceById = createSafeHandler(
         ...line,
         releasedAt: line.releasedAt?.toISOString() ?? null,
       })),
-      totals: totals,
+      totals,
       paidAt: invoice.paidAt?.toISOString() ?? null,
       finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),

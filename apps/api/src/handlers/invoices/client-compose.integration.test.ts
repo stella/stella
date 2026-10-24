@@ -190,12 +190,7 @@ const create = async () => {
       { clientId },
     ),
   );
-  if (
-    typeof result !== "object" ||
-    result === null ||
-    !("id" in result) ||
-    typeof result.id !== "string"
-  ) {
+  if (!("id" in result) || typeof result.id !== "string") {
     throw new Error(`Expected client invoice: ${JSON.stringify(result)}`);
   }
   return asTestRaw<SafeId<"invoice">>(result.id);

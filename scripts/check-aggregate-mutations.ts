@@ -1350,6 +1350,12 @@ const JOINING_RUNNERS = {
       suppliesTransaction: true,
     },
     {
+      module: `${API}db/safe-db.ts`,
+      exported: "resultTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
       module: REGISTRY,
       exported: "withAggregateSavepoint",
       argument: 1,
@@ -1654,6 +1660,19 @@ const calleeCallbackCredit = (
       resultPropertyCredit(options))
     : undefined;
 
+const hasLockIds = (expression: ts.Expression | undefined): boolean => {
+  if (expression === undefined) {
+    return false;
+  }
+  const ids = unwrapExpression(expression);
+  return (
+    !(ts.isArrayLiteralExpression(ids) && ids.elements.length === 0) &&
+    !(ts.isIdentifier(ids) && ids.text === "undefined") &&
+    ids.kind !== ts.SyntaxKind.NullKeyword &&
+    !ts.isVoidExpression(ids)
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
@@ -1708,6 +1727,48 @@ const awaitedAggregateNames = ({
       ts.isIdentifier(node.expression.expression)
     ) {
       const options = node.expression.arguments.at(0);
+      if (
+        isTrustedImport({
+          identifier: node.expression.expression,
+          access,
+          module: REGISTRY,
+          exported: ["withInvoiceMatterLocks"],
+        }) &&
+        hasLockIds(node.expression.arguments.at(1))
+      ) {
+        names.add("workspace");
+      }
+      if (
+        isTrustedImport({
+          identifier: node.expression.expression,
+          access,
+          module: REGISTRY,
+          exported: ["withAggregateParentBatch"],
+        }) &&
+        options !== undefined &&
+        ts.isObjectLiteralExpression(options) &&
+        options.properties.every(
+          (property) =>
+            (ts.isPropertyAssignment(property) ||
+              ts.isShorthandPropertyAssignment(property)) &&
+            !ts.isComputedPropertyName(property.name),
+        )
+      ) {
+        const workspaceIds = options.properties.filter(
+          (property) =>
+            ts.isPropertyAssignment(property) &&
+            staticPropertyKey(property) === "workspaceIds",
+        );
+        const field = workspaceIds.at(0);
+        if (
+          workspaceIds.length === 1 &&
+          field !== undefined &&
+          ts.isPropertyAssignment(field) &&
+          hasLockIds(field.initializer)
+        ) {
+          names.add("workspace");
+        }
+      }
       if (
         isTrustedImport({
           identifier: node.expression.expression,

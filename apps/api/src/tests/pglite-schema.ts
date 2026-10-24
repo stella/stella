@@ -1234,7 +1234,7 @@ export const installPgliteInvoiceObjects = async (
     const policy = /^CREATE POLICY (?<name>\w+) ON (?<table>\w+)/u.exec(
       statement,
     )?.groups;
-    if (policy) {
+    if (policy?.["name"] !== undefined && policy["table"] !== undefined) {
       // Schema push already created policies; workspace-access replay can also
       // replace them, so reinstall the owning migration's final definitions.
       await db.execute(

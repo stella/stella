@@ -12,6 +12,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { withBillingMatterAdvisoryLocks } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -162,14 +163,18 @@ export async function guardRunningTimeEntries(
       );
       // Validate this snapshot before source-row locks. The returned plan also
       // fences changes between this read and the later invoice lock owner.
-      const currentMatters = await tx
-        .select({ workspaceId: invoiceLines.workspaceId })
-        .from(invoiceLines)
-        .where(eq(invoiceLines.invoiceId, options.selection.invoiceId))
-        .limit(LIMITS.invoiceLinesPerInvoice + 1);
+      const currentMatterRead = await readBounded(
+        tx
+          .select({ workspaceId: invoiceLines.workspaceId })
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, options.selection.invoiceId)),
+        LIMITS.invoiceLinesPerInvoice,
+      );
       if (
-        currentMatters.length > LIMITS.invoiceLinesPerInvoice ||
-        currentMatters.some((line) => !workspaceIds.has(line.workspaceId))
+        currentMatterRead.type === "overflow" ||
+        currentMatterRead.rows.some(
+          (line) => !workspaceIds.has(line.workspaceId),
+        )
       ) {
         return refuse(
           new HandlerError({
@@ -202,13 +207,29 @@ export async function guardRunningTimeEntries(
       sql`SELECT pg_advisory_xact_lock(hashtext(${options.workspaceId}))`,
     );
   }
-  const locked = await tx
-    .select({ id: timeEntries.id })
-    .from(timeEntries)
-    .where(condition)
-    .orderBy(asc(timeEntries.id))
-    .limit(LIMITS.timeEntriesPerWorkspace + 1)
-    .for("update");
+  const lockedRead = await readBounded(
+    {
+      limit: (cap) =>
+        tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(condition)
+          .orderBy(asc(timeEntries.id))
+          .limit(cap)
+          .for("update"),
+    },
+    LIMITS.timeEntriesPerWorkspace,
+  );
+  if (lockedRead.type === "overflow") {
+    return refuse(
+      new HandlerError({
+        status: 409,
+        code: "time_entry_selection_changed",
+        message: "Time entry selection changed; reload and try again",
+      }),
+    );
+  }
+  const locked = lockedRead.rows;
   const snapshotIds = new Set(ids);
   if (
     locked.length !== snapshot.length ||
