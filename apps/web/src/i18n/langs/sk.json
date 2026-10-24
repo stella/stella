@@ -1028,7 +1028,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · približne {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
       "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd}} na tejto stránke",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
       "perPage": "Na stránku",
       "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
