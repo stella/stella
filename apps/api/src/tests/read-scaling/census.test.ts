@@ -7,7 +7,7 @@ import api from "@/api/server";
 import {
   ledgerMergeBase,
   runLedgerMembershipGuard,
-} from "../../../../../scripts/ledger-membership";
+} from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { exactIconScalingScenario } from "./link-icons";
