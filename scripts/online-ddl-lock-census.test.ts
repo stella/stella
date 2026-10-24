@@ -60,7 +60,7 @@ describe("online DDL lock census", () => {
     ["ACCESS EXCLUSIVE", "ALTER TABLE public.probe ADD COLUMN added text"],
   ] as const)("ungated %s SQL requires the branded path", (mode, sql) => {
     const source = `${ownerSource}\nconst fixture = ${JSON.stringify(sql)};`;
-    expect(censusOnlineDdlSource(source).join("\n")).toContain(`${mode}`);
+    expect(censusOnlineDdlSource(source).join("\n")).toContain(mode);
     expect(censusOnlineDdlSource(source).join("\n")).toMatch(
       /must be passed through lockTaking/iu,
     );
