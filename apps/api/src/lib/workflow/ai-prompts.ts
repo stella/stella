@@ -61,9 +61,9 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   const filenamesList = filenames
     .map((filename) => {
       if (filename.kind === "pdf-bates") {
-        return `- ${filename.simplified} (PDF — cite Bates stamps from the page corners, e.g. ${filename.simplified}-0002)`;
+        return `- ${filename.simplified} (PDF: cite Bates stamps from the page corners, e.g. ${filename.simplified}-0002)`;
       }
-      return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. seq-0010)`;
+      return `- ${filename.simplified} (DOCX: cite folio blockIds from the JSON list, e.g. seq-0010)`;
     })
     .join("\n");
   const hasCitableFiles = filenames.length > 0;
@@ -83,7 +83,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   }
   if (hasPdf && hasDocx) {
     citationGuide.push(
-      "Match the citation format to the source file's type — never " +
+      "Match the citation format to the source file's type; never " +
         "mix Bates stamps with blockIds inside one statement.",
     );
   }
@@ -230,7 +230,7 @@ export const buildDocxBlocksMessage = ({
   });
 
   return [
-    `DOCX file ${simplifiedName} — folio block list. Cite blocks by ` +
+    `DOCX file ${simplifiedName}: folio block list. Cite blocks by ` +
       `their "blockId" in any justification that references this file.`,
     "```json",
     JSON.stringify(promptBlocks),

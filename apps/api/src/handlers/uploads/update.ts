@@ -530,7 +530,7 @@ const runFinalize = async function* ({
     return Result.err(
       new UploadFinalizeError({
         status: 404,
-        message: "Upload not found in staging — URL likely expired",
+        message: "Upload not found in staging; URL likely expired",
         rejectReason: "tmp-head-failed",
       }),
     );

@@ -38,7 +38,7 @@
     "reconnectAccount": "Se reconnecter à stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Les modifications restent locales et seront réessayées automatiquement",
+    "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
     "checkpointDelayedTitle": "Synchronisation du point de contrôle retardée",
     "diagnosticsCopiedBody": "Collez-les dans votre demande de support si nécessaire.",
     "diagnosticsCopiedTitle": "Diagnostics copiés",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Les données de récupération locales ont été réinitialisées",
     "revisionCreatedBody": "{fileName} enregistré en tant que version {versionNumber}. Modification sur le bureau terminée",
     "revisionCreatedTitle": "Révision stella créée",
-    "sessionClosedSaved": "{fileName} — La copie locale reste préservée dans Copies de travail temporaires",
-    "sessionClosedUnsaved": "{fileName} — Vous avez des modifications locales non enregistrées. Retrouvez votre copie dans Copies de travail temporaires.",
-    "takenOverBody": "{fileName} — Rouvrez depuis stella ici pour reprendre la modification",
+    "sessionClosedSaved": "{fileName} : la copie locale reste préservée dans Copies de travail temporaires",
+    "sessionClosedUnsaved": "{fileName} : vous avez des modifications locales non enregistrées. Retrouvez votre copie dans Copies de travail temporaires.",
+    "takenOverBody": "{fileName} : rouvrez depuis stella ici pour reprendre la modification",
     "takenOverLocalError": "La modification sur le bureau a été déplacée vers un autre appareil. Cette copie locale est préservée.",
     "takenOverTitle": "Modification déplacée vers un autre appareil"
   },

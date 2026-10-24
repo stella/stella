@@ -13,7 +13,7 @@ import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 const MCP_SERVER_NAME = "stella";
 
 const SANDBOX_INSTRUCTIONS =
-  "You are running as a stella agent. Use the stella MCP server (registered in this workspace) for all workspace actions — reading and writing matters, documents, and knowledge. Do not attempt network access outside those tools.";
+  "You are running as a stella agent. Use the stella MCP server (registered in this workspace) for all workspace actions: reading and writing matters, documents, and knowledge. Do not attempt network access outside those tools.";
 
 type ChatSandboxContext = {
   dataClass: "customer";

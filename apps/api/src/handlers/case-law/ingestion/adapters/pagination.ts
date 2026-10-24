@@ -555,7 +555,7 @@ const materialiseConfiguredWalks = ({
   const refuse = (detail: string): Result<never, AdapterFetchError> =>
     Result.err(
       new AdapterFetchError({
-        message: `${adapterKey}: unusable walk policy — ${detail}`,
+        message: `${adapterKey}: unusable walk policy: ${detail}`,
         adapterKey,
         cursor,
       }),

@@ -378,7 +378,7 @@ export const TimeEntryForm = ({
                 <SelectPopup>
                   {taskCodes.map((tc) => (
                     <SelectItem key={tc.id} value={tc.code}>
-                      {`${tc.code} — ${tc.label}`}
+                      {`${tc.code}: ${tc.label}`}
                     </SelectItem>
                   ))}
                 </SelectPopup>
@@ -403,7 +403,7 @@ export const TimeEntryForm = ({
                 <SelectPopup>
                   {activityCodes.map((ac) => (
                     <SelectItem key={ac.id} value={ac.code}>
-                      {`${ac.code} — ${ac.label}`}
+                      {`${ac.code}: ${ac.label}`}
                     </SelectItem>
                   ))}
                 </SelectPopup>

@@ -102,7 +102,7 @@ const formatRegionBreakdown = (
   regionCounts: RenderStormDetails["regionCounts"],
 ): string => {
   if (regionCounts.length === 0) {
-    return "none attributed — wrap the suspect surface in <RenderStormRegion>";
+    return "none attributed; wrap the suspect surface in <RenderStormRegion>";
   }
   return regionCounts
     .slice(0, RENDER_STORM_REPORTED_REGIONS)

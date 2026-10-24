@@ -13,6 +13,8 @@
  *    category the target locale needs (e.g. Polish few/many, Arabic's six).
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
+ *  - typography: no em dash, the catalogue half of the `no-em-dash-copy`
+ *    oxlint rule (oxlint does not parse JSON).
  *
  * Existing debt is grandfathered in i18n-lint-baseline.json so the gate
  * catches only NEW regressions. Burn the baseline down over time.
@@ -491,6 +493,15 @@ export const hasInvalidCapitalizedStella = (value: string): boolean => {
   return false;
 };
 
+// Match the `no-em-dash-copy` oxlint rule for locale JSON: copy breaks a
+// sentence with a period, comma, colon or parentheses, in every locale. A
+// value that is only the glyph is the empty-cell marker, not punctuation.
+export const hasEmDash = (value: string): boolean =>
+  value.includes("\u2014") && value.trim() !== "\u2014";
+
+export const EM_DASH_GUIDANCE =
+  "no em dash: rewrite the break with a period, comma, colon or parentheses";
+
 export type ForbiddenRule = {
   concept: string;
   guidance?: string;
@@ -714,7 +725,8 @@ const findViolations = (
         locale === "en" &&
         (findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
           0 ||
-          hasInvalidCapitalizedStella(targetValue))
+          hasInvalidCapitalizedStella(targetValue) ||
+          hasEmDash(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -737,7 +749,8 @@ const findViolations = (
     if (
       findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
         0 ||
-      hasInvalidCapitalizedStella(targetValue)
+      hasInvalidCapitalizedStella(targetValue) ||
+      hasEmDash(targetValue)
     ) {
       result.terminology.push(key);
     }
@@ -839,13 +852,16 @@ if (import.meta.main) {
           } else if (!isSuppressed(baseline, category, key, locale, entry)) {
             const guidance =
               category === "terminology"
-                ? findForbiddenGuidance({
-                    source: entry.source,
-                    target: entry.target,
-                    locale,
-                    rules,
-                    key,
-                  })
+                ? [
+                    ...findForbiddenGuidance({
+                      source: entry.source,
+                      target: entry.target,
+                      locale,
+                      rules,
+                      key,
+                    }),
+                    ...(hasEmDash(entry.target) ? [EM_DASH_GUIDANCE] : []),
+                  ]
                 : [];
             const suffix =
               guidance.length > 0 ? ` (${guidance.join("; ")})` : "";

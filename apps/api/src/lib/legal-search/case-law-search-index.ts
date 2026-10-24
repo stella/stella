@@ -298,6 +298,7 @@ export const indexDecision = async (
     return Result.ok(undefined);
   }
 
+  // oxlint-disable-next-line no-em-dash-copy/no-em-dash-copy -- the title is persisted in search projections; changing its format re-projects the whole corpus and needs its own reviewed change.
   const title = `${decision.caseNumber} — ${decision.court}`;
   const bodyText =
     decision.fulltext ??

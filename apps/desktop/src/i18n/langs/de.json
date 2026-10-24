@@ -38,7 +38,7 @@
     "reconnectAccount": "Erneut mit stella web verbinden…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Änderungen bleiben lokal und werden automatisch erneut versucht",
+    "checkpointDelayedBody": "{fileName}: Änderungen bleiben lokal und werden automatisch erneut versucht",
     "checkpointDelayedTitle": "Checkpoint-Synchronisierung verzögert",
     "diagnosticsCopiedBody": "Fügen Sie sie bei Bedarf in Ihre Supportanfrage ein.",
     "diagnosticsCopiedTitle": "Diagnose kopiert",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokale Wiederherstellungsdaten wurden zurückgesetzt",
     "revisionCreatedBody": "{fileName} als Version {versionNumber} gespeichert. Desktop-Bearbeitung abgeschlossen",
     "revisionCreatedTitle": "stella-Revision erstellt",
-    "sessionClosedSaved": "{fileName} — Lokale Kopie bleibt in Temporäre Arbeitskopien erhalten",
-    "sessionClosedUnsaved": "{fileName} — Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
-    "takenOverBody": "{fileName} — Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
+    "sessionClosedSaved": "{fileName}: Lokale Kopie bleibt in Temporäre Arbeitskopien erhalten",
+    "sessionClosedUnsaved": "{fileName}: Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
+    "takenOverBody": "{fileName}: Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
     "takenOverLocalError": "Desktop-Bearbeitung auf anderes Gerät verschoben. Diese lokale Kopie bleibt erhalten.",
     "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben"
   },

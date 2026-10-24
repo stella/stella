@@ -542,7 +542,7 @@ const main = async (): Promise<void> => {
       `\n⚠ Skipped ${unverified.length} offered model ID(s) because an upstream source was unavailable:`,
     );
     for (const { entry, verdict } of unverified) {
-      const detail = "detail" in verdict ? ` — ${verdict.detail}` : "";
+      const detail = "detail" in verdict ? `: ${verdict.detail}` : "";
       console.warn(
         `  ⚠ [UNVERIFIED] ${entry.provider} / ${entry.modelId}${detail}`,
       );
@@ -565,12 +565,12 @@ const main = async (): Promise<void> => {
     console.error(`\n✗ ${failureCount} model catalog issue(s) need attention:`);
     for (const model of discoveryFailures) {
       console.error(
-        `  ✗ [NEW] ${model.provider} / ${model.modelId} — released ${model.releaseDate ?? "without a date"}; not offered or reviewed`,
+        `  ✗ [NEW] ${model.provider} / ${model.modelId}: released ${model.releaseDate ?? "without a date"}; not offered or reviewed`,
       );
     }
     for (const { entry, verdict } of failures) {
       const label = verdict.kind === "deprecated" ? "DEPRECATED" : "MISSING";
-      const detail = "detail" in verdict ? ` — ${verdict.detail}` : "";
+      const detail = "detail" in verdict ? `: ${verdict.detail}` : "";
       console.error(
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId}${detail}`,
       );
@@ -582,7 +582,7 @@ const main = async (): Promise<void> => {
     }
     for (const { entry, label, detail } of capabilityFailures) {
       console.error(
-        `  ✗ [${label}] ${entry.provider} / ${entry.modelId} — ${detail}`,
+        `  ✗ [${label}] ${entry.provider} / ${entry.modelId}: ${detail}`,
       );
     }
     console.error(

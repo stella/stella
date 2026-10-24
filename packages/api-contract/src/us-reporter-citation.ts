@@ -128,7 +128,7 @@ export const US_REPORTER_PAGE_LEAD_SOURCE = String.raw`(?:\s{0,16},\s{0,16}|\s{1
 /** A page cannot end inside a word or a longer numeral. */
 export const US_REPORTER_PAGE_END_SOURCE = String.raw`(?![\p{L}\p{N}])`;
 
-const DASH = "[-‐‑‒–—―−]";
+const DASH = "[-‐‑‒–\u2014―−]";
 const PAGE_RANGE_SOURCE = String.raw`\d{1,5}(?:\s*${DASH}\s*\d{1,5})?`;
 const FOOTNOTE_SOURCE = String.raw`nn?\.\s*\d{1,4}(?:\s*${DASH}\s*\d{1,4})?`;
 const PIN_SOURCE = String.raw`(?:${PAGE_RANGE_SOURCE}(?:\s*,?\s*(?:&\s*|and\s+)?${FOOTNOTE_SOURCE})?|${FOOTNOTE_SOURCE})`;

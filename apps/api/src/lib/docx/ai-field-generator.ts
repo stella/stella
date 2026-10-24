@@ -393,7 +393,7 @@ ${itemSection}${documentSection}
 Known details (JSON):
 ${JSON.stringify(values)}
 
-Reply with only the text for this field — no preamble, no quotes, no markdown.`,
+Reply with only the text for this field: no preamble, no quotes, no markdown.`,
         skillTools,
         resolveTextModel,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
@@ -615,7 +615,7 @@ const buildAdaptPrompt = (
   return `Field: ${fieldLine}
 ${guidance}${languagesLine}Value to adapt: ${stub}
 
-Each occurrence below shows the surrounding document text with the {{${fieldPath}}} marker where the value goes. Return exactly ${String(occurrences.length)} renderings, in order — rendering N replaces the marker in occurrence N. Each rendering is the replacement text only: no quotes, no markdown, no surrounding sentence.
+Each occurrence below shows the surrounding document text with the {{${fieldPath}}} marker where the value goes. Return exactly ${String(occurrences.length)} renderings, in order: rendering N replaces the marker in occurrence N. Each rendering is the replacement text only: no quotes, no markdown, no surrounding sentence.
 
 ${contexts}`;
 };

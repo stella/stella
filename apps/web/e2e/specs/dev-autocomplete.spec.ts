@@ -22,7 +22,7 @@ test("autocomplete playground matches the web runtime mode", async ({
   await expect(page).toHaveURL(/\/dev\?visual=autocomplete$/u);
   await expect(
     page.getByRole("heading", {
-      name: "stella autocomplete — dev playground",
+      name: "stella autocomplete: dev playground",
     }),
   ).toBeVisible({ timeout: 30_000 });
 });

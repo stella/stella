@@ -24,7 +24,7 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
       "a complex task. Use this when the request is " +
       "ambiguous or requires decisions you cannot make " +
       "alone (jurisdiction, parties, preferences, scope). " +
-      "The UI renders the questions automatically — clickable " +
+      "The UI renders the questions automatically: clickable " +
       "chips when `options` is populated, a free-text input " +
       "otherwise (the user can switch from chips to free text " +
       "themselves via a 'Write your own' affordance). " +
@@ -34,7 +34,7 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
       "EN/CS/DE, contract kinds, jurisdictions, named " +
       "parties already in scope. Do NOT phrase the question " +
       "as 'A, B, or something else?' and leave `options` " +
-      "empty — that forces the user to type. Reserve free-form " +
+      "empty; that forces the user to type. Reserve free-form " +
       "(no `options`) for genuinely open-ended answers like " +
       "names, dates, free text. Once the user answers, " +
       "synthesize their input into a plan and execute it.",

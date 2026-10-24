@@ -127,10 +127,10 @@ type Doc = {
 };
 
 const DOCS: Doc[] = [
-  { name: "MSA — Acme Corp", pill: "Reviewed" },
+  { name: "MSA (Acme Corp)", pill: "Reviewed" },
   { name: "Witness statement.docx", pill: "Draft" },
-  { name: "Exhibit B — Invoices.pdf", pill: "New" },
-  { name: "NDA — Northwind", pill: "Reviewed" },
+  { name: "Exhibit B (Invoices.pdf)", pill: "New" },
+  { name: "NDA (Northwind)", pill: "Reviewed" },
 ];
 
 const NavRow = ({ label, tint, active }: NavItem) => (

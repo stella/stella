@@ -38,7 +38,7 @@
     "reconnectAccount": "Volver a conectar con stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Los cambios permanecen locales y se reintentarán automáticamente",
+    "checkpointDelayedBody": "{fileName}: los cambios permanecen locales y se reintentarán automáticamente",
     "checkpointDelayedTitle": "Sincronización de punto de control retrasada",
     "diagnosticsCopiedBody": "Péguelo en su solicitud de soporte cuando sea necesario.",
     "diagnosticsCopiedTitle": "Diagnósticos copiados",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Los datos de recuperación local fueron restablecidos",
     "revisionCreatedBody": "{fileName} guardado como versión {versionNumber}. Edición de escritorio finalizada",
     "revisionCreatedTitle": "Revisión de stella creada",
-    "sessionClosedSaved": "{fileName} — La copia local se mantiene preservada en Copias de trabajo temporales",
-    "sessionClosedUnsaved": "{fileName} — Tiene ediciones locales sin guardar. Encuentre su copia en Copias de trabajo temporales.",
-    "takenOverBody": "{fileName} — Vuelva a abrir desde stella aquí para recuperar la edición",
+    "sessionClosedSaved": "{fileName}: la copia local se mantiene preservada en Copias de trabajo temporales",
+    "sessionClosedUnsaved": "{fileName}: tiene ediciones locales sin guardar. Encuentre su copia en Copias de trabajo temporales.",
+    "takenOverBody": "{fileName}: vuelva a abrir desde stella aquí para recuperar la edición",
     "takenOverLocalError": "La edición de escritorio se movió a otro dispositivo. Esta copia local se mantiene preservada.",
     "takenOverTitle": "Edición movida a otro dispositivo"
   },

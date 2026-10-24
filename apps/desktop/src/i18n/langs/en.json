@@ -38,7 +38,7 @@
     "reconnectAccount": "Reconnect to stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Changes stay local and will retry automatically",
+    "checkpointDelayedBody": "{fileName}: Changes stay local and will retry automatically",
     "checkpointDelayedTitle": "Checkpoint sync delayed",
     "diagnosticsCopiedBody": "Paste it into your support request when needed.",
     "diagnosticsCopiedTitle": "Diagnostics copied",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Local recovery data was reset",
     "revisionCreatedBody": "{fileName} saved as version {versionNumber}. Desktop editing finished",
     "revisionCreatedTitle": "stella revision created",
-    "sessionClosedUnsaved": "{fileName} — You have unsaved local edits. Find your copy in Temporary working copies.",
-    "sessionClosedSaved": "{fileName} — Local copy stays preserved in Temporary working copies",
-    "takenOverBody": "{fileName} — Reopen from stella here to take editing back",
+    "sessionClosedUnsaved": "{fileName}: You have unsaved local edits. Find your copy in Temporary working copies.",
+    "sessionClosedSaved": "{fileName}: Local copy stays preserved in Temporary working copies",
+    "takenOverBody": "{fileName}: Reopen from stella here to take editing back",
     "takenOverTitle": "Editing moved to another device",
     "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved."
   },
