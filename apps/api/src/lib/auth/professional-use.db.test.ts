@@ -25,7 +25,7 @@ import { env } from "@/api/env";
 import { meRoute } from "@/api/handlers/me/routes";
 import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
 import { authMacro, createAuth, getAuth } from "@/api/lib/auth";
-import { acceptAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -302,7 +302,83 @@ const acceptanceAuditEvents = async (organizationId: string) =>
       ),
     );
 
+const acceptanceProvenanceCases = {
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive]: {
+    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+    performerType: "user",
+    triggerType: "direct",
+    triggerSource: null,
+  },
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning]: {
+    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning,
+    performerType: "service",
+    triggerType: "system",
+    triggerSource: "review-account",
+  },
+} as const satisfies Record<
+  Parameters<typeof recordAccountProfessionalUse>[0]["source"],
+  Pick<
+    typeof auditLogs.$inferSelect,
+    "performerType" | "triggerType" | "triggerSource"
+  > & { source: Parameters<typeof recordAccountProfessionalUse>[0]["source"] }
+>;
+
 describe("professional-use acceptance", () => {
+  test.each(Object.values(acceptanceProvenanceCases))(
+    "$source acceptance preserves its account source and audit performer on replay",
+    async ({ source, ...execution }) => {
+      const person = await signInHuman(
+        `professional-use-origin-${Bun.randomUUIDv7()}@stella.dev`,
+      );
+      const userId = brandPersistedUserId(person.userId);
+      await testDb
+        .delete(userProfessionalUseAcceptances)
+        .where(eq(userProfessionalUseAcceptances.userId, userId));
+      const organization = await createOrganizationFor(person);
+      const organizationId = brandPersistedOrganizationId(organization.id);
+      expect(await organizationAcceptances([organizationId])).toEqual([]);
+
+      expect(
+        (await recordAccountProfessionalUse({ userId, source })).isOk(),
+      ).toBe(true);
+      const accepted = await userAcceptances([userId]);
+      expect(accepted).toMatchObject([{ source, ...CURRENT_VERSIONS }]);
+      const readExecution = async () =>
+        await testDb
+          .select({
+            performerType: auditLogs.performerType,
+            performerId: auditLogs.performerId,
+            triggerType: auditLogs.triggerType,
+            triggerSource: auditLogs.triggerSource,
+          })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.organizationId, organizationId),
+              sql`${auditLogs.metadata}->>'field' = 'professionalUseAcceptance'`,
+            ),
+          );
+      const events = await readExecution();
+      expect(events).toEqual([
+        {
+          ...execution,
+          performerId:
+            execution.performerType === "user" ? userId : "review-account",
+        },
+      ]);
+
+      for (const next of Object.values(acceptanceProvenanceCases)) {
+        expect(
+          (
+            await recordAccountProfessionalUse({ userId, source: next.source })
+          ).isOk(),
+        ).toBe(true);
+        expect(await userAcceptances([userId])).toEqual(accepted);
+        expect(await readExecution()).toEqual(events);
+      }
+    },
+  );
+
   test("every account and organization created through interactive registration has exactly one acceptance with the current versions", async () => {
     await assertProperty(
       "every account and organization created through interactive registration has exactly one acceptance with the current versions",
@@ -718,7 +794,10 @@ describe("professional-use acceptance", () => {
     expect(await organizationAcceptances([organizationId])).toEqual([]);
     expect(await acceptanceAuditEvents(organizationId)).toEqual([]);
 
-    const accepted = await acceptAccountProfessionalUse(userId);
+    const accepted = await recordAccountProfessionalUse({
+      userId,
+      source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+    });
     expect(Result.isOk(accepted)).toBe(true);
 
     expect(await organizationAcceptances([organizationId])).toMatchObject([
