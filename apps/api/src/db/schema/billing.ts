@@ -319,7 +319,9 @@ const TIME_TIMER_ADMIN_ROLE_SQL_VALUES = ORGANIZATION_MANAGEMENT_ROLES.map(
 
 const timerOrganizationAdminCheck = (
   tableName:
-    "time_timers" | "time_timer_confirmations" | "time_entry_timer_states",
+    | "time_timers"
+    | "time_timer_confirmations"
+    | "time_entry_timer_states",
 ) => sql`(
   ${sql.identifier(tableName)}."organization_id" = (SELECT current_setting('app.organization_id', true))
   AND EXISTS (
