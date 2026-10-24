@@ -1,3 +1,4 @@
+// parser-output-unchanged: failure stop kinds classify rejected pages only; accepted page validation and parsed records are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
