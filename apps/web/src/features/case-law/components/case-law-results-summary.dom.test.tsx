@@ -18,8 +18,8 @@ afterAll(async () => await unregisterDomEnvironment());
 
 const renderHeading = (
   props: Partial<Parameters<typeof CaseLawResultsSummary>[0]>,
-) => {
-  return render(
+) =>
+  render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <CaseLawResultsSummary
@@ -34,7 +34,6 @@ const renderHeading = (
       </FormattingProvider>
     </IntlProvider>,
   );
-};
 
 test("reports exact and appended partial matches separately", () => {
   const view = renderHeading({ relaxedHitCount: 3 });
