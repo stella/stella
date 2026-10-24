@@ -4,11 +4,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { ownerStorageKey } from "@stll/api-contract/browser-storage";
+
 import type { FileTab } from "../../src/components/inspector/file-tab";
-import {
-  inspectorMinimizedStorageKey,
-  inspectorStateStorageKey,
-} from "../../src/components/inspector/inspector-storage-keys";
 import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
 import {
   dockedChatFileThreadPage,
@@ -147,18 +145,30 @@ export const restoreGeometryInspector = async (
       localStorage.setItem(
         stateKey,
         JSON.stringify({
-          tabs: mode === "inspector" ? [fileTab] : [],
-          groups: [],
-          groupAssignments: {},
-          activeId: mode === "inspector" ? fileTab.id : null,
-          collapsedGroupIds: [],
+          version: 1,
+          value: {
+            tabs: mode === "inspector" ? [fileTab] : [],
+            groups: [],
+            groupAssignments: {},
+            activeId: mode === "inspector" ? fileTab.id : null,
+            collapsedGroupIds: [],
+          },
         }),
       );
-      localStorage.setItem(minimizedKey, mode === "inspector" ? "0" : "1");
+      localStorage.setItem(
+        minimizedKey,
+        JSON.stringify({ version: 1, value: mode !== "inspector" }),
+      );
     },
     {
-      stateKey: inspectorStateStorageKey(scope),
-      minimizedKey: inspectorMinimizedStorageKey(scope),
+      stateKey: ownerStorageKey(
+        `stella:inspector-state:v1:${scope.organizationId}:`,
+        { kind: "user", userId: scope.userId },
+      ),
+      minimizedKey: ownerStorageKey(
+        `stella:inspector-minimized:v1:${scope.organizationId}:`,
+        { kind: "user", userId: scope.userId },
+      ),
       fileTab: world.fileTab,
       mode: presentation,
     },
