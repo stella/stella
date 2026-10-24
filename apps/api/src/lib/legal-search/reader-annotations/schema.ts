@@ -7,22 +7,25 @@ import {
   READER_ANNOTATION_MAX_SPANS,
   READER_ANNOTATION_QUOTE_MAX_LENGTH,
   READER_ANNOTATION_STYLES,
-  READER_ANNOTATION_TARGET_TYPES,
   READER_ANNOTATION_VISIBILITIES,
+  READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
 import type {
   ReaderAnnotationColor,
   ReaderAnnotationStyle,
   ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,
+  ReaderDocumentTargetType,
 } from "@stll/api-contract/legal-reader-annotations";
 
 import { resourceIdSchema, uuidSchema } from "@/api/lib/custom-schema";
 
+// The public-law routes and tools address documents only; a claim's comment
+// goes through its matter's verification routes.
 const ANNOTATION_TARGET_TYPE_SCHEMA_VALUES = [
-  READER_ANNOTATION_TARGET_TYPES[0],
-  READER_ANNOTATION_TARGET_TYPES[1],
-] as const satisfies readonly ReaderAnnotationTargetType[];
+  READER_DOCUMENT_TARGET_TYPES[0],
+  READER_DOCUMENT_TARGET_TYPES[1],
+] as const satisfies readonly ReaderDocumentTargetType[];
 const ANNOTATION_COLOR_SCHEMA_VALUES = [
   READER_ANNOTATION_COLORS[0],
   READER_ANNOTATION_COLORS[1],
@@ -42,7 +45,7 @@ const ANNOTATION_VISIBILITY_SCHEMA_VALUES = [
 ] as const satisfies readonly ReaderAnnotationVisibility[];
 
 type MissingAnnotationTargetType = Exclude<
-  ReaderAnnotationTargetType,
+  ReaderDocumentTargetType,
   (typeof ANNOTATION_TARGET_TYPE_SCHEMA_VALUES)[number]
 >;
 type MissingAnnotationColor = Exclude<
@@ -80,7 +83,7 @@ const annotationStyleSchema = v.union([
   v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[2]),
   v.literal(ANNOTATION_STYLE_SCHEMA_VALUES[3]),
 ]);
-const annotationVisibilitySchema = v.union([
+export const annotationVisibilitySchema = v.union([
   v.literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[0]),
   v.literal(ANNOTATION_VISIBILITY_SCHEMA_VALUES[1]),
 ]);
@@ -92,6 +95,7 @@ export const requireAnnotationTargetType = (
   switch (value) {
     case "decision":
     case "statute":
+    case "verification-claim":
       return value;
     default:
       return panic(`Invalid annotation target type: ${value}`);
@@ -167,6 +171,13 @@ const spansSchema = v.pipe(
   v.maxLength(READER_ANNOTATION_MAX_SPANS),
 );
 
+/** A comment's words, on every route that writes one. */
+export const annotationCommentTextSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(READER_ANNOTATION_BODY_MAX_LENGTH),
+);
+
 /**
  * One body per kind, so a highlight cannot carry words and a comment cannot
  * arrive without them; the database CHECK says the same.
@@ -184,11 +195,7 @@ export const createAnnotationBodySchema = v.union([
   v.object({
     ...targetSchemaFields,
     kind: v.literal("comment"),
-    body: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(READER_ANNOTATION_BODY_MAX_LENGTH),
-    ),
+    body: annotationCommentTextSchema,
     requestId: v.optional(resourceIdSchema("legalReaderAnnotation")),
     visibility: v.optional(annotationVisibilitySchema),
     spans: spansSchema,
@@ -199,15 +206,25 @@ export type CreateAnnotationBody = v.InferOutput<
   typeof createAnnotationBodySchema
 >;
 
+type WithTargetType<TBody, TTarget> = TBody extends unknown
+  ? Omit<TBody, "targetType"> & { targetType: TTarget }
+  : never;
+
+/**
+ * A new mark as the operation receives it, on any target. The public-law
+ * route validates `CreateAnnotationBody`; the claim route builds a
+ * `verification-claim` request from the claim it read.
+ */
+export type CreateAnnotationRequest = WithTargetType<
+  CreateAnnotationBody,
+  ReaderAnnotationTargetType
+>;
+
 /** One change per request, named, so an update cannot be empty or ambiguous. */
 export const updateAnnotationBodySchema = v.union([
   v.object({
     change: v.literal("body"),
-    body: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(READER_ANNOTATION_BODY_MAX_LENGTH),
-    ),
+    body: annotationCommentTextSchema,
   }),
   v.object({ change: v.literal("color"), color: annotationColorSchema }),
   v.object({ change: v.literal("style"), style: annotationStyleSchema }),

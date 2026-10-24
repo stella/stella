@@ -25,6 +25,7 @@ import {
   ROOT_MCP_DISCOVERY_PATH,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import { mcpMethodNotAllowedResponse } from "@/api/mcp/json-rpc-error-response";
 import {
   createMcpDiscoveryPreflightHeaders,
   createMcpPreflightHeaders,
@@ -48,6 +49,15 @@ const preflight = (createHeaders: () => Headers) =>
 
 const transportPreflight = preflight(createMcpPreflightHeaders);
 const discoveryPreflight = preflight(createMcpDiscoveryPreflightHeaders);
+
+/**
+ * The one 405 for a method the transport is never handed, in the envelope and
+ * with the `Allow` value the transport answers a refused `DELETE` with.
+ */
+const transportMethodNotAllowed = defineEndpoint.public(
+  { bodyMode: "none", cors: "own" },
+  () => mcpMethodNotAllowedResponse(),
+);
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,
@@ -95,7 +105,13 @@ export const createMcpRoute = ({
 
   const transportMethods = (mode?: McpMode) => {
     const definition = transport(mode);
-    return { GET: definition, POST: definition, DELETE: definition };
+    return {
+      GET: definition,
+      POST: definition,
+      DELETE: definition,
+      PUT: transportMethodNotAllowed,
+      PATCH: transportMethodNotAllowed,
+    };
   };
 
   return mount([

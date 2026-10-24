@@ -1,6 +1,10 @@
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
+import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
+import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
+import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
+import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import createVerification from "@/api/handlers/lists/verifications/create";
@@ -20,6 +24,11 @@ export const createListVerificationRoutes = (
       "/item-fact-details": { PUT: updateFactDetails },
       "/claim-reviews": { POST: createClaimReview },
       "/claim-reviews/bulk": { POST: createBulkClaimReviews },
+      "/claim-comments": { GET: listClaimComments, POST: createClaimComment },
+      "/claim-comments/:annotationId": {
+        PATCH: updateClaimComment,
+        DELETE: deleteClaimComment,
+      },
       "/sample-case": { POST: createSampleCase },
       "/verifications": {
         GET: readVerifications,

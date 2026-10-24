@@ -150,7 +150,7 @@ describe("list verification route admission", () => {
       handlers.push(filename);
     }
     expect(handlers).toHaveLength(mounted.length);
-    expect(handlers).toHaveLength(9);
+    expect(handlers).toHaveLength(13);
   });
 
   // The gate answers like an absent route (404) before the route reads
