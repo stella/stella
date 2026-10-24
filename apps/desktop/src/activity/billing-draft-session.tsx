@@ -44,8 +44,7 @@ import type {
 } from "./billing-draft-logic";
 
 type DraftingStatus =
-  | { type: "idle" }
-  | { type: "drafting"; groupIds: readonly string[] };
+  { type: "idle" } | { type: "drafting"; groupIds: readonly string[] };
 type ConsentPrompt = "closed" | "open" | "saving";
 type EarlierEntry = DesktopBillingDraftReview["earlierEntries"][number];
 type CheckedGuideline =

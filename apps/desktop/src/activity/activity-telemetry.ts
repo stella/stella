@@ -7,13 +7,9 @@ import {
 
 export const reportActivityError = (
   operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[
-    | "activityRead"
-    | "activitySubscribe"
-    | "activityUpdate"],
+    "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
-    | "eventSubscriptionFailed"
-    | "invalidResponse"
-    | "invokeFailed"],
+    "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
 ) => {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
