@@ -19,8 +19,8 @@ import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get"
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
   invoiceInMatter,
-  invoiceTouchesMatter,
   invoiceMatterShare,
+  invoiceTouchesMatter,
 } from "@/api/lib/billing/invoice-scope";
 import {
   NARRATIVE_LANGUAGE_MAX_LENGTH,
@@ -454,6 +454,10 @@ const resolveInvoiceWorkspace = async ({
     tx.query.invoices.findFirst({
       where: {
         id: { eq: invoiceId },
+        RAW:
+          requestedMatterId === undefined
+            ? undefined
+            : (table) => invoiceInMatter(table, requestedMatterId),
       },
       columns: { workspaceId: true },
       with: {
@@ -469,14 +473,8 @@ const resolveInvoiceWorkspace = async ({
       },
     }),
   );
-  if (matterId !== undefined) {
-    if (row?.workspaceId === matterId) {
-      return row.workspaceId;
-    }
-    return (
-      row?.lines.find((line) => line.workspaceId === matterId)?.workspaceId ??
-      null
-    );
+  if (requestedMatterId !== undefined) {
+    return row === undefined ? null : requestedMatterId;
   }
   return row?.workspaceId ?? row?.lines.at(0)?.workspaceId ?? null;
 };

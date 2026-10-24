@@ -78,7 +78,9 @@ BEGIN
    END IF;
    RETURN NEW;
  ELSIF TG_TABLE_NAME = 'workspaces' THEN
-   IF EXISTS (SELECT 1 FROM public.invoice_lines l JOIN public.invoices i ON i.id = l.invoice_id
+   IF EXISTS (SELECT 1 FROM public.invoices i
+     WHERE i.workspace_id = NEW.id AND i.client_id IS NOT NULL AND i.client_id IS DISTINCT FROM NEW.client_id)
+   OR EXISTS (SELECT 1 FROM public.invoice_lines l JOIN public.invoices i ON i.id = l.invoice_id
      WHERE l.workspace_id = NEW.id AND i.client_id IS NOT NULL AND i.client_id IS DISTINCT FROM NEW.client_id) THEN
      RAISE EXCEPTION 'An invoiced matter must retain its invoice client' USING ERRCODE = '23514';
    END IF;

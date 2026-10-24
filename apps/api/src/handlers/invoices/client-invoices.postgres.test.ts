@@ -14,7 +14,13 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+  markRlsDatabase,
+} from "@/api/db/scoped";
+import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,12 +29,15 @@ import {
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { getPgErrorCode } from "@/api/lib/pg-error";
+import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const expectSqlState = async (
@@ -545,6 +554,123 @@ if (!databaseUrl || !runPostgres) {
             .where(eq(invoiceLines.invoiceId, scenario.invoiceId)),
         })),
       ).toEqual({ invoices: [], lines: [] });
+    });
+
+    test.each(["draft", "finalized"] as const)(
+      "a matter with a line-free %s invoice retains its client",
+      async (status) => {
+        const scenario = await seedScenario();
+        const invoiceId = createSafeId<"invoice">();
+        await db.insert(invoices).values({
+          id: invoiceId,
+          organizationId: scenario.orgId,
+          workspaceId: scenario.otherClientMatterId,
+          invoiceDate: "2026-10-15",
+          currency: "EUR",
+          status,
+        });
+        for (const clientId of [scenario.clientId, null]) {
+          await expectSqlState(
+            db
+              .update(workspaces)
+              .set({ clientId })
+              .where(eq(workspaces.id, scenario.otherClientMatterId)),
+            "23514",
+          );
+        }
+        expect(
+          await db.query.workspaces.findFirst({
+            where: { id: { eq: scenario.otherClientMatterId } },
+            columns: { clientId: true },
+          }),
+        ).toEqual({ clientId: scenario.otherClientId });
+        expect(
+          await db.query.invoices.findFirst({
+            where: { id: { eq: invoiceId } },
+            columns: { clientId: true },
+          }),
+        ).toEqual({ clientId: scenario.otherClientId });
+      },
+    );
+
+    test("MCP detail retains empty client invoices through an authorized matter of their client", async () => {
+      const scenario = await seedScenario();
+      await scoped(
+        scenario,
+        scenario.actors.owner,
+      )(async (tx) => {
+        await tx
+          .delete(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, scenario.invoiceId));
+      });
+      for (const actor of ["owner", "admin", "full", "partial"] as const) {
+        const userId = scenario.actors[actor];
+        const memberRole = sessionMemberRole(
+          actor === "owner" || actor === "admin" ? actor : "member",
+        );
+        const accessibleWorkspaceIds = [scenario.firstMatterId];
+        if (actor !== "partial") {
+          accessibleWorkspaceIds.push(scenario.secondMatterId);
+        }
+        if (actor === "owner" || actor === "admin") {
+          accessibleWorkspaceIds.push(scenario.otherClientMatterId);
+        }
+        const context = buildMcpContextFromChat({
+          organizationId: scenario.orgId,
+          userId,
+          userEmail: "invoice-reader@example.test",
+          memberRole,
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            organizationId: scenario.orgId,
+            userId,
+          }),
+          safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+            organizationId: scenario.orgId,
+            userId,
+            serverValidatedWorkspaceIds: [],
+          }),
+          scopedDb: scoped(scenario, userId),
+          toolWorkspaceIds: resolveToolWorkspaceIds({
+            accessibleWorkspaceIds,
+            pinnedIds: [],
+          }),
+        });
+        const result = await BILLING_TOOL_HANDLERS.list_invoices({
+          args: {
+            invoice_id: scenario.invoiceId,
+            matter_id: scenario.firstMatterId,
+          },
+          context,
+        });
+        if (actor === "owner" || actor === "admin") {
+          expect(result).toMatchObject({
+            egress: "structured",
+            payload: {
+              invoice: {
+                id: scenario.invoiceId,
+                workspaceId: scenario.firstMatterId,
+                lines: [],
+              },
+            },
+          });
+        } else {
+          expect(result).toMatchObject({
+            status: "error",
+            error: { code: "not_found" },
+          });
+        }
+        const wrongClient = await BILLING_TOOL_HANDLERS.list_invoices({
+          args: {
+            invoice_id: scenario.invoiceId,
+            matter_id: scenario.otherClientMatterId,
+          },
+          context,
+        });
+        expect(wrongClient).toMatchObject({
+          status: "error",
+          error: { code: "not_found" },
+        });
+      }
     });
 
     test("an invoiced matter and its invoice cannot move to a different client", async () => {
