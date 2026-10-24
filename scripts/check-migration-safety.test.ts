@@ -350,8 +350,33 @@ describe("check-migration-safety", () => {
           "pre-deploy-update",
         ],
         [
+          `UPDATE "audit"."documents" SET "status" = 'ready' WHERE "id" = 1;`,
+          "pre-deploy-update",
+        ],
+        [
           `INSERT INTO "documents_v2" ("id") SELECT "id" FROM "documents";`,
-          "pre-deploy-insert-select",
+          "pre-deploy-row-copy",
+        ],
+        [
+          `MERGE INTO "documents_v2" AS t USING "documents" AS s ON t."id" = s."id" WHEN NOT MATCHED THEN INSERT ("id") VALUES (s."id");`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `CREATE TABLE "documents_copy" AS SELECT * FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [
+          `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents";`,
+          "pre-deploy-row-copy",
+        ],
+        [`REFRESH MATERIALIZED VIEW "document_totals";`, "pre-deploy-row-copy"],
+        [
+          `DO $$ BEGIN EXECUTE 'UPDATE documents SET status = ''ready'' WHERE id = 1'; END $$;`,
+          "pre-deploy-dynamic-row-write",
+        ],
+        [
+          `DO $$ BEGIN EXECUTE format('INSERT INTO %I (id) SELECT id FROM documents', 'documents_v2'); END $$;`,
+          "pre-deploy-dynamic-row-write",
         ],
         [
           `DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
@@ -379,6 +404,19 @@ describe("check-migration-safety", () => {
           INSERT INTO "document_states" ("id", "slug") VALUES (1, 'ready'), (2, 'archived');
         `),
       );
+    });
+
+    it("allows empty copies and dynamic DDL", () => {
+      for (const sql of [
+        `CREATE TABLE "documents_shape" AS SELECT * FROM "documents" WITH NO DATA;`,
+        `CREATE MATERIALIZED VIEW "document_totals" AS SELECT count(*) FROM "documents" WITH NO DATA;`,
+        `DO $$ BEGIN EXECUTE 'ALTER TABLE documents ADD COLUMN state text'; END $$;`,
+      ]) {
+        const result = runChecker(sql);
+        expect(result.stdout + result.stderr, sql).not.toMatch(
+          /pre-deploy-(?:row-copy|dynamic-row-write|update)/u,
+        );
+      }
     });
 
     it("ignores refused syntax in comments, literals and identifiers", () => {

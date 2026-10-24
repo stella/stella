@@ -39,6 +39,9 @@ type Statement = {
   identifiers: { index: number; name: string }[];
   literals: { index: number; end: number; value: string }[];
   executableIndexHint?: boolean;
+  // A DO block runs this statement's command string through EXECUTE, and the
+  // string writes or copies rows (UPDATE ... SET, INSERT ... SELECT, MERGE).
+  executableRowWrite?: boolean;
   // Comment, string, and identifier content masked to spaces so keyword scans
   // cannot be fooled by literals.
   text: string;
@@ -602,14 +605,15 @@ const DML_VERB_BY_TOKEN = new Map<string, DmlVerb>(
   DML_VERBS.map((verb) => [verb.toLowerCase(), verb]),
 );
 
-type DmlTarget = { verb: DmlVerb; table: string };
+type DmlTarget = { verb: DmlVerb; schema: string; table: string };
 
 // The relations a statement writes rows of when the migration runs, read from
 // the token stream: comments and string literals are masked there and quoted
 // identifiers are tokens of their own, so no keyword or name inside a comment
 // or literal counts, and a comment between tokens (`INSERT /* x */ INTO`) is
-// plain whitespace. A relation outside the public schema is none of the
-// registered tables. A stored-routine body executes nothing at migration
+// plain whitespace. Targets keep their schema: registered tables live in
+// public, while a row update is one in any schema. A stored-routine body
+// executes nothing at migration
 // time, and an UPDATE after a clause keyword (`FOR UPDATE`, `DO UPDATE`) is
 // not a statement of its own.
 const executedDmlTargets = (statement: Statement): DmlTarget[] => {
@@ -663,11 +667,15 @@ const executedDmlTargets = (statement: Statement): DmlTarget[] => {
     }
 
     const relation = readIndexRelation(tokens, next)?.relation;
-    if (relation?.schema.toLowerCase() !== "public") {
+    if (relation === undefined) {
       continue;
     }
 
-    targets.push({ verb, table: relation.name.toLowerCase() });
+    targets.push({
+      verb,
+      schema: relation.schema.toLowerCase(),
+      table: relation.name.toLowerCase(),
+    });
   }
 
   return targets;
@@ -677,7 +685,8 @@ const executedDmlTargets = (statement: Statement): DmlTarget[] => {
 // INSERT counts only when it copies rows out of another relation.
 const isHighVolumeTableDml = (statement: Statement): boolean =>
   executedDmlTargets(statement).some(
-    ({ verb, table }) =>
+    ({ verb, schema, table }) =>
+      schema === "public" &&
       HIGH_VOLUME_TABLE_NAMES.has(table) &&
       (verb !== "INSERT" || isInsertFromQuery(statement.text)),
   );
@@ -688,7 +697,10 @@ const CODE_OWNED_TABLE_NAMES = new Set<string>(CODE_OWNED_TABLES);
 // older migration seeded, converges every database on the code's state.
 const isCodeOwnedTableWrite = (statement: Statement): boolean =>
   executedDmlTargets(statement).some(
-    ({ verb, table }) => verb !== "DELETE" && CODE_OWNED_TABLE_NAMES.has(table),
+    ({ verb, schema, table }) =>
+      verb !== "DELETE" &&
+      schema === "public" &&
+      CODE_OWNED_TABLE_NAMES.has(table),
   );
 
 // Calls whose result depends on when, or by which draw, the statement runs.
@@ -704,13 +716,25 @@ const VOLATILE_VALUE_PATTERN =
 // are not writes and stay allowed; DELETE writes no value.
 const isVolatileDataWrite = (statement: Statement): boolean =>
   VOLATILE_VALUE_PATTERN.test(statement.text) &&
-  executedDmlTargets(statement).some(({ verb }) => verb !== "DELETE");
+  executedDmlTargets(statement).some(
+    ({ verb, schema }) => verb !== "DELETE" && schema === "public",
+  );
 
 const ONLINE_BACKFILL_GUIDANCE =
   "Move data changes to the post-deploy online phase owned by apps/api/src/db/backfill-runtime.ts; use its bounded, resumable backfill pattern.";
 
 const isPreDeployUpdate = (statement: Statement): boolean =>
   executedDmlTargets(statement).some(({ verb }) => verb === "UPDATE");
+
+// Every form that copies or materialises existing rows; WITH NO DATA creates
+// the relation empty.
+const isPreDeployRowCopy = (text: string): boolean =>
+  isInsertFromQuery(text) ||
+  /\bMERGE\s+INTO\b/iu.test(text) ||
+  /\bREFRESH\s+MATERIALIZED\s+VIEW\b/iu.test(text) ||
+  ((isCreateTableAsQuery(text) ||
+    /\bCREATE\s+MATERIALIZED\s+VIEW\b/iu.test(text)) &&
+    !/\bWITH\s+NO\s+DATA\b/iu.test(text));
 
 const STATEMENT_INVARIANT_RULES = [
   {
@@ -738,10 +762,17 @@ const STATEMENT_INVARIANT_RULES = [
     guidance: ONLINE_BACKFILL_GUIDANCE,
   },
   {
-    id: "pre-deploy-insert-select",
+    id: "pre-deploy-row-copy",
     description:
-      "copies existing rows with INSERT ... SELECT during the pre-deploy phase",
-    matches: ({ deferred, text }) => !deferred && isInsertFromQuery(text),
+      "copies or materialises existing rows (INSERT ... SELECT, MERGE, CREATE TABLE AS, a populated materialized view) during the pre-deploy phase",
+    matches: ({ deferred, text }) => !deferred && isPreDeployRowCopy(text),
+    guidance: ONLINE_BACKFILL_GUIDANCE,
+  },
+  {
+    id: "pre-deploy-dynamic-row-write",
+    description:
+      "writes or copies rows through EXECUTE in a DO block during the pre-deploy phase",
+    matches: ({ executableRowWrite }) => executableRowWrite === true,
     guidance: ONLINE_BACKFILL_GUIDANCE,
   },
   {
@@ -1020,6 +1051,9 @@ const INDEX_BUILD_HINT_PATTERN =
 // cursor loops and batch-looking DML cannot hide a data backfill in a DO block
 // or stored function.
 const ROW_LOOP_PATTERN = /\bLOOP\b/iu;
+// A command string a DO block can EXECUTE that writes or copies rows.
+const EXECUTABLE_ROW_WRITE_PATTERN =
+  /\bUPDATE\s+\S[\s\S]*?\bSET\b|\bINSERT\s+INTO\b[\s\S]*?\bSELECT\b|\bMERGE\s+INTO\b/iu;
 const RELATION_ACCESS_PATTERN =
   /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO)\b/iu;
 
@@ -1056,6 +1090,15 @@ const surfaceQuotedBody = ({
     }
     if (rowLoop && index === 0) {
       statement.rowLoop = true;
+    }
+    if (
+      !deferred &&
+      /\bEXECUTE\b/iu.test(statement.text) &&
+      statement.literals.some(({ value }) =>
+        EXECUTABLE_ROW_WRITE_PATTERN.test(value),
+      )
+    ) {
+      statement.executableRowWrite = true;
     }
     return statement;
   });
