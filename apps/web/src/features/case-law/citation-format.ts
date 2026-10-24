@@ -422,7 +422,8 @@ const hasCitationFormatter = (
   Object.hasOwn(CITATION_FORMATTERS, country);
 
 export const formatDecisionCitation = (input: CitationInput): string => {
-  const country = fromCaseLawCountryParam(input.country);
+  const normalized = fromCaseLawCountryParam(input.country);
+  const country = normalized === "GB" ? "GBR" : normalized;
   return (
     hasCitationFormatter(country)
       ? CITATION_FORMATTERS[country]

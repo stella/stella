@@ -67,6 +67,7 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
         "[2024] EWHC 123 (SCCO)",
         "[2024] EWHC 123 (Costs)",
         "[2024] EWHC 123 (Mercantile)",
+        "[2024] EWHC 123 (BP)",
       ],
     },
     { canonical: "[2024] EWHC 124 (KB)", variants: [] },

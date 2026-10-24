@@ -414,7 +414,7 @@ describe("British neutral citations", () => {
     const citations = DECISION_DOCKET_GRAMMAR_FIXTURES.GBR.filter(
       ({ canonical }) => canonical === "[2024] EWHC 123",
     ).flatMap(({ variants }) => variants);
-    expect(citations.length).toBe(13);
+    expect(citations.length).toBe(14);
     for (const citation of citations) {
       expect(DECISION_DOCKET_GRAMMARS.GBR.parse(citation)).toEqual({
         jurisdiction: "GBR",

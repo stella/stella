@@ -1,5 +1,6 @@
 import { ECLI_COURT_REGISTRY, type RegisteredCourt } from "./case-law-courts";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
+import { GBR_EWHC_DIVISIONS } from "./decision-docket-grammar";
 import { SK_COURT_TIERS } from "./sk-court-tiers";
 
 /**
@@ -128,8 +129,10 @@ export const COURT_NAME_REGISTRY = {
     { pattern: /^EWFC$/iu, shortCode: "EWFC" },
     { pattern: /^EWCOP$/iu, shortCode: "EWCOP" },
     {
-      pattern:
-        /^EWHC(?:\s+\((?:KB|QB|Ch|Fam|Admin|Comm|TCC|Pat|IPEC|Admlty|SCCO|Costs|Mercantile)\))?$/iu,
+      pattern: new RegExp(
+        String.raw`^EWHC(?:\s+\((?:${GBR_EWHC_DIVISIONS.join("|")})\))?$`,
+        "iu",
+      ),
       shortCode: "EWHC",
     },
   ],

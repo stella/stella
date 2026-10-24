@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] BP extends only GBR and the division-list export leaves the POL grammar used by this adapter unchanged.
 // parser-output-unchanged: [pl-uokik] GBR adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 // parser-output-unchanged: A grammar's format spells a reader's docket family only; ingestion reads acceptance and the case-file key, both from the input.
@@ -791,7 +792,7 @@ const canonicalPolishDocketKey = (formatted: string): string =>
         .replace(/^(\p{L}{1,3})\.(?=\d{1,4}\/)/u, "$1");
 
 /** EWHC numbers run across divisions within a year; the suffix is metadata. */
-const GBR_EWHC_DIVISIONS = [
+export const GBR_EWHC_DIVISIONS = [
   "KB",
   "QB",
   "Ch",
@@ -805,6 +806,7 @@ const GBR_EWHC_DIVISIONS = [
   "SCCO",
   "Costs",
   "Mercantile",
+  "BP",
 ] as const;
 
 const GBR_DOCKET_PATTERNS = [
