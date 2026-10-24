@@ -434,7 +434,11 @@ const recordFailure = (
   if (outcome.passed) {
     return;
   }
-  const details = outcome.failureDetails ?? [];
+  // Names without details (a runner that reports no detail lines) still
+  // name the failure.
+  const details =
+    outcome.failureDetails ??
+    outcome.failedTests.map((name) => ({ name, detail: "" }));
   if (details.length === 0) {
     result.unnamedFailureStatus = outcome.status;
     return;

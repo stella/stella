@@ -1009,3 +1009,20 @@ test("a failing gate names each failing test with its first assertion line", asy
     "a trial failed with exit status 134 and named no test",
   );
 });
+
+test("a failing trial that names tests without details still names them", async () => {
+  const report = await executeGate({
+    targets: [targetFor("/fixture", "a.test.ts")],
+    skipped: [],
+    run: async () => ({
+      type: "executed",
+      passed: false,
+      status: 1,
+      ranTests: true,
+      failedTests: ["math > adds"],
+    }),
+  });
+  const markdown = renderReport(report);
+  expect(markdown).toContain("math > adds");
+  expect(markdown).not.toContain("named no test");
+});

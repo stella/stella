@@ -305,6 +305,14 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       star: 'new Bun.Glob("apps/*/src/**/*.ts").scanSync();',
       brace: 'new Bun.Glob("apps/{web,api}/src/**/*.ts").scanSync();',
       starstar: 'new Bun.Glob("apps/**").scanSync();',
+      template:
+        // The fixture source holds a template literal; `$` and `{` are joined
+        // so this file's own string is not mistaken for one.
+        'import { readdirSync } from "node:fs"; const name = process.argv[2]; readdirSync(`apps/' +
+        "$" +
+        "{name}/src`);",
+      nested:
+        'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(path.dirname(import.meta.path), "sub", "..", "..", "..", "web", "x.tsx"));',
       appsdir: 'import { readdirSync } from "node:fs"; readdirSync("apps/");',
       root: 'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join(import.meta.dir, "..", "..", ".."));',
       failed:
@@ -319,9 +327,11 @@ test("wildcard globs, repository climbs and analysis failures reach another app"
       "src/appsdir.test.ts",
       "src/brace.test.ts",
       "src/failed.test.ts",
+      "src/nested.test.ts",
       "src/root.test.ts",
       "src/star.test.ts",
       "src/starstar.test.ts",
+      "src/template.test.ts",
     ]);
   });
 });

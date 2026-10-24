@@ -181,7 +181,7 @@ const textReach = (file: string, source: string): ModuleReach => {
       code,
     ) ||
     /process\s*\.\s*cwd\s*\(/u.test(code) ||
-    /apps\/(?:\*|\*\*|\{[^}/]+\})(?=\/|["'`]|$)/u.test(code) ||
+    /apps\/(?:\*|\*\*|\{[^}/]+\}|\$\{)(?=\/|["'`]|$|[^/]*\})/u.test(code) ||
     // A path assembled from segments (`path.join("apps", name)`) can name
     // any app.
     /["'`]apps\/?["'`]/u.test(code)
@@ -191,34 +191,35 @@ const textReach = (file: string, source: string): ModuleReach => {
   // A climb leaves the module's own workspace only when it climbs past that
   // workspace's root: `../../..` from `apps/api/src/lib/x/` stays in
   // `apps/api`. Counted from `../` runs and from `".."` call arguments.
-  const climbs: { count: number; next: string }[] = [
-    ...[...code.matchAll(/((?:\.\.\/)+)([^/'"`$}\s]*)/gu)].map((match) => ({
-      count: (match[1] ?? "").length / 3,
-      next: match[2] ?? "",
-    })),
-    ...[
-      ...code.matchAll(/(?:\bpath\s*\.\s*)?(?:join|resolve)\s*\(([^)]*)\)/gu),
-    ].map((match) => {
-      const literals = [
-        ...(match[1] ?? "").matchAll(/["'`]([^"'`]*)["'`]/gu),
+  const climbs: string[][] = [
+    ...[...code.matchAll(/((?:\.\.\/)+)([^/'"`$}\s]*)/gu)].map((match) => [
+      ...Array.from({ length: (match[1] ?? "").length / 3 }, () => ".."),
+      match[2] ?? "",
+    ]),
+    // A `join`/`resolve` call's quoted segments, in order, from the module's
+    // directory; the arguments are read with balanced parentheses so a nested
+    // call (`join(dirname(x), "..", "web")`) keeps them.
+    ...[...code.matchAll(/\b(?:join|resolve)\s*\(/gu)].map((match) => {
+      const start = match.index + match[0].length;
+      let depth = 1;
+      let end = start;
+      while (end < code.length && depth > 0) {
+        if (code[end] === "(") {
+          depth += 1;
+        } else if (code[end] === ")") {
+          depth -= 1;
+        }
+        end += 1;
+      }
+      return [
+        ...code.slice(start, end - 1).matchAll(/["'`]([^"'`]*)["'`]/gu),
       ].map((literal) => literal[1] ?? "");
-      return {
-        count: literals.filter((literal) => literal === "..").length,
-        next: literals.find((literal) => literal !== "..") ?? "",
-      };
     }),
-  ];
+  ].filter((segments) => segments.includes(".."));
   const workspace = /^(?:apps|packages)\/[^/]+/u.exec(file)?.[0];
   const apps = new Set<string>();
-  for (const { count, next } of climbs) {
-    if (count === 0) {
-      continue;
-    }
-    const target = path.posix.join(
-      path.posix.dirname(file),
-      ...Array.from({ length: count }, () => ".."),
-      next.split("/").at(0) ?? "",
-    );
+  for (const segments of climbs) {
+    const target = path.posix.join(path.posix.dirname(file), ...segments);
     if (
       workspace !== undefined &&
       (target === workspace || target.startsWith(`${workspace}/`))
