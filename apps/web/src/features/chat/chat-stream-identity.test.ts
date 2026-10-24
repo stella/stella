@@ -587,6 +587,36 @@ const REBUILDS_MESSAGES: ReadonlySet<StreamChunk["type"]> = new Set([
 
 const STREAMED_IDS: ReadonlySet<string> = new Set([ANSWER_ID, REGENERATED_ID]);
 
+type ReasoningTargetOptions = {
+  cause: StreamChunk;
+  message: ChatUIMessage;
+  historyIds: ReadonlySet<string>;
+  activeAssistantId: string | undefined;
+  stepName: string | undefined;
+};
+
+/** The SDK attaches reasoning to its active assistant, which may be an
+ * auto-created message after a tool result. The wire messageId identifies
+ * the thinking step, not necessarily that assistant message. */
+const reasoningTargetsMessage = ({
+  cause,
+  message,
+  historyIds,
+  activeAssistantId,
+  stepName,
+}: ReasoningTargetOptions) =>
+  cause.type === EventType.REASONING_MESSAGE_CONTENT &&
+  message.id === activeAssistantId &&
+  !historyIds.has(message.id) &&
+  message.role === "assistant" &&
+  message.parts.some(
+    (part) =>
+      part.type === "thinking" &&
+      "stepId" in part &&
+      (part.stepId === cause.messageId ||
+        (stepName !== undefined && part.stepId === stepName)),
+  );
+
 type SessionPath =
   | "approval-requested"
   | "approval-responded"
@@ -660,6 +690,83 @@ const reachedPaths = (
   return paths;
 };
 
+type StreamIdentityObservation = {
+  changed: readonly string[];
+  emits: readonly Emit[];
+  history: readonly UIMessage<ChatClientTools>[];
+};
+
+const expectStableStreamIdentity = ({
+  changed,
+  emits,
+  history,
+}: StreamIdentityObservation) => {
+  expect(changed).toEqual([]);
+  const historyIds = new Set(history.map(({ id }) => id));
+  let stepName: string | undefined;
+  for (const [index, next] of emits.entries()) {
+    expect({ cause: next.cause, fresh: next.fresh }).toMatchObject({
+      fresh: true,
+    });
+    const previous = emits.at(index - 1);
+    const { cause } = next;
+    if (typeof cause === "object") {
+      if (cause.type === EventType.RUN_STARTED) {
+        stepName = undefined;
+      } else if (cause.type === EventType.STEP_STARTED) {
+        stepName = cause.stepName;
+      }
+    }
+    // A page action (approval, stop, regenerate) may rebuild messages.
+    if (index === 0 || previous === undefined || typeof cause !== "object") {
+      continue;
+    }
+    const before = new Map(
+      previous.shown.map((message) => [message.id, message]),
+    );
+    // This harness appends each new assistant to the transcript; snapshots
+    // preserve that order. The SDK's reverse-insertion active selection thus
+    // belongs to this one current-run assistant, even if earlier ones kept
+    // the same thinking step name.
+    const activeAssistantId = next.shown.findLast(
+      ({ id, role }) => role === "assistant" && !historyIds.has(id),
+    )?.id;
+    for (const message of next.shown) {
+      const shown = before.get(message.id);
+      if (shown === undefined) {
+        continue;
+      }
+      if (
+        !STREAMED_IDS.has(message.id) &&
+        !REBUILDS_MESSAGES.has(cause.type) &&
+        !reasoningTargetsMessage({
+          cause,
+          message,
+          historyIds,
+          activeAssistantId,
+          stepName,
+        })
+      ) {
+        expect(message).toBe(shown);
+      }
+      if (cause.type === EventType.MESSAGES_SNAPSHOT) {
+        continue;
+      }
+      const kept = new Set(message.parts);
+      for (const part of shown.parts) {
+        if (!kept.has(part)) {
+          expect({
+            chunk: cause.type,
+            message: message.id,
+            replaced: part,
+            allowed: chunkMayReplace(cause, part, shown.parts),
+          }).toMatchObject({ allowed: true });
+        }
+      }
+    }
+  }
+};
+
 describe("streamed chunks keep what they do not change", () => {
   test("every chunk leaves the messages and parts it does not touch as the same objects", async () => {
     const reached = new Set<SessionPath>();
@@ -667,51 +774,11 @@ describe("streamed chunks keep what they do not change", () => {
       "every chunk leaves the messages and parts it does not touch as the same objects",
       fc.asyncProperty(sessionArb, async (session) => {
         const { changed, emits, stopped } = await streamSession({ session });
-        expect(changed).toEqual([]);
-        for (const [index, next] of emits.entries()) {
-          expect({ cause: next.cause, fresh: next.fresh }).toMatchObject({
-            fresh: true,
-          });
-          const previous = emits.at(index - 1);
-          const { cause } = next;
-          // A page action (approval, stop, regenerate) may rebuild messages.
-          if (
-            index === 0 ||
-            previous === undefined ||
-            typeof cause !== "object"
-          ) {
-            continue;
-          }
-          const before = new Map(
-            previous.shown.map((message) => [message.id, message]),
-          );
-          for (const message of next.shown) {
-            const shown = before.get(message.id);
-            if (shown === undefined) {
-              continue;
-            }
-            if (
-              !STREAMED_IDS.has(message.id) &&
-              !REBUILDS_MESSAGES.has(cause.type)
-            ) {
-              expect(message).toBe(shown);
-            }
-            if (cause.type === EventType.MESSAGES_SNAPSHOT) {
-              continue;
-            }
-            const kept = new Set(message.parts);
-            for (const part of shown.parts) {
-              if (!kept.has(part)) {
-                expect({
-                  chunk: cause.type,
-                  message: message.id,
-                  replaced: part,
-                  allowed: chunkMayReplace(cause, part, shown.parts),
-                }).toMatchObject({ allowed: true });
-              }
-            }
-          }
-        }
+        expectStableStreamIdentity({
+          changed,
+          emits,
+          history: session.history,
+        });
         for (const path of reachedPaths(emits, stopped)) {
           reached.add(path);
         }
@@ -722,6 +789,125 @@ describe("streamed chunks keep what they do not change", () => {
     expect<readonly string[]>([...reached].toSorted()).toEqual(
       Object.keys(SESSION_PATHS).toSorted(),
     );
+  });
+
+  test("reused thinking step names do not exempt an earlier assistant clone", () => {
+    const earlier = {
+      id: "earlier-fallback",
+      role: "assistant" as const,
+      parts: [
+        { type: "thinking" as const, content: "Earlier", stepId: "step" },
+      ],
+    };
+    const active = {
+      id: "active-fallback",
+      role: "assistant" as const,
+      parts: [
+        { type: "thinking" as const, content: "Current", stepId: "step" },
+      ],
+    };
+    const cause = {
+      type: EventType.REASONING_MESSAGE_CONTENT,
+      messageId: "step",
+      delta: " reasoning",
+    } as const;
+    const before = { cause, fresh: true, shown: [earlier, active] };
+    const continued = {
+      ...active,
+      parts: [
+        {
+          type: "thinking" as const,
+          content: "Current reasoning",
+          stepId: "step",
+        },
+      ],
+    };
+    expectStableStreamIdentity({
+      changed: [],
+      history: [],
+      emits: [before, { cause, fresh: true, shown: [earlier, continued] }],
+    });
+    expect(() =>
+      expectStableStreamIdentity({
+        changed: [],
+        history: [],
+        emits: [
+          before,
+          { cause, fresh: true, shown: [{ ...earlier }, continued] },
+        ],
+      }),
+    ).toThrow("expect(received).toBe(expected)");
+  });
+
+  test("reasoning after tool results owns its SDK assistant without replacing history", async () => {
+    const history = transcript([
+      [{ type: "text", content: "Earlier settled answer" }],
+    ]);
+    const session = {
+      approved: true,
+      continuation: [],
+      first: {
+        end: "stop",
+        ops: [
+          { kind: "status" },
+          { kind: "status" },
+          { kind: "text", delta: "Answer" },
+          { kind: "tools", calls: [{ args: ['{"query":"first"}'] }] },
+          {
+            kind: "tools",
+            calls: [
+              { args: ['{"query":"second"}'] },
+              { args: ['{"query":"third"}'] },
+              { args: ['{"query":"fourth"}'] },
+              { args: ['{"query":"fifth"}'] },
+            ],
+          },
+          { kind: "text", delta: "\n\n" },
+          { kind: "reasoning", delta: "Reasoning after tool results" },
+          { kind: "status" },
+          { kind: "status" },
+        ],
+      },
+      history,
+      regenerate: {
+        end: "snapshot",
+        ops: [
+          { kind: "text", delta: "\n\n" },
+          { kind: "text", delta: "" },
+          { kind: "reasoning", delta: "Continued reasoning" },
+          { kind: "status" },
+          { kind: "tools", calls: [{ args: ['{"query":"reloaded"}'] }] },
+          { kind: "reasoning", delta: "Next reasoning" },
+          { kind: "reasoning", delta: " and more" },
+        ],
+      },
+    } satisfies Session;
+    const observed = await streamSession({ session });
+    expectStableStreamIdentity({ ...observed, history });
+    expect(
+      observed.emits.some(
+        ({ cause, shown }) =>
+          typeof cause === "object" &&
+          cause.type === EventType.REASONING_MESSAGE_CONTENT &&
+          shown.some(
+            (message) =>
+              !STREAMED_IDS.has(message.id) &&
+              reasoningTargetsMessage({
+                cause,
+                message,
+                historyIds: new Set(history.map(({ id }) => id)),
+                activeAssistantId: shown.findLast(
+                  ({ id, role }) =>
+                    role === "assistant" &&
+                    !history.some(
+                      (historicalMessage) => historicalMessage.id === id,
+                    ),
+                )?.id,
+                stepName: undefined,
+              }),
+          ),
+      ),
+    ).toBe(true);
   });
 
   test("no chunk, tool result or snapshot reads the 200 finished tool calls it leaves alone", async () => {

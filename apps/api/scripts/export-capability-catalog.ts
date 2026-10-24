@@ -131,6 +131,8 @@ const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 // artifacts above (see `serializeCoverageDoc`).
 const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
 export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun apps/api/scripts/export-capability-catalog.ts --check";
 const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
 
 /**

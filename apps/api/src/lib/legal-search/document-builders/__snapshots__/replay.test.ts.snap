@@ -1,0 +1,96 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`replaying EDPB Guidelines 3/2025 (PDF) matches the reviewed outline 1`] = `
+{
+  "blocks": 222,
+  "digest": "5daacfcbc5e6430eadc5b15b739b18336abb1434e2adcb790d5f88379885548e",
+  "footnotes": 31,
+  "footnotesWithoutReference": [],
+  "legislation": {
+    "eu-directive 1995/46": 2,
+    "eu-directive 2000/31": 4,
+    "eu-directive 2002/58": 1,
+    "eu-directive 2005/29": 1,
+    "eu-directive 2010/13": 1,
+    "eu-directive 2016/680": 1,
+    "eu-directive 2018/1808": 1,
+    "eu-directive 2018/1972": 1,
+    "eu-directive 2019/2161": 1,
+    "eu-directive 2019/790": 2,
+    "eu-regulation 2001/1049": 2,
+    "eu-regulation 2009/1224": 2,
+    "eu-regulation 2016/679": 26,
+    "eu-regulation 2022/2065": 9,
+    "eu-regulation 2024/900": 1,
+  },
+  "numberedParagraphs": 129,
+  "outline": [
+    "s-1 1 Introduction and scope of the guidelines",
+    "s-1-1 1.1 The relationship between the DSA and the GDPR",
+    "s-2 2 Specific Issues",
+    "s-2-1 2.1 Voluntary own-initiative investigations and legal compliance in relation to illegal content (Article 7)",
+    "s-2-2 2.2 Processing of personal data in notice and action mechanisms and in internal complaint-handling systems (Articles 16, 17, 20, and 23)",
+    "s-2-2-1 2.2.1 Processing activities involved by the notice and action mechanisms (Articles 16 and 17 DSA)",
+    "s-2-2-2 2.2.2 Processing of personal data of the affected recipient by providers of online platforms for handling of complaint and combatting misuse (Articles 20 and 23)",
+    "s-2-3 2.3 Deceptive design patterns (Article 25)",
+    "s-2-4 2.4 Advertising transparency and prohibition of presenting advertisements based on profiling using special categories of data (Article 26)",
+    "s-2-4-1 2.4.1 General advertising transparency obligations",
+    "s-2-4-2 2.4.2 Legal framework on automated individual decision-making and profiling",
+    "s-2-4-3 2.4.3 Legal framework on profiling using special categories of data",
+    "s-2-4-4 2.4.4 Security and confidentiality of data resulting from advertising transparency obligations",
+    "s-2-4-5 2.4.5 Specific obligations for online marketplaces in relation to advertisements containing personal data",
+    "s-2-5 2.5 Recommender systems (Articles 27 and 38)",
+    "s-2-6 2.6 Protection of minors (Article 28)",
+    "s-2-7 2.7 Risk assessment and mitigation (Articles 34 and 35)",
+    "s-2-8 2.8 Codes of conduct, including for online advertising (Articles 45, 46 and 47), and their relationship with codes of conduct under Article 40 GDPR",
+    "s-2-9 2.9 Governance and Enforcement",
+    "s-2-9-1 2.9.1 Cooperation between competent authorities and duty of sincere cooperation with DPAs",
+    "s-2-9-2 2.9.2 European Board for Digital Services",
+  ],
+}
+`;
+
+exports[`replaying EDPB Guidelines 3/2025 (record page) matches the reviewed outline 1`] = `
+{
+  "blocks": 17,
+  "digest": "0e0e9ab0de8d377d13402cc499eccde29eaa1442cdbdc9114376bbae7660290a",
+  "footnotes": 0,
+  "footnotesWithoutReference": [],
+  "legislation": {},
+  "numberedParagraphs": 0,
+  "outline": [
+    "s-guidelines-3-2025-on-the-interplay-between-the-d Guidelines 3/2025 on the interplay between the DSA and the GDPR",
+    "s-downloadable-documents Downloadable documents",
+    "s-related-topics Related topics:",
+  ],
+}
+`;
+
+exports[`replaying WP29 transparency guidelines (record page) matches the reviewed outline 1`] = `
+{
+  "blocks": 10,
+  "digest": "b426c5727d924d1d96f383990f4ce410b660e2cc886b4be44e2b2edd353a88b7",
+  "footnotes": 0,
+  "footnotesWithoutReference": [],
+  "legislation": {},
+  "numberedParagraphs": 0,
+  "outline": [
+    "s-downloads Downloads",
+  ],
+}
+`;
+
+exports[`replaying ÚOOÚ methodologies and recommendations (listing page) matches the reviewed outline 1`] = `
+{
+  "blocks": 17,
+  "digest": "dac2dc49f78129ad2b4f76fa3cb66b73318936d6a9d54345f1875493e9375da3",
+  "footnotes": 0,
+  "footnotesWithoutReference": [],
+  "legislation": {},
+  "numberedParagraphs": 0,
+  "outline": [
+    "s-metodiky-a-doporuceni-pro-spravce Metodiky a doporučení pro správce",
+    "s-rubriky Rubriky",
+  ],
+}
+`;

@@ -55,9 +55,15 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
+import { clientInvoicePrefillScalingScenario } from "@/api/tests/read-scaling/client-invoice-prefill";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 
 const expectSqlState = async (
   operation: PromiseLike<unknown>,
@@ -337,6 +343,56 @@ if (!databaseUrl || !runPostgres) {
         throw totals.error;
       }
     };
+
+    test("client prefill keeps its selected matters and query cost as other client matters grow", async () => {
+      const scenario = await seedScenario();
+      const unrelatedMatters = Array.from({ length: 199 }, () => {
+        const id = createSafeId<"workspace">();
+        return {
+          id,
+          organizationId: scenario.orgId,
+          clientId: scenario.otherClientId,
+          name: "Unrelated client matter",
+          reference: id,
+        };
+      });
+      // The fixture already has one other-client matter: these populations
+      // contain exactly 10 and 200, while the requested client keeps two.
+      await db.insert(workspaces).values(unrelatedMatters.slice(0, 9));
+      const userId = scenario.actors.owner;
+      const context = createTestHandlerContext<
+        Parameters<typeof clientInvoicePrefillScalingScenario.handler>[0]
+      >({
+        safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+          organizationId: scenario.orgId,
+          userId,
+          serverValidatedWorkspaceIds: [],
+        }),
+        scopedDb: NO_DB,
+        audit: NO_AUDIT,
+        session: { activeOrganizationId: scenario.orgId },
+        user: { id: userId },
+        params: { clientId: scenario.clientId },
+        query: {},
+        request: new Request(
+          `https://example.test/v1/client-invoices/${scenario.clientId}/prefill`,
+        ),
+        route: "/v1/client-invoices/:clientId/prefill",
+      });
+      const at10 = await clientInvoicePrefillScalingScenario.measure(context);
+      await db.insert(workspaces).values(unrelatedMatters.slice(9));
+      const at200 = await clientInvoicePrefillScalingScenario.measure(context);
+      const expectedMatters = [scenario.firstMatterId, scenario.secondMatterId];
+      for (const measurement of [at10, at200]) {
+        expect(measurement.rows).toBe(2);
+        expect(measurement.matterIds).toEqual(
+          expect.arrayContaining(expectedMatters),
+        );
+        expect(measurement.statements).toBeGreaterThan(0);
+        expect(measurement.transactionRoundTrips).toBeGreaterThan(0);
+      }
+      expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
+    });
 
     test("organization deletion cascades through contacts, matters and client-linked invoices", async () => {
       const scenario = await seedScenario();
