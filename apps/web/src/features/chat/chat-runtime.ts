@@ -49,7 +49,10 @@ import {
   isBrowserExtensionBridgeMounted,
 } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
-import { toPersistedChatMessages } from "@/features/chat/chat-persisted-messages";
+import {
+  toPersistedChatMessages,
+  withCurrentChatMessages,
+} from "@/features/chat/chat-persisted-messages";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
@@ -737,7 +740,7 @@ export const createChatRuntime = ({
         state.resume;
       mountReadFoundRun =
         resume !== undefined && (resume.pendingInterrupts?.length ?? 0) === 0;
-      return { ...state, messages: snapshot.messages };
+      return withCurrentChatMessages(state, () => snapshot.messages);
     },
   } satisfies typeof persistence;
 
