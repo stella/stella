@@ -5,14 +5,12 @@ import { repoRelativePath } from "@stll/portable-path";
 /**
  * Positional arguments select which discovered test files to run.
  *
- * They must never be appended to the batches the runner builds. Appending adds
- * the file to EVERY batch, including batches deliberately built to keep it away
- * from a test that mocks a module it imports, which is the isolation the
- * batcher exists to provide (see src/tests/module-mock-batching.ts). A local
- * run would then fail, or pass, for reasons CI never reproduces.
+ * They must never be appended to the file list a runner passes to `bun test`:
+ * Bun ORs positional filters, so an appended pattern beside an explicit list
+ * runs the whole list again instead of narrowing it.
  *
- * So a positional narrows each batch instead of joining it: composition is
- * decided by the batcher over every discovered file, and the positional only
+ * So a positional narrows the discovered files instead of joining them: the
+ * runner decides the files over every discovered path, and the positional only
  * picks which of those files run.
  *
  * Classification tracks option arity rather than guessing from the shape of a

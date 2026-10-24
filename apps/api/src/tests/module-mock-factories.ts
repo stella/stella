@@ -4,14 +4,12 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { resolveModuleSpecifier } from "./module-mock-batching";
-
 // Every call site this reader must account for: a `mock.module` naming its
 // target with a string literal. A computed target names no module to compare
 // against and is out of scope for both this pattern and the reader.
 //
 // Written with an escaped dot so this module's own source does not read as a
-// `mock.module` call site to the runner's helper scan (scripts/run-tests.ts).
+// `mock.module` call site to a source scan.
 const MODULE_MOCK_CALL_PATTERN = /\bmock\.module\s*\(\s*["']([^"']+)["']\s*,/gu;
 // The `() => (` an object-literal factory opens with, measured from just past
 // the target literal's comma.
@@ -25,6 +23,32 @@ const MODULE_FILE_SUFFIXES = [
   "/index.ts",
   "/index.tsx",
 ] as const;
+const MODULE_ALIAS_PREFIX = "@/api/";
+const MODULE_ALIAS_TARGET = "src/";
+const MODULE_EXTENSION_PATTERN = /\.[cm]?[jt]sx?$/u;
+
+/**
+ * Canonicalize a module specifier so the alias, relative, and bare forms of the
+ * same module compare equal. `fromModulePath` is the api-package-relative path
+ * of the file the specifier was written in (e.g. `src/lib/analytics/x.test.ts`).
+ */
+export const resolveModuleSpecifier = (
+  specifier: string,
+  fromModulePath: string,
+): string => {
+  if (specifier.startsWith(MODULE_ALIAS_PREFIX)) {
+    return `${MODULE_ALIAS_TARGET}${specifier.slice(MODULE_ALIAS_PREFIX.length)}`.replace(
+      MODULE_EXTENSION_PATTERN,
+      "",
+    );
+  }
+  if (specifier.startsWith(".")) {
+    return path.posix
+      .join(path.posix.dirname(fromModulePath), specifier)
+      .replace(MODULE_EXTENSION_PATTERN, "");
+  }
+  return specifier;
+};
 
 const transpilers = new Map<string, Bun.Transpiler>();
 const transpilerFor = (modulePath: string): Bun.Transpiler => {

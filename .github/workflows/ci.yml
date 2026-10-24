@@ -2619,8 +2619,8 @@ jobs:
           && matrix.shard == 'rest-web'
         run: bun --cwd .claude/mcp test
 
-      # The API test runner sizes its parallel lanes from the runner's cores
-      # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
+      # The API test runner sizes its `bun test --parallel` workers from the
+      # runner's cores (apps/api/scripts/run-tests.ts); print what it sees.
       - name: Runner resources
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: nproc; free -g

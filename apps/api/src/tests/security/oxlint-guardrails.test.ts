@@ -384,15 +384,12 @@ describe("custom oxlint guardrails", () => {
     // the other exports for every file sharing the process, so a file that
     // imports a dropped export gets `undefined` back instead of the function.
     //
-    // The api test runner now prevents the direct form of that on its own: the
-    // batcher (src/tests/module-mock-batching.ts) refuses to co-locate a
-    // module's mocker with a file that imports it, and the shared-process
-    // batches hold no mock-installing file at all. What neither can see is the
-    // TRANSITIVE importer, a co-batched file reaching the mocked module through
-    // a handler it imports. Walking the whole import graph instead would put
-    // nearly every mock file in a batch of one (src/lib/analytics/capture alone
-    // has ~130 non-test importers inside apps/api), so not dropping exports in
-    // the first place stays the defence there and this guard stays.
+    // The api test runner gives every file a fresh module registry
+    // (`bun test --parallel` isolates each file), so a mock no longer reaches
+    // another file. Inside one file it still does: a test importing a handler
+    // that reaches the mocked module sees only the factory's exports. Not
+    // dropping exports in the first place stays the defence, and this guard
+    // stays.
     //
     // It no longer carries a hand-kept module list. The property is read off
     // each target module's own source: a factory is clean when it spreads the
