@@ -9,7 +9,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- run and claim, and is visible only while the caller can see that claim.
 --
 -- Additive for the rollout: the new columns are nullable and every row the
--- previous build writes leaves them null, which both new checks accept.
+-- previous build writes leaves them null, which both new checks accept. The
+-- checks and the matter key are added NOT VALID; the post-deploy online phase
+-- validates them and builds the claim index (apps/api/src/db/online-migrations.ts).
 ALTER TABLE "legal_reader_annotations"
   ADD COLUMN IF NOT EXISTS "workspace_id" uuid,
   ADD COLUMN IF NOT EXISTS "verification_run_id" uuid,
@@ -241,35 +243,3 @@ CREATE TRIGGER "legal_list_claims_drop_reader_comments"
 AFTER DELETE ON "legal_list_claims"
 REFERENCING OLD TABLE AS removed_claims
 FOR EACH STATEMENT EXECUTE FUNCTION "legal_reader_annotations_drop_claim_comments"();--> statement-breakpoint
-
--- Split the migrator transaction for a non-blocking claim comment index.
--- squawk-ignore transaction-nesting
-COMMIT;
---> statement-breakpoint
-SET statement_timeout = 0;--> statement-breakpoint
-SET lock_timeout = 0;--> statement-breakpoint
--- Rebuild only this migration's interrupted index before replay.
-DROP INDEX CONCURRENTLY IF EXISTS "legal_reader_annotations_verification_claim_idx";
---> statement-breakpoint
--- Serves the matter key's cascade and the claim trigger's cleanup.
--- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "legal_reader_annotations_verification_claim_idx" ON "legal_reader_annotations" ("workspace_id", "verification_claim_id") WHERE "workspace_id" IS NOT NULL;
---> statement-breakpoint
-SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
--- squawk-ignore transaction-nesting, ban-uncommitted-transaction
-BEGIN;--> statement-breakpoint
-
--- The checks and the matter key were added NOT VALID in the committed
--- transaction above. Reader notes are a small table (not registered as
--- high-volume), and every existing row has null matter columns, so
--- validation is a short scan.
--- squawk-ignore constraint-missing-not-valid -- Added NOT VALID in the committed transaction above; validation holds no earlier schema lock.
-ALTER TABLE "legal_reader_annotations"
-  VALIDATE CONSTRAINT "legal_reader_annotations_target_type_values";--> statement-breakpoint
--- squawk-ignore constraint-missing-not-valid -- Added NOT VALID in the committed transaction above; validation holds no earlier schema lock.
-ALTER TABLE "legal_reader_annotations"
-  VALIDATE CONSTRAINT "legal_reader_annotations_verification_claim_shape";--> statement-breakpoint
--- squawk-ignore constraint-missing-not-valid -- Added NOT VALID in the committed transaction above; validation holds no earlier schema lock.
-ALTER TABLE "legal_reader_annotations"
-  VALIDATE CONSTRAINT "legal_reader_annotations_workspace_organization_fk";
