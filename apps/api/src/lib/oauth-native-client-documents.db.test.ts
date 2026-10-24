@@ -31,6 +31,7 @@ const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
 const { signInHuman } = await import("@/api/tests/helpers/human-session");
 const { rootDb } = await import("@/api/db/root");
 const { workspaceMembers, workspaces } = await import("@/api/db/schema");
+const { createSafeId, toSafeId } = await import("@/api/lib/branded-types");
 const { readSignedQuery } = await import("@/api/tests/helpers/oauth-grant");
 const { login } = await import("../../../../packages/cli/src/auth/login.ts");
 const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
@@ -294,10 +295,10 @@ describe("stella mobile client document", () => {
     const browser = await signInWithOrganization(
       "mobile-document@example.test",
     );
-    const workspaceId = Bun.randomUUIDv7();
+    const workspaceId = createSafeId<"workspace">();
     await rootDb.insert(workspaces).values({
       id: workspaceId,
-      organizationId: browser.organizationId,
+      organizationId: toSafeId<"organization">(browser.organizationId),
       name: "Mobile matter",
       reference: workspaceId,
     });
