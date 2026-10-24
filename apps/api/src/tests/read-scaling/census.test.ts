@@ -19,6 +19,7 @@ import {
   mcpScalingSurface,
   parseScalingLedger,
   scalingCoverageViolations,
+  withNewWriteRoutes,
 } from "./surface";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -121,6 +122,16 @@ for (const { kind, surface, ledger, measured } of [
           ledgerRel: `apps/api/src/tests/read-scaling/${kind}-scaling-ledger.json`,
           repoRoot,
           parseLedger: parseScalingLedger,
+          // A write route this change mounts may enter with its reason.
+          normalizeBaseEntries: (base) =>
+            withNewWriteRoutes({
+              base,
+              current: parseScalingLedger(
+                JSON.stringify(ledger),
+                `${kind}-scaling`,
+              ),
+              writes: surface.writes,
+            }),
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",

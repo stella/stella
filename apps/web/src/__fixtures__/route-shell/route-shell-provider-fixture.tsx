@@ -3,7 +3,7 @@ import type { ComponentType, LazyExoticComponent } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, expect, mock, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { parseTimeZoneId } from "@stll/time";
@@ -493,28 +493,8 @@ const loadFixtureRuntime = async (
   { mode, suite = "leaf-shells" }: RouteShellProviderFixtureOptions,
   network: ReturnType<typeof installFixtureNetwork>,
 ) => {
-  // Bun does not run Start's client/server build transform. Keep its client
-  // implementation, as the browser bundle does, while retaining the real router.
-  const start = await import("@tanstack/react-start");
-  type ClientHalf = (...args: never[]) => unknown;
-  await mock.module("@tanstack/react-start", () => ({
-    ...start,
-    createIsomorphicFn: () => {
-      let clientHalf: ClientHalf = () => undefined;
-      const isomorphic = Object.assign(
-        (...args: never[]) => clientHalf(...args),
-        {
-          server: () => isomorphic,
-          client: (half: ClientHalf) => {
-            clientHalf = half;
-            return isomorphic;
-          },
-        },
-      );
-      return isomorphic;
-    },
-  }));
-
+  // Isomorphic functions run their browser half here, as the test preload
+  // (src/test-setup.ts) arranges for every test.
   const { routeTree } = await import("@/router");
   const { createAppQueryClient } = await import("@/lib/react-query");
   const { professionalUseOptions } = await import("@/lib/auth-queries");

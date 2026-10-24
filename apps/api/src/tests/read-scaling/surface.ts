@@ -87,3 +87,34 @@ export const parseScalingLedger = (text: string, label: string): string[] => {
     entries.map(({ id }) => `${section}:${id}`),
   );
 };
+
+type NewWriteRouteAllowanceOptions = {
+  /** The ledger entries on the base, section-prefixed. */
+  base: readonly string[];
+  /** The ledger entries in this change, section-prefixed. */
+  current: readonly string[];
+  /** The mounted non-GET routes in this change. */
+  writes: readonly string[];
+};
+
+/**
+ * Base entries plus the write routes this change adds to the pending write
+ * harness. While no write is measured the census holds every base write route
+ * in that section, so a pending entry the base lacks that names a mounted
+ * write route is a route this change adds; it may enter with its reason.
+ * Read exemptions and existing entries stay shrink-only.
+ */
+export const withNewWriteRoutes = ({
+  base,
+  current,
+  writes,
+}: NewWriteRouteAllowanceOptions): string[] => {
+  const known = new Set(base);
+  const pendingWrites = new Set(
+    writes.map((id) => `pendingWriteHarness:${id}`),
+  );
+  return [
+    ...base,
+    ...current.filter((entry) => !known.has(entry) && pendingWrites.has(entry)),
+  ];
+};

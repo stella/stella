@@ -297,7 +297,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/VERSION",
-        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png"
+        "$TURBO_ROOT$/apps/desktop/assets/icon-*.png",
+        "$TURBO_ROOT$/apps/landing/public/brand/stella-symbol.svg"
       ],
       "outputs": [".output/**"]
     },

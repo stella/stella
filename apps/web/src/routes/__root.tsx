@@ -33,6 +33,7 @@ import {
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import "@/fonts.css";
+import { readSidebarStateAttribute } from "@/components/sidebar/sidebar-state";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -201,10 +202,13 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     // recovered hydration error. The server renders the document's own
     // language on pages that show one, and the interface locale otherwise;
     // data-lang-source tells prepaint-init.js to keep a document language.
+    // data-sidebar-state carries the sidebar's stored state from the server
+    // render to the browser (see components/sidebar/sidebar-state.ts).
     <html
       lang={lang}
       dir={dir}
       data-lang-source={langSource}
+      data-sidebar-state={readSidebarStateAttribute()}
       suppressHydrationWarning
     >
       <head>

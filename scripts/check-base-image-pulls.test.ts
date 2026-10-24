@@ -27,9 +27,9 @@ const DOCKER_BUILD = /(?:^|[\s;&|(])docker\s+(?:buildx\s+)?build\b/u;
 const MINIMUM_BUILD_SITES = 9;
 const RETRY_SCRIPT = "scripts/retry.sh";
 const DOCKER_PULL = /(?:^|[\s;&|(])docker\s+pull\b/u;
-/** Tolerates a checkout-path prefix, as in `.workflow-source/scripts/…`. */
+/** Tolerates a checkout-path prefix, as in `.workflow-source/scripts/…` or `${TOOLING_PATH}/scripts/…`. */
 const WRAPPED_PULL =
-  /\bbash\s+(?:[\w.\-/]+\/)?scripts\/retry\.sh\s+docker\s+pull\b/u;
+  /\bbash\s+["']?(?:(?:\$\{\w+\}|[\w.-]+)(?:\/[\w.-]+)*\/)?scripts\/retry\.sh["']?\s+docker\s+pull\b/u;
 /** The registry pulls the workflows run today, counted like the builds. */
 const MINIMUM_PULL_SITES = 3;
 

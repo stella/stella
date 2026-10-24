@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RouteComponent } from "@tanstack/react-router";
 import { plugin } from "bun";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -38,28 +38,6 @@ for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {
     value: "test",
   });
 }
-
-// The browser build keeps only the client half of an isomorphic function;
-// without the build step both halves exist and the server one would run.
-const start = await import("@tanstack/react-start");
-type ClientHalf = (...args: never[]) => unknown;
-await mock.module("@tanstack/react-start", () => ({
-  ...start,
-  createIsomorphicFn: () => {
-    let clientHalf: ClientHalf = () => undefined;
-    const isomorphic = Object.assign(
-      (...args: never[]) => clientHalf(...args),
-      {
-        server: () => isomorphic,
-        client: (half: ClientHalf) => {
-          clientHalf = half;
-          return isomorphic;
-        },
-      },
-    );
-    return isomorphic;
-  },
-}));
 
 // ── The network ─────────────────────────────────────
 

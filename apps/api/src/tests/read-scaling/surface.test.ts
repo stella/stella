@@ -6,6 +6,7 @@ import {
   mcpScalingSurface,
   parseScalingLedger,
   scalingCoverageViolations,
+  withNewWriteRoutes,
 } from "./surface";
 
 describe("scaling coverage census", () => {
@@ -88,5 +89,39 @@ describe("scaling coverage census", () => {
         "fixture",
       ),
     ).toThrow("must contain reasoned");
+  });
+
+  test("a write route added with its reason may enter the pending write harness", () => {
+    const base = ["pendingWriteHarness:POST /v1/rows"];
+    const current = [
+      "pendingWriteHarness:POST /v1/rows",
+      "pendingWriteHarness:POST /v1/rows/apply",
+    ];
+    const writes = ["POST /v1/rows", "POST /v1/rows/apply"];
+    expect(withNewWriteRoutes({ base, current, writes })).toEqual(current);
+    // The same route without a reason is refused before any allowance.
+    expect(() =>
+      parseScalingLedger(
+        JSON.stringify({
+          unmeasuredReads: [],
+          pendingWriteHarness: [{ id: "POST /v1/rows/apply", reason: "" }],
+        }),
+        "fixture",
+      ),
+    ).toThrow("must contain reasoned");
+  });
+
+  test("new read exemptions and entries for no mounted write stay new", () => {
+    const base = ["pendingWriteHarness:POST /v1/rows"];
+    const allowed = withNewWriteRoutes({
+      base,
+      current: [
+        ...base,
+        "unmeasuredReads:GET /v1/rows/apply",
+        "pendingWriteHarness:POST /v1/unmounted",
+      ],
+      writes: ["POST /v1/rows", "GET /v1/rows/apply"],
+    });
+    expect(allowed).toEqual(base);
   });
 });

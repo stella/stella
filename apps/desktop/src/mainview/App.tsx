@@ -22,6 +22,7 @@ import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
+import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
@@ -109,11 +110,7 @@ const getInitialTab = (): PreferencesTab => {
   return isPreferencesTab(tab) ? tab : "general";
 };
 
-const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
-  if (!linkedAccount) {
-    return "S";
-  }
-
+const getAccountInitials = (linkedAccount: LinkedAccountSnapshot) => {
   if (linkedAccount.name?.trim()) {
     return linkedAccount.name
       .split(" ")
@@ -340,7 +337,13 @@ const GeneralPane = ({
       <PanelGroup>
         <div className="flex items-center gap-3 px-4 py-4">
           <Avatar className="size-10 border">
-            <AvatarFallback>{getAccountInitials(linkedAccount)}</AvatarFallback>
+            <AvatarFallback>
+              {linkedAccount ? (
+                getAccountInitials(linkedAccount)
+              ) : (
+                <StellaMark className="size-5" />
+              )}
+            </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">
