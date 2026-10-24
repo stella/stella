@@ -83,10 +83,11 @@ test("repeated frame starts distinguish one factory instance from distinct alloc
   const factory = (starts: string) =>
     `const factory=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};${starts}return()=>cancelAnimationFrame(frame.current);};`;
   const cases = [
-    [factory("tick();tick();") + "useMountEffect(()=>factory());", false],
+    [`${factory("tick();tick();")}useMountEffect(()=>factory());`, false],
     [
-      factory("tick();") +
-        "useMountEffect(()=>{const first=factory();const second=factory();return()=>{first();second();};});",
+      `${factory(
+        "tick();",
+      )}useMountEffect(()=>{const first=factory();const second=factory();return()=>{first();second();};});`,
       true,
     ],
   ] as const;
