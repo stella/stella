@@ -222,7 +222,7 @@ export const hasMcpToolAuthority = (
   isMemberAuthorizedForMcpTool(mcpMemberAuthority(authority), definition);
 
 /** `isMemberAuthorizedForMcpToolInput` for an MCP request. */
-export const hasMcpToolInputAuthority = (
+const hasMcpToolInputAuthority = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
@@ -276,7 +276,7 @@ const mcpToolAuthorityDenial = (
  * `mcpToolAuthorityDenial` for the operation the normalized input selects:
  * whether the member role or a narrower credential refuses its exact grant.
  */
-export const mcpToolInputAuthorityDenial = (
+const mcpToolInputAuthorityDenial = (
   authority: McpEffectiveAuthority,
   definition: McpToolAuthorityDeclaration,
   input: Readonly<Record<string, unknown>>,
@@ -323,7 +323,7 @@ export const authorizedMcpContextForTest = <
  * credential narrower than the role needs a different credential, not a role
  * change, so the two are told apart.
  */
-export const mcpToolAuthorityDenialRefusal = (
+const mcpToolAuthorityDenialRefusal = (
   subject: string,
   denial: McpToolAuthorityDenial,
 ): McpToolAuthorityRefusal => {

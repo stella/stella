@@ -5,10 +5,13 @@ import { lintRuleAcrossFiles } from "./lint-single-rule.ts";
 test("keeps authorized-context construction in the authority owner", async () => {
   expect(
     await lintRuleAcrossFiles("mcp-authorized-context-owner", {
-      ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts":
-        await Bun.file(
-          ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts",
-        ).text(),
+      ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts": [
+        'import { authorizedMcpContextForTest } from "@/api/mcp/write-tool-authority";',
+        "",
+        'const authorizedMcpRequestContextBrand = Symbol("context");',
+        "void authorizedMcpContextForTest;",
+        "void authorizedMcpRequestContextBrand;",
+      ].join("\n"),
     }),
   ).toEqual({
     ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts": [

@@ -4,6 +4,7 @@ import {
   canonicalModuleId,
   getImportedName,
   getPropertyName,
+  isTestFile,
   repoRelativeFilename,
   staticStringValue,
 } from "./utils.ts";
@@ -17,11 +18,6 @@ const INTERNAL_NAMES = new Set([
 ]);
 const TEST_HELPER_MODULE = "apps/api/src/tests/helpers/authorized-mcp-context";
 const TEST_HELPER = "authorizedMcpContextForTest";
-
-const isTestFile = (filename: string): boolean =>
-  /(?:\.test|\.integration\.test|\.db\.test|\.postgres\.test)\.tsx?$/.test(
-    filename,
-  ) || filename.includes("/tests/helpers/");
 
 export default eslintCompatPlugin({
   meta: { name: "mcp-authorized-context-owner" },
