@@ -88,6 +88,40 @@ describe("the HTML builder", () => {
     expect(ast.metadata).toEqual(METADATA);
   });
 
+  test("keeps the article's own header and footer inside its content root", () => {
+    const ast = build(
+      `<header><h1>Title</h1><p>Adoption date</p></header><p>Body</p><footer>Issuer</footer>`,
+    );
+    expect(ast.blocks.map(({ plainText }) => plainText)).toEqual([
+      "Title",
+      "Adoption date",
+      "Body",
+      "Issuer",
+    ]);
+  });
+
+  test("a heading in a referenced footnote stays grouped with that note after the body", () => {
+    const ast = build(
+      `<h2>1 Body</h2><p>Body<a href="#fn1">1</a>.</p><aside id="fn1" role="doc-footnote"><h3>Explanation</h3><p>Note body.</p></aside><p>After note.</p>`,
+    );
+    expect(outline(ast)).toEqual([
+      { id: "s-1", type: "heading", text: "1 Body" },
+      { id: "s-1_1", type: "paragraph", text: "Body1." },
+      { id: "s-1_2", type: "paragraph", text: "After note." },
+      { id: "fn-1", type: "paragraph", text: "Explanation", note: "1" },
+      { id: "fn-1-2", type: "paragraph", text: "Note body.", note: "1" },
+    ]);
+    const notes = ast.blocks.flatMap((block) =>
+      block.type === "paragraph" && block.note !== undefined
+        ? [block.note]
+        : [],
+    );
+    expect(notes).toEqual([
+      { type: "footnote", label: "1", noteId: "note-1" },
+      { type: "footnote", label: "1", noteId: "note-1" },
+    ]);
+  });
+
   test("sets footnotes after the body under the mark the body printed", () => {
     const ast = build(`
       <p>Body<sup><a href="#fn1" id="r1">1</a></sup> and Word style<a href="#_ftn2" name="_ftnref2">[2]</a>.</p>

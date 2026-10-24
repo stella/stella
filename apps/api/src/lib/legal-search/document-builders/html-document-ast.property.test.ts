@@ -17,6 +17,8 @@ const METADATA = {
 
 const kinds = [
   "text",
+  "header",
+  "footer",
   "headingLink",
   "noteMarker",
   "noteDescription",
@@ -37,6 +39,11 @@ test("HTML document building preserves every non-marker text run", () => {
             case "text": {
               expected.push(token);
               return `<p>${token}</p>`;
+            }
+            case "header":
+            case "footer": {
+              expected.push(token);
+              return `<${kind}><p>${token}</p></${kind}>`;
             }
             case "headingLink": {
               expected.push(token);

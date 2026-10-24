@@ -50,8 +50,6 @@ import { headingKeyOf } from "./section-labels";
 /** Page chrome a content root can still contain; none of it is document text. */
 const SKIPPED_TAGS = new Set([
   "nav",
-  "header",
-  "footer",
   "form",
   "button",
   "noscript",
@@ -89,6 +87,8 @@ const BLOCK_TAGS = new Set([
   ...PARAGRAPH_TAGS,
   ...SKIPPED_TAGS,
   "div",
+  "header",
+  "footer",
   "section",
   "article",
   "main",
@@ -628,6 +628,10 @@ const walkBlock = (
   }
   if (isHeadingTag(tag)) {
     const inlines = inlinesOf(state, state.$(element), context);
+    if (context.into === "notes") {
+      registerSource(state, [element], pushParagraph(state, inlines, context));
+      return;
+    }
     const text = plainTextOf(inlines).trim();
     if (text !== "") {
       const block: KeyedBlock = {
