@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   ledgerGitEnv,
+  ledgerMergeBase,
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "./ledger-membership";
@@ -70,7 +71,7 @@ const fixture = () => {
       },
     });
   git("init", "--quiet", "--initial-branch=main");
-  return { git, writeLedger, commit, check, errors };
+  return { repoRoot, git, writeLedger, commit, check, errors };
 };
 
 test("an older commit the base contains passes after the base shrank its ledger", () => {
@@ -136,4 +137,23 @@ process.exit(runLedgerMembershipGuard({
     { env: { ...GIT_ENV, GIT_DIR: otherGitDir }, stderr: "pipe" },
   );
   expect(guard.exitCode, guard.stderr.toString()).toBe(0);
+});
+
+test("diverged branch comparisons use the fork point and name unavailable refs", () => {
+  const { repoRoot, git, commit } = fixture();
+  const fork = commit(["a::x", "a::y"], "fork");
+  commit(["a::x"], "main shrinks");
+  git("checkout", "--quiet", "-b", "feature", fork);
+  git(
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "--no-verify",
+    "-m",
+    "feature work",
+  );
+  expect(ledgerMergeBase({ repoRoot, baseRef: "main" })).toBe(fork);
+  expect(() =>
+    ledgerMergeBase({ repoRoot, baseRef: "origin/missing" }),
+  ).toThrow("requires a fetched origin/missing with shared history");
 });

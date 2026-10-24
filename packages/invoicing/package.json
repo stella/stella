@@ -31,6 +31,7 @@
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "bysquare": "4.1.0",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "xmllint-wasm": "catalog:"
   }
 }
