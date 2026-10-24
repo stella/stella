@@ -18,7 +18,7 @@ const openFixture = async (page: Page) => {
 };
 
 const readBox = async (page: Page) => {
-  await waitForStableGeometry(page, box(page));
+  await waitForStableGeometry(page, box(page).locator(".."));
   return await box(page).evaluate((element) => {
     const preview = element.parentElement?.querySelector("canvas");
     if (!(preview instanceof HTMLCanvasElement)) {

@@ -19,7 +19,7 @@ export { expect };
 
 type Rect = { x: number; y: number; width: number; height: number };
 
-/** Prepare the page and wait until every measured box is unchanged for two frames. */
+/** Wait for measured roots, their descendant boxes and text lines to settle. */
 export const waitForStableGeometry = async (
   page: Page,
   measured: Locator | readonly Locator[],
@@ -61,12 +61,50 @@ export const waitForStableGeometry = async (
                 if (stableElements.length === 0) {
                   return false;
                 }
-                const snapshot = () =>
-                  stableElements.map((element) => {
+                const snapshot = () => {
+                  const elements = new Set(
+                    stableElements.flatMap((element) => [
+                      element,
+                      ...element.querySelectorAll("*"),
+                    ]),
+                  );
+                  return [...elements].map((element) => {
                     const { x, y, width, height } =
                       element.getBoundingClientRect();
-                    return { x, y, width, height };
+                    const textLines = [...element.childNodes].flatMap(
+                      (node) => {
+                        if (
+                          node.nodeType !== Node.TEXT_NODE ||
+                          !node.textContent?.trim()
+                        ) {
+                          return [];
+                        }
+                        const range = document.createRange();
+                        range.selectNodeContents(node);
+                        return [...range.getClientRects()].map((rect) => ({
+                          x: rect.x,
+                          y: rect.y,
+                          width: rect.width,
+                          height: rect.height,
+                        }));
+                      },
+                    );
+                    return {
+                      connected: element.isConnected,
+                      x,
+                      y,
+                      width,
+                      height,
+                      clientWidth: element.clientWidth,
+                      clientHeight: element.clientHeight,
+                      scrollWidth: element.scrollWidth,
+                      scrollHeight: element.scrollHeight,
+                      scrollLeft: element.scrollLeft,
+                      scrollTop: element.scrollTop,
+                      textLines,
+                    };
                   });
+                };
                 const first = snapshot();
                 await new Promise<void>((resolve) => {
                   requestAnimationFrame(() => resolve());
@@ -77,6 +115,7 @@ export const waitForStableGeometry = async (
                 });
                 const third = snapshot();
                 return (
+                  third.every(({ connected }) => connected) &&
                   JSON.stringify(first) === JSON.stringify(second) &&
                   JSON.stringify(second) === JSON.stringify(third)
                 );

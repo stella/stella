@@ -103,6 +103,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     await page.addScriptTag({ content: fixture.bundle });
     const pane = page.getByTestId("pane");
     await expect(pane).toBeVisible();
+    await waitForStableGeometry(page, [pane, page.locator("header")]);
     await page.evaluate((selectionInput) => {
       const root = window.document.querySelector<HTMLElement>(
         '[data-testid="pane"]',
@@ -153,7 +154,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     }
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toHaveCSS("position", "fixed");
-    await waitForStableGeometry(page, [pane, toolbar]);
+    await waitForStableGeometry(page, [pane, toolbar, page.locator("header")]);
     expect((await stableBoundingBox(page, toolbar)).width).toBeGreaterThan(200);
     const geometry = await page.evaluate((usePointer) => {
       const paneElement = window.document.querySelector<HTMLElement>(

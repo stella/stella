@@ -398,7 +398,7 @@ test("a row shown whole is as tall as what it holds", async ({ page }) => {
  * sees, whatever padding each cell's content carries above its text.
  */
 const readFirstLineOffsets = async (page: Page) => {
-  await waitForStableGeometry(page, page.locator(BODY_ROW).first());
+  await waitForStableGeometry(page, page.locator(BODY_ROW));
   return await page.evaluate(
     ([bodyRowSelector]) => {
       const lineCentre = (node: Node) => {

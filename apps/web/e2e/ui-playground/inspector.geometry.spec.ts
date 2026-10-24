@@ -130,6 +130,7 @@ test("a table too wide for the column scrolls inside its own box", async ({
 }) => {
   await page.goto("/dev?visual=inspector-pane", { waitUntil: "commit" });
   await expect(page.locator(`${SECTION} table`).first()).toBeVisible();
+  await waitForStableGeometry(page, page.locator(SECTION));
 
   // The pane holds its width by wrapping what can wrap; a table cannot, so it
   // keeps the axis locally rather than giving it to the document.

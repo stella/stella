@@ -18,7 +18,6 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
 
     const section = page.locator(`[data-playground-section="fixture:${name}"]`);
     await expect(section).toBeVisible();
-    await waitForStableGeometry(page, section);
     await expect(section.locator("header").first()).toHaveText(
       `Fixture: ${label}`,
     );
@@ -27,6 +26,7 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     await expect(
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
+    await waitForStableGeometry(page, section);
     if (name === "chat-history-decision") {
       // The fixtures stay out of this spec: they are typed against the web
       // API routes, which would pull the app's types into the browser tests.
