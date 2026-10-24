@@ -11,7 +11,11 @@
 // Usage: bun scripts/fingerprint.ts <ios|android>   (honours APP_VARIANT)
 
 import { createFingerprintAsync, SourceSkips } from "@expo/fingerprint";
+import type { HashSource } from "@expo/fingerprint";
+import { panic } from "better-result";
 import path from "node:path";
+
+import { APP_VERSION } from "../app.config";
 
 export const NATIVE_PLATFORMS = ["ios", "android"] as const;
 
@@ -28,20 +32,68 @@ const APP_ROOT = path.resolve(import.meta.dir, "..");
 export const FINGERPRINT_SOURCE_SKIPS: number =
   SourceSkips.ExpoConfigVersions + SourceSkips.ExpoConfigRuntimeVersionIfString;
 
+/**
+ * The part of the store version an update may not cross: the major version,
+ * or major and minor while the app is below 1.0. Skipping the version above
+ * would let an update for a new release reach every older build whose native
+ * code happens to match; hashing the release line keeps each line's updates
+ * on its own builds.
+ */
+export const releaseLine = (version: string): string => {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(version);
+  if (match === null) {
+    return panic(`app version ${version} is not major.minor.patch`);
+  }
+  const [, major, minor] = match;
+  return major === "0" ? `0.${minor}` : `${major}`;
+};
+
+/**
+ * `@expo/fingerprint` returns no sources, rather than failing, when Expo
+ * autolinking errors; the hash then stops moving with native changes and
+ * updates reach builds that lack them. A fingerprint must hash at least one
+ * autolinked module.
+ */
+const AUTOLINKING_REASON = {
+  ios: "expoAutolinkingIos",
+  android: "expoAutolinkingAndroid",
+} as const satisfies Record<NativePlatform, string>;
+
+export const hashesExpoModules = (
+  platform: NativePlatform,
+  sources: readonly Pick<HashSource, "reasons">[],
+): boolean =>
+  sources.some((source) =>
+    source.reasons.includes(AUTOLINKING_REASON[platform]),
+  );
+
 export const isNativePlatform = (value: string): value is NativePlatform =>
   NATIVE_PLATFORMS.some((platform) => platform === value);
 
 export const nativeFingerprint = async (
   platform: NativePlatform,
   projectRoot: string = APP_ROOT,
-): Promise<string> =>
-  (
-    await createFingerprintAsync(projectRoot, {
-      platforms: [platform],
-      silent: true,
-      sourceSkips: FINGERPRINT_SOURCE_SKIPS,
-    })
-  ).hash;
+): Promise<string> => {
+  const fingerprint = await createFingerprintAsync(projectRoot, {
+    platforms: [platform],
+    silent: true,
+    sourceSkips: FINGERPRINT_SOURCE_SKIPS,
+    extraSources: [
+      {
+        type: "contents",
+        id: "releaseLine",
+        contents: releaseLine(APP_VERSION),
+        reasons: ["releaseLine"],
+      },
+    ],
+  });
+  if (!hashesExpoModules(platform, fingerprint.sources)) {
+    return panic(
+      `the ${platform} fingerprint hashes no Expo native modules; autolinking failed`,
+    );
+  }
+  return fingerprint.hash;
+};
 
 if (import.meta.main) {
   const platform = process.argv[2] ?? "";
