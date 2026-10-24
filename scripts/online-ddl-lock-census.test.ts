@@ -215,10 +215,8 @@ describe("online DDL lock census", () => {
     "the concurrent target guard must execute before building SQL: %s",
     (wrapper) => {
       const guard =
-        ownerSource
-          .match(
-            /  if \(builtName !== name \|\| builtTable !== tableName\) \{[\s\S]*?\n  \}/u,
-          )
+        / {2}if \(builtName !== name \|\| builtTable !== tableName\) \{[\s\S]*?\n  \}/u
+          .exec(ownerSource)
           ?.at(0) ?? panic("Missing concurrent-index target guard");
       const source = ownerSource.replace(guard, `${wrapper} {\n${guard}\n}`);
       expect(source).not.toBe(ownerSource);
