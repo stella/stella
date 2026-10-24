@@ -20,8 +20,8 @@ import {
   legalReaderAnnotations,
   searchHistoryEntries,
   workspaceMembers,
-  workspaceViewTemplates,
   workspaces,
+  workspaceViewTemplates,
 } from "@/api/db/schema";
 import {
   createMembershipScopedDb,
