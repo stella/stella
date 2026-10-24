@@ -370,6 +370,7 @@ mod tests {
       not_connected(),
       "the native request must reach API authentication rather than fail in transit"
     );
+    drop(saved);
   }
 
   #[tokio::test]
@@ -426,6 +427,7 @@ mod tests {
         body
       );
     }
+    drop(saved);
     server.abort();
   }
 

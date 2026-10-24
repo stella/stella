@@ -2,8 +2,8 @@ import Elysia from "elysia";
 
 import publishAnnouncement from "@/api/handlers/notifications/announce";
 import listNotifications from "@/api/handlers/notifications/list";
-import markNotificationRead from "@/api/handlers/notifications/read";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
