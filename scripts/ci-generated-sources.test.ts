@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { PR_CODE_QUALITY_CANCEL_JOBS } from "./ci-cancellation-contract";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
+import { lexShell, programWords } from "./install-free-ci";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -878,6 +879,19 @@ test("API boot entry points prepare capability runtime sources before starting",
 const STARTS_WEB_FROM_SOURCE =
   /\b(?:bun\s+--bun\s+vite|bunx\s+vite|vite\s+dev)\b/u;
 const REGISTRY_PREPARE = "bun scripts/ci-generated-sources.ts prepare";
+const preparesGeneratedSources = (run: string) =>
+  lexShell(run).some((event) => {
+    if (event.type !== "command") return false;
+    const words = programWords(event.words);
+    return (
+      words.at(0) === "bun" &&
+      words.at(1) === "scripts/ci-generated-sources.ts" &&
+      ((words.at(2) === "prepare" && words.length === 3) ||
+        (words.at(2) === "restore" &&
+          words.length === 4 &&
+          words.at(3)?.startsWith("-") === false))
+    );
+  });
 const looseWorkflow = v.object({
   jobs: v.optional(
     v.record(
@@ -908,11 +922,7 @@ const unpreparedSourceStarts = (file: string, source: LooseWorkflow) =>
     }
     const prepared = steps
       .slice(0, start)
-      .some(
-        ({ name, run }) =>
-          (run ?? "").includes(REGISTRY_PREPARE) ||
-          name === "Restore generated sources",
-      );
+      .some(({ run }) => preparesGeneratedSources(run ?? ""));
     return prepared ? [] : [`${file}/${id}/${steps[start]?.name ?? start}`];
   });
 
@@ -956,3 +966,34 @@ test("every job that serves the web app from source runs the generated-source re
     "ci.yml/e2e-vite-canary/Start web dev server",
   ]);
 });
+
+test.each([
+  [REGISTRY_PREPARE, true],
+  [`CI_CHECK_KIND=CONTEXTUAL ${REGISTRY_PREPARE}`, true],
+  [
+    'bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"',
+    true,
+  ],
+  [`echo '${REGISTRY_PREPARE}'`, false],
+  [`# ${REGISTRY_PREPARE}`, false],
+  [`cat <<'TEXT'\n${REGISTRY_PREPARE}\nTEXT`, false],
+  ["bun scripts/ci-generated-sources.ts restore", false],
+  ["echo 'Nothing to restore'", false],
+])(
+  "source preparation requires an executable registry command: %s",
+  (run, prepared) => {
+    const source = {
+      jobs: {
+        web: {
+          steps: [
+            { name: "Restore generated sources", run },
+            { name: "Serve", run: "bun --bun vite" },
+          ],
+        },
+      },
+    };
+    expect(unpreparedSourceStarts("fixture.yml", source)).toEqual(
+      prepared ? [] : ["fixture.yml/web/Serve"],
+    );
+  },
+);
