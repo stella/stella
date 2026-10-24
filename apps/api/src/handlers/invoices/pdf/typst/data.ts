@@ -157,7 +157,9 @@ const party = ({
       printedIds.includes("registration") ? value.registrationId : null,
     ],
     [
-      domesticTaxIdLabel ?? l.taxId,
+      domesticTaxIdLabel !== null && invoiceSellerCountryOf(value) === "PL"
+        ? domesticTaxIdLabel
+        : l.taxId,
       printedIds.includes("taxId") ? value.taxId : null,
     ],
     [

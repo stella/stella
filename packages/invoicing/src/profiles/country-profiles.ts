@@ -219,7 +219,7 @@ export const INVOICE_COUNTRY_PROFILES = {
         sk: "Plnenie oslobodené od dane.",
       }),
     },
-    exemptionReasonTreatments: [],
+    exemptionReasonTreatments: ["exempt"],
   },
   // Ustawa z dnia 11 marca 2004 r. o podatku od towarów i usług,
   // consolidated text, art. 106e.
@@ -270,7 +270,7 @@ export const INVOICE_COUNTRY_PROFILES = {
     supplyDateLabel: supplyDateLabels(),
     partyIds: commonPartyIds,
     legalNotes: noLegalNotes,
-    exemptionReasonTreatments: [],
+    exemptionReasonTreatments: ["exempt"],
   },
 } as const satisfies Record<InvoiceCountry, InvoiceCountryProfile>;
 

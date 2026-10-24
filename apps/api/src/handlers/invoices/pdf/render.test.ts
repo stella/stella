@@ -444,6 +444,49 @@ describe("country invoice wording", () => {
     expect(text).toContain("Numer VAT");
   });
 
+  test("prints a Czech exempt line's basis after the prescribed statement", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: { ...options.seller, vatPayer: true, vatId: "CZ12345678" },
+      invoice: {
+        ...options.invoice,
+        lines: [
+          {
+            ...sampleLine,
+            vatTreatment: "exempt",
+            exemptionReason: "§ 51 odst. 1 písm. a)",
+          },
+        ],
+      },
+    });
+    expect(text).toContain("Plnění osvobozené od daně.");
+    expect(text).toContain("§ 51 odst. 1 písm. a)");
+  });
+
+  test("labels a foreign buyer's tax ID as a tax ID, not a NIP, on a Polish invoice", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: {
+        ...options.seller,
+        country: "PL",
+        taxId: null,
+        vatId: "PL5260001246",
+      },
+      invoice: {
+        ...options.invoice,
+        currency: "PLN",
+        language: "pl",
+        buyerCountry: "DE",
+        buyerTaxId: "12/345/67890",
+        buyerVatId: "DE123456789",
+      },
+    });
+    // Only the Polish seller's identifier reads NIP.
+    expect(text.match(/NIP/gu)).toHaveLength(1);
+    expect(text).toContain("Numer identyfikacji podatkowej");
+    expect(text).toContain("12/345/67890");
+  });
+
   test("keeps Czech labels while adding the Czech profile note", async () => {
     const { text } = await textOf(options);
     expect(text).toContain("Datum zdanitelného plnění");
