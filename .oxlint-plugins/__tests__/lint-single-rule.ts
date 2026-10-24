@@ -88,17 +88,17 @@ const traceLintRun = (
   run: LintRunTrace | undefined,
   event: { stage: string; pid?: number; cases?: number; exitCode?: number },
 ) => {
-  if (process.env["CI"] !== "true" || run === undefined) {
+  if (process.env.CI !== "true" || run === undefined) {
     return;
   }
-  console.error(
+  process.stderr.write(
     `[lint-single-rule] ${JSON.stringify({
       worker: process.pid,
       run: run.id,
       rule: run.code,
       elapsedMs: performance.now() - run.queuedAt,
       ...event,
-    })}`,
+    })}\n`,
   );
 };
 
