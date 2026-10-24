@@ -49,6 +49,7 @@ export const AlphabetIndex = ({
   const [active, setActive] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
     if (!sc || groups.length === 0) {

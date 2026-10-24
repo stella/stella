@@ -92,6 +92,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       analytics.captureError(saved.error);
     }
   }, [analytics, saved.error]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const defaults = useMemo(
     () =>
       defaultEntityViews({
@@ -100,12 +101,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       }),
     [t],
   );
-  const savedViews = useMemo(() => {
-    if (!saved.data) {
-      return [];
-    }
-    return saved.data.items;
-  }, [saved.data]);
+  const savedViews = saved.data ? saved.data.items : [];
   const views = [
     ...savedViews,
     ...defaults.filter(
@@ -489,13 +485,9 @@ const EntityViewContent = ({
   );
   // The server orders and pages tasks and signals as one window; rows render
   // in the order they arrive.
-  const rows = useMemo(
-    () =>
-      records.data
-        ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
-        : [],
-    [records.data],
-  );
+  const rows = records.data
+    ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
+    : [];
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({

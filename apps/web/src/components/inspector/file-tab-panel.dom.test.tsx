@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
+
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -34,6 +36,11 @@ Object.assign(globalThis, {
   },
 });
 
+// The first plugin whose filter matches a module loads it, and the test
+// preload has already registered the React Compiler for every source module.
+// Clearing it lets the engine stubs register first; the compiler goes back
+// after them, so the panel still renders as it ships.
+Bun.plugin.clearAll();
 Bun.plugin({
   name: "file-tab-rendering-engine-test-loader",
   setup(build) {
@@ -68,6 +75,7 @@ Bun.plugin({
     }));
   },
 });
+Bun.plugin(reactCompilerBunPlugin);
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");

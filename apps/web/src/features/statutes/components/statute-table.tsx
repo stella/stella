@@ -8,7 +8,6 @@
  * the table read one column set.
  */
 
-import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
@@ -110,15 +109,11 @@ export const StatuteTable = ({
   statutes,
 }: StatuteTableProps) => {
   const columns = useStatuteTableColumns();
-  const rows = useMemo(
-    () =>
-      statutes.map((statute): StatuteRowData => ({
-        kind: "statute",
-        statute,
-        children: [],
-      })),
-    [statutes],
-  );
+  const rows = statutes.map((statute): StatuteRowData => ({
+    kind: "statute",
+    statute,
+    children: [],
+  }));
   const rowHost = useStatuteRowHost();
 
   return (
@@ -188,15 +183,12 @@ const useStatuteTableColumns = (): TableColumnDef<StatuteRowData>[] => {
 
   // Rebuilt only when the words change: a controlled table handed new column
   // definitions every render loops.
-  return useMemo(
-    () => [
-      ROW_NUMBER_COLUMN,
-      ...STATUTE_COLUMN_IDS.map((column) =>
-        statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
-      ),
-    ],
-    [t],
-  );
+  return [
+    ROW_NUMBER_COLUMN,
+    ...STATUTE_COLUMN_IDS.map((column) =>
+      statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
+    ),
+  ];
 };
 
 const renderNothing = () => null;

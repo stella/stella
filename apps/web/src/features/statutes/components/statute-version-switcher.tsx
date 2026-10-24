@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { useTranslations } from "use-intl";
 
 import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
@@ -39,14 +37,11 @@ export const StatuteVersionSwitcher = ({
   const t = useTranslations();
   const format = useFormatter();
 
-  const handleValueChange = useCallback(
-    (value: string | null) => {
-      if (value !== null && value !== "" && value !== currentVersionId) {
-        onVersionChange(value);
-      }
-    },
-    [currentVersionId, onVersionChange],
-  );
+  const handleValueChange = (value: string | null) => {
+    if (value !== null && value !== "" && value !== currentVersionId) {
+      onVersionChange(value);
+    }
+  };
 
   if (versions.length < 2) {
     return null;

@@ -52,6 +52,7 @@ export const usePageVisibility = ({
 
   const throttledUpdate = useThrottledCallback(updateVisiblePages, 150);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const containerRef = useCallback(
     (container: HTMLDivElement | null) => {
       if (!container || pageIds.length === 0) {

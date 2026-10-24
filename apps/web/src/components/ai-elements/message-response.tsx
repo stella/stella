@@ -38,6 +38,7 @@ export const MessageResponseImpl = memo(
     sourceOffsets = false,
     ...props
   }: MessageResponseProps) => {
+    // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
     const effectiveRehypePlugins = useMemo(
       () => [
         // Streamdown's raw HTML, sanitize and harden chain always runs first:

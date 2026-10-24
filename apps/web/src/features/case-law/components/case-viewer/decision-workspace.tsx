@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -528,7 +528,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
       mode: props.aiMode,
     });
-  const generate = useCallback(async () => {
+  const generate = async () => {
     if (!ensureAIAvailable) {
       return;
     }
@@ -539,7 +539,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     }
 
     generateDecisionAnalysis();
-  }, [ensureAIAvailable, generateDecisionAnalysis]);
+  };
 
   const hasAnalysis =
     analysisState.status === "done" ||

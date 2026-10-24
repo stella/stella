@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 
 import type { UnavailableSkillIds } from "@/components/chat-editor-slash-items";
@@ -38,18 +36,14 @@ export const useChatUnavailableSkills = (
     dataView.type === "items" && dataView.refetchError === undefined
       ? dataView.items
       : undefined;
-  return useMemo(
-    () =>
-      data === undefined
-        ? undefined
-        : new Map(
-            data.unavailable.map(({ missingTools, skillId }) => [
-              skillId,
-              missingTools,
-            ]),
-          ),
-    [data],
-  );
+  return data === undefined
+    ? undefined
+    : new Map(
+        data.unavailable.map(({ missingTools, skillId }) => [
+          skillId,
+          missingTools,
+        ]),
+      );
 };
 
 /** The ids of {@link useChatUnavailableSkills}, as the slash menus take them. */
@@ -58,10 +52,7 @@ export const useChatUnavailableSkillIds = (
   userId: string | undefined,
 ): UnavailableSkillIds => {
   const unavailable = useChatUnavailableSkills(organizationId, userId);
-  return useMemo(
-    () => (unavailable === undefined ? undefined : new Set(unavailable.keys())),
-    [unavailable],
-  );
+  return unavailable === undefined ? undefined : new Set(unavailable.keys());
 };
 
 /**
@@ -101,8 +92,5 @@ export const useComposerSkillAvailability = ({
       ? dataView.items
       : undefined;
   // A chat not known yet reads no answer, not the widest chat's cached one.
-  return useMemo(
-    () => (known ? chatSkillMenuAvailability(data) : undefined),
-    [data, known],
-  );
+  return known ? chatSkillMenuAvailability(data) : undefined;
 };

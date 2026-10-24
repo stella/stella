@@ -131,6 +131,7 @@ export const useInspectorFind = ({
   const allHighlightName = `stella-inspector-find-${safeKey}`;
   const activeHighlightName = `stella-inspector-find-active-${safeKey}`;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const clearFind = useCallback(() => {
     setFindState((prev) =>
       prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
@@ -139,19 +140,20 @@ export const useInspectorFind = ({
     highlightRegistry()?.delete(activeHighlightName);
   }, [activeHighlightName, allHighlightName]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const closeFind = useCallback(() => {
     clearFind();
     setFindState(FIND_CLOSED);
   }, [clearFind]);
 
-  const openFind = useCallback(() => {
+  const openFind = () => {
     if (!enabled) {
       return;
     }
     setFindState(findCommanded);
-  }, [enabled]);
+  };
 
-  const setFindQuery = useCallback((query: string) => {
+  const setFindQuery = (query: string) => {
     setFindState((prev) =>
       prev.open
         ? {
@@ -162,27 +164,24 @@ export const useInspectorFind = ({
           }
         : prev,
     );
-  }, []);
+  };
 
-  const openFindAtQuery = useCallback(
-    (query: string) => {
-      if (!enabled) {
-        return;
-      }
-      setFindState((prev) => ({
-        open: true,
-        query: query.trim(),
-        matchCount: 0,
-        activeIndex: 0,
-        focusRequest: prev.open ? prev.focusRequest : 0,
-        landingRequest: prev.open ? prev.landingRequest + 1 : 1,
-        scrollIntent: FIND_SCROLL_INTENT.reveal,
-      }));
-    },
-    [enabled],
-  );
+  const openFindAtQuery = (query: string) => {
+    if (!enabled) {
+      return;
+    }
+    setFindState((prev) => ({
+      open: true,
+      query: query.trim(),
+      matchCount: 0,
+      activeIndex: 0,
+      focusRequest: prev.open ? prev.focusRequest : 0,
+      landingRequest: prev.open ? prev.landingRequest + 1 : 1,
+      scrollIntent: FIND_SCROLL_INTENT.reveal,
+    }));
+  };
 
-  const nextMatch = useCallback(() => {
+  const nextMatch = () => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
         return prev;
@@ -193,9 +192,9 @@ export const useInspectorFind = ({
         scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
-  }, []);
+  };
 
-  const previousMatch = useCallback(() => {
+  const previousMatch = () => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
         return prev;
@@ -206,7 +205,7 @@ export const useInspectorFind = ({
         scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
-  }, []);
+  };
 
   const findOpen = findState.open;
   const findQuery = findState.open ? findState.query : "";

@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 /**
  * The words behind reference passages, by id.
  *
@@ -137,7 +136,7 @@ export const useReferencePassageTexts = (
   const { data, isError } = useQuery(documentReviewPassageTextsOptions(ids));
   // One stable empty map per hook instance: a fresh Map each render would hand
   // every consumer a new identity while nothing has loaded.
-  const empty = useMemo(() => new Map<string, string>(), []);
+  const empty = new Map<string, string>();
   return {
     // A failed read is a settled one: the words are not on screen, and saying
     // so is better than a column that never resolves.

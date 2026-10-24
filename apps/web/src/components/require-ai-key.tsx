@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -98,23 +98,22 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const availabilityOptions = useMemo(
-    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-    [activeOrganizationId],
-  );
+  const availabilityOptions = aiAvailabilityOptions({
+    organizationId: activeOrganizationId,
+  });
   const dataQuery = useChromeQuery(availabilityOptions);
   const dataView = useQueryView(dataQuery);
   useQueryViewError(dataView);
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const openAIKeyDialog = useCallback(() => {
+  const openAIKeyDialog = () => {
     if (data?.providerConfiguration === "allowed") {
       setOpen(true);
     }
-  }, [data]);
+  };
 
-  const ensureAIAvailable = useCallback(async () => {
+  const ensureAIAvailable = async () => {
     const availability = await queryClient
       .query(availabilityOptions)
       .catch((error: unknown) => {
@@ -146,9 +145,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, queryClient, t, tErrors]);
+  };
 
-  const openIfAIUnavailable = useCallback(() => {
+  const openIfAIUnavailable = () => {
     if (
       dataQuery.status === "success" &&
       data &&
@@ -158,7 +157,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status, isFetching]);
+  };
   const aiUnavailable =
     dataQuery.status === "success" && data && !data.available && !isFetching
       ? data
@@ -176,14 +175,11 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     }
   }
 
-  const value = useMemo(
-    () => ({
-      ensureAIAvailable,
-      openAIKeyDialog,
-      openIfAIUnavailable,
-    }),
-    [ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
-  );
+  const value = {
+    ensureAIAvailable,
+    openAIKeyDialog,
+    openIfAIUnavailable,
+  };
 
   return (
     <AIAvailabilityContext value={value}>
