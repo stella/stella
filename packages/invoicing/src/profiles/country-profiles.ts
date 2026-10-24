@@ -6,7 +6,7 @@ import { INVOICE_PDF_LABELS } from "./pdf-labels";
 
 export { INVOICE_LANGUAGES, type InvoiceLanguage };
 
-export const INVOICE_COUNTRIES = ["SK", "CZ", "EU"] as const;
+export const INVOICE_COUNTRIES = ["SK", "CZ", "PL", "EU"] as const;
 export type InvoiceCountry = (typeof INVOICE_COUNTRIES)[number];
 export type InvoicePartyId = "registration" | "taxId" | "vatId";
 
@@ -20,7 +20,7 @@ export type InvoiceCountryProfile = {
    * when the profile prescribes none. Until invoices carry an exchange rate,
    * a VAT invoice in any other currency cannot be finalized.
    */
-  vatCurrency: "EUR" | "CZK" | null;
+  vatCurrency: "EUR" | "CZK" | "PLN" | null;
   supplyDateLabel: Record<InvoiceLanguage, string>;
   partyIds: {
     seller: readonly InvoicePartyId[];
@@ -215,6 +215,13 @@ export const INVOICE_COUNTRY_PROFILES = {
       }),
     },
   },
+  PL: {
+    // Ustawa o VAT art. 106e ust. 11: the tax amount is stated in PLN.
+    vatCurrency: "PLN",
+    supplyDateLabel: supplyDateLabels(),
+    partyIds: commonPartyIds,
+    legalNotes: noLegalNotes,
+  },
   EU: {
     vatCurrency: null,
     supplyDateLabel: supplyDateLabels(),
@@ -258,7 +265,9 @@ export const invoiceCountryOf = (
   seller: InvoiceSellerCountryInput,
 ): InvoiceCountry => {
   const country = invoiceSellerCountryOf(seller);
-  return country === "SK" || country === "CZ" ? country : "EU";
+  return country === "SK" || country === "CZ" || country === "PL"
+    ? country
+    : "EU";
 };
 
 export const legalNotesFor = ({

@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
-import { INVOICE_COUNTRY_PROFILES, invoiceCountryOf } from "@stll/invoicing";
+import {
+  INVOICE_COUNTRY_PROFILES,
+  invoiceCountryOf,
+  vatTaxPointDate,
+} from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
@@ -14,6 +18,7 @@ import {
   INVOICE_STATUS,
   invoiceLines,
   invoices,
+  sellerProfiles,
   timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
@@ -36,6 +41,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import {
+  fetchVatExchangeRate,
+  type VatExchangeRate,
+} from "@/api/lib/vat-exchange-rates";
 
 type TransitionAction =
   "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
@@ -262,45 +271,6 @@ const releaseInvoiceEntries = async (
   return Result.ok(undefined);
 };
 
-type VatCurrencyGuardOptions = {
-  tx: Transaction;
-  sellerProfileId: SafeId<"sellerProfile"> | null;
-  organizationId: SafeId<"organization">;
-  currency: string;
-  vatAmountMinor: number;
-};
-
-const vatCurrencyError = async ({
-  tx,
-  sellerProfileId,
-  organizationId,
-  currency,
-  vatAmountMinor,
-}: VatCurrencyGuardOptions): Promise<HandlerError | null> => {
-  if (vatAmountMinor === 0 || sellerProfileId === null) {
-    return null;
-  }
-  const seller = await tx.query.sellerProfiles.findFirst({
-    where: {
-      id: { eq: sellerProfileId },
-      organizationId: { eq: organizationId },
-    },
-    columns: { country: true, vatId: true },
-  });
-  if (seller === undefined) {
-    return null;
-  }
-  const { vatCurrency } = INVOICE_COUNTRY_PROFILES[invoiceCountryOf(seller)];
-  if (vatCurrency === null || vatCurrency === currency) {
-    return null;
-  }
-  return new HandlerError({
-    status: 409,
-    message: `This seller's VAT invoices must state the VAT amount in ${vatCurrency}`,
-    hint: `Issue the invoice in ${vatCurrency}; converting the VAT amount from another currency is not supported yet.`,
-  });
-};
-
 /** A finalize that reuses an issued number surfaces as a conflict. */
 const duplicateInvoiceNumberError = (
   error: HandlerError | SafeDbError,
@@ -336,6 +306,7 @@ const transitionInvoice = createSafeHandler(
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },
+  // oxlint-disable-next-line eslint/max-lines-per-function -- transition invariants remain in one transactional flow.
   async function* ({
     safeDb,
     user,
@@ -347,6 +318,85 @@ const transitionInvoice = createSafeHandler(
   }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
+    let resolvedRate: VatExchangeRate | null = null;
+    let resolvedTaxPoint: string | null = null;
+    if (body.action === "finalize") {
+      const preflight = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({
+              currency: invoices.currency,
+              documentType: invoices.documentType,
+              invoiceDate: invoices.invoiceDate,
+              taxableSupplyDate: invoices.taxableSupplyDate,
+              country: sellerProfiles.country,
+              vatId: sellerProfiles.vatId,
+            })
+            .from(invoices)
+            .leftJoin(
+              sellerProfiles,
+              eq(invoices.sellerProfileId, sellerProfiles.id),
+            )
+            .where(
+              and(
+                eq(invoices.id, params.invoiceId),
+                eq(invoices.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1),
+        ),
+      );
+      const invoice = preflight.at(0);
+      if (invoice?.country) {
+        const country = invoiceCountryOf(invoice);
+        const homeCurrency = INVOICE_COUNTRY_PROFILES[country].vatCurrency;
+        if (
+          country !== "EU" &&
+          homeCurrency !== null &&
+          homeCurrency !== invoice.currency
+        ) {
+          // CZ § 42 and PL art. 31b prescribe correction-specific rates; foreign-currency credit notes are deliberately refused in this PR.
+          if (invoice.documentType === "credit_note") {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message:
+                  "Foreign-currency credit notes cannot be finalized because correction exchange-rate rules differ",
+                hint: "Issue the credit note in the seller's home VAT currency.",
+              }),
+            );
+          }
+          const taxPointDate = vatTaxPointDate({
+            country,
+            invoiceDate: invoice.invoiceDate,
+            taxableSupplyDate: invoice.taxableSupplyDate,
+          });
+          resolvedTaxPoint = taxPointDate;
+          const rate = await Result.tryPromise({
+            try: async () =>
+              await fetchVatExchangeRate({
+                country,
+                currency: invoice.currency,
+                taxPointDate,
+              }),
+            catch: (cause) => cause,
+          });
+          if (rate.isErr()) {
+            return Result.err(
+              new HandlerError({
+                status: 503,
+                message: "The VAT exchange rate could not be resolved",
+                hint:
+                  rate.error instanceof Error
+                    ? rate.error.message
+                    : "Retry finalizing later.",
+              }),
+            );
+          }
+          resolvedRate = rate.value;
+        }
+      }
+    }
     const result = await resultTx(
       safeDb,
       async (tx): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
@@ -396,6 +446,11 @@ const transitionInvoice = createSafeHandler(
         }
         if (body.action === "revert_to_draft") {
           set.finalizedAt = existing.finalizedAt ?? now;
+          set.vatExchangeRate = null;
+          set.vatExchangeRateSource = null;
+          set.vatExchangeRateDate = null;
+          set.vatExchangeRateReference = null;
+          set.vatExchangeRateTaxPoint = null;
         }
         if (body.action === "finalize") {
           const scope = {
@@ -428,15 +483,12 @@ const transitionInvoice = createSafeHandler(
           if (totals.isErr()) {
             return Result.err(totals.error);
           }
-          const currencyError = await vatCurrencyError({
-            tx,
-            sellerProfileId: existing.sellerProfileId,
-            organizationId: session.activeOrganizationId,
-            currency: existing.currency,
-            vatAmountMinor: totals.value.vatAmountMinor,
-          });
-          if (currencyError !== null) {
-            return Result.err(currencyError);
+          if (totals.value.vatAmountMinor !== 0 && resolvedRate !== null) {
+            set.vatExchangeRate = resolvedRate.rate;
+            set.vatExchangeRateSource = resolvedRate.source;
+            set.vatExchangeRateDate = resolvedRate.effectiveDate;
+            set.vatExchangeRateReference = resolvedRate.sourceReference;
+            set.vatExchangeRateTaxPoint = resolvedTaxPoint;
           }
           set.finalizedAt = existing.finalizedAt ?? now;
           if (existing.invoiceNumber === null) {

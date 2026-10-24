@@ -113,7 +113,7 @@ describe("invoice transition integration", () => {
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
   });
 
-  test("refuses a Slovak VAT invoice in a currency other than euro (zákon 222/2004 Z. z. § 74 ods. 1 písm. i)", async () => {
+  test("keeps a foreign-currency Slovak invoice in draft when the official rate is unavailable", async () => {
     const sellerProfileId = createSafeId<"sellerProfile">();
     await testDb.insert(sellerProfiles).values({
       id: sellerProfileId,
@@ -148,10 +148,10 @@ describe("invoice transition integration", () => {
     });
 
     expect(await runTransition(invoiceId, "finalize")).toEqual({
-      code: 409,
+      code: 503,
       response: {
-        message: "This seller's VAT invoices must state the VAT amount in EUR",
-        hint: "Issue the invoice in EUR; converting the VAT amount from another currency is not supported yet.",
+        message: "The VAT exchange rate could not be resolved",
+        hint: "The official VAT exchange-rate service is unavailable; retry finalizing later",
       },
     });
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.DRAFT);
