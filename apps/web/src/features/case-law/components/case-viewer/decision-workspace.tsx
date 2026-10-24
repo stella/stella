@@ -98,6 +98,7 @@ import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
@@ -182,6 +183,7 @@ export type DecisionWorkspaceProps =
 /** What the margin's source filter means for the reader's own marks. */
 /** A decision without a parsed body has no blocks to range over. */
 const NO_BLOCKS: DocumentAst["blocks"] = [];
+const SERVER_ERROR_STATUS = 500;
 
 const decisionBlocks = (ast: DocumentAst | null): DocumentAst["blocks"] =>
   ast?.blocks ?? NO_BLOCKS;
@@ -210,32 +212,54 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
 type ParagraphLanding = ReturnType<typeof decisionParagraphLanding>;
 
-const ReaderStatusNotices = ({
-  answersError,
-  foreignDecisionFailed,
+export const ReaderStatusNotices = ({
+  answerFailures,
+  foreignDecisionError,
   isCreatingAnswer,
   paragraphLanding,
 }: {
-  answersError: unknown;
-  foreignDecisionFailed: boolean;
+  answerFailures: readonly unknown[];
+  foreignDecisionError: unknown;
   isCreatingAnswer: boolean;
   paragraphLanding: ParagraphLanding;
 }) => {
   const t = useTranslations();
+  const reported = useRef(new Set<unknown>());
+  useExternalSyncEffect(() => {
+    for (const error of answerFailures) {
+      if (
+        error === null ||
+        error === undefined ||
+        reported.current.has(error)
+      ) {
+        continue;
+      }
+      reported.current.add(error);
+      const kind = readerAnswerFailureKind(error);
+      let fallback = t("readerAnswers.modelError");
+      if (kind === "budget") {
+        fallback = t("readerAnswers.budgetError");
+      } else if (kind === "network") {
+        fallback = t("readerAnswers.networkError");
+      } else if (kind === "timeout") {
+        fallback = t("readerAnswers.timeoutError");
+      }
+      if (APIError.is(error) && error.status < SERVER_ERROR_STATUS) {
+        fallback = error.message;
+      }
+      notifyUserError(error, fallback);
+    }
+    if (
+      foreignDecisionError !== null &&
+      foreignDecisionError !== undefined &&
+      !reported.current.has(foreignDecisionError)
+    ) {
+      reported.current.add(foreignDecisionError);
+      notifyUserError(foreignDecisionError, t("errors.actionFailed"));
+    }
+  }, [answerFailures, foreignDecisionError, t]);
   return (
     <>
-      {answersError !== null && (
-        <p role="alert" className="text-destructive px-4 py-2 text-sm">
-          {readerAnswerFailureKind(answersError) === "budget"
-            ? t("readerAnswers.budgetError")
-            : t("readerAnswers.networkError")}
-        </p>
-      )}
-      {foreignDecisionFailed && (
-        <p role="alert" className="text-destructive px-4 py-2 text-sm">
-          {t("errors.actionFailed")}
-        </p>
-      )}
       {isCreatingAnswer && (
         <p role="status" className="text-muted-foreground px-4 py-2 text-sm">
           {t("readerAnswers.loading")}
@@ -394,7 +418,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     busy:
       answers.busyAnswerIds.has(answer.id) ||
       answer.messages.some((message) => message.status === "streaming"),
-    error: readerAnswerFailureKind(answers.errors.get(answer.id)),
     onOpen: () => openAnswer(answer.id),
     onFollowUp: (question) =>
       detached(
@@ -883,8 +906,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             )}
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
               <ReaderStatusNotices
-                answersError={answers.error}
-                foreignDecisionFailed={foreignDecisionError !== undefined}
+                answerFailures={[answers.error, ...answers.errors.values()]}
+                foreignDecisionError={foreignDecisionError}
                 isCreatingAnswer={answers.isCreating}
                 paragraphLanding={paragraphLanding}
               />

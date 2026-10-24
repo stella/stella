@@ -368,6 +368,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
     "no-direct-error-toast/no-direct-error-toast",
   ]),
+  fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
+    "no-rendered-error-translation/no-rendered-error-translation",
+  ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
@@ -1574,6 +1577,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
+    "./.oxlint-plugins/no-rendered-error-translation.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -3795,6 +3799,7 @@ const config = defineConfig({
         "no-optional-mutation-command/no-optional-mutation-command": "error",
         "no-discarded-toast-error/no-discarded-toast-error": "error",
         "no-direct-error-toast/no-direct-error-toast": "error",
+        "no-rendered-error-translation/no-rendered-error-translation": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "require-matter-option-label/require-matter-option-label": "error",

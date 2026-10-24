@@ -16,8 +16,6 @@ import { cn } from "@stll/ui/utils";
 import { CopyActionButton } from "@/components/copy-action-button";
 
 import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
-import { readerAnswerErrorCodeKind } from "./reader-answers.logic";
-import type { ReaderAnswerFailureKind } from "./reader-answers.logic";
 
 export type ReaderAnswerCardProps = {
   answer: ReaderAnswer;
@@ -31,7 +29,6 @@ export type ReaderAnswerCardProps = {
   openRevision: number;
   citationLabel: (citation: ReaderAnswerCitation) => string;
   onOpen: () => void;
-  error?: ReaderAnswerFailureKind | undefined;
   busy: boolean;
 };
 
@@ -47,7 +44,6 @@ export const ReaderAnswerCard = ({
   openRevision,
   citationLabel,
   onOpen,
-  error,
   busy,
 }: ReaderAnswerCardProps) => {
   const t = useTranslations();
@@ -134,19 +130,10 @@ export const ReaderAnswerCard = ({
   const lastAssistant = answer.messages.findLast(
     (message) => message.role === "assistant",
   );
-  const failure =
-    error ?? readerAnswerErrorCodeKind(lastAssistant?.errorCode ?? null);
   const invalidCitationCount = answer.messages.reduce(
     (count, message) => count + message.invalidCitationCount,
     0,
   );
-  const errorMessages = {
-    budget: t("readerAnswers.budgetError"),
-    model: t("readerAnswers.modelError"),
-    network: t("readerAnswers.networkError"),
-    timeout: t("readerAnswers.timeoutError"),
-  } satisfies Record<NonNullable<ReaderAnswerCardProps["error"]>, string>;
-  const errorText = failure === undefined ? undefined : errorMessages[failure];
   return (
     <section
       aria-label={t("readerAnswers.title")}
@@ -214,11 +201,6 @@ export const ReaderAnswerCard = ({
               </div>
             ))}
           </div>
-          {errorText && (
-            <p role="alert" className="text-destructive mt-2">
-              {errorText}
-            </p>
-          )}
           {invalidCitationCount > 0 && (
             <p className="text-foreground-muted mt-1">
               {t("readerAnswers.invalidCitations", {

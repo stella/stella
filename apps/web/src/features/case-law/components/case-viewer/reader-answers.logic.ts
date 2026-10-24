@@ -291,8 +291,17 @@ export const readerAnswerFailureKind = (
   ) {
     return "budget";
   }
-  if (!ReaderAnswerFailure.is(error)) {
+  if (APIError.is(error)) {
+    return "model";
+  }
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return "timeout";
+  }
+  if (error instanceof Error && error.name === "AbortError") {
     return "network";
+  }
+  if (!ReaderAnswerFailure.is(error)) {
+    return "model";
   }
   if (error.code !== undefined) {
     return readerAnswerErrorCodeKind(error.code);
