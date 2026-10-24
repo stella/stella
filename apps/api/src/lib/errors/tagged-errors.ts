@@ -31,8 +31,8 @@ import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import {
   declareFailureClass,
-  FetchBoundaryError,
   type FailureReason,
+  FetchBoundaryError,
 } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
