@@ -121,12 +121,19 @@ jobs:
           set -euo pipefail
           # One heavy run per commit: a dispatch for a commit whose heavy run
           # already passed (for a version commit, the run its push started)
-          # reuses that result, and neither the suites nor PR depth run again.
+          # reuses that result. PR depth is decided on its own status, so a
+          # passed heavy run never stands in for a failed or missing PR depth.
           if [[ "$EVENT" == workflow_dispatch ]]; then
-            passed=$(bash scripts/gh-retry.sh api "repos/$GITHUB_REPOSITORY/commits/$SHA/statuses?per_page=100" \
-              --jq '[.[] | select(.context == "main/heavy" and .creator.login == "github-actions[bot]")] | first | .state // ""')
-            if [[ "$passed" == success ]]; then
+            read -r heavy depth < <(bash scripts/gh-retry.sh api "repos/$GITHUB_REPOSITORY/commits/$SHA/statuses?per_page=100" \
+              --jq '[.[] | select(.creator.login == "github-actions[bot]")] as $own
+                | [($own | map(select(.context == "main/heavy")) | first | .state // "none"),
+                   ($own | map(select(.context == "main/pr-depth")) | first | .state // "none")] | join(" ")')
+            if [[ "$depth" == success ]]; then
+              echo "depth_passed=true" >> "$GITHUB_OUTPUT"
+            fi
+            if [[ "$heavy" == success ]]; then
               echo "::notice::main/heavy already passed on $SHA; reusing it."
+              echo "heavy_reused=true" >> "$GITHUB_OUTPUT"
               echo "run=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -144,7 +151,8 @@ jobs:
       # only on whichever commit is main's tip when it starts.
       - name: Dispatch release PR-depth checks
         if: >-
-          ${{ steps.reuse.outputs.run != 'false' && (
+          ${{ (steps.reuse.outputs.run != 'false' || steps.reuse.outputs.heavy_reused == 'true')
+          && steps.reuse.outputs.depth_passed != 'true' && (
           (github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true)
           || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v'))) }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

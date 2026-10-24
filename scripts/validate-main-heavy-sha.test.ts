@@ -258,8 +258,19 @@ test("a version commit's push run and a release candidate dispatch PR depth for 
   const condition =
     rawStep("Dispatch release PR-depth checks").if ??
     panic("the PR-depth dispatch needs a condition");
-  const decide = (context: object) =>
-    evaluate(condition, contextFromNested(context));
+  // GitHub reads an output a step did not write as an empty string.
+  const none = { run: "", heavy_reused: "", depth_passed: "" };
+  const decide = (context: { steps: { reuse: { outputs: object } } }) =>
+    evaluate(
+      condition,
+      contextFromNested({
+        inputs: { sha: "", release_candidate: false },
+        ...context,
+        steps: {
+          reuse: { outputs: { ...none, ...context.steps.reuse.outputs } },
+        },
+      }),
+    );
   const release = {
     event_name: "push",
     event: { head_commit: { message: "chore: release v0.9.63 (#6740)" } },
@@ -283,9 +294,20 @@ test("a version commit's push run and a release candidate dispatch PR depth for 
   expect(decide({ ...candidate, steps: { reuse: { outputs: {} } } })).toBe(
     true,
   );
-  // A commit whose heavy run already passed dispatches nothing again.
+  // A tree proof covers heavy and PR depth: nothing is dispatched again.
   expect(
     decide({ ...candidate, steps: { reuse: { outputs: { run: "false" } } } }),
+  ).toBe(false);
+  // A reused heavy run never stands in for PR depth that did not pass.
+  const reusedHeavy = { run: "false", heavy_reused: "true" };
+  expect(
+    decide({ ...candidate, steps: { reuse: { outputs: reusedHeavy } } }),
+  ).toBe(true);
+  expect(
+    decide({
+      ...candidate,
+      steps: { reuse: { outputs: { ...reusedHeavy, depth_passed: "true" } } },
+    }),
   ).toBe(false);
 });
 
@@ -293,7 +315,7 @@ test("a dispatch reuses a commit's passed heavy run and a push never asks", () =
   const script =
     rawStep("Reuse completed release proof").run ??
     panic("the reuse step needs a script");
-  const run = (event: string, state: string) => {
+  const run = (event: string, heavy: string, depth = "none") => {
     const directory = mkdtempSync(path.join(tmpdir(), "main-heavy-reuse-"));
     try {
       const calls = path.join(directory, "calls");
@@ -302,7 +324,7 @@ test("a dispatch reuses a commit's passed heavy run and a push never asks", () =
       mkdirSync(path.join(directory, "scripts"));
       writeFileSync(
         path.join(directory, "scripts/gh-retry.sh"),
-        `echo "$*" >> "${calls}"\necho '${state}'\n`,
+        `echo "$*" >> "${calls}"\necho '${heavy} ${depth}'\n`,
       );
       // No tree proof: the step falls through to running the suites.
       writeFileSync(
@@ -328,15 +350,21 @@ test("a dispatch reuses a commit's passed heavy run and a push never asks", () =
       rmSync(directory, { recursive: true, force: true });
     }
   };
-  const reused = run("workflow_dispatch", "success");
-  expect(reused.exitCode).toBe(0);
-  expect(reused.output).toBe("run=false\n");
-  expect(reused.calls).toHaveLength(1);
-  expect(reused.calls[0]).toContain(`commits/${"b".repeat(40)}/statuses`);
+  // Heavy passed, PR depth missing or failed: heavy is reused, depth is not.
+  for (const depth of ["none", "failure"]) {
+    const reused = run("workflow_dispatch", "success", depth);
+    expect(reused.exitCode).toBe(0);
+    expect(reused.output).toBe("heavy_reused=true\nrun=false\n");
+    expect(reused.calls[0]).toContain(`commits/${"b".repeat(40)}/statuses`);
+    expect(reused.calls).not.toContain("verify");
+  }
+  expect(run("workflow_dispatch", "success", "success").output).toBe(
+    "depth_passed=true\nheavy_reused=true\nrun=false\n",
+  );
   // A failed or missing heavy result is tested again.
-  for (const state of ["failure", ""]) {
-    const retried = run("workflow_dispatch", state);
-    expect(retried.output).toBe("");
+  for (const heavy of ["failure", "none"]) {
+    const retried = run("workflow_dispatch", heavy, "success");
+    expect(retried.output).toBe("depth_passed=true\n");
     expect(retried.calls.at(-1)).toBe("verify");
   }
   const pushed = run("push", "success");
