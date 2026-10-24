@@ -556,6 +556,97 @@ if (!databaseUrl || !runPostgres) {
       ).toEqual({ invoices: [], lines: [] });
     });
 
+    test.each(["derived", "explicit"] as const)(
+      "invoice creation serializes with matter client changes (%s client)",
+      async (clientSource) => {
+        for (const first of ["invoice", "matter"] as const) {
+          const scenario = await seedScenario();
+          const invoiceId = createSafeId<"invoice">();
+          await withInterleaving({
+            databaseUrl,
+            a: {
+              steps: [
+                {
+                  name: "insert",
+                  run: async (tx) => {
+                    await tx.insert(invoices).values({
+                      id: invoiceId,
+                      organizationId: scenario.orgId,
+                      workspaceId: scenario.otherClientMatterId,
+                      ...(clientSource === "explicit"
+                        ? { clientId: scenario.otherClientId }
+                        : {}),
+                      invoiceDate: "2026-10-15",
+                      currency: "EUR",
+                    });
+                  },
+                },
+              ],
+            },
+            b: {
+              steps: [
+                {
+                  name: "reassign",
+                  run: async (tx) => {
+                    await tx
+                      .update(workspaces)
+                      .set({ clientId: scenario.clientId })
+                      .where(eq(workspaces.id, scenario.otherClientMatterId));
+                  },
+                },
+              ],
+            },
+            schedules: [
+              first === "invoice"
+                ? ["a.insert", "b.reassign", "a.commit", "b.commit"]
+                : ["b.reassign", "a.insert", "b.commit", "a.commit"],
+            ],
+            reset: async () => {},
+            readState: async () => ({
+              matter: await db.query.workspaces.findFirst({
+                where: { id: { eq: scenario.otherClientMatterId } },
+                columns: { clientId: true },
+              }),
+              invoice: await db.query.invoices.findFirst({
+                where: { id: { eq: invoiceId } },
+                columns: { clientId: true },
+              }),
+            }),
+            invariant: ({ outcomes, blocked, state }) => {
+              if (first === "invoice") {
+                expect(blocked).toContain("b.reassign");
+                expect(outcomes.a.status).toBe("committed");
+                expect(outcomes.b.status).toBe("app-error");
+                if (outcomes.b.status === "app-error") {
+                  expect(getPgErrorCode(outcomes.b.error)).toBe("23514");
+                }
+                expect(state.matter).toEqual({
+                  clientId: scenario.otherClientId,
+                });
+                expect(state.invoice).toEqual({
+                  clientId: scenario.otherClientId,
+                });
+                return;
+              }
+              expect(blocked).toContain("a.insert");
+              expect(outcomes.b.status).toBe("committed");
+              expect(state.matter).toEqual({ clientId: scenario.clientId });
+              if (clientSource === "explicit") {
+                expect(outcomes.a.status).toBe("app-error");
+                if (outcomes.a.status === "app-error") {
+                  expect(getPgErrorCode(outcomes.a.error)).toBe("23514");
+                }
+                expect(state.invoice).toBeUndefined();
+                return;
+              }
+              expect(outcomes.a.status).toBe("committed");
+              expect(state.invoice).toEqual({ clientId: scenario.clientId });
+            },
+          });
+        }
+      },
+    );
+
     test.each(["draft", "finalized"] as const)(
       "a matter with a line-free %s invoice retains its client",
       async (status) => {

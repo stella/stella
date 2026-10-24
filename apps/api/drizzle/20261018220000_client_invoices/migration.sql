@@ -57,18 +57,21 @@ CREATE FUNCTION public.stella_invoice_client_guard() RETURNS trigger LANGUAGE pl
 DECLARE invoice_row public.invoices; matter_row public.workspaces;
 BEGIN
  IF TG_TABLE_NAME = 'invoices' THEN
-   IF NEW.workspace_id IS NOT NULL AND NEW.client_id IS NULL THEN
-     SELECT client_id INTO NEW.client_id FROM public.workspaces WHERE id = NEW.workspace_id AND organization_id = NEW.organization_id;
+   IF NEW.workspace_id IS NOT NULL THEN
+     SELECT * INTO matter_row FROM public.workspaces
+       WHERE id = NEW.workspace_id AND organization_id = NEW.organization_id FOR NO KEY UPDATE;
+     IF NEW.client_id IS NULL THEN
+       NEW.client_id := matter_row.client_id;
+     END IF;
+     IF NEW.client_id IS NOT NULL AND (matter_row.id IS NULL OR matter_row.client_id IS DISTINCT FROM NEW.client_id) THEN
+       RAISE EXCEPTION 'Invoice matter must belong to its client' USING ERRCODE = '23514';
+     END IF;
    END IF;
    IF NEW.original_invoice_id IS NOT NULL AND NOT EXISTS (
      SELECT 1 FROM public.invoices original WHERE original.id = NEW.original_invoice_id AND original.organization_id = NEW.organization_id
        AND original.client_id IS NOT DISTINCT FROM NEW.client_id
        AND original.workspace_id IS NOT DISTINCT FROM NEW.workspace_id) THEN
      RAISE EXCEPTION 'Original invoice must have the same client and scope' USING ERRCODE = '23514';
-   END IF;
-   IF NEW.workspace_id IS NOT NULL AND NEW.client_id IS NOT NULL AND NOT EXISTS (
-     SELECT 1 FROM public.workspaces w WHERE w.id = NEW.workspace_id AND w.organization_id = NEW.organization_id AND w.client_id = NEW.client_id) THEN
-     RAISE EXCEPTION 'Invoice matter must belong to its client' USING ERRCODE = '23514';
    END IF;
    IF EXISTS (SELECT 1 FROM public.invoice_lines l JOIN public.workspaces w ON w.id = l.workspace_id
      WHERE l.invoice_id = NEW.id AND (l.organization_id <> NEW.organization_id
