@@ -95,76 +95,56 @@ test("an unavailable Tailwind design system fails as one typed error per rule an
   }
 });
 
-// The plugin loads the design system in worker threads and blocks on them.
-// Each bounded wait below expires once before its worker answers: the state a
-// loaded runner reaches when a load outlasts any deadline. Lint must wait the
-// load out and then judge the classes exactly, instead of failing on the clock.
-// The clock is replaced by a plugin with no rules, loaded in the same runtime as
-// oxlint-tailwindcss before any file is linted.
-const expireEachTimedWaitOnce = `
-export default { meta: { name: "expire-timed-waits" }, rules: {} };
-const wait = Atomics.wait;
-const expired = new WeakMap();
-Atomics.wait = (array, index, value, timeout) => {
-  if (timeout !== undefined && Number.isFinite(timeout) && Atomics.load(array, index) === value) {
-    const indices = expired.get(array) ?? new Set();
-    if (!indices.has(index)) {
-      indices.add(index);
-      expired.set(array, indices);
-      return "timed-out";
-    }
-  }
-  return wait(array, index, value, timeout);
-};
-`;
+type WorkerHook = "slow-heartbeat" | "stop-heartbeat" | "throw-outside-main";
 
-test("a design-system load slower than any deadline delays lint, never fails it", async () => {
-  // Inside the repository so `@import "tailwindcss"` resolves.
+const runWorkerHook = async (hook: WorkerHook, heartbeatLimitMs: number) => {
   const fixtureRoot = path.join(repositoryRoot, "node_modules/.cache");
   await mkdir(fixtureRoot, { recursive: true });
   const directory = await mkdtemp(
-    path.join(fixtureRoot, "stella-tailwind-slow-load-"),
+    path.join(fixtureRoot, "stella-tailwind-worker-liveness-"),
   );
   try {
     const entryPoint = path.join(directory, "app.css");
     await Bun.write(entryPoint, '@import "tailwindcss";\n');
-    const clock = path.join(directory, "expire-timed-waits.mjs");
-    await Bun.write(clock, expireEachTimedWaitOnce);
-    // JSON: Node does not strip types from a TypeScript config under
-    // node_modules.
     const config = path.join(directory, "oxlintrc.json");
     await Bun.write(
       config,
       JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [
-          clock,
           path.join(repositoryRoot, "node_modules/oxlint-tailwindcss"),
         ],
         settings: { tailwindcss: { entryPoint } },
-        rules: {
-          "tailwindcss/no-conflicting-classes": "error",
-          "tailwindcss/no-unknown-classes": "error",
-        },
+        rules: { "tailwindcss/no-unknown-classes": "error" },
       }),
     );
     const input = path.join(directory, "input.tsx");
-    // Arbitrary values are outside the precomputed class list, so judging
-    // them needs the live declarations worker as well as the precompute.
     await Bun.write(
       input,
-      'export const A = () => <span className="size-[1em] object-contain bg-red-5000" />;\n',
+      'export const A = () => <span className="bg-red-5000" />;\n',
     );
+    // Populate the disk precompute before applying the worker-service hook.
+    // The hook assertions target the persistent declarations worker, while the
+    // precompute path has its own shared liveness protocol.
+    const warm = Bun.spawn(
+      ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
+      { cwd: repositoryRoot, stdout: "ignore", stderr: "ignore" },
+    );
+    await warm.exited;
+
+    const started = performance.now();
     const child = Bun.spawn(
       ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
       {
         cwd: repositoryRoot,
         stdout: "pipe",
         stderr: "pipe",
-        // A cold design-system cache, so the precompute worker runs too.
         env: {
           ...process.env,
-          OXLINT_TAILWINDCSS_CACHE_DIR: path.join(directory, "cache"),
+          OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS:
+            String(heartbeatLimitMs),
+          OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS: "11000",
+          OXLINT_TAILWINDCSS_WORKER_TEST_HOOK: hook,
         },
       },
     );
@@ -173,29 +153,43 @@ test("a design-system load slower than any deadline delays lint, never fails it"
       new Response(child.stderr).text(),
       child.exited,
     ]);
-    // Every wait expired, the precompute, the declarations worker's load (the
-    // CI failure) and its first answer, and each was only reported as progress.
-    const notices = stderr
-      .split("\n")
-      .filter((line) => line.startsWith("[oxlint-tailwindcss] still waiting"));
-    expect(notices, `${stderr}\n${stdout}`).toEqual([
-      expect.stringContaining("the design-system precompute of"),
-      expect.stringContaining(
-        "the declarations worker to load the design system from",
-      ),
-      expect.stringContaining("a declarations worker response"),
-    ]);
-    const { diagnostics } = v.parse(diagnosticReport, JSON.parse(stdout));
-    expect(
-      diagnostics.map(({ code, message }) => `${code} ${message}`),
-      stdout,
-    ).toEqual([
-      expect.stringMatching(
-        /^tailwindcss\(no-unknown-classes\) .*"bg-red-5000"/u,
-      ),
-    ]);
-    expect(exitCode).toBe(1);
+    return {
+      diagnostics: v.parse(diagnosticReport, JSON.parse(stdout)).diagnostics,
+      elapsedMs: performance.now() - started,
+      exitCode,
+      stderr,
+    };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+};
+
+test("a slow worker with a live heartbeat is allowed past the liveness bound", async () => {
+  const result = await runWorkerHook("slow-heartbeat", 6000);
+  expect(result.stderr).not.toContain("stopped answering");
+  expect(result.elapsedMs).toBeGreaterThan(10_000);
+  expect(result.exitCode).toBe(1);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining('"bg-red-5000" is not a valid Tailwind class'),
+  ]);
+}, 120_000);
+
+test("a worker with a stopped heartbeat fails promptly with its phase", async () => {
+  const result = await runWorkerHook("stop-heartbeat", 1000);
+  expect(result.elapsedMs).toBeLessThan(10_000);
+  expect(result.exitCode).toBe(1);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining(
+      "declarations worker stopped answering while compiling the design system",
+    ),
+  ]);
+}, 120_000);
+
+test("an exception outside worker main reports its cause immediately", async () => {
+  const result = await runWorkerHook("throw-outside-main", 10_000);
+  expect(result.elapsedMs).toBeLessThan(10_000);
+  expect(result.exitCode).toBe(1);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    expect.stringContaining("injected worker failure outside main"),
+  ]);
 }, 120_000);
