@@ -1,5 +1,11 @@
 import type { HttpApp } from "@/api/http/app";
 
+// The network fetch as it is when this module loads. A test that replaces the
+// global `fetch` (to serve an outbound client in process) must still reach the
+// server over the network; calling the replaced global here would hand the
+// request straight back to the test's own stub, which forwards it here again.
+const networkFetch = globalThis.fetch;
+
 export type TestServer = {
   readonly url: URL;
   /**
@@ -32,7 +38,7 @@ export const serveForTest = (app: HttpApp): TestServer => {
       // The same request, addressed to this server over the network: Bun's
       // `server.fetch` calls only the `fetch` fallback and skips `routes`, so
       // a real request is the one that meets the production router.
-      return await fetch(
+      return await networkFetch(
         new Request(target.href, {
           method: request.method,
           headers: request.headers,
