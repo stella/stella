@@ -251,6 +251,7 @@ jobs:
 
       # Install hooks run before a write-capable credential exists in the job.
       - name: Install dependencies
+        timeout-minutes: 10
         run: bash scripts/retry.sh bun install --frozen-lockfile
 
       - name: Version the pending changesets into the release
