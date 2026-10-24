@@ -1,5 +1,19 @@
 # @stll/workspace-ui
 
+## 0.13.0
+
+### Minor Changes
+
+- [#6268](https://github.com/stella/stella/pull/6268) [`5fb50f0`](https://github.com/stella/stella/commit/5fb50f0fe6c2161d41c50a46cb961aaa8f037494) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow hosts to provide typed content for workspace feature previews while retaining the default scenes.
+
+- [#6247](https://github.com/stella/stella/pull/6247) [`d2ad946`](https://github.com/stella/stella/commit/d2ad946f78aa870f47a2f3e7cddf4028e7481c0c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/feature-previews`: static product scenes (matters, documents, research, billing, contacts, time tracking) composed from the app's own components, for marketing pages, menus and slides. Each scene takes its interface labels and a formatting locale. Add `@stll/workspace-ui/task-status`, the glyph and colour of each task status.
+
+### Patch Changes
+
+- [#6472](https://github.com/stella/stella/pull/6472) [`83e4634`](https://github.com/stella/stella/commit/83e4634ae41525365ddcca368db1d128e6448729) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Paginate filesystem tree reads and expose bounded text previews in entity lists.
+- Updated dependencies [[`7835dfd`](https://github.com/stella/stella/commit/7835dfd514ad56fce2a4f00fd4bf0bd522188d34), [`281665b`](https://github.com/stella/stella/commit/281665baa193e2ab2b3acba0da3a259ec16a770a), [`a765cda`](https://github.com/stella/stella/commit/a765cdaeb5718de31b707958364dfde7b6c98594), [`2dd1699`](https://github.com/stella/stella/commit/2dd16994dfba74f35540d47b1582e428ba7b4bc1), [`85a56db`](https://github.com/stella/stella/commit/85a56dbbf73156b5b7e4a0e37c73db382aa02ada)]:
+  - @stll/ui@0.51.0
+
 ## 0.12.7
 
 ### Patch Changes

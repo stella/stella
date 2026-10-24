@@ -4,6 +4,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { vApiDate } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { classifyFailure } from "@stll/errors";
@@ -258,6 +259,8 @@ export const plCourtsModifiedSince = (
  * restarts the crawl: names are stable input, never derived from the date the
  * policy is read on.
  */
+// parser-output-unchanged: [pl-courts] Strict calendar dates apply only to crawl-window parameters; stored decision parsing and replay are unchanged.
+// parser-output-unchanged: [pl-ncourt] The shared adapter module changes only PL courts crawl-window validation, not decision construction or replay.
 export const PL_COURTS_WALK_KINDS = {
   /**
    * A window of the dump bounded by judgment date. Either bound may be
@@ -269,8 +272,8 @@ export const PL_COURTS_WALK_KINDS = {
    */
   [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind({
     params: {
-      from: v.optional(v.pipe(v.string(), v.isoDate())),
-      to: v.optional(v.pipe(v.string(), v.isoDate())),
+      from: v.optional(vApiDate),
+      to: v.optional(vApiDate),
     },
     /**
      * A window that ends before it starts holds no date, so the publisher
