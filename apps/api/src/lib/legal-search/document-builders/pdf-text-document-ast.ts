@@ -54,7 +54,7 @@ const FURNITURE_MIN_PAGES = 3;
 
 const FOOTNOTE_MARK_LINE = /^\d{1,3}$/u;
 const MARK_RUN_LINE = /^\d{1,3}(?: \d{1,3})*$/u;
-const INDENTED = /^ \S/u;
+const INDENTED = /^[\t ]+\S/u;
 
 /**
  * A mark glued to a lowercase letter, a closing bracket or quote, or

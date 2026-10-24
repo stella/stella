@@ -90,6 +90,16 @@ const inlinesOf = (block: Block): Inline[] =>
   block.type === "heading" || block.type === "paragraph" ? block.inlines : [];
 
 describe("the PDF text builder", () => {
+  test.each([" ", "  ", "\t", " \t "])(
+    "recognizes a footnote whose first line uses indentation %j",
+    (indent) => {
+      const ast = build(`Body.1\n\n1\n${indent}A note.`);
+      expect(ast.blocks.find(({ id }) => id === "fn-1")?.plainText).toBe(
+        "A note.",
+      );
+    },
+  );
+
   test("keeps an ordinary act number intact when its last digit names a footnote", () => {
     const ast = build(
       [
@@ -378,6 +388,7 @@ const layout: fc.Arbitrary<Layout> = fc.record({
   loneMarks: fc.boolean(),
   numericFacts: fc.boolean(),
   indentedNumericFacts: fc.boolean(),
+  noteIndent: fc.constantFrom(" ", "  ", "\t", " \t "),
   separator: fc.boolean(),
 });
 
@@ -418,6 +429,7 @@ type Layout = {
   loneMarks: boolean;
   numericFacts: boolean;
   indentedNumericFacts: boolean;
+  noteIndent: string;
   separator: boolean;
 };
 
@@ -426,6 +438,7 @@ const render = ({
   loneMarks,
   numericFacts,
   indentedNumericFacts,
+  noteIndent,
   sections,
   separator,
 }: Layout): { text: string; expected: Expected } => {
@@ -518,7 +531,7 @@ const render = ({
       if (index > 0) {
         out.push("");
       }
-      out.push(String(label), ` Note ${label}`);
+      out.push(String(label), `${noteIndent}Note ${label}`);
       if (numericFacts) {
         out.push(
           "Controllers:",
