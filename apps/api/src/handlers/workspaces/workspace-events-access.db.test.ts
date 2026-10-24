@@ -8,9 +8,17 @@ import {
   test,
 } from "bun:test";
 
+import {
+  newNotificationRealtimeEvent,
+  RESOURCE_TYPE,
+  resourceRef,
+  resourceUpdatedRealtimeEvent,
+} from "@stll/api-contract";
+
 import { rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb } from "@/api/db/scoped";
+import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
@@ -23,7 +31,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { startSse, stopSse } from "@/api/lib/sse";
+import { broadcast, broadcastToUser, startSse, stopSse } from "@/api/lib/sse";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -63,6 +71,34 @@ const openEventStream = async (browser: HumanBrowser, workspaceId: string) =>
       headers: { cookie: browser.cookieHeader() },
     }),
   );
+
+const openUserEventStream = async (browser: HumanBrowser) =>
+  await notificationsRoute.handle(
+    new Request(`${BASE}/v1/notifications/events`, {
+      headers: { cookie: browser.cookieHeader() },
+    }),
+  );
+
+const readNextChunk = async (response: Response) => {
+  const { body } = response;
+  if (!body) {
+    throw new Error("The event stream has no body");
+  }
+  const reader = body.getReader();
+  try {
+    const result = await Promise.race([
+      reader.read(),
+      Bun.sleep(STREAM_CLOSE_WAIT_MS).then(() => "timeout" as const),
+    ]);
+    return result;
+  } finally {
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+};
 
 type StreamOutcome = "closed" | "open";
 
@@ -221,5 +257,70 @@ describe("a matter's event stream when a member is removed", () => {
     expect(removal.isOk()).toBe(true);
 
     expect(await awaitStreamEnd(memberStream)).toBe("closed");
+  });
+});
+
+describe("event streams when their opening session ends", () => {
+  test("stops workspace and user delivery only for the revoked session", async () => {
+    const { member, organizationId, workspaceId } =
+      await createMatterWithMember();
+    const otherSession = await signInHuman(member.email);
+    await otherSession.setActiveOrganization(organizationId);
+
+    const revokedSession = await getAuth().api.getSession({
+      headers: member.headers(),
+    });
+    const liveSession = await getAuth().api.getSession({
+      headers: otherSession.headers(),
+    });
+    if (!revokedSession || !liveSession) {
+      throw new Error("Expected both signed-in sessions");
+    }
+
+    const revokedWorkspaceStream = await openEventStream(member, workspaceId);
+    const liveWorkspaceStream = await openEventStream(
+      otherSession,
+      workspaceId,
+    );
+    const revokedUserStream = await openUserEventStream(member);
+    const liveUserStream = await openUserEventStream(otherSession);
+    expect(revokedWorkspaceStream.status).toBe(200);
+    expect(liveWorkspaceStream.status).toBe(200);
+    expect(revokedUserStream.status).toBe(200);
+    expect(liveUserStream.status).toBe(200);
+
+    const revocation = await getAuth().api.revokeSession({
+      body: { token: revokedSession.session.token },
+      headers: otherSession.headers(),
+    });
+    expect(revocation.status).toBe(true);
+
+    broadcast(
+      workspaceId,
+      resourceUpdatedRealtimeEvent(
+        resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: createSafeId<"entity">(),
+        }),
+      ),
+    );
+    broadcastToUser(
+      brandPersistedUserId(member.userId),
+      brandPersistedOrganizationId(organizationId),
+      newNotificationRealtimeEvent(),
+    );
+
+    expect(await readNextChunk(revokedWorkspaceStream)).toEqual({
+      done: true,
+      value: undefined,
+    });
+    expect(await readNextChunk(revokedUserStream)).toEqual({
+      done: true,
+      value: undefined,
+    });
+    expect(await readNextChunk(liveWorkspaceStream)).toMatchObject({
+      done: false,
+    });
+    expect(await readNextChunk(liveUserStream)).toMatchObject({ done: false });
   });
 });

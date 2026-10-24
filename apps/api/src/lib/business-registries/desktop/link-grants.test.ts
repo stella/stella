@@ -6,8 +6,8 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { verification } from "@/api/db/auth-schema";
 import {
-  createDesktopLinkGrant,
   consumeDesktopLinkGrant,
+  createDesktopLinkGrant,
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import {
   authorizeDesktopLinkGrant,

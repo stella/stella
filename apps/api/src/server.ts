@@ -1,3 +1,4 @@
+import "./register-schema-formats";
 import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
@@ -25,6 +26,7 @@ import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
+  authMetadataPreflightRoute,
   authMetadataRoute,
 } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
@@ -190,7 +192,7 @@ import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
 } from "@/api/lib/observability/request-metrics";
-import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { runWithHttpRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -218,10 +220,10 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
-  finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
-  setSecurityHeaders,
   CORS_EXPOSED_HEADERS,
+  finalizeResponseCachePolicy,
+  setSecurityHeaders,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -439,11 +441,11 @@ const api = new Elysia()
     }
 
     // Ahead of the CORS layer below, which otherwise answers every preflight
-    // with the API-wide method list and leaves the MCP route's own preflight
-    // unreachable.
-    const mcpPreflightResponse = handleMcpPreflightRequest(request, set);
-    if (mcpPreflightResponse) {
-      return mcpPreflightResponse;
+    // with the API-wide method list and trusted origins only, leaving the MCP
+    // route's own preflight unreachable.
+    const publicPreflightResponse = handleMcpPreflightRequest(request, set);
+    if (publicPreflightResponse) {
+      return publicPreflightResponse;
     }
 
     return (
@@ -451,6 +453,9 @@ const api = new Elysia()
       handleVisualSandboxRequest(request, set)
     );
   })
+  // Keep discovery interception in its owning handler module while mounting it
+  // before the credentialed global CORS layer.
+  .use(authMetadataPreflightRoute)
   .use(
     cors({
       origin: ALLOWED_BROWSER_ORIGINS,
@@ -594,16 +599,24 @@ const api = new Elysia()
       .use(entitiesRoute)
       .use(docxSuggestionsRoute)
       .use(fieldsRoute)
-      .use(templatesRoute)
-      .use(styleSetsRoute)
-      .use(templateCategoriesRoute)
-      .use(templatePacksRoute)
-      .use(templateRecipesRoute)
-      .use(timeEntriesRoute)
-      .use(billingCodesRoute)
-      .use(ratesRoute)
-      .use(expensesRoute)
-      .use(invoicesRoute)
+      // Each domain slice composes in one link: every `.use` here deepens the
+      // app's type, and the chain sits at TypeScript's instantiation limit.
+      .use(
+        new Elysia()
+          .use(templatesRoute)
+          .use(styleSetsRoute)
+          .use(templateCategoriesRoute)
+          .use(templatePacksRoute)
+          .use(templateRecipesRoute),
+      )
+      .use(
+        new Elysia()
+          .use(timeEntriesRoute)
+          .use(billingCodesRoute)
+          .use(ratesRoute)
+          .use(expensesRoute)
+          .use(invoicesRoute),
+      )
       // Issuer settings share one link: every `.use` here deepens the
       // app's type, and the chain sits at TypeScript's instantiation limit.
       .use(
@@ -647,13 +660,19 @@ const api = new Elysia()
       .use(userFilesRoute)
       .use(skillsRoute)
       .use(usageRoute)
-      .use(viewTemplatesRoute)
-      .use(viewsRoute)
-      .use(entityViewsRoute)
-      .use(listsRoute)
-      .use(tasksRoute)
-      .use(workObligationsRoute)
-      .use(myWorkRoute)
+      .use(
+        new Elysia()
+          .use(viewTemplatesRoute)
+          .use(viewsRoute)
+          .use(entityViewsRoute),
+      )
+      .use(
+        new Elysia()
+          .use(listsRoute)
+          .use(tasksRoute)
+          .use(workObligationsRoute)
+          .use(myWorkRoute),
+      )
       .use(accountExportsRoute)
       .use(meRoute)
       .use(localDevVersionedRoutes)
@@ -733,31 +752,31 @@ const scopeRequestAsyncStores = (): void => {
     strictPath: api.config.strictPath,
     aot: api.config.aot,
   });
-  api.wrap(
-    (handleRequest) => async (request: Request) =>
-      runWithRequestScope(async () => {
-        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-          return handleRequest(request);
-        }
-        return withFinalResponseCompletion(request, async () =>
-          runTenantHttpAction(request, {
-            handleRequest: async (bounded) => {
-              // The private HOC types erase the response type; validate the
-              // framework boundary before applying serialized JSON limits.
-              const response: unknown = await Promise.resolve(
-                handleRequest(bounded),
-              );
-              if (!(response instanceof Response)) {
-                return panic("The HTTP framework returned an invalid response");
-              }
-              return response;
-            },
-            isTenantAction,
-            decorateRefusal: decorateActionSizeRefusal,
-          }),
-        );
-      }),
-  );
+  api.wrap((handleRequest) => async (request: Request) => {
+    const scopedRequest = async () => {
+      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+        return handleRequest(request);
+      }
+      return withFinalResponseCompletion(request, async () =>
+        runTenantHttpAction(request, {
+          handleRequest: async (bounded) => {
+            // The private HOC types erase the response type; validate the
+            // framework boundary before applying serialized JSON limits.
+            const response: unknown = await Promise.resolve(
+              handleRequest(bounded),
+            );
+            if (!(response instanceof Response)) {
+              return panic("The HTTP framework returned an invalid response");
+            }
+            return response;
+          },
+          isTenantAction,
+          decorateRefusal: decorateActionSizeRefusal,
+        }),
+      );
+    };
+    return runWithHttpRequestScope(scopedRequest);
+  });
 };
 
 const startS3RefreshLoop = () => {
@@ -896,7 +915,9 @@ const startServer = async (): Promise<void> => {
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
-      closeBackgroundWorkers: backgroundWorkers.close,
+      closeBackgroundWorkers: async () => {
+        await backgroundWorkers.close();
+      },
       closeManagedProviderChecks,
       closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is

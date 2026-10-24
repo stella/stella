@@ -19,8 +19,8 @@ import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   CACHE_SCHEMA_VERSION,
-  DEFAULT_TTL_SECONDS,
   cachePathFor,
+  DEFAULT_TTL_SECONDS,
   readCacheFile,
   writeCacheFile,
 } from "./registry-cache.js";

@@ -595,13 +595,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/entities/versions/list.ts",
-    "function": "module/readVersionsHandler",
-    "kind": "fixed-page-size",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/entities/zip/download.ts",
     "function": "module/downloadZipHandler/fetchFile",
     "kind": "numeric-timeout",
@@ -875,13 +868,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/templates/prefill.ts",
-    "function": "module/prefillTemplate/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/csv/export.ts",
     "function": "module/exportCsvHandler",
     "kind": "constant-limit",
@@ -1027,13 +1013,6 @@
     "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/auth.ts",
-    "function": "module/resolveWorkspaceRealtimeAudience",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
     "file": "apps/api/src/lib/bilingual/run-queue.ts",

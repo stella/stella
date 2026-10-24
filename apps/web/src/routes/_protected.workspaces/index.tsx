@@ -345,8 +345,7 @@ const SKELETON_COLUMN_WIDTHS: Record<MattersColumnId, string> = {
 };
 
 type SkeletonColumn =
-  | { id: "name"; width?: undefined }
-  | { id: MattersColumnId; width: string };
+  { id: "name"; width?: undefined } | { id: MattersColumnId; width: string };
 
 // Faithful placeholder of the matters page during route suspension: the real
 // toolbar chrome plus a content skeleton that follows the live view mode, so the

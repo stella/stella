@@ -1,12 +1,12 @@
 import { EventType } from "@tanstack/ai";
 import type {
   ActivityPart,
-  ToolCallPart,
-  ToolResultPart,
   MessagePart,
   StreamChunk,
   StructuredOutputPart,
   SubagentPart,
+  ToolCallPart,
+  ToolResultPart,
   UIMessage,
 } from "@tanstack/ai";
 import { panic, TaggedError } from "better-result";

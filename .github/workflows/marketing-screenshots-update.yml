@@ -10,13 +10,20 @@ defaults:
 #
 #   gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 #
-# It only starts marketing-screenshots-capture.yml on that branch's own ref,
-# where the branch's code regenerates the baselines without any release
-# secret and without touching main's caches. When the capture completes,
-# marketing-screenshots-publish.yml (from main) validates the PNGs as data and
-# pushes them, which re-runs the PR's checks against the new head. Baselines
-# are never regenerated on a developer machine, so the comparison tolerance
-# only has to cover run-to-run noise on one runner image.
+# It starts marketing-screenshots-capture.yml on that branch's own ref, where
+# the branch's code regenerates the baselines without any release secret and
+# without touching main's caches. When the capture succeeds, it starts
+# marketing-screenshots-publish.yml on main for exactly that capture run,
+# which validates the PNGs as data and pushes them, re-running the PR's
+# checks against the new head. This run follows both and fails when either
+# fails or does not finish in time, so a capture never ends unpublished
+# behind a green run. Baselines are never regenerated on a developer
+# machine, so the comparison tolerance only has to cover run-to-run noise on
+# one runner image.
+#
+# The publish run is started here instead of following the capture through
+# `workflow_run`: GitHub creates no workflow_run event for a run that
+# GITHUB_TOKEN started.
 
 on:
   workflow_dispatch:
@@ -35,9 +42,10 @@ permissions: {}
 jobs:
   update:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # The capture is followed for at most 40 minutes, the publish for 20.
+    timeout-minutes: 65
     permissions:
-      # Starting the capture run on the branch.
+      # Starting the capture and publish runs and reading their state.
       actions: write
       contents: read
     steps:
@@ -64,14 +72,80 @@ jobs:
 
       # A fork PR's branch does not exist here; its author takes the PNGs
       # from a capture run's artifact on a same-repository branch.
-      - name: Start the capture on the branch
+      - name: Capture on the branch and publish
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           BRANCH: ${{ inputs.branch }}
         with:
+          # One failed status read must not end an hour-long follow.
+          retries: 2
           script: |
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
+            const { owner, repo } = context.repo;
+            const POLL_MS = 30_000;
+            // A dispatch names its run only when asked for run details, and even
+            // then the answer may omit it. The run is then found by listing: this
+            // workflow and branch, dispatched at or after the request, matching the
+            // expected title, and not one already claimed. Undefined after the bounded
+            // search; the caller decides what a missing run means.
+            const dispatchRun = async ({ title, claimed, ...request }) => {
+              const since = new Date(Date.now() - 5_000).toISOString();
+              const { data } = await github.rest.actions.createWorkflowDispatch({
+                owner, repo, ...request, return_run_details: true,
+              });
+              const named = data?.workflow_run_id;
+              if (Number.isSafeInteger(named) && named > 0) return named;
+              for (let attempt = 0; attempt < 6; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, 5_000));
+                const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id: request.workflow_id, branch: request.ref,
+                  event: 'workflow_dispatch', created: `>=${since}`, per_page: 100,
+                });
+                const found = runs
+                  .filter(run => Number.isSafeInteger(run.id) && run.id > 0 && !claimed.has(run.id)
+                    && (title === undefined || run.display_title === title))
+                  .sort((a, b) => a.id - b.id)[0];
+                if (found !== undefined) return found.id;
+              }
+              return undefined;
+            };
+            const start = async (request) => {
+              const id = await dispatchRun({ claimed: new Set(), ...request });
+              if (id === undefined) {
+                core.setFailed(`The dispatched ${request.workflow_id} run was not found`);
+              } else {
+                core.notice(`${request.workflow_id}: run ${id}`);
+              }
+              return id;
+            };
+            const finish = async (id, polls) => {
+              for (let poll = 0; ; poll += 1) {
+                const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id });
+                if (run.status === 'completed') return run;
+                if (poll >= polls) return undefined;
+                await new Promise(resolve => setTimeout(resolve, POLL_MS));
+              }
+            };
+            const succeeded = (name, run, minutes) => {
+              if (run === undefined) {
+                core.setFailed(`The ${name} run did not finish within ${minutes} minutes`);
+                return false;
+              }
+              if (run.conclusion !== 'success') {
+                core.setFailed(`The ${name} run ended ${run.conclusion}: ${run.html_url}`);
+                return false;
+              }
+              return true;
+            };
+
+            const capture = await start({
               workflow_id: 'marketing-screenshots-capture.yml',
               ref: process.env.BRANCH,
             });
+            if (capture === undefined || !succeeded('capture', await finish(capture, 80), 40)) return;
+            const publish = await start({
+              workflow_id: 'marketing-screenshots-publish.yml',
+              ref: 'main',
+              inputs: { capture_run_id: String(capture) },
+              title: `Publish marketing screenshots of run ${capture}`,
+            });
+            if (publish !== undefined) succeeded('publish', await finish(publish, 40), 20);

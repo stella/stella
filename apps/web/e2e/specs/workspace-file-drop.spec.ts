@@ -4,9 +4,9 @@ import path from "node:path";
 import { apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");

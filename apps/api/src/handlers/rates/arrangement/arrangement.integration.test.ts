@@ -14,11 +14,11 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   billingArrangements,
-  invoices,
+  featureEnrolments,
   invoiceLines,
+  invoices,
   timeEntries,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -30,9 +30,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
 import {
-  NO_DB,
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {

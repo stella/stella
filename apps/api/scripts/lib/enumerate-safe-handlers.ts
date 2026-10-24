@@ -86,6 +86,7 @@ export type ParsedExposure =
       type: "capability";
       reason: string;
       consumesServices: ServiceClassification;
+      confirmation?: "required";
       readClass?: McpReadClass;
     }
   | { type: "internal"; reason: string }
@@ -146,6 +147,10 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
   }
   const reason = mcp["reason"];
   const consumesServices = mcp["consumesServices"];
+  const confirmation = mcp["confirmation"];
+  if (confirmation !== undefined && confirmation !== "required") {
+    return { type: "invalid", raw: mcp };
+  }
   if (
     type === "capability" &&
     typeof reason === "string" &&
@@ -155,6 +160,7 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
       type: "capability",
       reason,
       consumesServices,
+      ...(confirmation === undefined ? {} : { confirmation }),
       ...readClassification,
     };
   }

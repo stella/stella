@@ -119,8 +119,7 @@ type ChatTitleRenameProps = {
    * navigation row and triggers editing from its own wand.
    */
   renderView?:
-    | ((view: ChatTitleRenameViewProps) => React.JSX.Element)
-    | undefined;
+    ((view: ChatTitleRenameViewProps) => React.JSX.Element) | undefined;
   inputClassName?: string | undefined;
   /** Class for the `InlineEdit` wrapper (e.g. to fill a list row). */
   editClassName?: string | undefined;

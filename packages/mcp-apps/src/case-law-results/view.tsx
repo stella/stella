@@ -12,8 +12,8 @@ import {
 import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  parseDecisionParagraphFragment,
   formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
 } from "@stll/api-contract/decision-paragraph-range";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { Temporal, todayFor } from "@stll/time";
@@ -66,12 +66,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@stll/ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { createReaderController } from "../decision-reader/controller";
@@ -935,7 +930,7 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
   return (
     <IntlProvider locale={formattingLocale} messages={messages}>
       <DirectionProvider direction={direction}>
-        <TooltipProvider>
+        <>
           <main
             hidden={screen !== "results"}
             ref={(element) => {
@@ -967,7 +962,7 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
           {screen === "reader" && (
             <ReaderView host={embeddedReader} onBack={onBack} />
           )}
-        </TooltipProvider>
+        </>
       </DirectionProvider>
     </IntlProvider>
   );

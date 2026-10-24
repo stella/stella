@@ -47,6 +47,11 @@ class ChatRunLogError extends TaggedError("ChatRunLogError")<{
   message: string;
 }> {}
 
+/** A resume cursor this run's log never issued: the caller's input, not a defect. */
+export class ChatRunLogOffsetBeyondTailError extends TaggedError(
+  "ChatRunLogOffsetBeyondTailError",
+)<{ message: string }> {}
+
 type ChatRunLogOptions = {
   db: ScopedDb;
   execution: ChatRunLogExecution;
@@ -378,8 +383,8 @@ const createRunLogReader = ({
 
 // A reconnect replays at most 256 deltas or a 1 MiB suffix. Larger prefixes
 // fold into one canonical SDK transcript snapshot, bounded by MAX_RUN_BYTES.
-const MAX_CATCHUP_CHUNKS = 256n;
-const MAX_CATCHUP_BYTES = 1024n * 1024n;
+export const MAX_CATCHUP_CHUNKS = 256n;
+export const MAX_CATCHUP_BYTES = 1024n * 1024n;
 
 export const createChatRunLogReplay = async ({
   db,
@@ -435,7 +440,7 @@ export const createChatRunLogReplay = async ({
     return offsetSequence(resumeOffset);
   })();
   if (after >= header.nextSeq) {
-    throw new ChatRunLogError({
+    throw new ChatRunLogOffsetBeyondTailError({
       message: "Chat run log offset is beyond the stored tail",
     });
   }

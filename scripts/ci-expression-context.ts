@@ -182,6 +182,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   cached: { input_hash: "" },
   check: { trusted: "true" },
   "completed-depth": {
+    plan_config: "fixture-plan-config",
     completed_run_id: "",
     marker: "",
     metadata_only: "false",

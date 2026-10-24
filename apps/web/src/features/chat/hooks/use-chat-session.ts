@@ -41,8 +41,8 @@ import {
   getChatAssistantTurnError,
   getCurrentApprovalPendingMessageId,
   isChatClientRequestActive,
-  isSuggestChangesApplyOutput,
   isNonPersistentGrantChatToolName,
+  isSuggestChangesApplyOutput,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -58,19 +58,19 @@ import {
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
 import {
-  buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
+  buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftTabId,
   type CreateDocumentDraft,
+  createDocumentDraftTabId,
   findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
   isCreateDocumentDraftSettlementActive,
   isSameCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
-  selectTerminalCreateDocumentDraftIds,
   selectSettleableCreateDocumentDrafts,
+  selectTerminalCreateDocumentDraftIds,
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
@@ -81,14 +81,13 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
-import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
-  isChatMessageStartError,
-  sendThreadChatMessage,
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
+  isChatMessageStartError,
+  sendThreadChatMessage,
 } from "@/features/chat/chat-runtime";
 import {
   chatToolGrantsOptions,
@@ -115,11 +114,11 @@ import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/u
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
   type QueuedChatEntry,
+  reduceSendQueue,
   type SendQueueEvent,
   type SendQueueState,
+  snapshotChatRequestOptions,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -128,7 +127,7 @@ import {
 } from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatTimingSurface } from "@/lib/analytics/types";
@@ -179,8 +178,7 @@ type UseChatSessionOptions = {
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
-    | (() => DocxEditRepresentation | undefined)
-    | undefined;
+    (() => DocxEditRepresentation | undefined) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
@@ -309,7 +307,6 @@ export const useChatSession = ({
   timingSurface,
   workspaceId,
 }: UseChatSessionOptions) => {
-  useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
