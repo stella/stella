@@ -39,8 +39,8 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
-  authorizeMcpToolContext,
   type AccountOperationCheck,
+  authorizeMcpToolContext,
   hasMcpToolAuthority,
   isAccountAuthorizedForMcpTool,
 } from "@/api/mcp/write-tool-authority";
