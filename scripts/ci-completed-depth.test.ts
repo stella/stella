@@ -254,7 +254,7 @@ const decide = async ({
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
   // Metadata events mirror the head's earlier code run; one exists here.
-  const listWorkflowRuns = () => {};
+  const listWorkflowRuns = async (_request: unknown) => ({ data: undefined });
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
     Buffer,
     require: (name: string) => {

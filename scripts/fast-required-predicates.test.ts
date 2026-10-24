@@ -187,7 +187,9 @@ describe("fast-required predicates", () => {
           target["steps"] = [];
         }
       });
+    // Lever 1 removes queue-only query-perf from FAST_REQUIRED, so neither
+    // definition participates in the fast merge-gate model anymore.
     expect(unmodeledIds(unknownAtom(true))).toEqual([]);
-    expect(unmodeledIds(unknownAtom(false))).toEqual(["query-perf"]);
+    expect(unmodeledIds(unknownAtom(false))).toEqual([]);
   });
 });

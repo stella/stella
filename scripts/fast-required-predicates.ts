@@ -27,6 +27,7 @@ const OUTPUT_PLACEHOLDER = "<output>";
  */
 export const FAST_REQUIRED_PREDICATE_ATOMS = [
   "needs.ci-plan.outputs.run_required != 'false'",
+  "needs.ci-plan.outputs.heavy_proof == 'true'",
   "needs.ci-plan.result == 'success'",
   "needs.pr-heavy-gate.result == 'success'",
   // A repository check waits on the gate only when the plan schedules it; a

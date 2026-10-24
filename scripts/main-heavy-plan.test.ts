@@ -685,7 +685,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           if (
             event === "pull_request" &&
             current.includes(
-              "needs.ci-plan.outputs.browser_spec_selection_required == 'true'",
+              "needs.ci-plan.outputs.web_build_pr_required == 'true'",
             )
           ) {
             expected = required === "true";

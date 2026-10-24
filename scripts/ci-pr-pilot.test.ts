@@ -495,6 +495,12 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
   const context = conditionContext("pilot-fast-v1", "pull_request", "fast");
   const always: readonly string[] = PILOT_ALWAYS;
   for (const [name, job] of Object.entries(workflow.jobs)) {
+    // Lever 1 deliberately keeps the gate and queue-only query suite off
+    // intermediate pilot pushes; arming selects them instead.
+    if (name === "pr-heavy-gate" || name === "query-perf") {
+      expect(evaluate(job.if ?? "true", context), name).toBe(false);
+      continue;
+    }
     if (always.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(true);
       continue;
