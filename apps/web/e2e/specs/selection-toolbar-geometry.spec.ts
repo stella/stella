@@ -46,15 +46,13 @@ const cases = {
 for (const [name, selectionCase] of Object.entries(cases)) {
   test(`selection toolbar follows ${name} within its pane`, async ({
     page,
-    context,
   }) => {
     // Vite injects styles in development; production emits hashed asset links.
-    const stylesheetPage = await context.newPage();
-    await stylesheetPage.goto("/auth");
+    await page.goto("/auth");
     await expect
       .poll(
         async () =>
-          await stylesheetPage.evaluate(() => {
+          await page.evaluate(() => {
             const probe = window.document.createElement("div");
             probe.className = "fixed -translate-x-1/2";
             window.document.body.append(probe);
@@ -64,7 +62,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
           }),
       )
       .toBe("fixed");
-    const styles = await stylesheetPage.evaluate(() =>
+    const styles = await page.evaluate(() =>
       Array.from(
         window.document.querySelectorAll("style, link[rel='stylesheet']"),
       )
@@ -81,7 +79,6 @@ for (const [name, selectionCase] of Object.entries(cases)) {
         })
         .join("\n"),
     );
-    await stylesheetPage.close();
     await page.setContent(`<head>${styles}</head><div id="fixture"></div>`);
     await page.addScriptTag({ content: fixture.bundle });
     const pane = page.getByTestId("pane");

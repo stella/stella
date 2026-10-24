@@ -162,61 +162,63 @@ test("the table scrolls inside the height its host gives it", async ({
   expect(geometry.renderedRowCount).toBeLessThan(40);
 });
 
-test("a viewport too short for the table keeps what is below it reachable", async ({
-  page,
-}) => {
-  // Short enough that the table's own minimum no longer fits beside the rest of
-  // the stack. The bench's chrome is lighter than the results page's, so the
-  // height at which that bites is lower here; the assertion below checks the
-  // page really did overflow rather than trusting the number.
-  await page.addStyleTag({
-    content: "main { block-size: 300px !important; }",
+test.describe("a short viewport", () => {
+  test.use({ viewport: { width: 1440, height: 300 } });
+
+  test("a viewport too short for the table keeps what is below it reachable", async ({
+    page,
+  }) => {
+    // Short enough that the table's own minimum no longer fits beside the rest of
+    // the stack. The bench's chrome is lighter than the results page's, so the
+    // height at which that bites is lower here; the assertion below checks the
+    // page really did overflow rather than trusting the number.
+    const belowTable = page.locator(`${SECTION} > div:last-child`);
+    await expect(belowTable).toBeVisible();
+
+    const readReach = async () => {
+      await waitForStableGeometry(page, belowTable);
+      return await page.evaluate(
+        ([sectionSelector]) => {
+          const section = document.querySelector(sectionSelector);
+          const pageScroller = section?.closest("main");
+          const below = section?.lastElementChild;
+          if (
+            !(pageScroller instanceof HTMLElement) ||
+            !(below instanceof HTMLElement)
+          ) {
+            throw new Error("workspace table bench is not mounted");
+          }
+          const scrollerBox = pageScroller.getBoundingClientRect();
+          const belowBox = below.getBoundingClientRect();
+          return {
+            overflows:
+              pageScroller.scrollHeight > pageScroller.clientHeight + 1,
+            bottomWithinScroller: Math.round(
+              scrollerBox.bottom - belowBox.bottom,
+            ),
+            height: Math.round(belowBox.height),
+          };
+        },
+        [SECTION] as const,
+      );
+    };
+
+    const before = await readReach();
+    // The premise: the stack genuinely does not fit, so a fallback scroller is
+    // the only thing that can bring what is under the table back into view.
+    expect(before.overflows).toBe(true);
+    expect(before.height).toBeGreaterThan(0);
+    expect(before.bottomWithinScroller).toBeLessThan(0);
+
+    // A wheel over the chrome above the table, not over the table's own scroll
+    // box. `overflow: hidden` is still scriptable, so only a real gesture tells a
+    // page that scrolls apart from one that merely clips.
+    await page.mouse.move(720, 24);
+    await page.mouse.wheel(0, 2000);
+    await expect
+      .poll(async () => (await readReach()).bottomWithinScroller)
+      .toBeGreaterThanOrEqual(0);
   });
-  const belowTable = page.locator(`${SECTION} > div:last-child`);
-  await expect(belowTable).toBeVisible();
-
-  const readReach = async () => {
-    await waitForStableGeometry(page, belowTable);
-    return await page.evaluate(
-      ([sectionSelector]) => {
-        const section = document.querySelector(sectionSelector);
-        const pageScroller = section?.closest("main");
-        const below = section?.lastElementChild;
-        if (
-          !(pageScroller instanceof HTMLElement) ||
-          !(below instanceof HTMLElement)
-        ) {
-          throw new Error("workspace table bench is not mounted");
-        }
-        const scrollerBox = pageScroller.getBoundingClientRect();
-        const belowBox = below.getBoundingClientRect();
-        return {
-          overflows: pageScroller.scrollHeight > pageScroller.clientHeight + 1,
-          bottomWithinScroller: Math.round(
-            scrollerBox.bottom - belowBox.bottom,
-          ),
-          height: Math.round(belowBox.height),
-        };
-      },
-      [SECTION] as const,
-    );
-  };
-
-  const before = await readReach();
-  // The premise: the stack genuinely does not fit, so a fallback scroller is
-  // the only thing that can bring what is under the table back into view.
-  expect(before.overflows).toBe(true);
-  expect(before.height).toBeGreaterThan(0);
-  expect(before.bottomWithinScroller).toBeLessThan(0);
-
-  // A wheel over the chrome above the table, not over the table's own scroll
-  // box. `overflow: hidden` is still scriptable, so only a real gesture tells a
-  // page that scrolls apart from one that merely clips.
-  await page.mouse.move(720, 24);
-  await page.mouse.wheel(0, 2000);
-  await expect
-    .poll(async () => (await readReach()).bottomWithinScroller)
-    .toBeGreaterThanOrEqual(0);
 });
 
 test("the header stays frozen while the body scrolls under it", async ({

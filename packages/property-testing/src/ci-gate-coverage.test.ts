@@ -1129,6 +1129,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
     expect(workflowRunsPackageScript(sameUnnamedStep, runner)).toBe(true);
   });
 
+  // Measured p95: 14.4 s; this must scan all test gates, runners, and workflows.
   test("every env-gated test suite has a workflow that runs it with its gate set", async () => {
     const [gateScan, workflows, runners] = await Promise.all([
       collectGates(),
@@ -1165,5 +1166,5 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
       .map(({ gate, file }) => `${gate} (declared in ${file})`)
       .toSorted();
     expect(uncovered).toEqual([]);
-  });
+  }, 30_000);
 });

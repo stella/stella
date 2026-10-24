@@ -3,7 +3,10 @@ import type { Locator, Page } from "@playwright/test";
 
 const VIEWPORT = { width: 1440, height: 900 } as const;
 const STABLE_GEOMETRY_TIMEOUT_MS = 10_000;
-const EXPECTED_FONTS = ['16px "DM Sans"', '16px "Noto Sans Arabic"'] as const;
+const EXPECTED_FONTS = [
+  { font: '16px "DM Sans"', text: "Stella č" },
+  { font: '16px "Noto Sans Arabic"', text: "العربية" },
+] as const;
 const MOTION_STYLE_ID = "stable-geometry-motion";
 
 export const test = base.extend({});
@@ -26,11 +29,17 @@ export const waitForStableGeometry = async (
   const locators = "elementHandles" in measured ? [measured] : measured;
   await page.evaluate(
     async ({ fonts, styleId }) => {
+      const loaded = await Promise.all(
+        fonts.map(async ({ font, text }) => ({
+          font,
+          faces: await document.fonts.load(font, text),
+        })),
+      );
       await document.fonts.ready;
-      const missing = fonts.filter((font) => !document.fonts.check(font));
+      const missing = loaded.filter(({ faces }) => faces.length === 0);
       if (missing.length > 0) {
         throw new Error(
-          `Stable geometry requires bundled fonts: ${missing.join(", ")}`,
+          `Stable geometry requires bundled fonts: ${missing.map(({ font }) => font).join(", ")}`,
         );
       }
       if (document.querySelector(`#${styleId}`) === null) {

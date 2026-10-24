@@ -15,4 +15,5 @@ void page.setViewportSize({ width: 800, height: 600 });
 // oxlint-disable-next-line require-stable-geometry/require-stable-geometry -- fixture exercises direct measurement
 void locator.boundingBox();
 
+// expect-clean: require-stable-geometry/require-stable-geometry
 void stableBoundingBox(page, locator);
