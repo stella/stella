@@ -1,7 +1,8 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
+import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
 import { roles } from "@stll/permissions";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -12,6 +13,9 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import getCorrespondence from "@/api/handlers/workspaces/correspondence/get";
+import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
+import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
@@ -69,7 +73,6 @@ const envelope = {
   deliveredAt: "2026-10-14T07:12:33.120Z",
   acceptedAt: null,
   status: "delivered",
-  directionBasis: "unknown",
   seal: {
     status: "unverified",
     signerName: null,
@@ -77,7 +80,7 @@ const envelope = {
     serialNumber: null,
     signedAt: null,
   },
-} as const satisfies DataBoxEnvelope;
+} as const satisfies DataBoxStatedEnvelope;
 
 type FileMessageOptions = {
   tx: Tx;
@@ -86,8 +89,7 @@ type FileMessageOptions = {
   createdBy: SafeId<"user">;
 };
 
-// A message filed before the organization listed its boxes: incoming, with
-// an unknown basis.
+// Store only the file assertions; reads use the current organization boxes.
 const fileMessage = async ({
   tx,
   organizationId,
@@ -108,7 +110,7 @@ const fileMessage = async ({
     workspaceId,
     channel: "data_box",
     dataBox: envelope,
-    direction: "in",
+    direction: null,
     source: "upload",
     sourceEntityId,
     originalSignature: { status: "unverified" },
@@ -165,18 +167,81 @@ const runInRollback = async (work: (tx: Tx) => Promise<void>) => {
 
 const directionOf = async (tx: Tx, id: SafeId<"correspondence">) => {
   await tx.execute(sql`RESET ROLE`);
-  const [row] = await tx
+  const [stored] = await tx
     .select({
       direction: correspondence.direction,
-      basis: sql<string>`${correspondence.dataBox} ->> 'directionBasis'`,
+      envelope: correspondence.dataBox,
+      organizationId: correspondence.organizationId,
+      workspaceId: correspondence.workspaceId,
     })
     .from(correspondence)
     .where(eq(correspondence.id, id));
-  return row;
+  if (stored === undefined) {
+    return panic("Expected stored correspondence");
+  }
+  expect(stored.direction).toBeNull();
+  expect(stored.envelope).not.toHaveProperty("directionBasis");
+  const userId = stored.organizationId === ids.orgA ? ids.userA1 : ids.userB1;
+  const context = {
+    ...contextFor(tx),
+    workspaceId: stored.workspaceId,
+    session: { activeOrganizationId: stored.organizationId },
+    user: { id: userId },
+    safeDb: createSafeDb(
+      markRlsDatabase(tx),
+      [stored.workspaceId],
+      stored.organizationId,
+      userId,
+    ),
+    recordAuditEvent: createAuditRecorder({
+      organizationId: stored.organizationId,
+      workspaceId: stored.workspaceId,
+      userId,
+      request: new Request("https://api.example.test/correspondence"),
+      server: null,
+    }),
+  };
+  const detail = await getCorrespondence.handler(
+    asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
+      ...context,
+      params: { correspondenceId: id },
+    }),
+  );
+  if (!("record" in detail) || detail.record.channel !== "data_box") {
+    return panic("Expected projected data-box detail");
+  }
+  const list = await listCorrespondence.handler(
+    asTestRaw<Parameters<typeof listCorrespondence.handler>[0]>({
+      ...context,
+      query: { channel: "data_box" },
+    }),
+  );
+  if (!("items" in list)) {
+    return panic("Expected projected correspondence page");
+  }
+  const listed = list.items.find((item) => item.id === id);
+  expect(listed?.dataBox).toEqual(detail.record.dataBox);
+  expect(listed).not.toHaveProperty("direction");
+  const updated = await updateCorrespondence.handler(
+    asTestRaw<Parameters<typeof updateCorrespondence.handler>[0]>({
+      ...context,
+      params: { correspondenceId: id },
+      body: { handlingState: "handled" },
+    }),
+  );
+  if (!("record" in updated)) {
+    return panic("Expected projected correspondence update");
+  }
+  expect(updated.record.direction).toBe(detail.record.direction);
+  expect(updated.record.dataBox).toEqual(detail.record.dataBox);
+  return {
+    direction: detail.record.direction,
+    basis: detail.record.dataBox.directionBasis,
+  };
 };
 
 describe("organization data boxes", () => {
-  test("filing derives direction from current settings instead of the parsed snapshot", async () => {
+  test("all wire producers derive direction while filing preserves the raw envelope", async () => {
     await runInRollback(async (tx) => {
       const sourceEntityId = createSafeId<"entity">();
       await tx.insert(entities).values({
@@ -203,7 +268,7 @@ describe("organization data boxes", () => {
           originalSignature: { status: "unverified" },
           channel: "data_box",
           dataBox: envelope,
-          direction: "in",
+          direction: null,
           messageId: envelope.messageId,
           contentHash: "b".repeat(64),
           from: { address: FIRM_BOX, name: null },
@@ -264,7 +329,7 @@ describe("organization data boxes", () => {
           body: { boxId: FIRM_BOX.toUpperCase() },
         }),
       );
-      expect(added).toEqual({ boxIds: [FIRM_BOX], recomputed: 1 });
+      expect(added).toEqual({ boxIds: [FIRM_BOX] });
       expect(await directionOf(tx, own)).toEqual({
         direction: "out",
         basis: "organization_sender",
@@ -273,6 +338,15 @@ describe("organization data boxes", () => {
         direction: "in",
         basis: "unknown",
       });
+      expect(
+        await getCorrespondence.handler(
+          asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
+            ...contextFor(tx),
+            workspaceId: ids.wsB1,
+            params: { correspondenceId: otherOrganization },
+          }),
+        ),
+      ).toMatchObject({ code: 404 });
 
       const repeated = await addOrganizationDataBox.handler(
         asTestRaw<Parameters<typeof addOrganizationDataBox.handler>[0]>({
@@ -280,7 +354,7 @@ describe("organization data boxes", () => {
           body: { boxId: FIRM_BOX },
         }),
       );
-      expect(repeated).toEqual({ boxIds: [FIRM_BOX], recomputed: 0 });
+      expect(repeated).toEqual({ boxIds: [FIRM_BOX] });
 
       const read = await getOrganizationDataBoxes.handler(
         asTestRaw<Parameters<typeof getOrganizationDataBoxes.handler>[0]>(
@@ -295,7 +369,7 @@ describe("organization data boxes", () => {
           params: { boxId: FIRM_BOX },
         }),
       );
-      expect(removed).toEqual({ boxIds: [], recomputed: 1 });
+      expect(removed).toEqual({ boxIds: [] });
       expect(await directionOf(tx, own)).toEqual({
         direction: "in",
         basis: "unknown",
@@ -326,6 +400,41 @@ describe("organization data boxes", () => {
     });
   });
 
+  test("settings changes never rewrite filed envelope or record timestamps", async () => {
+    await runInRollback(async (tx) => {
+      const id = await fileMessage({
+        tx,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        createdBy: ids.userA1,
+      });
+      const before = await tx
+        .select()
+        .from(correspondence)
+        .where(eq(correspondence.id, id))
+        .limit(1);
+      await addOrganizationDataBox.handler(
+        asTestRaw<Parameters<typeof addOrganizationDataBox.handler>[0]>({
+          ...contextFor(tx),
+          body: { boxId: FIRM_BOX },
+        }),
+      );
+      await removeOrganizationDataBox.handler(
+        asTestRaw<Parameters<typeof removeOrganizationDataBox.handler>[0]>({
+          ...contextFor(tx),
+          params: { boxId: FIRM_BOX },
+        }),
+      );
+      expect(
+        await tx
+          .select()
+          .from(correspondence)
+          .where(eq(correspondence.id, id))
+          .limit(1),
+      ).toEqual(before);
+    });
+  });
+
   test("the recipient box marks a message incoming", async () => {
     await runInRollback(async (tx) => {
       const message = await fileMessage({
@@ -340,7 +449,7 @@ describe("organization data boxes", () => {
           body: { boxId: COURT_BOX },
         }),
       );
-      expect(added).toEqual({ boxIds: [COURT_BOX], recomputed: 1 });
+      expect(added).toEqual({ boxIds: [COURT_BOX] });
       expect(await directionOf(tx, message)).toEqual({
         direction: "in",
         basis: "organization_recipient",

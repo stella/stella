@@ -11,7 +11,7 @@ import {
 import { entityFeatureCoverageViolations } from "@/api/db/entity-feature-coverage";
 import {
   entityFeaturePolicies,
-  entityFeaturePolicyStatements,
+  entityFeaturePolicyDefinitions,
 } from "@/api/db/entity-feature-policies";
 import { wsPolicies } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
@@ -19,6 +19,7 @@ import {
   latestEntityFeaturePolicies,
   readEntityFeatureMigrations,
 } from "@/api/tests/fixtures/entity-feature-migrations";
+import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
 test("every app-readable entity relation inherits feature visibility", () => {
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -189,14 +190,16 @@ test("a record owned by an unfenced parent needs no fence", () => {
   expect(entityFeatureCoverageViolations([reader])).toEqual([]);
 });
 
-test("the committed migration matches every schema-owned visibility policy", () => {
+test("the committed migration matches every schema-owned visibility policy", async () => {
   const migration = readEntityFeatureMigrations();
   const statements = latestEntityFeaturePolicies(
     migration,
     "workspace_entity_feature",
   );
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
-  expect(statements).toEqual(entityFeaturePolicyStatements(tables));
+  expect(statements).toEqual(
+    await createPolicyStatementsOf(entityFeaturePolicyDefinitions(tables)),
+  );
   expect(
     statements.some((statement) =>
       statement.includes('ON "public"."time_entries"'),

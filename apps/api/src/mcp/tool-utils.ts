@@ -97,7 +97,6 @@ export const MAX_LIST_LIMIT = LIMITS.mcpListPageSizeMax;
 export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
 export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
-export const ISO_DATE_SCHEMA = v.pipe(v.string(), v.isoDate());
 
 /**
  * Characters of long document text one tool response may carry. Every

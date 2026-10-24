@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { is, sql } from "drizzle-orm";
 import {
-  getTableConfig,
-  PgRole,
   foreignKey,
-  PgTable,
+  getTableConfig,
   pgPolicy,
+  PgRole,
+  PgTable,
   pgTable,
   text,
   uuid,
@@ -19,13 +19,14 @@ import {
 } from "@/api/db/entity-feature-gate-metadata";
 import {
   entityFeaturePolicies,
-  entityFeaturePolicyStatements,
+  entityFeaturePolicyDefinitions,
 } from "@/api/db/entity-feature-policies";
 import * as schema from "@/api/db/schema";
 import {
   latestEntityFeaturePolicies,
   readEntityFeatureMigrations,
 } from "@/api/tests/fixtures/entity-feature-migrations";
+import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
@@ -480,13 +481,12 @@ test("migration propagation plans are derived from the complete gate census", ()
   expect(actual).toBe(expected);
 });
 
-test("the migration grants maintenance policies only to the dedicated gate role", () => {
+test("the migration grants maintenance policies only to the dedicated gate role", async () => {
   const migration = readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
-  const expected = entityFeaturePolicyStatements(
-    tables,
-    "entity_feature_gate_maintenance",
+  const expected = await createPolicyStatementsOf(
+    entityFeaturePolicyDefinitions(tables, "entity_feature_gate_maintenance"),
   );
   const actual = latestEntityFeaturePolicies(
     migration,

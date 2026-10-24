@@ -24,9 +24,7 @@ const concurrentChange = () =>
 const config = {
   contract: "patch",
   realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
-  description:
-    `Add one of the organization's own data-box IDs (at most ${ORGANIZATION_DATA_BOX_LIMIT}; stored lowercase) and re-derive the direction of the data-box messages filed in the matters the caller can reach: sent from one of the organization's boxes is outgoing, sent to one incoming, otherwise incoming with directionBasis unknown. ` +
-    "Adding an ID already listed changes nothing but re-derives; recomputed counts the records whose direction changed.",
+  description: `Add one of the organization's own data-box IDs (at most ${ORGANIZATION_DATA_BOX_LIMIT}; stored lowercase). Filed data-box messages derive their direction from this inventory on every read: organization sender is outgoing, organization recipient incoming, otherwise incoming with directionBasis unknown. Adding an existing ID leaves the inventory unchanged.`,
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
@@ -74,7 +72,7 @@ const addOrganizationDataBox = createSafeRootHandler(
 
 declareAggregateMutation(addOrganizationDataBox.handler, {
   type: "aggregate",
-  aggregates: ["dataBoxDirection"],
+  aggregates: ["organizationDataBoxes"],
 });
 
 export default addOrganizationDataBox;

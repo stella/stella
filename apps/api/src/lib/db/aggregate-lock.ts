@@ -2,12 +2,12 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
-  inArray,
-  or,
-  getColumnTable,
   getColumns,
+  getColumnTable,
   getTableName,
+  inArray,
   is,
+  or,
   SQL,
   sql,
 } from "drizzle-orm";
@@ -66,7 +66,7 @@ export const AGGREGATE_LOCKS = {
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
   desktopBatch: { rank: 90, kind: "advisory" },
-  dataBoxDirection: { rank: 95, kind: "advisory" },
+  organizationDataBoxes: { rank: 95, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
@@ -164,7 +164,7 @@ export const AGGREGATE_CHAINS = {
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
-  dataBoxDirection: ["dataBoxDirection", "workspace"],
+  organizationDataBoxes: ["organizationDataBoxes"],
   documentSource: [
     "workspace",
     "entity",
@@ -236,7 +236,7 @@ type AggregateIdentities = {
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
-  dataBoxDirection: { organizationId: SafeId<"organization"> };
+  organizationDataBoxes: { organizationId: SafeId<"organization"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -1257,7 +1257,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.idempotencyKey,
         ],
       };
-    case "dataBoxDirection":
+    case "organizationDataBoxes":
       return {
         first: sql`hashtext('data-box-direction')`,
         second: sql`hashtext(${options.id.organizationId})`,

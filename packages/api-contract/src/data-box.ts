@@ -76,8 +76,8 @@ export type DataBoxSeal = {
 };
 
 /**
- * The message envelope as stated in the exported file, with the basis its
- * record's direction was derived on.
+ * The message envelope as stated in the exported file, with its direction
+ * basis derived from the organization's current data boxes on this read.
  */
 export type DataBoxEnvelope = DataBoxStatedEnvelope & {
   directionBasis: DataBoxDirectionBasis;
@@ -106,11 +106,7 @@ export type OrganizationDataBoxesResponse = {
   boxIds: string[];
 };
 
-/** `recomputed` counts the records whose direction changed. */
-export type UpdateOrganizationDataBoxesResponse =
-  OrganizationDataBoxesResponse & {
-    recomputed: number;
-  };
+export type UpdateOrganizationDataBoxesResponse = OrganizationDataBoxesResponse;
 
 export const isDataBoxMessageMimeType = (
   mimeType: string | null | undefined,

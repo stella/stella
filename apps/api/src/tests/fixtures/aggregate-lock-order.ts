@@ -45,8 +45,8 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
-    dataBoxDirection: {
-      aggregate: "dataBoxDirection",
+    organizationDataBoxes: {
+      aggregate: "organizationDataBoxes",
       id: { organizationId },
     },
     professionalUseAcceptance: {

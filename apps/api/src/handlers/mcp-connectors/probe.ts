@@ -4,8 +4,8 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   discoverOAuthMetadataForApproval,
-  getOAuthEndpointOrigins,
   endpointsRequiringConfirmation,
+  getOAuthEndpointOrigins,
 } from "@/api/lib/mcp-upstream/oauth";
 import {
   safeOutboundFetchBytes,

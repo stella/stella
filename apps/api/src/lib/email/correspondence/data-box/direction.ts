@@ -2,7 +2,7 @@
  * A data-box message's direction, derived from the organization's own boxes:
  * sent from one of them is outgoing, sent to one is incoming. A message
  * whose boxes are neither (or both) the organization's stays incoming with an
- * unknown basis. The same rule runs at filing and when the boxes change.
+ * unknown basis. The rule runs on each read against the current box inventory.
  */
 import type { CorrespondenceDirection } from "@stll/api-contract/correspondence";
 import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";

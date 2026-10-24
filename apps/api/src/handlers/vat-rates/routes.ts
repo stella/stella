@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import archiveVatRate from "@/api/handlers/vat-rates/archive";
 import createVatRate from "@/api/handlers/vat-rates/create";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
@@ -21,18 +22,27 @@ export const vatRateRoute = new Elysia({ prefix: "/vat-rates" })
   .guard({ validateAuth: true })
   .get("/", listVatRates.handler, {
     permissions: listVatRates.config.permissions,
+    accountAccess: listVatRates.config.accountAccess,
     query: listVatRates.config.query,
   })
   .post("/", createVatRate.handler, {
     permissions: createVatRate.config.permissions,
+    accountAccess: createVatRate.config.accountAccess,
     body: createVatRate.config.body,
+  })
+  .post("/apply-preset", applyVatRatePreset.handler, {
+    permissions: applyVatRatePreset.config.permissions,
+    accountAccess: applyVatRatePreset.config.accountAccess,
+    body: applyVatRatePreset.config.body,
   })
   .patch("/:vatRateId", updateVatRate.handler, {
     permissions: updateVatRate.config.permissions,
+    accountAccess: updateVatRate.config.accountAccess,
     params: updateVatRate.config.params,
     body: updateVatRate.config.body,
   })
   .post("/:vatRateId/archive", archiveVatRate.handler, {
     permissions: archiveVatRate.config.permissions,
+    accountAccess: archiveVatRate.config.accountAccess,
     params: archiveVatRate.config.params,
   });

@@ -21,6 +21,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
 import {
   readCorrespondenceChannel,
   readCorrespondenceProvenance,
@@ -235,7 +236,11 @@ const getCorrespondence = createSafeHandler(
             "Correspondence attachment count exceeds the accepted limit",
           );
         }
-        const channel = readCorrespondenceChannel(row);
+        const organizationBoxIds =
+          row.channel === "data_box"
+            ? await readOrganizationDataBoxIds(tx, session.activeOrganizationId)
+            : [];
+        const channel = readCorrespondenceChannel(row, organizationBoxIds);
         const dataBoxContacts =
           channel.channel === "data_box"
             ? await readDataBoxContacts({

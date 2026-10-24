@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
-import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
+import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -57,7 +57,6 @@ const envelope = {
   deliveredAt: "2026-10-14T07:12:33.120Z",
   acceptedAt: null,
   status: "delivered",
-  directionBasis: "organization_recipient",
   seal: {
     status: "unverified",
     signerName: null,
@@ -65,7 +64,7 @@ const envelope = {
     serialNumber: null,
     signedAt: null,
   },
-} as const satisfies DataBoxEnvelope;
+} as const satisfies DataBoxStatedEnvelope;
 
 const dataBoxes = (id: string) => ({
   version: 1 as const,
@@ -92,15 +91,68 @@ const runInRollback = async (work: RollbackWork) => {
 };
 
 const INVALID_DATA_BOX_ROWS = [
-  { dataBox: null, messageId: envelope.messageId, direction: "in" },
-  { dataBox: envelope, messageId: null, direction: "in" },
-  { dataBox: envelope, messageId: "999", direction: "in" },
-  // Outgoing only when sent from one of the organization's boxes.
-  { dataBox: envelope, messageId: envelope.messageId, direction: "out" },
   {
-    dataBox: { ...envelope, directionBasis: "organization_sender" },
-    messageId: envelope.messageId,
-    direction: "in",
+    row: {
+      channel: "data_box",
+      dataBox: null,
+      messageId: envelope.messageId,
+      direction: null,
+    },
+    constraint: "correspondence_data_box_check",
+  },
+  {
+    row: {
+      channel: "data_box",
+      dataBox: envelope,
+      messageId: null,
+      direction: null,
+    },
+    constraint: "correspondence_data_box_check",
+  },
+  {
+    row: {
+      channel: "data_box",
+      dataBox: envelope,
+      messageId: "999",
+      direction: null,
+    },
+    constraint: "correspondence_data_box_check",
+  },
+  {
+    row: {
+      channel: "data_box",
+      dataBox: { ...envelope, directionBasis: "organization_sender" },
+      messageId: envelope.messageId,
+      direction: null,
+    },
+    constraint: "correspondence_data_box_check",
+  },
+  {
+    row: {
+      channel: "data_box",
+      dataBox: envelope,
+      messageId: envelope.messageId,
+      direction: "in",
+    },
+    constraint: "correspondence_direction_check",
+  },
+  {
+    row: {
+      channel: "data_box",
+      dataBox: envelope,
+      messageId: envelope.messageId,
+      direction: "out",
+    },
+    constraint: "correspondence_direction_check",
+  },
+  {
+    row: {
+      channel: "email",
+      dataBox: null,
+      messageId: envelope.messageId,
+      direction: null,
+    },
+    constraint: "correspondence_direction_check",
   },
 ] as const;
 
@@ -114,7 +166,9 @@ const causeChainText = (error: unknown): string => {
   return parts.join(" | ");
 };
 
-const insertDataBoxRow = async (row: (typeof INVALID_DATA_BOX_ROWS)[number]) =>
+const insertDataBoxRow = async (
+  row: (typeof INVALID_DATA_BOX_ROWS)[number]["row"],
+) =>
   await runInRollback(async (tx) => {
     const sourceEntityId = createSafeId<"entity">();
     await tx.insert(entities).values({
@@ -126,7 +180,6 @@ const insertDataBoxRow = async (row: (typeof INVALID_DATA_BOX_ROWS)[number]) =>
     await tx.insert(correspondence).values({
       organizationId: ids.orgA,
       workspaceId: ids.wsA2,
-      channel: "data_box",
       source: "upload",
       sourceEntityId,
       originalSignature: { status: "unverified" },
@@ -188,7 +241,7 @@ describe("data-box correspondence reads", () => {
         workspaceId: ids.wsA2,
         channel: "data_box",
         dataBox: envelope,
-        direction: "in",
+        direction: null,
         source: "upload",
         sourceEntityId,
         originalSignature: { status: "unverified" },
@@ -231,7 +284,8 @@ describe("data-box correspondence reads", () => {
         record: {
           id: correspondenceId,
           channel: "data_box",
-          dataBox: envelope,
+          dataBox: { ...envelope, directionBasis: "unknown" },
+          direction: "in",
           source: "upload",
           sourceEntityId,
         },
@@ -285,7 +339,11 @@ describe("data-box correspondence reads", () => {
       );
       expect(list).toMatchObject({
         items: [
-          { id: correspondenceId, channel: "data_box", dataBox: envelope },
+          {
+            id: correspondenceId,
+            channel: "data_box",
+            dataBox: { ...envelope, directionBasis: "unknown" },
+          },
         ],
       });
       expect(
@@ -299,11 +357,11 @@ describe("data-box correspondence reads", () => {
     });
   });
 
-  test("refuse a data-box row without its envelope or message ID", async () => {
-    for (const row of INVALID_DATA_BOX_ROWS) {
+  test("refuse invalid stored channel, direction, envelope, and message identity", async () => {
+    for (const { row, constraint } of INVALID_DATA_BOX_ROWS) {
       expect(
         causeChainText(await rejectionOf(insertDataBoxRow(row))),
-      ).toContain("correspondence_data_box_check");
+      ).toContain(constraint);
     }
   });
 });

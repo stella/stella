@@ -11,14 +11,11 @@ import {
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
   CORRESPONDENCE_SOURCES,
-  type CorrespondenceAddress,
   type CorrespondenceActorDisplay,
+  type CorrespondenceAddress,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
-import {
-  DATA_BOX_DIRECTION_BASES,
-  type DataBoxEnvelope,
-} from "@stll/api-contract/data-box";
+import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
 
 import {
   entityFeatureGateChecks,
@@ -126,9 +123,7 @@ export const correspondence = p.pgTable.withRLS(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    direction: p
-      .text("direction", { enum: CORRESPONDENCE_DIRECTIONS })
-      .notNull(),
+    direction: p.text("direction", { enum: CORRESPONDENCE_DIRECTIONS }),
     channel: p.text("channel", { enum: CORRESPONDENCE_CHANNELS }).notNull(),
     source: p
       .text("source", { enum: CORRESPONDENCE_SOURCES })
@@ -146,7 +141,7 @@ export const correspondence = p.pgTable.withRLS(
     // The data-box message ID on the data-box channel.
     messageId: p.text("message_id"),
     // A data-box message's envelope as stated in its file; null for email.
-    dataBox: jsonb("data_box_envelope").$type<DataBoxEnvelope>(),
+    dataBox: jsonb("data_box_envelope").$type<DataBoxStatedEnvelope>(),
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
     from: jsonb("sender").$type<CorrespondenceAddress>().notNull(),
@@ -248,7 +243,7 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.check(
       "correspondence_direction_check",
-      sql`${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})`,
+      sql`((${table.channel} = 'email' and ${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})) or (${table.channel} = 'data_box' and ${table.direction} is null)) is true`,
     ),
     p.check(
       "correspondence_channel_check",
@@ -256,7 +251,7 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.check(
       "correspondence_data_box_check",
-      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId} and ${table.dataBox}->>'directionBasis' in (${valuesSql(DATA_BOX_DIRECTION_BASES)}) and (${table.direction} = 'out') = (${table.dataBox}->>'directionBasis' = 'organization_sender')))) is true`,
+      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId} and not (${table.dataBox} ? 'directionBasis')))) is true`,
     ),
     p.check(
       "correspondence_handling_check",

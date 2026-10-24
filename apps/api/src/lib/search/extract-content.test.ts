@@ -4,9 +4,9 @@ import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import {
+  OCTET_STREAM_MIME_TYPE,
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
-  OCTET_STREAM_MIME_TYPE,
 } from "@/api/mime-types";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";

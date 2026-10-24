@@ -1,4 +1,4 @@
-import type { DataBoxEnvelope } from "./data-box";
+import type { DataBoxEnvelope, DataBoxStatedEnvelope } from "./data-box";
 import type { SafeId } from "./safe-id";
 
 export const CORRESPONDENCE_MAX_BODY_CHARACTERS = 2_000_000;
@@ -91,8 +91,7 @@ export type CorrespondenceAuthenticatedSender = CorrespondenceAuthentication & {
 };
 
 export type CorrespondenceOriginalSignature =
-  | { status: "unverified" }
-  | { status: "verified"; domain: string };
+  { status: "unverified" } | { status: "verified"; domain: string };
 
 export const CORRESPONDENCE_SOURCES = ["delivery", "upload"] as const;
 
@@ -121,8 +120,7 @@ type CorrespondenceUploadProvenance = {
 };
 
 export type CorrespondenceProvenance =
-  | CorrespondenceDeliveryProvenance
-  | CorrespondenceUploadProvenance;
+  CorrespondenceDeliveryProvenance | CorrespondenceUploadProvenance;
 
 export const CORRESPONDENCE_SENDER_KINDS = [
   "verified_alias",
@@ -139,8 +137,7 @@ export type CorrespondenceSenderScope =
   (typeof CORRESPONDENCE_SENDER_SCOPES)[number];
 
 export type CorrespondenceActorDisplay =
-  | { status: "active"; name: string; email: string }
-  | { status: "deleted" };
+  { status: "active"; name: string; email: string } | { status: "deleted" };
 
 export type CorrespondenceFiler =
   | {
@@ -162,8 +159,11 @@ export type CorrespondenceFiler =
 
 /** The parser's output. The authenticated filer is supplied separately. */
 export type ParsedCorrespondence = CorrespondenceProvenance &
-  CorrespondenceChannelContent &
-  CorrespondenceMessageContent;
+  Omit<CorrespondenceMessageContent, "direction"> &
+  (
+    | { channel: "email"; dataBox: null; direction: CorrespondenceDirection }
+    | { channel: "data_box"; dataBox: DataBoxStatedEnvelope; direction: null }
+  );
 
 /** A record's content other than its provenance and channel. */
 export type CorrespondenceMessageContent = {

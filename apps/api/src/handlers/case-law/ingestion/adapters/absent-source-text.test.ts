@@ -4,12 +4,12 @@ import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
+  absentTextComparison,
+  readDecisionTextMetadata,
   SOURCE_ABSENT_TEXT,
+  sourceTextField,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentTextComparison,
-  sourceTextField,
-  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
 

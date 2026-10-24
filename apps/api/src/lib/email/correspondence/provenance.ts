@@ -2,10 +2,15 @@ import { panic } from "better-result";
 
 import type {
   CorrespondenceChannelContent,
+  CorrespondenceDirection,
   CorrespondenceProvenance,
 } from "@stll/api-contract/correspondence";
 
 import type { correspondence } from "@/api/db/schema";
+import {
+  deriveDataBoxDirectionBasis,
+  DIRECTION_BY_BASIS,
+} from "@/api/lib/email/correspondence/data-box/direction";
 
 type StoredCorrespondenceProvenance = Pick<
   typeof correspondence.$inferSelect,
@@ -106,25 +111,43 @@ export const readCorrespondenceProvenance = (
 
 type StoredCorrespondenceChannel = Pick<
   typeof correspondence.$inferSelect,
-  "channel" | "dataBox"
+  "channel" | "dataBox" | "direction"
 >;
 
-/** correspondence_data_box_check binds the envelope to the channel. */
-export const readCorrespondenceChannel = ({
-  channel,
-  dataBox,
-}: StoredCorrespondenceChannel): CorrespondenceChannelContent => {
+type CorrespondenceChannelProjection = CorrespondenceChannelContent & {
+  direction: CorrespondenceDirection;
+};
+
+/** Stored data-box envelopes contain only the file's assertions. */
+export const readCorrespondenceChannel = (
+  { channel, dataBox, direction }: StoredCorrespondenceChannel,
+  organizationBoxIds: readonly string[],
+): CorrespondenceChannelProjection => {
   switch (channel) {
     case "email":
-      if (dataBox !== null) {
-        return panic("Email correspondence has a data-box envelope");
+      if (dataBox !== null || direction === null) {
+        return panic("Email correspondence has invalid channel metadata");
       }
-      return { channel, dataBox };
-    case "data_box":
-      if (dataBox === null) {
-        return panic("Data-box correspondence has no envelope");
+      return { channel, dataBox, direction };
+    case "data_box": {
+      if (
+        dataBox === null ||
+        direction !== null ||
+        "directionBasis" in dataBox
+      ) {
+        return panic("Data-box correspondence has invalid stored metadata");
       }
-      return { channel, dataBox };
+      const directionBasis = deriveDataBoxDirectionBasis({
+        senderBoxId: dataBox.sender.boxId,
+        recipientBoxId: dataBox.recipient.boxId,
+        organizationBoxIds,
+      });
+      return {
+        channel,
+        dataBox: { ...dataBox, directionBasis },
+        direction: DIRECTION_BY_BASIS[directionBasis],
+      };
+    }
     default:
       channel satisfies never;
       return panic("Unhandled correspondence channel");

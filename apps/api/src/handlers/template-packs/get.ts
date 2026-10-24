@@ -12,9 +12,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   canInstallTemplatePacks,
   getTemplatePackCatalogue,
-  toTemplatePackView,
   type TemplatePackTemplateView,
   type TemplatePackView,
+  toTemplatePackView,
 } from "./catalogue";
 import {
   readInstalledPackTemplates,

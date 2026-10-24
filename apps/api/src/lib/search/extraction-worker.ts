@@ -35,10 +35,10 @@ import {
   parseDataBoxMessage,
 } from "@/api/lib/email/correspondence/data-box/zfo";
 import {
-  parseEmail,
-  parsedEmailToText,
   type EmailAttachment,
   type EmailParseError,
+  parsedEmailToText,
+  parseEmail,
 } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -51,6 +51,10 @@ import {
   classifyAttachmentError,
   formatAttachmentIssue,
 } from "@/api/lib/search/extraction-worker-attachments";
+import {
+  formatWorkerErrorLine,
+  getWorkerErrorClass,
+} from "@/api/lib/search/extraction-worker-error";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -379,10 +383,11 @@ try {
     LIMITS.extractedContentMaxChars,
   );
   if (result.isErr()) {
-    const outputError = sanitizeErrorForOutput(result.error);
-    const outputErrorType =
-      outputError instanceof Error ? outputError.name : "UnknownError";
-    process.stderr.write(`extraction-worker error: ${outputErrorType}\n`);
+    const errorClass = getWorkerErrorClass(result.error);
+    const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
+    process.stderr.write(
+      `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
+    );
     process.exit(1);
   }
   if (result.value) {
@@ -390,8 +395,10 @@ try {
   }
   process.exit(0);
 } catch (error) {
-  const outputError = sanitizeErrorForOutput(error);
-  const type = outputError instanceof Error ? outputError.name : "UnknownError";
-  process.stderr.write(`extraction-worker error: ${type}\n`);
+  const errorClass = getWorkerErrorClass(error);
+  const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
+  process.stderr.write(
+    `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
+  );
   process.exit(1);
 }

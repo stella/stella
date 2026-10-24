@@ -7,9 +7,9 @@ import type {
 } from "@stll/api-contract/correspondence";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
+  type EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
-  type EMAIL_MIME_TYPES,
 } from "@stll/api-contract/email-mime-types";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -23,8 +23,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import {
-  createBackgroundAuditRecorder,
   type AuditRecorder,
+  createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -32,18 +32,17 @@ import {
   createCorrespondence,
   retireCorrespondenceSource,
 } from "@/api/lib/email/correspondence/create";
-import { DIRECTION_BY_BASIS } from "@/api/lib/email/correspondence/data-box/direction";
 import {
-  parseDataBoxMessage,
   type DataBoxMessageParseError,
+  parseDataBoxMessage,
   type ParsedDataBoxMessage,
 } from "@/api/lib/email/correspondence/data-box/zfo";
 import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication";
 import { PARSE_DROP_REASON } from "@/api/lib/email/inbound/ingest";
 import {
   correspondenceFromMessage,
-  parseEmailFile,
   type EmailFileFormat,
+  parseEmailFile,
 } from "@/api/lib/email/inbound/message";
 import { finishCorrespondenceAttachments } from "@/api/lib/email/inbound/persistence";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -396,8 +395,8 @@ type DataBoxCorrespondenceOptions = {
 
 /**
  * The one field mapping from a data-box message to a correspondence record.
- * Its addresses are box IDs and its subject is the annotation. Filing derives
- * the direction under the settings fence in the insertion transaction.
+ * Its addresses are box IDs and its subject is the annotation. Direction is
+ * derived from current organization settings when the record is read.
  */
 const dataBoxCorrespondence = ({
   message: { annotation, envelope },
@@ -409,8 +408,8 @@ const dataBoxCorrespondence = ({
   sourceEntityId,
   originalSignature: UNVERIFIED_SIGNATURE,
   channel: "data_box",
-  dataBox: { ...envelope, directionBasis: "unknown" },
-  direction: DIRECTION_BY_BASIS.unknown,
+  dataBox: envelope,
+  direction: null,
   messageId: envelope.messageId,
   contentHash: hashSha256Hex(new Uint8Array(bytes)),
   from: { address: envelope.sender.boxId, name: envelope.sender.name },

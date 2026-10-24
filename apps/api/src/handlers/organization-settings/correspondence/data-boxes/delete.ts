@@ -24,7 +24,7 @@ const config = {
   contract: "patch",
   realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
   description:
-    "Remove one of the organization's own data-box IDs and re-derive the direction of the data-box messages filed in the matters the caller can reach. Removing an ID not listed changes nothing but re-derives; recomputed counts the records whose direction changed.",
+    "Remove one of the organization's own data-box IDs. Filed data-box messages derive their direction from the current inventory on every read. Removing an ID not listed leaves the inventory unchanged.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
@@ -66,7 +66,7 @@ const removeOrganizationDataBox = createSafeRootHandler(
 
 declareAggregateMutation(removeOrganizationDataBox.handler, {
   type: "aggregate",
-  aggregates: ["dataBoxDirection"],
+  aggregates: ["organizationDataBoxes"],
 });
 
 export default removeOrganizationDataBox;

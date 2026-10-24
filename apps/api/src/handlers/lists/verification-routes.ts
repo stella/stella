@@ -23,37 +23,46 @@ export const createListVerificationRoutes = (
     .patch("/item-sources", verifyItemSource.handler, {
       body: verifyItemSource.config.body,
       permissions: verifyItemSource.config.permissions,
+      accountAccess: verifyItemSource.config.accountAccess,
     })
     .put("/item-fact-details", updateFactDetails.handler, {
       body: updateFactDetails.config.body,
       permissions: updateFactDetails.config.permissions,
+      accountAccess: updateFactDetails.config.accountAccess,
     })
     .post("/claim-reviews", createClaimReview.handler, {
       body: createClaimReview.config.body,
       permissions: createClaimReview.config.permissions,
+      accountAccess: createClaimReview.config.accountAccess,
     })
     .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
       body: createBulkClaimReviews.config.body,
       permissions: createBulkClaimReviews.config.permissions,
+      accountAccess: createBulkClaimReviews.config.accountAccess,
     })
     .post("/sample-case", createSampleCase.handler, {
       body: createSampleCase.config.body,
       permissions: createSampleCase.config.permissions,
+      accountAccess: createSampleCase.config.accountAccess,
     })
     .post("/verifications", createVerification.handler, {
       body: createVerification.config.body,
       permissions: createVerification.config.permissions,
+      accountAccess: createVerification.config.accountAccess,
     })
     .post("/verifications/latest", readLatestVerifications.handler, {
       body: readLatestVerifications.config.body,
       permissions: readLatestVerifications.config.permissions,
+      accountAccess: readLatestVerifications.config.accountAccess,
     })
     .get("/verifications", readVerifications.handler, {
       params: readVerifications.config.params,
       permissions: readVerifications.config.permissions,
+      accountAccess: readVerifications.config.accountAccess,
       query: readVerifications.config.query,
     })
     .get("/verifications/:runId", readVerification.handler, {
       params: readVerification.config.params,
       permissions: readVerification.config.permissions,
+      accountAccess: readVerification.config.accountAccess,
     });

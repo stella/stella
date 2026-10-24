@@ -1,6 +1,10 @@
 import type { SQLWrapper } from "drizzle-orm";
 
-import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  INVOICE_LANGUAGES,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -16,9 +20,9 @@ import {
   centsColumn,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
   organizationCheck,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -26,11 +30,11 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   workspaceIdCheck,
   wsOrganizationPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   BankAccount,
@@ -88,11 +92,16 @@ export const contacts = p.pgTable(
       length: 64,
     }),
     taxId: p.varchar("tax_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    // Null means the payer status has not been established.
+    vatPayer: p.boolean("vat_payer"),
     bankAccounts: jsonb("bank_accounts").$type<BankAccount[]>(),
     billingAddress: jsonb("billing_address").$type<BillingAddress>(),
     defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
+    /** Language preferred for invoices sent to this contact; null uses the issuer default. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
 
     // Attorney responsibility
     originatingAttorneyId: p
@@ -112,6 +121,13 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.check(
+      "contacts_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),

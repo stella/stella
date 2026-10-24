@@ -35,6 +35,16 @@ transactions, or tenant-scoped persistence.
 
 ## Migrations
 
+### Expand-only pre-deploy phase
+
+SQL migrations are a blocking pre-deploy phase, so keep them expand-only: add
+tables or columns, add constraints as `NOT VALID`, and use only short-lock DDL.
+Never put data backfills, `CREATE [UNIQUE] INDEX CONCURRENTLY`, or
+`ALTER TABLE ... VALIDATE CONSTRAINT` in a migration. Governed, bounded
+backfills belong to `apps/api/src/db/backfill-runtime.ts` and registered online
+repairs and concurrent index builds (`ONLINE_MIGRATION_INDEXES`) in
+`apps/api/src/db/online-migrations.ts`.
+
 - `bun --filter @stll/api db:migrate` is the shipped migration path used by CI
   and deployment. `db:push` is a local declarative schema-diff tool; it does
   not replace committed migrations and must not be described as the deployment
@@ -46,22 +56,19 @@ transactions, or tenant-scoped persistence.
   compatible with the migrated schema, and a failed rollout must have a safe
   forward-fix path.
 - Keep irreversible schema operations out of the same release as risky
-  application changes. Destructive, bulk-backfill, and access-control SQL
-  requires a statement-scoped acknowledgement enforced by
+  application changes. Destructive and access-control SQL requires a
+  statement-scoped acknowledgement enforced by
   `scripts/check-migration-safety.ts`, placed in the comment block directly
   above the statement:
   `-- stella-migration-safety: reviewed <rule-id> - <why this is safe>`.
   An acknowledgement that clears nothing is an error. Every migration sets
   `lock_timeout` and `statement_timeout` first.
-- For large live tables, follow the repository's guarded concurrent-index
-  protocol: either split and reopen the migrator transaction exactly as
-  enforced by `migration-concurrent-index.test.ts`, or put repairable work in
-  `online-migrations.ts`. Keep long backfills outside schema migrations and
-  checkpoint them durably.
+- Keep repairable work in `online-migrations.ts`. Long backfills stay outside
+  schema migrations and checkpoint durably.
 - A migration directory's name is its identity: the migrator applies every
-  directory whose name the database has not recorded, in name order. The
-  timestamp prefix does not need to sort after the base branch, but never
-  rename or delete a merged migration; add a new one instead.
+  directory whose name the database has not recorded, in name order. New
+  timestamps sort after the newest migration on the base branch. Never rename
+  or delete a merged migration; add a new one instead.
 - Validate migration history two ways: apply every committed migration to a
   fresh database, then confirm
   `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
@@ -104,9 +111,9 @@ transactions, or tenant-scoped persistence.
 
 - Keep transactions short; perform S3, network, conversion, and other external
   I/O outside them.
-- Close every read-decide-write race. Lock the decisive row with `SELECT ...
-FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
-  clause and check the affected-row count.
+- Close every read-decide-write race. Lock the decisive row with
+  `SELECT ... FOR UPDATE`, or encode the expected state/version in the
+  mutation `WHERE` clause and check the affected-row count.
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert
   checks.

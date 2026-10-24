@@ -18,7 +18,7 @@
  *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
  *   + extraction enqueues.
  */
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, ne, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -76,12 +76,14 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
-  UploadFinalizeError,
   finalizeErr,
   finalizeOk,
+  UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
 
 type ResolveFileNameProps = {
@@ -647,6 +649,7 @@ export const finalizeEntityCreate = async function* ({
       // Durable extraction request, committed with the file it reads. The
       // post-promote call below only accelerates the queue handoff.
       await requestNativeExtractionRun({ entityId, tx });
+      await enqueueEntitySearchRepairs(tx, [entityId]);
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.CREATE,
@@ -716,6 +719,8 @@ export const finalizeEntityCreate = async function* ({
       });
     }
     const { finalized } = writeResult;
+
+    flushEntitySearchRepairs([entityId]).catch(captureError);
 
     const afterPromote = () => {
       // Async kickoffs mirror the legacy handler. They run only after

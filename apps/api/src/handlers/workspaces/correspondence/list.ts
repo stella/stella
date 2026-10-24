@@ -10,6 +10,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
 import {
   readCorrespondenceChannel,
   readCorrespondenceProvenance,
@@ -27,6 +28,7 @@ type CorrespondenceRow = typeof correspondence.$inferSelect;
 
 const CORRESPONDENCE_LIST_COLUMNS = {
   id: correspondence.id,
+  direction: correspondence.direction,
   subject: correspondence.subject,
   from: correspondence.from,
   to: correspondence.to,
@@ -54,7 +56,6 @@ const UNPROJECTED_LIST_COLUMNS = [
   "workspaceId", // Matter scope comes from the authorized route.
   "contentHash", // Internal content fingerprint for ingestion.
   "dedupKey", // Internal replay identity.
-  "direction", // The compact list uses the detail route for direction metadata.
   "messageId", // Transport identifiers belong to detail.
   "inReplyTo", // Reply linkage belongs to detail.
   "references", // Thread references belong to detail.
@@ -112,7 +113,7 @@ const config = {
 
 const listCorrespondence = createSafeHandler(
   config,
-  async function* ({ query, safeDb, workspaceId }) {
+  async function* ({ query, safeDb, workspaceId, session }) {
     const cursor =
       query.cursor === undefined ? null : cursorCodec.decode(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
@@ -124,33 +125,38 @@ const listCorrespondence = createSafeHandler(
       );
     }
     const limit = normalizeTenantPageLimit(query.limit ?? PAGE_SIZE);
-    const rows = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx
-            .select({
-              ...CORRESPONDENCE_LIST_COLUMNS,
-              cursorTimestamp: cursorCodec.cursorValue,
-            })
-            .from(correspondence)
-            .where(
-              and(
-                eq(correspondence.workspaceId, workspaceId),
-                query.channel === undefined
-                  ? undefined
-                  : eq(correspondence.channel, query.channel),
-                cursor === null
-                  ? undefined
-                  : cursorCodec.keysetAfter({
-                      cursor,
-                      idColumn: correspondence.id,
-                      direction: "descending",
-                    }),
-              ),
-            )
-            .orderBy(desc(correspondence.receivedAt), desc(correspondence.id))
-            .limit(limit + 1),
-      ),
+    const { rows, organizationBoxIds } = yield* Result.await(
+      safeDb(async (tx) => {
+        const selectedRows = await tx
+          .select({
+            ...CORRESPONDENCE_LIST_COLUMNS,
+            cursorTimestamp: cursorCodec.cursorValue,
+          })
+          .from(correspondence)
+          .where(
+            and(
+              eq(correspondence.workspaceId, workspaceId),
+              query.channel === undefined
+                ? undefined
+                : eq(correspondence.channel, query.channel),
+              cursor === null
+                ? undefined
+                : cursorCodec.keysetAfter({
+                    cursor,
+                    idColumn: correspondence.id,
+                    direction: "descending",
+                  }),
+            ),
+          )
+          .orderBy(desc(correspondence.receivedAt), desc(correspondence.id))
+          .limit(limit + 1);
+        const currentBoxIds = selectedRows.some(
+          (row) => row.channel === "data_box",
+        )
+          ? await readOrganizationDataBoxIds(tx, session.activeOrganizationId)
+          : [];
+        return { rows: selectedRows, organizationBoxIds: currentBoxIds };
+      }),
     );
     const page = createCursorPage({
       rows,
@@ -163,6 +169,7 @@ const listCorrespondence = createSafeHandler(
           cursorTimestamp: _cursorTimestamp,
           channel,
           dataBox,
+          direction,
           source,
           sourceEntityId,
           intake,
@@ -173,21 +180,28 @@ const listCorrespondence = createSafeHandler(
           dmarc,
           alignedIdentifier,
           ...record
-        }) => ({
-          ...record,
-          ...readCorrespondenceChannel({ channel, dataBox }),
-          ...readCorrespondenceProvenance({
-            source,
-            sourceEntityId,
-            intake,
-            originalSignature,
-            authenticatedSenderAddress,
-            spf,
-            dkim,
-            dmarc,
-            alignedIdentifier,
-          }),
-        }),
+        }) => {
+          const { direction: _direction, ...channelContent } =
+            readCorrespondenceChannel(
+              { channel, dataBox, direction },
+              organizationBoxIds,
+            );
+          return {
+            ...record,
+            ...channelContent,
+            ...readCorrespondenceProvenance({
+              source,
+              sourceEntityId,
+              intake,
+              originalSignature,
+              authenticatedSenderAddress,
+              spf,
+              dkim,
+              dmarc,
+              alignedIdentifier,
+            }),
+          };
+        },
       ),
       nextCursor: page.nextCursor,
       limit,

@@ -15,9 +15,9 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import {
-  correspondenceAddressOptions,
   CORRESPONDENCE_PAGE_SIZE,
   CORRESPONDENCE_STATE_LABEL_KEYS,
+  correspondenceAddressOptions,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";

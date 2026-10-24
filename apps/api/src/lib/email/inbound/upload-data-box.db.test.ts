@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 
@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { readCorrespondenceChannel } from "@/api/lib/email/correspondence/provenance";
 import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
 import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
@@ -24,8 +25,8 @@ import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -320,7 +321,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(others).toHaveLength(0);
       expect(record).toMatchObject({
         channel: "data_box",
-        direction: "in",
+        direction: null,
         source: "upload",
         sourceEntityId: entityId,
         originalSignature: { status: "unverified" },
@@ -332,7 +333,6 @@ if (!databaseUrl || !runPostgresTests) {
         dataBox: {
           messageId: FIXTURE_MESSAGE.messageId,
           status: "accepted_by_login",
-          directionBasis: "unknown",
           sender: { boxId: "abc2def", fileMark: "12 C 345/2026" },
         },
       });
@@ -388,10 +388,16 @@ if (!databaseUrl || !runPostgresTests) {
         const record = (await records()).find(
           (candidate) => candidate.messageId === messageId,
         );
-        expect([record?.direction, record?.dataBox?.directionBasis]).toEqual([
-          direction,
-          basis,
-        ]);
+        expect(record?.direction).toBeNull();
+        expect(record?.dataBox).not.toHaveProperty("directionBasis");
+        if (record === undefined) {
+          panic("Expected filed data-box record");
+        }
+        const projected = readCorrespondenceChannel(record, boxIds);
+        expect([
+          projected.direction,
+          projected.dataBox?.directionBasis,
+        ]).toEqual([direction, basis]);
       }
       await db
         .delete(organizationSettings)
