@@ -70,6 +70,14 @@ const REFRESH_PATHS = [
   "packages/catalogue/upstream/pinned-content.gen.json",
 ] as const;
 const directories: string[] = [];
+const byCodeUnit = (left: string | undefined, right: string | undefined) => {
+  const a = left ?? "";
+  const b = right ?? "";
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+};
 
 afterEach(async () => {
   await Promise.all(
@@ -106,7 +114,9 @@ test("retains least-privilege grants and the reviewed publication identity", () 
       .parse(v.string(), confinement.run)
       .matchAll(/:\(exclude,(?:glob|literal)\)([^"\n]+)/gu),
   ].map((match) => match[1]);
-  expect(exclusions.toSorted()).toEqual([...REFRESH_PATHS].toSorted());
+  expect(exclusions.toSorted(byCodeUnit)).toEqual(
+    [...REFRESH_PATHS].toSorted(byCodeUnit),
+  );
   expect(steps.slice(0, 3).map(({ name }) => name)).toEqual([
     "Checkout",
     "Setup Bun",
@@ -175,6 +185,8 @@ const shouldRun = ({
         return jobStatus === "success";
       case "failure()":
         return jobStatus === "failure";
+      default:
+        break;
     }
     const comparison =
       /^(?<left>\S+)\s*(?<operator>==|!=)\s*'(?<right>[^']*)'$/u.exec(clause);
@@ -366,12 +378,14 @@ esac
       expect(step.with?.["mode"]).toBe("refresh-pr");
       expect(step.with?.["branch"]).toBe("catalogue/upstream-revs");
       expect(step.with?.["base"]).toBe("main");
-      expect(step.with?.["pr-body"]).toBe("${{ steps.body.outputs.pr-body }}");
+      expect(step.with?.["pr-body"]).toBe(`\${{ steps.body.outputs.pr-body }}`);
       const configuredPaths = v
         .parse(v.string(), step.with?.["paths"])
         .trim()
         .split("\n");
-      expect(configuredPaths.toSorted()).toEqual([...REFRESH_PATHS].toSorted());
+      expect(configuredPaths.toSorted(byCodeUnit)).toEqual(
+        [...REFRESH_PATHS].toSorted(byCodeUnit),
+      );
       const status = Bun.spawn(
         [
           "git",
@@ -448,7 +462,7 @@ test.each([
     published: [
       REFRESH_PATHS.map((pattern) =>
         pattern.replace("**", "skills/reviewed"),
-      ).toSorted(),
+      ).toSorted(byCodeUnit),
     ],
   },
   { mode: "failed", exitCode: 1, published: [[]] },
