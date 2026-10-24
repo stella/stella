@@ -857,7 +857,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.3.0",
+      "version": "5.3.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1331,6 +1331,9 @@
     },
     "packages/sha256": {
       "name": "@stll/sha256",
+      "dependencies": {
+        "@noble/hashes": "2.2.0",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

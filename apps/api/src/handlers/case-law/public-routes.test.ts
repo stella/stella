@@ -130,24 +130,23 @@ describe("public case-law routes", () => {
     });
   });
 
-  // A pages-public country serves its decision pages and sitemap (the page
-  // routes read the database, covered by the page db tests); every search
-  // route still answers typed unavailable.
-  test("a pages-public country returns typed unavailable on every search route", async () => {
+  // A country not yet launched answers typed unavailable on every search
+  // route, before any database read.
+  test("an unlaunched country returns typed unavailable on every search route", async () => {
     const urls = [
-      "/case/decisions?country=SVK",
-      "/case/decisions/facets?country=SVK",
-      "/case/decisions/status?country=SVK",
-      "/case/decisions/latest?country=SVK",
-      "/case/provisions/citing-decisions?jurisdiction=SVK&work=synthetic",
-      "/case/provisions/citation-counts?jurisdiction=SVK&eli=SK/2012/89",
+      "/case/decisions?country=AUT",
+      "/case/decisions/facets?country=AUT",
+      "/case/decisions/status?country=AUT",
+      "/case/decisions/latest?country=AUT",
+      "/case/provisions/citing-decisions?jurisdiction=AUT&work=synthetic",
+      "/case/provisions/citation-counts?jurisdiction=AUT&eli=SK/2012/89",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     requests.push(
       new Request("http://localhost/case/decisions/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ country: "SVK", query: "synthetic" }),
+        body: JSON.stringify({ country: "AUT", query: "synthetic" }),
       }),
     );
     for (const request of requests) {
@@ -157,8 +156,8 @@ describe("public case-law routes", () => {
       );
       expect(await response.json()).toMatchObject({
         status: "unavailable",
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
         code: "public_country_unavailable",
         domain: "caseLaw",
       });
