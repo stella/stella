@@ -83,6 +83,15 @@ const pageThrough = (
 };
 
 describe("global search keyset pagination", () => {
+  test.each(["1e1", "+10", " 10", "0xA"])(
+    "refuses non-decimal seen-count token %s",
+    (token) => {
+      expect(
+        parseGlobalSearchCursor(encodeCursor(0.8, `${token}:entity:2`)),
+      ).toEqual({ type: "invalid" });
+    },
+  );
+
   test("encodes the last returned score and globally unique id", () => {
     const page = paginateScoredSearchHits({
       scoredHits: [
