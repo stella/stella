@@ -79,8 +79,7 @@ export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
  * unknown.
  */
 export type RegisteredChatUIToolCallPart =
-  | BuiltInChatToolCallPart
-  | ExternalMcpChatToolCallPart;
+  BuiltInChatToolCallPart | ExternalMcpChatToolCallPart;
 type RegisteredFolioAgentToolName = Extract<
   keyof ChatUITools,
   FolioAgentToolName
@@ -96,11 +95,9 @@ export type RegisteredFolioAgentToolCallPart<
   };
 }[TName];
 export type ChatUIToolCallPart =
-  | RegisteredChatUIToolCallPart
-  | OpaquePersistedChatToolCallPart;
+  RegisteredChatUIToolCallPart | OpaquePersistedChatToolCallPart;
 export type ChatUIPart =
-  | Exclude<TanStackChatPart, { type: "tool-call" }>
-  | ChatUIToolCallPart;
+  Exclude<TanStackChatPart, { type: "tool-call" }> | ChatUIToolCallPart;
 export type ChatUIMessage = Omit<PersistedChatMessage, "parts"> & {
   parts: ChatUIPart[];
 };
@@ -127,8 +124,7 @@ type BuiltInApprovalToolName = Exclude<
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
-  | ApprovalToolName
-  | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
+  ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
 export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
   name: ApprovalToolName;
   approval: {
@@ -1010,9 +1006,7 @@ type ServerChatTurnOutcome = NonNullable<
 >;
 
 export type ResolvedChatAssistantTurnOutcome =
-  | ServerChatTurnOutcome
-  | { type: "incomplete" }
-  | { type: "legacy-completed" };
+  ServerChatTurnOutcome | { type: "incomplete" } | { type: "legacy-completed" };
 
 type ChatAssistantTurnMessage = Pick<ChatMessage, "metadata" | "role"> & {
   parts: readonly ChatPart[];

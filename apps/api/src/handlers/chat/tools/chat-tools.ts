@@ -228,8 +228,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -412,8 +411,7 @@ export type ChatBuiltinApprovalToolName = Exclude<
 >;
 
 type BuiltInChatToolPolicyName =
-  | keyof BuiltInChatTools
-  | CurrentSkillEditToolName;
+  keyof BuiltInChatTools | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
   /** Only the owning chat turn can issue and store displayed visual resources. */
@@ -582,8 +580,7 @@ export type GetChatToolsProps = {
    * registered by tools or subagents before the memory write.
    */
   resolveMemorySourceWorkspaceIds?:
-    | (() => readonly SafeId<"workspace">[])
-    | undefined;
+    (() => readonly SafeId<"workspace">[]) | undefined;
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
    * into the projected write tools' MCP context so their `ensureActiveWorkspace`
@@ -593,8 +590,7 @@ export type GetChatToolsProps = {
    * from `accessibleWorkspaces`.
    */
   workspaceStatusById?:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see

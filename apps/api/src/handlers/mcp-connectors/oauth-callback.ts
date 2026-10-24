@@ -70,8 +70,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type CallbackRedirectInput =
-  | { status: "connected"; slug: string }
-  | { status: "error"; reason: string };
+  { status: "connected"; slug: string } | { status: "error"; reason: string };
 
 // The popup lands on a SPA route that does the postMessage + close.
 // Returning HTML with an inline <script> from api.stll.app is blocked
