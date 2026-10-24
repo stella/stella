@@ -8,7 +8,6 @@ import { useTranslations } from "use-intl";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -21,7 +20,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
-import { withActiveUpload } from "@/lib/files/active-uploads";
+import {
+  hashActiveUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -85,7 +87,7 @@ const prepareFolderTreeUpload = async ({
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      sha256Hex: await hashSha256Hex(placement.file),
+      sha256Hex: await hashActiveUploadFile(placement.file),
     });
   }
 
@@ -183,9 +185,8 @@ const abortUpload = async (
  * success) so the surrounding `UploadQueue` integration is
  * untouched.
  *
- *   1. Compute SHA-256 of the bytes in-thread. 50 MB takes
- *      ~200–500ms on modern hardware; a Web Worker is a phase-6
- *      optimisation, not a correctness requirement.
+ *   1. Compute SHA-256 in one pass of bounded chunks, counted
+ *      as an active upload while the file is read.
  *   2. POST `/uploads/:wsId/presign` with the declared metadata.
  *      The API records intent in `pending_uploads`, issues a
  *      5-minute URL bound to the exact size and checksum.
@@ -220,7 +221,7 @@ const prepareSingleFileEntityUpload = async ({
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const sha256Hex = await hashSha256Hex(file);
+  const sha256Hex = await hashActiveUploadFile(file);
 
   signal.throwIfAborted();
 
@@ -728,26 +729,28 @@ export const useCreateFileEntities = (workspaceId: string) => {
         const plan = buildDroppedFolderUploadPlan(input.tree);
         const propertyId =
           plan.files.length > 0 ? await ensureFileProperty() : null;
-        const preparedTree = await prepareFolderTreeUpload({
-          workspaceId,
-          parentId,
-          propertyId,
-          plan,
-        });
+        const uploaded = await withActiveUpload(async () => {
+          const preparedTree = await prepareFolderTreeUpload({
+            workspaceId,
+            parentId,
+            propertyId,
+            plan,
+          });
 
-        if (preparedTree.files.length === 0 || propertyId === null) {
-          return;
-        }
+          if (preparedTree.files.length === 0 || propertyId === null) {
+            return [];
+          }
 
-        const uploaded = await uploadFileEntitiesBatched({
-          files: preparedTree.files,
-          workspaceId,
-          propertyId,
-          parentId,
-          parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
-          preparedUploads: preparedTree.preparedUploadByFile,
-          labels,
-          onError: (error) => analytics.captureError(error),
+          return await uploadFileEntitiesBatched({
+            files: preparedTree.files,
+            workspaceId,
+            propertyId,
+            parentId,
+            parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
+            preparedUploads: preparedTree.preparedUploadByFile,
+            labels,
+            onError: (error) => analytics.captureError(error),
+          });
         });
         startWorkflowForUploadedFiles(uploaded);
         return;

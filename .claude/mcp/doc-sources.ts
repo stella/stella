@@ -402,6 +402,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
         }) satisfies NoLlmsTxtExclusion,
     ),
     {
+      checkedAt: "2026-10-24T00:00:00.000Z",
+      dependency: "@noble/hashes",
+      explanation:
+        "The repository's https://raw.githubusercontent.com/paulmillr/noble-hashes/main/llms.txt returns 404. Use the official README and API declarations at https://github.com/paulmillr/noble-hashes directly; the shared SHA-256 owner uses create(), update() and digest() for bounded browser Blob hashing.",
+      expiresAt: "2026-11-23T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-20T00:00:00.000Z",
       dependency: "lzma1",
       explanation:
