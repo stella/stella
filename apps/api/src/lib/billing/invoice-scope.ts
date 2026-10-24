@@ -30,6 +30,22 @@ export const invoiceInMatter = (
 ) =>
   sql`(${invoiceTouchesMatter(table, workspaceId)} OR (${table.workspaceId} IS NULL AND EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${table.organizationId} AND invoice_matter.client_id = ${table.clientId})))`;
 
+/** Credential scope must cover the stored matter and every participating line. */
+// sql-perf-allow: the invoice primary key and invoice_lines_invoice_position_idx bound this complete-invoice fence.
+export const invoiceWithinMatterAllowlist = (
+  table: Pick<InvoiceScopeColumns, "id" | "workspaceId">,
+  workspaceIds: readonly SafeId<"workspace">[],
+) => {
+  if (workspaceIds.length === 0) {
+    return sql`false`;
+  }
+  const allowed = sql.join(
+    workspaceIds.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  );
+  return sql`((${table.workspaceId} IS NULL OR ${table.workspaceId} IN (${allowed})) AND NOT EXISTS (SELECT 1 FROM public.invoice_lines credential_line WHERE credential_line.invoice_id = ${table.id} AND credential_line.workspace_id NOT IN (${allowed})))`;
+};
+
 type InvoiceShareColumns = {
   id: SQLWrapper;
   workspaceId: SQLWrapper;

@@ -21,6 +21,7 @@ import {
   invoiceInMatter,
   invoiceMatterShare,
   invoiceTouchesMatter,
+  invoiceWithinMatterAllowlist,
 } from "@/api/lib/billing/invoice-scope";
 import {
   NARRATIVE_LANGUAGE_MAX_LENGTH,
@@ -427,7 +428,7 @@ const resolveTimeEntryWorkspace = async ({
   return row?.workspaceId ?? null;
 };
 
-/** Resolve a participating matter after RLS authorizes the complete invoice. */
+/** Resolve a participating matter only inside both row and credential scope. */
 const resolveInvoiceWorkspace = async ({
   context,
   invoiceId,
@@ -454,10 +455,13 @@ const resolveInvoiceWorkspace = async ({
     tx.query.invoices.findFirst({
       where: {
         id: { eq: invoiceId },
-        RAW:
-          requestedMatterId === undefined
-            ? undefined
-            : (table) => invoiceInMatter(table, requestedMatterId),
+        RAW: (table) =>
+          and(
+            invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds),
+            requestedMatterId === undefined
+              ? undefined
+              : invoiceInMatter(table, requestedMatterId),
+          ),
       },
       columns: { workspaceId: true },
       with: {
@@ -1352,7 +1356,11 @@ const readInvoiceDetail = async ({
     tx.query.invoices.findFirst({
       where: {
         id: { eq: invoiceId },
-        RAW: (table) => invoiceInMatter(table, workspaceId),
+        RAW: (table) =>
+          and(
+            invoiceInMatter(table, workspaceId),
+            invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds),
+          ),
       },
       with: INVOICE_DETAIL_RELATIONS,
     }),
@@ -1549,6 +1557,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       .where(
         and(
           invoiceTouchesMatter(invoices, workspaceId),
+          invoiceWithinMatterAllowlist(
+            invoices,
+            context.accessibleWorkspaceIds,
+          ),
           cursor === null
             ? undefined
             : invoicePageCursor.keysetAfter({

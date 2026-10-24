@@ -797,6 +797,132 @@ if (!databaseUrl || !runPostgres) {
       });
     });
 
+    test("MCP invoice reads retain the credential matter allowlist for owners and admins", async () => {
+      const scenario = await seedScenario();
+      const singleMatterInvoiceId = createSafeId<"invoice">();
+      await db.insert(invoices).values({
+        id: singleMatterInvoiceId,
+        organizationId: scenario.orgId,
+        workspaceId: scenario.secondMatterId,
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+      });
+      const contextFor = (
+        actor: "owner" | "admin",
+        accessibleWorkspaceIds: SafeId<"workspace">[],
+      ) => {
+        const userId = scenario.actors[actor];
+        return buildMcpContextFromChat({
+          organizationId: scenario.orgId,
+          userId,
+          userEmail: "invoice-reader@example.test",
+          memberRole: sessionMemberRole(actor),
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            organizationId: scenario.orgId,
+            userId,
+          }),
+          safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+            organizationId: scenario.orgId,
+            userId,
+            serverValidatedWorkspaceIds: [],
+          }),
+          scopedDb: scoped(scenario, userId),
+          toolWorkspaceIds: resolveToolWorkspaceIds({
+            accessibleWorkspaceIds,
+            pinnedIds: [],
+          }),
+        });
+      };
+      for (const actor of ["owner", "admin"] as const) {
+        const partial = contextFor(actor, [scenario.firstMatterId]);
+        const complete = contextFor(actor, [
+          scenario.firstMatterId,
+          scenario.secondMatterId,
+        ]);
+        const unrelated = contextFor(actor, [scenario.otherClientMatterId]);
+        for (const context of [partial, unrelated]) {
+          expect(
+            await BILLING_TOOL_HANDLERS.list_invoices({
+              args: { invoice_id: singleMatterInvoiceId },
+              context,
+            }),
+          ).toMatchObject({ status: "error", error: { code: "not_found" } });
+          expect(
+            await BILLING_TOOL_HANDLERS.list_invoices({
+              args: { invoice_id: scenario.invoiceId },
+              context,
+            }),
+          ).toMatchObject({ status: "error", error: { code: "not_found" } });
+        }
+        expect(
+          await BILLING_TOOL_HANDLERS.list_invoices({
+            args: {
+              invoice_id: scenario.invoiceId,
+              matter_id: scenario.firstMatterId,
+            },
+            context: partial,
+          }),
+        ).toMatchObject({ status: "error", error: { code: "not_found" } });
+        expect(
+          await BILLING_TOOL_HANDLERS.list_invoices({
+            args: { matter_id: scenario.firstMatterId },
+            context: partial,
+          }),
+        ).toMatchObject({ egress: "structured", payload: { invoices: [] } });
+        expect(
+          await BILLING_TOOL_HANDLERS.list_invoices({
+            args: { invoice_id: singleMatterInvoiceId },
+            context: complete,
+          }),
+        ).toMatchObject({
+          egress: "structured",
+          payload: {
+            invoice: {
+              id: singleMatterInvoiceId,
+              workspaceId: scenario.secondMatterId,
+            },
+          },
+        });
+        for (const args of [
+          { invoice_id: scenario.invoiceId },
+          { invoice_id: scenario.invoiceId, matter_id: scenario.firstMatterId },
+        ]) {
+          expect(
+            await BILLING_TOOL_HANDLERS.list_invoices({
+              args,
+              context: complete,
+            }),
+          ).toMatchObject({
+            egress: "structured",
+            payload: {
+              invoice: {
+                id: scenario.invoiceId,
+                lines: expect.arrayContaining([
+                  expect.objectContaining({
+                    workspaceId: scenario.firstMatterId,
+                  }),
+                  expect.objectContaining({
+                    workspaceId: scenario.secondMatterId,
+                  }),
+                ]),
+              },
+            },
+          });
+        }
+        expect(
+          await BILLING_TOOL_HANDLERS.list_invoices({
+            args: { matter_id: scenario.firstMatterId },
+            context: complete,
+          }),
+        ).toMatchObject({
+          egress: "structured",
+          payload: {
+            invoices: [expect.objectContaining({ id: scenario.invoiceId })],
+          },
+        });
+      }
+    });
+
     test("MCP detail retains empty client invoices through an authorized matter of their client", async () => {
       const scenario = await seedScenario();
       await scoped(
