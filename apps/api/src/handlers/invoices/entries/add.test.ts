@@ -94,6 +94,7 @@ describe("addEntries currency enforcement", () => {
           id: toSafeId<"invoice">("inv_test"),
           totalAmount: 0,
           currency: "USD",
+          finalizedAt: null,
         },
       ]);
       const { safeDb } = createScopedDbMock({

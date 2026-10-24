@@ -38,7 +38,10 @@ import {
 } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { checkInvoiceBillingArrangement } from "@/api/lib/billing/invoice-arrangements";
-import { validateInvoiceDocument } from "@/api/lib/billing/invoice-document-type";
+import {
+  invoiceContentMutationRefusal,
+  validateInvoiceDocument,
+} from "@/api/lib/billing/invoice-document-type";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
@@ -566,7 +569,7 @@ const materialiseAttachedEntryLines = async (
 };
 
 /**
- * Locks a draft invoice before its lines change and backfills lines for
+ * Locks a never-issued draft before its lines change and backfills lines for
  * entries attached before lines existed (`materialiseAttachedEntryLines`), so
  * the edit and the `recalculateInvoiceTotals` after it see every billed
  * entry. Backfilled lines are totalled at once, so the invoice stays
@@ -589,6 +592,12 @@ export const lockDraftInvoiceForLines = async (
     workspaceId: scope.workspaceId,
     status: INVOICE_STATUS.DRAFT,
   });
+  if (invoice) {
+    const refusal = invoiceContentMutationRefusal(invoice);
+    if (refusal) {
+      return Result.err(refusal);
+    }
+  }
   if (
     invoice &&
     (await materialiseAttachedEntryLines(tx, scope, recordAuditEvent)) > 0

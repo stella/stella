@@ -298,8 +298,9 @@ const addEntries = createSafeHandler(
       "to a draft invoice as invoice lines without VAT, marking them billed " +
       "and recomputing the invoice totals. Every entry must match the " +
       "invoice currency, because an invoice is single-currency and nothing " +
-      "is converted. Only draft " +
-      "invoices accept entries, and a concurrent change to the same entries " +
+      "is converted. Only never-issued drafts accept entries; issued invoices " +
+      "require a credit note even after reverting to draft. A concurrent change " +
+      "to the same entries " +
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
     permissions: { invoice: ["update"] },

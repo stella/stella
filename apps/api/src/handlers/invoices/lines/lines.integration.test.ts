@@ -28,7 +28,9 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import deleteExpense from "@/api/handlers/expenses/delete";
 import updateExpense from "@/api/handlers/expenses/update";
 import createInvoice from "@/api/handlers/invoices/create";
+import deleteInvoice from "@/api/handlers/invoices/delete";
 import addEntries from "@/api/handlers/invoices/entries/add";
+import removeEntries from "@/api/handlers/invoices/entries/remove";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import batchUpdateTimeEntries from "@/api/handlers/time-entries/batch/update";
@@ -934,38 +936,284 @@ describe("invoice lines", () => {
     );
   });
 
-  test("previously issued draft lines remain immutable", async () => {
-    const invoiceId = await seedInvoice();
-    const lineId = await expectCreated(
-      invoiceId,
-      manual({ quantity: "1", unitPriceMinor: 12_000 }, STANDARD_RATE),
-    );
+  test.each(["never-issued", "previously-issued"] as const)(
+    "%s draft content mutation boundary covers every line and entry operation",
+    async (history) => {
+      const invoiceId = await seedInvoice();
+      const lineId = await expectCreated(
+        invoiceId,
+        manual({ quantity: "1", unitPriceMinor: 12_000 }, STANDARD_RATE),
+      );
+      const attachedTime = await seedTimeEntry({ billedMinutes: 60 });
+      const attachedExpense = await seedExpense({ amount: 1000, markup: 0 });
+      await expectCreated(invoiceId, {
+        source: { type: "time_entry", timeEntryId: attachedTime },
+        vatRateBps: STANDARD_RATE,
+        vatTreatment: "domestic_vat",
+      });
+      await expectCreated(invoiceId, {
+        source: { type: "expense", expenseId: attachedExpense },
+        vatRateBps: STANDARD_RATE,
+        vatTreatment: "domestic_vat",
+      });
+      const lineTime = await seedTimeEntry({ billedMinutes: 30 });
+      const lineExpense = await seedExpense({ amount: 500, markup: 0 });
+      const addTime = await seedTimeEntry({ billedMinutes: 15 });
+      const addExpense = await seedExpense({ amount: 250, markup: 0 });
+      const timeIds = [attachedTime, lineTime, addTime];
+      const expenseIds = [attachedExpense, lineExpense, addExpense];
+      if (history === "previously-issued") {
+        expect(await runTransition(invoiceId, "finalize")).toEqual({
+          id: invoiceId,
+        });
+        expect(await runTransition(invoiceId, "revert_to_draft")).toEqual({
+          id: invoiceId,
+        });
+      }
+      const readContent = async () => ({
+        invoice: await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+        }),
+        lines: await testDb
+          .select()
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, invoiceId))
+          .orderBy(invoiceLines.id),
+        time: await testDb
+          .select()
+          .from(timeEntries)
+          .where(inArray(timeEntries.id, timeIds))
+          .orderBy(timeEntries.id),
+        expenses: await testDb
+          .select()
+          .from(expenses)
+          .where(inArray(expenses.id, expenseIds))
+          .orderBy(expenses.id),
+      });
+      const before = await readContent();
+      const auditEvents: AuditEvent[] = [];
+      const invoiceParams = { workspaceId: ids.wsA1, invoiceId };
+      const lineParams = { ...invoiceParams, lineId };
+      const mutations = [
+        {
+          name: "create manual line",
+          successKey: "id",
+          run: () =>
+            createInvoiceLine.handler(
+              contextFor(createInvoiceLine.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: manual(
+                  { quantity: "1", unitPriceMinor: 1000 },
+                  STANDARD_RATE,
+                ),
+              }),
+            ),
+        },
+        {
+          name: "create time line",
+          successKey: "id",
+          run: () =>
+            createInvoiceLine.handler(
+              contextFor(createInvoiceLine.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: {
+                  source: { type: "time_entry", timeEntryId: lineTime },
+                  vatRateBps: STANDARD_RATE,
+                  vatTreatment: "domestic_vat",
+                },
+              }),
+            ),
+        },
+        {
+          name: "create expense line",
+          successKey: "id",
+          run: () =>
+            createInvoiceLine.handler(
+              contextFor(createInvoiceLine.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: {
+                  source: { type: "expense", expenseId: lineExpense },
+                  vatRateBps: STANDARD_RATE,
+                  vatTreatment: "domestic_vat",
+                },
+              }),
+            ),
+        },
+        {
+          name: "update line",
+          successKey: "id",
+          run: () =>
+            updateInvoiceLine.handler(
+              contextFor(updateInvoiceLine.handler, {
+                params: lineParams,
+                auditEvents,
+                body: { description: "Revised" },
+              }),
+            ),
+        },
+        {
+          name: "reset line",
+          successKey: "id",
+          run: () =>
+            updateInvoiceLine.handler(
+              contextFor(updateInvoiceLine.handler, {
+                params: lineParams,
+                auditEvents,
+                body: { resetToRecorded: true },
+              }),
+            ),
+        },
+        {
+          name: "attach time",
+          successKey: "totalAmount",
+          run: () =>
+            addEntries.handler(
+              contextFor(addEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { timeEntryIds: [addTime] },
+              }),
+            ),
+        },
+        {
+          name: "attach expense",
+          successKey: "totalAmount",
+          run: () =>
+            addEntries.handler(
+              contextFor(addEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { expenseIds: [addExpense] },
+              }),
+            ),
+        },
+        {
+          name: "remove time",
+          successKey: "success",
+          run: () =>
+            removeEntries.handler(
+              contextFor(removeEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { timeEntryIds: [attachedTime] },
+              }),
+            ),
+        },
+        {
+          name: "remove expense",
+          successKey: "success",
+          run: () =>
+            removeEntries.handler(
+              contextFor(removeEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { expenseIds: [attachedExpense] },
+              }),
+            ),
+        },
+        {
+          name: "delete line",
+          successKey: "id",
+          run: () =>
+            deleteInvoiceLine.handler(
+              contextFor(deleteInvoiceLine.handler, {
+                params: lineParams,
+                auditEvents,
+              }),
+            ),
+        },
+        {
+          name: "delete invoice",
+          successKey: "deleted",
+          run: () =>
+            deleteInvoice.handler(
+              contextFor(deleteInvoice.handler, {
+                params: invoiceParams,
+                auditEvents,
+              }),
+            ),
+        },
+      ];
+      for (const mutation of mutations) {
+        const result = await mutation.run();
+        if (history === "previously-issued") {
+          expect(result, mutation.name).toMatchObject({
+            code: 409,
+            response: {
+              message:
+                "Issued invoice content cannot be edited; create a credit note instead",
+            },
+          });
+        } else {
+          expect(result, mutation.name).toHaveProperty(mutation.successKey);
+          expect(result, mutation.name).not.toHaveProperty("code");
+        }
+      }
+      const after = await readContent();
+      if (history === "previously-issued") {
+        expect(after).toEqual(before);
+        expect(auditEvents).toEqual([]);
+        expect(await runTransition(invoiceId, "finalize")).toEqual({
+          id: invoiceId,
+        });
+        const refinalized = await readContent();
+        expect(refinalized.invoice).toMatchObject({
+          ...before.invoice,
+          status: INVOICE_STATUS.FINALIZED,
+          updatedAt: expect.any(Date),
+        });
+        expect(refinalized.lines).toEqual(before.lines);
+        expect(refinalized.time).toEqual(before.time);
+        expect(refinalized.expenses).toEqual(before.expenses);
+      } else {
+        expect(after.invoice).toBeUndefined();
+        expect(after.lines).toEqual([]);
+        for (const row of [...after.time, ...after.expenses]) {
+          expect(row).toMatchObject({
+            invoiceId: null,
+            status: BILLING_STATUS.APPROVED,
+          });
+        }
+        expect(auditEvents.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  test("previously issued legacy content is neither materialized nor recalculated on refinalize", async () => {
+    const legacy = await seedLegacyDraft();
     await testDb
       .update(invoices)
       .set({ finalizedAt: new Date("2026-01-01T00:00:00Z") })
-      .where(eq(invoices.id, invoiceId));
-    const before = await testDb
-      .select()
-      .from(invoiceLines)
-      .where(eq(invoiceLines.id, lineId));
-    for (const body of [
-      { description: "Revised" },
-      { resetToRecorded: true },
-    ] satisfies UpdateBody[]) {
-      expect(await runUpdate(invoiceId, lineId, body)).toMatchObject({
-        code: 409,
-        response: {
-          message:
-            "Issued invoice lines cannot be edited; create a credit note instead",
-        },
-      });
-    }
+      .where(eq(invoices.id, legacy.invoiceId));
+    const before = await testDb.query.invoices.findFirst({
+      where: { id: { eq: legacy.invoiceId } },
+    });
+    expect(
+      await runCreate(
+        legacy.invoiceId,
+        manual({ quantity: "1", unitPriceMinor: 1000 }, 0),
+      ),
+    ).toMatchObject({ code: 409 });
+    expect(await runTransition(legacy.invoiceId, "finalize")).toEqual({
+      id: legacy.invoiceId,
+    });
     expect(
       await testDb
         .select()
         .from(invoiceLines)
-        .where(eq(invoiceLines.id, lineId)),
-    ).toEqual(before);
+        .where(eq(invoiceLines.invoiceId, legacy.invoiceId)),
+    ).toEqual([]);
+    const after = await testDb.query.invoices.findFirst({
+      where: { id: { eq: legacy.invoiceId } },
+    });
+    expect(after).toMatchObject({
+      ...before,
+      status: INVOICE_STATUS.FINALIZED,
+      updatedAt: expect.any(Date),
+    });
   });
 
   test("expense overrides preserve the source and can be reset", async () => {

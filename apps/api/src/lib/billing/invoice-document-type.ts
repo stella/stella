@@ -24,6 +24,20 @@ true satisfies [InvoiceDocumentType] extends [
     : never
   : never;
 
+/** A status revert keeps the issued document frozen; corrections use a credit note. */
+export const invoiceContentMutationRefusal = ({
+  finalizedAt,
+}: {
+  finalizedAt: Date | null;
+}) =>
+  finalizedAt === null
+    ? undefined
+    : new HandlerError({
+        status: 409,
+        message:
+          "Issued invoice content cannot be edited; create a credit note instead",
+      });
+
 type ValidateInvoiceDocumentOptions = {
   workspaceId: SafeId<"workspace">;
   documentType: InvoiceDocumentType;

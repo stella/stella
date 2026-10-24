@@ -38,7 +38,8 @@ const deleteInvoiceLine = createSafeHandler(
     description:
       "Remove one line from a draft invoice and recompute its totals. A time " +
       "entry or expense line returns its entry to approved, unbilled status, " +
-      "so it can be billed again. Only draft invoices can be edited.",
+      "so it can be billed again. Only never-issued drafts can be edited; " +
+      "issued invoices require a credit note even after reverting to draft.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },

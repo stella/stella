@@ -148,12 +148,6 @@ const updateInvoiceLine = createSafeHandler(
           if (!invoice) {
             return refuse(409, "Invoice not found or not in draft status");
           }
-          if (invoice.finalizedAt !== null) {
-            return refuse(
-              409,
-              "Issued invoice lines cannot be edited; create a credit note instead",
-            );
-          }
           const [line] = await tx
             .select()
             .from(invoiceLines)

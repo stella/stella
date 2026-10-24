@@ -184,7 +184,8 @@ const createInvoiceLine = createSafeHandler(
       "price in minor units), an approved unbilled time entry, or an " +
       "approved unbilled expense; an entry line takes its amount from the " +
       "entry and marks the entry billed. Every line carries a VAT rate in " +
-      "basis points and a VAT treatment. Only draft invoices accept lines.",
+      "basis points and a VAT treatment. Only never-issued drafts accept lines; " +
+      "issued invoices require a credit note even after reverting to draft.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },

@@ -298,22 +298,25 @@ const transitionInvoice = createSafeHandler(
             workspaceId,
             organizationId: session.activeOrganizationId,
           };
-          const draft = await lockDraftInvoiceForLines(
-            tx,
-            scope,
-            recordAuditEvent,
-          );
-          if (draft.isErr()) {
-            return Result.err(draft.error);
-          }
-          const totals = await recalculateInvoiceTotals(
-            tx,
-            scope,
-            now,
-            recordAuditEvent,
-          );
-          if (totals.isErr()) {
-            return Result.err(totals.error);
+          // Re-finalizing changes status, never the previously issued content.
+          if (existing.finalizedAt === null) {
+            const draft = await lockDraftInvoiceForLines(
+              tx,
+              scope,
+              recordAuditEvent,
+            );
+            if (draft.isErr()) {
+              return Result.err(draft.error);
+            }
+            const totals = await recalculateInvoiceTotals(
+              tx,
+              scope,
+              now,
+              recordAuditEvent,
+            );
+            if (totals.isErr()) {
+              return Result.err(totals.error);
+            }
           }
           set.finalizedAt = existing.finalizedAt ?? now;
           if (existing.invoiceNumber === null) {

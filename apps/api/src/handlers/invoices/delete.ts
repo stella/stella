@@ -13,6 +13,7 @@ import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { invoiceContentMutationRefusal } from "@/api/lib/billing/invoice-document-type";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -27,7 +28,8 @@ const deleteInvoice = createSafeHandler(
     description:
       "Delete a draft invoice and return every time entry and expense on it to " +
       "approved, unbilled status so they can be invoiced again. Only draft " +
-      "invoices can be deleted: a sent, paid, or void invoice is refused.",
+      "invoices that have never been issued can be deleted; issued invoices " +
+      "require a credit note even after reverting to draft.",
     permissions: { invoice: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -71,6 +73,11 @@ const deleteInvoice = createSafeHandler(
             ok: false as const,
             reason: "Invoice not found or not in draft status",
           };
+        }
+
+        const refusal = invoiceContentMutationRefusal(invoice);
+        if (refusal) {
+          return refusal;
         }
 
         const linkedCredit = await tx

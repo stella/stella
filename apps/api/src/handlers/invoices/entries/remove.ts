@@ -98,8 +98,9 @@ const removeEntries = createSafeHandler(
       "recomputing the invoice totals. " +
       "Reversible: the same entries can be attached again with " +
       "invoices.entries.add, and the entries themselves are kept. Only " +
-      "draft invoices may " +
-      "be changed, and ids that are not on this invoice are skipped without " +
+      "never-issued drafts may be changed; issued invoices require a credit " +
+      "note even after reverting to draft. Ids that are not on this invoice " +
+      "are skipped without " +
       "an error.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
