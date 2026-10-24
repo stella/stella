@@ -43,6 +43,12 @@ import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/gue
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type {
+  AnalysisMarginItem,
+  AnswerMarginItem,
+  ProvisionMarginItem,
+} from "@/components/legal-reader/margin-notes";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
@@ -59,12 +65,6 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type {
-  AnalysisMarginItem,
-  AnswerMarginItem,
-  ProvisionMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -676,7 +676,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       id: heading.id,
       heading: heading.label,
       text: first?.summary ?? "",
-      category: heading.category,
+      accentVar: getCategoryVar(heading.category),
       depth: heading.depth,
       startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
     });
@@ -686,7 +686,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         kind: "annotation",
         id: annotation.id,
         text: annotation.summary,
-        category: heading.category,
+        accentVar: getCategoryVar(heading.category),
         depth: heading.depth + 1,
         startAnchorId: annotation.startAnchorId,
       });
@@ -719,7 +719,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   kind: "example",
                   id: `example:${note.category}`,
                   heading: t(`caseLaw.analysis.categories.${note.category}`),
-                  category: note.category,
+                  accentVar: getCategoryVar(note.category),
                   depth: 0,
                   lines: note.lines,
                   startAnchorId,

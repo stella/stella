@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq, getTableName, inArray, SQL, sql } from "drizzle-orm";
 import { getTableConfig, makePgArray, PgDialect } from "drizzle-orm/pg-core";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   member,
@@ -30,26 +31,16 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
-export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
+/**
+ * Session-local copies of `tables` that shadow the shared ones on this
+ * connection, so a scaling fixture writes without row-level policies.
+ */
+export const createScalingTempTables = async (
+  db: GatedTestDb,
+  tables: readonly PgTable[],
+) => {
   const dialect = new PgDialect();
-  for (const table of [
-    organization,
-    user,
-    member,
-    workspaces,
-    properties,
-    entities,
-    entityVersions,
-    fields,
-    cellMetadata,
-    desktopEditSessions,
-    extractedContent,
-    documentProcessingRuns,
-    oauthClient,
-    oauthConsent,
-    mcpWebHandoff,
-    auditLogs,
-  ]) {
+  for (const table of tables) {
     const columns = getTableConfig(table).columns.map((column) => {
       let fallback = "";
       if (column.default instanceof SQL) {
@@ -86,6 +77,26 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
     );
   }
 };
+
+export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
+  await createScalingTempTables(db, [
+    organization,
+    user,
+    member,
+    workspaces,
+    properties,
+    entities,
+    entityVersions,
+    fields,
+    cellMetadata,
+    desktopEditSessions,
+    extractedContent,
+    documentProcessingRuns,
+    oauthClient,
+    oauthConsent,
+    mcpWebHandoff,
+    auditLogs,
+  ]);
 
 export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
   const organizationId = mintAuthProviderId<"organization">();
