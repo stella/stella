@@ -105,6 +105,11 @@ import {
 } from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
+  CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
+  recordClientMetadataValidated,
+  withStaleIfError,
+} from "@/api/lib/auth/cimd-stale-if-error";
+import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
   getDemoAccountConfig,
@@ -2105,6 +2110,7 @@ export const createAuth = (
     }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+      CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createMcpWebHandoffPlugin({ service: getWebHandoffService }),
       createAgentUserPlugin(),
@@ -2276,11 +2282,15 @@ export const createAuth = (
               },
             },
             {
-              clientDiscovery: createCimdClientDiscovery({
-                fetchClientMetadataResource: withOwnClientDocuments(
-                  fetchClientMetadataResource,
-                ),
-              }),
+              clientDiscovery: withStaleIfError(
+                createCimdClientDiscovery({
+                  fetchClientMetadataResource: withOwnClientDocuments(
+                    fetchClientMetadataResource,
+                  ),
+                  onClientCreated: recordClientMetadataValidated,
+                  onClientRefreshed: recordClientMetadataValidated,
+                }),
+              ),
             },
           ],
           accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,

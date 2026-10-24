@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment.",
+  "reviewedDigest": "d458f9a75c1d6201d26bb6a6add53c90402a8f51bd04a5ddc2e7da3d8c0975e3"
+}
