@@ -446,6 +446,14 @@ export const createChatRuntime = ({
       toError(error),
       providerDiagnostic,
     );
+    // Interrupt submission reports the same transport failure again after
+    // the SDK has reduced it to a generic interrupt error. Keep its typed cause.
+    if (
+      snapshot.error !== undefined &&
+      keepsShownChatError(snapshot.error, normalized)
+    ) {
+      return snapshot.error;
+    }
     if (snapshot.error !== normalized) {
       onError(normalized);
       setSnapshot({ error: normalized });

@@ -1199,7 +1199,8 @@ const findUncoveredActions = async (
 ): Promise<OracleViolation[]> => {
   const web = await loadWebChat();
   const messages = real.client.messages();
-  const { hasError, requestActive, stopStatus } = real.client.runtimeState();
+  const { error, hasError, requestActive, stopStatus } =
+    real.client.runtimeState();
   const isGenerating = web.isChatTurnGenerating({
     hasError:
       hasError ||
@@ -1211,7 +1212,9 @@ const findUncoveredActions = async (
   });
   const answers = messages.filter(({ role }) => role === "assistant");
   const offeredOnAnswer = (gate: typeof web.canForkAssistantMessage): boolean =>
-    answers.some(({ id }) => gate({ isGenerating, messageId: id, messages }));
+    answers.some(({ id }) =>
+      gate({ error, isGenerating, messageId: id, messages }),
+    );
   const cards = real.client.cards();
   const offered: Record<string, boolean> = {
     "allow-in-conversation": cards.some(({ kind }) => kind === "approval"),
