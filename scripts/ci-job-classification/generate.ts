@@ -5,6 +5,8 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
+import { readDecisions } from "./decisions";
+import { decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -74,7 +76,10 @@ export const readClassificationInputs = (root: string) => {
     },
   };
   return {
-    decisions: v.parse(DECISIONS, read("ci-job-classification-decisions.json")),
+    decisions: v.parse(
+      DECISIONS,
+      readDecisions({ type: "working-tree", root }),
+    ),
     snapshots,
     reader,
     localActionPath: (directory: string) => {
@@ -152,7 +157,7 @@ export const readClassificationInputsAtRevision = (
   };
   const revisionDecisions = v.parse(
     REVISION_DECISIONS,
-    readGithubJson("ci-job-classification-decisions.json"),
+    readDecisions({ type: "git-revision", root, revision }),
   );
   return {
     decisions: v.parse(
@@ -402,12 +407,19 @@ const reviewJobs = ({
   );
   if (removed.length) {
     throw new AdmissionError({
-      message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these entries from .github/ci-job-classification-decisions.json`,
+      message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these files:\n${removed.map(decisionPathForKey).join("\n")}`,
     });
   }
   if (Object.keys(entries).length) {
     throw new ReviewRequiredError({
-      message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier; paste these entries into .github/ci-job-classification-decisions.json (choose kind and qualifier for new jobs):\n${JSON.stringify(entries, null, 2)}`,
+      message: `${privilegedJobs.length ? `Sensitive classification change: ${privilegedJobs.join(", ")}\n` : ""}Missing or changed job review. Re-review kind and qualifier, then create or update each listed file (choose kind and qualifier for new jobs):\n${Object.entries(
+        entries,
+      )
+        .map(
+          ([key, value]) =>
+            `${decisionPathForKey(key)}\n${JSON.stringify(value, null, 2)}`,
+        )
+        .join("\n")}`,
       privilegedJobs,
     });
   }

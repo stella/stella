@@ -17,6 +17,7 @@
     "allow-email-support",
     "allow-reveal-support-root",
     "allow-set-autostart",
+    "allow-onboarding-restart",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

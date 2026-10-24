@@ -39,6 +39,7 @@ export const OAUTH_REGISTRATION_SCOPE_POLICY = {
   "stella:matters_write": "open",
   "stella:contacts_write": "open",
   "stella:chat": "open",
+  "stella:memory_write": "elevated",
   "stella:knowledge_write": "open",
   "stella:billing_write": "open",
   "stella:admin_read": "elevated",

@@ -56,6 +56,7 @@ import {
 } from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { GENERATORS } from "./generated-files";
 import {
   type Context,
@@ -1504,6 +1505,7 @@ test("a run that passes as superseded records no completion evidence", () => {
           HEAD_REPO_ID: "456",
           PATCH_ID: "c".repeat(40),
           WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
           PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
         },
       };
@@ -1516,6 +1518,104 @@ test("a run that passes as superseded records no completion evidence", () => {
       );
       if (item.label !== "complete") {
         expect(stdout, item.label).toContain("superseded");
+      }
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("completion evidence names every missing evidence input without changing the verdict", () => {
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "ci-result-evidence-inputs-"),
+  );
+  const evidenceInputBlock =
+    /evidence_inputs=\(\n(?<inputs>[\s\S]*?)\n\s*\)/u.exec(resultStep.run)
+      ?.groups?.["inputs"];
+  if (evidenceInputBlock === undefined) {
+    throw new TypeError("Evaluate CI outcome has no evidence input list");
+  }
+  const requiredInputs = [
+    ...evidenceInputBlock.matchAll(/"(?<name>[A-Z_]+):[^"\n]+"/gu),
+  ].map((match) => match.groups?.["name"] ?? "");
+  expect(requiredInputs).not.toContain("");
+  try {
+    const cases: {
+      label: string;
+      invalid?: string;
+      mutation?: "malformed" | "missing";
+    }[] = [
+      { label: "complete" },
+      ...requiredInputs.flatMap((invalid) => [
+        { label: `${invalid} missing`, invalid, mutation: "missing" as const },
+        {
+          label: `${invalid} malformed`,
+          invalid,
+          mutation: "malformed" as const,
+        },
+      ]),
+    ];
+    for (const { item, exitCode, stdout } of runBashBatch(cases, (entry) => {
+      let invalidation = "";
+      if (entry.invalid !== undefined) {
+        if (entry.mutation === "missing") {
+          invalidation = `unset ${entry.invalid}\n`;
+        } else {
+          const value = ["COMPLETION_MARKER", "COVERAGE_PROFILE"].includes(
+            entry.invalid,
+          )
+            ? "''"
+            : "malformed";
+          invalidation = `${entry.invalid}=${value}\n`;
+        }
+      }
+      const outcomeScript = resultStep.run.replace(
+        "# Completion evidence lets a later unchanged-head run skip every\n",
+        () =>
+          `${invalidation}# Completion evidence lets a later unchanged-head run skip every\n`,
+      );
+      expect(outcomeScript === resultStep.run, entry.label).toBe(
+        entry.invalid === undefined,
+      );
+      const base = resultGateCase({
+        event: EVENT.pullRequest,
+        results: {},
+        suiteDepth: SUITE_DEPTH.fast,
+        outcomeScript,
+      });
+      return {
+        ...base,
+        env: {
+          ...base.env,
+          GITHUB_OUTPUT: nodePath.join(directory, entry.label),
+          RUN_REQUIRED: "true",
+          COMPLETION_MARKER: "ci-completed-v6-fixture",
+          HEAD_SHA: "a".repeat(40),
+          BASE_SHA: "b".repeat(40),
+          HEAD_REPO_ID: "456",
+          PATCH_ID: "c".repeat(40),
+          WORKFLOW_VERSION: "d".repeat(40),
+          PLAN_CONFIG: "e".repeat(64),
+          PR_DEPTH_JOBS: JSON.stringify(prDepthJobs({ jobs: ciJobs })),
+        },
+      };
+    })) {
+      expect(exitCode, item.label).toBe(0);
+      const output = nodePath.join(directory, item.label);
+      const written = existsSync(output) ? readFileSync(output, "utf-8") : "";
+      expect(written.includes("evidence="), item.label).toBe(
+        item.invalid === undefined,
+      );
+      if (item.invalid !== undefined) {
+        expect(stdout, item.label).toContain(
+          `Completion evidence was skipped because ${item.invalid} is missing or malformed.`,
+        );
+        expect(stdout, item.label).toContain(
+          `::error::Invalid or missing completion evidence input: ${item.invalid}.`,
+        );
+        expect(stdout, item.label).not.toContain(
+          "Not every planned CI job succeeded",
+        );
       }
     }
   } finally {
@@ -3084,8 +3184,8 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
         results: {},
         metadataCodeRun: state,
         outcomeScript: resultStep.run.replace(
-          "local poll_seconds=30 max_wait_seconds=5400",
-          "local poll_seconds=0 max_wait_seconds=5400",
+          "local poll_seconds=30 max_wait_seconds=2700",
+          "local poll_seconds=0 max_wait_seconds=2700",
         ),
       })),
     );
@@ -3101,14 +3201,14 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
       results: {},
       metadataCodeRun: "running",
       outcomeScript: resultStep.run.replace(
-        "local poll_seconds=30 max_wait_seconds=5400",
+        "local poll_seconds=30 max_wait_seconds=2700",
         "local poll_seconds=0 max_wait_seconds=0",
       ),
     })),
   );
   expect(timedOut.exitCode).toBe(1);
   expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
-    "code run still running after 90 min",
+    "timed out after 45 min waiting for a code run",
   );
 }, 20_000);
 
@@ -3808,7 +3908,11 @@ const runPlaywrightSelection = ({
     [
       "bash",
       "-c",
-      `bash() { printf '%s\\n' "$@"; }\n${run.replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))}`,
+      `bash() { printf '%s\\n' "$@"; }\n${run
+        .replaceAll(/\$\{\{ matrix\.shard \}\}/gu, () => String(shard))
+        .replaceAll(`\${{ steps.e2e-shards.outputs.count }}`, () =>
+          String(E2E_SHARD_COUNT),
+        )}`,
     ],
     {
       env: {
@@ -3823,7 +3927,7 @@ const runPlaywrightSelection = ({
   );
 };
 
-test.each([1, 2])(
+test.each([1, 2, 3, 4])(
   "full Playwright depth shards general and geometry projects independently: %s",
   (shard) => {
     const result = runPlaywrightSelection({ mode: "full", specs: "[]", shard });
@@ -3838,7 +3942,7 @@ test.each([1, 2])(
       "--grep-invert=route-smoke",
       "--project=chromium",
       "--project=heap-growth-canary",
-      `--shard=${shard}/2`,
+      `--shard=${shard}/4`,
       `${nodePath.resolve(import.meta.dir, "..")}/.github/actions/setup-playwright/run-in-image.sh`,
       "bun",
       "--filter",
@@ -3846,10 +3950,29 @@ test.each([1, 2])(
       "test:e2e",
       "--",
       "--project=docked-chat-geometry",
-      `--shard=${shard}/2`,
+      `--shard=${shard}/4`,
     ]);
   },
 );
+
+test("every production Playwright shard total comes from the matrix shard source", () => {
+  const steps = jobSteps(ciJobs["e2e-production-shard"]);
+  const countStep = steps.find(
+    ({ name }) => name === "Read production E2E shard count",
+  );
+  expect(countStep?.run).toBe(
+    'echo "count=$(bun scripts/e2e-spec-shards-core.ts count)" >> "$GITHUB_OUTPUT"',
+  );
+  const shardArgument = `--shard=\${{ matrix.shard }}/\${{ steps.e2e-shards.outputs.count }}`;
+  const invocationLines = steps.flatMap(({ run }) =>
+    (run ?? "").split("\n").filter((line) => line.includes("--shard=")),
+  );
+  expect(invocationLines).toHaveLength(3);
+  expect(invocationLines.every((line) => line.includes(shardArgument))).toBe(
+    true,
+  );
+  expect(E2E_SHARD_COUNT).toBe(4);
+});
 
 const queueOnlyJobs = Object.fromEntries(
   Object.entries(eventPolicies.jobs)
@@ -6366,7 +6489,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
       });
       return plan.type === "run" ? plan.matrix.shard : [];
     })(),
-  ).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
+  ).toEqual(["api-1", "api-2", "api-3", "api-4", "api-5", "api-6", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -6376,7 +6499,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=3");
+  expect(planner?.run).toContain("api_test_shards=6");
   expect(planner?.env?.["COMPARISON_BASE"]).toBe(
     `\${{ steps.changed-files.outputs.comparison_base }}`,
   );
@@ -6431,9 +6554,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}',
     );
-    expect(values).toContain("api_test_shards=3");
+    expect(values).toContain("api_test_shards=6");
     expect(values).toContain("api_test_files=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -6704,12 +6827,12 @@ test("API planning only loads dependencies after installation and emits install-
       expected,
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "", "3"],
+      ["pull_request", "true", "false", "", "", "", "6"],
       // Without package checks no API test runs, even when the API scope is
       // unknown: ci_tests_required is the one gate of ci-tests.
       ["pull_request", "false", "true", "", "", "", "0"],
-      ["merge_group", "true", "false", "", "", "", "3"],
-      ["workflow_dispatch", "true", "false", "", "", "", "3"],
+      ["merge_group", "true", "false", "", "", "", "6"],
+      ["workflow_dispatch", "true", "false", "", "", "", "6"],
       [
         "pull_request",
         "true",
@@ -6726,7 +6849,7 @@ test("API planning only loads dependencies after installation and emits install-
         "",
         '{"shard":["api-1","rest-web"]}',
         "1",
-        "3",
+        "6",
       ],
     ]) {
       writeFileSync(output, "");
@@ -6763,7 +6886,7 @@ test("API planning only loads dependencies after installation and emits install-
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(
-          'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}\n',
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}\n',
         );
       }
     }

@@ -22,13 +22,15 @@ const extractDecideScript = (workflow: string) => {
   const stepStart = workflow.indexOf(
     "      - name: Decide whether staging can deploy\n",
   );
-  const jobEnd = workflow.indexOf("\n  build-api:\n", stepStart);
   const runStart = workflow.indexOf("run: |\n", stepStart);
-  if (stepStart === -1 || jobEnd === -1 || runStart === -1) {
+  // The step is the last of its job: its body ends at the next job-level line.
+  const bodyStart = runStart + "run: |\n".length;
+  const nextJobLine = /^ {0,2}\S/mu.exec(workflow.slice(bodyStart));
+  if (stepStart === -1 || runStart === -1 || nextJobLine === null) {
     throw new Error("deploy-staging.yml no longer exposes the decide step");
   }
 
-  const body = workflow.slice(runStart + "run: |\n".length, jobEnd);
+  const body = workflow.slice(bodyStart, bodyStart + nextJobLine.index);
   const indents = body
     .split("\n")
     .filter((line) => line.trim().length > 0)
@@ -68,6 +70,7 @@ const extractStepScript = (
 
 type DecisionCase = {
   deployWhenUnreachable?: boolean;
+  releaseCandidate?: boolean;
   status: "not_ready" | "ready";
   script?: string;
   statusWriteExitCode?: number;
@@ -75,6 +78,7 @@ type DecisionCase = {
 
 type Decision = {
   deploy: string;
+  wake: string;
   exitCode: number;
   summary: string;
   calls: string;
@@ -91,6 +95,7 @@ let sideSha = "";
 
 const runDecision = async ({
   deployWhenUnreachable = false,
+  releaseCandidate = false,
   status,
   script = scriptPath,
   statusWriteExitCode = 0,
@@ -111,6 +116,7 @@ const runDecision = async ({
     env: {
       ...process.env,
       DEPLOY_WHEN_UNREACHABLE: String(deployWhenUnreachable),
+      RELEASE_CANDIDATE: String(releaseCandidate),
       GITHUB_EVENT_NAME: "workflow_dispatch",
       GH_TOKEN: "stub",
       GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
@@ -132,8 +138,11 @@ const runDecision = async ({
     .split("\n")
     .findLast((line) => line.startsWith("deploy="));
 
+  const wake = output.split("\n").findLast((line) => line.startsWith("wake="));
+
   return {
     deploy: deploy ?? "",
+    wake: wake ?? "",
     exitCode: result.exitCode,
     summary: await Bun.file(summaryPath).text(),
     calls: await Bun.file(callsPath).text(),
@@ -249,6 +258,8 @@ const runRecord = async (deploySha: string) => {
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       STUB_CALLS_PATH: callsPath,
       WEB_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
     },
   });
   return {
@@ -396,16 +407,60 @@ describe("staging deploy decision", () => {
     expect(result.calls.trim().split("\n")).toHaveLength(1);
   });
 
-  test("every successful decision selects deployment", async () => {
+  test("hands an off staging to the wake job for a release candidate only", async () => {
+    const candidate = await runDecision({
+      releaseCandidate: true,
+      status: "not_ready",
+    });
+    expect(candidate).toMatchObject({
+      deploy: "deploy=false",
+      exitCode: 0,
+      wake: "wake=true",
+      calls: "",
+    });
+
+    const ordinary = await runDecision({ status: "not_ready" });
+    expect(ordinary).toMatchObject({
+      deploy: "deploy=false",
+      exitCode: 1,
+      wake: "",
+    });
+    expect(ordinary.calls).toContain('"description":"staging off"');
+
+    for (const decision of [
+      await runDecision({ releaseCandidate: true, status: "ready" }),
+      await runDecision({
+        deployWhenUnreachable: true,
+        releaseCandidate: true,
+        status: "not_ready",
+      }),
+    ]) {
+      expect(decision).toMatchObject({ deploy: "deploy=true", wake: "" });
+    }
+  });
+
+  test("every successful decision selects deployment or the wake", async () => {
     for (const status of ["ready", "not_ready"] as const) {
       for (const deployWhenUnreachable of [false, true]) {
-        const result = await runDecision({ status, deployWhenUnreachable });
-        if (result.exitCode === 0) {
-          expect(result.deploy).toBe("deploy=true");
-          expect(result.calls).toBe("");
-        } else {
-          expect(result.deploy).toBe("deploy=false");
-          expect(result.exitCode).toBe(1);
+        for (const releaseCandidate of [false, true]) {
+          const result = await runDecision({
+            status,
+            deployWhenUnreachable,
+            releaseCandidate,
+          });
+          expect(result.calls === "", "only a refusal writes a status").toBe(
+            result.exitCode === 0,
+          );
+          if (result.exitCode !== 0) {
+            expect(result.deploy).toBe("deploy=false");
+            expect(result.exitCode).toBe(1);
+            expect(releaseCandidate).toBe(false);
+          } else if (result.wake === "wake=true") {
+            expect(result.deploy).toBe("deploy=false");
+            expect(releaseCandidate).toBe(true);
+          } else {
+            expect(result.deploy).toBe("deploy=true");
+          }
         }
       }
     }
@@ -430,7 +485,7 @@ describe("staging deploy decision", () => {
   test("the off status belongs to the selected source with confined write permission", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const start = workflow.indexOf("  staging-health:\n");
-    const end = workflow.indexOf("\n  build-api:", start);
+    const end = workflow.indexOf("\n  staging-wake:", start);
     const healthJob = workflow.slice(start, end);
     expect(healthJob).toContain("if: github.ref == 'refs/heads/main'");
     expect(healthJob).toContain("      statuses: write");

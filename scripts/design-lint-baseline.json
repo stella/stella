@@ -80,10 +80,10 @@
     "apps/web/src/components/versions/version-list.tsx": 1,
     "apps/web/src/components/workspaces/active-edit-badge.tsx": 1,
     "apps/web/src/components/workspaces/attached-template-upload-dialog.tsx": 1,
-    "apps/web/src/components/workspaces/bulk-add-columns.tsx": 20,
+    "apps/web/src/components/workspaces/bulk-add-columns.tsx": 19,
     "apps/web/src/components/workspaces/cell-metadata-flags.tsx": 5,
     "apps/web/src/components/workspaces/create-matter-dialog.tsx": 1,
-    "apps/web/src/components/workspaces/create-property.tsx": 18,
+    "apps/web/src/components/workspaces/create-property.tsx": 17,
     "apps/web/src/components/workspaces/editable-field.tsx": 1,
     "apps/web/src/components/workspaces/field-value-select.tsx": 1,
     "apps/web/src/components/workspaces/field-value.tsx": 3,
@@ -252,6 +252,9 @@
     "packages/workspace-ui/src/field-value.tsx": 1
   },
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {
+    "apps/desktop/src/clipboard/ClipboardApp.tsx": 2,
+    "apps/desktop/src/clipboard/ClipboardEditor.tsx": 1,
+    "apps/desktop/src/registry/RegistrySearch.tsx": 2,
     "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/components/ai-suggestions/review-margin-notes.tsx": 1,
@@ -291,7 +294,6 @@
     "apps/web/src/components/search-dialog-preview.tsx": 2,
     "apps/web/src/components/search-dialog.tsx": 2,
     "apps/web/src/components/search-matter-preview.tsx": 1,
-    "apps/web/src/components/suggested-actions.tsx": 1,
     "apps/web/src/components/templates/template-form.tsx": 1,
     "apps/web/src/components/versions/version-list.tsx": 1,
     "apps/web/src/components/workspaces/advanced-filter-editor.tsx": 1,
@@ -387,7 +389,8 @@
     "packages/ui/src/components/workspace-shell.tsx": 2,
     "packages/ui/src/inspector/chrome.tsx": 2,
     "packages/ui/src/kanban/subgroup-board.tsx": 1,
-    "packages/ui/src/kanban/virtual-cell.tsx": 1
+    "packages/ui/src/kanban/virtual-cell.tsx": 1,
+    "packages/workspace-ui/src/responsive-action-toolbar.tsx": 1
   },
   "no-imported-class-constant/no-imported-class-constant": {
     "apps/web/src/components/app-sidebar.tsx": 1,

@@ -181,6 +181,13 @@ RUN bun build \
     --outdir /app/bundles \
     --entry-naming replay-tick.js \
     apps/api/src/scripts/replay-tick.ts
+# Weekly Czech Constitutional Court roster import and load-aware relink.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outdir /app/bundles \
+    --entry-naming import-cz-us-roster.js \
+    apps/api/src/scripts/import-cz-us-roster.ts
 # Bounded EU completion ticks and operator controls.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
