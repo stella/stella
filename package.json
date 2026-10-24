@@ -68,7 +68,7 @@
     "lint:changed": "bun run generate && bun scripts/lint-changed.ts",
     "lint:fix": "turbo run lint:fix",
     "lint:profile:api": "bun --cwd=apps/api run lint:profile",
-    "lint:profile:web": "bun run generate && OXLINT_TAILWINDCSS_CACHE_DIR=apps/web/.tailwind-cache OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1 bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --debug timings --format=default apps/web",
+    "lint:profile:web": "bun run generate && OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1 bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --debug timings --format=default apps/web",
     "assets:check": "bun test scripts/check-duplicate-raster-assets.test.ts && bun scripts/check-duplicate-raster-assets.ts",
     "lint:ws": "sherif -r unsync-similar-dependencies -i '@babel/core@^7.29.0' && bun packages/scripts/src/workspace-hygiene.ts",
     "new-package": "bun scripts/new-package.ts",

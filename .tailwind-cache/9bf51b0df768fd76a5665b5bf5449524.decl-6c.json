@@ -1,0 +1,19 @@
+{
+  "bg-muted-foreground/55": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--muted-foreground) 55%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--muted-foreground) 55%, transparent)": {
+        "p": ["--muted-foreground"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

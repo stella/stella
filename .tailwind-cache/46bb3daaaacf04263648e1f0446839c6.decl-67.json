@@ -1,0 +1,10 @@
+{
+  "leading-[1.55]": {
+    "valid": true,
+    "declarations": [
+      ["", "--tw-leading", "1.55"],
+      ["", "line-height", "1.55"]
+    ],
+    "values": { "1.55": { "p": [], "f": [], "u": false } }
+  }
+}

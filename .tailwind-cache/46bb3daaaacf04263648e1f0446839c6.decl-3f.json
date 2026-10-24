@@ -1,0 +1,7 @@
+{
+  "@min-[40rem]/review-pair:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "min-h-[420px]": {
+    "valid": true,
+    "declarations": [["", "min-height", "420px"]],
+    "values": { "420px": { "p": [], "f": [], "u": false } }
+  }
+}

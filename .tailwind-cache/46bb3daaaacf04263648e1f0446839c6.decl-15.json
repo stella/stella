@@ -1,0 +1,18 @@
+{
+  "max-w-[220px]": {
+    "valid": true,
+    "declarations": [["", "max-width", "220px"]],
+    "values": { "220px": { "p": [], "f": [], "u": false } }
+  },
+  "text-[oklch(0.85_0.11_var(--cat-hue))]": {
+    "valid": true,
+    "declarations": [["", "color", "oklch(0.85 0.11 var(--cat-hue))"]],
+    "values": {
+      "oklch(0.85 0.11 var(--cat-hue))": {
+        "p": ["--cat-hue"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

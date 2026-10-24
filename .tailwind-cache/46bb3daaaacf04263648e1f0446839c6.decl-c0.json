@@ -1,0 +1,8 @@
+{
+  "group-hover/cell-content:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "group/reasoning": { "valid": false, "declarations": [], "values": {} }
+}

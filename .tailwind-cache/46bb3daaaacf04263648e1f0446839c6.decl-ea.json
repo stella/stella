@@ -1,0 +1,12 @@
+{
+  "[&_span::selection]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "aria-pressed:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  }
+}

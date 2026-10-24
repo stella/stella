@@ -1,0 +1,24 @@
+{
+  "bg-background/96": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--background) 96%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--background) 96%, transparent)": {
+        "p": ["--background"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "empty:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  }
+}

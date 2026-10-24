@@ -1,0 +1,59 @@
+{
+  "@max-[26rem]/review-bar:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "bg-muted-foreground/35": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--muted-foreground) 35%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--muted-foreground) 35%, transparent)": {
+        "p": ["--muted-foreground"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "bg-muted/45": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--muted) 45%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--muted) 45%, transparent)": {
+        "p": ["--muted"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "bg-primary/5": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--primary) 5%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--primary) 5%, transparent)": {
+        "p": ["--primary"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "group/comment": { "valid": false, "declarations": [], "values": {} }
+}

@@ -1,0 +1,18 @@
+{
+  "[&>svg]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "before:flex": {
+    "valid": true,
+    "declarations": [
+      ["::before", "content", "var(--tw-content)"],
+      ["::before", "display", "flex"]
+    ],
+    "values": {
+      "var(--tw-content)": { "p": ["--tw-content"], "f": [], "u": true },
+      "flex": { "p": [], "f": [], "u": false }
+    }
+  }
+}

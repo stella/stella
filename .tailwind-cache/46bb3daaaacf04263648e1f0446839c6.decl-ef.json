@@ -1,0 +1,12 @@
+{
+  "[&_.ProseMirror]:focus-visible:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "text-[12.5px]": {
+    "valid": true,
+    "declarations": [["", "font-size", "12.5px"]],
+    "values": { "12.5px": { "p": [], "f": [], "u": false } }
+  }
+}

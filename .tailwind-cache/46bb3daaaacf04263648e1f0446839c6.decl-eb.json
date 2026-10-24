@@ -1,0 +1,14 @@
+{
+  "border-[var(--doc-border)]": {
+    "valid": true,
+    "declarations": [["", "border-color", "var(--doc-border)"]],
+    "values": {
+      "var(--doc-border)": { "p": ["--doc-border"], "f": [], "u": true }
+    }
+  },
+  "group-hover/card:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  }
+}

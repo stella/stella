@@ -1,0 +1,24 @@
+{
+  "border-warning/20": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "border-color",
+        "color-mix(in oklab, var(--warning) 20%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--warning) 20%, transparent)": {
+        "p": ["--warning"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "group-hover/reasoning:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  }
+}

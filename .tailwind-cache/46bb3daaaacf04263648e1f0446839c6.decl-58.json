@@ -1,0 +1,12 @@
+{
+  "grid-cols-[auto_1fr]": {
+    "valid": true,
+    "declarations": [["", "grid-template-columns", "auto 1fr"]],
+    "values": { "auto 1fr": { "p": [], "f": [], "u": false } }
+  },
+  "text-[16px]": {
+    "valid": true,
+    "declarations": [["", "font-size", "16px"]],
+    "values": { "16px": { "p": [], "f": [], "u": false } }
+  }
+}

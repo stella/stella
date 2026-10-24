@@ -1,0 +1,24 @@
+{
+  "group-hover/menu-item:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "ring-ring/24": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "--tw-ring-color",
+        "color-mix(in oklab, var(--ring) 24%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--ring) 24%, transparent)": {
+        "p": ["--ring"],
+        "f": [],
+        "u": false
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "[&_:not(pre)>code]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "data-pressed:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "max-w-[120px]": {
+    "valid": true,
+    "declarations": [["", "max-width", "120px"]],
+    "values": { "120px": { "p": [], "f": [], "u": false } }
+  },
+  "md:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "min-h-[44px]": {
+    "valid": true,
+    "declarations": [["", "min-height", "44px"]],
+    "values": { "44px": { "p": [], "f": [], "u": false } }
+  },
+  "sm:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "tracking-[0.04em]": {
+    "valid": true,
+    "declarations": [
+      ["", "--tw-tracking", "0.04em"],
+      ["", "letter-spacing", "0.04em"]
+    ],
+    "values": { "0.04em": { "p": [], "f": [], "u": false } }
+  },
+  "w-[300px]": {
+    "valid": true,
+    "declarations": [["", "width", "300px"]],
+    "values": { "300px": { "p": [], "f": [], "u": false } }
+  },
+  "w-[3px]": {
+    "valid": true,
+    "declarations": [["", "width", "3px"]],
+    "values": { "3px": { "p": [], "f": [], "u": false } }
+  }
+}

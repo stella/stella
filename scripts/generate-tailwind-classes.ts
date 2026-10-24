@@ -4,15 +4,23 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
-const committedCache = path.join(repositoryRoot, "apps/web/.tailwind-cache");
+const committedCache = path.join(repositoryRoot, ".tailwind-cache");
+const lintTargets = [
+  "apps/web",
+  "packages/mcp-apps",
+  "apps/desktop",
+  "apps/playground",
+];
 const artifact = /^[0-9a-f]{32}(?:\.json|\.decl-[0-9a-f]{2}\.json)$/u;
 
 const generate = async (cacheDirectory: string) => {
   await rm(cacheDirectory, { recursive: true, force: true });
   await mkdir(cacheDirectory, { recursive: true });
-  const env = { ...process.env };
+  const env = {
+    ...process.env,
+    OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory,
+  };
   delete env["OXLINT_TAILWINDCSS_CACHE_READ_ONLY"];
-  env["OXLINT_TAILWINDCSS_CACHE_DIR"] = cacheDirectory;
   const child = Bun.spawn(
     [
       "bun",
@@ -21,15 +29,13 @@ const generate = async (cacheDirectory: string) => {
       "-c",
       "oxlint.config.ts",
       "--report-unused-disable-directives-severity=error",
-      "--type-aware",
-      "--type-check",
-      "apps/web",
+      ...lintTargets,
     ],
     { cwd: repositoryRoot, env, stdout: "inherit", stderr: "inherit" },
   );
   const exitCode = await child.exited;
   if (exitCode !== 0) {
-    panic(`Web lint failed while generating Tailwind cache (${exitCode})`);
+    panic(`Lint failed while generating Tailwind cache (${exitCode})`);
   }
   for (const name of await readdir(cacheDirectory)) {
     const file = path.join(cacheDirectory, name);
@@ -37,11 +43,30 @@ const generate = async (cacheDirectory: string) => {
       await rm(file, { recursive: true, force: true });
       continue;
     }
+    const value = JSON.parse(await readFile(file, "utf-8"));
     if (!name.includes(".decl-")) {
-      const snapshot = JSON.parse(await readFile(file, "utf-8"));
-      delete snapshot.timings;
-      await Bun.write(file, `${JSON.stringify(snapshot, null, 2)}\n`);
+      delete value.timings;
     }
+    await Bun.write(file, `${JSON.stringify(value)}\n`);
+  }
+  env["OXLINT_TAILWINDCSS_CACHE_READ_ONLY"] = "1";
+  const verification = Bun.spawn(
+    [
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.config.ts",
+      "--report-unused-disable-directives-severity=error",
+      ...lintTargets,
+    ],
+    { cwd: repositoryRoot, env, stdout: "inherit", stderr: "inherit" },
+  );
+  const verificationExitCode = await verification.exited;
+  if (verificationExitCode !== 0) {
+    panic(
+      `Read-only Tailwind cache verification failed (${verificationExitCode}); the diagnostics above name the missing classes.`,
+    );
   }
 };
 

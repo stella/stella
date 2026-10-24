@@ -1,0 +1,29 @@
+{
+  "[&::-webkit-details-marker]:flex": {
+    "valid": true,
+    "declarations": [["::-webkit-details-marker", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "bg-warning/20": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--warning) 20%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--warning) 20%, transparent)": {
+        "p": ["--warning"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "max-w-[640px]": {
+    "valid": true,
+    "declarations": [["", "max-width", "640px"]],
+    "values": { "640px": { "p": [], "f": [], "u": false } }
+  }
+}

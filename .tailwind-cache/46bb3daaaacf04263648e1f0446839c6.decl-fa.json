@@ -1,0 +1,14 @@
+{
+  "slide-in-from-right-1": {
+    "valid": true,
+    "declarations": [["", "--tw-enter-translate-x", "calc(1*var(--spacing))"]],
+    "values": {
+      "calc(1*var(--spacing))": { "p": ["--spacing"], "f": [], "u": false }
+    }
+  },
+  "w-[340px]": {
+    "valid": true,
+    "declarations": [["", "width", "340px"]],
+    "values": { "340px": { "p": [], "f": [], "u": false } }
+  }
+}

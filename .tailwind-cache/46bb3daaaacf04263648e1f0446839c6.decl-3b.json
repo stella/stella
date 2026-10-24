@@ -1,0 +1,17 @@
+{
+  "[@media(min-height:820px)]:flex": {
+    "valid": true,
+    "declarations": [["@", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "[&_ul]:flex": {
+    "valid": true,
+    "declarations": [[">", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "max-w-[340px]": {
+    "valid": true,
+    "declarations": [["", "max-width", "340px"]],
+    "values": { "340px": { "p": [], "f": [], "u": false } }
+  }
+}

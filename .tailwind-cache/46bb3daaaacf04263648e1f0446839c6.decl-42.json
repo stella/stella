@@ -1,0 +1,7 @@
+{
+  "group-data-[state=selected]/row:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  }
+}

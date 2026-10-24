@@ -1,0 +1,24 @@
+{
+  "border-success/40": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "border-color",
+        "color-mix(in oklab, var(--success) 40%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--success) 40%, transparent)": {
+        "p": ["--success"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "gap-[3px]": {
+    "valid": true,
+    "declarations": [["", "gap", "3px"]],
+    "values": { "3px": { "p": [], "f": [], "u": false } }
+  }
+}

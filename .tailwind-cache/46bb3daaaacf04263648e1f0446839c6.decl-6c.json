@@ -1,0 +1,57 @@
+{
+  "bg-primary/4": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "background-color",
+        "color-mix(in oklab, var(--primary) 4%, transparent)"
+      ]
+    ],
+    "values": {
+      "color-mix(in oklab, var(--primary) 4%, transparent)": {
+        "p": ["--primary"],
+        "f": [],
+        "u": false
+      }
+    }
+  },
+  "has-[[data-highlighted]]:flex": {
+    "valid": true,
+    "declarations": [["", "display", "flex"]],
+    "values": { "flex": { "p": [], "f": [], "u": false } }
+  },
+  "shadow-[0_0_0_999px_rgb(0_0_0/0.42)]": {
+    "valid": true,
+    "declarations": [
+      [
+        "",
+        "--tw-shadow",
+        "0 0 0 999px var(--tw-shadow-color, rgb(0 0 0/0.42))"
+      ],
+      [
+        "",
+        "box-shadow",
+        "var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)"
+      ]
+    ],
+    "values": {
+      "0 0 0 999px var(--tw-shadow-color, rgb(0 0 0/0.42))": {
+        "p": ["--tw-shadow-color"],
+        "f": [],
+        "u": false
+      },
+      "var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)": {
+        "p": [
+          "--tw-inset-shadow",
+          "--tw-inset-ring-shadow",
+          "--tw-ring-offset-shadow",
+          "--tw-ring-shadow",
+          "--tw-shadow"
+        ],
+        "f": [],
+        "u": true
+      }
+    }
+  }
+}

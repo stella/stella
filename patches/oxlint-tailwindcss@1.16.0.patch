@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..6314c2d380390b2474bd78d26249ddf6b0c0bf93 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..d2c35e3b6faef66c4d3678927c4af455da574132 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2480,7 +2480,8 @@ function isFatalError(err) {
@@ -72,14 +72,14 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..6314c2d380390b2474bd78d26249ddf6
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5549,6 +5571,69 @@ function answersFor(cache) {
+@@ -5549,6 +5571,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
 +const declarationPersistLoaded = /* @__PURE__ */ new WeakMap();
 +function declarationShardFile(cssPath, cls) {
 +	const { json } = cacheArtifactPaths(cssPath);
-+	const shard = createHash("md5").update(cls).digest("hex").slice(0, 2);
++	const shard = (0, node_crypto.createHash)("md5").update(cls).digest("hex").slice(0, 2);
 +	return json.replace(/\.json$/, `.decl-${shard}.json`);
 +}
 +function loadDeclarationAnswers(cssPath, cache, classes) {
@@ -94,7 +94,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..6314c2d380390b2474bd78d26249ddf6
 +		if (loaded.has(file)) continue;
 +		loaded.add(file);
 +		try {
-+			const data = JSON.parse(readFileSync(file, "utf-8"));
++			const data = JSON.parse((0, node_fs.readFileSync)(file, "utf-8"));
 +			if (typeof data !== "object" || data === null) continue;
 +			for (const [token, entry] of Object.entries(data)) {
 +				if (typeof entry !== "object" || entry === null || typeof entry.valid !== "boolean") continue;
@@ -112,7 +112,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..6314c2d380390b2474bd78d26249ddf6
 +		const file = declarationShardFile(cssPath, cls);
 +		let entries = byFile.get(file);
 +		if (!entries) {
-+			try { entries = JSON.parse(readFileSync(file, "utf-8")); } catch { entries = {}; }
++			try { entries = JSON.parse((0, node_fs.readFileSync)(file, "utf-8")); } catch { entries = {}; }
 +			if (typeof entries !== "object" || entries === null || Array.isArray(entries)) entries = {};
 +			byFile.set(file, entries);
 +		}
@@ -126,23 +126,27 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..6314c2d380390b2474bd78d26249ddf6
 +	}
 +	for (const [file, entries] of byFile) {
 +		const lockPath = `${file}.lock`;
-+		const lock = acquireFlushLock(lockPath);
-+		if (lock !== "acquired") continue;
++		let lock = acquireFlushLock(lockPath);
++		for (let attempt = 0; lock === "contended" && attempt < 300; attempt++) {
++			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
++			lock = acquireFlushLock(lockPath);
++		}
++		if (lock !== "acquired") throw new Error(`Could not persist Tailwind declaration cache shard "${file}" (${lock})`);
 +		try {
 +			let merged = {};
-+			try { const existing = JSON.parse(readFileSync(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
++			try { const existing = JSON.parse((0, node_fs.readFileSync)(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
 +			Object.assign(merged, entries);
 +			const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
-+			const tmp = `${file}.${process.pid}.${threadId}.${tmpSeq++}.tmp`;
-+			writeFileSync(tmp, `${JSON.stringify(sorted, null, 2)}\n`);
-+			renameSync(tmp, file);
++			const tmp = `${file}.${process.pid}.${node_worker_threads.threadId}.${tmpSeq++}.tmp`;
++			(0, node_fs.writeFileSync)(tmp, `${JSON.stringify(sorted)}\n`);
++			(0, node_fs.renameSync)(tmp, file);
 +		} finally { tryUnlink(lockPath); }
 +	}
 +}
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5569,12 +5654,15 @@ function answersFor(cache) {
+@@ -5569,12 +5658,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -159,7 +163,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..6314c2d380390b2474bd78d26249ddf6
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..a3cb4279f7b7410f58ec8180965aa70aa412228e 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..70269ab1ea40779f93f080bc7602ca56f1690820 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2483,7 +2483,8 @@ function isFatalError(err) {
@@ -232,7 +236,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..a3cb4279f7b7410f58ec8180965aa70a
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5552,6 +5574,69 @@ function answersFor(cache) {
+@@ -5552,6 +5574,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -286,15 +290,19 @@ index 61c624233238edcc998099f3d496c04caa7ba154..a3cb4279f7b7410f58ec8180965aa70a
 +	}
 +	for (const [file, entries] of byFile) {
 +		const lockPath = `${file}.lock`;
-+		const lock = acquireFlushLock(lockPath);
-+		if (lock !== "acquired") continue;
++		let lock = acquireFlushLock(lockPath);
++		for (let attempt = 0; lock === "contended" && attempt < 300; attempt++) {
++			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
++			lock = acquireFlushLock(lockPath);
++		}
++		if (lock !== "acquired") throw new Error(`Could not persist Tailwind declaration cache shard "${file}" (${lock})`);
 +		try {
 +			let merged = {};
 +			try { const existing = JSON.parse(readFileSync(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
 +			Object.assign(merged, entries);
 +			const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
 +			const tmp = `${file}.${process.pid}.${threadId}.${tmpSeq++}.tmp`;
-+			writeFileSync(tmp, `${JSON.stringify(sorted, null, 2)}\n`);
++			writeFileSync(tmp, `${JSON.stringify(sorted)}\n`);
 +			renameSync(tmp, file);
 +		} finally { tryUnlink(lockPath); }
 +	}
@@ -302,7 +310,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..a3cb4279f7b7410f58ec8180965aa70a
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5572,12 +5657,15 @@ function answersFor(cache) {
+@@ -5572,12 +5661,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);

@@ -1,24 +1,39 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  cp,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
-const generatedCache = path.join(repositoryRoot, "apps/web/.tailwind-cache");
+const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
 const report = v.object({
   diagnostics: v.array(
-    v.object({ code: v.string(), message: v.string(), severity: v.string() }),
+    v.object({
+      code: v.optional(v.string(), ""),
+      message: v.string(),
+      severity: v.string(),
+    }),
   ),
 });
 
 const lintFixture = async ({
   cache,
   source,
+  readOnly = true,
 }: {
   cache: string;
   source: string;
+  readOnly?: boolean;
 }) => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-cache-test-"),
@@ -55,7 +70,7 @@ const lintFixture = async ({
         env: {
           ...process.env,
           OXLINT_TAILWINDCSS_CACHE_DIR: cache,
-          OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1",
+          ...(readOnly ? { OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1" } : {}),
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -79,12 +94,100 @@ test("read-only lint uses the complete committed cache for all Tailwind rules", 
       'export const A = () => <div className="flex flex block flex-shrink-0" />;\n',
   });
   expect(result.stderr).not.toContain("Worker");
-  expect(result.diagnostics.map(({ code }) => code).toSorted()).toEqual([
+  expect(
+    result.diagnostics
+      .map(({ code }) => code)
+      .toSorted((a, b) => {
+        if (a === b) {
+          return 0;
+        }
+        return a < b ? -1 : 1;
+      }),
+  ).toEqual([
     "tailwindcss(no-conflicting-classes)",
     "tailwindcss(no-conflicting-classes)",
     "tailwindcss(no-deprecated-classes)",
     "tailwindcss(no-duplicate-classes)",
   ]);
+});
+
+test("concurrent declaration writers merge answers in the same shard", async () => {
+  const cache = await mkdtemp(
+    path.join(tmpdir(), "stella-tailwind-concurrent-cache-"),
+  );
+  try {
+    await cp(generatedCache, cache, { recursive: true });
+    const left = "cache-regression-9";
+    const right = "cache-regression-22";
+    const shard = createHash("md5").update(left).digest("hex").slice(0, 2);
+    const seeded = await lintFixture({
+      cache,
+      source: `const seed = <div className="${left}" />;`,
+      readOnly: false,
+    });
+    expect(seeded.exitCode).toBe(1);
+    let shardFile: string | undefined;
+    for (const name of await readdir(cache)) {
+      if (!name.endsWith(`.decl-${shard}.json`)) {
+        continue;
+      }
+      const candidate = path.join(cache, name);
+      if ((await readFile(candidate, "utf-8")).includes(JSON.stringify(left))) {
+        shardFile = candidate;
+        break;
+      }
+    }
+    if (shardFile === undefined) {
+      throw new TypeError("Tailwind shard missing");
+    }
+    await rm(shardFile, { force: true });
+    await writeFile(`${shardFile}.lock`, "");
+    const writes = Promise.all([
+      lintFixture({
+        cache,
+        source: `const a = <div className="${left}" />;`,
+        readOnly: false,
+      }),
+      lintFixture({
+        cache,
+        source: `const b = <div className="${right}" />;`,
+        readOnly: false,
+      }),
+    ]);
+    await Bun.sleep(1500);
+    await unlink(`${shardFile}.lock`);
+    const results = await writes;
+    expect(results.map(({ exitCode }) => exitCode)).toEqual([1, 1]);
+    const persisted = JSON.parse(await readFile(shardFile, "utf-8"));
+    expect(Object.keys(persisted)).toContain(left);
+    expect(Object.keys(persisted)).toContain(right);
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+});
+
+test("all Tailwind package lint scripts use the shared read-only cache", async () => {
+  for (const packagePath of [
+    "apps/web/package.json",
+    "apps/desktop/package.json",
+    "apps/playground/package.json",
+    "packages/mcp-apps/package.json",
+  ]) {
+    const manifest = JSON.parse(
+      await readFile(path.join(repositoryRoot, packagePath), "utf-8"),
+    );
+    for (const [name, command] of Object.entries(manifest.scripts)) {
+      if (
+        name !== "lint" &&
+        name !== "lint:fix" &&
+        !name.startsWith("lint:profile")
+      ) {
+        continue;
+      }
+      expect(command).toContain("OXLINT_TAILWINDCSS_CACHE_DIR=.tailwind-cache");
+      expect(command).toContain("OXLINT_TAILWINDCSS_CACHE_READ_ONLY=1");
+    }
+  }
 });
 
 test("read-only lint reports a missing snapshot once per design-system rule", async () => {
