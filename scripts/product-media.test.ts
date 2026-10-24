@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { createSha256 } from "@stll/sha256/node";
 
 import {
-  assertRecordingSourceMatches,
   assertPublishedObject,
+  assertRecordingSourceMatches,
   assetObjectKey,
   assetUrl,
   PRODUCT_MEDIA_MANIFEST_PATH,

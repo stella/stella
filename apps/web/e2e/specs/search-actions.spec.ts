@@ -3,9 +3,9 @@ import type { Page } from "@playwright/test";
 import { apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const openSearch = async (page: Page, route = "/workspaces") => {
@@ -79,7 +79,9 @@ for (const locale of ["en", "ar"] as const) {
   test.describe(`localized action keyboard selection (${locale})`, () => {
     test.use({ locale });
 
-    test("remains selectable after filtering", async ({ page }) => {
+    test("remains keyboard selectable after clearing a query", async ({
+      page,
+    }) => {
       const input = await openSearch(page);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.locator("html")).toHaveAttribute(
@@ -96,11 +98,12 @@ for (const locale of ["en", "ar"] as const) {
       expect(title).not.toBe("");
 
       await input.fill(title);
-      await expect(
-        page.getByRole("option").filter({ hasText: title }),
-      ).toBeVisible();
-      await input.press("ArrowDown");
-      await page.keyboard.press("Enter");
+      await expect(newMatterRow).toHaveCount(0);
+      await input.clear();
+      await expect(newMatterRow).toBeVisible();
+      await newMatterRow.focus();
+      await expect(newMatterRow).toBeFocused();
+      await newMatterRow.press("Enter");
 
       await expect(
         page.getByRole("heading", { name: title, exact: true }),
@@ -109,7 +112,9 @@ for (const locale of ["en", "ar"] as const) {
   });
 }
 
-test("filtered new-chat action opens an inspector chat", async ({ page }) => {
+test("new-chat action returns after clearing a query and opens an inspector chat", async ({
+  page,
+}) => {
   const input = await openSearch(page, "/chat");
   const actionRow = page.locator(
     '[data-search-empty-row][data-command-action-id="new-chat"]',
@@ -117,10 +122,13 @@ test("filtered new-chat action opens an inspector chat", async ({ page }) => {
   await expect(actionRow).toBeVisible();
   const title =
     (await actionRow.locator("span").first().textContent())?.trim() ?? "";
+  expect(title).not.toBe("");
 
   await input.fill(title);
-  await input.press("ArrowDown");
-  await page.keyboard.press("Enter");
+  await expect(actionRow).toHaveCount(0);
+  await input.clear();
+  await expect(actionRow).toBeVisible();
+  await actionRow.click();
 
   await expect(
     page.locator('[data-slot="inspector-chat-panel"]'),
@@ -167,11 +175,8 @@ test.describe("global create actions", () => {
       '[data-search-empty-row][data-command-action-id="upload-document"]',
     );
     await expect(action).toBeVisible();
-    await input.fill(
-      (await action.locator("span").first().textContent())?.trim() ?? "",
-    );
-    await input.press("ArrowDown");
-    await page.keyboard.press("Enter");
+    await expect(input).toHaveValue("");
+    await action.click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -220,11 +225,8 @@ test.describe("global create actions", () => {
       '[data-search-empty-row][data-command-action-id="new-task"]',
     );
     await expect(taskAction).toBeVisible();
-    await input.fill(
-      (await taskAction.locator("span").first().textContent())?.trim() ?? "",
-    );
-    await input.press("ArrowDown");
-    await page.keyboard.press("Enter");
+    await expect(input).toHaveValue("");
+    await taskAction.click();
     await expect(page.getByPlaceholder("Untitled task")).toBeVisible({
       timeout: 30_000,
     });
@@ -237,11 +239,8 @@ test.describe("global create actions", () => {
       '[data-search-empty-row][data-command-action-id="upload-document"]',
     );
     await expect(uploadAction).toBeVisible();
-    await uploadInput.fill(
-      (await uploadAction.locator("span").first().textContent())?.trim() ?? "",
-    );
-    await uploadInput.press("ArrowDown");
-    await page.keyboard.press("Enter");
+    await expect(uploadInput).toHaveValue("");
+    await uploadAction.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole("combobox")).toHaveCount(0);

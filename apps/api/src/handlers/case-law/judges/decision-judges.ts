@@ -15,6 +15,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * The query surface each write needs, structurally: the ingestion pipeline
@@ -120,7 +122,7 @@ const rosterIdsByNameKey = async (
  *
  * The decision states these names, so they are stored whether or not the
  * court's roster has been imported: an unmatched name keeps `judge_id` null
- * and is linked by {@link relinkUnmatchedDecisionJudges} once the roster
+ * and is linked by {@link relinkUnmatchedDecisionJudgesPage} once the roster
  * arrives. The miss is reported, never swallowed: a court whose names never
  * match is a parser or roster defect, and silence is what would hide it.
  */
@@ -163,33 +165,90 @@ export const replaceDecisionJudges = async (
   await tx.insert(caseLawDecisionJudges).values(rows);
 };
 
-type RelinkUnmatchedDecisionJudgesOptions = DecisionCourt;
+type RelinkUnmatchedDecisionJudgesPageOptions = DecisionCourt & {
+  /** The last decision a previous page covered; `null` starts the walk. */
+  after: SafeId<"caseLawDecision"> | null;
+  /** How many decisions this page covers. */
+  size: number;
+};
+
+export type RelinkUnmatchedDecisionJudgesPage = {
+  linked: number;
+  /** The last decision this page covered, the next page's `after`. */
+  cursor: SafeId<"caseLawDecision"> | null;
+  done: boolean;
+};
 
 /**
- * Link the names a roster import has just made matchable.
+ * Link the names a roster import has just made matchable, one page of
+ * decisions at a time.
  *
  * Runs after a roster import; the court is the one that was imported, and a
  * decision's court is the decision's own, so a name shared with another
- * court's judge stays unmatched.
+ * court's judge stays unmatched. Only names the roster holds are candidates,
+ * which the unmatched-name index answers directly.
+ *
+ * A page is bounded by decisions, not rows, so every row of a decision is
+ * settled in the page that names it and the keyset cursor never splits one.
+ * The cursor, not the shrinking candidate set, ends the walk: a name another
+ * court's decision shares with this roster stays unmatched and would
+ * otherwise be read again by every page.
  */
-export const relinkUnmatchedDecisionJudges = async (
+export const relinkUnmatchedDecisionJudgesPage = async (
   db: StatementRunner,
-  { country, court }: RelinkUnmatchedDecisionJudgesOptions,
-): Promise<{ linked: number }> => {
+  { country, court, after, size }: RelinkUnmatchedDecisionJudgesPageOptions,
+): Promise<RelinkUnmatchedDecisionJudgesPage> => {
   // audit: skip — relinks derived public case-law judge attributions
-  const linked = await db.execute(sql`
-    UPDATE ${caseLawDecisionJudges} AS dj
-    SET judge_id = j.id
-    FROM ${caseLawJudges} AS j
-    JOIN ${caseLawDecisions} AS d
-      ON d.country = j.country AND d.court = j.court
-    WHERE dj.decision_id = d.id
-      AND dj.judge_id IS NULL
-      AND dj.name_key = j.name_key
-      AND j.country = ${country}
-      AND j.court = ${court}
-    RETURNING 1
+  const result = await db.execute(sql`
+    WITH page AS (
+      SELECT DISTINCT dj.decision_id
+        FROM ${caseLawDecisionJudges} AS dj
+        JOIN ${caseLawDecisions} AS d ON d.id = dj.decision_id
+       WHERE dj.judge_id IS NULL
+         AND dj.name_key IN (
+           SELECT j.name_key
+             FROM ${caseLawJudges} AS j
+            WHERE j.country = ${country}
+              AND j.court = ${court}
+         )
+         AND d.country = ${country}
+         AND d.court = ${court}
+         ${after === null ? sql`` : sql`AND dj.decision_id > ${after}`}
+       ORDER BY dj.decision_id
+       LIMIT ${size}
+    ),
+    linked AS (
+      UPDATE ${caseLawDecisionJudges} AS dj
+         SET judge_id = j.id
+        FROM page, ${caseLawJudges} AS j
+       WHERE dj.decision_id = page.decision_id
+         AND dj.judge_id IS NULL
+         AND dj.name_key = j.name_key
+         AND j.country = ${country}
+         AND j.court = ${court}
+      RETURNING 1
+    )
+    SELECT (SELECT count(*) FROM page)::int AS covered,
+           (SELECT count(*) FROM linked)::int AS linked,
+           (SELECT max(decision_id::text) FROM page) AS last
   `);
 
-  return { linked: executedRows(linked).length };
+  const [row] = executedRows(result);
+  if (
+    !isRecord(row) ||
+    typeof row["covered"] !== "number" ||
+    typeof row["linked"] !== "number" ||
+    !(row["last"] === null || typeof row["last"] === "string")
+  ) {
+    return panic("Decision judge relink page returned an invalid row");
+  }
+
+  return {
+    linked: row["linked"],
+    cursor:
+      row["last"] === null
+        ? after
+        : brandPersistedCaseLawDecisionId(row["last"]),
+    done: row["covered"] < size,
+  };
 };

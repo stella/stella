@@ -22,7 +22,7 @@
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
     "marketing-screenshots-update.yml/update": "main",
     "publish-product-media.yml/publish": "main",
-    "docs-source-policy.yml/docs-source-policy": "main",
+    "nightly-test.yml/sanctions-real-editions": "main",
     "nightly-test.yml/workspace-replay": "main",
     "nightly-test.yml/full-test-plan": "main",
     "nightly-test.yml/full-test": "main",
@@ -181,7 +181,8 @@
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
-    "queue-admission.yml/admission": "dispatch-only"
+    "queue-admission.yml/admission": "dispatch-only",
+    "ci-runner-loss-retry.yml/retry": "pr-fast"
   },
   "pushMain": {
     "typecheck-base.yml": {

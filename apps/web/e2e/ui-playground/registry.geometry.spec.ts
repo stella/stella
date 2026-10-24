@@ -1,9 +1,12 @@
-import { expect, test } from "@playwright/test";
-
 import {
   playbookEditorStates,
   visualRegistry,
 } from "../../src/routes/dev/-visual-metadata";
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 for (const [name, { label }] of Object.entries(visualRegistry)) {
   test(`renders the registered ${name} fixture with its label`, async ({
@@ -23,6 +26,7 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
     await expect(
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
+    await waitForStableGeometry(page, section);
     if (name === "chat-history-decision") {
       // The fixtures stay out of this spec: they are typed against the web
       // API routes, which would pull the app's types into the browser tests.
@@ -73,6 +77,7 @@ test("renders retained playbook edits and rejected-save recovery at stable ancho
       `[data-playground-section="playbook-editor:${state}"]`,
     );
     await expect(section).toBeVisible();
+    await waitForStableGeometry(page, section);
     await expect(section.locator("input").first()).toHaveValue(
       "Contract review",
     );
@@ -119,6 +124,7 @@ test("long paste fixtures preserve composer expansion and sent preview", async (
     '[data-playground-section="chat-long-paste:sent-expanded"]',
   );
   await expect(sentExpanded.locator("pre")).toBeVisible();
+  await waitForStableGeometry(page, [collapsed, expanded, sent, sentExpanded]);
   await expect(sentExpanded.locator("button[aria-expanded]")).toHaveAttribute(
     "aria-expanded",
     "true",

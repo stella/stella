@@ -78,6 +78,11 @@ export type ReviewAccountStore = {
     userId: string;
     email: string;
   }) => Promise<number>;
+  /**
+   * Records professional-use acceptance through the owning operation, with
+   * the operator command's provenance rather than the account's.
+   */
+  acceptProfessionalUse: (userId: string) => Promise<void>;
 };
 
 /** The email-otp code types that name the account by its address alone. */
@@ -358,6 +363,7 @@ export const provisionReviewAccount = async ({
       : await store.revokeVerifications({ userId, email });
   if (members === null) {
     await store.createOrganization({ organizationId, ownerUserId: userId });
+    await store.acceptProfessionalUse(userId);
     return Result.ok({
       outcome: "provisioned",
       user: existingUserId === null ? "created" : "existing",
@@ -381,6 +387,7 @@ export const provisionReviewAccount = async ({
   } else if (membership.role !== "owner") {
     await store.promoteToOwner({ organizationId, userId });
   }
+  await store.acceptProfessionalUse(userId);
   return Result.ok({
     outcome: "provisioned",
     user: existingUserId === null ? "created" : "existing",

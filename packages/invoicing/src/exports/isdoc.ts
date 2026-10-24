@@ -8,12 +8,12 @@ import {
   effectiveVatRateBps,
   exportFileNamer,
   invoiceDescriptionOf,
+  type InvoiceExportRecord,
   quantityText,
   splitCzechAccountNumber,
   streetOf,
   variableSymbolOf,
   vatPercentText,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, mandatoryText, text, XML_DECLARATION } from "./xml";
 

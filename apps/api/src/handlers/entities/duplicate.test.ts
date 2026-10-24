@@ -1062,19 +1062,23 @@ describe("duplicate entity", () => {
     expect(nestedDuplicate.kind).toBe("folder");
     expect(nestedDuplicate.name).toBe("Nested");
     expect(nestedDuplicate.parentId).toBe(rootDuplicate.id);
-    // The DOCX copy is indexed by the extraction run that reads it; the two
-    // folder copies have no such run, so their marks are written inside the
-    // copy transaction and only flushed afterwards.
+    // Every copy is marked for immediate name indexing. Native extraction
+    // independently adds content to the same source-fenced projection.
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
       [toSafeId<"documentProcessingRun">("run_1")],
     ]);
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
-    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
-      rootDuplicate.id,
-      nestedDuplicate.id,
-    ]);
+    const markedIds = enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1);
+    if (!Array.isArray(markedIds)) {
+      throw new TypeError("Expected copied entity search marks");
+    }
+    expect(markedIds).toBeArray();
+    expect(markedIds).toHaveLength(insertedEntities.length);
+    expect(markedIds).toEqual(
+      expect.arrayContaining(insertedEntities.map(({ id }) => id)),
+    );
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
   });
 

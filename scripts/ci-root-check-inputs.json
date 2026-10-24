@@ -251,7 +251,7 @@
       "docs/module-ownership/**",
       "docs/module-ownership.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Outbound transport ownership": [
       "apps/api/**",
@@ -272,11 +272,11 @@
       "docs/module-ownership/**",
       "scripts/**",
       ".oxlint-plugins/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Generated artifact formatting invariants": [
       "@stll/scripts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/**"
     ],
     "Schema introspection invariants": [
@@ -289,7 +289,7 @@
       "packages/ui/src/styles/theme.css",
       "DESIGN.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Suppression waiver ledger": [
       "apps/*/src/**",
@@ -648,5 +648,23 @@
       "packages/*/package.json",
       "bun.lock"
     ]
+  },
+  "code-quality-web-rest": {
+    "Restore generated sources": ["**"],
+    "Prepare environment": ["**"],
+    "Install the docs MCP server": ["**"],
+    "Typecheck coverage": ["**"],
+    "Run independent code-quality checks": ["**"],
+    "Code quality (web)": ["**"],
+    "Result consumption (web)": ["**"],
+    "Code quality (rest)": ["**"],
+    "Query cache types": ["**"],
+    "Dead columns": ["**"],
+    "Projection totality": ["**"],
+    "Aggregate ownership": ["**"],
+    "Split-button census": ["**"],
+    "Database awaits in loops": ["**"],
+    "API timeout mutation guard": ["**"],
+    "Result consumption (rest)": ["**"]
   }
 }
