@@ -2416,11 +2416,9 @@ const safeErrorTelemetryDisposition = (
   statusCode: number,
   code?: string,
 ): SafeErrorTelemetry =>
-  code === ACTION_ADMISSION_CODES.featureDisabled
-    ? "log-only"
-    : statusCode >= 500
-      ? "capture"
-      : "log-only";
+  statusCode >= 500 && code !== ACTION_ADMISSION_CODES.featureDisabled
+    ? "capture"
+    : "log-only";
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;
