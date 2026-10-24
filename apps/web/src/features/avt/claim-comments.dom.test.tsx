@@ -245,6 +245,48 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   );
 });
 
+test("editing and sharing a private comment stores its words before sharing them", async () => {
+  const own = comment({ id: "comment-own", body: "Draft.", mine: true });
+  mount([own]);
+  const edit = () => {
+    fireEvent.click(screen.getByRole("button", { name: messages.common.edit }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: messages.folio.comment }),
+      { target: { value: "Final." } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: messages.knowledge.agentSkills.scopePrivate,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
+  };
+
+  // The words fail to store: nothing is shared.
+  answers.push(Response.json({ message: "Unavailable" }, { status: 503 }));
+  answers.push(page([own]));
+  edit();
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests.map(({ method }) => method)).toEqual(["PATCH", "GET"]);
+  expect(requests.at(0)?.body).toEqual({ change: "body", body: "Final." });
+  requests.length = 0;
+
+  // The words store first, then the comment is shared.
+  const stored = { ...own, body: "Final." };
+  answers.push(Response.json({ ok: true }));
+  answers.push(page([stored]));
+  answers.push(Response.json({ ok: true }));
+  answers.push(page([{ ...stored, visibility: "shared" as const }]));
+  edit();
+  await waitFor(() => expect(requests).toHaveLength(4));
+  expect(requests.map(({ method, body }) => [method, body])).toEqual([
+    ["PATCH", { change: "body", body: "Final." }],
+    ["GET", null],
+    ["PATCH", { change: "visibility", visibility: "shared" }],
+    ["GET", null],
+  ]);
+});
+
 test("a comment still being stored offers no controls until the server answers", async () => {
   mount([]);
   const stored = comment({

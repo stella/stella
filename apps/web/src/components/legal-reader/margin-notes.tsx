@@ -63,6 +63,9 @@ export type AnalysisMarginItem = AnalysisMarginItemBase &
       }
   );
 
+/** What the author saved: the comment's words and who sees it, together. */
+export type CommentEdit = { body: string; visibility: "private" | "shared" };
+
 export type CommentMarginItem = {
   kind: "comment";
   id: string;
@@ -73,8 +76,11 @@ export type CommentMarginItem = {
   mine: boolean;
   visibility: "private" | "shared";
   onDelete: () => void;
-  /** Rewrites the comment's words; absent where a comment is not editable. */
-  onEdit?: ((body: string) => void) | undefined;
+  /**
+   * Saves an edit of the words and visibility in one call, so the owner can
+   * order the writes; absent where a comment is not editable.
+   */
+  onEdit?: ((edit: CommentEdit) => void) | undefined;
   onToggleVisibility: () => void;
 };
 
@@ -798,11 +804,8 @@ const CommentNote = ({
           initialVisibility: item.visibility,
           onCancel: () => setEditing(false),
           onSubmit: (body, visibility) => {
-            if (body !== item.text) {
-              onEdit(body);
-            }
-            if (visibility !== item.visibility) {
-              item.onToggleVisibility();
+            if (body !== item.text || visibility !== item.visibility) {
+              onEdit({ body, visibility });
             }
             setEditing(false);
           },

@@ -12,6 +12,7 @@ import { Button } from "@stll/ui/button";
 import { AddCommentIcon } from "@stll/ui/icons";
 
 import type {
+  CommentEdit,
   CommentMarginItem,
   ComposerMarginItem,
 } from "@/components/legal-reader/margin-notes";
@@ -52,9 +53,9 @@ export const ClaimComments = ({
     onDelete: () => {
       detached(remove(comment.id), "avt.claim-comment-remove");
     },
-    onEdit: (body) => {
+    onEdit: (edit) => {
       detached(
-        update({ change: "body", body, id: comment.id }),
+        saveClaimCommentEdit({ comment, edit, update }),
         "avt.claim-comment-edit",
       );
     },
@@ -115,3 +116,46 @@ export const ClaimComments = ({
     </section>
   );
 };
+
+type SaveClaimCommentEditOptions = {
+  comment: {
+    id: string;
+    body: string | null;
+    visibility: "private" | "shared";
+  };
+  edit: CommentEdit;
+  update: ReturnType<typeof useClaimComments>["update"];
+};
+
+/**
+ * Writes an edit in the order that never shows colleagues words meant to stay
+ * private: new words before sharing, unsharing before new words. A failed
+ * write rejects, so the step after it never runs.
+ */
+async function saveClaimCommentEdit({
+  comment,
+  edit,
+  update,
+}: SaveClaimCommentEditOptions): Promise<void> {
+  const writeBody = async () => {
+    if (edit.body !== (comment.body ?? "")) {
+      await update({ change: "body", body: edit.body, id: comment.id });
+    }
+  };
+  const writeVisibility = async () => {
+    if (edit.visibility !== comment.visibility) {
+      await update({
+        change: "visibility",
+        id: comment.id,
+        visibility: edit.visibility,
+      });
+    }
+  };
+  if (edit.visibility === "shared") {
+    await writeBody();
+    await writeVisibility();
+    return;
+  }
+  await writeVisibility();
+  await writeBody();
+}
