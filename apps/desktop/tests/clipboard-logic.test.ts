@@ -2,22 +2,22 @@ import { describe, expect, test } from "bun:test";
 
 import {
   adjacentClipboardIndex,
+  adjacentClipboardScope,
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
-  adjacentClipboardScope,
-  clipboardControlsKeyAction,
-  clipboardScopeKeyAction,
-  clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
+  clipboardScopeKeyAction,
   clipboardSearchPreviewText,
   clipboardSourceTintIndex,
+  clipboardTimelineKeyAction,
   clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
@@ -26,6 +26,7 @@ import {
   isClipboardCopyShortcut,
   isClipboardNameInput,
   quickCopyIndex,
+  refreshClipboardEditorName,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
@@ -1025,5 +1026,27 @@ describe("clipboardUntitledName", () => {
         KIND_LABELS,
       ),
     ).toBe("Text");
+  });
+});
+
+describe("clipboard editor name ownership", () => {
+  test("history refreshes untouched names, including external clearing", () => {
+    let draft = refreshClipboardEditorName(
+      { type: "unchanged", value: "Original name" },
+      "Timeline rename",
+    );
+    expect(draft).toEqual({ type: "unchanged", value: "Timeline rename" });
+    draft = refreshClipboardEditorName(draft, null);
+    expect(draft).toEqual({ type: "unchanged", value: "" });
+  });
+
+  test("history refresh never replaces an explicit name edit or clear", () => {
+    for (const value of ["Editor rename", ""]) {
+      for (const externalName of ["Timeline rename", null]) {
+        expect(
+          refreshClipboardEditorName({ type: "edited", value }, externalName),
+        ).toEqual({ type: "edited", value });
+      }
+    }
   });
 });

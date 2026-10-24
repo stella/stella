@@ -30,9 +30,9 @@ import {
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
 import {
-  SEVERITY,
   declaredBaseRules,
   flattenLayers,
+  SEVERITY,
 } from "./oxlint-effective-config.ts";
 import core from "./oxlint-presets/core.mjs";
 import {

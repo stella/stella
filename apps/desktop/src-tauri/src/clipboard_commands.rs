@@ -5,9 +5,10 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
-    ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat, ClipboardGroup,
-    ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
-    ClipboardSnapshot, HISTORY_EVENT,
+    ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat,
+    ClipboardEditorNameUpdate, ClipboardGroup, ClipboardGroupColor,
+    ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
+    HISTORY_EVENT,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{
@@ -443,7 +444,7 @@ pub fn clipboard_get_image_preview(
 pub fn clipboard_save_editor_item(
   _caller: ClipboardCaller,
   id: String,
-  name: String,
+  name: ClipboardEditorNameUpdate,
   text: Option<ClipboardEditorText>,
   group_id: Option<String>,
   app: AppHandle,
@@ -454,7 +455,7 @@ pub fn clipboard_save_editor_item(
     .map(|text| (text.plain_text.as_str(), text.html.as_deref()));
   {
     let mut manager = state.lock().map_err(lock_error)?;
-    if !manager.save_editor_item(&id, &name, group_id, text)? {
+    if !manager.save_editor_item(&id, name, group_id, text)? {
       return Err(ITEM_NOT_FOUND_ERROR.to_string());
     }
   }

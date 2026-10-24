@@ -4,8 +4,8 @@ import * as v from "valibot";
 import {
   isTableChartable,
   isTableChartPlanUsable,
-  tableChartPlanSchema,
   TABLE_CHART_LIMITS,
+  tableChartPlanSchema,
 } from "@stll/api-contract/table-chart";
 import type {
   TableChartRequest,

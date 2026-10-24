@@ -178,6 +178,7 @@ runtime validation, or integration tests.
 - [`no-shared-suspense-query`](./no-shared-suspense-query.ts) (`no-shared-suspense-query`): prevents suspense queries in shared UI components that lack route-owned prefetching.
 - [`no-static-catalogue-route-import`](./no-static-catalogue-route-import.ts) (`no-static-catalogue-route-import`): prevents static imports of large catalogue route modules that defeat route-level code splitting.
 - [`no-strict-route-read-in-chrome`](./no-strict-route-read-in-chrome.ts) (`no-strict-route-read-in-chrome`): prevents strict router reads in reusable chrome that can render outside the matching route.
+- [`sql-client-owner`](./sql-client-owner.ts) (`sql-client-owner`): builds Bun SQL clients and bun-sql drizzle databases only in `apps/api/src/db/sql-client.ts`, so int8 decodes as BigInt or a checked Number instead of a string.
 - [`tooltip-provider-owner`](./tooltip-provider-owner.ts) (`tooltip-provider-owner`): confines `TooltipProvider` imports to app shell modules so feature components use the single shell-owned provider.
 - [`require-cn-for-classname-composition`](./require-cn-for-classname-composition.ts) (`require-cn-for-classname-composition`): requires conditional, interpolated, concatenated, or helper-composed JSX class names to use `cn` from `@stll/ui/utils`; static and pass-through values remain valid.
 - [`require-contained-handler`](./require-contained-handler.ts) (`require-contained-handler`, `no-portal-under-interactive-ancestor`): wraps handlers on ref-owned containers and rejects portaled popups under interactive ancestors so portal-bubbled events cannot trigger unrelated parent behavior or navigation.
@@ -377,6 +378,8 @@ implies a hazard that is gone.
 - [`require-json-import-attribute`](./require-json-import-attribute.ts) (`require-json-import-attribute`): requires the JSON type attribute on static runtime JSON imports in web browser-test files and repository scripts; erased type imports are allowed.
 
 ### Shared concurrency primitives
+
+- [`no-serial-lint-case`](./no-serial-lint-case.ts): requires lint-rule cases in loops to be issued together so `lintSingleRule` can combine matching configurations into one oxlint run.
 
 - [`no-hand-rolled-concurrency`](./no-hand-rolled-concurrency.ts) rejects direct promise resolver timers and the named duplicate sleep, API `chunked`, web research `chunk`, and adapter `backoffMs` helpers. The owner is private `@stll/concurrency`, through `/sleep`, `/chunk`, and `/backoff-delay`. It deliberately does not infer retry policy from arithmetic or array partitioning from generic slice loops. Native `Bun.sleep`, retained deadline timers, string/byte slices, overlapping windows, dynamic budgets, and atomic SQL retry updates retain their contracts. Exact exceptions with reasons live in [`no-hand-rolled-concurrency-exceptions.json`](./no-hand-rolled-concurrency-exceptions.json); `bun scripts/check-concurrency-exceptions.ts` prevents additions, moves, widening, and duplicate allowances after the introducing PR.
 

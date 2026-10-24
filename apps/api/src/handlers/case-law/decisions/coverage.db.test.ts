@@ -12,11 +12,11 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  caseLawDecisions,
   caseLawCoverageSlices,
-  publishedCaseLawDecisions,
+  caseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {

@@ -13,9 +13,9 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  type DecisionHeadnotePreview,
   decisionHeadnoteText,
   TEXT_FIELD_TYPE,
-  type DecisionHeadnotePreview,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionSearchMatch } from "@stll/api-contract/search";

@@ -5,8 +5,8 @@ import { STATUTE_ACTS } from "./statute-acts";
 import { STATUTE_ALIASES } from "./statute-aliases";
 import { statuteGazetteAbbreviation } from "./statute-gazette";
 import {
-  STATUTE_QUERY_CAPABILITIES,
   readStatuteQueryScope,
+  STATUTE_QUERY_CAPABILITIES,
 } from "./statute-query-capability";
 import { parseStatuteQuery } from "./statute-query-intent";
 

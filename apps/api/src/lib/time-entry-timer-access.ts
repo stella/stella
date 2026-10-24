@@ -9,8 +9,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessAssignments,
   lockTimerMatterAccessRows,
-  TIMER_MATTER_LOCK_SCOPE,
   lockWorkspaceLifecycle,
+  TIMER_MATTER_LOCK_SCOPE,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 

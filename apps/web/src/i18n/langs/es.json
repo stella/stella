@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Opciones de reescritura",
     "editWithAI": "Editar con IA",
     "keyRequired": {
+      "accountRestricted": "La configuración del proveedor de IA no está disponible para esta cuenta.",
+      "configUnreadable": "No se puede leer la configuración del proveedor de IA. Pide a un administrador de la organización que vuelva a conectarlo.",
       "cta": "Abrir ajustes de IA",
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
+      "permissionRequired": "Solo un administrador de la organización puede conectar un proveedor de IA.",
+      "seatRequired": "Pide a un administrador de la organización que te asigne una plaza.",
       "title": "Conectar proveedor de IA"
     },
     "refinePlaceholder": "¿Cómo debe la IA ajustar la redacción?",
@@ -155,7 +159,6 @@
     "organizationNamePlaceholder": "Mi Organización",
     "password": "Contraseña",
     "professionalUse": {
-      "description": "Su cuenta se configuró sin mostrarle esta declaración. Acéptela para continuar.",
       "title": "Confirme el uso profesional"
     },
     "professionalUseStatement": "Al crear una cuenta, confirma que utiliza stella con fines profesionales y reconoce que stella es una herramienta para profesionales del derecho y no sustituye el asesoramiento jurídico.",
@@ -3526,6 +3529,12 @@
       "unsupportedVisualContent": "Este archivo contiene imágenes o gráficos vectoriales que no se pueden comprobar para detectar texto sensible. La exportación no está disponible.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Este es un archivo antiguo de {format}. Vuelve a guardarlo como {replacementExtension} para convertirlo.",
+      "unsupportedEncoding": "Este documento usa la codificación {encoding}, que no es compatible, por lo que no se puede convertir.",
+      "unsupportedField": "Este documento contiene un campo {fieldType} que no se puede convertir.",
+      "unsupportedReference": "Este documento hace referencia a un recurso externo en {element} {attribute}, por lo que no se puede convertir."
+    },
     "external": {
       "confirmDescription": "Estás a punto de visitar un sitio web externo.",
       "confirmTitle": "¿Abrir enlace externo?",
@@ -4225,6 +4234,22 @@
       "guestStorageUnavailable": "No se han podido guardar los resaltados y notas en esta pestaña.",
       "highlight": "Resaltar",
       "highlightedPassage": "Pasaje resaltado",
+      "history": {
+        "colorRestored": "Color restablecido",
+        "commentRemoved": "Comentario eliminado",
+        "commentRestored": "Comentario restaurado",
+        "highlightRemoved": "Resaltado quitado",
+        "highlightRestored": "Resaltado restaurado",
+        "markChanged": "Este resaltado o comentario se modificó en otro lugar, así que se ha dejado como está.",
+        "markGone": "Este resaltado o comentario ya no existe.",
+        "nothingToRedo": "No hay nada que rehacer",
+        "nothingToUndo": "No hay nada que deshacer",
+        "redoShortcut": "Rehacer cambio de resaltado o comentario",
+        "styleRestored": "Estilo restablecido",
+        "textRestored": "Texto del comentario restaurado",
+        "undoShortcut": "Deshacer cambio de resaltado o comentario",
+        "visibilityRestored": "Uso compartido restablecido"
+      },
       "removeHighlight": "Quitar resaltado",
       "sharedBadge": "Compartido",
       "styleHighlight": "Resaltado",
@@ -4736,6 +4761,7 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "caseLawEmptyState": "Empiece a escribir para buscar resoluciones judiciales.",
     "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",
     "continueInChat": "Continuar en el chat",
@@ -4793,6 +4819,7 @@
     "savedSearchesEmpty": "Guarda una búsqueda para volver a usarla.",
     "scopeFilter": "Ámbito de búsqueda",
     "scopePlaceholderAll": "Buscar en todas las <scope>fuentes</scope>…",
+    "scopePlaceholderCaseLaw": "Buscar en la <scope>jurisprudencia</scope>…",
     "scopePlaceholderMatters": "Buscar en todos los <scope>asuntos</scope>…",
     "scopePlaceholderRegistries": "Buscar en <scope>registros</scope>…",
     "scopeRegistries": "Registros",

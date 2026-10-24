@@ -57,7 +57,11 @@ export const notificationsRoute = new Elysia({
         userId: user.id,
       });
 
-      return sseResponse(stream);
+      return sseResponse(stream, {
+        kind: "session",
+        sessionId: session.id,
+        userId: user.id,
+      });
     },
   )
   .get("/", listNotifications.handler, {

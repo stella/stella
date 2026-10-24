@@ -1,6 +1,6 @@
 import {
-  Fragment,
   forwardRef,
+  Fragment,
   memo,
   useEffect,
   useEffectEvent,
@@ -35,10 +35,10 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
@@ -47,7 +47,9 @@ import {
   clipboardUntitledName,
   hasClipboardPrimaryModifier,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
+  refreshClipboardEditorName,
 } from "./clipboard-logic";
+import type { ClipboardEditorNameDraft } from "./clipboard-logic";
 import {
   CLIPBOARD_EDITOR_SESSION_EVENT,
   CLIPBOARD_HISTORY_CHANGED_EVENT,
@@ -68,14 +70,11 @@ import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 
 type SaveState =
-  | { type: "idle" }
-  | { type: "saving" }
-  | { message: string; type: "error" };
+  { type: "idle" } | { type: "saving" } | { message: string; type: "error" };
 
 /** The inline "New group…" panel: closed, or holding the group being created. */
 type GroupDraftState =
-  | { type: "closed" }
-  | (ClipboardGroupDraft & { type: "open" });
+  { type: "closed" } | (ClipboardGroupDraft & { type: "open" });
 
 /** Picking it in the group select opens the draft instead of choosing a group. */
 const NEW_GROUP_OPTION_VALUE = "new-group";
@@ -92,7 +91,7 @@ type EditorState =
       groupDraft: GroupDraftState;
       groupId: string | null;
       /** The name field's draft; empty saves the clip unnamed. */
-      name: string;
+      name: ClipboardEditorNameDraft;
       save: SaveState;
       type: "ready";
     };
@@ -622,18 +621,19 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                 context: value,
                 groupDraft: { type: "closed" },
                 groupId: value.item.groupId,
-                name: value.item.name ?? "",
+                name: { type: "unchanged", value: value.item.name ?? "" },
                 save: { type: "idle" },
                 type: "ready",
               };
             }
-            // A refresh must not touch the text or name being edited or the
-            // user's group choice; it only takes what resolves underneath an
-            // open editor.
+            // History owns untouched names; text and explicit name/group edits
+            // stay with this editor until Save.
             return {
               ...current,
+              name: refreshClipboardEditorName(current.name, value.item.name),
               context: {
                 ...current.context,
+                item: { ...current.context.item, name: value.item.name },
                 groups: value.groups,
                 sourceAppVisual: value.sourceAppVisual,
               },
@@ -717,7 +717,10 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
     void invoke("clipboard_save_editor_item", {
       groupId: state.groupId,
       id: item.id,
-      name: state.name,
+      name:
+        state.name.type === "edited"
+          ? { type: "set", value: state.name.value }
+          : { type: "preserve" },
       text,
     })
       .then(closeEditor)
@@ -973,6 +976,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           <Input
             className="h-10 min-w-0 flex-1 rounded-xl"
             data-clipboard-editor-name=""
+            dir="auto"
             disabled={state.save.type === "saving"}
             maxLength={MAX_CLIPBOARD_ITEM_NAME_CHARACTERS}
             onChange={(event) => {
@@ -980,7 +984,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                 context: state.context,
                 groupDraft: state.groupDraft,
                 groupId: state.groupId,
-                name: event.target.value,
+                name: { type: "edited", value: event.target.value },
                 save: state.save,
                 type: "ready",
               });
@@ -1005,7 +1009,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               image: t("image"),
               text: t("unnamedClip"),
             })}
-            value={state.name}
+            value={state.name.value}
           />
         </label>
         {item.type === "image" ? (

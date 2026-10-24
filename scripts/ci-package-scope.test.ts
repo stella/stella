@@ -13,8 +13,8 @@ import path from "node:path";
 import { dependencyScope } from "./ci-dependency-scope";
 import {
   markdownChecks,
-  markdownReaders,
   markdownReaderInputNames,
+  markdownReaders,
   requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
@@ -409,6 +409,7 @@ test("a planted markdown reader joins isolated checks, including deleted input f
   });
 });
 
+// Measured p95: 11.3 s; this must derive readers from the real repository graph.
 test("the exact README change derives its genuine readers without package jobs", () => {
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
@@ -436,7 +437,7 @@ test("the exact README change derives its genuine readers without package jobs",
     ".github/workflows/ci.yml:ci-checks-policy:Documentation source policy rule",
     ".github/workflows/ci.yml:ci-checks-policy:Instruction references",
   ]);
-}, 30_000);
+}, 25_000);
 
 test("an aliased filesystem reader with a typed path constant joins automatically", () => {
   repository((root, write) => {

@@ -1,25 +1,25 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
-  writeFileSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  OfflineCheckPolicyError,
   catalogGeneratorNetworkViolations,
   enumerateOfflineChecks,
   offlineCheckExceptionGrowth,
-  offlineImportGraphViolations,
+  OfflineCheckPolicyError,
   offlineCheckViolations,
-  parseOfflineImportAllowances,
+  offlineImportGraphViolations,
   parseOfflineCheckExceptions,
+  parseOfflineImportAllowances,
   usesOfflineCheckPreload,
 } from "./offline-check-policy";
 
@@ -515,7 +515,7 @@ test("every protected blocking check has a transport-safe local import closure",
     ),
   );
   const entries = checks.flatMap((check) =>
-    check.protected ? [check.entry] : [],
+    check.protected && check.entry !== null ? [check.entry] : [],
   );
   expect(entries.length).toBeGreaterThan(0);
   expect(

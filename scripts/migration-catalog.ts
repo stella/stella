@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { createSqlClient } from "../apps/api/src/db/sql-client";
 import { REHEARSAL_ROWS_PER_DECISION } from "../apps/api/src/scripts/seed-migration-rehearsal-plan";
 
 type Row = Record<string, unknown>;
@@ -288,8 +289,9 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     client,
     `
     SELECT n.nspname AS schema, c.relname AS name, s.seqtypid::regtype::text AS type,
-           s.seqstart AS start, s.seqincrement AS increment, s.seqmin AS minimum,
-           s.seqmax AS maximum, s.seqcache AS cache, s.seqcycle AS cycle,
+           s.seqstart::text AS start, s.seqincrement::text AS increment,
+           s.seqmin::text AS minimum, s.seqmax::text AS maximum,
+           s.seqcache::text AS cache, s.seqcycle AS cycle,
            pg_get_userbyid(c.relowner) AS owner,
            coalesce(c.relacl::text[], '{}'::text[]) AS acl
     FROM pg_sequence s JOIN pg_class c ON c.oid = s.seqrelid
@@ -380,7 +382,7 @@ if (import.meta.main) {
     if (!url) {
       panic("DATABASE_URL is required");
     }
-    const client = new SQL({ url, max: 1, connectionTimeout: 30 });
+    const client = createSqlClient({ url, max: 1, connectionTimeout: 30 });
     try {
       console.log(JSON.stringify(await snapshotCatalog(client)));
     } finally {

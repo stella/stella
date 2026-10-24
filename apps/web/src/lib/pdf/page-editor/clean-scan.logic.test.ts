@@ -12,10 +12,10 @@ import {
   undoCleanScanReview,
 } from "./clean-scan.logic";
 import type {
+  CleanScanResult,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-  CleanScanResult,
 } from "./scan-engine";
 
 class FakeScanEngine implements ScanEngine {

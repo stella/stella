@@ -79,6 +79,16 @@ export const clipboardItemLink = (
 /** The cap the native side holds a clip name to. */
 export const MAX_CLIPBOARD_ITEM_NAME_CHARACTERS = 80;
 
+export type ClipboardEditorNameDraft =
+  { type: "unchanged"; value: string } | { type: "edited"; value: string };
+
+/** External history updates own the name until the user edits this field. */
+export const refreshClipboardEditorName = (
+  draft: ClipboardEditorNameDraft,
+  name: string | null,
+): ClipboardEditorNameDraft =>
+  draft.type === "edited" ? draft : { type: "unchanged", value: name ?? "" };
+
 /**
  * What an unnamed clip is called: the page a browser copy came from, else the
  * host a link points to, else its kind.
