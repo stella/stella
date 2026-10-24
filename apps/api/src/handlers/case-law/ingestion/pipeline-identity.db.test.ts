@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
@@ -271,17 +272,15 @@ if (!databaseUrl || !runPostgresTests) {
           // The alias is still uncommitted. The insert must wait on the
           // graph lock before checking it, rather than pass the guard and
           // wait on the deleted row's unique-index transaction lock.
-          const deadline = Date.now() + 3000;
-          let waitingLock: unknown;
-          while (waitingLock === undefined && Date.now() < deadline) {
-            const locks =
-              await session`SELECT locktype, classid::int AS classid, objid::int AS objid
-              FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`;
-            waitingLock = locks.at(0);
-            if (waitingLock === undefined) {
-              await Bun.sleep(10);
-            }
-          }
+          const waitingLock = await waitForExternalState({
+            description: `writer ${String(writerPid)} waits on a lock`,
+            timeoutMs: 3000,
+            read: async () =>
+              (
+                await session`SELECT locktype, classid::int AS classid, objid::int AS objid
+                FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`
+              ).at(0),
+          });
           expect(waitingLock).toMatchObject({
             locktype: "advisory",
             classid: 732_104,

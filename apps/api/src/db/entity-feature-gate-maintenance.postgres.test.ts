@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import type { SQL, TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -22,16 +23,15 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const waitUntilBlocked = async (observer: SQL, pid: number) => {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const [row] = await observer`
-      SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic(`backend ${String(pid)} never blocked`);
+  await waitForExternalState({
+    description: `backend ${String(pid)} waits on a lock`,
+    timeoutMs: 3000,
+    read: async () => {
+      const [row] = await observer`
+        SELECT cardinality(pg_blocking_pids(${pid}::int)) > 0 AS blocked`;
+      return row?.blocked === true;
+    },
+  });
 };
 
 const backendPid = async (client: SQL): Promise<number> => {
@@ -135,7 +135,10 @@ const inAppScope = async <T>(
 const gateOf = async (
   client: SQL,
   relation:
-    "entity_versions" | "fields" | "extracted_content" | "search_documents",
+    | "entity_versions"
+    | "fields"
+    | "extracted_content"
+    | "search_documents",
   id: string,
 ) => {
   switch (relation) {

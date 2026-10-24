@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { Temporal } from "@stll/time";
 
 import { readOnlineIndexConfig } from "../env-online-index";
@@ -328,24 +329,19 @@ describe.skipIf(!enabled)(
                     },
                   },
                   wait: async () => {
-                    for (let attempt = 0; attempt < 400; attempt += 1) {
-                      const progress = await observer.unsafe<
-                        { phase: string }[]
-                      >(
-                        "SELECT phase FROM pg_stat_progress_create_index WHERE pid = $1",
-                        [pid],
-                      );
-                      if (
-                        progress.at(0)?.phase ===
-                        "waiting for writers before build"
-                      ) {
-                        return;
-                      }
-                      await Bun.sleep(5);
-                    }
-                    throw new TypeError(
-                      "Staged index did not reach its writer barrier",
-                    );
+                    await waitForExternalState({
+                      description:
+                        "the staged index reaches its writer barrier",
+                      intervalMs: 5,
+                      timeoutMs: 2000,
+                      read: async () =>
+                        (
+                          await observer.unsafe<{ phase: string }[]>(
+                            "SELECT phase FROM pg_stat_progress_create_index WHERE pid = $1",
+                            [pid],
+                          )
+                        ).at(0)?.phase === "waiting for writers before build",
+                    });
                   },
                 },
                 reserveObserver: async () => ({

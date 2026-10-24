@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -46,7 +47,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const now = new Date("2026-09-29T12:00:00Z");
 const GATE_SETTING = "test.monitoring_write_gate";
-const BLOCK_OBSERVATION_ATTEMPTS = 200;
+const BLOCK_OBSERVATION_TIMEOUT_MS = 2000;
 
 const backendPid = async (db: GatedTestDb) =>
   (await db.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)).at(0)
@@ -54,21 +55,20 @@ const backendPid = async (db: GatedTestDb) =>
 
 // Observing the server's lock graph proves the competing operation reached its fence.
 // The bounded wait only diagnoses a missing barrier; elapsed time is never the oracle.
-const blockersFor = async (db: GatedTestDb, pid: number) => {
-  for (let attempt = 0; attempt < BLOCK_OBSERVATION_ATTEMPTS; attempt += 1) {
-    const row =
-      (
-        await db.execute<{ blockers: number[] }>(sql`
-      SELECT pg_blocking_pids(${pid}) AS blockers
-    `)
-      ).at(0) ?? panic("Missing lock observation");
-    if (row.blockers.length > 0) {
-      return row.blockers;
-    }
-    await Bun.sleep(10);
-  }
-  return panic("Monitoring operation did not reach its database barrier");
-};
+const blockersFor = async (db: GatedTestDb, pid: number) =>
+  await waitForExternalState({
+    description: "the monitoring operation reaches its database barrier",
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: async () => {
+      const row =
+        (
+          await db.execute<{ blockers: number[] }>(sql`
+        SELECT pg_blocking_pids(${pid}) AS blockers
+      `)
+        ).at(0) ?? panic("Missing lock observation");
+      return row.blockers.length > 0 && row.blockers;
+    },
+  });
 
 type InstallGateOptions = {
   db: GatedTestDb;
@@ -536,7 +536,8 @@ if (!databaseUrl || !runPostgresTests) {
       let controlGatePid: number | undefined;
       let editedContactId: typeof contacts.$inferSelect.id | undefined;
       let drainFirstEditedContactId:
-        typeof contacts.$inferSelect.id | undefined;
+        | typeof contacts.$inferSelect.id
+        | undefined;
       let optedOutContactId: typeof contacts.$inferSelect.id | undefined;
       try {
         await controlDb.insert(organization).values({

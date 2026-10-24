@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,32 +27,35 @@ const git = async (cwd: string, args: string[]) => {
 test("parser workers respect their concurrency bound and preserve result order", async () => {
   let active = 0;
   let peak = 0;
-  const releases: (() => void)[] = [];
+  // Each task hands back its release once it has started.
+  const started = [0, 1, 2, 3].map(() =>
+    Promise.withResolvers<() => unknown>(),
+  );
+  const startedTask = (index: number) =>
+    started[index] ?? panic(`No task ${String(index)}`);
   const tasks = [0, 1, 2, 3].map((value) => async () => {
     active += 1;
     peak = Math.max(peak, active);
-    await new Promise<void>((resolve) => {
-      releases.push(resolve);
+    const release = Promise.withResolvers<undefined>();
+    startedTask(value).resolve(() => {
+      release.resolve(undefined);
     });
+    await release.promise;
     active -= 1;
     return value;
   });
   const results = runWithConcurrency(tasks, 2);
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
+  const [releaseFirst, releaseSecond] = await Promise.all([
+    startedTask(0).promise,
+    startedTask(1).promise,
+  ]);
   expect(active).toBe(2);
-  releases.shift()?.();
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
-  releases.shift()?.();
-  while (releases.length < 2) {
-    await Bun.sleep(1);
-  }
-  for (const release of releases.splice(0)) {
-    release();
-  }
+  releaseFirst();
+  const releaseThird = await startedTask(2).promise;
+  releaseSecond();
+  const releaseFourth = await startedTask(3).promise;
+  releaseThird();
+  releaseFourth();
   expect(await results).toEqual([0, 1, 2, 3]);
   expect(peak).toBe(2);
 });

@@ -3,7 +3,6 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
-import { sleep } from "@stll/concurrency/sleep";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
@@ -149,18 +148,30 @@ const openPage = ({
   return { errors, reloads: () => reloads, runtime };
 };
 
-/** Wait until the page has stopped working on its request. */
+/** Resolves once the page has stopped working on its request: the change
+ *  that ends it reaches the runtime's subscribers at once. */
 const settle = async (runtime: ChatRuntime) => {
-  for (let tick = 0; tick < 400; tick += 1) {
+  const stopped = () => {
     const snapshot = runtime.getSnapshot();
-    if (
+    return (
       !snapshot.isLoading &&
       !snapshot.reconnecting &&
       snapshot.error !== undefined
-    ) {
-      return;
+    );
+  };
+  if (stopped()) {
+    return;
+  }
+  const done = Promise.withResolvers<undefined>();
+  const unsubscribe = runtime.subscribe(() => {
+    if (stopped()) {
+      done.resolve(undefined);
     }
-    await sleep(5);
+  });
+  try {
+    await done.promise;
+  } finally {
+    unsubscribe();
   }
 };
 

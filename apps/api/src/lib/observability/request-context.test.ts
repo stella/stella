@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
+import { setInterval } from "node:timers/promises";
 
 import { REQUEST_ID_HEADER } from "@stll/api-contract";
 
@@ -89,12 +90,21 @@ describe("x-request-id response header", () => {
   // frame, so a background loop resuming there adopted the in-flight request's
   // id and stamped it on unrelated work from then on.
   test("the ambient id belongs to its own request and never to background work", async () => {
-    const signal = { done: false };
+    const background = new AbortController();
     const backgroundIds: (string | undefined)[] = [];
+    // Each tick resumes this function after a timer, the gap in which it used
+    // to land on a request's frame.
     const backgroundLoop = async () => {
-      while (!signal.done) {
-        await Bun.sleep(BACKGROUND_WAIT_MS);
-        backgroundIds.push(getCurrentRequestId());
+      try {
+        for await (const _tick of setInterval(BACKGROUND_WAIT_MS, undefined, {
+          signal: background.signal,
+        })) {
+          backgroundIds.push(getCurrentRequestId());
+        }
+      } catch (error) {
+        if (!background.signal.aborted) {
+          throw error;
+        }
       }
     };
     void backgroundLoop();
@@ -111,7 +121,7 @@ describe("x-request-id response header", () => {
       }
     }
 
-    signal.done = true;
+    background.abort();
     await app.stop();
 
     expect(mismatches).toEqual([]);

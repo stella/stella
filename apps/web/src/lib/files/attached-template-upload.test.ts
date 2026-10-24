@@ -14,6 +14,10 @@ import {
   currentAttachedTemplateUploadPrompt,
   useAttachedTemplateUploadStore,
 } from "./attached-template-upload-store";
+import type {
+  AttachedTemplateUploadQueue,
+  QueuedAttachedTemplateUploadPrompt,
+} from "./attached-template-upload-store";
 
 const ATTACHED_TEMPLATE_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate";
@@ -44,17 +48,23 @@ const makeDocxFile = async ({
   );
 };
 
+// Resolves with the first prompt the store holds, from the state change that
+// queues it.
 const waitForAttachedTemplatePrompt = async () => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const prompt = currentAttachedTemplateUploadPrompt(
-      useAttachedTemplateUploadStore.getState(),
-    );
+  const queued = Promise.withResolvers<QueuedAttachedTemplateUploadPrompt>();
+  const settle = (state: AttachedTemplateUploadQueue) => {
+    const prompt = currentAttachedTemplateUploadPrompt(state);
     if (prompt !== null) {
-      return prompt;
+      queued.resolve(prompt);
     }
-    await Bun.sleep(10);
+  };
+  const unsubscribe = useAttachedTemplateUploadStore.subscribe(settle);
+  settle(useAttachedTemplateUploadStore.getState());
+  try {
+    return await queued.promise;
+  } finally {
+    unsubscribe();
   }
-  throw new Error("Expected an attached-template upload prompt");
 };
 
 afterEach(() => {

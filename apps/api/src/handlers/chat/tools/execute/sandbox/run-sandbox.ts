@@ -132,6 +132,13 @@ type SandboxAdmissionWaiter = {
 let activeSandboxCount = 0;
 const activeSandboxCountByKey = new Map<string, number>();
 const sandboxAdmissionQueue: SandboxAdmissionWaiter[] = [];
+// Test-only observers of queue changes; see `whenSandboxAdmissionQueued`.
+const sandboxAdmissionQueueListeners = new Set<() => void>();
+const notifySandboxAdmissionQueueListeners = (): void => {
+  for (const listener of sandboxAdmissionQueueListeners) {
+    listener();
+  }
+};
 
 // Every in-flight host-call promise (see `runHostCall`), tracked at module
 // scope purely so tests can await the full unwind of a run. A timed-out run
@@ -223,16 +230,32 @@ const raceHostWorkAgainstDeadline = async (
 };
 
 /**
- * Test-only: read the live admission counters. Concurrency tests use this to
- * observe "a run is QUEUED behind the cap" as a state transition instead of
- * sleeping a fixed interval and hoping the queue has settled — a fixed sleep is
- * exactly what flakes on a loaded CI runner. The waiter push and the admission
- * flush both happen synchronously inside `runSandbox`'s first await, so polling
- * this snapshot for `queuedWaiters` is a guaranteed-eventual observation, never
- * a timing bet.
+ * Test-only: resolves once exactly `count` runs wait in the admission queue.
+ * Concurrency tests use it to observe "a run is QUEUED behind the cap" as the
+ * state transition itself, instead of sleeping or polling the counters. The
+ * waiter push and the admission flush both happen synchronously inside
+ * `runSandbox`'s first await, and every queue change notifies the listeners,
+ * so the promise settles in the same task as the transition.
  */
-export const getSandboxAdmissionSnapshot = (): SandboxAdmissionSnapshot =>
-  snapshotSandboxAdmission();
+export const whenSandboxAdmissionQueued = async (
+  count: number,
+): Promise<void> => {
+  if (sandboxAdmissionQueue.length === count) {
+    return;
+  }
+  const reached = Promise.withResolvers<undefined>();
+  const listener = () => {
+    if (sandboxAdmissionQueue.length === count) {
+      reached.resolve(undefined);
+    }
+  };
+  sandboxAdmissionQueueListeners.add(listener);
+  try {
+    await reached.promise;
+  } finally {
+    sandboxAdmissionQueueListeners.delete(listener);
+  }
+};
 
 /**
  * Test-only: leave a stranded entry (a host promise that never settles) in the
@@ -312,7 +335,8 @@ const buildSandboxScript = (
  * {@link waitForHostProgress}, which owns the only suspension.
  */
 type SandboxScriptBudget =
-  { status: "spending" } | { status: "suspended"; suspendedAtMs: number };
+  | { status: "spending" }
+  | { status: "suspended"; suspendedAtMs: number };
 
 /**
  * The two wall clocks a run answers to. `scriptDeadlineMs` is the script's own
@@ -648,6 +672,7 @@ const createSandboxAdmissionRelease = (
     released = true;
     decrementSandboxAdmissionCounts(concurrencyKey);
     flushSandboxAdmissionQueue();
+    notifySandboxAdmissionQueueListeners();
   };
 };
 
@@ -684,6 +709,7 @@ const acquireSandboxAdmission = async (
       resolve,
     });
     flushSandboxAdmissionQueue();
+    notifySandboxAdmissionQueueListeners();
   });
 
 export const runSandbox = async ({
