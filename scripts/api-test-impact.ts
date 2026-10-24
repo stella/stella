@@ -155,9 +155,10 @@ const LOADER_CALL_PATTERN = /\b(?:import|require)\s*(?:\(|\/[*/])|\\u/u;
 type ModuleReach = "all" | ReadonlySet<string>;
 
 const TEXT_REACH_PREFILTER =
-  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/|\.\.\/|["'`]\.\.["'`]/u;
+  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/|["'`]apps["'`]|\.\.\/|["'`]\.\.["'`]/u;
 
 const textReach = (
+  file: string,
   source: string,
   appNames: ReadonlySet<string>,
 ): ModuleReach => {
@@ -204,20 +205,56 @@ const textReach = (
       code,
     ) ||
     /process\s*\.\s*cwd\s*\(/u.test(code) ||
-    /(?:^|[/'"`])(?:\.\.\/){3}/u.test(code) ||
-    /apps\/(?:\*|\*\*|\{[^}/]+\})(?:\/|$)/u.test(code)
+    /apps\/(?:\*|\*\*|\{[^}/]+\})(?:\/|$)/u.test(code) ||
+    // A path assembled from segments (`path.join("apps", name)`) can name
+    // any app.
+    /["'`]apps["'`]/u.test(code)
   ) {
     return "all";
   }
-  const textClimbsFromCall = [
-    ...code.matchAll(/(?:\bpath\s*\.\s*)?(?:join|resolve)\s*\(([^)]*)\)/gu),
-  ].some(
-    (match) => [...(match[1] ?? "").matchAll(/["'`]\.\.["'`]/gu)].length >= 3,
-  );
-  if (textClimbsFromCall) {
-    return "all";
-  }
+  // A climb leaves the module's own workspace only when it climbs past that
+  // workspace's root: `../../..` from `apps/api/src/lib/x/` stays in
+  // `apps/api`. Counted from `../` runs and from `".."` call arguments.
+  const climbs: { count: number; next: string }[] = [
+    ...[...code.matchAll(/((?:\.\.\/)+)([^/'"`$}\s]*)/gu)].map((match) => ({
+      count: (match[1] ?? "").length / 3,
+      next: match[2] ?? "",
+    })),
+    ...[
+      ...code.matchAll(/(?:\bpath\s*\.\s*)?(?:join|resolve)\s*\(([^)]*)\)/gu),
+    ].map((match) => {
+      const literals = [
+        ...(match[1] ?? "").matchAll(/["'`]([^"'`]*)["'`]/gu),
+      ].map((literal) => literal[1] ?? "");
+      return {
+        count: literals.filter((literal) => literal === "..").length,
+        next: literals.find((literal) => literal !== "..") ?? "",
+      };
+    }),
+  ];
+  const workspace = /^(?:apps|packages)\/[^/]+/u.exec(file)?.[0];
   const apps = new Set<string>();
+  for (const { count, next } of climbs) {
+    if (count === 0) {
+      continue;
+    }
+    const target = path.posix.join(
+      path.posix.dirname(file),
+      ...Array.from({ length: count }, () => ".."),
+      next.split("/").at(0) ?? "",
+    );
+    if (
+      workspace !== undefined &&
+      (target === workspace || target.startsWith(`${workspace}/`))
+    ) {
+      continue;
+    }
+    const app = /^apps\/([^/]+)/u.exec(target)?.[1];
+    if (app === undefined || app === "api") {
+      return "all";
+    }
+    apps.add(app);
+  }
   for (const match of code.matchAll(
     /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?:\/|$)/gu,
   )) {
@@ -287,7 +324,7 @@ export const analyzeModule = (
     computedImports,
     imports,
     reads: mentionsReads && READER_PATTERN.test(code),
-    reach: textReach(code, appNames),
+    reach: textReach(file, code, appNames),
     scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
@@ -432,7 +469,17 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
     }
     return seen;
   };
-  return { closure, failed, readers, reaches, scanners, computedImports };
+  const dependencies = (file: string): readonly string[] =>
+    edges.get(file) ?? [];
+  return {
+    closure,
+    dependencies,
+    failed,
+    readers,
+    reaches,
+    scanners,
+    computedImports,
+  };
 };
 
 type SelectApiTestImpactOptions = {
@@ -497,6 +544,8 @@ export const selectApiTestImpact = ({
       }),
     );
     const changedSet = new Set(changed);
+    const isFileReader = (file: string) =>
+      graph.readers.has(file) || graph.scanners.has(file);
     const files = tests
       .filter((test) => {
         const closure = graph.closure(test);
@@ -516,9 +565,18 @@ export const selectApiTestImpact = ({
             ([...closure].some((file) => graph.failed.has(file)) ||
               [...closure].some((file) => {
                 const reach = graph.reaches.get(file);
+                // A root path can be built in one module and read in the
+                // module that imports it: "all" counts in a reader or
+                // scanner and in what one of them imports directly. App
+                // names count anywhere in the closure.
                 return (
                   (reach === "all" &&
-                    (graph.readers.has(file) || graph.scanners.has(file))) ||
+                    (isFileReader(file) ||
+                      [...closure].some(
+                        (reader) =>
+                          isFileReader(reader) &&
+                          graph.dependencies(reader).includes(file),
+                      ))) ||
                   (reach !== undefined &&
                     reach !== "all" &&
                     [...changedApps].some((app) => reach.has(app)))

@@ -253,6 +253,27 @@ test("another app is selected from text anywhere in a reader closure", () => {
   });
 });
 
+test("a root helper in another module and segment-built app paths reach another app", () => {
+  withRepository((root, write) => {
+    write("apps/api/src/root.ts", "export const root = process.cwd();");
+    write(
+      "apps/api/src/root-joined-reader.ts",
+      'import path from "node:path"; import { readFileSync } from "node:fs"; import { root } from "./root"; export const read = () => readFileSync(path.join(root, "x.tsx"));',
+    );
+    write(
+      "apps/api/src/root-joined-reader.test.ts",
+      'import "./root-joined-reader";',
+    );
+    write(
+      "apps/api/src/segment-reader.test.ts",
+      'import path from "node:path"; import { readFileSync } from "node:fs"; readFileSync(path.join("apps", "web", "x.tsx"));',
+    );
+    expect(
+      selectApiTestImpact({ root, changed: ["apps/web/x.tsx"] }).files,
+    ).toEqual(["src/root-joined-reader.test.ts", "src/segment-reader.test.ts"]);
+  });
+});
+
 test("caller-only readers do not reach another app", () => {
   withRepository((root, write) => {
     write(
