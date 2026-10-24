@@ -1580,6 +1580,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PR_TITLE",
+  // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
+  "ARMED",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
