@@ -1649,8 +1649,7 @@ const ownsOwnerCleanup = ({
   const exits = cleanupPaths(
     {
       ...proof,
-      cancels:
-        effect === null ? [...matching, ...startupTransfers] : startupTransfers,
+      cancels: [...matching, ...startupTransfers],
       completed: new Map(),
       setup: {
         effect: owner,

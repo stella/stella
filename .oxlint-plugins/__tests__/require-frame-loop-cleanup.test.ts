@@ -909,6 +909,72 @@ test("effect ownership follows invoked cleanup helpers, not dormant closures", a
   expect(results.at(-1)).not.toEqual([]);
 });
 
+test("effect setup cancellation must execute after creation", async () => {
+  const cases = [
+    ["const id=setInterval(tick,10);clearInterval(id);", true],
+    [
+      "const ref={current:0};ref.current=setInterval(tick,10);clearInterval(ref.current);",
+      true,
+    ],
+    [
+      "const id=setInterval(tick,10);const stop=()=>clearInterval(id);stop();",
+      true,
+    ],
+    ["const id=setInterval(tick,10);if(ready())clearInterval(id);", false],
+    [
+      "const id=setInterval(tick,10);const unused=()=>clearInterval(id);",
+      false,
+    ],
+    ["let id;clearInterval(id);id=setInterval(tick,10);", false],
+    [
+      "let id;const stop=()=>clearInterval(id);stop();id=setInterval(tick,10);",
+      false,
+    ],
+    [
+      "const id=setInterval(tick,10);setTimeout(()=>clearInterval(id),10);",
+      false,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};begin();",
+      false,
+    ],
+    [
+      "const begin=()=>{const id=setInterval(tick,10);return()=>clearInterval(id);};begin();const stop=begin();stop();",
+      false,
+    ],
+    [
+      "let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};tick();cancelAnimationFrame(frame);",
+      true,
+    ],
+    [
+      "let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);cancelAnimationFrame(frame);",
+      true,
+    ],
+    [
+      "let frame=0;const tick=()=>{if(visible())frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);if(ready())cancelAnimationFrame(frame);",
+      false,
+    ],
+  ] as const;
+  const registrations = [
+    (body: string) => `useMountEffect(()=>{${body}});`,
+    (body: string) =>
+      `const beginEffect=()=>{${body}};useEffect(beginEffect,[]);`,
+    (body: string) =>
+      `function beginEffect(){${body}}useExternalSyncEffect(beginEffect,[]);`,
+  ];
+  const results = await Promise.all(
+    cases.flatMap(([body, owned]) =>
+      registrations.map(async (registration) => [
+        (await lintSingleRule(RULE, registration(body))).length === 0,
+        owned,
+      ]),
+    ),
+  );
+  expect(results.map(([actual]) => actual)).toEqual(
+    results.map(([, owned]) => owned),
+  );
+});
+
 test("effect cleanup ownership covers every reachable path and immutable alias", async () => {
   const cases = [
     [
