@@ -335,8 +335,7 @@ const buildSandboxScript = (
  * {@link waitForHostProgress}, which owns the only suspension.
  */
 type SandboxScriptBudget =
-  | { status: "spending" }
-  | { status: "suspended"; suspendedAtMs: number };
+  { status: "spending" } | { status: "suspended"; suspendedAtMs: number };
 
 /**
  * The two wall clocks a run answers to. `scriptDeadlineMs` is the script's own
