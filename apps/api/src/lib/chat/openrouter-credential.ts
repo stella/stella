@@ -135,12 +135,22 @@ const retryAfterMs = (
     Temporal.ZonedDateTime.from(
       {
         timeZone: "UTC",
-        year: parseIntegerToken(match[3], { sign: "unsigned" }).unwrap(),
+        year: parseIntegerToken(match[3], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a four-digit year",
+        ),
         month: months.indexOf(match[2] ?? "") + 1,
-        day: parseIntegerToken(match[1], { sign: "unsigned" }).unwrap(),
-        hour: parseIntegerToken(match[4], { sign: "unsigned" }).unwrap(),
-        minute: parseIntegerToken(match[5], { sign: "unsigned" }).unwrap(),
-        second: parseIntegerToken(match[6], { sign: "unsigned" }).unwrap(),
+        day: parseIntegerToken(match[1], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit day",
+        ),
+        hour: parseIntegerToken(match[4], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit hour",
+        ),
+        minute: parseIntegerToken(match[5], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit minute",
+        ),
+        second: parseIntegerToken(match[6], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit second",
+        ),
       },
       { overflow: "reject" },
     ),
