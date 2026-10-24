@@ -188,10 +188,8 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       if (payment.value.scheme === "pay_by_square") {
         // Official print frame: the 62-unit QR box stays inside its 64-unit
         // width with four quiet modules; 37.254 mm is the recommended size.
-        qr = payBySquareLogo.replace(
-          "</svg>",
-          `${qr.replace("<svg ", '<svg x="1" y="1" width="62" height="62" ')}</svg>`,
-        );
+        const framed = `${qr.replace("<svg ", '<svg x="1" y="1" width="62" height="62" ')}</svg>`;
+        qr = payBySquareLogo.replace("</svg>", () => framed);
         qrWidthMm = 37.254;
       }
     }
