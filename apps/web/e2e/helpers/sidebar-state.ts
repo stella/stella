@@ -1,10 +1,12 @@
 import type { BrowserContext } from "@playwright/test";
 import { panic } from "better-result";
 
+import { SIDEBAR_STATE_COOKIE } from "../../src/lib/sidebar-state-cookie";
+import type { SidebarStateValue } from "../../src/lib/sidebar-state-cookie";
+
 /**
- * Starts the app with the sidebar the way a user left it. Mirrors
- * `SIDEBAR_STATE_COOKIE` in src/lib/sidebar-state.ts, which the e2e project
- * cannot import (it has no DOM lib). A cookie, so the server render sees it too.
+ * Starts the app with the sidebar the way a user left it, using the same
+ * cookie contract as the server render without importing browser APIs.
  */
 export const seedSidebarState = async ({
   baseURL,
@@ -13,11 +15,11 @@ export const seedSidebarState = async ({
 }: {
   baseURL: string | undefined;
   context: BrowserContext;
-  state: "expanded" | "collapsed";
+  state: SidebarStateValue;
 }) =>
   context.addCookies([
     {
-      name: "sidebar_state",
+      name: SIDEBAR_STATE_COOKIE,
       url:
         baseURL ??
         panic("Set the Playwright baseURL so the sidebar cookie has an origin"),

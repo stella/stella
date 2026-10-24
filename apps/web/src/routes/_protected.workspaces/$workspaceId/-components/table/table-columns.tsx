@@ -16,6 +16,10 @@ import {
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 
+import {
+  DocumentExtractionStatus,
+  readDocumentProcessingStatus,
+} from "@/components/workspaces/document-extraction-status";
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
@@ -154,9 +158,18 @@ const useColumnDefFactory = (
               accessorFn: (row) => row.name,
               header: metadataHeader(TextIcon, "text"),
               cell: ({ row }) => (
-                <span className="truncate font-medium" dir="auto">
-                  <HighlightedText text={row.original.name ?? ""} />
-                </span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium" dir="auto">
+                    <HighlightedText text={row.original.name ?? ""} />
+                  </span>
+                  {row.original.kind === "document" ? (
+                    <DocumentExtractionStatus
+                      processingStatus={readDocumentProcessingStatus(
+                        row.original,
+                      )}
+                    />
+                  ) : null}
+                </div>
               ),
             };
           case "list-item-type":

@@ -1,9 +1,14 @@
-import { createIsomorphicFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
+import { createIsomorphicFn, createServerFn } from "@tanstack/react-start";
+import { getCookie, setCookie } from "@tanstack/react-start/server";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
 import { detached } from "@/lib/detached";
+import {
+  SIDEBAR_STATE_COOKIE,
+  SIDEBAR_STATE_VALUES,
+} from "@/lib/sidebar-state-cookie";
 
 /**
  * The sidebar's open state outlives a reload. It is a cookie, not browser
@@ -15,7 +20,6 @@ import { detached } from "@/lib/detached";
  * writes the value on `<html>`; the browser reads it back from there, so the
  * server render and hydration always agree. A toggle updates both.
  */
-const SIDEBAR_STATE_COOKIE = "sidebar_state";
 export const SIDEBAR_STATE_ATTRIBUTE = "data-sidebar-state";
 
 /** Until the user first toggles it, the sidebar is open. */
@@ -28,16 +32,19 @@ export const parsePersistedSidebarOpen = (
   storedState: string | null | undefined,
 ): boolean | null => {
   switch (storedState) {
-    case "expanded":
+    case SIDEBAR_STATE_VALUES.expanded:
       return true;
-    case "collapsed":
+    case SIDEBAR_STATE_VALUES.collapsed:
       return false;
+    case null:
+    case undefined:
     default:
       return null;
   }
 };
 
-const sidebarStateValue = (open: boolean) => (open ? "expanded" : "collapsed");
+const sidebarStateValue = (open: boolean) =>
+  open ? SIDEBAR_STATE_VALUES.expanded : SIDEBAR_STATE_VALUES.collapsed;
 
 /** The stored state, as the document's root element carries it. */
 export const readSidebarStateAttribute = createIsomorphicFn()
@@ -54,11 +61,35 @@ export const readSidebarStateAttribute = createIsomorphicFn()
 export const readPersistedSidebarOpen = (): boolean | null =>
   parsePersistedSidebarOpen(readSidebarStateAttribute());
 
-export const writePersistedSidebarOpen = (open: boolean) => {
+const persistSidebarState = createServerFn({ method: "POST" })
+  .validator((input: boolean) => v.parse(v.boolean(), input))
+  .handler(({ data }) => {
+    setCookie(SIDEBAR_STATE_COOKIE, sidebarStateValue(data), {
+      path: "/",
+      sameSite: "lax",
+      maxAge: SIDEBAR_STATE_LIFETIME_HOURS * 60 * 60,
+    });
+  });
+
+type PersistSidebarState = (input: { data: boolean }) => Promise<unknown>;
+
+let sidebarPersistence = Promise.resolve();
+
+export const writePersistedSidebarOpen = (
+  open: boolean,
+  persist: PersistSidebarState = persistSidebarState,
+) => {
   const value = sidebarStateValue(open);
   document.documentElement.setAttribute(SIDEBAR_STATE_ATTRIBUTE, value);
-  // Without the Cookie Store API the choice holds until the next reload.
   if (!("cookieStore" in globalThis)) {
+    // Serialize responses so a slower earlier toggle cannot replace the
+    // cookie written by the user's latest choice.
+    const save = async () => {
+      await persist({ data: open });
+    };
+    const pending = sidebarPersistence.then(save, save);
+    sidebarPersistence = pending;
+    detached(pending, "sidebar-state.persist");
     return;
   }
   detached(

@@ -309,6 +309,8 @@ const installFixtureNetwork = () => {
       if (pathname === "/v1/organization-settings/ai-availability") {
         return Response.json({
           available: true,
+          unavailableReason: null,
+          providerConfiguration: "allowed",
           instanceProvisioned: false,
           orgConfigured: true,
           deferredServiceTierAvailable: false,

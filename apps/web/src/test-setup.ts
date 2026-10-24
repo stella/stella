@@ -6,6 +6,12 @@ import {
   markTestStarted,
   reportRefusedRequests,
 } from "@/testing/dom-network-guard";
+import {
+  installTimerGuard,
+  markTimerTestEnded,
+  markTimerTestStarted,
+  reportLeakedTimers,
+} from "@/testing/timer-guard";
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.
@@ -23,7 +29,7 @@ installDomNetworkGuard();
 // The stubs package (behind `@tanstack/react-start`) is replaced whole, so the
 // preload loads nothing; its env-only helpers are identity functions.
 type IsomorphicHalf = (...args: never[]) => unknown;
-mock.module("@tanstack/start-fn-stubs", () => ({
+await mock.module("@tanstack/start-fn-stubs", () => ({
   createClientOnlyFn: <Fn>(fn: Fn) => fn,
   createServerOnlyFn: <Fn>(fn: Fn) => fn,
   createIsomorphicFn: () => {
@@ -42,11 +48,22 @@ mock.module("@tanstack/start-fn-stubs", () => ({
   },
 }));
 
-beforeEach(markTestStarted);
+// A timer a test starts never outlives it (see `installTimerGuard`).
+installTimerGuard();
+
+beforeEach(() => {
+  markTestStarted();
+  markTimerTestStarted();
+});
 
 afterEach(() => {
   markTestEnded();
+  markTimerTestEnded();
   reportRefusedRequests();
+  reportLeakedTimers();
 });
 
-afterAll(reportRefusedRequests);
+afterAll(() => {
+  reportRefusedRequests();
+  reportLeakedTimers();
+});
