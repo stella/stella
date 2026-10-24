@@ -609,7 +609,7 @@ describe("release proof trust boundary", () => {
             (step) =>
               relocatedProof.test(step) && !relocatedVerifier.test(step),
           )
-          .map((step) => `${file}: ${step.split("\n").at(0)}`),
+          .map((step) => `${file}: ${step.slice(0, step.indexOf("\n"))}`),
       );
     expect(missing).toEqual([]);
   });
