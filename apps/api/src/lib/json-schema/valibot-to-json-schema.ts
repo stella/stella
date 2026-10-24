@@ -5,6 +5,7 @@ import {
 } from "@valibot/to-json-schema";
 import type { GenericSchema } from "valibot";
 
+import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
 import { ANALYSIS_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/analysis";
@@ -51,6 +52,7 @@ const stripInternalMetadata: NonNullable<
  * an error.
  */
 const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
+  ...API_DATE_RUNTIME_ONLY_CHECKS,
   ...ANALYSIS_RUNTIME_ONLY_CHECKS,
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
@@ -59,6 +61,7 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
 
 const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
   [
+    ...API_DATE_RUNTIME_ONLY_CHECKS,
     ...ANALYSIS_RUNTIME_ONLY_CHECKS,
     ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
     ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
