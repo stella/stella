@@ -17,7 +17,6 @@ import {
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
-import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
