@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 
 import {
+  type CentsAmount,
   currencyMinorUnitDigits,
   toMajorUnits,
-  type CentsAmount,
 } from "@stll/money";
 
 import type {

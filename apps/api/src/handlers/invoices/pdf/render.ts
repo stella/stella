@@ -1,12 +1,12 @@
 import {
+  ops,
   PDF,
-  type PDFFormXObject,
   PdfArray,
   PdfDict,
+  type PDFFormXObject,
   PdfName,
   PdfNumber,
   PdfStream,
-  ops,
   rgb,
 } from "@libpdf/core";
 import { panic, Result } from "better-result";

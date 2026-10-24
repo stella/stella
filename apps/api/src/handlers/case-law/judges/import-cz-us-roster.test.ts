@@ -4,9 +4,9 @@ import { describe, expect, test } from "bun:test";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
+  CZ_US_ROSTER_LISTINGS,
   CzUsRosterListingError,
   type CzUsRosterStore,
-  CZ_US_ROSTER_LISTINGS,
   importCzUsRoster,
   parseJusticePage,
   parseRosterListing,

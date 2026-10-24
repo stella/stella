@@ -18,10 +18,10 @@ import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
-  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
@@ -100,8 +100,8 @@ import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligat
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
 import {
-  authorizedWorkspaceIds,
   type AuthorizedWorkspaceIds,
+  authorizedWorkspaceIds,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 

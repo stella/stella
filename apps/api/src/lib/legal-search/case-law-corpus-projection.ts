@@ -1,17 +1,17 @@
-import { type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import {
-  publishedCaseLawDecisions,
   corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  corpusAppliedProjection,
   type CorpusAppliedProjection,
+  corpusAppliedProjection,
   type CorpusProjectionRevision,
 } from "@/api/lib/legal-search/corpus-index-revision-clause";
 

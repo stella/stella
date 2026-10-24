@@ -6,8 +6,8 @@ import * as v from "valibot";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
-  PlainTextError,
   type PlainText,
+  PlainTextError,
   toPlainText,
   toPlainTextMetadata,
 } from "@/api/lib/case-law/plain-text";

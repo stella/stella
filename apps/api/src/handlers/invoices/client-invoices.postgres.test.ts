@@ -18,12 +18,18 @@ import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockInvoiceInStatus,
+  withInvoiceMatterLocks,
+} from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const expectSqlState = async (
   operation: PromiseLike<unknown>,
@@ -234,6 +240,106 @@ if (!databaseUrl || !runPostgres) {
         actors,
       };
     };
+    test("a newly participating matter invalidates a lock set acquired from an older snapshot", async () => {
+      const scenario = await seedScenario();
+      const thirdMatterId = createSafeId<"workspace">();
+      await db.insert(workspaces).values({
+        id: thirdMatterId,
+        organizationId: scenario.orgId,
+        clientId: scenario.clientId,
+        name: "New participating matter",
+        reference: thirdMatterId,
+      });
+      const owner = scoped(scenario, scenario.actors.owner);
+      await withInterleaving({
+        databaseUrl,
+        a: {
+          transaction: owner,
+          steps: [
+            {
+              name: "edit",
+              run: async (tx) => {
+                const invoice = await lockInvoiceInStatus(tx, {
+                  invoiceId: scenario.invoiceId,
+                  workspaceId: scenario.firstMatterId,
+                  status: "draft",
+                });
+                if (invoice === undefined) {
+                  throw new HandlerError({
+                    status: 409,
+                    message: "Invoice changed; reload and try again",
+                  });
+                }
+                await tx
+                  .update(invoices)
+                  .set({ notes: "Edited from a stale matter snapshot" })
+                  .where(eq(invoices.id, scenario.invoiceId));
+              },
+            },
+          ],
+        },
+        b: {
+          transaction: owner,
+          steps: [
+            {
+              name: "lock",
+              run: async (tx) => {
+                await withInvoiceMatterLocks(tx, [
+                  scenario.firstMatterId,
+                  scenario.secondMatterId,
+                  thirdMatterId,
+                ]);
+              },
+            },
+            {
+              name: "attach",
+              run: async (tx) => {
+                await tx.insert(invoiceLines).values(
+                  lineValues({
+                    organizationId: scenario.orgId,
+                    workspaceId: thirdMatterId,
+                    invoiceId: scenario.invoiceId,
+                    position: 2,
+                  }),
+                );
+              },
+            },
+          ],
+        },
+        schedules: [["b.lock", "a.edit", "b.attach", "b.commit", "a.commit"]],
+        reset: async () => {},
+        readState: async () =>
+          await owner(async (tx) => ({
+            invoice: await tx.query.invoices.findFirst({
+              where: { id: { eq: scenario.invoiceId } },
+              columns: { notes: true },
+            }),
+            lines: await tx.query.invoiceLines.findMany({
+              where: { invoiceId: { eq: scenario.invoiceId } },
+              columns: { workspaceId: true },
+            }),
+          })),
+        invariant: ({ outcomes, blocked, state }) => {
+          expect(blocked).toContain("a.edit");
+          expect(outcomes.a).toMatchObject({
+            status: "app-error",
+            error: { status: 409 },
+          });
+          expect(outcomes.b.status).toBe("committed");
+          expect(state.invoice?.notes).toBeNull();
+          expect(
+            state.lines.map(({ workspaceId }) => workspaceId).toSorted(),
+          ).toEqual(
+            [
+              scenario.firstMatterId,
+              scenario.secondMatterId,
+              thirdMatterId,
+            ].toSorted(),
+          );
+        },
+      });
+    });
+
     test("an invoice and every line require access to every included matter, with owner and admin overrides", async () => {
       const scenario = await seedScenario();
       const {

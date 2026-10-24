@@ -15,11 +15,11 @@ import {
 } from "./api-typecheck-config";
 import { typescriptModuleReferences } from "./api-typecheck-declarations";
 import {
-  apiResolvedTypecheckInputs,
   apiProgramTypecheckInputs,
+  apiResolvedTypecheckInputs,
   nativeTypecheckProgramFiles,
-  uncoveredApiTypecheckFiles,
   requireApiTypecheckGeneratedSources,
+  uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import {

@@ -3,8 +3,8 @@ import { describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
 import { propertyConfig } from "@stll/property-testing";
@@ -20,8 +20,8 @@ import {
   computeAssistantTurnWorkspaceIds,
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
-  extractMessageWorkspaceIds,
   extractMentionWorkspaceIds,
+  extractMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "./data-scope";
 

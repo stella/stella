@@ -71,7 +71,9 @@ test("overlapping answered selections keep the original highlight and activate e
     const highlight =
       container.querySelector('[data-annotation-id="original-highlight"]') ??
       panic("Missing original highlight");
-    expect(highlight.classList.contains("bg-(--text-mark)/30")).toBe(true);
+    // A reader's highlight takes the lighter reading wash, not a find's.
+    expect(highlight.classList.contains("bg-(--text-mark)/18")).toBe(true);
+    expect(highlight.classList.contains("bg-(--text-mark)/30")).toBe(false);
     for (const [id, label, key] of [
       ["answer-one", "Open first answer", "Enter"],
       ["answer-two", "Open second answer", " "],

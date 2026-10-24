@@ -2,12 +2,12 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
-  inArray,
-  or,
-  getColumnTable,
   getColumns,
+  getColumnTable,
   getTableName,
+  inArray,
   is,
+  or,
   SQL,
   sql,
 } from "drizzle-orm";
@@ -32,11 +32,11 @@ import {
   entities,
   entityVersions,
   fields,
+  invoiceLines,
+  invoices,
   pdfSigningSessions,
   workspaceMembers,
   workspaces,
-  invoices,
-  invoiceLines,
 } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import { lockBillingArrangement } from "@/api/lib/billing/arrangement-lock";
@@ -2372,7 +2372,23 @@ export const lockInvoiceInStatus = async (
     .limit(1)
     .for("update");
 
-  return rows.at(0);
+  const invoice = rows.at(0);
+  if (invoice === undefined) {
+    return undefined;
+  }
+  // A concurrent writer can add a participating matter while this acquisition
+  // waits. The invoice row now fences new participation; refuse a stale
+  // lock set before callers mutate or acquire missing matter locks out of order.
+  const currentMatters = await tx
+    .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+    .from(invoiceLines)
+    .where(eq(invoiceLines.invoiceId, invoiceId))
+    .limit(LIMITS.invoiceLinesPerInvoice);
+  const lockedMatterIds = new Set(matterIds);
+  if (currentMatters.some((line) => !lockedMatterIds.has(line.workspaceId))) {
+    return undefined;
+  }
+  return invoice;
 };
 
 /** Caller holds timer-owner locks; all selected matter advisory keys are acquired together. */
