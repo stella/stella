@@ -400,15 +400,15 @@ const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
     runId: v.pipe(v.string(), v.uuid()),
   });
 
-const legacyAnalysisGeneratingSchema: v.GenericSchema<LegacyAnalysisGenerating> =
-  v.strictObject(analysisGeneratingEntries);
+const legacyAnalysisGeneratingSchema = v.strictObject(
+  analysisGeneratingEntries,
+);
 
-const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =
-  v.union([
-    analysisGeneratingSchema,
-    legacyAnalysisGeneratingSchema,
-    decisionAnalysisSchema,
-  ]);
+const persistedDecisionAnalysisSchema = v.union([
+  analysisGeneratingSchema,
+  legacyAnalysisGeneratingSchema,
+  decisionAnalysisSchema,
+]);
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   v.is(analysisGeneratingSchema, val);
