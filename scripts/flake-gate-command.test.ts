@@ -91,7 +91,7 @@ test("the generic parser records unsupported shell shapes independently of dedic
   expect(unsupported).toMatchInlineSnapshot(`
     [
       {
-        "command": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun scripts/run-tests.ts",
+        "command": "bun --cwd=../../packages/cli run codegen:runtime || exit 1; bun run generate:capability-runtime || exit 1; bun scripts/run-tests.ts",
         "reason": "shell-syntax",
         "script": "apps/api/package.json:test",
       },
@@ -111,17 +111,17 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "apps/landing/package.json:test",
       },
       {
-        "command": "([ -n "$TURBO_HASH" ] || bun run generate:web-sources) && bun scripts/run-tests.ts",
+        "command": "([ -n "$TURBO_HASH" ] || bun run generate:web-sources) || exit 1; bun scripts/run-tests.ts",
         "reason": "shell-expansion",
         "script": "apps/web/package.json:test",
       },
       {
-        "command": "bun scripts/generate-manifest.ts --check && bun scripts/validate.ts && bun test src",
+        "command": "bun scripts/generate-manifest.ts --check || exit 1; bun scripts/validate.ts || exit 1; bun test src",
         "reason": "shell-syntax",
         "script": "packages/catalogue/package.json:test",
       },
       {
-        "command": "bun run codegen:runtime && bun test",
+        "command": "bun run codegen:runtime || exit 1; bun test",
         "reason": "shell-syntax",
         "script": "packages/cli/package.json:test",
       },
@@ -136,12 +136,12 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "packages/scan-engine/package.json:test",
       },
       {
-        "command": "bun scripts/generate-manifests.ts --check && bun test src",
+        "command": "bun scripts/generate-manifests.ts --check || exit 1; bun test src",
         "reason": "shell-syntax",
         "script": "packages/skills/package.json:test",
       },
       {
-        "command": "bun scripts/generate-manifest.ts --check && bun scripts/generate-manifest.ts --check --fixtures && bun test src",
+        "command": "bun scripts/generate-manifest.ts --check || exit 1; bun scripts/generate-manifest.ts --check --fixtures || exit 1; bun test src",
         "reason": "shell-syntax",
         "script": "packages/template-packs/package.json:test",
       },
