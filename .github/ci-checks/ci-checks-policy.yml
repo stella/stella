@@ -149,8 +149,8 @@ checks:
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
-    id: static_check_122
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_122 != 'true') }}
+    id: static_check_124
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_124 != 'true') }}
     # Every direct dependency must have an exact llms.txt source or an
     # explained quarantine of at most 31 days. The rule never reads the clock;
     # scripts/dated-waivers.ts owns the expiry.
