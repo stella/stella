@@ -72,6 +72,7 @@ export const AGGREGATE_LOCKS = {
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
   readerAnswer: { rank: 120, kind: "row" },
+  readerAnnotation: { rank: 120, kind: "advisory" },
   readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
@@ -186,6 +187,7 @@ export const AGGREGATE_CHAINS = {
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
+  readerAnnotation: ["readerAnnotation"],
   signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
@@ -282,6 +284,11 @@ type AggregateIdentities = {
   };
   readerAnswer: {
     id: SafeId<"legalReaderAnswer">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  readerAnnotation: {
+    id: SafeId<"legalReaderAnnotation">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -1296,6 +1303,17 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.aggregate,
           options.id.organizationId,
           options.id.userId,
+        ],
+      };
+    case "readerAnnotation":
+      return {
+        first: sql`${0x0f_10_cc_af}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.userId, options.id.id])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+          options.id.id,
         ],
       };
     case "orgFeatureAdmission":

@@ -19,6 +19,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 
 const db = {
+  transaction: async () =>
+    panic("Injected archive sources must not open transactions"),
   select: () => panic("Injected archive sources must not access the database"),
 } satisfies AccountExportDataDb;
 const userId = toSafeId<"user">("archive-account");
