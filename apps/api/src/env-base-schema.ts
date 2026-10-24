@@ -28,8 +28,8 @@ import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidan
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
-  type CorpusStorageMode,
   corpusStorageInvariantViolation,
+  type CorpusStorageMode,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";

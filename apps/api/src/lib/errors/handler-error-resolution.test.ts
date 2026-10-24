@@ -7,8 +7,8 @@ import { DocxArchiveError } from "@stll/docx-utils";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 
 import {
-  actionAdmissionRefusal,
   type ActionAdmissionError,
+  actionAdmissionRefusal,
 } from "./action-admission-error";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
@@ -63,17 +63,15 @@ const admissionReasons = {
 test("all admission refusals preserve the canonical contract through bounded wrappers", () => {
   const codes = new Set<string>();
   for (const reason of Object.keys(admissionReasons)) {
-    if (
-      !(
-        reason === "busy" ||
-        reason === "period_exhausted" ||
-        reason === "daily_exhausted" ||
-        reason === "not_enabled" ||
-        reason === "not_on_plan" ||
-        reason === "unavailable" ||
-        reason === "feature_disabled"
-      )
-    ) {
+    if (!(
+      reason === "busy" ||
+      reason === "period_exhausted" ||
+      reason === "daily_exhausted" ||
+      reason === "not_enabled" ||
+      reason === "not_on_plan" ||
+      reason === "unavailable" ||
+      reason === "feature_disabled"
+    )) {
       throw new Error("Unknown admission reason");
     }
     const refusal = actionAdmissionErrorFor(

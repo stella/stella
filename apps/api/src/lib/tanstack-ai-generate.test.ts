@@ -1,4 +1,4 @@
-import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
+import { convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { Panic, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -15,7 +15,7 @@ import {
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { OrgAIConfig, CachingDecision } from "@/api/lib/ai-config";
+import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -30,14 +30,14 @@ import {
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
   ModelRunError,
-  ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
   PROVIDER_ERROR_CODE,
+  ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import {
-  HandlerError,
-  ChatLoopDetectedError,
   ChatEmptyCompletionError,
+  ChatLoopDetectedError,
+  HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";

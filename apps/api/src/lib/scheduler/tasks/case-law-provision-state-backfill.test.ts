@@ -18,7 +18,7 @@ const fakeConnection = ({
       ? await pidQuery()
       : await onQuery(query);
   },
-  release: () => {
+  release: async () => {
     events.push("release");
   },
   close: async () => {

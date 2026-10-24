@@ -155,6 +155,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "document-processing-ocr.ts",
     "Hands queued document processing runs to their queue.",
   ),
+  "documentProcessing.dispatchNativeExtraction": platform(
+    "document-processing-native-extraction.ts",
+    "Hands queued native extraction runs to their queue.",
+  ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
     "Hands pending deadline scans to their queue.",
@@ -258,6 +262,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
+  ),
+  "scheduler.auditPauses": platform(
+    "scheduler-pause-audit.ts",
+    "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
     authority: "unclassified",

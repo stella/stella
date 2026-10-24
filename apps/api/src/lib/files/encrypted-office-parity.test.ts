@@ -163,6 +163,7 @@ describe("encrypted files on raw-byte paths", () => {
             fileName: `locked.${entry.label}`,
             mimeType: entry.mimeType,
           },
+          organizationId: toSafeId<"organization">("org_1"),
           recordAuditEvent: async () => await Promise.resolve(),
           safeDb: async () =>
             await Promise.resolve(

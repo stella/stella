@@ -9,7 +9,7 @@ import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { agentSkills } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,

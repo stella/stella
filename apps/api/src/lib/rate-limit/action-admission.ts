@@ -6,11 +6,11 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import {
+  type AdmissionRedisClient,
+  type AdmissionRedisReady,
   createAdmissionRedis,
   resolveAdmissionRedisClient,
   sendAdmissionRedisCommand,
-  type AdmissionRedisClient,
-  type AdmissionRedisReady,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -33,24 +33,24 @@ import {
   ACTION_SERVICE_DEADLINE_EXPIRED,
   ACTION_SERVICE_DEADLINE_SCRIPT,
   actionPeriodArguments,
-  staleActionPeriodTime,
-  PER_KIND_PERIOD_SCOPE,
-  resolveActionPeriodBudget,
   type ActionPeriodBudget,
   type ActionPeriodBudgetError,
   type ActionPeriodPolicy,
   type ActionPeriodScope,
+  PER_KIND_PERIOD_SCOPE,
+  resolveActionPeriodBudget,
+  staleActionPeriodTime,
 } from "@/api/lib/rate-limit/action-period-budget";
 import {
   configuredDemoActionBudget,
-  withDemoActionBudget,
   type DemoActionBudget,
+  withDemoActionBudget,
 } from "@/api/lib/rate-limit/demo-action-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 import {
-  runObservedAction,
   type ActionCostRecorder,
+  runObservedAction,
 } from "@/api/lib/usage/action-costs/context";
 import {
   getActionCostRecorder,
@@ -60,9 +60,9 @@ import { resolveOrganizationAccess } from "@/api/lib/usage/organization-access";
 import {
   actionDrawsServiceBudget,
   actionPlanAvailability,
+  type OrganizationActionBudgetConfig,
   readOrganizationActionState,
   resolveOrganizationActionBudget,
-  type OrganizationActionBudgetConfig,
 } from "@/api/lib/usage/organization-action-budget";
 
 type RedisCommands = AdmissionRedisClient;
@@ -1364,12 +1364,10 @@ export const withActionAdmission = async <T>(
             markStarted();
             return await execute({ signal, control });
           };
-          if (
-            !(
-              checkedOptions.enabled ??
-              isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
-            )
-          ) {
+          if (!(
+            checkedOptions.enabled ??
+            isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
+          )) {
             return await Result.tryPromise({
               try: async () =>
                 await startedRun(new AbortController().signal, disabledControl),

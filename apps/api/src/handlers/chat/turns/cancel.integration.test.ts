@@ -19,10 +19,10 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toPersistedChatMessageContentV3,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   finalizeAssistantTurn,
@@ -55,6 +55,7 @@ import {
   findOfferedInteractions,
   findTurnOutcomeMismatches,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -375,6 +376,7 @@ const produceUntilCut = ({
   const response = run.produce(
     output(),
     memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
   );
   return { response, run };
 };

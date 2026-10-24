@@ -2,7 +2,7 @@ import { isTaggedError } from "better-result";
 import { appendFile, mkdir, stat, truncate } from "node:fs/promises";
 import path from "node:path";
 
-import { createDevErrorLogger, sanitizeErrorForOutput } from "@stll/errors";
+import { createDevErrorLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import {
@@ -10,6 +10,7 @@ import {
   errorTag,
   isErrorInstance,
 } from "@/api/lib/errors/error-tag";
+import { sanitizeDiagnosticErrorForOutput } from "@/api/lib/errors/handoff-diagnostics";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import {
   identityFields,
@@ -61,7 +62,7 @@ export const connectionErrorFields = (
 ): Record<string, string> => {
   const fields = errorSystemFields(error);
   if (isErrorInstance(error)) {
-    const safeError = sanitizeErrorForOutput(error);
+    const safeError = sanitizeDiagnosticErrorForOutput(error);
     const message =
       safeError instanceof Error ? safeErrorMessage(safeError) : undefined;
     if (message !== undefined) {
@@ -92,6 +93,13 @@ export const safeErrorTelemetryFields = (
       ...fields,
       signalCode: error.termination.signalCode,
       terminationReason: error.termination.reason,
+    };
+  }
+  if (error.workerErrorClass !== null) {
+    return {
+      ...fields,
+      exitCode: String(error.exitCode),
+      workerErrorClass: error.workerErrorClass,
     };
   }
   return { ...fields, exitCode: String(error.exitCode) };
@@ -147,7 +155,7 @@ export const unredactedErrorFields = (
     return fields;
   }
 
-  const safeError = sanitizeErrorForOutput(error);
+  const safeError = sanitizeDiagnosticErrorForOutput(error);
   const message =
     safeError instanceof Error ? safeErrorMessage(safeError) : undefined;
   if (message !== undefined) {
@@ -275,7 +283,7 @@ const serializeSafeError = (error: unknown): unknown => {
 
 /** The JSONL sink and its contract tests share this serialization boundary. */
 export const serializeDevError = (error: unknown): unknown =>
-  serializeSafeError(sanitizeErrorForOutput(error));
+  serializeSafeError(sanitizeDiagnosticErrorForOutput(error));
 
 type AppendDevErrorJsonlInput = {
   error: unknown;
