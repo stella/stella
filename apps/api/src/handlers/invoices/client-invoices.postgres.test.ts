@@ -754,7 +754,7 @@ if (!databaseUrl || !runPostgres) {
         })),
       ).toEqual({
         lines: [{ id: scenario.firstLineId }],
-        invoice: { totalAmount: 0 },
+        invoice: { totalAmount: cents(0) },
       });
     });
 

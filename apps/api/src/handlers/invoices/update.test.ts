@@ -47,6 +47,7 @@ const createContext = ({
 describe("updateInvoice currency integrity", () => {
   test("rejects a currency change while entries are attached", async () => {
     const { safeDb } = createScopedDbMock({
+      selectDistinct: () => createSelectQueryMock([]),
       select: () => ({
         from: (table: unknown) => {
           if (table === invoices) {

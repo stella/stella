@@ -62,12 +62,12 @@ beforeAll(async () => {
   await db
     .update(authUser)
     .set({ emailVerified: true })
-    .where(eq(authUser.id, ids.userA1));
+    .where(eq(authUser.id, ids.userAdmin));
   await db
     .insert(featureEnrolments)
     .values({
       organizationId: ids.orgA,
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       featureId: "time-billing",
     })
     .onConflictDoNothing();
@@ -135,10 +135,10 @@ const context = <TContext>(
     body,
     params,
     workspaceId: matterIds.at(0),
-    safeDb: createSafeDb(db, matterIds, ids.orgA, ids.userA1),
-    scopedDb: createScopedDb(db, matterIds, ids.orgA, ids.userA1),
+    safeDb: createSafeDb(db, matterIds, ids.orgA, ids.userAdmin),
+    scopedDb: createScopedDb(db, matterIds, ids.orgA, ids.userAdmin),
     session: { activeOrganizationId: ids.orgA },
-    user: { id: ids.userA1 },
+    user: { id: ids.userAdmin },
     memberRole: sessionMemberRole("owner"),
     getActiveWorkspaceIds: async () => matterIds,
     getAccessibleWorkspaces: async () =>
@@ -162,7 +162,7 @@ const create = async () => {
       id,
       organizationId: ids.orgA,
       workspaceId,
-      userId: ids.userA1,
+      userId: ids.userAdmin,
       dateWorked: index === 0 ? "2026-09-10" : "2026-09-25",
       timezoneId: "UTC",
       durationMinutes: 60,
