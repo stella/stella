@@ -706,6 +706,18 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   },
   {
     migration: "20261022233000_mcp_web_handoff",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS apply only to the new empty handoff table before it becomes visible to application traffic, under a 1s lock_timeout.",
+  },
+  {
+    migration: "20261022233000_mcp_web_handoff",
+    form: "create-policy",
+    reason:
+      "Both policies are installed on the new empty handoff table under a 1s lock_timeout; their expressions inspect table ownership or return false, without reading application relations.",
+  },
+  {
+    migration: "20261022233000_mcp_web_handoff",
     form: "add-column",
     reason:
       "The two session columns are nullable and default-free catalog additions under a 1s lock_timeout, without a heap rewrite.",
