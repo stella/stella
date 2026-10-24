@@ -396,13 +396,13 @@ const useComposerSubmit = ({
         create: async () => {
           if (client === undefined) {
             return unwrapEden(
-              await invokeCapability("invoices.create", (request) =>
+              await invokeCapability("invoices.create", async (request) =>
                 invoices.put(body, request),
               ),
             );
           }
           return unwrapEden(
-            await invokeCapability("client-invoices.create", (request) =>
+            await invokeCapability("client-invoices.create", async (request) =>
               api["client-invoices"]({
                 clientId: toSafeId<"contact">(client.clientId),
               }).put(
@@ -457,7 +457,7 @@ const useComposerSubmit = ({
         finalize: async (id) => {
           const finalized = await invokeCapability(
             "invoices.transition",
-            (request) =>
+            async (request) =>
               invoices({
                 invoiceId: toSafeId<"invoice">(id),
               }).transition.post({ action: "finalize" }, request),

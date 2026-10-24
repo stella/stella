@@ -33,7 +33,7 @@ export const InvoicePdfDownloadButton = ({
     mutationFn: async () => {
       const response = await invokeCapability(
         "invoices.pdf.export",
-        (request) =>
+        async (request) =>
           api
             .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
               invoiceId: toSafeId<"invoice">(invoiceId),

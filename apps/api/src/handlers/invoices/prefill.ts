@@ -34,7 +34,7 @@ const prefillInvoice = createSafeHandler(
   },
   async function* ({ safeDb, session, workspaceId, query }) {
     const result = yield* Result.await(
-      safeDb((tx) =>
+      safeDb(async (tx) =>
         readMatterInvoicePrefill(tx, {
           organizationId: session.activeOrganizationId,
           workspaceId,

@@ -71,7 +71,7 @@ export const InvoiceLineEditor = ({
   const reset = useMutation({
     mutationFn: async () =>
       unwrapEden(
-        await invokeCapability("invoices.lines.update", (request) =>
+        await invokeCapability("invoices.lines.update", async (request) =>
           endpoint.patch({ resetToRecorded: true }, request),
         ),
       ),
@@ -81,7 +81,7 @@ export const InvoiceLineEditor = ({
   const remove = useMutation({
     mutationFn: async () =>
       unwrapEden(
-        await invokeCapability("invoices.lines.delete", (request) =>
+        await invokeCapability("invoices.lines.delete", async (request) =>
           endpoint.delete({}, request),
         ),
       ),
@@ -115,7 +115,7 @@ export const InvoiceLineEditor = ({
       onSubmit: async ({ value }) => {
         const result = await invokeCapability(
           "invoices.lines.update",
-          (request) =>
+          async (request) =>
             endpoint.patch(
               {
                 description: value.description,
