@@ -2299,6 +2299,7 @@
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
+    "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
@@ -2326,6 +2327,7 @@
     "summaryLineRead": "<group>Lugemine:</group> {items}",
     "summaryLineUse": "<group>Kasutamine:</group> {items}",
     "summaryMattersWrite": "toimikud ja ülesanded",
+    "summaryMemoryWrite": "assistendi mälestused",
     "summaryProfile": "profiil",
     "summaryRead": "dokumendid, toimikud ja kontaktid",
     "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
@@ -2691,6 +2693,7 @@
       "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
       "contact": "Võtke meiega ühendust",
+      "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
       "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
     },
