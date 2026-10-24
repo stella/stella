@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract/mcp";
+import { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 
 import { member, oauthClient, oauthConsent } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
@@ -89,10 +91,14 @@ export const measureWebHandoff = async (
           grantedScopes: [...MCP_DEFAULT_RESOURCE_SCOPES],
         }),
       });
+      const output = v.safeParse(
+        mcpWebHandoffLinkOutputSchema,
+        "data" in response ? response.data : undefined,
+      );
       if (
-        !("data" in response) ||
+        !output.success ||
         !/^sh1_[A-Za-z0-9_-]{43}$/u.test(
-          new URLSearchParams(new URL(response.data["url"]).hash.slice(1)).get(
+          new URLSearchParams(new URL(output.output.url).hash.slice(1)).get(
             "sh",
           ) ?? "",
         )
@@ -104,7 +110,7 @@ export const measureWebHandoff = async (
       return {
         statements: counter.count,
         transactionRoundTrips: counter.transactions,
-        responseBytes: Buffer.byteLength(JSON.stringify(response.data)),
+        responseBytes: Buffer.byteLength(JSON.stringify(output.output)),
         rows: 1,
       };
     });
@@ -134,7 +140,11 @@ export const measurePlainWebHandoff = async (
         organizationId: fixture.organizationId,
       }),
     });
-    if (!("data" in response) || response.data["url"] !== url) {
+    const output = v.safeParse(
+      mcpWebHandoffLinkOutputSchema,
+      "data" in response ? response.data : undefined,
+    );
+    if (!output.success || output.output.url !== url) {
       return panic(
         "Plain handoff scaling requires an unchanged successful URL",
       );
@@ -142,7 +152,7 @@ export const measurePlainWebHandoff = async (
     return {
       statements: counter.count,
       transactionRoundTrips: counter.transactions,
-      responseBytes: Buffer.byteLength(JSON.stringify(response.data)),
+      responseBytes: Buffer.byteLength(JSON.stringify(output.output)),
       rows: 1,
     };
   });

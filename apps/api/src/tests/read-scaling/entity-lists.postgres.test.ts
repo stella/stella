@@ -28,7 +28,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient({ max: 1 });
-        await prepareEntityReadScalingTables(db);
+        // Context-reference visibility reads public.entities, so this journey
+        // uses the migrated tables rather than temporary shadow tables.
         const fixture = await seedEntityReadScaling(db, 3);
         try {
           const documents = await db

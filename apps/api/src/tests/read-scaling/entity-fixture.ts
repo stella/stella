@@ -200,6 +200,10 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
     versionEntityId: versionEntity.id,
     safeDb,
     cleanup: async () => {
+      await db
+        .update(entities)
+        .set({ currentVersionId: null })
+        .where(eq(entities.workspaceId, workspaceId));
       await db.delete(fields).where(eq(fields.workspaceId, workspaceId));
       await db
         .delete(entityVersions)
