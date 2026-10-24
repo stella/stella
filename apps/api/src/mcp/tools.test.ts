@@ -88,6 +88,7 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { activeStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { readPresent } from "@/api/lib/errors/read-outcome";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
@@ -1887,11 +1888,17 @@ describe("OpenAI-compatible MCP tools", () => {
     test("allows a manual lookup outside the advertised home jurisdictions", async () => {
       const baseContext = createContext();
       const executeRegistryLookupMock = mock(
-        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => ({
-          type: "lookup" as const,
-          registry: handler.slug,
-          hit: null,
-        }),
+        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => {
+          expect(activeStatementCeiling()).toEqual({
+            kind: "mcp",
+            key: "lookup_business_registry",
+          });
+          return {
+            type: "lookup" as const,
+            registry: handler.slug,
+            hit: null,
+          };
+        },
       );
       const result = await handleMcpToolCall({
         args: { registry: "krs", query: "0000123456" },

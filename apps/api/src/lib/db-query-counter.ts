@@ -21,12 +21,15 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
 export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
 
-type QueryCounter = {
+export type QueryCounter = {
   count: number;
   transactions: number;
   fingerprints: Map<string, number>;
   detectRepeatedQueries: boolean;
   countTransactions: boolean;
+  diagnostics: boolean;
+  parent: QueryCounter | undefined;
+  onQuery?: () => void;
 };
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
@@ -34,8 +37,8 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 /**
  * Run `fn` inside a fresh counter store. Every query logged through
  * {@link queryCountLogger} while `fn` (and its awaited continuations) run
- * increments this store and no other, so interleaved async contexts count
- * independently.
+ * increments this store and its enclosing counters. Interleaved sibling
+ * contexts remain independent.
  *
  * This is the only supported way to open a store. `AsyncLocalStorage.enterWith`
  * would be the convenient alternative for a lifecycle split across separate
@@ -62,9 +65,13 @@ export const runWithQueryCounter = <TResult>(
     fingerprints: new Map(),
     detectRepeatedQueries,
     countTransactions,
+    diagnostics: false,
+    parent: queryCounterStore.getStore(),
   };
   return queryCounterStore.run(counter, () => fn(counter));
 };
+
+export const currentQueryCounter = () => queryCounterStore.getStore();
 
 export class RepeatedQueryFingerprintError extends TaggedError(
   "RepeatedQueryFingerprintError",
@@ -106,9 +113,17 @@ export const currentTransactionCount = (): number | undefined =>
   queryCounterStore.getStore()?.transactions;
 
 const recordTransactionRoundTrip = (): void => {
-  const counter = queryCounterStore.getStore();
-  if (counter?.countTransactions) {
-    counter.transactions += 1;
+  let counter = queryCounterStore.getStore();
+  const updated: QueryCounter[] = [];
+  while (counter !== undefined) {
+    if (counter.countTransactions) {
+      counter.transactions += 1;
+      updated.push(counter);
+    }
+    counter = counter.parent;
+  }
+  for (const store of updated) {
+    store.onQuery?.();
   }
 };
 
@@ -151,7 +166,7 @@ export const instrumentSqlTransactionCounts = (client: SQL): SQL => {
 
 export const currentRepeatedQueryFingerprints = (): readonly string[] => {
   const counter = queryCounterStore.getStore();
-  if (!counter) {
+  if (!counter?.detectRepeatedQueries) {
     return [];
   }
   return [...counter.fingerprints]
@@ -191,23 +206,35 @@ const isSessionConfigurationQuery = (query: string): boolean =>
  */
 export const queryCountLogger: Logger = {
   logQuery: (query): void => {
-    const counter = queryCounterStore.getStore();
+    let counter = queryCounterStore.getStore();
     if (!counter) {
       return;
     }
     if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
       return;
     }
-    counter.count += 1;
-    // RLS installs session-local settings for every scoped transaction; their
-    // repetition is protocol setup, not per-row query work.
-    if (!counter.detectRepeatedQueries || isSessionConfigurationQuery(query)) {
-      return;
+    // Reuse the repeated-query owner's normalization and callsite identity.
+    // Session setup contributes to the count, never to repeated-work findings.
+    let fingerprint: string | undefined;
+    const sessionConfiguration = isSessionConfigurationQuery(query);
+    const updated: QueryCounter[] = [];
+    while (counter !== undefined) {
+      counter.count += 1;
+      if (
+        !sessionConfiguration &&
+        (counter.detectRepeatedQueries || counter.diagnostics)
+      ) {
+        fingerprint ??= `${queryCallsite()} :: ${normalizeSql(query)}`;
+        counter.fingerprints.set(
+          fingerprint,
+          (counter.fingerprints.get(fingerprint) ?? 0) + 1,
+        );
+      }
+      updated.push(counter);
+      counter = counter.parent;
     }
-    const fingerprint = `${queryCallsite()} :: ${normalizeSql(query)}`;
-    counter.fingerprints.set(
-      fingerprint,
-      (counter.fingerprints.get(fingerprint) ?? 0) + 1,
-    );
+    for (const store of updated) {
+      store.onQuery?.();
+    }
   },
 };

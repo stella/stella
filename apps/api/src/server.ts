@@ -159,6 +159,7 @@ import {
 } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
@@ -230,7 +231,11 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import {
+  isLocalDevOpen,
+  isLocalTestRun,
+  runtimeMode,
+} from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -746,6 +751,33 @@ const decorateActionSizeRefusal = (
 };
 
 const scopeRequestAsyncStores = (): void => {
+  // Reuse the framework's matcher so parameter values and loose-path aliases
+  // share the registered route's budget identity.
+  const statementRoutes = isLocalTestRun()
+    ? new Elysia({
+        aot: false,
+        ...(api.config.strictPath === undefined
+          ? {}
+          : { strictPath: api.config.strictPath }),
+      })
+    : undefined;
+  if (statementRoutes !== undefined) {
+    for (const { method, path } of api.routes) {
+      statementRoutes.route(method, path, () => `${method} ${path}`);
+    }
+  }
+  const findStatementRoute = statementRoutes?.router.dynamic.find.bind(
+    statementRoutes.router.dynamic,
+  );
+  const statementRouteKey = (request: Request): string => {
+    const path = new URL(request.url).pathname;
+    const matched =
+      findStatementRoute?.(request.method, path) ??
+      findStatementRoute?.("ALL", path);
+    return matched === undefined || matched === null
+      ? `${request.method} <unmatched>`
+      : `${request.method} ${matched.store.route}`;
+  };
   const isTenantAction = createTenantActionClassifier({
     routes: api.routes,
     staticRoutes: api.router.static,
@@ -775,9 +807,23 @@ const scopeRequestAsyncStores = (): void => {
         }),
       );
     };
-    return runWithHttpRequestScope(scopedRequest);
+    return runWithHttpRequestScope(async () =>
+      statementRoutes === undefined
+        ? await scopedRequest()
+        : await runWithStatementCeiling({
+            kind: "request",
+            key: statementRouteKey(request),
+            run: scopedRequest,
+          }),
+    );
   });
 };
+
+// Imported test applications never run startServer, but must exercise the
+// same request boundary as the listening application.
+if (isLocalTestRun()) {
+  scopeRequestAsyncStores();
+}
 
 const startS3RefreshLoop = () => {
   const timer = setInterval(() => {
@@ -872,7 +918,9 @@ const startServer = async (): Promise<void> => {
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
       });
 
-  scopeRequestAsyncStores();
+  if (!isLocalTestRun()) {
+    scopeRequestAsyncStores();
+  }
 
   api.listen({
     port: getApiPort(),

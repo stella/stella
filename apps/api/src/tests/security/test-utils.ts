@@ -8,6 +8,7 @@ import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabaseMarker, TransactionOf } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const allRelations = {
@@ -28,6 +29,7 @@ const createTestDb = async (): Promise<TestDatabase> => {
     drizzle({
       client,
       relations: allRelations,
+      logger: queryCountLogger,
     }),
   );
 };
@@ -41,7 +43,14 @@ export const withQueryLogger = (
     drizzle({
       client: database.$client,
       relations: allRelations,
-      logger,
+      logger: {
+        logQuery: (query, params) => {
+          queryCountLogger.logQuery(query, params);
+          if (logger !== queryCountLogger) {
+            logger.logQuery(query, params);
+          }
+        },
+      },
     }),
   );
 

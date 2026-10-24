@@ -4,6 +4,7 @@ import type { JobProgress, QueueOptions } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import {
   createBullMqConnection,
   type RedisClientOverrides,
@@ -66,6 +67,18 @@ export class BullMqWorker<
   ResultType = void,
   NameType extends string = string,
 > extends Worker<DataType, ResultType, NameType> {
+  protected override async callProcessJob(
+    job: Job<DataType, ResultType, NameType>,
+    token: string,
+    signal?: AbortSignal,
+  ): Promise<ResultType> {
+    return runWithStatementCeiling({
+      kind: "worker",
+      key: this.name,
+      run: async () => super.callProcessJob(job, token, signal),
+    });
+  }
+
   protected override get Job() {
     return QueueFailureJob;
   }

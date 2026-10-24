@@ -74,7 +74,6 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import {
   createResetReviewOrganizationTask,
   RESET_REVIEW_ORGANIZATION_TASK,
-  resetReviewOrganizationTask,
 } from "@/api/lib/scheduler/tasks/review-organization-reset";
 import type {
   SchedulerDb,
@@ -1086,18 +1085,11 @@ describe("review organization reset task", () => {
   });
 
   test("is registered ungated and, without time billing, seeds everything else", async () => {
-    // The registry runs the task itself, with no feature gate in front of it.
-    expect(
-      createSchedulerTaskRegistry(async () => {}).get(
-        RESET_REVIEW_ORGANIZATION_TASK,
-      ),
-    ).toBe(resetReviewOrganizationTask);
-
     // Enrolments survive resets (they are the account's preferences).
     await testDb
       .delete(featureEnrolments)
       .where(eq(featureEnrolments.organizationId, fixture.reviewOrgId));
-    const task = createResetReviewOrganizationTask({
+    const reset = createResetReviewOrganizationTask({
       readConfig: () => config(fixture.reviewOrgId),
       dependencies: {
         ...resetDependencies,
@@ -1108,9 +1100,19 @@ describe("review organization reset task", () => {
       },
       rlsDatabase: rlsDatabase(),
     });
-    (await task(contextFor(Bun.randomUUIDv7()))).unwrap(
-      "Expected the reset run to succeed without time billing",
-    );
+    // Exercise the registered counting wrapper without a feature gate.
+    const task = createSchedulerTaskRegistry(async () => {}, {
+      resetReviewOrganization: reset,
+    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (task === undefined) {
+      panic("The reset task must be registered without a feature gate");
+    }
+    const runId = Bun.randomUUIDv7();
+    const outcome = await task(contextFor(runId));
+    if (outcome === undefined) {
+      panic("The registered reset task must return its Result");
+    }
+    outcome.unwrap("Expected the reset run to succeed without time billing");
     expect(await countRows(fixture.reviewOrgId)).toEqual({
       ...SAMPLE_COUNTS,
       timeEntries: 0,
@@ -1127,15 +1129,34 @@ describe("review organization reset task", () => {
       ),
     ).toBe(0);
 
-    // With time billing back, the next run completes the sample data.
-    const restored = createResetReviewOrganizationTask({
-      readConfig: () => config(fixture.reviewOrgId),
-      dependencies: resetDependencies,
-      rlsDatabase: rlsDatabase(),
+    const audit = await testDb
+      .select({ counts: systemAuditRuns.counts })
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.subject, runId));
+    expect(audit).toHaveLength(1);
+    expect(audit.at(0)?.counts).toMatchObject({
+      failedDeletes: 0,
+      seedFailed: 0,
+      seededDocuments: SAMPLE_COUNTS.documents,
+      seededTimeEntries: 0,
     });
-    (await restored(contextFor(Bun.randomUUIDv7()))).unwrap(
-      "Expected the reset run to succeed",
-    );
+
+    // With time billing back, the registered task completes the sample data.
+    const restored = createSchedulerTaskRegistry(async () => {}, {
+      resetReviewOrganization: createResetReviewOrganizationTask({
+        readConfig: () => config(fixture.reviewOrgId),
+        dependencies: resetDependencies,
+        rlsDatabase: rlsDatabase(),
+      }),
+    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (restored === undefined) {
+      panic("The restored reset task must remain registered");
+    }
+    const restoredOutcome = await restored(contextFor(Bun.randomUUIDv7()));
+    if (restoredOutcome === undefined) {
+      panic("The restored reset task must return its Result");
+    }
+    restoredOutcome.unwrap("Expected the reset run to succeed");
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
   });
 });

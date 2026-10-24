@@ -1,3 +1,4 @@
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
   SWEEP_ACTION_COSTS_TASK,
@@ -218,6 +219,7 @@ import {
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type {
   SchedulerTask,
+  SchedulerTaskContext,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
@@ -296,6 +298,10 @@ const SCHEDULER_TASKS = {
   SchedulerTask | { featureId: string; task: SchedulerTask }
 >;
 
+type SchedulerTaskRegistryOptions = {
+  resetReviewOrganization?: SchedulerTask;
+};
+
 const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
@@ -315,12 +321,31 @@ export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
     Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
-      ([name, entry]) => [
-        name,
-        typeof entry === "function" ? entry : entry.task,
-      ],
+      ([name, registered]) => {
+        const entry =
+          name === RESET_REVIEW_ORGANIZATION_TASK
+            ? (options.resetReviewOrganization ?? registered)
+            : registered;
+        return [
+          name,
+          async (context: SchedulerTaskContext) =>
+            runWithStatementCeiling({
+              kind: "scheduler",
+              key: name,
+              run: async () => {
+                const task = typeof entry === "function" ? entry : entry.task;
+                const outcome = await task(context);
+                if (outcome === undefined) {
+                  return undefined;
+                }
+                return outcome;
+              },
+            }),
+        ];
+      },
     ),
   );

@@ -103,6 +103,35 @@ describe("db query counter logger", () => {
     expect(result.repeats[0]).toContain("select * from matters where id = ?");
   });
 
+  test("unmeasured counters retain no diagnostic fingerprints", () => {
+    runWithQueryCounter((counter) => {
+      for (const id of [1, 2]) {
+        queryCountLogger.logQuery("SELECT id FROM matters WHERE id = $1", [id]);
+      }
+      expect(counter.count).toBe(2);
+      expect(counter.fingerprints.size).toBe(0);
+      expect(counter.diagnostics).toBe(false);
+      expect(currentRepeatedQueryFingerprints()).toEqual([]);
+    });
+  });
+
+  test("transaction-disabled children still count each round trip for their parent", async () => {
+    await runWithQueryCounter(async (parent) => {
+      await runWithQueryCounter(
+        async (child) => {
+          await runCountedTransaction(async () => {
+            queryCountLogger.logQuery("SELECT 1", []);
+          });
+          expect(child.count).toBe(1);
+          expect(child.transactions).toBe(0);
+        },
+        { countTransactions: false },
+      );
+      expect(parent.count).toBe(1);
+      expect(parent.transactions).toBe(2);
+    });
+  });
+
   test("interleaved async contexts count independently", async () => {
     const countContext = async (queries: number): Promise<number> => {
       const count = await runWithQueryCounter(async (counter) => {
