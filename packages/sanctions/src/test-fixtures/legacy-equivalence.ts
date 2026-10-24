@@ -4,7 +4,7 @@ import { expect } from "bun:test";
 import type { ParsedList, SanctionsEntry } from "../entry";
 import { buildScreeningIndex, screen, type ScreeningQuery } from "../screening";
 import { compactLists } from "./compact-lists";
-import { screen as legacyScreen } from "./legacy-screening";
+import type { screen as legacyScreen } from "./legacy-screening";
 
 type SeededEntryOptions = {
   base: SanctionsEntry;
