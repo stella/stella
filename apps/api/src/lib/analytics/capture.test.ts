@@ -19,6 +19,7 @@ import {
   HandlerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { ConversionInputError } from "@/api/lib/files/gotenberg";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -690,5 +691,57 @@ test("capture preserves finite dimensions when fingerprint metadata is unreadabl
   expect(captured[0]?.properties["$exception_fingerprint"]).toContain("decode");
   expect(JSON.stringify(captured[0]?.properties)).not.toContain(
     "private metadata sentinel",
+  );
+});
+
+test("conversion refusal fingerprints depend on kind rather than variable details", () => {
+  assertProperty(
+    "conversion-refusal-fingerprints-ignore-payload",
+    fc.property(fc.string(), (detail) => {
+      captured.length = 0;
+      resetCaptureWindows();
+      const privateDetail = `PRIVATE_CONVERSION_SENTINEL:${detail}`;
+      const reference = new ConversionInputError({
+        message: privateDetail,
+        reason: {
+          kind: "unsupported_reference",
+          format: privateDetail,
+          element: privateDetail,
+          attribute: privateDetail,
+        },
+      });
+      expect(readEvidence(reference).nodes.at(0)?.discriminators).toEqual({
+        "reason.kind": "unsupported_reference",
+      });
+      for (const error of [
+        reference,
+        new ConversionInputError({
+          message: "Another message",
+          reason: {
+            kind: "unsupported_reference",
+            format: "another format",
+            element: "another element",
+            attribute: "another attribute",
+          },
+        }),
+        new ConversionInputError({
+          message: privateDetail,
+          reason: { kind: "unsupported_encoding", encoding: privateDetail },
+        }),
+      ]) {
+        captureError(error, handlerErrorContext("analytics.conversionRefusal"));
+      }
+      expect(captured).toHaveLength(2);
+      expect(
+        new Set(
+          captured.map(
+            ({ properties }) => properties["$exception_fingerprint"],
+          ),
+        ).size,
+      ).toBe(2);
+      expect(JSON.stringify(captured)).not.toContain(
+        "PRIVATE_CONVERSION_SENTINEL",
+      );
+    }),
   );
 });

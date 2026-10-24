@@ -21,11 +21,21 @@ const FAILURE = "That did not work";
 const userVisibleReports = (capture: {
   mock: { calls: readonly (readonly unknown[])[] };
 }) =>
-  capture.mock.calls.filter(([, context]) => {
-    if (typeof context !== "object" || context === null) {
+  capture.mock.calls.filter(([, options]) => {
+    if (
+      typeof options !== "object" ||
+      options === null ||
+      !("context" in options)
+    ) {
       return false;
     }
-    return "type" in context && context.type === "user-visible";
+    const { context } = options;
+    return (
+      typeof context === "object" &&
+      context !== null &&
+      "type" in context &&
+      context.type === "user-visible"
+    );
   });
 
 /** Let the detached rejection handler run. */

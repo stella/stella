@@ -16,6 +16,8 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
@@ -392,7 +394,11 @@ class OnlineLockRetryDeferred extends TaggedError("OnlineLockRetryDeferred")<{
   attempts: number;
   lockTimeoutMs: number;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type GatedTableSessionOptions = {
   connection: Pick<OnlineMigrationConnection, "execute" | "query">;

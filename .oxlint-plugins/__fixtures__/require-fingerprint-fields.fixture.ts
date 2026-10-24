@@ -19,3 +19,15 @@ export class RegisteredFingerprint extends TaggedError(
     declareFingerprintFields(this, ["reason"]);
   }
 }
+
+// expect-clean: require-fingerprint-fields/require-fingerprint-fields
+export class RegisteredStructuredFingerprint extends TaggedError(
+  "RegisteredStructuredFingerprint",
+)<{
+  message: string;
+  reason: { kind: "read" | "write"; detail: string };
+}> {
+  static {
+    declareFingerprintFields(this, ["reason.kind"]);
+  }
+}

@@ -117,7 +117,11 @@ export default eslintCompatPlugin({
             if (isAstNode(type) && type.type === "TSStringKeyword") {
               continue;
             }
-            if (!registered.has(name)) {
+            if (
+              ![...registered].some(
+                (field) => field === name || field.startsWith(`${name}.`),
+              )
+            ) {
               context.report({ node: member, messageId: "missing" });
             }
           }

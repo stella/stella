@@ -5,19 +5,24 @@ import { MAX_EXCEPTION_CAUSE_DEPTH } from "./exception-cause-chain";
 // parser-output-unchanged: reads typed error dimensions for telemetry only; parsed values and rejection outcomes are unchanged.
 const FINGERPRINT_KEYS = ["reason", "phase", "stage", "termination"] as const;
 type FingerprintKey = (typeof FINGERPRINT_KEYS)[number];
+const NESTED_DISCRIMINATOR_KEY = "kind";
 
 /** Fingerprint dimensions are finite domain values vouched for by their error owner. */
-type FingerprintField<TValue> = {
-  [TKey in keyof TValue & FingerprintKey]: NonNullable<
-    TValue[TKey]
-  > extends string
+type FingerprintField<
+  TValue,
+  TAllowedKey extends FingerprintKey | typeof NESTED_DISCRIMINATOR_KEY =
+    FingerprintKey,
+> = {
+  [TKey in keyof TValue & TAllowedKey]: NonNullable<TValue[TKey]> extends string
     ? string extends NonNullable<TValue[TKey]>
       ? never
       : TKey
     : NonNullable<TValue[TKey]> extends object
-      ? `${TKey}.${FingerprintField<NonNullable<TValue[TKey]>>}`
+      ? TKey extends FingerprintKey
+        ? `${TKey}.${FingerprintField<NonNullable<TValue[TKey]>, FingerprintKey | typeof NESTED_DISCRIMINATOR_KEY>}`
+        : never
       : never;
-}[keyof TValue & FingerprintKey];
+}[keyof TValue & TAllowedKey];
 
 export type FingerprintFields<TInstance> =
   readonly FingerprintField<TInstance>[];
@@ -112,8 +117,12 @@ export const readFingerprintFields = ({
         continue;
       }
       if (
-        path.every((key) =>
-          FINGERPRINT_KEYS.some((dimension) => dimension === key),
+        path.every(
+          (key, index) =>
+            FINGERPRINT_KEYS.some((dimension) => dimension === key) ||
+            (index > 0 &&
+              index === path.length - 1 &&
+              key === NESTED_DISCRIMINATOR_KEY),
         )
       ) {
         fields.add(field);
@@ -142,7 +151,8 @@ export const readFingerprintFields = ({
       typeof constructor !== "function" ||
       !attempt(() =>
         Object.hasOwn(constructor, "stellaExceptionFingerprintFields"),
-      )
+      ) ||
+      attempt(() => read(constructor, "prototype")) !== prototype
     ) {
       continue;
     }

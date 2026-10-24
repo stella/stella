@@ -1,5 +1,5 @@
 import { TaggedError } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import type { FingerprintFields } from "./fingerprint-fields";
 import {
@@ -18,6 +18,16 @@ class DomainFailure extends TaggedError("DomainFailure")<{
   }
 }
 
+class StructuredFailure extends TaggedError("StructuredFailure")<{
+  message: string;
+  kind: "root-kind";
+  reason: { kind: "read" | "write"; detail: string };
+}> {
+  static {
+    declareFingerprintFields(this, ["reason.kind"]);
+  }
+}
+
 const fieldsOf = (value: object) =>
   readFingerprintFields({
     value,
@@ -26,6 +36,61 @@ const fieldsOf = (value: object) =>
   }).fields;
 
 describe("fingerprint fields preserve owner provenance", () => {
+  test("only a finite nested kind can identify a structured dimension", () => {
+    expectTypeOf<
+      FingerprintFields<StructuredFailure>[number]
+    >().toEqualTypeOf<"reason.kind">();
+    expectTypeOf<
+      FingerprintFields<{ reason: { kind: string } }>[number]
+    >().toEqualTypeOf<never>();
+    expectTypeOf<
+      FingerprintFields<{ reason: { kind: { reason: "read" } } }>[number]
+    >().toEqualTypeOf<never>();
+    for (const kind of ["read", "write"] as const) {
+      expect(
+        fieldsOf(
+          new StructuredFailure({
+            message: "private message",
+            kind: "root-kind",
+            reason: { kind, detail: "private nested detail" },
+          }),
+        ),
+      ).toEqual({ "reason.kind": kind });
+    }
+  });
+
+  test("registered nested dimensions are inherited through their declaring prototype", () => {
+    class InheritedFailure extends StructuredFailure {}
+    expect(
+      readFingerprintFields({
+        value: new InheritedFailure({
+          message: "private",
+          kind: "root-kind",
+          reason: { kind: "read", detail: "private" },
+        }),
+        prototypes: [InheritedFailure.prototype, StructuredFailure.prototype],
+        read: (object, key): unknown => Reflect.get(object, key),
+      }).fields,
+    ).toEqual({ "reason.kind": "read" });
+  });
+
+  test.each(["kind", "reason.detail", "reason.kind.reason", "reason.kind\n"])(
+    "static metadata cannot opt the private path %s in",
+    (field) => {
+      class MetadataError extends Error {
+        override readonly name = "MetadataError";
+        readonly kind = "private root kind";
+        readonly reason = {
+          kind: { reason: "private kind payload" },
+          detail: "private nested detail",
+          "kind\n": "private newline field",
+        };
+        static readonly stellaExceptionFingerprintFields = [field];
+      }
+      expect(fieldsOf(new MetadataError("private"))).toBeUndefined();
+    },
+  );
+
   test("captures finite dimensions including nested termination", () => {
     const error = new DomainFailure({
       message: "private message",
@@ -105,6 +170,38 @@ test("an instance constructor override cannot forge static fingerprint metadata"
   expect(fieldsOf(foreign)).toBeUndefined();
 });
 
+test("a foreign prototype cannot borrow another constructor's nested metadata", () => {
+  class StaticStructuredFailure extends Error {
+    override readonly name = "StaticStructuredFailure";
+    readonly reason = { kind: "read" as const };
+    static readonly stellaExceptionFingerprintFields = [
+      "reason.kind",
+    ] as const satisfies FingerprintFields<StaticStructuredFailure>;
+  }
+  class ForeignError extends Error {
+    override readonly name = "ForeignError";
+    readonly reason = { kind: "private foreign value" };
+  }
+  expect(fieldsOf(new StaticStructuredFailure("private"))).toEqual({
+    "reason.kind": "read",
+  });
+  class InheritedStaticFailure extends StaticStructuredFailure {}
+  expect(
+    readFingerprintFields({
+      value: new InheritedStaticFailure("private"),
+      prototypes: [
+        InheritedStaticFailure.prototype,
+        StaticStructuredFailure.prototype,
+      ],
+      read: (object, key): unknown => Reflect.get(object, key),
+    }).fields,
+  ).toEqual({ "reason.kind": "read" });
+  Object.defineProperty(ForeignError.prototype, "constructor", {
+    value: StaticStructuredFailure,
+  });
+  expect(fieldsOf(new ForeignError("private"))).toBeUndefined();
+});
+
 class FreeTextStaticFailureError extends Error {
   override readonly name = "FreeTextStaticFailureError";
   readonly reason: string = "private";
@@ -131,28 +228,46 @@ describe("fingerprint metadata is a bounded hostile-input boundary", () => {
     });
   };
 
-  test("a failing constructor descriptor preserves registered fields", () => {
-    class RegisteredError extends Error {
-      override readonly name = "RegisteredError";
-      readonly reason = "decode" as const;
-    }
-    declareFingerprintFields(RegisteredError, ["reason"]);
-    const constructor = new Proxy(RegisteredError, {
-      getOwnPropertyDescriptor: () => {
-        throw new TypeError("unreadable descriptor");
-      },
-    });
-    Object.defineProperty(RegisteredError.prototype, "constructor", {
-      value: constructor,
-    });
-    expect(
-      readFingerprintFields({
-        value: new RegisteredError("private"),
-        prototypes: [RegisteredError.prototype],
-        read: (object, key): unknown => Reflect.get(object, key),
-      }),
-    ).toEqual({ fields: { reason: "decode" }, status: "read_failed" });
-  });
+  test.each(["descriptor", "prototype", "revoked"])(
+    "a failing constructor %s read preserves registered fields",
+    (failure) => {
+      class RegisteredError extends Error {
+        override readonly name = "RegisteredError";
+        readonly reason = "decode" as const;
+        static readonly stellaExceptionFingerprintFields = [
+          "reason",
+        ] as const satisfies FingerprintFields<RegisteredError>;
+      }
+      declareFingerprintFields(RegisteredError, ["reason"]);
+      const { proxy: constructor, revoke } = Proxy.revocable(RegisteredError, {
+        getOwnPropertyDescriptor: (target, key) => {
+          if (failure === "descriptor") {
+            throw new TypeError("unreadable descriptor");
+          }
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+        get: (target, key, receiver): unknown => {
+          if (failure === "prototype" && key === "prototype") {
+            throw new TypeError("unreadable prototype");
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      Object.defineProperty(RegisteredError.prototype, "constructor", {
+        value: constructor,
+      });
+      if (failure === "revoked") {
+        revoke();
+      }
+      expect(
+        readFingerprintFields({
+          value: new RegisteredError("private"),
+          prototypes: [RegisteredError.prototype],
+          read: (object, key): unknown => Reflect.get(object, key),
+        }),
+      ).toEqual({ fields: { reason: "decode" }, status: "read_failed" });
+    },
+  );
 
   test("metadata methods and iterators are never called", () => {
     const metadata = ["reason"];
