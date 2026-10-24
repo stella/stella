@@ -29,6 +29,10 @@ simulator's or emulator's own host, so a local stack is reached at
 `http://localhost:<api port>` (or `http://10.0.2.2:<api port>` from an Android
 emulator); a phone needs an https server.
 
+Agents drive the app on a simulator against the local stack with the
+`test-mobile` skill (`.ai/local-skills/test-mobile/SKILL.md`), through the
+pinned `agent-device` CLI.
+
 The app uses only modules that Expo Go ships, so Expo Go can run it for a quick
 look. `expo-dev-client` is installed for the native development client, which
 every native module beyond Expo Go's set requires.
