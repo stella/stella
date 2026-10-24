@@ -106,12 +106,24 @@ An `.eml` or `.msg` file stored in a matter also becomes correspondence linked
 to that file, so one item appears in both Files and Correspondence. The native
 extraction run every new file version reaches hands the file to the
 `uploaded-mail-correspondence` queue after its text projection, so every upload
-transport is covered and extraction never fails on this step. The job is keyed
-by the file and runs in the API's workers: the document-processing worker
+transport is covered and extraction never fails on this step. Every file classification reaches this queue, including a version that is no
+longer a message. The job is keyed by the file and runs in the API's workers: the document-processing worker
 enqueues through `upload-enqueue.ts` alone, keeping the filing code and the API
-environment out of its import graph. The job rereads the stored object; a
+environment out of its import graph. The job identifies its stored file
+generation and reads the current entity version; filing and retirement check
+that version again under a source lock, so stale jobs cannot replace current
+correspondence. The job rereads the stored object; a
 permanent refusal is a logged skip, an unavailable database retries with
 backoff, and only an exhausted job or a failed hand-off is captured.
+
+The public filing boundary reconciles every terminal skip through the system
+source-retirement protocol, including access denial, parse refusals and files
+that are no longer correspondence. Cleanup uses the version captured before
+the filing attempt, so even a refusal that races a replacement cannot retire
+the newer version. Missing or initially stale sources leave current records
+alone. A cleanup failure remains retryable; it cannot acknowledge a refusal.
+Retryable filing errors also remain errors, preserving any record already
+created while attachment completion retries.
 
 - `parseEmailFile` reads the file as one message under the inbound limits: the
   same normalization as delivered mail, with an adapter for Outlook's MAPI
@@ -124,12 +136,57 @@ backoff, and only an exhausted job or a failed hand-off is captured.
   record, or an unreadable or oversized message files nothing; the skip is
   logged with its reason and the file is unaffected.
 - Attachments stay inside the file and are not stored again; the record links
-  the file. Deleting the file deletes its record. The attachment policy is per
+  the file. Uploaded files of both channels are registered in
+  `correspondence_sources`; deleting or reclassifying the last source removes its
+  record. The attachment policy is per
   source: a delivery stores each attachment, so a blocked type refuses it; an
   upload retains them in the already scanned file, so only count and size
   limits apply.
 - Each file has at most one record, keyed by the file. A delivered message and
-  an uploaded file of it remain separate records, as do two copies of a file.
+  an uploaded file of it remain separate records, as do two copies of an email
+  file. A replacement email version uses its content hash to retire the old
+  record even when its file identity is unchanged.
+
+A single source transition removes associations whose message identity changed,
+or whose email content hash changed. A classification that files nothing retires
+the previous association through the same transition. Existing uploaded email
+records are enrolled from their indexed source pointer when first transitioned;
+no full-table backfill is needed.
+
+## Uploaded data-box messages
+
+A `.zfo` file, a Czech data-box (ISDS) message exported as a CMS SignedData
+over the message XML, takes the same path and files a `data_box` record.
+
+- `parseDataBoxMessage` (`src/lib/email/correspondence/data-box/zfo.ts`) reads the envelope and the
+  base64 files without network access. The file is bounded by the document
+  upload limit and its files by the correspondence attachment limit; a
+  document type declaration is refused, so no entity is expanded or fetched.
+  The system's seal is recorded as found (signer, issuer, serial number,
+  signing time) and stays unverified; the `.zfo` file keeps its bytes.
+- The record's addresses are box IDs and its subject is the annotation; the
+  envelope (reference numbers and file marks of both parties, delivery and
+  acceptance times, status, delivery flags) is `dataBox`.
+- The organization's own boxes (`organization_settings.data_box_ids`, edited
+  through `organization-settings/correspondence/data-boxes`) decide the
+  direction: sent from one is outgoing, sent to one incoming; neither or both
+  leaves it incoming with `directionBasis` `unknown`. Each add or remove
+  re-derives the direction of filed records from their stored envelopes in
+  the matters the administrator can reach, writing only rows whose basis
+  changes, so a repeat converges.
+- Each file of the message is scanned before anything is written, then stored
+  as a document in the `.zfo` file's folder and linked as an attachment. A
+  rejected file refuses the whole message; a replay resumes missing ordinals.
+- The message ID keys the record in the matter: another file of the same
+  message, in a batch or later, adds its uploader as a filer and stores no
+  second set of documents. `correspondence_sources` retains every source copy.
+  Deleting or reclassifying the current `.zfo` source switches the record to a
+  surviving copy;
+  only deleting its last source removes the record and attachment links. Each
+  matter owns its record and sources independently. Any copy can resume missing
+  attachment ordinals, including when the initial source was deleted.
+- The detail read lists the organization's contacts whose data boxes include
+  the sender or recipient box ID. Matching only reads contacts.
 
 ## Local development
 

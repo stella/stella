@@ -14,6 +14,9 @@ import deleteCorrespondenceAllowedSender from "@/api/handlers/organization-setti
 import listCorrespondenceAllowedSenders from "@/api/handlers/organization-settings/correspondence/allowed-senders/list";
 import addCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/add";
 import removeCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/remove";
+import addOrganizationDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/create";
+import removeOrganizationDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/delete";
+import getOrganizationDataBoxes from "@/api/handlers/organization-settings/correspondence/data-boxes/get";
 import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-availability/get";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
@@ -53,6 +56,24 @@ export const organizationSettingsRoute = new Elysia({
   .guard({
     validateAuth: true,
   })
+  .get("/correspondence/data-boxes", getOrganizationDataBoxes.handler, {
+    permissions: getOrganizationDataBoxes.config.permissions,
+    accountAccess: getOrganizationDataBoxes.config.accountAccess,
+  })
+  .post("/correspondence/data-boxes", addOrganizationDataBox.handler, {
+    permissions: addOrganizationDataBox.config.permissions,
+    accountAccess: addOrganizationDataBox.config.accountAccess,
+    body: addOrganizationDataBox.config.body,
+  })
+  .delete(
+    "/correspondence/data-boxes/:boxId",
+    removeOrganizationDataBox.handler,
+    {
+      permissions: removeOrganizationDataBox.config.permissions,
+      accountAccess: removeOrganizationDataBox.config.accountAccess,
+      params: removeOrganizationDataBox.config.params,
+    },
+  )
   .get(
     "/correspondence/allowed-senders",
     listCorrespondenceAllowedSenders.handler,

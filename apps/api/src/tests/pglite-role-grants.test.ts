@@ -45,7 +45,10 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WHOLESALE_ROLES = new Set(["stella", "public"]);
 
 /** The PGlite schema installer replays these migration-owned grants verbatim. */
-const MIGRATION_REPLAYED_ROLES = new Set(["stella_entity_gate"]);
+const MIGRATION_REPLAYED_ROLES = new Set([
+  "stella_entity_gate",
+  "stella_correspondence_source",
+]);
 
 /**
  * Column grants are compared for every role but `public`: the harness narrows
@@ -59,7 +62,7 @@ const GRANT_OR_REVOKE_STATEMENT =
 const OBJECT_CLAUSE = /\bON\s+(?:TABLE\s+)?([\s\S]*?)$/u;
 
 const NOT_A_TABLE_GRANT =
-  /\bON\s+(?:ALL\s+TABLES|ALL\s+SEQUENCES|SCHEMA|SEQUENCE|FUNCTION|PROCEDURE|ROUTINE|DATABASE|TYPE|LARGE\s+OBJECT)\b/iu;
+  /\bON\s+(?:ALL\s+TABLES|ALL\s+SEQUENCES|SCHEMA|SEQUENCE|FUNCTION|PROCEDURE|ROUTINE|DATABASE|TYPE|PARAMETER|LARGE\s+OBJECT)\b/iu;
 
 const IDENTIFIER = /"([a-zA-Z_][a-zA-Z0-9_]*)"|\b([a-z_][a-z0-9_]*)\b/gu;
 
@@ -450,6 +453,83 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
     expect(migrationColumns).not.toHaveLength(0);
     expect(actualColumns).toEqual(migrationColumns);
     expect(tablePrivileges.rows).toEqual([]);
+  });
+
+  test("source maintenance privileges match its replayed migration exactly", async () => {
+    const migration = await readMigrationSql();
+    const role = "stella_correspondence_source";
+    const expectedColumns = [...grantedColumnPairs(migration)]
+      .filter((pair) => pair.startsWith(`${role}:`))
+      .toSorted();
+    const expectedTables = new Set<string>();
+    for (const [
+      ,
+      verb = "",
+      body = "",
+      ,
+      rawRole = "",
+    ] of migrationSqlWithoutLineComments(migration).matchAll(
+      GRANT_OR_REVOKE_STATEMENT,
+    )) {
+      if (unquote(rawRole) !== role || NOT_A_TABLE_GRANT.test(body)) {
+        continue;
+      }
+      const objects = OBJECT_CLAUSE.exec(body)?.at(1);
+      if (objects === undefined) {
+        continue;
+      }
+      const privileges = body
+        .slice(0, body.indexOf("ON"))
+        .replaceAll(COLUMN_PRIVILEGE, "")
+        .split(",")
+        .map((privilege) => privilege.trim().toUpperCase())
+        .filter(Boolean);
+      for (const object of objects.split(",")) {
+        const identifier = [...object.matchAll(IDENTIFIER)].at(-1);
+        const table = identifier?.at(1) ?? identifier?.at(2);
+        if (table === undefined) {
+          throw new TypeError("Source maintenance grant has no table");
+        }
+        for (const privilege of privileges) {
+          if (verb.toUpperCase() === "GRANT") {
+            expectedTables.add(`${table}:${privilege}`);
+          } else {
+            expectedTables.delete(`${table}:${privilege}`);
+          }
+        }
+      }
+    }
+    const columns = await client.query<{
+      table_name: string;
+      column_name: string;
+      privilege_type: string;
+    }>(`
+      SELECT table_name, column_name, privilege_type
+      FROM information_schema.column_privileges
+      WHERE table_schema = 'public' AND grantee = 'stella_correspondence_source'
+      ORDER BY table_name, column_name, privilege_type
+    `);
+    const tables = await client.query<{ relation: string; privilege: string }>(`
+      SELECT c.relname AS relation, acl.privilege_type AS privilege
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL pg_catalog.aclexplode(c.relacl) acl
+      WHERE n.nspname = 'public'
+        AND acl.grantee = 'stella_correspondence_source'::regrole
+    `);
+    expect(expectedColumns).not.toHaveLength(0);
+    expect(expectedTables.size).toBeGreaterThan(0);
+    expect(
+      columns.rows.map(
+        ({ table_name, column_name, privilege_type }) =>
+          `${role}:${table_name}:${column_name}:${privilege_type}`,
+      ),
+    ).toEqual(expectedColumns);
+    expect(
+      tables.rows
+        .map(({ relation, privilege }) => `${relation}:${privilege}`)
+        .toSorted(),
+    ).toEqual([...expectedTables].toSorted());
   });
 
   test("a migration privilege change the harness ignores is drift", async () => {

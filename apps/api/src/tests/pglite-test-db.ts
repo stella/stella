@@ -35,6 +35,7 @@ import {
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
   installPgliteDecisionCitationStats,
   installPgliteDesktopPresenceRls,
@@ -774,6 +775,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(
     sql.raw(
+      "CREATE ROLE stella_correspondence_source NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
+  await db.execute(
+    sql.raw(
       "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
     ),
   );
@@ -803,6 +809,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceAccessObjects(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
+  });
+  await db.transaction(async (tx) => {
+    await installPgliteCorrespondenceSources(tx);
   });
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteSyntheticMembershipTrigger(db);

@@ -49,6 +49,7 @@ import {
 } from "./list-verification-constraint-validation";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
+import { readConstraintCompletion } from "./online-constraint-completion";
 import {
   createIndexConcurrently,
   createOnlineTableGate,
@@ -57,6 +58,7 @@ import {
   reindexIndexConcurrently,
   renameIndex,
   runGatedTableWork,
+  validateOnlineConstraints,
 } from "./online-ddl";
 import type {
   GatedTableSession,
@@ -648,6 +650,14 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "correspondence_attachments",
   },
   {
+    createSql: `CREATE INDEX CONCURRENTLY "contacts_data_box_ids_idx" ON public."contacts" USING gin (("metadata" -> 'dataBoxes') jsonb_path_ops)`,
+    definitionBody:
+      "ON public.contacts USING gin (((metadata -> 'dataBoxes'::text)) jsonb_path_ops)",
+    isUnique: false,
+    name: "contacts_data_box_ids_idx",
+    tableName: "contacts",
+  },
+  {
     createSql:
       'CREATE INDEX CONCURRENTLY "sanctions_contact_marks_retry_idx" ON public."sanctions_contact_marks" USING btree ("next_attempt_at", "scheduled_at", "organization_id", "contact_id")',
     definitionBody:
@@ -785,6 +795,49 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
   ...ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
 ]);
 
+/** The new data-box migrations leave these checks to the table gate. */
+const DATA_BOX_CONSTRAINTS = [
+  {
+    tableName: "correspondence",
+    constraintName: "correspondence_direction_check",
+  },
+  {
+    tableName: "correspondence",
+    constraintName: "correspondence_channel_check",
+  },
+  {
+    tableName: "correspondence",
+    constraintName: "correspondence_data_box_check",
+  },
+  {
+    tableName: "organization_settings",
+    constraintName: "organization_settings_data_box_ids_check",
+  },
+  {
+    tableName: "correspondence",
+    constraintName: "correspondence_source_entity_workspace_fk",
+  },
+] as const satisfies readonly OnlineConstraintValidation[];
+
+const DATA_BOX_CONSTRAINT_REPAIRS = DATA_BOX_CONSTRAINTS.map(
+  (constraint) =>
+    ({
+      name: constraint.constraintName,
+      readCompletion: async (connection) =>
+        await readConstraintCompletion({
+          connection,
+          ...constraint,
+          repairName: constraint.constraintName,
+        }),
+      repair: async (connection, tables) =>
+        await validateOnlineConstraints({
+          connection,
+          tables,
+          constraints: [constraint],
+        }),
+    }) satisfies OnlineRepair,
+);
+
 /**
  * Data repairs a schema migration left to this phase, run after the index
  * steps so an index a repair walks is one that already exists. Each is
@@ -799,6 +852,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  ...DATA_BOX_CONSTRAINT_REPAIRS,
   CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
@@ -824,6 +878,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...DATA_BOX_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

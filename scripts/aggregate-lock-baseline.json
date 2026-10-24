@@ -2670,12 +2670,6 @@
     "reason": "builder-for in apps/api/src/lib/email/inbound/store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/email/inbound/upload.ts",
-    "fingerprint": "92ea16631fbb913cb19a62767f82ba16b1a584eaccc8b123d1bb5a2c51ec4377",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/email/inbound/upload.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/entities/validate-parent-id.ts",
     "fingerprint": "9ec01ee3050d3946360f78adc7643aa0e8de94739fa1dc36006941b504b2b851",
     "count": 1,

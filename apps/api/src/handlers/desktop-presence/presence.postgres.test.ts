@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
@@ -39,7 +39,7 @@ if (!databaseUrl || !runPostgres) {
     "%s writer commits first while concurrent installation reports stay bounded",
     async (firstWriter) => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const connection = { lock_timeout: 500, statement_timeout: 10_000 };
+        const connection = { statement_timeout: 10_000 };
         const { db: firstDb } = openClient({ connection });
         const { db: secondDb } = openClient({ connection });
         const organizationId = mintAuthProviderId<"organization">();
@@ -121,7 +121,13 @@ if (!databaseUrl || !runPostgres) {
           const blockedReport = await Result.tryPromise(
             async () =>
               await reportDesktopPresence({
-                scopedDb: competitor,
+                // Bound the deliberately blocked probe without imposing its
+                // short deadline on the later burst of successful writers.
+                scopedDb: async (fn) =>
+                  await competitor(async (tx) => {
+                    await tx.execute(sql`SET LOCAL lock_timeout = '500ms'`);
+                    return await fn(tx);
+                  }),
                 organizationId,
                 userId,
                 report: { ...report, desktopId: installationId(101) },

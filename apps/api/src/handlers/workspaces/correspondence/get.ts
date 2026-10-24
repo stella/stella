@@ -1,9 +1,16 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
-
-import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
+  CORRESPONDENCE_MAX_ATTACHMENTS,
+  type CorrespondenceDataBoxContactMatches,
+  type CorrespondenceDataBoxContacts,
+} from "@stll/api-contract/correspondence";
+import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
+
+import type { Transaction } from "@/api/db/root";
+import {
+  contacts,
   correspondence,
   correspondenceAllowedSenders,
   correspondenceAttachments,
@@ -11,8 +18,14 @@ import {
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
+import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
+import {
+  readCorrespondenceChannel,
+  readCorrespondenceProvenance,
+} from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnbackedProjectionKeys,
@@ -31,6 +44,7 @@ const CORRESPONDENCE_DETAIL_COLUMNS = {
   authenticatedSenderAddress: correspondence.authenticatedSenderAddress,
   originalSignature: correspondence.originalSignature,
   messageId: correspondence.messageId,
+  dataBox: correspondence.dataBox,
   from: correspondence.from,
   to: correspondence.to,
   cc: correspondence.cc,
@@ -73,11 +87,60 @@ true satisfies MissingDetailColumn extends never ? true : never;
 true satisfies UnexpectedDetailColumn extends never ? true : never;
 
 const MAX_FILERS_PER_RECORD = 10_000;
+const MAX_CONTACT_MATCHES_PER_BOX = 5;
+
+type MatchDataBoxContactsOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  boxId: string;
+};
+
+// Read-only: contacts whose data boxes list the box ID, served by
+// contacts_data_box_ids_idx. Contact box IDs are stored lowercase, as are
+// envelope box IDs.
+const matchDataBoxContacts = async ({
+  tx,
+  organizationId,
+  boxId,
+}: MatchDataBoxContactsOptions): Promise<CorrespondenceDataBoxContactMatches> => {
+  const page = await readCursorPage(
+    tx
+      .select({ contactId: contacts.id, displayName: contacts.displayName })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, organizationId),
+          sql`(${contacts.metadata} -> 'dataBoxes') @> ${JSON.stringify([{ id: boxId }])}::text::jsonb`,
+        ),
+      )
+      .orderBy(asc(contacts.displayName), asc(contacts.id)),
+    {
+      limit: MAX_CONTACT_MATCHES_PER_BOX,
+      cursorForItem: ({ contactId }) => contactId,
+    },
+  );
+  return { matches: page.items, hasMore: page.nextCursor !== null };
+};
+
+type ReadDataBoxContactsOptions = Omit<MatchDataBoxContactsOptions, "boxId"> & {
+  envelope: DataBoxEnvelope;
+};
+
+const readDataBoxContacts = async ({
+  envelope,
+  ...options
+}: ReadDataBoxContactsOptions): Promise<CorrespondenceDataBoxContacts> => {
+  const [sender, recipient] = await Promise.all([
+    matchDataBoxContacts({ ...options, boxId: envelope.sender.boxId }),
+    matchDataBoxContacts({ ...options, boxId: envelope.recipient.boxId }),
+  ]);
+  return { sender, recipient };
+};
 
 const config = {
   contract: "patch",
   description:
-    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
+    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -173,7 +236,22 @@ const getCorrespondence = createSafeHandler(
             "Correspondence attachment count exceeds the accepted limit",
           );
         }
+        const organizationBoxIds =
+          row.channel === "data_box"
+            ? await readOrganizationDataBoxIds(tx, session.activeOrganizationId)
+            : [];
+        const channel = readCorrespondenceChannel(row, organizationBoxIds);
+        const dataBoxContacts =
+          channel.channel === "data_box"
+            ? await readDataBoxContacts({
+                tx,
+                organizationId: session.activeOrganizationId,
+                envelope: channel.dataBox,
+              })
+            : null;
         const {
+          channel: _channel,
+          dataBox: _dataBox,
           source,
           sourceEntityId,
           intake,
@@ -188,6 +266,7 @@ const getCorrespondence = createSafeHandler(
         return {
           record: {
             ...record,
+            ...channel,
             ...readCorrespondenceProvenance({
               source,
               sourceEntityId,
@@ -238,6 +317,7 @@ const getCorrespondence = createSafeHandler(
             };
           }),
           attachments,
+          dataBoxContacts,
         };
       }),
     );

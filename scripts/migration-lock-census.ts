@@ -700,6 +700,66 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261016100600_data_box_correspondence",
+    form: "add-column",
+    reason:
+      "The envelope is nullable and default-free; the data-box inventory uses a constant JSON default on PostgreSQL's fast-default path. Neither addition rewrites existing rows; lock_timeout is 1s and statement_timeout is 5s.",
+  },
+  {
+    migration: "20261016100600_data_box_correspondence",
+    form: "alter-column",
+    reason:
+      "Dropping direction's NOT NULL flag changes catalog metadata without reading correspondence rows. The replacement channel-specific CHECK is added NOT VALID; lock_timeout is 1s and statement_timeout is 5s.",
+  },
+  {
+    migration: "20261016100600_data_box_correspondence",
+    form: "add-constraint",
+    reason:
+      "All four channel, direction, envelope and bounded-inventory CHECKs are added NOT VALID, with no existing-row scan. Canonical gated online repairs validate them after commit; lock_timeout is 1s and statement_timeout is 5s.",
+  },
+  {
+    migration: "20261016100800_data_box_sources",
+    form: "create-table-references",
+    reason:
+      "The new empty source table references existing matter, record and entity keys. Creating its foreign keys locks the parents but scans no existing source rows; lock_timeout is 1s and statement_timeout is 5s.",
+  },
+  {
+    migration: "20261016100800_data_box_sources",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE ROW LEVEL SECURITY apply to the newly created empty source table. Both are catalog changes without a data rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100800_data_box_sources",
+    form: "create-trigger",
+    reason:
+      "The four source lifecycle triggers are attached through catalog changes; this migration executes no application DML or history backfill. Lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100800_data_box_sources",
+    form: "add-foreign-key",
+    reason:
+      "After the source lifecycle triggers are installed, the current-source foreign key changes from cascade to restrict as NOT VALID, without scanning live rows. Gated online validation follows; lock_timeout is 1s and statement_timeout is 5s.",
+  },
+  {
+    migration: "20261016100900_data_box_source_gates",
+    form: "create-policy",
+    reason:
+      "The eight source-table policies install the canonical feature, matter, organization and reset-owner fences. Policy creation is catalog-only and scans no rows; this generated migration declares 1s lock_timeout and 10s statement_timeout.",
+  },
+  {
+    migration: "20261016100900_data_box_source_gates",
+    form: "create-trigger",
+    reason:
+      "The canonical feature write trigger is attached to the new source table without executing row work. This generated migration declares 1s lock_timeout and 10s statement_timeout; it contains only catalog operations.",
+  },
+  {
+    migration: "20261016101100_correspondence_source_maintenance",
+    form: "create-policy",
+    reason:
+      "The four lifecycle policies give only the private non-bypass role row-scoped access derived from the deleted source. Catalog-only policy creation scans no history, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:

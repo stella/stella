@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { correspondence, correspondenceAttachments } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import type { InboundFiler } from "@/api/lib/email/inbound/acceptance";
@@ -157,20 +158,32 @@ type InboundCompletion = {
   filer: InboundFiler;
 };
 
-// Stores each scanned attachment not yet linked to the filed correspondence.
-const finishInboundAttachments = async ({
-  completion: { id, scope, filer },
-  scannedFiles,
-  scopedDbForMatter,
-  createDocument,
-}: {
-  completion: InboundCompletion;
+type FinishCorrespondenceAttachmentsOptions = {
+  correspondenceId: SafeId<"correspondence">;
+  scope: InboundMatterScope;
   scannedFiles: readonly InferOk<Awaited<ReturnType<typeof scanUpload>>>[];
-  scopedDbForMatter: CreateInboundMailPersistenceOptions["scopedDbForMatter"];
+  scopedDb: ScopedDb;
+  recordAuditEvent: AuditRecorder;
   createDocument: typeof createEntityFromBuffer;
-}): Promise<Result<undefined, InboundPersistenceError>> => {
-  const scopedDb = scopedDbForMatter(scope);
-  const recordAuditEvent = auditForFiler({ filer, ...scope });
+  /** The folder the documents are stored in; the matter root when null. */
+  parentId: SafeId<"entity"> | null;
+};
+
+/**
+ * Stores each scanned attachment not yet linked to the filed correspondence,
+ * so a retry resumes at the missing ordinals.
+ */
+export const finishCorrespondenceAttachments = async ({
+  correspondenceId: id,
+  scope,
+  scannedFiles,
+  scopedDb,
+  recordAuditEvent,
+  createDocument,
+  parentId,
+}: FinishCorrespondenceAttachmentsOptions): Promise<
+  Result<undefined, InboundPersistenceError>
+> => {
   const linked = await scopedDb((tx) =>
     tx
       .select({ ordinal: correspondenceAttachments.ordinal })
@@ -227,6 +240,7 @@ const finishInboundAttachments = async ({
           fileName: sanitizeFilename(file.fileName),
           mimeType: file.mimeType,
           encryption,
+          parentId,
           scanWarnings: file.scanWarnings ?? undefined,
           afterCreate: async (tx, document) => {
             const attachmentLink = await linkInboundAttachment({
@@ -368,6 +382,7 @@ export const createInboundMailPersistence =
                 );
               case "invalid_content":
               case "invalid_authentication":
+              case "source_changed":
                 return Result.err(
                   new InboundPersistenceError({
                     message: "Inbound correspondence failed validation",
@@ -387,11 +402,17 @@ export const createInboundMailPersistence =
         if (!completion) {
           return outcome;
         }
-        const finished = await finishInboundAttachments({
-          completion,
+        const finished = await finishCorrespondenceAttachments({
+          correspondenceId: completion.id,
+          scope: completion.scope,
           scannedFiles,
-          scopedDbForMatter,
+          scopedDb: scopedDbForMatter(completion.scope),
+          recordAuditEvent: auditForFiler({
+            filer: completion.filer,
+            ...completion.scope,
+          }),
           createDocument,
+          parentId: null,
         });
         if (finished.isErr()) {
           return Result.err(finished.error);

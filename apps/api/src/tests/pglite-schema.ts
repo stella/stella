@@ -459,6 +459,81 @@ export const installPgliteEntityFeatureGateMaintenance = async (
     }
     await db.execute(sql.raw(statement));
   }
+  // Later graph replacements must reach schema-pushed fixtures as well. The
+  // pushed schema already owns policies; replay only the migration's runtime
+  // setup after the base role/functions exist.
+  const baseName = nodePath.basename(
+    nodePath.dirname(ENTITY_FEATURE_GATE_MIGRATION_PATH),
+  );
+  const graphMigrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => name > baseName)
+    .toSorted()
+    .map((name) =>
+      readMigrationStatements(
+        nodePath.join(DRIZZLE_DIR, name, "migration.sql"),
+      ),
+    )
+    .filter((migration) =>
+      migration.some((statement) =>
+        /^CREATE OR REPLACE FUNCTION public\.entity_feature_gate_(?:graph|propagate)\(\)/u.test(
+          executableSql(statement),
+        ),
+      ),
+    );
+  for (const migration of graphMigrations) {
+    for (const statement of migration) {
+      if (/^CREATE POLICY\b/u.test(executableSql(statement))) {
+        continue;
+      }
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
+/** Install correspondence lifecycle routines omitted by declarative schema push. */
+export const installPgliteCorrespondenceSources = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261016100800_data_box_sources",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|CREATE CONSTRAINT TRIGGER)\b/u.test(
+      executableSql(statement),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+  const maintenance = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261016101100_correspondence_source_maintenance",
+      "migration.sql",
+    ),
+  );
+  // Reinstall this routine's policies from its migration so fixtures exercise
+  // the shipped policy definitions as well as the private role and functions.
+  await db.execute(
+    sql`DROP POLICY correspondence_source_maintenance ON public.correspondence_sources`,
+  );
+  await db.execute(
+    sql`DROP POLICY correspondence_source_maintenance ON public.correspondence`,
+  );
+  await db.execute(
+    sql`DROP POLICY correspondence_source_entity_maintenance ON public.correspondence_sources`,
+  );
+  await db.execute(
+    sql`DROP POLICY correspondence_source_entity_maintenance ON public.correspondence`,
+  );
+  for (const statement of maintenance) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 /** Install the self-referencing tree triggers omitted by declarative schema push. */

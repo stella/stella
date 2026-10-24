@@ -433,6 +433,62 @@ describe("check-migration-safety", () => {
       }
     });
 
+    it("allows a deferred data trigger only in a catalog-only migration", () => {
+      const trigger = `
+        CREATE FUNCTION maintain_documents() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP;
+          RETURN NEW;
+        END $$;
+      `;
+      expectClean(
+        runChecker(`
+          SET LOCAL ROLE migration_owner;
+          CREATE FUNCTION document_graph() RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
+          GRANT SELECT ON documents TO stella;
+          REVOKE ALL ON FUNCTION maintain_documents() FROM PUBLIC;
+          CREATE POLICY document_read ON documents FOR SELECT TO stella USING (true);
+          ${trigger}
+          CREATE TRIGGER maintain_documents AFTER INSERT ON documents
+            FOR EACH ROW EXECUTE FUNCTION maintain_documents();
+          RESET ROLE;
+        `),
+      );
+      for (const operation of [
+        `INSERT INTO documents (id) VALUES (1);`,
+        `UPDATE documents SET id = 2;`,
+        `DELETE FROM documents;`,
+        `SELECT 1;`,
+        `CALL migrate_documents();`,
+        `DO $$ BEGIN PERFORM 1; END $$;`,
+        `WITH entry AS (SELECT 1) SELECT * FROM entry;`,
+        `SET CONSTRAINTS ALL IMMEDIATE;`,
+        `TRUNCATE documents;`,
+        `UNKNOWN OPERATION;`,
+      ]) {
+        expectFinding(
+          runChecker(`${trigger}\n${operation}`),
+          "pre-deploy-row-loop",
+        );
+        expectFinding(
+          runChecker(`${operation}\n${trigger}`),
+          "pre-deploy-row-loop",
+        );
+      }
+      for (const declaration of [
+        `CREATE FUNCTION maintain_documents() RETURNS void LANGUAGE plpgsql`,
+        `CREATE FUNCTION maintain_documents(note text DEFAULT 'RETURNS TRIGGER') RETURNS void LANGUAGE plpgsql`,
+        `CREATE FUNCTION maintain_documents() RETURNS trigger LANGUAGE unknown`,
+      ]) {
+        expectFinding(
+          runChecker(`${declaration} AS $$ BEGIN
+            FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP;
+          END $$;`),
+          "pre-deploy-row-loop",
+        );
+      }
+    });
+
     it("allows additive DDL and fixed seed rows", () => {
       expectClean(
         runChecker(`

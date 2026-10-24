@@ -1,10 +1,13 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 
+import { entityFeaturePolicyDefinitions } from "@/api/db/entity-feature-policies";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
+import * as schema from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -30,7 +33,9 @@ const databaseUrl = process.env["DATABASE_URL"];
 const ENTITY_COUNT = 100_000;
 const MATCHES_PER_KIND = 1000;
 const SAMPLE_COUNT = 5;
-const POLICY_COUNT = 47;
+const POLICY_COUNT = entityFeaturePolicyDefinitions(
+  Object.values(schema).filter((table) => is(table, PgTable)),
+).length;
 const MAX_BUFFER_RATIO = 1.25;
 const QUERY_TEXT = "budgetneedle";
 const HIT_LIMIT = 20;

@@ -43,6 +43,7 @@ export const ROUTE_LATENCY_CLASSES = {
     "crud",
   "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":
     "crud",
+  "DELETE /v1/organization-settings/correspondence/data-boxes/:boxId": "crud",
   "DELETE /v1/organization-settings/deepl": "crud",
   "DELETE /v1/organization-settings/feature-enrolments/:featureId": "crud",
   "DELETE /v1/organization-settings/web-search-key": "crud",
@@ -266,6 +267,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/organization-settings/anonymization-blacklist": "crud",
   "GET /v1/organization-settings/business-registry-credentials": "crud",
   "GET /v1/organization-settings/correspondence/allowed-senders": "crud",
+  "GET /v1/organization-settings/correspondence/data-boxes": "crud",
   "GET /v1/organization-settings/deepl": "crud",
   "GET /v1/organization-settings/deepl-config": "crud",
   "GET /v1/organization-settings/document-ocr-availability": "crud",
@@ -632,6 +634,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/organization-settings/correspondence/allowed-senders": "crud",
   "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope":
     "crud",
+  "POST /v1/organization-settings/correspondence/data-boxes": "crud",
   "POST /v1/organization-settings/deepl": "crud",
   "POST /v1/organization-settings/practice-jurisdictions": "crud",
   "POST /v1/organization-settings/preview": "crud",

@@ -79,6 +79,7 @@
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
+    "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./entity-views": "./src/entity-views.ts",
     "./feedback": "./src/feedback.ts",
