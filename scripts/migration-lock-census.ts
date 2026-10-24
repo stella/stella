@@ -700,6 +700,18 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261023151000_mcp_oauth_current_state",
+    form: "create-index",
+    reason:
+      "The unique index must cover the rows this transaction just deduplicated; the table holds only short-lived pending OAuth attempts, so the write block is brief, under 1s lock_timeout and 30s statement_timeout.",
+  },
+  {
+    migration: "20261023164000_chat_stored_content_egress",
+    form: "create-trigger",
+    reason:
+      "Each egress backstop trigger is a catalog-only creation that reads no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
     migration: "20261023160000_organization_access_state_origin",
     form: "add-column",
     reason:

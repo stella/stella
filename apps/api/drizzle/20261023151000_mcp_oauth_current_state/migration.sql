@@ -12,5 +12,9 @@ WHERE older."organization_id" = newer."organization_id"
   AND older."user_id" = newer."user_id"
   AND (older."created_at", older."state") < (newer."created_at", newer."state");
 --> statement-breakpoint
+-- The uniqueness must hold over the rows this transaction just deduplicated;
+-- a concurrent build outside it would race new pending attempts. The table
+-- holds only short-lived pending OAuth attempts, so the write lock is brief.
+-- squawk-ignore require-concurrent-index-creation
 CREATE UNIQUE INDEX "mcp_oauth_state_org_connector_user_uidx"
   ON "mcp_oauth_state" ("organization_id", "connector_id", "user_id");
