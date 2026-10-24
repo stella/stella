@@ -464,8 +464,10 @@ const document = (
         ])
       : "",
   ]);
+  // P_9A is optional; without a stored unit price the line states only its
+  // quantity and net amount rather than a price that need not fit them.
   const unitPrice = (line: InvoiceExportLine) =>
-    amount(line.unitPriceMinor ?? line.netAmountMinor);
+    line.unitPriceMinor === null ? null : amount(line.unitPriceMinor);
   const invoiceLines = lines.map(({ line, tax }, index) =>
     el("FaWiersz", [
       text("NrWierszaFa", String(index + 1)),

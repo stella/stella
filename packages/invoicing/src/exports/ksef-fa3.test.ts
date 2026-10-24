@@ -765,6 +765,27 @@ describe("KSeF FA(3) amounts", () => {
     expect(await schemaErrors(xml)).toBe("");
   });
 
+  test("states no unit price when none is stored", async () => {
+    const xml = fa3(
+      polish({
+        number: "21a/2026",
+        lines: [
+          {
+            description: "Obsługa prawna",
+            quantity: "2.0000",
+            unitPriceMinor: null,
+            netAmountMinor: cents(10_000),
+            vatRateBps: 2300,
+          },
+        ],
+      }),
+    );
+    expect(between(xml, "P_8B")).toEqual(["2"]);
+    expect(between(xml, "P_9A")).toEqual([]);
+    expect(between(xml, "P_11")).toEqual(["100.00"]);
+    expect(await schemaErrors(xml)).toBe("");
+  });
+
   test("writes a currency without minor units as whole numbers", async () => {
     const xml = fa3(
       polish({
