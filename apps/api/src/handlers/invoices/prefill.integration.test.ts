@@ -17,6 +17,7 @@ import {
   featureEnrolments,
   invoices,
   numberSeries,
+  organizationSettings,
   sellerProfiles,
   timeEntries,
   vatRates,
@@ -300,6 +301,86 @@ const createdId = (result: Awaited<ReturnType<typeof create>>) =>
   "id" in result ? result.id : panic(JSON.stringify(result));
 
 describe("invoice prefill", () => {
+  test("creation freezes explicit, client, organization and seller language precedence", async () => {
+    const previousContact =
+      (await db.query.contacts.findFirst({
+        where: { id: { eq: ids.contactA2 } },
+        columns: { invoiceLanguage: true },
+      })) ?? panic("Invoice client fixture is missing");
+    const previousSettings = await db.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: ids.orgA } },
+      columns: { invoiceLanguage: true },
+    });
+    const seller = await seedSeller(null);
+    await db
+      .update(sellerProfiles)
+      .set({ country: "SK" })
+      .where(eq(sellerProfiles.id, seller));
+    try {
+      await db
+        .update(contacts)
+        .set({ invoiceLanguage: null })
+        .where(eq(contacts.id, ids.contactA2));
+      await db
+        .insert(organizationSettings)
+        .values({
+          organizationId: ids.orgA,
+          invoiceLanguage: null,
+        })
+        .onConflictDoUpdate({
+          target: organizationSettings.organizationId,
+          set: { invoiceLanguage: null },
+        });
+      const sellerDefault = createdId(
+        await create({ sellerProfileId: seller }),
+      );
+      await db
+        .update(organizationSettings)
+        .set({ invoiceLanguage: "de" })
+        .where(eq(organizationSettings.organizationId, ids.orgA));
+      const organizationDefault = createdId(
+        await create({ sellerProfileId: seller }),
+      );
+      await db
+        .update(contacts)
+        .set({ invoiceLanguage: "fr" })
+        .where(eq(contacts.id, ids.contactA2));
+      const clientDefault = createdId(
+        await create({ sellerProfileId: seller }),
+      );
+      const explicit = createdId(
+        await create({ sellerProfileId: seller, language: "pl" }),
+      );
+      // Read every document after the defaults changed: language is a stored snapshot.
+      const documents = await Promise.all(
+        [sellerDefault, organizationDefault, clientDefault, explicit].map(
+          async (id) => await readInvoice(id),
+        ),
+      );
+      expect(documents.map((document) => document.language)).toEqual([
+        "sk",
+        "de",
+        "fr",
+        "pl",
+      ]);
+    } finally {
+      await db
+        .update(contacts)
+        .set(previousContact)
+        .where(eq(contacts.id, ids.contactA2));
+      if (previousSettings === undefined) {
+        await db
+          .delete(organizationSettings)
+          .where(eq(organizationSettings.organizationId, ids.orgA));
+      } else {
+        await db
+          .update(organizationSettings)
+          .set(previousSettings)
+          .where(eq(organizationSettings.organizationId, ids.orgA));
+      }
+    }
+  });
+
   test("a VAT payer billing a domestic client charges the standard rate and copies the buyer", async () => {
     const seller = await seedSeller("CZ12345678");
     await seedVatRates();
