@@ -37,6 +37,7 @@ jobs:
             );
             const runnerLost = job => job.conclusion === "failure"
               && !(job.steps || []).some(step => step.conclusion === "failure")
+              && (job.steps || []).every(step => !step.status || step.status === "completed")
               && (!(job.steps || []).length || job.steps.some(step => step.conclusion === "cancelled"));
             const retryDecision = (jobs, attempt) => {
               if (attempt !== 1) return { retry: false, reason: "only the first attempt can be retried" };

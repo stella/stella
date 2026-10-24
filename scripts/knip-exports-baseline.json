@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 128,
+    "count": 127,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 2,
@@ -27,7 +27,6 @@
       "apps/api/src/lib/docx/ooxml.ts": 1,
       "apps/api/src/lib/entities/query-entities.ts": 3,
       "apps/api/src/lib/errors/tagged-errors.ts": 3,
-      "apps/api/src/lib/feature-access/registry.ts": 1,
       "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
