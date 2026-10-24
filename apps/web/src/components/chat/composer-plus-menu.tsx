@@ -711,10 +711,12 @@ export const ComposerSkillsMenu = ({
   // run stays, disabled, with what the chat lacks.
   const unavailableSkillIds = availability?.hidden;
   const oneClickNeeds = oneClickSkillNeeds(chat);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const items = useMemo(
     () =>
       buildChatSlashItems({
@@ -1297,6 +1299,7 @@ const ComposerContextMatterSub = ({
     enabled: open,
   });
   const activeView = views?.at(0) ?? null;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const { filters, sorts } = useMemo(
     () => getMentionViewScope(activeView?.layout),
     [activeView?.layout],
@@ -1308,16 +1311,13 @@ const ComposerContextMatterSub = ({
     search.trim(),
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
-  const entitiesKey = useMemo(
-    () => ({
-      workspaceId: matter.id,
-      filters,
-      sorts,
-      ...(debouncedSearch && { search: debouncedSearch }),
-      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    }),
-    [debouncedSearch, filters, matter.id, sorts],
-  );
+  const entitiesKey = {
+    workspaceId: matter.id,
+    filters,
+    sorts,
+    ...(debouncedSearch && { search: debouncedSearch }),
+    pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+  };
   const { data: entitiesData, isError: entitiesFailed } = useQuery({
     ...useEntitiesOptions(entitiesKey),
     enabled: open && views !== undefined,
@@ -1330,6 +1330,7 @@ const ComposerContextMatterSub = ({
     threadRef.scope === "workspace" && threadRef.workspaceId === matter.id
       ? undefined
       : matter.id;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const fileOptions = useMemo<ChatMentionOption[]>(() => {
     if (!entitiesData) {
       return [];
@@ -1342,14 +1343,11 @@ const ComposerContextMatterSub = ({
       }),
     );
   }, [entitiesData, matter.id, sourceWorkspaceId]);
-  const matterMentionOption = useMemo<ChatMentionOption | undefined>(
-    () =>
-      buildWorkspaceMentionOptions({
-        workspaces: [{ id: matter.id, name: matter.name }],
-        firstViewIdsByWorkspaceId: undefined,
-      }).at(0),
-    [matter.id, matter.name],
-  );
+  const matterMentionOption: ChatMentionOption | undefined =
+    buildWorkspaceMentionOptions({
+      workspaces: [{ id: matter.id, name: matter.name }],
+      firstViewIdsByWorkspaceId: undefined,
+    }).at(0);
 
   const renderFileOptions = () => {
     if (viewsFailed || entitiesFailed) {
@@ -1482,6 +1480,7 @@ export const ComposerMcpSubmenu = ({
   const connectionsData =
     connectionsView.type === "items" ? connectionsView.items : undefined;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const connectionBySlug = useMemo(() => {
     const map = new Map<
       string,
