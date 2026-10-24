@@ -85,6 +85,7 @@ const SNAPSHOT = {
     },
   ],
   persistence: { imageCleanup: "idle", status: "encrypted" },
+  revision: 0,
   retention: "month",
   screenCapture: "hidden",
   sourceAppExclusionLimit: 128,
