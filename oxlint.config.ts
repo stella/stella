@@ -3690,9 +3690,7 @@ const config = defineConfig({
       // fixed; `scripts/rc-bailouts.ts --check` guards those functions.
       files: ["apps/web/src/**/*.{ts,tsx}"],
       excludeFiles: [
-        "apps/web/src/**/__tests__/**",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/web/src/**/*.gen.{ts,tsx}",
         "apps/web/src/hooks/use-effect.ts",
         ...new Set(
           Object.keys(reactCompilerBailouts).map((key) =>
