@@ -736,6 +736,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/usage/hosted/setup": "crud",
   "POST /v1/vat-rates/": "crud",
   "POST /v1/vat-rates/:vatRateId/archive": "crud",
+  "POST /v1/vat-rates/apply-preset": "crud",
   "POST /v1/views/:workspaceId/reorder": "crud",
   "POST /v1/views/:workspaceId/view/:viewId/": "crud",
   "POST /v1/views/:workspaceId/view/:viewId/convert": "crud",
