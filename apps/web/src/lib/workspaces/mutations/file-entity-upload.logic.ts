@@ -1,6 +1,34 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 
-import { uploadFailureDisposition } from "@/lib/upload-queue";
+import {
+  uploadErrorStatus,
+  uploadFailureDisposition,
+} from "@/lib/upload-queue";
+
+class FileEntityUploadError extends TaggedError("FileEntityUploadError")<{
+  message: string;
+  cause: unknown;
+  status: number;
+  response: Response | undefined;
+}> {}
+
+const normalizeUploadError = (error: unknown): Error => {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new FileEntityUploadError({
+    message: "Upload request failed",
+    cause: error,
+    status: uploadErrorStatus(error),
+    response:
+      error !== null &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response instanceof Response
+        ? error.response
+        : undefined,
+  });
+};
 
 export type FileEntityUploadGrant = {
   uploadId: string;
@@ -36,10 +64,7 @@ export const finalizeFailureKeepsUpload = (error: unknown): boolean =>
 
 export type FileEntityUploader<TResult> = {
   /** One attempt for the file; the upload queue calls it again on retry. */
-  upload: (
-    file: File,
-    signal: AbortSignal,
-  ) => Promise<Result<TResult, unknown>>;
+  upload: (file: File, signal: AbortSignal) => Promise<Result<TResult, Error>>;
   /** Release every upload whose bytes are staged but not finalized. */
   abortStaged: () => Promise<void>;
 };
@@ -58,7 +83,7 @@ export const createFileEntityUploader = <TResult>(
   const upload = async (
     file: File,
     signal: AbortSignal,
-  ): Promise<Result<TResult, unknown>> => {
+  ): Promise<Result<TResult, Error>> => {
     const attempted = await Result.tryPromise({
       try: async () => {
         let uploadId = stagedUploadIds.get(file);
@@ -92,7 +117,7 @@ export const createFileEntityUploader = <TResult>(
       },
       catch: (error) => error,
     });
-    return attempted.andThen((result) => result);
+    return attempted.andThen((result) => result).mapErr(normalizeUploadError);
   };
 
   const abortStaged = async (): Promise<void> => {

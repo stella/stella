@@ -92,17 +92,15 @@ const runBatch = (steps: ReturnType<typeof scriptedSteps>["steps"]) => {
 const file = () => new File(["contract"], "contract.pdf");
 
 describe("file entity upload retries", () => {
-  test.each(["reserve", "put", "finalize"] as const)(
-    "preserves a rejected %s response through the typed failure boundary",
-    async (phase) => {
+  test.each([{ phase: "reserve" }, { phase: "put" }, { phase: "finalize" }])(
+    "preserves a rejected $phase response through the typed failure boundary",
+    async ({ phase }) => {
       const failure = {
         status: 503,
         response: new Response(null, { status: 503 }),
       };
       const script = scriptedSteps([{ type: "ok" }]);
-      const reject = async () => {
-        throw failure;
-      };
+      const reject = jest.fn<() => Promise<never>>().mockRejectedValue(failure);
       const uploader = createFileEntityUploader({
         ...script.steps,
         reserve: phase === "reserve" ? reject : script.steps.reserve,
@@ -117,7 +115,12 @@ describe("file entity upload retries", () => {
 
       expect(outcome.isErr()).toBe(true);
       if (outcome.isErr()) {
-        expect(outcome.error).toBe(failure);
+        expect(outcome.error).toBeInstanceOf(Error);
+        expect(outcome.error.cause).toBe(failure);
+        expect(outcome.error).toMatchObject({
+          status: failure.status,
+          response: failure.response,
+        });
       }
     },
   );
@@ -150,6 +153,7 @@ describe("file entity upload retries", () => {
   test.each([
     { name: "transport failure", error: new TypeError("Failed to fetch") },
     { name: "request timeout", error: httpError(408) },
+    { name: "plain request timeout", error: { status: 408 } },
   ])(
     "a finalize $name retries the same upload without another PUT",
     async ({ error }) => {
@@ -178,6 +182,52 @@ describe("file entity upload retries", () => {
     },
   );
 
+  test("a plain rate-limit response keeps its retry delay and upload identity", async () => {
+    jest.useFakeTimers();
+    try {
+      const response = new Response(null, {
+        status: 429,
+        headers: { "Retry-After": "2" },
+      });
+      const script = scriptedSteps([
+        { type: "throw", error: { response } },
+        { type: "ok" },
+      ]);
+      const { queue, done } = runBatch(script.steps);
+      const delays: number[] = [];
+      queue.on("rate-limited", ({ retryAfterS }) => delays.push(retryAfterS));
+
+      queue.enqueue([file()]);
+      await flush();
+      expect(delays).toEqual([2]);
+      expect(queue.getState()).toBe("rate-limited");
+      jest.advanceTimersByTime(1999);
+      await flush();
+      expect(script.finalizes).toEqual(["upload-1"]);
+      jest.advanceTimersByTime(1);
+      await flush();
+
+      expect(script.reservations).toEqual(["upload-1"]);
+      expect(script.puts).toEqual(["upload-1"]);
+      expect(script.finalizes).toEqual(["upload-1", "upload-1"]);
+      expect(done.at(-1)).toMatchObject({ failed: 0, cancelled: false });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("an existing error keeps its identity through the upload result", async () => {
+    const failure = new TypeError("Failed to fetch");
+    const script = scriptedSteps([{ type: "throw", error: failure }]);
+    const uploader = createFileEntityUploader(script.steps);
+    const outcome = await uploader.upload(file(), new AbortController().signal);
+
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error).toBe(failure);
+    }
+  });
+
   test("a lost finalize response retains its upload after automatic retries are exhausted", async () => {
     jest.useFakeTimers();
     try {
@@ -197,14 +247,14 @@ describe("file entity upload retries", () => {
         await flush();
       }
       expect(done).toEqual([{ completed: [], failed: 1, cancelled: false }]);
-      expect(script.finalizes).toEqual(Array(4).fill("upload-1"));
+      expect(script.finalizes).toEqual(new Array(4).fill("upload-1"));
 
       queue.retryFailed();
       await flush();
 
       expect(script.reservations).toEqual(["upload-1"]);
       expect(script.puts).toEqual(["upload-1"]);
-      expect(script.finalizes).toEqual(Array(5).fill("upload-1"));
+      expect(script.finalizes).toEqual(new Array(5).fill("upload-1"));
       expect(script.aborts).toEqual([]);
       expect(done.at(-1)).toEqual({
         completed: ["entity-for-upload-1"],

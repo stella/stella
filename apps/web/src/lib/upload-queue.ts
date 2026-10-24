@@ -417,13 +417,6 @@ export class UploadQueue<T> {
 // -- Error inspection helpers --
 
 /**
- * A server error or no HTTP answer at all (status 0: DNS, connection,
- * timeout). The queue retries these; anything else is the server's answer.
- */
-export const isTransientUploadStatus = (status: number): boolean =>
-  status >= HTTP_SERVER_ERROR_MIN || status === 0;
-
-/**
  * Extract HTTP status from an error. Works with APIError
  * (which has a `status` field) and plain Error objects; `0` means the
  * request got no HTTP answer. The queue's retry decision and an upload's

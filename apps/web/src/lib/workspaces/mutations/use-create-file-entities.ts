@@ -512,7 +512,9 @@ const runUploadBatch = async ({
       }
 
       if (cancelled) {
-        const unusedPreparedUploads = [...(preparedUploads?.values() ?? [])];
+        const unusedPreparedUploads = preparedUploads
+          ? [...preparedUploads.values()]
+          : [];
         preparedUploads?.clear();
         detached(
           (async () => {
