@@ -1,8 +1,10 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { admitSwitchedAction } from "@/api/lib/kill-switches/admission";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import {
@@ -74,7 +76,8 @@ type AdmitModelDispatchOptions<T> = {
  * The proof lives exactly as long as `run`: when `run` settles, its signal
  * aborts and any later dispatch on it panics, so work that outlives its
  * admission (a detached generation, a proof returned out of the admitted
- * callback) cannot reach a model.
+ * callback) cannot reach a model. A proof is never minted for an action whose
+ * kill switch is off; the refusal returns as the wrapper's admission refusal.
  */
 export const admitModelDispatch = async <T>({
   userId,
@@ -83,7 +86,11 @@ export const admitModelDispatch = async <T>({
   organizationStateDb,
   signal,
   run,
-}: AdmitModelDispatchOptions<T>): Promise<T> => {
+}: AdmitModelDispatchOptions<T>): Promise<Result<T, ActionAdmissionError>> => {
+  const switched = admitSwitchedAction(actionKind);
+  if (Result.isError(switched)) {
+    return Result.err(switched.error);
+  }
   const modelTier = await readManagedModelTier(
     organizationStateDb,
     organizationId,
@@ -91,15 +98,17 @@ export const admitModelDispatch = async <T>({
   const settled = new AbortController();
   const hold: AdmittedHold = { status: "held" };
   try {
-    return await run({
-      type: "organization",
-      userId,
-      organizationId,
-      actionKind,
-      modelTier,
-      signal: AbortSignal.any([signal, settled.signal]),
-      [ADMITTED]: hold,
-    });
+    return Result.ok(
+      await run({
+        type: "organization",
+        userId,
+        organizationId,
+        actionKind,
+        modelTier,
+        signal: AbortSignal.any([signal, settled.signal]),
+        [ADMITTED]: hold,
+      }),
+    );
   } finally {
     hold.status = "settled";
     settled.abort(
