@@ -739,6 +739,34 @@ test("a frame handle resets only after cancellation has executed", async () => {
   );
 });
 
+test("a frame callback retains each newly scheduled handle until cancellation", async () => {
+  const cases = [
+    ["frame = 0; if (visible()) frame = requestAnimationFrame(tick);", true],
+    ["if (visible()) frame = requestAnimationFrame(tick); frame = 0;", false],
+    [
+      "if (visible()) frame = requestAnimationFrame(tick); cancelAnimationFrame(frame); frame = 0;",
+      true,
+    ],
+    [
+      "cancelAnimationFrame(frame); if (visible()) frame = requestAnimationFrame(tick); frame = 0;",
+      false,
+    ],
+  ] as const;
+  for (const member of [false, true]) {
+    const results = await Promise.all(
+      cases.map(async ([body]) =>
+        lintSingleRule(
+          RULE,
+          `useMountEffect(() => { ${member ? "const ref = { current: 0 };" : "let frame = 0;"} const tick = () => { ${member ? body.replaceAll("frame", "ref.current") : body} }; ${member ? "ref.current" : "frame"} = requestAnimationFrame(tick); return () => cancelAnimationFrame(${member ? "ref.current" : "frame"}); });`,
+        ),
+      ),
+    );
+    expect(results.map((lines) => lines.length === 0)).toEqual(
+      cases.map(([, owned]) => owned),
+    );
+  }
+});
+
 test("an earlier handle handoff does not own a subsequently started timer", async () => {
   expect(
     await lintSingleRule(

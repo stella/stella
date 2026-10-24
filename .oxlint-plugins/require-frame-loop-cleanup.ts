@@ -875,16 +875,37 @@ const cleanupFunctionPaths = (
   return paths;
 };
 
-const cancelledBeforeWrite = (proof: CleanupProof, write: AstNode): boolean => {
+const cancelledBeforeWrite = ({
+  proof,
+  write,
+  start,
+}: {
+  proof: CleanupProof;
+  write: AstNode;
+  start: AstNode;
+}): boolean => {
   const statement = parentOf(write);
   const block = statement === null ? null : parentOf(statement);
   if (block?.type !== "BlockStatement" || !Array.isArray(block.body)) {
     return false;
   }
+  const owner = enclosingFunctions(write).at(0);
+  const anchoredProof =
+    owner !== undefined &&
+    enclosingFunctions(start).at(0) === owner &&
+    start.range[1] < write.range[0]
+      ? {
+          ...proof,
+          completed: new Map(),
+          setup: { effect: owner, start, returns: new Set<AstNode>() },
+        }
+      : proof;
   const index = block.body.indexOf(statement);
   let paths = new Set<UncancelledPath>(["continues"]);
   for (const preceding of block.body.slice(0, Math.max(index, 0))) {
-    paths = continueCleanupPaths(paths, () => cleanupPaths(proof, preceding));
+    paths = continueCleanupPaths(paths, () =>
+      cleanupPaths(anchoredProof, preceding),
+    );
   }
   return paths.size === 0;
 };
@@ -929,6 +950,25 @@ const startsFrameLoop = ({
       directFunctionCalls(callback).some(
         (node) => namedCallTarget(context, node) === loopBody,
       ))
+  );
+};
+
+const resetsConsumedFrame = ({
+  context,
+  write,
+  loop,
+}: {
+  context: LoopContext;
+  write: AstNode;
+  loop: AstNode;
+}): boolean => {
+  const reschedules = directFunctionCalls(loop).filter((call) =>
+    isGlobalCall(context, call, START_NAMES.frame),
+  );
+  return (
+    enclosingFunctions(write).at(0) === loop &&
+    reschedules.length > 0 &&
+    reschedules.every((call) => write.range[1] < call.range[0])
   );
 };
 
@@ -1000,12 +1040,19 @@ const hasAmbiguousMemberWrites = ({
       continue;
     }
     const empty = emptyHandleValue(context, value);
-    if (empty && cancelledBeforeWrite(proof, node)) {
+    if (empty && cancelledBeforeWrite({ proof, write: node, start })) {
       continue;
     }
     const insideLoop = loopBody !== null && isWithin(node, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
-    if (frame && insideLoop && (empty || startsLoop)) {
+    if (
+      frame &&
+      insideLoop &&
+      (startsLoop ||
+        (empty &&
+          loopBody !== null &&
+          resetsConsumedFrame({ context, write: node, loop: loopBody })))
+    ) {
       continue;
     }
     if (startsLoop && !insideLoop && ++kickOffs <= 1) {
@@ -1058,7 +1105,8 @@ const hasAmbiguousHandleWrites = ({
       emptyHandleValue(context, value);
     if (
       empty &&
-      (reference.init || (write !== null && cancelledBeforeWrite(proof, write)))
+      (reference.init ||
+        (write !== null && cancelledBeforeWrite({ proof, write, start })))
     ) {
       continue;
     }
@@ -1066,7 +1114,15 @@ const hasAmbiguousHandleWrites = ({
     const insideLoop =
       loopBody !== null && write !== null && isWithin(write, loopBody);
     const startsLoop = frame && startsFrameLoop({ context, value, loopBody });
-    if (frame && insideLoop && (empty || startsLoop)) {
+    if (
+      frame &&
+      insideLoop &&
+      (startsLoop ||
+        (empty &&
+          write !== null &&
+          loopBody !== null &&
+          resetsConsumedFrame({ context, write, loop: loopBody })))
+    ) {
       continue;
     }
     if (startsLoop && !insideLoop) {
