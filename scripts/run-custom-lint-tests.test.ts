@@ -225,7 +225,7 @@ test("the workers receive exactly the environment the caller passes", async () =
       `import { test } from "bun:test";
 import { writeFileSync } from "node:fs";
 test("env", () => {
-  writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ actions: process.env["GITHUB_ACTIONS"] ?? null, marker: process.env["CUSTOM_LINT_ENV_MARKER"] ?? null }));
+  writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ actions: process.env["GITHUB_ACTIONS"] ?? null, marker: process.env["OXLINT_RULE_COVERAGE_PATH"] ?? null }));
 });`,
     );
     expect(
@@ -234,13 +234,14 @@ test("env", () => {
         undefined,
         {
           ...withoutCiAnnotations(),
-          CUSTOM_LINT_ENV_MARKER: "passed",
+          // Without a coverage path the runner leaves this one as the caller set it.
+          OXLINT_RULE_COVERAGE_PATH: "caller-value",
         },
       ),
     ).toBe(0);
     expect(JSON.parse(readFileSync(seen, "utf-8"))).toEqual({
       actions: null,
-      marker: "passed",
+      marker: "caller-value",
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });
