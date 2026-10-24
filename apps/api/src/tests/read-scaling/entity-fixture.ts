@@ -54,16 +54,27 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) => {
       let fallback = "";
       if (column.default instanceof SQL) {
         fallback = ` DEFAULT ${dialect.sqlToQuery(column.default).sql}`;
+      } else if (column.default === null) {
+        fallback = " DEFAULT NULL";
       } else if (
         column.default !== undefined &&
         typeof column.default !== "function"
       ) {
-        const value =
-          column.dimensions > 0 && Array.isArray(column.default)
-            ? makePgArray(column.default)
-            : typeof column.default === "object"
-              ? JSON.stringify(column.default)
-              : String(column.default);
+        let value: string;
+        if (column.dimensions > 0 && Array.isArray(column.default)) {
+          value = makePgArray(column.default);
+        } else if (typeof column.default === "object") {
+          value = JSON.stringify(column.default);
+        } else if (
+          typeof column.default === "string" ||
+          typeof column.default === "number" ||
+          typeof column.default === "boolean" ||
+          typeof column.default === "bigint"
+        ) {
+          value = String(column.default);
+        } else {
+          return panic(`Unsupported default for ${column.name}`);
+        }
         fallback = ` DEFAULT '${value.replaceAll("'", "''")}'`;
       }
       return `"${column.name}" ${column.getSQLType()}${"[]".repeat(column.dimensions)}${fallback}`;

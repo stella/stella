@@ -184,8 +184,8 @@ describe("db query counter HTTP header", () => {
   test("integration HTTP requests reject per-row SQL through the server request scope", async () => {
     const app = new Elysia()
       .wrap(
-        (handleRequest) => (request: Request) =>
-          runWithHttpRequestScope(async () => {
+        (handleRequest) => async (request: Request) =>
+          await runWithHttpRequestScope(async () => {
             const response: unknown = await Promise.resolve(
               handleRequest(request),
             );

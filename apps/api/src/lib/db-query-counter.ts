@@ -70,11 +70,11 @@ export class RepeatedQueryFingerprintError extends TaggedError(
   "RepeatedQueryFingerprintError",
 )<{ message: string; fingerprints: readonly string[] }> {}
 
-export const runWithMeasuredQueryCounter = <TResult>(
+export const runWithMeasuredQueryCounter = async <TResult>(
   fn: (counter: Readonly<QueryCounter>) => Promise<TResult>,
   ledger: readonly { id: string; count: number }[] = [],
 ): Promise<TResult> =>
-  runWithQueryCounter(
+  await runWithQueryCounter(
     async (counter) => {
       const result = await fn(counter);
       const allowed = new Map(ledger.map(({ id, count }) => [id, count]));

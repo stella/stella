@@ -26,7 +26,8 @@ export const runWithHttpRequestScope = async <TResult>(
   fn: () => Promise<TResult>,
 ): Promise<TResult> =>
   isLocalTestRun()
-    ? await runWithRequestIdScope(() =>
-        runWithMeasuredQueryCounter(fn, repeatedSqlFingerprintLedger),
+    ? await runWithRequestIdScope(
+        async () =>
+          await runWithMeasuredQueryCounter(fn, repeatedSqlFingerprintLedger),
       )
     : await runWithRequestScope(fn);

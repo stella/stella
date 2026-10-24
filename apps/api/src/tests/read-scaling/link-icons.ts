@@ -7,6 +7,7 @@ import getExactIcon, {
 } from "@/api/handlers/chat/link-icons/get-exact";
 import { toExactIconUrl } from "@/api/handlers/chat/link-icons/origin";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -28,7 +29,9 @@ export const exactIconScalingScenario = {
             redisRoundTrips += 1;
             return await client.send(command, args);
           },
-          close: () => client.close(),
+          close: () => {
+            client.close();
+          },
         };
       },
     });
@@ -72,6 +75,7 @@ export const exactIconScalingScenario = {
           asTestRaw<Parameters<typeof handler.handler>[0]>({
             query: { url: first },
             user: { id: mintAuthProviderId<"user">() },
+            memberRole: sessionMemberRole("owner"),
             request: new Request(
               "https://example.test/v1/chat/link-icons/exact",
             ),

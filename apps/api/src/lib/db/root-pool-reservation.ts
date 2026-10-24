@@ -49,30 +49,32 @@ export const instrumentRootPoolTransactions = (
     callback?: SQL.TransactionContextCallback<T>,
   ): Promise<SQL.ContextCallbackResult<T>> => {
     if (typeof optionsOrCallback !== "string") {
-      return await runCountedTransaction(() =>
-        withRootPoolReservation({
-          reserve,
-          window,
-          work: async (session) =>
-            await runTransactionsInCallerContext(session).begin(
-              optionsOrCallback,
-            ),
-        }),
+      return await runCountedTransaction(
+        async () =>
+          await withRootPoolReservation({
+            reserve,
+            window,
+            work: async (session) =>
+              await runTransactionsInCallerContext(session).begin(
+                optionsOrCallback,
+              ),
+          }),
       );
     }
     if (callback === undefined) {
       return panic("begin(options) needs a transaction callback");
     }
-    return await runCountedTransaction(() =>
-      withRootPoolReservation({
-        reserve,
-        window,
-        work: async (session) =>
-          await runTransactionsInCallerContext(session).begin(
-            optionsOrCallback,
-            callback,
-          ),
-      }),
+    return await runCountedTransaction(
+      async () =>
+        await withRootPoolReservation({
+          reserve,
+          window,
+          work: async (session) =>
+            await runTransactionsInCallerContext(session).begin(
+              optionsOrCallback,
+              callback,
+            ),
+        }),
     );
   };
   Object.defineProperties(client, {

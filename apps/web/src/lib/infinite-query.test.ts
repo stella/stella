@@ -19,6 +19,7 @@ describe("cursor page traversal", () => {
 
   test("propagates an aborted page request without visiting it", async () => {
     const controller = new AbortController();
+    const reason = new DOMException("Traversal stopped", "AbortError");
     const cursors: (string | undefined)[] = [];
     const traversal = visitCursorPages({
       getPage: async (cursor) => {
@@ -26,9 +27,9 @@ describe("cursor page traversal", () => {
         controller.signal.throwIfAborted();
         return { nextCursor: "next" };
       },
-      visit: () => controller.abort(),
+      visit: () => controller.abort(reason),
     });
-    await expect(traversal).rejects.toBe(controller.signal.reason);
+    await expect(traversal).rejects.toBe(reason);
     expect(cursors).toEqual([undefined, "next"]);
   });
 });

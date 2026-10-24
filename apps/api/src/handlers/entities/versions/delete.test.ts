@@ -14,6 +14,11 @@ import { repoRelativePath } from "@stll/portable-path";
 
 const API_SRC = nodePath.resolve(import.meta.dir, "../../..");
 
+const isProductionSource = (file: string): boolean =>
+  file.endsWith(".ts") &&
+  !file.endsWith(".test.ts") &&
+  !repoRelativePath(API_SRC, file).startsWith("tests/");
+
 const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
   for (const entry of readdirSync(dir)) {
     const full = nodePath.join(dir, entry);
@@ -21,12 +26,9 @@ const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
       collectSourceFiles(full, acc);
       continue;
     }
-    if (!entry.endsWith(".ts")) {
-      continue;
-    }
-    // Tests may exercise raw deletes against a throwaway DB; only production
-    // source is bound by the no-hard-delete invariant.
-    if (entry.endsWith(".test.ts")) {
+    // Dedicated test helpers are forbidden imports for production modules.
+    // Like test modules, their cleanup may delete isolated fixture rows.
+    if (!isProductionSource(full)) {
       continue;
     }
     acc.push(full);
@@ -35,6 +37,21 @@ const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
 };
 
 describe("delete-version chain-of-custody guard", () => {
+  test("excludes test modules and dedicated helpers while retaining production sources", () => {
+    for (const [relative, production] of [
+      ["handlers/entities/versions/delete.ts", true],
+      ["handlers/entities/versions/delete.test.ts", false],
+      ["tests/read-scaling/entity-fixture.ts", false],
+      ["lib/read-scaling/entity-fixture.ts", true],
+      ["lib/tests/entity-fixture.ts", true],
+      ["tests-support/entity-fixture.ts", true],
+    ] as const) {
+      expect(isProductionSource(nodePath.join(API_SRC, relative))).toBe(
+        production,
+      );
+    }
+  });
+
   test("no production code hard-deletes an entity version", () => {
     const offenders = collectSourceFiles(API_SRC).filter((file) =>
       readFileSync(file, "utf-8").includes("delete(entityVersions)"),

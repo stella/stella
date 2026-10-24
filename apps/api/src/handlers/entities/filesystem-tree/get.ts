@@ -5,7 +5,6 @@ import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { toSafeId } from "@/api/lib/branded-types";
 import {
   queryEntities,
   queryEntityCursorPage,
@@ -13,6 +12,7 @@ import {
 import { entityReadPageBodySchema } from "@/api/lib/entities/query-window-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   contract: "patch",
@@ -126,8 +126,8 @@ export const createReadFilesystemTreeHandler = (
       const ancestorLinks = ancestors
         .filter((ancestor) => !presentIds.has(ancestor.entityId))
         .map(({ entityId, parentId }) => ({
-          entityId: toSafeId<"entity">(entityId),
-          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+          entityId: brandPersistedEntityId(entityId),
+          parentId: parentId === null ? null : brandPersistedEntityId(parentId),
         }));
       return Result.ok({ ...page, ancestorLinks });
     },
