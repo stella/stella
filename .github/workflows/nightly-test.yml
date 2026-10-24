@@ -9,11 +9,6 @@ on:
     # 04:17 UTC daily, after nightly typecheck.
     - cron: "17 4 * * *"
   workflow_dispatch:
-    inputs:
-      dry-run-issue:
-        description: Exercise migration failure reporting without writing an issue
-        type: boolean
-        default: true
 
 permissions: {}
 
@@ -624,34 +619,3 @@ jobs:
             echo "Base: $BASE_SHA; candidate: $CANDIDATE_SHA."
             echo "Phase durations and rehearsal total: not run."
           } >> "$GITHUB_STEP_SUMMARY"
-
-  report-failure:
-    needs: migration-exact-base-upgrade
-    if: >-
-      always() && (needs.migration-exact-base-upgrade.result == 'failure'
-      || (github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled')
-      || (github.event_name == 'workflow_dispatch' && inputs.dry-run-issue))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    # Serialize issue discovery and creation to avoid duplicate open issues.
-    concurrency:
-      group: nightly-exact-base-failure-issue
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      # Files or updates the routine failure issue, without publishing logs.
-      issues: write
-    steps:
-      - name: Checkout report script
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: File or update the routine failure issue
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          # Manual branch dispatches may exercise reporting but never write.
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry-run-issue || github.ref != 'refs/heads/main') }}
-        run: bash scripts/report-exact-base-failure.sh
