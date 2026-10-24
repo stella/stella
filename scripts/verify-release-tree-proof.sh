@@ -205,7 +205,12 @@ else
       .head.sha == $sha and .head.repo.full_name == $repo and .base.repo.full_name == $repo and
       .base.ref == "main")] | length == 1
   ' <<< "$pulls" >/dev/null || refuse 'open release PR relation is unverified'
-  git merge-base --is-ancestor "$main" "$proof" || refuse 'PR head does not contain current main tip'
+  # Main moving during a release cut is normal: exit 3 lets a caller skip
+  # instead of failing, while every other refusal stays exit 1.
+  if ! git merge-base --is-ancestor "$main" "$proof"; then
+    echo "RELEASE_TREE_PROOF_STALE: PR head $proof does not contain current main tip $main" >&2
+    exit 3
+  fi
   relation=pr-head
 fi
 if [[ "$sha" != "$proof" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

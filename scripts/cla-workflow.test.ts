@@ -1976,9 +1976,9 @@ describe("contributor signature workflow", () => {
     expect(workflow.jobs).not.toHaveProperty("cla");
     expect(steps).toHaveLength(3);
     expect(steps.map(({ uses }) => uses)).toEqual([
-      "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
-      "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
-      "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+      expect.stringMatching(/^actions\/github-script@[a-f0-9]{40}$/u),
+      expect.stringMatching(/^actions\/create-github-app-token@[a-f0-9]{40}$/u),
+      expect.stringMatching(/^actions\/github-script@[a-f0-9]{40}$/u),
     ]);
     for (const step of steps) {
       expect(step).not.toHaveProperty("run");

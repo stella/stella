@@ -15,11 +15,14 @@
     "RUNNER_ARCH"
   ],
   // BUN_OPTIONS carries the quarantine preload into each package's Bun test
-  // process; the report directory only locates its output.
+  // process; the report directory only locates its output. The workflows'
+  // GIT_CONFIG_* settings keep Git background maintenance out of package test
+  // fixtures, which strict env mode would otherwise drop.
   "globalPassThroughEnv": [
     "BUN_OPTIONS",
     "CI_GENERATED_SOURCES_MANIFEST",
-    "FLAKY_TEST_QUARANTINE_REPORT_DIR"
+    "FLAKY_TEST_QUARANTINE_REPORT_DIR",
+    "GIT_CONFIG_*"
   ],
   // A patched dependency changes installed code for every task that resolves
   // it, but editing a patch file moves neither bun.lock (which records the

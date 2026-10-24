@@ -9,6 +9,7 @@ import {
   resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -124,7 +125,6 @@ import {
   getWorkspaceStatus,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
   structuredEgressPlan,
@@ -1133,7 +1133,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1360,7 +1360,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1369,7 +1369,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1676,7 +1676,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
+          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),

@@ -110,13 +110,13 @@ correspondence_allowed_sender_matters.workspace_id       safeWorkspaceId     not
 correspondence_allowed_sender_matters.allowed_sender_id  safeUuid            not null     correspondence.ts:534
 ```
 
-## correspondence_drop_logs · `correspondenceDropLogs` · correspondence.ts:567 · rls
+## correspondence_drop_logs · `correspondenceDropLogs` · correspondence.ts:568 · rls
 
 ```text
-correspondence_drop_logs.id               pUuid               pk,not null  correspondence.ts:570
-correspondence_drop_logs.organization_id  safeOrganizationId  not null     correspondence.ts:571
-correspondence_drop_logs.workspace_id     safeWorkspaceId     not null     correspondence.ts:572
-correspondence_drop_logs.sender_address   text                not null     correspondence.ts:573
-correspondence_drop_logs.reason           text                not null     correspondence.ts:574
-correspondence_drop_logs.received_at      timestamptz         not null     correspondence.ts:575
+correspondence_drop_logs.id               pUuid               pk,not null  correspondence.ts:571
+correspondence_drop_logs.organization_id  safeOrganizationId  not null     correspondence.ts:572
+correspondence_drop_logs.workspace_id     safeWorkspaceId     not null     correspondence.ts:573
+correspondence_drop_logs.sender_address   text                not null     correspondence.ts:574
+correspondence_drop_logs.reason           text                not null     correspondence.ts:575
+correspondence_drop_logs.received_at      timestamptz         not null     correspondence.ts:576
 ```

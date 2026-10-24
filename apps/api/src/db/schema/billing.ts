@@ -679,6 +679,7 @@ export const sellerProfiles = p.pgTable(
       "seller_profiles_vat_payer_check",
       sql`NOT ${table.vatPayer} OR btrim(coalesce(${table.vatId}, '')) <> ''`,
     ),
+    ...reviewResetOwnerPolicies("seller_profiles"),
     ...orgPolicies(),
   ],
 );
@@ -746,6 +747,7 @@ export const numberSeries = p.pgTable(
       "number_series_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
     ),
+    ...reviewResetOwnerPolicies("number_series"),
     ...orgPolicies(),
   ],
 );
@@ -772,6 +774,7 @@ export const numberSeriesCounters = p.pgTable(
       "number_series_counters_positive_check",
       sql`${table.lastValue} > 0`,
     ),
+    ...reviewResetOwnerPolicies("number_series_counters"),
     ...orgPolicies(),
   ],
 );
@@ -804,6 +807,7 @@ export const numberSeriesAllocations = p.pgTable(
       "number_series_allocations_document_type_check",
       sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
     ),
+    ...reviewResetOwnerPolicies("number_series_allocations"),
     ...orgPolicies(),
   ],
 );
@@ -1186,6 +1190,7 @@ export const invoiceLines = p.pgTable(
       "invoice_lines_description_check",
       sql`length(${table.description}) between 1 and 10000`,
     ),
+    ...reviewResetOwnerPolicies("invoice_lines"),
     ...wsOrganizationPolicies("invoice_lines", { columns: table }),
   ],
 );
@@ -1220,6 +1225,7 @@ export const vatRates = p.pgTable(
       "vat_rates_validity_check",
       sql`${table.validTo} IS NULL OR ${table.validTo} > ${table.validFrom}`,
     ),
+    ...reviewResetOwnerPolicies("vat_rates"),
     ...orgPolicies(),
   ],
 );
