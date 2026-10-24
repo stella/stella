@@ -56,8 +56,7 @@ type AskUserCardProps = {
    * competing follow-up suggestions). Reports `false` on unmount.
    */
   onEditingChange?:
-    | ((toolCallId: string, isEditing: boolean) => void)
-    | undefined;
+    ((toolCallId: string, isEditing: boolean) => void) | undefined;
   discardsDownstream?: boolean | undefined;
   workspaceId?: string | undefined;
   /**
