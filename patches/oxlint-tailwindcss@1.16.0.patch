@@ -92,7 +92,8 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
 +  setPhase(3);
    const base = dirname(cssPath);
 +  setPhase(4);
-   const ds = await __unstable__loadDesignSystem(css, { base });
+-  const ds = await __unstable__loadDesignSystem(css, { base });
++  const ds = await __unstable__loadDesignSystem(css, { base }); setPhase(8);
    phase('load');
  
 @@ -3104,6 +3139,7 @@ async function main() {
@@ -185,7 +186,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
 +const WORKER_WAIT_LIMIT_MS = 6e5;
 +const WORKER_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS) ?? 6e4;
 +const WORKER_LOAD_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS) ?? 18e4;
-+const WORKER_PHASES = ["not started", "started", "Tailwind node module loaded", "stylesheet read", "compiling the design system", "ready", "warming up", "answering a request"];
++const WORKER_PHASES = ["not started", "started", "Tailwind node module loaded", "stylesheet read", "compiling the design system", "ready", "warming up", "answering a request", "precomputing declarations"];
 +function workerPhase(control) {
 +	return WORKER_PHASES[Atomics.load(control, 4)] ?? `unknown phase ${Atomics.load(control, 4)}`;
 +}
@@ -201,7 +202,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..af784d571b5c271cb394fba6724511c5
 +			heartbeat = nextHeartbeat;
 +			heartbeatAt = now;
 +		}
-+		const heartbeatLimitMs = Atomics.load(control, 4) < 5 ? WORKER_LOAD_HEARTBEAT_LIMIT_MS : WORKER_HEARTBEAT_LIMIT_MS;
++		const heartbeatLimitMs = Atomics.load(control, 4) < 5 || Atomics.load(control, 4) === 8 ? WORKER_LOAD_HEARTBEAT_LIMIT_MS : WORKER_HEARTBEAT_LIMIT_MS;
 +		if (stopped()) return { answered: false, reason: "stopped", phase: workerPhase(control), silentMs: now - heartbeatAt };
 +		if (now - started >= WORKER_WAIT_LIMIT_MS) return { answered: false, reason: "bound", phase: workerPhase(control), silentMs: now - heartbeatAt };
 +		if (now - heartbeatAt >= heartbeatLimitMs) return { answered: false, reason: "heartbeat", phase: workerPhase(control), silentMs: now - heartbeatAt };
@@ -577,7 +578,8 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
 +  setPhase(3);
    const base = dirname(cssPath);
 +  setPhase(4);
-   const ds = await __unstable__loadDesignSystem(css, { base });
+-  const ds = await __unstable__loadDesignSystem(css, { base });
++  const ds = await __unstable__loadDesignSystem(css, { base }); setPhase(8);
    phase('load');
  
 @@ -3107,6 +3142,7 @@ async function main() {
@@ -670,7 +672,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
 +const WORKER_WAIT_LIMIT_MS = 6e5;
 +const WORKER_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS) ?? 6e4;
 +const WORKER_LOAD_HEARTBEAT_LIMIT_MS = parseRequestTimeout(process.env.OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS) ?? 18e4;
-+const WORKER_PHASES = ["not started", "started", "Tailwind node module loaded", "stylesheet read", "compiling the design system", "ready", "warming up", "answering a request"];
++const WORKER_PHASES = ["not started", "started", "Tailwind node module loaded", "stylesheet read", "compiling the design system", "ready", "warming up", "answering a request", "precomputing declarations"];
 +function workerPhase(control) {
 +	return WORKER_PHASES[Atomics.load(control, 4)] ?? `unknown phase ${Atomics.load(control, 4)}`;
 +}
@@ -686,7 +688,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..28676105c3c0e2c977fb2e00e4c62c3e
 +			heartbeat = nextHeartbeat;
 +			heartbeatAt = now;
 +		}
-+		const heartbeatLimitMs = Atomics.load(control, 4) < 5 ? WORKER_LOAD_HEARTBEAT_LIMIT_MS : WORKER_HEARTBEAT_LIMIT_MS;
++		const heartbeatLimitMs = Atomics.load(control, 4) < 5 || Atomics.load(control, 4) === 8 ? WORKER_LOAD_HEARTBEAT_LIMIT_MS : WORKER_HEARTBEAT_LIMIT_MS;
 +		if (stopped()) return { answered: false, reason: "stopped", phase: workerPhase(control), silentMs: now - heartbeatAt };
 +		if (now - started >= WORKER_WAIT_LIMIT_MS) return { answered: false, reason: "bound", phase: workerPhase(control), silentMs: now - heartbeatAt };
 +		if (now - heartbeatAt >= heartbeatLimitMs) return { answered: false, reason: "heartbeat", phase: workerPhase(control), silentMs: now - heartbeatAt };
