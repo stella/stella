@@ -13,7 +13,7 @@
  * passes the origin it reads off the stored resources.
  */
 
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
 import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";

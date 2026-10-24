@@ -7,16 +7,16 @@ import { resolveClientId } from "./client-id";
 import { discoverAuthorizationServer } from "./discovery";
 import {
   AuthorizationError,
-  TokenError,
   type ClientRegistrationError,
   type DiscoveryError,
   type ServerUrlError,
+  TokenError,
 } from "./errors";
 import type { Fetch } from "./http";
 import {
+  type AuthorizationCrypto,
   createAuthorizationState,
   createPkcePair,
-  type AuthorizationCrypto,
 } from "./pkce";
 import { parseServerUrl } from "./server-url";
 import type { TransportPolicy } from "./server-url";

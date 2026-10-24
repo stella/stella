@@ -3807,15 +3807,7 @@ export const createAuthMacro = ({
     .macro({
       validateAuth: {
         detail: { [TENANT_ACTION_DETAIL]: true },
-        async resolve({
-          params,
-          query,
-          status,
-          request,
-          route,
-          server,
-          set,
-        }) {
+        async resolve({ params, query, status, request, route, server, set }) {
           const result = await resolveAuth({
             params,
             query,

@@ -76,8 +76,7 @@ export const createAccessTokenSource = ({
   let current = session;
   let access = initialAccess;
   let refreshing:
-    | Promise<Result<string, SignedOutError | TokenError>>
-    | undefined;
+    Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
   const refresh = async (): Promise<
     Result<string, SignedOutError | TokenError>
