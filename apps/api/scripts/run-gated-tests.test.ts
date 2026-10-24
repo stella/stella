@@ -9,10 +9,10 @@ import {
   assertPostgresWorkerBudget,
   planPostgresWorkers,
   POSTGRES_IDENTIFIER_BYTES,
+  type PostgresAdmin,
   PostgresTemplateConnectionError,
   PostgresWorkerBudgetError,
   runPostgresWorkers,
-  type PostgresAdmin,
   workerDatabaseName,
 } from "./postgres-test-workers";
 import { runTestBatches } from "./run-gated-tests";

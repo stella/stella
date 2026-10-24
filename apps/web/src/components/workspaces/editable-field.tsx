@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 /**
  * Shared inline-editable field component.
  *
@@ -40,9 +40,9 @@ import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   EntityKind,
+  SelectPropertyOption,
   WorkspaceFieldContent,
   WorkspaceProperty,
-  SelectPropertyOption,
 } from "@/lib/types";
 import { entityOptions, entitiesKeys } from "@/lib/workspaces/queries/entities";
 

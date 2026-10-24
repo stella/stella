@@ -14,8 +14,8 @@ import {
 } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
-  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
   encodeEntitiesWindowCursor,
+  ENTITIES_WINDOW_CURSOR_MAX_LENGTH,
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";

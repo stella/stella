@@ -10,13 +10,13 @@
  * constructing a client anywhere else.
  */
 import { panic } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Logger } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { forceClosePool } from "@/api/db/sql-close";
 import {
   instrumentSqlTransactionCounts,
@@ -25,7 +25,7 @@ import {
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 
 const openDatabase = (client: SQL, logger: Logger = queryCountLogger) =>
-  drizzle({ client, relations: databaseRelations, logger });
+  createDatabase({ client, relations: databaseRelations, logger });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
 
@@ -53,7 +53,7 @@ export const openGatedTestDatabase = (
   { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
 ): GatedTestDatabase => {
   const client = instrumentSqlTransactionCounts(
-    runTransactionsInCallerContext(new SQL({ url: databaseUrl, max })),
+    runTransactionsInCallerContext(createSqlClient({ url: databaseUrl, max })),
   );
   const cleanupSteps: CleanupStep[] = [];
 
@@ -129,7 +129,7 @@ export const withGatedTestClients = async <T>(
   }: OpenClientOptions = {}) => {
     const client = instrumentSqlTransactionCounts(
       runTransactionsInCallerContext(
-        new SQL({
+        createSqlClient({
           url: clientDatabaseUrl,
           max,
           idleTimeout,

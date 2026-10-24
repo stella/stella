@@ -29,6 +29,15 @@ up as a reviewable diff in the PR. The guards include:
   CI instead of silently reintroducing an infinite-update-loop risk.
 - **DB query counter** (`apps/api/src/lib/db-query-counter.ts`): the runtime
   half of the network baseline's DB-query budget. Dev/test only.
+- **Chat path budgets**
+  (`apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts`,
+  `apps/web/src/features/chat/chat-runtime-send-budget.test.ts`): SQL
+  statements and bytes per chat path (thread open, older page, send, streamed
+  delta, settlement, rejoin, Stop) through the real handlers, on a short and
+  a long thread. The counts must be equal on both, so an N+1 fails at any
+  size; bytes are bounded per page and per delta, and a send carries only the
+  message it posts. Each budget is the measurement on main plus a stated
+  headroom; a real improvement lowers the measurement.
 - **`require-loader-prefetch`** oxlint rule
   (`.oxlint-plugins/require-loader-prefetch.ts`): static, not baseline-based;
   flags the waterfall pattern the network baseline would otherwise only catch
@@ -74,14 +83,14 @@ the deterministic before/after values and the rejected mutation in the PR.
 
 The performance coverage inventories are:
 
-| Census | Test or check | Ledger or coverage inventory |
-| --- | --- | --- |
-| Mounted API v1 routes | `apps/api/src/tests/read-scaling/census.test.ts` | `apps/api/src/tests/read-scaling/api-scaling-ledger.json` |
-| Curated MCP tools | `apps/api/src/tests/read-scaling/census.test.ts` | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json` |
-| Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/repeated-sql-fingerprints.json` |
-| Web route smoke list | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`) | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`) |
-| Query performance registry | `apps/api/src/tests/query-perf/query-perf.test.ts`; `scripts/query-perf-baseline.test.ts` | `apps/api/src/tests/query-perf/registry.ts`; `apps/api/src/tests/query-perf/baseline.json` |
-| Create-form single-flight coverage | `apps/web/src/hooks/single-flight-census.test.ts` | Same file (`UNGUARDED_CREATE_FORMS`) |
+| Census                                              | Test or check                                                                                         | Ledger or coverage inventory                                                               |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Mounted API v1 routes                               | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/api-scaling-ledger.json`                                  |
+| Curated MCP tools                                   | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json`                                  |
+| Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/repeated-sql-fingerprints.json`                                          |
+| Web route smoke list                                | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`)                                 | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`)                    |
+| Query performance registry                          | `apps/api/src/tests/query-perf/query-perf.test.ts`; `scripts/query-perf-baseline.test.ts`             | `apps/api/src/tests/query-perf/registry.ts`; `apps/api/src/tests/query-perf/baseline.json` |
+| Create-form single-flight coverage                  | `apps/web/src/hooks/single-flight-census.test.ts`                                                     | Same file (`UNGUARDED_CREATE_FORMS`)                                                       |
 
 The existing web route inventory and query baseline retain their recorded-budget
 policies below; they do not replace the two-size scaling measurement. The query

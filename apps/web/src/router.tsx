@@ -18,6 +18,7 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
+import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
@@ -111,6 +112,7 @@ export function getRouter() {
       return;
     }
     routeErrorLifecycle.routeResolved(path);
+    setUserErrorRouteTemplate(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });
 
