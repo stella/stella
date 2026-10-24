@@ -23,6 +23,8 @@ import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+// How long pg_locks may still report a lock wait after its timeout fired.
+const LOCK_ROW_EDGE_MS = 50;
 const connectionAdapter = (
   connection: ReservedSQL,
 ): OnlineMigrationConnection => ({
@@ -283,7 +285,10 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
               AND l.waitstart IS NOT NULL`;
           for (const wait of waits) {
             samples++;
-            expect(wait.waitMs).toBeLessThanOrEqual(500);
+            // The longest lock timeout bounds each wait. pg_locks can still
+            // show the timed-out request's wait row for a moment after the
+            // timeout fires (see below), so allow that observation edge.
+            expect(wait.waitMs).toBeLessThanOrEqual(500 + LOCK_ROW_EDGE_MS);
             if (wait.active === true) {
               activeSamples++;
             }
