@@ -733,6 +733,7 @@ export const buildReportData = async ({
 
     const queryResult = yield* Result.await(
       queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId,

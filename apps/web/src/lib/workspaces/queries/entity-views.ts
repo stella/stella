@@ -71,7 +71,7 @@ export const entityViewRowsOptions = ({
             filters: layout.filters,
             sorts: layout.sorts,
             includeAssignees: true,
-            fieldMode: "full",
+            fieldMode: "visible",
             inboxView,
             asOf,
             ...(pageParam ? { cursor: pageParam } : {}),

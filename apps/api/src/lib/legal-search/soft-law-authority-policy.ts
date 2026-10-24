@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
+
 import {
   isTextlessExtraction,
-  type SOFT_LAW_KINDS,
   type SoftLawAuthority,
   type SoftLawDocumentInput,
   SoftLawItemError,
@@ -16,7 +17,7 @@ type AuthorityPolicy = {
   referenceStyle: "literal" | "wp_number";
   identitySeries:
     { type: "none" } | { type: "source-kind"; values: readonly string[] };
-  kinds: Record<(typeof SOFT_LAW_KINDS)[number], KindDisposition>;
+  kinds: Record<GuidanceKind, KindDisposition>;
 };
 
 const eligible = { type: "eligible" } as const;

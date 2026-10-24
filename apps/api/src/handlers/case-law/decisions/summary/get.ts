@@ -14,7 +14,10 @@ import {
   ACCOUNT_ACCESS,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  type CaseLawPublicReadDb,
+  caseLawPublicReadDb,
+} from "@/api/lib/case-law-public-read-db";
 import {
   courtPresentation,
   readCourtRegistry,
@@ -197,21 +200,26 @@ const readDecisionSummary = async (
   });
 };
 
-const readDecisionSummaryRoute = createSafePublicSubjectHandler({
-  config: {
-    contract: "patch",
-    access: "read",
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "search_ui" },
-    cache: { kind: "none" },
-    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
-    response: safePublicHandlerResponseSchemasWithStatusText(
-      decisionSummaryResponseSchema,
-    ),
-  },
-  caseLawDb: caseLawPublicReadDb,
-  locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
-  read: readDecisionSummary,
-});
+export const createReadDecisionSummaryHandler = (
+  caseLawDb: CaseLawPublicReadDb = caseLawPublicReadDb,
+) =>
+  createSafePublicSubjectHandler({
+    config: {
+      contract: "patch",
+      access: "read",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "search_ui" },
+      cache: { kind: "none" },
+      params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        decisionSummaryResponseSchema,
+      ),
+    },
+    caseLawDb,
+    locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
+    read: readDecisionSummary,
+  });
+
+const readDecisionSummaryRoute = createReadDecisionSummaryHandler();
 
 export default readDecisionSummaryRoute;

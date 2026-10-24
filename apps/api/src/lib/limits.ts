@@ -46,8 +46,6 @@ export {
   API_RATE_LIMITS,
 } from "@/api/lib/rate-limit/budget-config";
 
-/** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
- *  object literal instead of restating the page size. */
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
 
 export const LIMITS = {
@@ -133,11 +131,6 @@ export const LIMITS = {
    *  the `before` cursor, so a heavily-revised entity never loses access to
    *  older versions. */
   versionsPageSizeDefault: VERSIONS_PAGE_SIZE_DEFAULT,
-  /** Worst-case file fields scanned for one page of an entity's version
-   *  history (versionsPageSizeDefault * propertiesCount). The reader pages
-   *  versions, so the scan follows the page size, not versionsPerEntity. */
-  versionFieldsScanLimit:
-    VERSIONS_PAGE_SIZE_DEFAULT * PROPERTIES_PER_WORKSPACE_MAX,
   calendarTasksMax: 200,
   /** Default page size for the signed-in user's assigned tasks. */
   myTasksPageSizeDefault: 50,
