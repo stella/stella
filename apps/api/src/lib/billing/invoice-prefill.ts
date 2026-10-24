@@ -21,6 +21,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 
 import {
+  addressCountry,
   buyerSnapshotFromContact,
   decideInvoiceVat,
   EMPTY_BUYER_SNAPSHOT,
@@ -47,7 +48,9 @@ export const invoiceLanguageForSeller = (
   } | null,
 ) =>
   invoiceLanguageForCountry(
-    invoiceCountryOf(seller ?? { country: null, vatId: null }),
+    addressCountry(seller?.country ?? null) ??
+      seller?.vatId?.trim().slice(0, 2).toUpperCase() ??
+      null,
   );
 
 const SELLER_COLUMNS = {

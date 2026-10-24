@@ -201,12 +201,12 @@ const VAT_CASES: VatCase[] = [
     expected: ["domestic_vat", 2100, "domestic_rate"],
   },
   {
-    name: "an explicit non-payer is not reverse charged despite a foreign VAT ID",
+    name: "a registered non-payer business with a foreign VAT ID is reverse charged",
     seller: { vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DE298765432",
     buyerVatPayer: false,
     buyerCountry: "DE",
-    expected: ["domestic_vat", 2100, "domestic_rate"],
+    expected: ["reverse_charge", 0, "reverse_charge"],
   },
   {
     name: "a private client pays the standard rate",

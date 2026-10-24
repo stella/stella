@@ -224,7 +224,6 @@ const OUTSIDE_SCOPE: InvoiceVatDecision = {
 const crossBorderVat = ({
   seller,
   buyerVatId,
-  buyerVatPayer,
   buyerCountry,
   standardRateBps,
 }: DecideInvoiceVatOptions & {
@@ -251,9 +250,8 @@ const crossBorderVat = ({
       ? OUTSIDE_SCOPE
       : domesticVat(standardRateBps, "client_vat_id_invalid");
   }
-  if (buyerVatPayer === false) {
-    return domesticVat(standardRateBps);
-  }
+  // VAT-payer status is separate from taxable-business status: a registered
+  // non-payer can still receive cross-border services under reverse charge.
   // A business client in another member state accounts for the VAT itself
   // (Art. 44/196), shown by a VAT ID with that state's syntax.
   return isWellFormedEuVatId(buyerVatId)
