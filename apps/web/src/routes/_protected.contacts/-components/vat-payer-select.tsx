@@ -26,7 +26,7 @@ export const VatPayerSelect = ({ contact }: { contact: ContactData }) => {
   }
   const labels = {
     [UNKNOWN]: t("contacts.fields.vatPayerUnknown"),
-    [YES]: t("contacts.fields.vatPayerYes"),
+    [YES]: t("common.vatPayer"),
     [NO]: t("contacts.fields.vatPayerNo"),
   };
   const labelOf = (current: unknown) => {

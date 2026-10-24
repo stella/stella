@@ -316,13 +316,13 @@ function ContactDetailPage() {
               <EditableRow
                 contact={contact}
                 field="taxId"
-                label={t("contacts.fields.taxId")}
+                label={t("common.taxId")}
                 value={contact.taxId}
               />
               <EditableRow
                 contact={contact}
                 field="vatId"
-                label={t("contacts.fields.vatId")}
+                label={t("common.vatId")}
                 value={contact.vatId}
               />
               <VatPayerSelect contact={contact} />

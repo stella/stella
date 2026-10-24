@@ -29,8 +29,8 @@ import {
 const FIELD_LABELS = {
   legalName: "billing.sellerProfiles.legalName",
   registrationId: "billing.sellerProfiles.registrationId",
-  taxId: "billing.sellerProfiles.taxId",
-  vatId: "billing.sellerProfiles.vatId",
+  taxId: "common.taxId",
+  vatId: "common.vatId",
   registerEntry: "billing.sellerProfiles.registerEntry",
   barRegistration: "billing.sellerProfiles.barRegistration",
   addressLine1: "contacts.importStudio.fields.address_line_1",
@@ -170,7 +170,7 @@ export const SellerProfileForm = ({
                   />
                   <div className="flex flex-col gap-0.5">
                     <FieldLabel htmlFor={`${id}-vatPayer`}>
-                      {t("billing.sellerProfiles.vatPayer")}
+                      {t("common.vatPayer")}
                     </FieldLabel>
                     <span
                       className="text-muted-foreground text-xs"

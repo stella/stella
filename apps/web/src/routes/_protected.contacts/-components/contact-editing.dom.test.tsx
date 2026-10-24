@@ -245,7 +245,7 @@ test("VAT payer selection submits the nullable contact field", async () => {
     view.getByRole("combobox", { name: messages.contacts.fields.vatPayer }),
   );
   const yes = await view.findByRole("option", {
-    name: messages.contacts.fields.vatPayerYes,
+    name: messages.common.vatPayer,
   });
   testing.fireEvent.pointerDown(yes);
   testing.fireEvent.mouseDown(yes);
