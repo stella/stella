@@ -8,7 +8,7 @@ const STORABLE_UNTIL_MS = Temporal.Instant.from(
   "+010000-01-01T00:00:00Z",
 ).epochMilliseconds;
 
-/** Whether an already well-formed date-time names an instant the API stores. */
+/** Whether the raw date-time directly parses to an instant the API stores. */
 export const isStorableInstant = (value: string): boolean => {
   const epochMs = new Date(value).getTime();
   return epochMs >= STORABLE_FROM_MS && epochMs < STORABLE_UNTIL_MS;

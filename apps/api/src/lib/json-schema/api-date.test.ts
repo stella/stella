@@ -4,6 +4,7 @@ import { Value } from "@sinclair/typebox/value";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { isApiDate, vApiDate } from "@stll/api-contract/api-date";
@@ -21,6 +22,79 @@ const DATE_SCHEMA_SOURCES = [
 ] as const;
 // Development helpers and one-off scripts never take a request or write a row.
 const OUTSIDE_RUNTIME = /^(?:dev|scripts|tests)\//u;
+
+const callsValibotIsoDate = (source: string): boolean => {
+  const file = ts.createSourceFile(
+    "schema.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const namespaces = new Set<string>();
+  const named = new Set<string>();
+  for (const statement of file.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "valibot" ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+    } else if (bindings && ts.isNamedImports(bindings)) {
+      for (const binding of bindings.elements) {
+        if (
+          !binding.isTypeOnly &&
+          (binding.propertyName ?? binding.name).text === "isoDate"
+        ) {
+          named.add(binding.name.text);
+        }
+      }
+    }
+  }
+  const unwrap = (node: ts.Expression): ts.Expression => {
+    let expression = node;
+    while (ts.isParenthesizedExpression(expression)) {
+      expression = expression.expression;
+    }
+    return expression;
+  };
+  const visit = (node: ts.Node): boolean => {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrap(node.expression);
+      if (ts.isIdentifier(callee) && named.has(callee.text)) {
+        return true;
+      }
+      if (
+        ts.isPropertyAccessExpression(callee) ||
+        ts.isElementAccessExpression(callee)
+      ) {
+        const owner = unwrap(callee.expression);
+        let property: string | null = null;
+        if (ts.isPropertyAccessExpression(callee)) {
+          property = callee.name.text;
+        } else if (ts.isStringLiteral(callee.argumentExpression)) {
+          property = callee.argumentExpression.text;
+        }
+        if (
+          ts.isIdentifier(owner) &&
+          namespaces.has(owner.text) &&
+          property === "isoDate"
+        ) {
+          return true;
+        }
+      }
+    }
+    return (
+      ts.forEachChild(node, (child) => (visit(child) ? true : undefined)) ??
+      false
+    );
+  };
+  return visit(file);
+};
 
 describe("API calendar date boundaries", () => {
   test("accepts exactly existing CE calendar days across month and leap-century boundaries", () => {
@@ -169,6 +243,7 @@ describe("API date-time storage boundaries", () => {
   });
 
   test.each([
+    '"2026-10-23T10:00:00Z"',
     "0000-01-01T00:00:00Z",
     // A positive offset moves the instant back into UTC year 0.
     "0001-01-01T00:00:00+01:00",
@@ -177,6 +252,29 @@ describe("API date-time storage boundaries", () => {
   ])("rejects the unstorable instant %s", (value) => {
     expect(Value.Check(dateTimeSchema, value)).toBe(false);
   });
+});
+
+test.each([
+  'import * as v from "valibot"; v.isoDate();',
+  'import * as v from "valibot"; v.isoDate("Expected a date");',
+  'import { isoDate } from "valibot"; isoDate("Expected a date");',
+  'import { isoDate as day } from "valibot"; day("Expected a date");',
+  'import * as dates from "valibot"; (dates["isoDate"])("Expected a date");',
+])(
+  "finds runtime Valibot date calls regardless of import spelling or arguments: %s",
+  (source) => {
+    expect(callsValibotIsoDate(source)).toBe(true);
+  },
+);
+
+test.each([
+  'import * as v from "another-library"; v.isoDate();',
+  'import { isoDate as day } from "another-library"; day();',
+  'const isoDate = () => "2026-10-23"; isoDate();',
+  'import * as v from "valibot"; const example = "v.isoDate()";',
+  'import type * as v from "valibot"; type DateSchema = v.IsoDateAction<string, undefined>;',
+])("ignores sources without a runtime Valibot date call: %s", (source) => {
+  expect(callsValibotIsoDate(source)).toBe(false);
 });
 
 test("every Valibot date schema checks the calendar day", async () => {
@@ -191,7 +289,7 @@ test("every Valibot date schema checks the calendar day", async () => {
         continue;
       }
       const source = await Bun.file(`${root}/${filename}`).text();
-      if (source.includes(".isoDate()")) {
+      if (callsValibotIsoDate(source)) {
         loose.push(`${root}/${filename}`);
       }
     }

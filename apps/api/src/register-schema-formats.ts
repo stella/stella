@@ -10,8 +10,8 @@ import { isStorableInstant } from "@/api/lib/json-schema/api-date";
 // both HTTP validators and the TypeBox checks used by generated capabilities.
 FormatRegistry.Set("date", isApiDate);
 
-// Elysia's date-time check decides the accepted spellings; the range check
-// only drops instants outside the API serialized UTC year range.
+// Retain Elysia's format check and require a directly parseable API instant
+// whose serialized UTC year stays within 0001 to 9999.
 const elysiaDateTime =
   FormatRegistry.Get("date-time") ??
   panic("Elysia registers the date-time format on import");
