@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+import { validateXML } from "xmllint-wasm";
 
 import { cents } from "@stll/money";
 
@@ -9,43 +10,37 @@ import { buildKsefFa3Files } from "./ksef-fa3";
 import type { InvoiceExportRecord, InvoiceExportSeller } from "./record";
 
 // The official FA(3) schema and the crd.gov.pl type schemas it imports are
-// vendored next to this test (see fixtures/ksef-fa3/README.md); the catalog
-// maps the imports to those copies, so validation never touches the network.
+// vendored next to this test (see fixtures/ksef-fa3/README.md).
 const SCHEMAS = path.join(import.meta.dir, "fixtures", "ksef-fa3");
-const XMLLINT = Bun.which("xmllint");
-// CI must validate: a missing xmllint there would turn every schema check
-// into a silent pass. A developer machine without it skips them visibly.
-if (XMLLINT === null && Bun.env["CI"]) {
-  throw new Error("FA(3) schema validation needs xmllint on the CI runner");
-}
+const IMPORT_PREFIX =
+  "http://crd.gov.pl/xml/schematy/dziedzinowe/mf/2022/01/05/eD/DefinicjeTypy/";
+const IMPORTED_SCHEMAS = [
+  "StrukturyDanych_v10-0E.xsd",
+  "ElementarneTypyDanych_v10-0E.xsd",
+  "KodyKrajow_v10-0E.xsd",
+] as const;
 
-/**
- * What xmllint reports against the FA(3) schema; nothing when the XML is
- * valid. Without xmllint (outside CI only) there is nothing to report and
- * the schema tests below are skipped.
- */
-const schemaErrors = (xml: string): string => {
-  if (XMLLINT === null) {
-    return "";
-  }
-  const result = Bun.spawnSync(
-    [
-      XMLLINT,
-      "--nonet",
-      "--noout",
-      "--schema",
-      path.join(SCHEMAS, "schemat.xsd"),
-      "-",
-    ],
-    {
-      stdin: new TextEncoder().encode(xml),
-      env: {
-        ...process.env,
-        XML_CATALOG_FILES: path.join(SCHEMAS, "catalog.xml"),
-      },
-    },
+const schemaText = async (fileName: string): Promise<string> =>
+  (await Bun.file(path.join(SCHEMAS, fileName)).text()).replaceAll(
+    `schemaLocation="${IMPORT_PREFIX}`,
+    'schemaLocation="',
   );
-  return result.exitCode === 0 ? "" : result.stderr.toString();
+
+const schemaErrors = async (xml: string): Promise<string> => {
+  const result = await validateXML({
+    xml: { fileName: "invoice.xml", contents: xml },
+    schema: {
+      fileName: "schemat.xsd",
+      contents: await schemaText("schemat.xsd"),
+    },
+    preload: await Promise.all(
+      IMPORTED_SCHEMAS.map(async (fileName) => ({
+        fileName,
+        contents: await schemaText(fileName),
+      })),
+    ),
+  });
+  return result.valid ? "" : result.rawOutput;
 };
 
 const GENERATED_AT = new Date("2026-10-20T08:15:30.123Z");
@@ -122,7 +117,7 @@ const ORDINARY = polish({
 });
 
 describe("KSeF FA(3)", () => {
-  test("writes an ordinary VAT invoice", () => {
+  test("writes an ordinary VAT invoice", async () => {
     const xml = fa3(ORDINARY);
     expect(xml).toStartWith(
       '<?xml version="1.0" encoding="UTF-8"?>\n<Faktura xmlns="http://crd.gov.pl/wzor/2025/06/25/13775/">',
@@ -153,15 +148,15 @@ describe("KSeF FA(3)", () => {
     expect(between(xml, "SWIFT")).toEqual(["WBKPPLPP"]);
     expect(xml).toContain("&amp; &lt;due diligence&gt;");
     expect(xml).not.toContain("<PrefiksPodatnika>");
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("names each file after its invoice number", () => {
+  test("names each file after its invoice number", async () => {
     const files = buildKsefFa3Files([ORDINARY], GENERATED_AT).unwrap();
     expect(files.map((file) => file.fileName)).toEqual(["FV_2026_10_0042.xml"]);
   });
 
-  test("sums each Polish rate in its own field, in schema order", () => {
+  test("sums each Polish rate in its own field, in schema order", async () => {
     const xml = fa3(
       polish({
         number: "FV/2026/2",
@@ -203,10 +198,10 @@ describe("KSeF FA(3)", () => {
     expect(between(xml, "P_13_6_1")).toEqual(["70.00"]);
     expect(between(xml, "P_15")).toEqual(["2191.00"]);
     expect(between(xml, "P_12")).toEqual(["23", "8", "5", "0 KR", "23"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("writes a paid advance invoice with the order it is paid towards", () => {
+  test("writes a paid advance invoice with the order it is paid towards", async () => {
     const xml = fa3(
       polish({
         number: "FZ/2026/7",
@@ -233,10 +228,10 @@ describe("KSeF FA(3)", () => {
     expect(between(xml, "P_12Z")).toEqual(["23"]);
     expect(between(xml, "Zaplacono")).toEqual(["1"]);
     expect(between(xml, "DataZaplaty")).toEqual(["2026-10-10"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("writes an unpaid advance invoice without a payment date", () => {
+  test("writes an unpaid advance invoice without a payment date", async () => {
     const xml = fa3(
       polish({
         number: "FZ/2026/8",
@@ -253,12 +248,12 @@ describe("KSeF FA(3)", () => {
     );
     expect(between(xml, "P_6")).toEqual([]);
     expect(xml).not.toContain("<Zaplacono>");
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 });
 
 describe("KSeF FA(3) payment and files", () => {
-  test("marks an invoice paid only when it was paid by its issue date", () => {
+  test("marks an invoice paid only when it was paid by its issue date", async () => {
     const paidOn = (paidDate: string) =>
       fa3({ ...ORDINARY, status: "paid", paidDate });
     expect(between(paidOn("2026-10-15"), "Zaplacono")).toEqual(["1"]);
@@ -268,10 +263,10 @@ describe("KSeF FA(3) payment and files", () => {
     const later = paidOn("2026-10-20");
     expect(between(later, "Zaplacono")).toEqual([]);
     expect(between(later, "DataZaplaty")).toEqual([]);
-    expect(schemaErrors(later)).toBe("");
+    expect(await schemaErrors(later)).toBe("");
   });
 
-  test("keeps file names unique when invoice numbers collide", () => {
+  test("keeps file names unique when invoice numbers collide", async () => {
     const files = buildKsefFa3Files(
       [
         { ...ORDINARY, number: "FV/1" },
@@ -298,7 +293,7 @@ describe("KSeF FA(3) VAT treatments", () => {
     vatTreatment,
   });
 
-  test("a seller exempt by turnover cites art. 113 for every line", () => {
+  test("a seller exempt by turnover cites art. 113 for every line", async () => {
     const xml = fa3(
       polish({
         number: "1/2026",
@@ -311,10 +306,10 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(between(xml, "P_19A")).toEqual(["art. 113 ust. 1 ustawy o VAT"]);
     expect(between(xml, "P_12")).toEqual(["zw", "zw"]);
     expect(xml).not.toContain("<P_11Vat>");
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("an exempt seller cannot also charge VAT", () => {
+  test("an exempt seller cannot also charge VAT", async () => {
     const record = polish({
       number: "2/2026",
       lines: [
@@ -325,13 +320,13 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(refusal(record)).toContain("exempt from VAT");
   });
 
-  test("refuses an exempt line: the legal basis is not stored", () => {
+  test("refuses an exempt line: the legal basis is not stored", async () => {
     expect(
       refusal(polish({ number: "3/2026", lines: [line("exempt")] })),
     ).toContain("legal basis of the exemption");
   });
 
-  test("a reverse charge to a Polish buyer is domestic reverse charge", () => {
+  test("a reverse charge to a Polish buyer is domestic reverse charge", async () => {
     const xml = fa3(
       polish({ number: "4/2026", lines: [line("reverse_charge")] }),
     );
@@ -339,10 +334,10 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(between(xml, "P_12")).toEqual(["oo"]);
     expect(between(xml, "P_18")).toEqual(["1"]);
     expect(between(xml, "P_15")).toEqual(["1000.00"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("a reverse charge to an EU business is a service under art. 100 ust. 1 pkt 4", () => {
+  test("a reverse charge to an EU business is a service under art. 100 ust. 1 pkt 4", async () => {
     const xml = fa3(
       polish({
         number: "5/2026",
@@ -366,10 +361,10 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(between(xml, "P_12")).toEqual(["np II"]);
     expect(between(xml, "P_18")).toEqual(["1"]);
     expect(between(xml, "KodKraju")).toEqual(["PL", "DE"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("a Greek buyer's VAT number carries the EL prefix", () => {
+  test("a Greek buyer's VAT number carries the EL prefix", async () => {
     const xml = fa3(
       polish({
         number: "5a/2026",
@@ -385,10 +380,10 @@ describe("KSeF FA(3) VAT treatments", () => {
     );
     expect(between(xml, "KodUE")).toEqual(["EL"]);
     expect(between(xml, "NrVatUE")).toEqual(["094259216"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("the VAT number's own EU prefix wins over the address country", () => {
+  test("the VAT number's own EU prefix wins over the address country", async () => {
     const euBuyer = (country: string, vatId: string) =>
       fa3(
         polish({
@@ -407,7 +402,7 @@ describe("KSeF FA(3) VAT treatments", () => {
     const branch = euBuyer("CZ", "DE123456789");
     expect(between(branch, "KodUE")).toEqual(["DE"]);
     expect(between(branch, "NrVatUE")).toEqual(["123456789"]);
-    expect(schemaErrors(branch)).toBe("");
+    expect(await schemaErrors(branch)).toBe("");
     // Luxembourg and Malta are in TKodyKrajowUE.
     for (const [country, vatId, number] of [
       ["LU", "LU15027442", "15027442"],
@@ -416,48 +411,55 @@ describe("KSeF FA(3) VAT treatments", () => {
       const xml = euBuyer(country, vatId);
       expect(between(xml, "KodUE")).toEqual([country]);
       expect(between(xml, "NrVatUE")).toEqual([number]);
-      expect(schemaErrors(xml)).toBe("");
+      expect(await schemaErrors(xml)).toBe("");
     }
     // Leading letters that are not a prefix belong to the number.
     const french = euBuyer("FR", "AB123456789");
     expect(between(french, "KodUE")).toEqual(["FR"]);
     expect(between(french, "NrVatUE")).toEqual(["AB123456789"]);
-    expect(schemaErrors(french)).toBe("");
+    expect(await schemaErrors(french)).toBe("");
   });
 
-  test("the VAT registration decides before the address", () => {
-    // A German registration at a Polish address is an EU buyer.
-    const german = fa3(
-      polish({
-        number: "5c/2026",
-        buyer: { ...BUYER, vatId: "DE123456789" },
-        lines: [line("reverse_charge")],
-      }),
-    );
-    expect(between(german, "KodUE")).toEqual(["DE"]);
-    expect(between(german, "NrVatUE")).toEqual(["123456789"]);
-    expect(between(german, "NIP")).toEqual(["1234563218"]);
-    expect(schemaErrors(german)).toBe("");
-    // A PL-prefixed NIP at a German address is a Polish buyer.
-    const polishAbroad = fa3(
-      polish({
-        number: "5d/2026",
-        buyer: {
-          ...BUYER,
-          vatId: "PL 725-001-85-13",
-          addressLine1: "Hauptstraße 1",
-          city: "Berlin",
-          postalCode: "10115",
-          country: "DE",
-        },
-      }),
-    );
-    expect(between(polishAbroad, "NIP")).toEqual(["1234563218", "7250018513"]);
-    expect(between(polishAbroad, "KodUE")).toEqual([]);
-    expect(schemaErrors(polishAbroad)).toBe("");
+  test("the VAT registration decides before the address", async () => {
+    const cases = [
+      { country: "PL", vatId: "DE123456789", zone: "eu" },
+      { country: "DE", vatId: "PL 725-001-85-13", zone: "domestic" },
+      { country: "PL", vatId: "PL 725-001-85-13", zone: "domestic" },
+      { country: "DE", vatId: "DE123456789", zone: "eu" },
+    ] as const;
+
+    for (const [index, entry] of cases.entries()) {
+      const xml = fa3(
+        polish({
+          number: `5${index}/2026`,
+          buyer: {
+            ...BUYER,
+            vatId: entry.vatId,
+            country: entry.country,
+          },
+          lines: [line("reverse_charge")],
+        }),
+      );
+      if (entry.zone === "eu") {
+        expect(between(xml, "KodUE")).toEqual(["DE"]);
+        expect(between(xml, "NrVatUE")).toEqual(["123456789"]);
+        expect(between(xml, "NIP")).toEqual(["1234563218"]);
+        expect(between(xml, "P_13_9")).toEqual(["1000.00"]);
+        expect(between(xml, "P_13_10")).toEqual([]);
+        expect(between(xml, "P_12")).toEqual(["np II"]);
+      } else {
+        expect(between(xml, "KodUE")).toEqual([]);
+        expect(between(xml, "NrVatUE")).toEqual([]);
+        expect(between(xml, "NIP")).toEqual(["1234563218", "7250018513"]);
+        expect(between(xml, "P_13_9")).toEqual([]);
+        expect(between(xml, "P_13_10")).toEqual(["1000.00"]);
+        expect(between(xml, "P_12")).toEqual(["oo"]);
+      }
+      expect(await schemaErrors(xml)).toBe("");
+    }
   });
 
-  test("a reverse charge to an EU buyer needs its VAT number", () => {
+  test("a reverse charge to an EU buyer needs its VAT number", async () => {
     const record = polish({
       number: "6/2026",
       buyer: {
@@ -471,7 +473,7 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(refusal(record)).toContain("EU VAT number");
   });
 
-  test("a reverse charge outside the EU is a supply outside Poland", () => {
+  test("a reverse charge outside the EU is a supply outside Poland", async () => {
     const xml = fa3(
       polish({
         number: "7/2026",
@@ -492,20 +494,20 @@ describe("KSeF FA(3) VAT treatments", () => {
     expect(between(xml, "P_13_8")).toEqual(["1000.00"]);
     expect(between(xml, "P_12")).toEqual(["np I"]);
     expect(between(xml, "P_18")).toEqual(["1"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("an out-of-scope supply is outside Poland without a reverse charge", () => {
+  test("an out-of-scope supply is outside Poland without a reverse charge", async () => {
     const xml = fa3(
       polish({ number: "8/2026", lines: [line("outside_scope")] }),
     );
     expect(between(xml, "P_13_8")).toEqual(["1000.00"]);
     expect(between(xml, "P_12")).toEqual(["np I"]);
     expect(between(xml, "P_18")).toEqual(["2"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("refuses a rate Polish VAT does not have", () => {
+  test("refuses a rate Polish VAT does not have", async () => {
     const record = polish({
       number: "9/2026",
       lines: [
@@ -517,7 +519,7 @@ describe("KSeF FA(3) VAT treatments", () => {
 });
 
 describe("KSeF FA(3) parties", () => {
-  test("a foreign buyer without a tax identifier reads BrakID", () => {
+  test("a foreign buyer without a tax identifier reads BrakID", async () => {
     const xml = fa3(
       polish({
         number: "10/2026",
@@ -541,10 +543,10 @@ describe("KSeF FA(3) parties", () => {
     );
     expect(between(xml, "BrakID")).toEqual(["1"]);
     expect(between(xml, "KodKraju")).toEqual(["PL", "CH"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("a consumer without a NIP reads BrakID", () => {
+  test("a consumer without a NIP reads BrakID", async () => {
     const xml = fa3(
       polish({
         number: "11/2026",
@@ -566,10 +568,10 @@ describe("KSeF FA(3) parties", () => {
     expect(between(xml, "NIP")).toEqual(["1234563218"]);
     expect(between(xml, "BrakID")).toEqual(["1"]);
     expect(between(xml, "KodKraju")).toEqual(["PL", "PL"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("refuses VAT on a foreign-currency invoice: no PLN exchange rate", () => {
+  test("refuses VAT on a foreign-currency invoice: no PLN exchange rate", async () => {
     const record = polish({
       number: "12/2026",
       currency: "EUR",
@@ -580,7 +582,7 @@ describe("KSeF FA(3) parties", () => {
     expect(refusal(record)).toContain("exchange rate");
   });
 
-  test("refuses a seller without a valid NIP", () => {
+  test("refuses a seller without a valid NIP", async () => {
     const withoutNip = polish({
       number: "13/2026",
       seller: { ...SELLER, vatId: "PL1234563219" },
@@ -600,7 +602,7 @@ describe("KSeF FA(3) parties", () => {
     expect(refusal(zeros)).toContain("valid Polish NIP");
   });
 
-  test("finds the seller's NIP in its tax ID when the VAT ID is absent", () => {
+  test("finds the seller's NIP in its tax ID when the VAT ID is absent", async () => {
     const { vatId: _omitted, ...seller } = SELLER;
     const xml = fa3(
       polish({
@@ -618,7 +620,7 @@ describe("KSeF FA(3) parties", () => {
     expect(between(xml, "NIP")[0]).toBe("1234563218");
   });
 
-  test("refuses a Polish buyer whose NIP fails the checksum", () => {
+  test("refuses a Polish buyer whose NIP fails the checksum", async () => {
     const record = polish({
       number: "16/2026",
       buyer: { ...BUYER, vatId: "PL7250018514" },
@@ -629,7 +631,7 @@ describe("KSeF FA(3) parties", () => {
     expect(refusal(record)).toContain("is not a valid Polish NIP");
   });
 
-  test("refuses an invalid seller IBAN and parties without an address", () => {
+  test("refuses an invalid seller IBAN and parties without an address", async () => {
     const lines = [
       { description: "Porada", netAmountMinor: cents(100), vatRateBps: 2300 },
     ];
@@ -649,7 +651,7 @@ describe("KSeF FA(3) parties", () => {
     ).toContain("buyer's address");
   });
 
-  test("omits the bank account when the seller has none", () => {
+  test("omits the bank account when the seller has none", async () => {
     const { iban: _iban, bic: _bic, ...seller } = SELLER;
     const xml = fa3(
       polish({
@@ -666,12 +668,12 @@ describe("KSeF FA(3) parties", () => {
     );
     expect(xml).not.toContain("<RachunekBankowy>");
     expect(between(xml, "Termin")).toEqual(["2026-10-29"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 });
 
 describe("KSeF FA(3) credit notes", () => {
-  test("refuses a credit note: the corrected invoice's KSeF data is not stored", () => {
+  test("refuses a credit note: the corrected invoice's KSeF data is not stored", async () => {
     const creditNote = polish({
       number: "KOR/2026/1",
       documentType: "credit_note",
@@ -694,13 +696,13 @@ describe("KSeF FA(3) credit notes", () => {
     ).toBe(true);
   });
 
-  test("refuses an empty export", () => {
+  test("refuses an empty export", async () => {
     expect(buildKsefFa3Files([], GENERATED_AT).isErr()).toBe(true);
   });
 });
 
 describe("KSeF FA(3) amounts", () => {
-  test("formats minor units exactly, without binary fractions", () => {
+  test("formats minor units exactly, without binary fractions", async () => {
     const xml = fa3(
       polish({
         number: "20/2026",
@@ -743,10 +745,10 @@ describe("KSeF FA(3) amounts", () => {
     ]);
     expect(between(xml, "P_13_1")).toEqual(["0.06"]);
     expect(between(xml, "P_14_1")).toEqual(["0.01"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("writes a currency without minor units as whole numbers", () => {
+  test("writes a currency without minor units as whole numbers", async () => {
     const xml = fa3(
       polish({
         number: "21/2026",
@@ -763,10 +765,10 @@ describe("KSeF FA(3) amounts", () => {
     );
     expect(between(xml, "P_13_8")).toEqual(["150000"]);
     expect(between(xml, "P_15")).toEqual(["150000"]);
-    expect(schemaErrors(xml)).toBe("");
+    expect(await schemaErrors(xml)).toBe("");
   });
 
-  test("refuses a currency with more decimals than FA(3) carries", () => {
+  test("refuses a currency with more decimals than FA(3) carries", async () => {
     const record = polish({
       number: "22/2026",
       currency: "KWD",
@@ -783,15 +785,13 @@ describe("KSeF FA(3) amounts", () => {
   });
 });
 
-describe.skipIf(XMLLINT === null)("FA(3) schema validation", () => {
-  test("accepts the generated invoice", () => {
-    expect(schemaErrors(fa3(ORDINARY))).toBe("");
+describe("FA(3) schema validation", () => {
+  test("accepts the generated invoice", async () => {
+    expect(await schemaErrors(fa3(ORDINARY))).toBe("");
   });
 
-  test("rejects an invoice missing a mandatory field", () => {
+  test("rejects an invoice missing a mandatory field", async () => {
     const xml = fa3(ORDINARY).replace(/<P_15>[^<]*<\/P_15>/u, "");
-    // xmllint names the element after the gap and lists only some of the
-    // expected ones, so the rejection is the contract, not its wording.
-    expect(schemaErrors(xml)).toContain("fails to validate");
+    expect(await schemaErrors(xml)).toContain("Adnotacje");
   });
 });

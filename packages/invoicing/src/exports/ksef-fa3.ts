@@ -105,7 +105,10 @@ const DOMESTIC_RATES = new Map<number, LineTax>([
  */
 const SMALL_BUSINESS_EXEMPTION = "art. 113 ust. 1 ustawy o VAT";
 
-type BuyerZone = "domestic" | "eu" | "foreign";
+type BuyerTaxIdentity =
+  | { zone: "domestic"; nip: string | null }
+  | { zone: "eu"; prefix: string; number: string }
+  | { zone: "foreign"; country: string; identifier: string | null };
 
 /**
  * The tax of a line as FA(3) states it. A reverse charge reads by where the
@@ -116,7 +119,7 @@ type BuyerZone = "domestic" | "eu" | "foreign";
  */
 const lineTaxOf = (
   line: InvoiceExportLine,
-  zone: BuyerZone,
+  zone: BuyerTaxIdentity["zone"],
 ): LineTax | string => {
   switch (line.vatTreatment) {
     case "domestic_vat":
@@ -170,11 +173,8 @@ const presentText = (value: string | undefined): string | null => {
   return trimmed === "" ? null : trimmed;
 };
 
-/**
- * The buyer's country: its stored code, else its VAT number's prefix, else
- * Poland, where a KSeF invoice's buyer usually is.
- */
-const buyerCountryOf = (buyer: InvoiceParty): string => {
+/** The buyer's address country, with a VAT-prefix fallback for missing data. */
+const buyerAddressCountryOf = (buyer: InvoiceParty): string => {
   const stored = countryCodeOf(buyer.country);
   if (stored !== null) {
     return stored;
@@ -186,13 +186,6 @@ const buyerCountryOf = (buyer: InvoiceParty): string => {
     return "GR";
   }
   return prefix !== undefined && EU_COUNTRIES.has(prefix) ? prefix : "PL";
-};
-
-const zoneOf = (country: string): BuyerZone => {
-  if (country === "PL") {
-    return "domestic";
-  }
-  return EU_COUNTRIES.has(country) ? "eu" : "foreign";
 };
 
 /** Street, then postal code and town, as the schema's two address lines. */
@@ -220,14 +213,12 @@ const hasAddress = (party: InvoiceParty): boolean =>
  * delivers the invoice by; an EU business by VAT number; anyone else by its
  * own tax identifier; a buyer with none (a consumer) by BrakID.
  */
-const buyerIdentification = (
+const buyerTaxIdentity = (
   buyer: InvoiceParty,
   country: string,
   needsEuVatNumber: boolean,
-): string | { error: string } => {
-  const zone = zoneOf(country);
+): BuyerTaxIdentity | { error: string } => {
   const identifier = presentText(buyer.vatId) ?? presentText(buyer.taxId);
-  const name = text("Nazwa", clip(buyer.name.trim(), 512));
   const vatId = presentText(buyer.vatId)
     ?.replaceAll(/[^\dA-Za-z+*]/gu, "")
     .toUpperCase();
@@ -237,39 +228,67 @@ const buyerIdentification = (
   // letters that are not a prefix belong to the number (French numbers).
   const leading = vatId?.slice(0, 2) ?? "";
   const ownPrefix = EU_VAT_PREFIXES.has(leading) ? leading : undefined;
-  const euVat = (prefix: string, number: string) =>
+  const euVat = (
+    prefix: string,
+    number: string,
+  ): BuyerTaxIdentity | { error: string } =>
     EU_VAT_NUMBER_PATTERN.test(number)
-      ? [text("KodUE", prefix), text("NrVatUE", number), name].join("")
+      ? { zone: "eu", prefix, number }
       : { error: `the buyer's EU VAT number ${vatId ?? ""} is not valid` };
   if (vatId && ownPrefix !== undefined && ownPrefix !== "PL") {
     return euVat(ownPrefix, vatId.slice(2));
   }
-  if (zone === "domestic" || ownPrefix === "PL") {
+  if (country === "PL" || ownPrefix === "PL") {
     if (identifier === null) {
-      return [text("BrakID", "1"), name].join("");
+      return { zone: "domestic", nip: null };
     }
     const nip = polishNipOf(identifier);
     return nip === null
       ? { error: `the buyer's NIP ${identifier} is not a valid Polish NIP` }
-      : [text("NIP", nip), name].join("");
+      : { zone: "domestic", nip };
   }
-  if (zone === "eu" && vatId) {
+  if (EU_COUNTRIES.has(country) && vatId) {
     return euVat(vatPrefixOf(country), vatId);
   }
-  if (needsEuVatNumber) {
+  if (EU_COUNTRIES.has(country) && needsEuVatNumber) {
     return {
       error:
         "a reverse-charge service to an EU buyer needs the buyer's EU VAT number",
     };
   }
-  if (identifier === null) {
-    return [text("BrakID", "1"), name].join("");
+  return { zone: "foreign", country, identifier };
+};
+
+const buyerIdentification = (
+  buyer: InvoiceParty,
+  identity: BuyerTaxIdentity,
+): string => {
+  const name = text("Nazwa", clip(buyer.name.trim(), 512));
+  switch (identity.zone) {
+    case "domestic":
+      return [
+        identity.nip === null ? text("BrakID", "1") : text("NIP", identity.nip),
+        name,
+      ].join("");
+    case "eu":
+      return [
+        text("KodUE", identity.prefix),
+        text("NrVatUE", identity.number),
+        name,
+      ].join("");
+    case "foreign":
+      return identity.identifier === null
+        ? [text("BrakID", "1"), name].join("")
+        : [
+            text("KodKraju", identity.country),
+            text("NrID", clip(identity.identifier.replaceAll(/\s/gu, ""), 50)),
+            name,
+          ].join("");
+    default: {
+      identity satisfies never;
+      return panic("Unknown buyer tax identity");
+    }
   }
-  return [
-    text("KodKraju", country),
-    text("NrID", clip(identifier.replaceAll(/\s/gu, ""), 50)),
-    name,
-  ].join("");
 };
 
 /** Polish accounts as the 26-digit NRB; foreign ones as the full IBAN. */
@@ -489,11 +508,18 @@ const prepare = (
       "a seller exempt from VAT cannot also charge or reverse-charge VAT on the same invoice",
     );
   }
-  const buyerCountry = buyerCountryOf(record.buyer);
-  const zone = zoneOf(buyerCountry);
+  const buyerCountry = buyerAddressCountryOf(record.buyer);
+  const identity = buyerTaxIdentity(
+    record.buyer,
+    buyerCountry,
+    record.lines.some((line) => line.vatTreatment === "reverse_charge"),
+  );
+  if ("error" in identity) {
+    return refuse(identity.error);
+  }
   const lines: Classified[] = [];
   for (const line of record.lines) {
-    const tax = lineTaxOf(line, zone);
+    const tax = lineTaxOf(line, identity.zone);
     if (typeof tax === "string") {
       return refuse(`line ${line.position}: ${tax}`);
     }
@@ -507,14 +533,7 @@ const prepare = (
       `VAT on an invoice in ${record.currency} must also be stated in PLN at the exchange rate of the day before the tax point, which stella does not store`,
     );
   }
-  const identification = buyerIdentification(
-    record.buyer,
-    buyerCountry,
-    lines.some(({ tax }) => tax.bucket === "euServices"),
-  );
-  if (typeof identification !== "string") {
-    return refuse(identification.error);
-  }
+  const identification = buyerIdentification(record.buyer, identity);
   let iban: string | null = null;
   if (presentText(record.seller.iban) !== null) {
     iban = normalizeIban(record.seller.iban ?? "");
