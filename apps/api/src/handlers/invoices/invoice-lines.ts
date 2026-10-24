@@ -788,6 +788,32 @@ export const recalculateInvoiceTotals = async (
   now: Date,
   recordAuditEvent: AuditRecorder,
 ): Promise<Result<InvoiceTotals, HandlerError>> => {
+  const invoiceScope = and(
+    eq(invoices.id, scope.invoiceId),
+    invoiceInMatter(invoices, scope.workspaceId),
+  );
+  const [stored] = await tx
+    .select({
+      documentType: invoices.documentType,
+      originalInvoiceId: invoices.originalInvoiceId,
+      currency: invoices.currency,
+      netAmount: invoices.netAmount,
+      vatAmount: invoices.vatAmount,
+      totalAmount: invoices.totalAmount,
+    })
+    .from(invoices)
+    .where(invoiceScope);
+  if (!stored) {
+    // Removing the final client-invoice line revokes ordinary member RLS
+    // access. Refuse the enclosing transaction before cap reads or writes.
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Removing these lines would make the invoice inaccessible",
+        hint: "Ask an organization owner or administrator to remove the final line.",
+      }),
+    );
+  }
   const matterRows = await tx
     .selectDistinct({ workspaceId: invoiceLines.workspaceId })
     .from(invoiceLines)
@@ -818,24 +844,6 @@ export const recalculateInvoiceTotals = async (
     })
     .from(invoiceLines)
     .where(and(eq(invoiceLines.invoiceId, scope.invoiceId)));
-  const invoiceScope = and(
-    eq(invoices.id, scope.invoiceId),
-    invoiceInMatter(invoices, scope.workspaceId),
-  );
-  const [stored] = await tx
-    .select({
-      documentType: invoices.documentType,
-      originalInvoiceId: invoices.originalInvoiceId,
-      currency: invoices.currency,
-      netAmount: invoices.netAmount,
-      vatAmount: invoices.vatAmount,
-      totalAmount: invoices.totalAmount,
-    })
-    .from(invoices)
-    .where(invoiceScope);
-  if (!stored) {
-    return panic("The locked invoice disappeared before recalculation");
-  }
   const totals = invoiceTotals(lines, stored.documentType);
   if (totals.isErr()) {
     return Result.err(totals.error);

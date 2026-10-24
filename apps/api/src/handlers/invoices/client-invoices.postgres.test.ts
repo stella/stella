@@ -21,6 +21,7 @@ import {
 } from "@/api/db/scoped";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
+import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -29,7 +30,10 @@ import {
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
@@ -37,6 +41,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
@@ -683,6 +688,74 @@ if (!databaseUrl || !runPostgres) {
         ).toEqual({ clientId: scenario.otherClientId });
       },
     );
+
+    test("a member removing the final client-invoice line gets a deliberate refusal without a partial mutation", async () => {
+      const scenario = await seedScenario();
+      await scoped(
+        scenario,
+        scenario.actors.owner,
+      )(async (tx) => {
+        await tx
+          .delete(invoiceLines)
+          .where(eq(invoiceLines.id, scenario.secondLineId));
+      });
+      const userId = scenario.actors.full;
+      const memberRole = sessionMemberRole("member");
+      expect(hasMemberPermission(memberRole, { invoice: ["update"] })).toBe(
+        true,
+      );
+      const safeDb = createMembershipSafeDb(markRlsDatabase(db), {
+        organizationId: scenario.orgId,
+        userId,
+        serverValidatedWorkspaceIds: [],
+      });
+      const auditEvents: unknown[] = [];
+      const result = await deleteInvoiceLine.handler(
+        createTestHandlerContext<
+          Parameters<typeof deleteInvoiceLine.handler>[0]
+        >({
+          safeDb,
+          scopedDb: scoped(scenario, userId),
+          audit: async (_tx, event) => {
+            auditEvents.push(event);
+          },
+          memberRole,
+          session: { activeOrganizationId: scenario.orgId },
+          user: { id: userId },
+          workspaceId: scenario.firstMatterId,
+          params: {
+            invoiceId: scenario.invoiceId,
+            lineId: scenario.firstLineId,
+            workspaceId: scenario.firstMatterId,
+          },
+        }),
+      );
+      expect(result).toMatchObject({
+        code: 409,
+        response: {
+          message: "Removing these lines would make the invoice inaccessible",
+        },
+      });
+      expect(auditEvents).toEqual([]);
+      expect(
+        await scoped(
+          scenario,
+          userId,
+        )(async (tx) => ({
+          lines: await tx.query.invoiceLines.findMany({
+            where: { invoiceId: { eq: scenario.invoiceId } },
+            columns: { id: true },
+          }),
+          invoice: await tx.query.invoices.findFirst({
+            where: { id: { eq: scenario.invoiceId } },
+            columns: { totalAmount: true },
+          }),
+        })),
+      ).toEqual({
+        lines: [{ id: scenario.firstLineId }],
+        invoice: { totalAmount: 0 },
+      });
+    });
 
     test("MCP detail retains empty client invoices through an authorized matter of their client", async () => {
       const scenario = await seedScenario();
