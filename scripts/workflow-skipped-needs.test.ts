@@ -13,6 +13,9 @@ import path from "node:path";
 
 const WORKFLOWS = path.resolve(import.meta.dirname, "../.github/workflows");
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure|success)\(\)/u;
+// Only these let a job run after a skipped ancestor; `success()` skips with it
+// and `failure()` runs after a failure, not a skip.
+const TOLERATES_SKIP = /\b(?:always|cancelled)\(\)/u;
 
 type Job = { needs?: unknown; if?: unknown };
 
@@ -36,9 +39,9 @@ export const skipsAfterTolerantParent = (
       ? value.filter((entry): entry is string => typeof entry === "string")
       : [];
   };
-  const statesStatus = (name: string) => {
+  const conditionMatches = (name: string, pattern: RegExp) => {
     const condition = jobs[name]?.if;
-    return typeof condition === "string" && STATUS_FUNCTION.test(condition);
+    return typeof condition === "string" && pattern.test(condition);
   };
   const ancestors = (name: string, seen = new Set<string>()): Set<string> => {
     for (const parent of needs(name)) {
@@ -52,10 +55,10 @@ export const skipsAfterTolerantParent = (
   return Object.keys(jobs)
     .filter(
       (name) =>
-        !statesStatus(name) &&
+        !conditionMatches(name, STATUS_FUNCTION) &&
         needs(name).some(
           (parent) =>
-            statesStatus(parent) &&
+            conditionMatches(parent, TOLERATES_SKIP) &&
             [...ancestors(parent)].some(
               (ancestor) => jobs[ancestor]?.if !== undefined,
             ),
@@ -102,6 +105,9 @@ test("the check finds the child of a tolerant parent and nothing that skips with
     scope: { if: "github.ref == 'refs/heads/main'" },
     deploy: { needs: ["scope"] },
     report: { needs: ["deploy"] },
+    // An explicit success() parent skips with the ancestor too.
+    gated: { needs: ["wake"], if: "success()" },
+    summary: { needs: ["gated"] },
   };
   expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual(["w.yml#promote"]);
 });
