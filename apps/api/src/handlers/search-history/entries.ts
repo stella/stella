@@ -1,13 +1,17 @@
 import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
-import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
+import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import {
+  searchHistoryEntryMatch,
+  searchHistoryPathJurisdiction,
+} from "@stll/api-contract/search-history-identity";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -83,15 +87,30 @@ const statuteDocumentIdentitySchema = t.Object(
   { additionalProperties: false },
 );
 
-/** One use to record: a typed query, or a decision or statute opened. */
+// Enum derives its choices without assigning a default to an omitted filter.
+export const searchHistoryJurisdictionSchema = t.Enum(
+  Object.fromEntries(PUBLIC_COUNTRIES.map((country) => [country, country])),
+  {
+    description:
+      "A country code such as CZE or POL: the country whose law a search ran against, or whose page an opened document is on.",
+  },
+);
+
+const searchQuerySchema = t.String({
+  minLength: 1,
+  maxLength: LIMITS.searchQueryMaxLength,
+});
+
+/**
+ * One use to record: a typed query in a country, or a decision or statute
+ * opened. An opened document's country is read from its path.
+ */
 export const searchHistoryEntryInputSchema = t.Union([
   t.Object(
     {
       kind: t.Literal("search"),
-      query: t.String({
-        minLength: 1,
-        maxLength: LIMITS.searchQueryMaxLength,
-      }),
+      query: searchQuerySchema,
+      jurisdiction: searchHistoryJurisdictionSchema,
     },
     { additionalProperties: false },
   ),
@@ -127,9 +146,18 @@ export const searchHistoryEntryInputSchema = t.Union([
   ),
 ]);
 
-export type SearchHistoryEntryInput = Static<
-  typeof searchHistoryEntryInputSchema
->;
+type SearchHistoryEntryInput = Static<typeof searchHistoryEntryInputSchema>;
+
+/** What a browser kept before history was stored per country: no country. */
+const uncountriedSearchEntrySchema = t.Object(
+  { kind: t.Literal("search"), query: searchQuerySchema },
+  { additionalProperties: false },
+);
+
+/** An entry to store; a search kept before history was per country has none. */
+export type SearchHistoryEntry =
+  | Exclude<SearchHistoryEntryInput, { kind: "search" }>
+  | { kind: "search"; query: string; jurisdiction: string | null };
 
 // Enum derives its choices without assigning a default to an omitted filter.
 export const searchHistoryKindSchema = t.Enum(
@@ -174,21 +202,27 @@ const collapseWhitespace = (value: string) =>
   normalizeUnicode(value, "NFC").trim().replaceAll(/\s+/gu, " ");
 
 /**
- * The entry as stored and the text its repeats are matched on. A query is
- * matched case- and spacing-insensitively, so "Náhrada  škody" and "náhrada
- * škody" are one entry; an opened document is matched on its identifier.
- * `null` when the entry is not one the law pages could have recorded.
+ * The entry as stored, its country, and the text its repeats are matched on.
+ * A query is matched case- and spacing-insensitively within its country, so
+ * "Náhrada  škody" and "náhrada škody" are one entry; an opened document is
+ * matched on its identifier. `null` when the entry is not one the law pages
+ * could have recorded.
  */
 export const canonicalSearchHistoryEntry = (
-  entry: SearchHistoryEntryInput,
-): { entry: SearchHistoryEntryInput; match: string } | null => {
+  entry: SearchHistoryEntry,
+): {
+  entry: SearchHistoryEntry;
+  jurisdiction: string | null;
+  match: string;
+} | null => {
   switch (entry.kind) {
     case "search": {
       const query = collapseWhitespace(entry.query);
       return query.length === 0
         ? null
         : {
-            entry: { kind: "search", query },
+            entry: { kind: "search", query, jurisdiction: entry.jurisdiction },
+            jurisdiction: entry.jurisdiction,
             match: searchHistoryEntryMatch(entry),
           };
     }
@@ -200,11 +234,18 @@ export const canonicalSearchHistoryEntry = (
         entry.kind === "decision"
           ? parseCaseLawDecisionPath(entry.path) !== null
           : parseStatutePath(entry.path) !== null;
-      if (title.length === 0 || documentId.length === 0 || !opensDocument) {
+      const jurisdiction = searchHistoryPathJurisdiction(entry.path);
+      if (
+        title.length === 0 ||
+        documentId.length === 0 ||
+        !opensDocument ||
+        jurisdiction === null
+      ) {
         return null;
       }
       return {
         entry: { ...entry, documentId, title },
+        jurisdiction,
         match: searchHistoryEntryMatch(entry),
       };
     }
@@ -218,10 +259,16 @@ export const canonicalSearchHistoryEntry = (
 /** Reads an untrusted value as an entry, or `null` (import is best effort). */
 export const readSearchHistoryEntryInput = (
   value: unknown,
-): SearchHistoryEntryInput | null =>
-  Value.Check(searchHistoryEntryInputSchema, value) ? value : null;
+): SearchHistoryEntry | null => {
+  if (Value.Check(searchHistoryEntryInputSchema, value)) {
+    return value;
+  }
+  return Value.Check(uncountriedSearchEntrySchema, value)
+    ? { ...value, jurisdiction: null }
+    : null;
+};
 
-const payloadOf = (entry: SearchHistoryEntryInput) => {
+const payloadOf = (entry: SearchHistoryEntry) => {
   switch (entry.kind) {
     case "search":
       return { query: entry.query };
@@ -251,14 +298,17 @@ type SearchHistoryOwner = {
 };
 
 export type SearchHistoryUse = {
-  entry: SearchHistoryEntryInput;
+  entry: SearchHistoryEntry;
   usedAt: Date;
 };
 
 type PreparedUse = {
-  kind: SearchHistoryEntryInput["kind"];
+  kind: SearchHistoryEntry["kind"];
+  jurisdiction: string | null;
   lookupKey: string;
-  entry: SearchHistoryEntryInput;
+  /** A search's key from before history was kept per country, when it differs. */
+  uncountriedLookupKey: string | null;
+  entry: SearchHistoryEntry;
   firstUsedAt: Date;
   lastUsedAt: Date;
   useCount: number;
@@ -279,18 +329,29 @@ const prepareUses = async (
     if (canonical === null) {
       continue;
     }
-    const lookupKey = await keyedContentLookupKey(
-      organizationId,
+    const keyOf = async (material: string) =>
+      await keyedContentLookupKey(organizationId, material).then((result) =>
+        result.match({ ok: (value) => value, err: abortTransaction }),
+      );
+    const uncountriedLookupKey = await keyOf(
       `${use.entry.kind}\u0000${canonical.match}`,
-    ).then((result) =>
-      result.match({ ok: (value) => value, err: abortTransaction }),
     );
+    // A search is one entry per country; a document's id fixes its country.
+    const lookupKey =
+      use.entry.kind === "search" && canonical.jurisdiction !== null
+        ? await keyOf(
+            `${use.entry.kind}\u0000${canonical.jurisdiction}\u0000${canonical.match}`,
+          )
+        : uncountriedLookupKey;
     const mapKey = `${use.entry.kind}:${lookupKey}`;
     const previous = prepared.get(mapKey);
     if (previous === undefined) {
       prepared.set(mapKey, {
         kind: use.entry.kind,
+        jurisdiction: canonical.jurisdiction,
         lookupKey,
+        uncountriedLookupKey:
+          lookupKey === uncountriedLookupKey ? null : uncountriedLookupKey,
         entry: canonical.entry,
         firstUsedAt: use.usedAt,
         lastUsedAt: use.usedAt,
@@ -300,8 +361,7 @@ const prepareUses = async (
     }
     const isLatest = use.usedAt >= previous.lastUsedAt;
     prepared.set(mapKey, {
-      kind: previous.kind,
-      lookupKey,
+      ...previous,
       entry: isLatest ? canonical.entry : previous.entry,
       firstUsedAt:
         use.usedAt < previous.firstUsedAt ? use.usedAt : previous.firstUsedAt,
@@ -338,7 +398,9 @@ export const prepareSearchHistoryRows = async (
         kind: use.kind,
         courtId:
           use.entry.kind === "decision" ? (use.entry.courtId ?? null) : null,
+        jurisdiction: use.jurisdiction,
         lookupKey: use.lookupKey,
+        uncountriedLookupKey: use.uncountriedLookupKey,
         ciphertext,
         iv,
         firstUsedAt: use.firstUsedAt,
@@ -423,6 +485,218 @@ type SearchHistoryInsert = Awaited<
 >[number];
 
 /**
+ * Records deleted identities so an import of an older use cannot restore
+ * them. Only the newest tombstones are kept; retiring older ones moves the
+ * owner's cutoff past them, so the barrier holds for every device. Called
+ * under the owner lock.
+ */
+export const recordSearchHistoryTombstones = async (
+  tx: Transaction,
+  owner: SearchHistoryOwner,
+  identities: readonly { kind: SearchHistoryKind; lookupKey: string }[],
+) => {
+  const unique = new Map(
+    identities.map((identity) => [
+      `${identity.kind}:${identity.lookupKey}`,
+      identity,
+    ]),
+  );
+  if (unique.size === 0) {
+    return;
+  }
+  // audit: skip - callers audit the deletion in this transaction
+  await tx
+    .insert(searchHistoryTombstones)
+    .values(
+      [...unique.values()].map(({ kind, lookupKey }) => ({
+        organizationId: owner.organizationId,
+        userId: owner.userId,
+        kind,
+        lookupKey,
+        deletedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [
+        searchHistoryTombstones.organizationId,
+        searchHistoryTombstones.userId,
+        searchHistoryTombstones.kind,
+        searchHistoryTombstones.lookupKey,
+      ],
+      set: {
+        deletedAt: sql`GREATEST(${searchHistoryTombstones.deletedAt}, excluded.deleted_at)`,
+      },
+    });
+  const retained = await tx
+    .select({ deletedAt: searchHistoryTombstones.deletedAt })
+    .from(searchHistoryTombstones)
+    .where(
+      and(
+        eq(searchHistoryTombstones.organizationId, owner.organizationId),
+        eq(searchHistoryTombstones.userId, owner.userId),
+      ),
+    )
+    .orderBy(
+      desc(searchHistoryTombstones.deletedAt),
+      desc(searchHistoryTombstones.kind),
+      desc(searchHistoryTombstones.lookupKey),
+    )
+    .offset(LIMITS.searchHistoryTombstonesMax)
+    .limit(1);
+  const oldestExcess = retained.at(0);
+  if (oldestExcess === undefined) {
+    return;
+  }
+  // Retiring an identity must retain its ordering barrier for other devices.
+  // audit: skip - callers audit the deletion in this transaction
+  await tx
+    .update(searchHistoryOwners)
+    .set({
+      tombstoneCutoffAt: sql`GREATEST(${searchHistoryOwners.tombstoneCutoffAt}, ${oldestExcess.deletedAt}::timestamptz)`,
+    })
+    .where(
+      and(
+        eq(searchHistoryOwners.organizationId, owner.organizationId),
+        eq(searchHistoryOwners.userId, owner.userId),
+      ),
+    );
+  // audit: skip - compacting import barriers keeps no user-visible state
+  await tx
+    .delete(searchHistoryTombstones)
+    .where(
+      and(
+        eq(searchHistoryTombstones.organizationId, owner.organizationId),
+        eq(searchHistoryTombstones.userId, owner.userId),
+        lte(
+          searchHistoryTombstones.deletedAt,
+          sql`${oldestExcess.deletedAt}::timestamptz`,
+        ),
+      ),
+    );
+};
+
+/**
+ * Gives documents opened before history was kept per country the country of
+ * the page they reopen. Runs under the owner lock on every write, so the
+ * owner's history converges at their next use. Searches from then never said
+ * where they ran and keep none.
+ */
+export const fillOpenedDocumentJurisdictions = async (
+  tx: Transaction,
+  owner: SearchHistoryOwner,
+) => {
+  const rows = await tx
+    .select({
+      id: searchHistoryEntries.id,
+      ciphertext: searchHistoryEntries.ciphertext,
+      iv: searchHistoryEntries.iv,
+    })
+    .from(searchHistoryEntries)
+    .where(
+      and(
+        eq(searchHistoryEntries.organizationId, owner.organizationId),
+        eq(searchHistoryEntries.userId, owner.userId),
+        isNull(searchHistoryEntries.jurisdiction),
+        inArray(searchHistoryEntries.kind, ["decision", "statute"]),
+      ),
+    );
+  for (const row of rows) {
+    const { path } = v.parse(
+      openedPayloadSchema,
+      JSON.parse(
+        await decryptContent(owner.organizationId, row.ciphertext, row.iv),
+      ),
+    );
+    const jurisdiction = searchHistoryPathJurisdiction(path);
+    if (jurisdiction === null) {
+      continue;
+    }
+    // audit: skip - derives a column from stored content; the write audits
+    await tx
+      .update(searchHistoryEntries)
+      .set({ jurisdiction })
+      .where(
+        and(
+          eq(searchHistoryEntries.id, row.id),
+          eq(searchHistoryEntries.organizationId, owner.organizationId),
+          eq(searchHistoryEntries.userId, owner.userId),
+        ),
+      );
+  }
+};
+
+/**
+ * A search kept before history was per country becomes the entry of the
+ * country it is next run in, so one query is never listed twice. Its uses
+ * fold into that entry, and a tombstone stops an older import restoring it.
+ */
+const adoptUncountriedSearches = async (
+  tx: Transaction,
+  owner: SearchHistoryOwner,
+  rows: readonly SearchHistoryInsert[],
+) => {
+  const keys = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.uncountriedLookupKey === null ? [] : [row.uncountriedLookupKey],
+      ),
+    ),
+  ];
+  if (keys.length === 0) {
+    return rows;
+  }
+  // audit: skip - folded into the recorded entry, which the write audits
+  const adopted = await tx
+    .delete(searchHistoryEntries)
+    .where(
+      and(
+        eq(searchHistoryEntries.organizationId, owner.organizationId),
+        eq(searchHistoryEntries.userId, owner.userId),
+        eq(searchHistoryEntries.kind, "search"),
+        isNull(searchHistoryEntries.jurisdiction),
+        inArray(searchHistoryEntries.lookupKey, keys),
+      ),
+    )
+    .returning({
+      lookupKey: searchHistoryEntries.lookupKey,
+      firstUsedAt: searchHistoryEntries.firstUsedAt,
+      lastUsedAt: searchHistoryEntries.lastUsedAt,
+      useCount: searchHistoryEntries.useCount,
+    });
+  if (adopted.length === 0) {
+    return rows;
+  }
+  await recordSearchHistoryTombstones(
+    tx,
+    owner,
+    adopted.map(({ lookupKey }) => ({ kind: "search", lookupKey })),
+  );
+  const unfolded = new Map(adopted.map((row) => [row.lookupKey, row]));
+  return rows.map((row) => {
+    const earlier =
+      row.uncountriedLookupKey === null
+        ? undefined
+        : unfolded.get(row.uncountriedLookupKey);
+    if (earlier === undefined) {
+      return row;
+    }
+    unfolded.delete(earlier.lookupKey);
+    return {
+      ...row,
+      firstUsedAt:
+        earlier.firstUsedAt < row.firstUsedAt
+          ? earlier.firstUsedAt
+          : row.firstUsedAt,
+      lastUsedAt:
+        earlier.lastUsedAt > row.lastUsedAt
+          ? earlier.lastUsedAt
+          : row.lastUsedAt,
+      useCount: row.useCount + earlier.useCount,
+    };
+  });
+};
+
+/**
  * Writes prepared rows. A use of an entry the owner already has bumps that
  * row (latest use, count, and the latest spelling) instead of adding one.
  * Returns the id of each distinct entry written.
@@ -460,6 +734,7 @@ export const upsertSearchHistoryRows = async ({
     .values({ organizationId: owner.organizationId, userId: owner.userId })
     .onConflictDoNothing();
   const state = await lockSearchHistoryOwner(tx, owner);
+  await fillOpenedDocumentJurisdictions(tx, owner);
   const tombstones =
     mode === "import"
       ? await tx
@@ -528,7 +803,9 @@ export const upsertSearchHistoryRows = async ({
       useCount: row.useCount + previous.useCount,
     });
   }
-  const acceptedRows = [...accepted.values()];
+  const acceptedRows = await adoptUncountriedSearches(tx, owner, [
+    ...accepted.values(),
+  ]);
   const table = searchHistoryEntries;
   // A later use replaces the stored spelling; an older one (an import of
   // what a browser kept) merges its first use and preserves replay counts.
@@ -538,7 +815,11 @@ export const upsertSearchHistoryRows = async ({
       ? []
       : await tx
           .insert(table)
-          .values(acceptedRows)
+          .values(
+            acceptedRows.map(
+              ({ uncountriedLookupKey: _adopted, ...row }) => row,
+            ),
+          )
           .onConflictDoUpdate({
             target: [
               table.organizationId,
@@ -548,6 +829,8 @@ export const upsertSearchHistoryRows = async ({
             ],
             set: {
               courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
+              // A document opened before history was per country gains one.
+              jurisdiction: sql`COALESCE(excluded.jurisdiction, ${table.jurisdiction})`,
               ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
               iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
               firstUsedAt: sql`LEAST(${table.firstUsedAt}, excluded.first_used_at)`,
@@ -578,6 +861,7 @@ type SearchHistoryRow = Pick<
   | "id"
   | "kind"
   | "courtId"
+  | "jurisdiction"
   | "ciphertext"
   | "iv"
   | "firstUsedAt"
@@ -604,6 +888,7 @@ export const toSearchHistoryEntryResponse = async (
     firstUsedAt: row.firstUsedAt.toISOString(),
     lastUsedAt: row.lastUsedAt.toISOString(),
     useCount: row.useCount,
+    jurisdiction: row.jurisdiction,
   };
   switch (row.kind) {
     case "search":

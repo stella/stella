@@ -3,6 +3,7 @@ import { useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { PublicCountry } from "@stll/api-contract/public-country-capability";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import {
   AlertDialog,
@@ -62,11 +63,17 @@ type LawRecentProps = {
   onSearch: (query: string) => void;
 };
 
-export const LawRecent = ({ onSearch }: LawRecentProps) => {
+/** The history of the country the page is scoped to. */
+export const LawRecent = ({
+  onSearch,
+  jurisdiction,
+}: LawRecentProps & { jurisdiction: PublicCountry }) => {
   const [filter, setFilter] = useState<LawRecentFilter>("all");
-  const history = useLawHistory(filter);
+  const history = useLawHistory(jurisdiction, filter);
   return (
+    // A clear confirmation opened in one country never applies to another.
     <LawRecentList
+      key={jurisdiction}
       onSearch={onSearch}
       history={history}
       filter={filter}

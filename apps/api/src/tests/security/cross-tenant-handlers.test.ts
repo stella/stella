@@ -2824,7 +2824,11 @@ testState.beforeAll(async () => {
     { organizationId: ids.orgB, userId: ids.userA1 },
     [
       {
-        entry: { kind: "search", query: "Firm B research" },
+        entry: {
+          kind: "search",
+          query: "Firm B research",
+          jurisdiction: "CZE",
+        },
         usedAt: new Date(),
       },
     ],

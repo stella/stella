@@ -99,7 +99,10 @@ describe.skipIf(!enabled)("account export personal data", () => {
               panic("Organization query fixture required");
             }
             return await prepareSearchHistoryRows({ organizationId, userId }, [
-              { entry: { kind: "search", query }, usedAt: new Date() },
+              {
+                entry: { kind: "search", query, jurisdiction: "CZE" },
+                usedAt: new Date(),
+              },
             ]);
           }),
         );
