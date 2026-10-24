@@ -8,7 +8,6 @@ import {
   redirect,
   useMatches,
 } from "@tanstack/react-router";
-import * as v from "valibot";
 
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -36,7 +35,10 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { optionalSearchStringSchema } from "@/lib/schema";
+import {
+  optionalIntegerSearchSchema,
+  optionalSearchStringSchema,
+} from "@/lib/schema";
 import type { EntityKind, ViewLayout, WorkspaceView } from "@/lib/types";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import {
@@ -58,6 +60,7 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
+import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
@@ -65,10 +68,10 @@ import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-compon
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   folder: optionalSearchStringSchema(),
   reveal: optionalSearchStringSchema(),
-  page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  page: optionalIntegerSearchSchema({ min: 1 }),
 });
 
 export const Route = createFileRoute(

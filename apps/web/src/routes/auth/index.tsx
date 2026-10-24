@@ -11,6 +11,7 @@ import {
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
+import { routeSearchSchema } from "@/route-search-params";
 
 const DevQuickStartButton = import.meta.env.DEV
   ? React.lazy(async () => {
@@ -20,7 +21,7 @@ const DevQuickStartButton = import.meta.env.DEV
     })
   : null;
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
 

@@ -53,6 +53,7 @@ import type {
   WorkspaceGroup,
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS } from "@/lib/workspaces/types";
+import { routeSearchSchema } from "@/route-search-params";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
@@ -69,7 +70,7 @@ import {
 } from "@/routes/_protected.workspaces/-utils";
 import { useConfigStore } from "@/stores/config-store";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   // Client id to scroll into view and flash on arrival (set by the matter
   // breadcrumb's company link). Cleared by the route once consumed.
   focusClient: v.optional(v.string()),

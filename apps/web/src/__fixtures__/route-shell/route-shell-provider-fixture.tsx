@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { parseTimeZoneId } from "@stll/time";
 
+import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
 import {
   authFixtureBeforeLoadData,
   authFixtureLoaderData,
@@ -33,7 +34,9 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts";
+  suite?: "leaf-shells" | "law-hosts" | "route-search";
+  /** The router's reading of a URL, which the route-search suite checks with. */
+  parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
 
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
@@ -52,6 +55,7 @@ const fixtureRouteSchema = v.object({
       ),
     ),
     loader: v.optional(v.unknown()),
+    validateSearch: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
         appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
@@ -481,7 +485,11 @@ const installFixtureNetwork = () => {
   };
 };
 const loadFixtureRuntime = async (
-  { mode, suite = "leaf-shells" }: RouteShellProviderFixtureOptions,
+  {
+    mode,
+    suite = "leaf-shells",
+    parseSearch,
+  }: RouteShellProviderFixtureOptions,
   network: ReturnType<typeof installFixtureNetwork>,
 ) => {
   // Bun does not run Start's client/server build transform. Keep its client
@@ -533,6 +541,8 @@ const loadFixtureRuntime = async (
   const { noopAnalytics } = await import("@/lib/analytics/noop");
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
+  const { parseRouteSearch, stringifyRouteSearch } =
+    await import("@/route-search-params");
 
   const createFixtureRouter = (initialEntry: string) => {
     const queryClient = createAppQueryClient();
@@ -542,6 +552,8 @@ const loadFixtureRuntime = async (
     const caughtErrors: Error[] = [];
     const router = createRouter({
       routeTree,
+      parseSearch: parseRouteSearch,
+      stringifySearch: stringifyRouteSearch,
       defaultOnCatch: (error) => {
         caughtErrors.push(
           error instanceof Error ? error : new Error(String(error)),
@@ -583,11 +595,11 @@ const loadFixtureRuntime = async (
     (route) => !hasChildren(route) && route.options.component !== undefined,
   );
   const selectedLeaves =
-    suite === "law-hosts"
-      ? []
-      : uiLeaves.filter(
+    suite === "leaf-shells"
+      ? uiLeaves.filter(
           (route) => isLegacyTool(route) === (mode === "legacy-tools"),
-        );
+        )
+      : [];
   const exercised = new Set<string>();
   const expectedCases: string[] = [];
   const usedExceptions = new Set<string>();
@@ -624,6 +636,7 @@ const loadFixtureRuntime = async (
   return {
     mode,
     suite,
+    parseSearch,
     createFixtureRouter,
     census,
     registeredRoutes,
@@ -700,12 +713,27 @@ const declareCensus = (fixture: FixtureRuntime) => {
   const {
     mode,
     suite,
+    parseSearch,
     registeredRoutes,
     isLegacyTool,
     uiLeaves,
     selectedLeaves,
     hasUi,
   } = fixture;
+  if (suite === "route-search") {
+    const readSearch =
+      parseSearch ??
+      panic("The route-search suite needs the router's search parser.");
+    test("every route opens whatever its URL's search carries", () => {
+      expect(
+        routeSearchRefusals(
+          registeredRoutes,
+          (routeId) => fixtureSearch(routeId, "reader@example.com"),
+          readSearch,
+        ),
+      ).toEqual([]);
+    });
+  }
   if (suite === "leaf-shells") {
     test(`${mode}: every top-level UI section declares its runtime frame scope`, () => {
       expect(
@@ -880,7 +908,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
           component: protectedLeaf ? Probe : Page,
           beforeLoad: protectedLeaf
             ? undefined
-            : () => authFixtureBeforeLoadData(route.id),
+            : () => authFixtureBeforeLoadData(route.id, user.email),
           loader,
         });
         await initializeI18n();
