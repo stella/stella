@@ -908,7 +908,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -1061,7 +1061,7 @@ jobs:
 
       - name: Upload planned API test durations
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-test-durations-plan
           path: ${{ runner.temp }}/api-test-durations.json
@@ -1092,7 +1092,7 @@ jobs:
 
       - name: Upload planned Postgres test durations
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: postgres-test-durations-plan
           path: ${{ runner.temp }}/postgres-test-durations.json
@@ -1376,7 +1376,7 @@ jobs:
           path: ${{ runner.temp }}/generated-sources
           key: ${{ steps.identity.outputs.key }}
       - name: Upload generated sources
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: generated-sources-${{ steps.generate.outputs.input_hash || steps.cached.outputs.input_hash }}
           path: ${{ runner.temp }}/generated-sources/
@@ -1655,7 +1655,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -1729,7 +1729,7 @@ jobs:
 
       - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
           path: ${{ runner.temp }}/generated-sources
@@ -1924,7 +1924,7 @@ jobs:
 
       - name: Upload generated route tree review diff
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: generated-route-tree-diff
           path: ${{ runner.temp }}/route-tree.patch
@@ -1932,7 +1932,7 @@ jobs:
 
       - name: Upload generated API type review diff
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: generated-web-api-types-diff
           path: ${{ runner.temp }}/web-api-types.patch
@@ -2057,7 +2057,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
           path: ${{ runner.temp }}/generated-sources
@@ -2126,7 +2126,7 @@ jobs:
 
       - name: Publish static check receipts
         if: success() && github.event_name == 'merge_group' && steps.static_receipt_record.outputs.recorded == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.static_receipts.outputs.artifact_name }}
           path: ${{ runner.temp }}/static-checks-ci-checks-policy/upload/receipt.json
@@ -2399,7 +2399,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
           path: ${{ runner.temp }}/generated-sources
@@ -2489,7 +2489,7 @@ jobs:
 
       - name: Publish static check receipts
         if: success() && github.event_name == 'merge_group' && steps.static_receipt_record.outputs.recorded == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.static_receipts.outputs.artifact_name }}
           path: ${{ runner.temp }}/static-checks-ci-checks-rest/upload/receipt.json
@@ -2542,7 +2542,7 @@ jobs:
 
       - name: Download planned API test durations
         if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.api_test_durations_hash != 'missing'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: api-test-durations-plan
           # A directory: the single-file artifact lands as api-test-durations.json.
@@ -2687,7 +2687,7 @@ jobs:
 
       - name: Upload API test timings
         if: always() && startsWith(matrix.shard, 'api-')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-test-timings-${{ matrix.shard }}
           path: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}/*.json
@@ -2757,7 +2757,7 @@ jobs:
         if: >-
           !cancelled()
           && needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flaky-test-quarantine-${{ matrix.shard }}
           path: ${{ runner.temp }}/flaky-test-quarantine/*.jsonl
@@ -2766,7 +2766,7 @@ jobs:
 
       - name: Upload test diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-test-diagnostics-${{ matrix.shard }}
           path: |
@@ -2818,14 +2818,14 @@ jobs:
 
       - name: Upload install log on failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-api-test-durations-${{ github.run_id }}
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
 
       - name: Download API test timings
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: api-test-timings-api-*
           path: ${{ runner.temp }}/api-test-timings
@@ -2853,7 +2853,7 @@ jobs:
 
       - name: Download Postgres test timings
         if: needs.postgres-service-suites.result == 'success'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: postgres-test-timings-*
           path: ${{ runner.temp }}/postgres-test-timings
@@ -3078,7 +3078,7 @@ jobs:
 
       - name: Upload desktop browser failures
         if: matrix.suite == 'desktop' && failure() && steps.desktop-browser-tests.outputs.required == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-browser-failures
           path: apps/desktop/test-results/
@@ -3102,7 +3102,7 @@ jobs:
 
       - name: Upload browser test timings
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-browser-timings-${{ matrix.suite }}
           path: .cache/playwright-timings/*.json
@@ -3172,7 +3172,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
           path: ${{ runner.temp }}/generated-sources
@@ -3340,7 +3340,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
           path: ${{ runner.temp }}/generated-sources
@@ -3465,7 +3465,7 @@ jobs:
 
       - name: Download planned Postgres test durations
         if: needs.ci-plan.outputs.postgres_test_durations_hash != 'missing'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: postgres-test-durations-plan
           # A directory: the single-file artifact lands as postgres-test-durations.json.
@@ -3503,7 +3503,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -3556,7 +3556,7 @@ jobs:
 
       - name: Upload Postgres test timings
         if: ${{ !cancelled() && steps.postgres-tests.outcome == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: postgres-test-timings-${{ matrix.shard }}
           path: ${{ runner.temp }}/postgres-test-timings/*.json
@@ -4051,7 +4051,7 @@ jobs:
           || needs.ci-plan.outputs.e2e_production_required == 'true'
           || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
           || needs.ci-plan.outputs.route_smoke_required == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-web-build
           path: apps/web/dist/
@@ -4108,7 +4108,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -4374,7 +4374,7 @@ jobs:
       - name: Build web
         uses: ./.github/actions/build-e2e-web
       - name: Upload production E2E web build
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-web-build
           path: apps/web/dist/
@@ -4471,7 +4471,7 @@ jobs:
 
       - name: Upload route smoke report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: route-smoke-pr-blob
           path: apps/web/e2e/test-results/blob-report/
@@ -4479,7 +4479,7 @@ jobs:
 
       - name: Upload server logs
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: server-logs-route-smoke
           path: |
@@ -4489,7 +4489,7 @@ jobs:
 
       - name: Upload browser test timings
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: route-smoke-timings
           path: .cache/playwright-timings/*.json
@@ -4629,7 +4629,7 @@ jobs:
           always()
           && steps.e2e-stack.outcome == 'success'
           && matrix.shard == 'network-baseline'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: network-baseline-blob
           path: apps/web/e2e/test-results/blob-report/
@@ -4723,7 +4723,7 @@ jobs:
           always()
           && steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-blob-${{ matrix.shard }}
           path: apps/web/e2e/test-results/blob-report/
@@ -4735,7 +4735,7 @@ jobs:
           always()
           && steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-blob-route-smoke-${{ matrix.shard }}
           path: apps/web/e2e/test-results/route-smoke-${{ matrix.shard }}/blob-report/
@@ -4744,7 +4744,7 @@ jobs:
       - name: Upload server logs
         timeout-minutes: 1
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: server-logs-production-${{ matrix.shard }}
           path: |
@@ -4755,7 +4755,7 @@ jobs:
       - name: Upload browser test timings
         timeout-minutes: 1
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-production-shard-timings-${{ matrix.shard }}
           path: .cache/playwright-timings/*.json
@@ -4830,7 +4830,7 @@ jobs:
 
       - name: Upload browser test timings
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: stack-redaction-browsers-timings
           path: .cache/playwright-timings/*.json
@@ -5030,7 +5030,7 @@ jobs:
 
       - name: Upload Playwright blob report
         if: always() && steps.e2e-stack.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-blob-vite-canary
           path: apps/web/e2e/test-results/blob-report/
@@ -5038,7 +5038,7 @@ jobs:
 
       - name: Upload collaboration failure artifacts
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-collab-vite-canary
           path: apps/web/e2e/test-results-collab/
@@ -5046,7 +5046,7 @@ jobs:
 
       - name: Upload server logs
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: server-logs-vite-canary
           path: |
@@ -5057,7 +5057,7 @@ jobs:
 
       - name: Upload browser test timings
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-vite-canary-timings
           path: .cache/playwright-timings/*.json
@@ -5169,7 +5169,7 @@ jobs:
 
       - name: Upload failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: landing-e2e-diagnostics
           path: |
@@ -5180,7 +5180,7 @@ jobs:
 
       - name: Upload browser test timings
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-landing-timings
           path: .cache/playwright-timings/*.json
@@ -5327,7 +5327,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download Playwright blob reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: playwright-blob-*
           path: apps/web/all-blob-reports
@@ -5337,7 +5337,7 @@ jobs:
         run: bun --filter @stll/playwright-tools report
 
       - name: Upload merged Playwright report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -5422,7 +5422,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -5659,7 +5659,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -5738,7 +5738,7 @@ jobs:
 
       - name: Upload successful queue dry-run receipt
         if: success() && github.event_name == 'merge_group' && steps.receipt.outcome == 'success' && steps.receipt.outputs.key != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         continue-on-error: true
         with:
           name: desktop-windows-dry-run-${{ steps.receipt.outputs.key }}
@@ -5796,7 +5796,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -5846,7 +5846,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -5889,7 +5889,7 @@ jobs:
 
       - name: Upload fresh WebAssembly on mismatch
         if: failure() && steps.wasm-check.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scan-engine-wasm
           path: |
@@ -6259,7 +6259,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: ${{ !cancelled() && steps.install.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -7196,7 +7196,7 @@ jobs:
       - name: Upload required-jobs record
         if: always() && steps.outcome.outcome != 'skipped'
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-required-summary
           overwrite: true
@@ -7234,7 +7234,7 @@ jobs:
 
       - name: Upload failure digest
         if: failure() && steps.outcome.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-failures
           overwrite: true
@@ -7275,7 +7275,7 @@ jobs:
 
       - name: Publish completed suite depth
         if: success() && github.event_name == 'pull_request' && needs.ci-plan.outputs.run_required == 'true' && needs.ci-plan.outputs.completion_marker != '' && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'failure') && steps.outcome.outputs.evidence != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.ci-plan.outputs.completion_marker }}
           overwrite: true

@@ -8,6 +8,7 @@ import {
   RESOURCE_TYPE,
   resourceRef,
 } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -216,7 +217,6 @@ import {
   handlerResultMessage,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   legalCitationLinkFields,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
@@ -822,14 +822,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     source_id: v.optional(uuidInputSchema("Filter by source ID")),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
       ),
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),

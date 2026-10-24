@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -118,8 +119,7 @@ const resolveLawArgsSchema = nullAsAbsent(
     ),
     as_of: v.optional(
       v.pipe(
-        v.string(),
-        v.isoDate(),
+        vApiDate,
         v.description(
           "Expression date YYYY-MM-DD; omit for the current expression.",
         ),
