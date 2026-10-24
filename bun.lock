@@ -66,6 +66,7 @@
         "@libpdf/core": "catalog:",
         "@litko/yara-x": "^0.7.5",
         "@modelcontextprotocol/server": "2.3.1",
+        "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
         "@openrouter/sdk": "0.13.67",
         "@opentelemetry/api-logs": "^0.223.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.223.0",
@@ -201,7 +202,6 @@
         "@modelcontextprotocol/client": "2.3.1",
         "@modelcontextprotocol/ext-apps": "^2.0.3",
         "@myriaddreamin/typst-ts-renderer": "0.7.0",
-        "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
         "@playwright/test": "^1.63.0",
         "@standard-schema/spec": "^1.1.0",
         "@stll/playwright-tools": "workspace:*",
@@ -1041,6 +1041,8 @@
       "name": "@stll/invoicing",
       "version": "0.1.0",
       "dependencies": {
+        "@stll/agent-input": "workspace:*",
+        "@stll/api-contract": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
@@ -1050,6 +1052,7 @@
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "bysquare": "4.1.0",
         "fast-check": "catalog:",
         "xmllint-wasm": "catalog:",
       },
@@ -3999,6 +4002,8 @@
 
     "bundle-name": ["bundle-name@4.1.0", "", { "dependencies": { "run-applescript": "^7.0.0" } }, "sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q=="],
 
+    "bysquare": ["bysquare@4.1.0", "", { "dependencies": { "lzma1": "0.4.0", "validator": "^13.15.35" }, "bin": { "bysquare": "lib/cli.js" } }, "sha512-/Oc0h342r22zhXFEe12F9a6OK2eN33ZPZ3yeezELw1Ihz6Rp3WJ7HaaRMgNA2a8K2sgrbr72PsaVg17cCvKf8g=="],
+
     "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
 
     "bytestreamjs": ["bytestreamjs@2.0.1", "", {}, "sha512-U1Z/ob71V/bXfVABvNr/Kumf5VyeQRBEm6Txb0PQ6S7V5GpBM3w4Cbqz/xPDicR5tN0uvDifng8C+5qECeGwyQ=="],
@@ -5960,6 +5965,8 @@
     "valibot": ["valibot@1.5.0", "", { "peerDependencies": { "typescript": ">=5" }, "optionalPeers": ["typescript"] }, "sha512-nil6AkP2TChWL43Z5uJ6GTxX01CUA+g8LWUM+N/rB9NBbkUMaUsi9PUNzlUPgoKASgmx9f7eGOYpJ04/fSa6FQ=="],
 
     "validate-npm-package-name": ["validate-npm-package-name@5.0.1", "", {}, "sha512-OljLrQ9SQdOUqTaQxqL5dEfZWrXExyyWsozYlAWFawPVNuD83igl7uJD2RTkNMbniIYgt8l81eCJGIdQF7avLQ=="],
+
+    "validator": ["validator@13.15.35", "", {}, "sha512-TQ5pAGhd5whStmqWvYF4OjQROlmv9SMFVt37qoCBdqRffuuklWYQlCNnEs2ZaIBD1kZRNnikiZOS1eqgkar0iw=="],
 
     "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
 

@@ -30,6 +30,7 @@ import {
   readApiErrorIdentity,
   sanitizeFingerprintFields,
 } from "@/lib/analytics/exception-fingerprint";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
@@ -835,6 +836,7 @@ const captureError: Analytics["captureError"] = (
  * rather than relying on deployment-specific environment settings.
  */
 type CreatePostHogAnalyticsOptions = {
+  routeTemplates?: readonly string[];
   key: string;
   host: string;
   /**
@@ -845,10 +847,58 @@ type CreatePostHogAnalyticsOptions = {
   uiHost?: string | undefined;
 };
 
+// Events whose properties are already typed for PostHog go straight to the
+// SDK; keeping them out of the factory keeps its body to the stateful parts.
+const forwardedCaptures: Pick<
+  Analytics,
+  | "capturePageHangSuspected"
+  | "captureLongAnimationFrame"
+  | "captureGuideStepSkipped"
+  | "captureFeedbackDialogOpened"
+  | "captureFeedbackReportSubmitted"
+  | "captureProvisionPlacementGaps"
+  | "captureInspectorRestoreRecovered"
+  | "captureFollowupShown"
+  | "captureFollowupSelected"
+  | "captureKeyActionTiming"
+> = {
+  capturePageHangSuspected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
+  },
+  captureLongAnimationFrame: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.longAnimationFrame, properties);
+  },
+  captureGuideStepSkipped: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
+  },
+  captureFeedbackDialogOpened: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
+  },
+  captureFeedbackReportSubmitted: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
+  },
+  captureProvisionPlacementGaps: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+  },
+  captureInspectorRestoreRecovered: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
+  },
+  captureFollowupShown: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+  },
+  captureFollowupSelected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+  },
+  captureKeyActionTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
+  },
+};
+
 export const createPostHogAnalytics = ({
   host,
   key,
   uiHost,
+  routeTemplates = [],
 }: CreatePostHogAnalyticsOptions): {
   analytics: Analytics;
   client: typeof posthog | undefined;
@@ -900,6 +950,13 @@ export const createPostHogAnalytics = ({
             : sanitizeExceptionEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
           return routeErrorLifecycleSanitizer?.(event) ?? null;
+        case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+        case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+          return sanitizeHangDiagnosticEvent({
+            event,
+            appUrl: env.VITE_PUBLIC_APP_URL,
+            routeTemplates,
+          });
         case WEB_ANALYTICS_EVENTS.webVitals:
           return sanitizeWebVitalsEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.pageViewed:
@@ -993,33 +1050,7 @@ export const createPostHogAnalytics = ({
         path,
       });
     },
-    captureGuideStepSkipped: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
-    },
-    captureFeedbackDialogOpened: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
-    },
-    captureFeedbackReportSubmitted: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
-    },
-    captureProvisionPlacementGaps: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
-    },
-    captureInspectorRestoreRecovered: (properties) => {
-      posthog.capture(
-        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
-        properties,
-      );
-    },
-    captureFollowupShown: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
-    },
-    captureFollowupSelected: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
-    },
-    captureKeyActionTiming: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
-    },
+    ...forwardedCaptures,
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")
         .then((module) => {

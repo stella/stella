@@ -88,6 +88,7 @@
         // Derived and gitignored: the TanStack Router plugin skips gitignored
         // files, but configured entries are globbed without .gitignore.
         "src/routeTree.gen.ts!",
+        "src/route-templates.gen.ts!",
         // The generated route tree is ignored; this route owns billing dialogs
         // loaded by the router and must remain in Knip's usage graph.
         "src/routes/_protected.workspaces/$workspaceId/timesheets.tsx",

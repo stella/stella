@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import Elysia from "elysia";
 import type { Context } from "elysia";
 
@@ -19,6 +19,7 @@ import {
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -163,6 +164,7 @@ import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -668,6 +670,24 @@ const countChatMessages = async (threadId: SafeId<"chatThread">) =>
       .select({ id: chatMessages.id })
       .from(chatMessages)
       .where(eq(chatMessages.threadId, threadId))
+  ).length;
+
+const CZECH_PRESET_CODES = [
+  ...new Set(VAT_RATE_PRESETS.CZ.map(({ code }) => code)),
+];
+
+/** An organization's Czech preset rows, read past RLS after a handler ran. */
+const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
+  (
+    await testDb
+      .select({ id: vatRates.id })
+      .from(vatRates)
+      .where(
+        and(
+          eq(vatRates.organizationId, organizationId),
+          inArray(vatRates.code, CZECH_PRESET_CODES),
+        ),
+      )
   ).length;
 
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
@@ -1344,6 +1364,38 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "VAT rate preset applies only to the active organization",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+      const otherBefore = await countCzechPresetRates(testIds.orgB);
+      const result = await runHandler(applyVatRatePreset, workspaceA, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgA),
+        otherUnchanged:
+          (await countCzechPresetRates(testIds.orgB)) === otherBefore,
+      };
+    },
+    runBPositive: async ({ ids: testIds, workspaceB }) => {
+      const result = await runHandler(applyVatRatePreset, workspaceB, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgB),
+      };
+    },
+    expectDenied: (outcome) =>
+      expect(outcome).toEqual({
+        added: 5,
+        activeRows: 5,
+        otherUnchanged: true,
+      }),
+    expectPositive: (outcome) =>
+      expect(outcome).toEqual({ added: 5, activeRows: 5 }),
   },
   {
     name: "time entry read by id",

@@ -260,6 +260,8 @@ export class ConfigurationError extends TaggedError("ConfigurationError")<{
 }> {}
 
 export class TelemetryError extends TaggedError("TelemetryError")<{
+  /** Stable outcome code; it becomes `error.code`, so it splits the issue. */
+  code?: string | undefined;
   message: string;
   cause?: unknown;
 }> {}

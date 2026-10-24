@@ -1045,7 +1045,10 @@ test("route tree has one derived owner and a cache producer for every consumer",
   const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
   expect(ignored.exitCode).toBe(0);
   const producer = config.tasks["@stll/web#generate:route-tree"];
-  expect(producer?.outputs).toEqual(["src/routeTree.gen.ts"]);
+  expect(producer?.outputs).toEqual([
+    "src/routeTree.gen.ts",
+    "src/route-templates.gen.ts",
+  ]);
   expect(
     generationInputs("generate:route-tree")
       .map((input) =>

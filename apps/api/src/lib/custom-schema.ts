@@ -1,7 +1,9 @@
 import type { TProperties, TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
+import type { Static } from "elysia";
 import { t } from "elysia";
 
+import type { INVOICE_LANGUAGES, InvoiceLanguage } from "@stll/api-contract";
 import {
   CURRENCY_CODE_LENGTH,
   CURRENCY_CODE_PATTERN,
@@ -151,3 +153,33 @@ export type WorkspaceParamsSchema = TSchema & {
 
 export const workspaceParams = <T extends TProperties>(extra: T) =>
   t.Object({ workspaceId: tSafeId("workspace"), ...extra });
+
+/**
+ * A literal union, not `t.UnionEnum`: UnionEnum stamps its first member as the
+ * schema default, so an omitted language would become Arabic before the
+ * client, organization and seller defaults are consulted.
+ */
+export const tInvoiceLanguage = t.Union([
+  t.Literal("ar"),
+  t.Literal("cs"),
+  t.Literal("de"),
+  t.Literal("en"),
+  t.Literal("es"),
+  t.Literal("et"),
+  t.Literal("fr"),
+  t.Literal("hu"),
+  t.Literal("lt"),
+  t.Literal("lv"),
+  t.Literal("pl"),
+  t.Literal("pt-BR"),
+  t.Literal("sk"),
+]);
+
+// Binds the literals to the contract list in both directions.
+true satisfies InvoiceLanguage extends Static<typeof tInvoiceLanguage>
+  ? true
+  : never;
+true satisfies Static<typeof tInvoiceLanguage> extends InvoiceLanguage
+  ? true
+  : never;
+true satisfies (typeof INVOICE_LANGUAGES)["length"] extends 13 ? true : never;

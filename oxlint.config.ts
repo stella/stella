@@ -1196,6 +1196,7 @@ const config = defineConfig({
       "error",
     "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
+    "no-domain-enum/no-domain-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
@@ -1455,6 +1456,7 @@ const config = defineConfig({
   ignorePatterns: [
     ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
@@ -1663,6 +1665,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-domain-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/provider-call-error-message.ts",

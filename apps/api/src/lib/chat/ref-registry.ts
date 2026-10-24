@@ -107,20 +107,44 @@ const describeUnresolvedRef = (ref: string) => ({
   refMatchesMintedShape: String(MINTED_REF_SHAPE.test(ref)),
 });
 
+/**
+ * Each ref failure is a different defect: an unminted ref is a model mistake,
+ * while a conflicted or malformed binding is corrupt stored history that can
+ * point at the wrong document. The code is the error identity, so each
+ * outcome groups into its own issue.
+ */
+const REF_TELEMETRY_OUTCOME = {
+  unminted: {
+    code: "chat_ref_unminted",
+    message: "Assistant text cited a chat ref this turn never minted",
+  },
+  conflict: {
+    code: "chat_ref_conflict",
+    message: "Stored chat history bound one ref to two targets",
+  },
+  malformed: {
+    code: "chat_ref_malformed",
+    message: "Stored chat ref binding has a malformed ref",
+  },
+} as const satisfies Record<
+  "unminted" | Exclude<RestoreRefOutcome, "restored">,
+  { code: string; message: string }
+>;
+
 const reportRefTelemetry = ({
   kind,
   fingerprintKey,
   scope,
-  message,
+  outcome,
   ref,
 }: {
   fingerprintKey: `chat.${string}`;
   scope: Parameters<typeof captureError>[1]["scope"];
   kind: string;
-  message: string;
+  outcome: keyof typeof REF_TELEMETRY_OUTCOME;
   ref: string;
 }) => {
-  captureError(new TelemetryError({ message }), {
+  captureError(new TelemetryError(REF_TELEMETRY_OUTCOME[outcome]), {
     fingerprintKey,
     scope,
     context: {
@@ -612,7 +636,7 @@ export const createChatRefRegistry = (
       },
       fingerprintKey: `chat.resolveAssistantTextRefs.${kind}`,
       kind,
-      message: "Assistant text cited a chat ref this turn never minted",
+      outcome: "unminted",
       ref,
     });
   };
@@ -907,10 +931,7 @@ export const createChatRefRegistry = (
       },
       fingerprintKey: `chat.restoreRefBinding.${binding.kind}.${outcome}`,
       kind: binding.kind,
-      message:
-        outcome === "conflict"
-          ? "Stored chat history bound one ref to two targets"
-          : "Stored chat ref binding has a malformed ref",
+      outcome,
       ref: binding.ref,
     });
   };

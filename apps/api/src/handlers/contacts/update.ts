@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
@@ -27,10 +28,16 @@ import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { patchContactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  tInvoiceLanguage,
+  tMinorUnitAmount,
+  tSafeId,
+  tUserId,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -60,8 +67,16 @@ const updateContactBodySchema = t.Object({
   metadata: t.Optional(t.Nullable(contactMetadataSchema)),
   tags: t.Optional(t.Nullable(t.Array(t.String(), { maxItems: 50 }))),
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  registrationNumber: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  taxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  registrationNumber: t.Optional(
+    t.Nullable(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  ),
+  taxId: t.Optional(
+    t.Nullable(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  ),
+  vatId: t.Optional(
+    t.Nullable(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  ),
+  vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(
     t.Nullable(t.Array(bankAccountSchema, { maxItems: 10 })),
   ),
@@ -71,6 +86,7 @@ const updateContactBodySchema = t.Object({
   paymentTermDays: t.Optional(
     t.Nullable(t.Integer({ minimum: 0, maximum: 365 })),
   ),
+  invoiceLanguage: t.Optional(t.Nullable(tInvoiceLanguage)),
   originatingAttorneyId: t.Optional(t.Nullable(tUserId)),
   responsibleAttorneyId: t.Optional(t.Nullable(tUserId)),
 });
@@ -153,6 +169,42 @@ const contactRateUpdates = async ({
   });
 };
 
+/** Lock the contact row and read what the update validates against. */
+const lockExistingContact = async ({
+  tx,
+  contactId,
+  organizationId,
+}: {
+  tx: Transaction;
+  contactId: UpdateContactHandlerProps["contactId"];
+  organizationId: UpdateContactHandlerProps["organizationId"];
+}) => {
+  const rows = await tx
+    .select({
+      id: contacts.id,
+      type: contacts.type,
+      metadata: contacts.metadata,
+      currency: contacts.currency,
+      defaultHourlyRate: contacts.defaultHourlyRate,
+      dateOfBirthYear: contacts.dateOfBirthYear,
+      dateOfBirthMonth: contacts.dateOfBirthMonth,
+      dateOfBirthDay: contacts.dateOfBirthDay,
+      nationalityCodes: contacts.nationalityCodes,
+      taxId: contacts.taxId,
+      vatId: contacts.vatId,
+    })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        eq(contacts.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -193,28 +245,11 @@ export const updateContactHandler = async function* ({
           }),
         };
       }
-      const existingRows = await tx
-        .select({
-          id: contacts.id,
-          type: contacts.type,
-          metadata: contacts.metadata,
-          currency: contacts.currency,
-          defaultHourlyRate: contacts.defaultHourlyRate,
-          dateOfBirthYear: contacts.dateOfBirthYear,
-          dateOfBirthMonth: contacts.dateOfBirthMonth,
-          dateOfBirthDay: contacts.dateOfBirthDay,
-          nationalityCodes: contacts.nationalityCodes,
-        })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.id, contactId),
-            eq(contacts.organizationId, organizationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const existing = existingRows.at(0);
+      const existing = await lockExistingContact({
+        tx,
+        contactId,
+        organizationId,
+      });
       if (!existing) {
         return { kind: "not_found" as const };
       }
@@ -264,11 +299,12 @@ export const updateContactHandler = async function* ({
           "color",
           "tags",
           "registrationNumber",
-          "taxId",
+          "vatPayer",
           "bankAccounts",
           "billingAddress",
           "currency",
           "paymentTermDays",
+          "invoiceLanguage",
           "originatingAttorneyId",
           "responsibleAttorneyId",
         ]),
@@ -284,6 +320,13 @@ export const updateContactHandler = async function* ({
                 : [],
             }),
         ...pickDefined(rateUpdates.value, ["defaultHourlyRate"]),
+        ...(rest.taxId === undefined && rest.vatId === undefined
+          ? {}
+          : patchContactTaxIdentifiers({
+              stored: { taxId: existing.taxId, vatId: existing.vatId },
+              taxId: rest.taxId,
+              vatId: rest.vatId,
+            })),
       };
       if (Object.keys(updates).length === 0) {
         return {
@@ -312,10 +355,13 @@ export const updateContactHandler = async function* ({
           tags: updates.tags,
           registrationNumber: updates.registrationNumber,
           taxId: updates.taxId,
+          vatId: updates.vatId,
+          vatPayer: updates.vatPayer,
           bankAccounts: updates.bankAccounts,
           billingAddress: updates.billingAddress,
           currency: updates.currency,
           paymentTermDays: updates.paymentTermDays,
+          invoiceLanguage: updates.invoiceLanguage,
           originatingAttorneyId: updates.originatingAttorneyId,
           responsibleAttorneyId: updates.responsibleAttorneyId,
           metadata: updates.metadata,

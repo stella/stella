@@ -89,6 +89,8 @@ type CreateContactVars = {
   color?: string;
   registrationNumber?: string;
   taxId?: string;
+  vatId?: string;
+  vatPayer?: boolean | null;
   bankAccounts?: BankAccount[];
   billingAddress?: BillingAddress;
   defaultHourlyRate?: number;
@@ -134,6 +136,8 @@ export type ContactUpdateFields = {
   color: string | null;
   registrationNumber: string | null;
   taxId: string | null;
+  vatId: string | null;
+  vatPayer: boolean | null;
   bankAccounts: BankAccount[] | null;
   billingAddress: BillingAddress | null;
   defaultHourlyRate: number | null;

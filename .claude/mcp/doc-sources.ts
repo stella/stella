@@ -410,6 +410,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-10-24T00:00:00.000Z",
+      dependency: "bysquare",
+      explanation:
+        "https://raw.githubusercontent.com/xseman/bysquare/master/llms.txt and the typescript/llms.txt path return 404. Use the TypeScript README and API declarations at https://github.com/xseman/bysquare/tree/master/typescript directly; the package is used only as an independent PAY by square decoder in tests.",
+      expiresAt: "2026-11-23T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-17T00:00:00.000Z",
       dependency: "@embedpdf/pdfium",
       explanation:

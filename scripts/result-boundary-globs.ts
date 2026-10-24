@@ -225,6 +225,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
+  // Browser startup captures detector installation failures in its outer Result.
+  "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",

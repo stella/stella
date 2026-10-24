@@ -3,6 +3,8 @@ import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
@@ -25,10 +27,16 @@ import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  tInvoiceLanguage,
+  tMinorUnitAmount,
+  tSafeId,
+  tUserId,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -57,13 +65,18 @@ export const createContactBodySchema = t.Object({
   metadata: t.Optional(contactMetadataSchema),
   tags: t.Optional(t.Array(t.String(), { maxItems: 50 })),
   color: t.Optional(t.String({ maxLength: 32 })),
-  registrationNumber: t.Optional(t.String({ maxLength: 64 })),
-  taxId: t.Optional(t.String({ maxLength: 64 })),
+  registrationNumber: t.Optional(
+    t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH }),
+  ),
+  taxId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  vatId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
+  vatPayer: t.Optional(t.Nullable(t.Boolean())),
   bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
   billingAddress: t.Optional(billingAddressSchema),
   defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
+  invoiceLanguage: t.Optional(t.Nullable(tInvoiceLanguage)),
   originatingAttorneyId: t.Optional(tUserId),
   responsibleAttorneyId: t.Optional(tUserId),
 });
@@ -144,7 +157,11 @@ export const insertContactRow = async ({
       tags: body.tags,
       color: body.color,
       registrationNumber: body.registrationNumber,
-      taxId: body.taxId,
+      ...contactTaxIdentifiers({
+        taxId: body.taxId ?? null,
+        vatId: body.vatId ?? null,
+      }),
+      vatPayer: body.vatPayer,
       bankAccounts: body.bankAccounts,
       billingAddress: body.billingAddress,
       defaultHourlyRate:
@@ -153,6 +170,7 @@ export const insertContactRow = async ({
           : cents(body.defaultHourlyRate),
       currency: body.currency,
       paymentTermDays: body.paymentTermDays,
+      invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
       createdBy: userId,
