@@ -168,7 +168,7 @@ export const clusterExclusiveMigrationTests = (
         ts.isImportDeclaration(node) &&
         ts.isStringLiteral(node.moduleSpecifier) &&
         isMigrationRunnerModule(testPath, node.moduleSpecifier.text) &&
-        !node.importClause?.isTypeOnly
+        node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
       ) {
         const bindings = node.importClause?.namedBindings;
         if (
@@ -184,7 +184,6 @@ export const clusterExclusiveMigrationTests = (
         ts.isImportEqualsDeclaration(node) &&
         !node.isTypeOnly &&
         ts.isExternalModuleReference(node.moduleReference) &&
-        node.moduleReference.expression !== undefined &&
         ts.isStringLiteral(node.moduleReference.expression) &&
         isMigrationRunnerModule(testPath, node.moduleReference.expression.text)
       ) {
@@ -235,7 +234,7 @@ export const classifyPostgresTestIsolation = async (
   if (violations.length === 0) {
     return clusterExclusiveMigrationTests(sources);
   }
-  panic(
+  return panic(
     `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations
       .map(({ testPath, tables }) => `  ${testPath}: ${tables.join(", ")}`)
       .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
