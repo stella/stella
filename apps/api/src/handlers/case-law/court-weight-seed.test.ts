@@ -70,7 +70,7 @@ const HISTORICAL_SVK_SEED = [
 ] satisfies CourtWeightSeedRow[];
 
 describe("court weight seed", () => {
-  test("each seed migration is the rendering of its part of the declaration", async () => {
+  test("historical seed migrations render their part of the declaration", async () => {
     const full = await Bun.file(
       migrationPath("20260918210100_case_law_court_weight_seed_hun"),
     ).text();
@@ -88,12 +88,6 @@ describe("court weight seed", () => {
       migrationPath("20260927200200_case_law_court_weight_seed_usa"),
     ).text();
     expect(usa.trimEnd().endsWith(courtWeightJurisdictionSeedSql("USA"))).toBe(
-      true,
-    );
-    const gbr = await Bun.file(
-      migrationPath("20261024190100_case_law_court_weight_seed_gbr"),
-    ).text();
-    expect(gbr.trimEnd().endsWith(courtWeightJurisdictionSeedSql("GBR"))).toBe(
       true,
     );
     const svk = await Bun.file(

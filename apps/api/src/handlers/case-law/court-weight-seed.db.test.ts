@@ -180,6 +180,40 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   await client.close();
 }, 60_000);
 
+test("the GBR seed preserves existing ranks and replays without changing rows", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  const gbrRows = COURT_WEIGHT_SEED.filter((row) => row.country === "GBR");
+  expect(gbrRows.length).toBeGreaterThan(0);
+  await db.insert(caseLawCourtWeights).values([
+    ...gbrRows.map((row) => ({
+      ...row,
+      id: createSafeId<"caseLawCourtWeight">(),
+      tier: 1,
+      tierLabel: "existing",
+      weight: 1,
+    })),
+    {
+      id: createSafeId<"caseLawCourtWeight">(),
+      country: "EU",
+      courtPattern: "existing court",
+      tier: 2,
+      tierLabel: "existing",
+      weight: 4,
+    },
+  ]);
+  const before = (await db.select().from(caseLawCourtWeights)).toSorted(byKey);
+  await applyMigration(db, GBR_SEED);
+  expect((await db.select().from(caseLawCourtWeights)).toSorted(byKey)).toEqual(
+    before,
+  );
+  await applyMigration(db, GBR_SEED);
+  expect((await db.select().from(caseLawCourtWeights)).toSorted(byKey)).toEqual(
+    before,
+  );
+  await client.close();
+});
+
 test.each(["legacy-only", "replacement-preseeded"])(
   "the Slovak seed reconciles %s without changing another jurisdiction",
   async (state) => {
