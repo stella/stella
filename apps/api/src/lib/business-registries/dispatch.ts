@@ -1823,10 +1823,20 @@ type RegistryWebSearch = {
   abortSignal?: AbortSignal | undefined;
 };
 
-type RegistryWebSearchResult = Result<RegistryWebSearch | null, HandlerError>;
+type RegistryWebSearchResult = Result<RegistryWebSearch | null, Error>;
 
 export type LoadRegistryWebSearch = () =>
   RegistryWebSearchResult | Promise<RegistryWebSearchResult>;
+
+const unexpectedRegistryLookupFailure = (
+  registry: BusinessRegistrySlug,
+  cause: unknown,
+) =>
+  new HandlerError({
+    status: 500,
+    message: `Registry '${registry}' lookup failed`,
+    cause,
+  });
 
 /**
  * Run the dispatch flow for a registry handler: detect lookup vs.
@@ -1883,7 +1893,9 @@ export const executeRegistryLookup = async ({
     if (!searchFn && handler.webCandidateNameSearch) {
       const availability = (await loadWebSearch?.()) ?? Result.ok(null);
       if (availability.isErr()) {
-        return availability.error;
+        return HandlerError.is(availability.error)
+          ? availability.error
+          : unexpectedRegistryLookupFailure(handler.slug, availability.error);
       }
       const webSearch = availability.value;
       if (webSearch === null) {
@@ -1919,11 +1931,7 @@ export const executeRegistryLookup = async ({
     if (mapped) {
       return mapped;
     }
-    return new HandlerError({
-      status: 500,
-      message: `Registry '${handler.slug}' lookup failed`,
-      cause: error,
-    });
+    return unexpectedRegistryLookupFailure(handler.slug, error);
   }
 };
 

@@ -43,7 +43,7 @@ import {
   isBusinessRegistryNativeToolDeployAvailable,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 const permit = grantThirdPartyOutboundPermit();
@@ -697,6 +697,28 @@ describe("executeRegistryLookup — verified web candidates", () => {
     }
     expect(candidateLookups).toBe(0);
     expect(result).toBe(failure);
+    expect(result.status).toBe(500);
+    expect(result.cause).toBe(cause);
+  });
+
+  test("the registry failure owner retains a settings database error", async () => {
+    const cause = new DatabaseError({ message: "Settings read unavailable" });
+    let candidateLookups = 0;
+    const result = await executeRegistryLookup({
+      observer: "unobserved",
+      permit,
+      handler: krsWebHandler(async () => {
+        candidateLookups += 1;
+        return null;
+      }),
+      query: "Company name",
+      loadWebSearch: async () => Result.err(cause),
+    });
+    expect(result).toBeInstanceOf(HandlerError);
+    if (!(result instanceof HandlerError)) {
+      throw new TypeError("Expected a lookup failure");
+    }
+    expect(candidateLookups).toBe(0);
     expect(result.status).toBe(500);
     expect(result.cause).toBe(cause);
   });

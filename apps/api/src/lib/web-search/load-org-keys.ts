@@ -82,9 +82,9 @@ export const loadWebSearchKeys = async (
     .where(eq(organizationSettings.organizationId, organizationId))
     .limit(1);
 
-  return (
-    await resolveWebSearchKeysFromRow(organizationId, rows.at(0))
-  ).unwrap();
+  return (await resolveWebSearchKeysFromRow(organizationId, rows.at(0))).unwrap(
+    "Could not resolve organization web-search credentials",
+  );
 };
 
 export const loadWebSearchProvidersForOrg = async (
@@ -104,7 +104,9 @@ export const resolveWebSearchProvidersFromOrgSettingsRow = async (
   row: OrgWebSearchKeyRow | null | undefined,
 ): Promise<ResolvedWebSearchProviders> =>
   resolveWebSearchProvidersFromEnv(
-    (await resolveWebSearchKeysFromRow(organizationId, row)).unwrap(),
+    (await resolveWebSearchKeysFromRow(organizationId, row)).unwrap(
+      "Could not resolve organization web-search credentials",
+    ),
   );
 
 export const resolveWebSearchProvidersResultFromOrgSettingsRow = async (

@@ -37,7 +37,6 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -1045,16 +1044,7 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
         return Result.ok(null);
       }
       if (webSearch.isErr()) {
-        captureError(webSearch.error, {
-          source: "mcp-web-search-settings-read",
-        });
-        return Result.err(
-          new HandlerError({
-            status: 500,
-            message: "Could not load registry web-search settings",
-            cause: webSearch.error,
-          }),
-        );
+        return webSearch;
       }
       const provider = providerFromMcpWebSearchAvailability(webSearch.value);
       if (provider === null) {

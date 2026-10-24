@@ -50,7 +50,6 @@ import type {
   OrgAIConfigReader,
   OrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -416,6 +415,11 @@ export type McpWebSearchAvailability =
       reason: "not-configured" | "key-unreadable";
     };
 
+const MCP_WEB_SEARCH_KEY_RESOLUTION_SINK = failureSink({
+  event: "mcp.web_search.key_resolution_failed",
+  expected: [],
+});
+
 export const resolveEnabledMcpWebSearchProvider = async ({
   disabledNativeToolSlugs,
   organizationId,
@@ -433,7 +437,9 @@ export const resolveEnabledMcpWebSearchProvider = async ({
     row,
   );
   if (resolved.isErr()) {
-    captureError(resolved.error, { source: "mcp-web-search-key-resolution" });
+    observeFailure(resolved.error, {
+      sink: MCP_WEB_SEARCH_KEY_RESOLUTION_SINK,
+    });
     return { status: "unavailable", reason: "key-unreadable" };
   }
   if (resolved.value.webSearchProvider === null) {
