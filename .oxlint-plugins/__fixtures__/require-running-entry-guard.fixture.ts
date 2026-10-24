@@ -36,11 +36,11 @@ declare const invoiceOptions: {
 };
 
 export const invoiceGuarded = async () => {
-  const guarded = await guardRunningTimeEntries({ ...invoiceOptions, tx });
-  if (guarded.isErr()) {
-    return Result.err(guarded.error);
+  const invoiceGuard = await guardRunningTimeEntries({ ...invoiceOptions, tx });
+  if (invoiceGuard.isErr()) {
+    return Result.err(invoiceGuard.error);
   }
   // expect-clean: require-running-entry-guard/require-running-entry-guard
   tx.update(timeEntries);
-  return Result.ok(guarded.value);
+  return Result.ok(invoiceGuard.value);
 };

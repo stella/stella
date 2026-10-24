@@ -113,7 +113,6 @@ const buildVoidEvents = (params: {
 
 type ReleaseInvoiceEntriesOptions = {
   matterLocks: AcquiredInvoiceMatterLocks;
-  workspaceId: SafeId<"workspace">;
   previousStatus: InvoiceStatus;
   now: Date;
   recordAuditEvent: AuditRecorder;
@@ -122,7 +121,6 @@ const releaseInvoiceEntries = async (
   tx: Transaction,
   {
     matterLocks,
-    workspaceId,
     previousStatus,
     now,
     recordAuditEvent,
@@ -167,7 +165,6 @@ const releaseInvoiceEntries = async (
       revertedExpenses,
     }),
   );
-  return Result.ok(undefined);
 };
 
 const transitionInvoice = createSafeHandler(
@@ -349,16 +346,12 @@ const transitionInvoice = createSafeHandler(
               "Invoice release requires the running guard's acquired locks",
             );
           }
-          const release = await releaseInvoiceEntries(tx, {
+          await releaseInvoiceEntries(tx, {
             matterLocks,
-            workspaceId,
             previousStatus: existing.status,
             now,
             recordAuditEvent,
           });
-          if (release.isErr()) {
-            return Result.err(release.error);
-          }
           await recordBillingCapCrossings(tx, {
             workspaceId,
             recordAuditEvent,

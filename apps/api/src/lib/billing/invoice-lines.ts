@@ -655,15 +655,14 @@ const calculateInvoiceAmounts = (
       calculated.error,
     );
   }
-  return calculated;
+  return calculated.value;
 };
 
 /** Invoice totals and VAT breakdown over the given lines. */
 const invoiceTotals = (
   lines: readonly LineAmountInput[],
   documentType: InvoiceDocumentType = "invoice",
-): Result<InvoiceTotals, HandlerError> =>
-  calculateInvoiceAmounts(lines, documentType).map(({ totals }) => totals);
+) => calculateInvoiceAmounts(lines, documentType).totals;
 
 type InvoiceForReadTotals = {
   documentType: InvoiceDocumentType;
@@ -765,30 +764,32 @@ type InvoiceForDocumentLines = Omit<InvoiceForReadTotals, "lines"> & {
 export const readInvoiceDocumentLines = (invoice: InvoiceForDocumentLines) => {
   const source = readInvoiceSourceLines(invoice);
   const sign = invoice.documentType === "credit_note" ? -1 : 1;
-  return calculateInvoiceAmounts(source, invoice.documentType).map(
-    ({ lines, totals }) => ({
-      lines: lines.map((line, index) => {
-        const billed =
-          source[index] ?? panic("A calculated line has no source line");
-        return {
-          ...line,
-          quantity: billed.quantity ?? null,
-          unit: billed.unit ?? null,
-          unitPrice:
-            billed.unitPrice === undefined
-              ? null
-              : cents(sign * Math.abs(billed.unitPrice) || 0),
-          timeEntryId: billed.timeEntryId ?? null,
-          expenseId: billed.expenseId ?? null,
-        };
-      }),
-      totals,
-    }),
+  const { lines, totals } = calculateInvoiceAmounts(
+    source,
+    invoice.documentType,
   );
+  return {
+    lines: lines.map((line, index) => {
+      const billed =
+        source[index] ?? panic("A calculated line has no source line");
+      return {
+        ...line,
+        quantity: billed.quantity ?? null,
+        unit: billed.unit ?? null,
+        unitPrice:
+          billed.unitPrice === undefined
+            ? null
+            : cents(sign * Math.abs(billed.unitPrice) || 0),
+        timeEntryId: billed.timeEntryId ?? null,
+        expenseId: billed.expenseId ?? null,
+      };
+    }),
+    totals,
+  };
 };
 
 export const readInvoiceTotals = (invoice: InvoiceForReadTotals) =>
-  readInvoiceAmounts(invoice).map(({ totals }) => totals);
+  readInvoiceAmounts(invoice).totals;
 
 /**
  * Recomputes the invoice's stored totals from all of its lines (a voided
@@ -861,24 +862,21 @@ export const recalculateInvoiceTotals = async (
     .from(invoiceLines)
     .where(and(eq(invoiceLines.invoiceId, scope.invoiceId)));
   const totals = invoiceTotals(lines, stored.documentType);
-  if (totals.isErr()) {
-    return Result.err(totals.error);
-  }
   const valid = await validateInvoiceDocument(tx, {
     invoiceId: scope.invoiceId,
     workspaceId: scope.workspaceId,
     documentType: stored.documentType,
     originalInvoiceId: stored.originalInvoiceId,
     currency: stored.currency,
-    totalAmount: totals.value.grossAmountMinor,
+    totalAmount: totals.grossAmountMinor,
   });
   if (valid.isErr()) {
     return Result.err(valid.error);
   }
   const next = {
-    netAmount: totals.value.netAmountMinor,
-    vatAmount: totals.value.vatAmountMinor,
-    totalAmount: totals.value.grossAmountMinor,
+    netAmount: totals.netAmountMinor,
+    vatAmount: totals.vatAmountMinor,
+    totalAmount: totals.grossAmountMinor,
   };
   await tx
     .update(invoices)
@@ -903,7 +901,7 @@ export const recalculateInvoiceTotals = async (
     workspaceId: scope.workspaceId,
     recordAuditEvent,
   });
-  return Result.ok(totals.value);
+  return Result.ok(totals);
 };
 
 /** Columns an invoice detail read returns for each line. */

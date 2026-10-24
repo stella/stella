@@ -50,19 +50,16 @@ const readInvoiceById = createSafeHandler(
     // for its attached entries until its first line edit materialises them
     // (`lockDraftInvoiceForLines`), and its totals count them in memory.
     const totals = readInvoiceTotals(invoice);
-    if (totals.isErr()) {
-      return Result.err(totals.error);
-    }
 
     return Result.ok({
       ...invoice,
-      netAmount: totals.value.netAmountMinor,
-      vatAmount: totals.value.vatAmountMinor,
+      netAmount: totals.netAmountMinor,
+      vatAmount: totals.vatAmountMinor,
       lines: invoice.lines.map((line) => ({
         ...line,
         releasedAt: line.releasedAt?.toISOString() ?? null,
       })),
-      totals: totals.value,
+      totals: totals,
       paidAt: invoice.paidAt?.toISOString() ?? null,
       finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),

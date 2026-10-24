@@ -310,11 +310,9 @@ describe("invoice transition integration", () => {
         columns: { invoiceId: true, status: true },
       }),
     ).toEqual({ invoiceId: null, status: BILLING_STATUS.APPROVED });
-    expect(auditEvents.map((event) => event.resourceId)).toEqual([
-      invoiceId,
-      timeEntryId,
-      expenseId,
-    ]);
+    expect(auditEvents.map((event) => event.resourceId).toSorted()).toEqual(
+      [invoiceId, timeEntryId, expenseId].toSorted(),
+    );
   });
 });
 

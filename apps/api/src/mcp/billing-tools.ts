@@ -1436,9 +1436,6 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       return notFoundResult("Invoice not found or not accessible");
     }
     const totals = readInvoiceTotals(invoiceRow);
-    if (totals.isErr()) {
-      return internalFailureResult(totals.error);
-    }
 
     const invoice = {
       id: invoiceRow.id,
@@ -1530,7 +1527,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         };
       }),
       lines: invoiceRow.lines.map(projectInvoiceLine),
-      totals: totals.value,
+      totals,
     };
 
     const textFields = runTextFieldSpecs(

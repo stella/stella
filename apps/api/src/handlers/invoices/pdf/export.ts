@@ -131,7 +131,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
           }),
         );
       }
-      const amounts = yield* readInvoiceDocumentLines(loaded.invoice);
+      const amounts = readInvoiceDocumentLines(loaded.invoice);
       const rendered = yield* Result.await(
         Result.tryPromise(
           async () =>

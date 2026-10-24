@@ -64,7 +64,9 @@ export function guardRunningTimeEntries(
 ): Promise<HandlerError | null>;
 export async function guardRunningTimeEntries(
   options: GuardRunningTimeEntriesOptions,
-) {
+): Promise<
+  Result<AcquiredInvoiceMatterLocks, HandlerError> | HandlerError | null
+> {
   const { tx, selection, actorUserId } = options;
   const refuse = (error: HandlerError) =>
     selection.type === "invoice" ? Result.err(error) : error;

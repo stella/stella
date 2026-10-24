@@ -88,6 +88,13 @@ afterEach(async () => {
 });
 afterAll(releaseRlsFixture);
 
+const recordAuditEvent = async (
+  _tx: unknown,
+  events: AuditEvent | AuditEvent[],
+) => {
+  auditEvents.push(...(Array.isArray(events) ? events : [events]));
+};
+
 const context = <TContext>(
   _handler: (context: TContext) => unknown,
   body: unknown,
@@ -108,13 +115,8 @@ const context = <TContext>(
     getWorkspaceAccess: async () => ({ id: ids.wsA2, status: "active" }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
     getAccessibleWorkspaces: async () => [{ id: ids.wsA2, status: "active" }],
-    recordAuditEvent: async (
-      _tx: unknown,
-      events: AuditEvent | AuditEvent[],
-    ) => {
-      auditEvents.push(...(Array.isArray(events) ? events : [events]));
-    },
-    createAuditRecorder: () => async () => {},
+    recordAuditEvent,
+    createAuditRecorder: () => recordAuditEvent,
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,

@@ -302,7 +302,7 @@ test.each([
           screen.getByRole("checkbox", {
             name: messages.billing.clientComposer.includeMatter.replace(
               "{matterName}",
-              LATER_NAME,
+              () => LATER_NAME,
             ),
           }),
         );

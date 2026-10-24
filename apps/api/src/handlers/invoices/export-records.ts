@@ -365,10 +365,7 @@ export const toExportRecords = (
       );
     }
     const amounts = readInvoiceDocumentLines(invoice);
-    if (amounts.isErr()) {
-      return Result.err(amounts.error);
-    }
-    const lines = exportLines({ invoice, amounts: amounts.value, loaded });
+    const lines = exportLines({ invoice, amounts, loaded });
     const invoiceMatters = [
       ...new Map(lines.map((line) => [line.matter.id, line.matter])).values(),
     ];
@@ -419,7 +416,7 @@ export const toExportRecords = (
         country: invoice.buyerCountry,
       }),
       lines,
-      totals: amounts.value.totals,
+      totals: amounts.totals,
     });
   }
   return Result.ok(records);

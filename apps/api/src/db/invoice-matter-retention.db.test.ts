@@ -185,9 +185,9 @@ test("the retention migration changes only foreign keys and keeps existing invoi
   const validations = CLIENT_INVOICE_CONSTRAINTS.filter(({ constraintName }) =>
     retainedNames.has(constraintName),
   );
-  expect(
+  expect([...retainedNames].toSorted()).toEqual(
     validations.map(({ constraintName }) => constraintName).toSorted(),
-  ).toEqual([...retainedNames].toSorted());
+  );
   expect(
     (
       await database.query<{ validated: boolean }>(
