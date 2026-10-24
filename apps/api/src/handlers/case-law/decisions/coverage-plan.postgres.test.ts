@@ -162,15 +162,24 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             statement.params,
           ),
         );
+        const planEvidence = JSON.stringify(
+          { query: statement.query, plan: root },
+          null,
+          2,
+        );
         const probes = scanOccurrences(root).filter(
           ({ index }) => index === COVERAGE_INDEX,
         );
-        expect(probes).toHaveLength(2);
+        expect(probes, planEvidence).toHaveLength(2);
         for (const probe of probes) {
-          expect(["Index Scan", "Index Only Scan"]).toContain(probe.nodeType);
+          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
+            probe.nodeType,
+          );
           // The endpoint limits and actual scan work are asserted below.
-          expect(probe.indexCond).toContain("source_id");
-          expect(probe.indexCond).toContain("decision_date IS NOT NULL");
+          expect(probe.indexCond, planEvidence).toContain("source_id");
+          expect(probe.indexCond, planEvidence).toContain(
+            "decision_date IS NOT NULL",
+          );
         }
         const endpointLimits = planNodes(root).filter(
           (node) =>
@@ -183,9 +192,9 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         const limits = endpointLimits.filter(
           (node) => node["Actual Loops"] === SOURCES,
         );
-        expect(limits).toHaveLength(2);
+        expect(limits, planEvidence).toHaveLength(2);
         for (const limit of limits) {
-          expect(limit["Actual Rows"]).toBe(1);
+          expect(limit["Actual Rows"], planEvidence).toBe(1);
           const nodes = planNodes(limit);
           expect(
             nodes.some((node) =>
@@ -193,12 +202,13 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
                 String(node["Node Type"]),
               ),
             ),
+            planEvidence,
           ).toBe(false);
           const scan =
             nodes.find((node) => node["Index Name"] === COVERAGE_INDEX) ??
             panic("Missing endpoint scan");
-          expect(scan["Actual Rows"]).toBe(1);
-          expect(scan["Actual Loops"]).toBe(SOURCES);
+          expect(scan["Actual Rows"], planEvidence).toBe(1);
+          expect(scan["Actual Loops"], planEvidence).toBe(SOURCES);
         }
         expect(
           new Set(
@@ -207,6 +217,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
               .filter((node) => node["Index Name"] === COVERAGE_INDEX)
               .map((node) => node["Scan Direction"]),
           ),
+          planEvidence,
         ).toEqual(new Set(["Forward", "Backward"]));
         expect(rows).toHaveLength(SOURCES);
         for (const row of rows) {
