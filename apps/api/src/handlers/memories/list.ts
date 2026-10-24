@@ -20,12 +20,25 @@ const DEFAULT_LIMIT = 50;
 const config = {
   featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  description:
+    "List the assistant memories you can see, newest first: firm-wide " +
+    "memory, your own, and memory of matters you can access. Archived " +
+    "memories are left out unless status asks for them. Narrow by scope " +
+    "(organization, user, workspace = a matter), status, or matterId.",
   // Memory is an AI-assistant capability; gate reads on chat access.
   // Row visibility (firm / own / accessible matters) is enforced by RLS,
   // so firm memory still reads org-wide for any chat-capable member.
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
+  // The `chat:create` gate is the caller floor, not the operation: this only
+  // reads.
+  access: "read",
   query: t.Object({
     scope: t.Optional(
       t.Union([
