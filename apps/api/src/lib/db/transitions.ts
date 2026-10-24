@@ -1838,14 +1838,19 @@ export const claimInvoiceExpenses = async (
 type ReleaseInvoiceTimeEntriesOptions = {
   matterLocks: AcquiredInvoiceMatterLocks;
   now: Date;
+  recordAuditEvent: AuditRecorder;
 };
 
 /** The caller retains the successful guard's timer-owner, matter and source-row locks. */
 export const releaseInvoiceTimeEntries = async (
   tx: Transaction,
-  { matterLocks: { invoiceId }, now }: ReleaseInvoiceTimeEntriesOptions,
-) =>
-  await tx
+  {
+    matterLocks: { invoiceId },
+    now,
+    recordAuditEvent,
+  }: ReleaseInvoiceTimeEntriesOptions,
+) => {
+  const reverted = await tx
     .update(timeEntries)
     .set({
       status: BILLING_STATUS.APPROVED,
@@ -1855,3 +1860,22 @@ export const releaseInvoiceTimeEntries = async (
     })
     .where(and(eq(timeEntries.invoiceId, invoiceId)))
     .returning({ id: timeEntries.id });
+  if (reverted.length === 0) {
+    return;
+  }
+  await recordAuditEvent(
+    tx,
+    reverted.map((row) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: invoiceId, new: null },
+      },
+    })),
+  );
+};

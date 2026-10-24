@@ -82,7 +82,6 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
   previousStatus: InvoiceStatus;
-  revertedTimeEntries: { id: SafeId<"timeEntry"> }[];
   revertedExpenses: { id: SafeId<"expense"> }[];
 }): AuditEvent[] => {
   const events: AuditEvent[] = [
@@ -95,20 +94,6 @@ const buildVoidEvents = (params: {
       },
     },
   ];
-  for (const row of params.revertedTimeEntries) {
-    events.push({
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-      resourceId: row.id,
-      changes: {
-        status: {
-          old: BILLING_STATUS.BILLED,
-          new: BILLING_STATUS.APPROVED,
-        },
-        invoiceId: { old: params.invoiceId, new: null },
-      },
-    });
-  }
   for (const row of params.revertedExpenses) {
     events.push({
       action: AUDIT_ACTION.UPDATE,
@@ -146,9 +131,10 @@ const releaseInvoiceEntries = async (
   const { invoiceId } = matterLocks;
   // The caller retains the successful guard's timer-owner, complete matter
   // and source-row locks; reacquiring them after the invoice would invert order.
-  const revertedTimeEntries = await releaseInvoiceTimeEntries(tx, {
+  await releaseInvoiceTimeEntries(tx, {
     matterLocks,
     now,
+    recordAuditEvent,
   });
 
   const revertedExpenses = await tx
@@ -178,7 +164,6 @@ const releaseInvoiceEntries = async (
     buildVoidEvents({
       invoiceId,
       previousStatus,
-      revertedTimeEntries,
       revertedExpenses,
     }),
   );

@@ -136,6 +136,6 @@ test.each([
           cwd: "scratch",
         },
       ),
-    ).toEqual(expected);
+    ).toEqual([...expected]);
   },
 );

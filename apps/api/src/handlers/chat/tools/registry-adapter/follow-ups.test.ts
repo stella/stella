@@ -268,7 +268,13 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
       const result = await runRegistryReadTool({
         args: {
           invoice_id: INV_UUID,
-          ...(matterSource === "explicit" ? { matter_id: WS_UUID } : {}),
+          ...(matterSource === "explicit"
+            ? {
+                matter_id: refRegistry.toMatterRef(
+                  toSafeId<"workspace">(WS_UUID),
+                ),
+              }
+            : {}),
         },
         context: buildContext(tx),
         refRegistry,

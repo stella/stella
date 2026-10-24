@@ -43,9 +43,9 @@ export const InvoicePdfDownloadButton = ({
               {
                 ...request,
                 headers: {
-                  ...request.headers,
                   "Accept-Language": locale,
                   "x-stella-formatting-locale": formattingLocale,
+                  ...request.headers,
                 },
                 fetch: { signal: AbortSignal.timeout(PDF_DOWNLOAD_TIMEOUT_MS) },
               },
