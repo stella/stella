@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import { env } from "@/api/env";
 import { logger } from "@/api/lib/observability/logger";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
@@ -80,7 +82,10 @@ export const boundActionRequest = async (
   maximum: number,
 ): Promise<Result<Request, ActionSizeError>> => {
   const length = request.headers.get("content-length");
-  if (length !== null && (!/^\d+$/u.test(length) || Number(length) > maximum)) {
+  if (
+    length !== null &&
+    parseIntegerToken(length, { sign: "unsigned", max: maximum }).isErr()
+  ) {
     return Result.err(requestTooLarge());
   }
   if (request.body === null) {

@@ -371,6 +371,72 @@ const countAsCasts: FileCounter = (content, { file }) => {
   return total;
 };
 
+const isObviousNumericCoercionLiteral = (node: ts.Expression): boolean => {
+  let expression = node;
+  while (ts.isParenthesizedExpression(expression)) {
+    expression = expression.expression;
+  }
+  if (
+    ts.isStringLiteralLike(expression) ||
+    ts.isNumericLiteral(expression) ||
+    ts.isBigIntLiteral(expression) ||
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    expression.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  return (
+    ts.isPrefixUnaryExpression(expression) &&
+    (expression.operator === ts.SyntaxKind.PlusToken ||
+      expression.operator === ts.SyntaxKind.MinusToken) &&
+    (ts.isNumericLiteral(expression.operand) ||
+      ts.isBigIntLiteral(expression.operand))
+  );
+};
+
+const countRawNumericCoercions: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  let total = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const isGlobalCoercion =
+        ts.isIdentifier(callee) &&
+        (callee.text === "Number" ||
+          callee.text === "parseInt" ||
+          callee.text === "parseFloat");
+      const isNumberParser =
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "Number" &&
+        (callee.name.text === "parseInt" || callee.name.text === "parseFloat");
+      const argument = node.arguments.at(0);
+      if (
+        (isGlobalCoercion || isNumberParser) &&
+        argument !== undefined &&
+        !isObviousNumericCoercionLiteral(argument)
+      ) {
+        total += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return total;
+};
+
+const RAW_NUMERIC_COERCION_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedRawNumericCoercionSource = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/scripts/") ||
+  file.includes("/evals/") ||
+  file === "packages/agent-input/src/numeric-token.ts";
+
 // `transition` is also an ordinary word and a discriminator value
 // (`kind: "transition"`), so it counts only in a class-list position.
 const BARE_TRANSITION_UTILITY = "transition";
@@ -3164,6 +3230,17 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "raw-numeric-coercions",
+    description:
+      "Number/parseInt/parseFloat calls on non-literal arguments in app and package source; syntax-only, so variable number/bigint conversions are conservatively counted; tests, generated files, scripts/evals, and numeric-token's parser are excluded; each file only shrinks",
+    include: RAW_NUMERIC_COERCION_SOURCE_GLOBS,
+    exclude: isExcludedRawNumericCoercionSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countRawNumericCoercions,
+  },
+  {
+    scope: "file",
     id: "legacy-paint-transitions",
     description:
       "Tailwind utilities and CSS declarations (in TS, CSS and .astro sources) that transition paint properties instead of transform/opacity; at 0 — keep it there",
@@ -4684,6 +4761,26 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
 ].join("\n");
 const EXPECTED_PACKAGE_AS_CASTS = 2;
 
+const SELF_TEST_RAW_NUMERIC_COERCIONS = [
+  "Number(amount)",
+  "parseInt(text, 10)",
+  "parseFloat(decimal)",
+  "Number.parseInt(text, 10)",
+  "Number.parseFloat(decimal)",
+  'Number("12")',
+  "Number(12)",
+  "Number(12n)",
+  "Number(true)",
+  "Number(null)",
+  "Number(-12)",
+  "Number(+12n)",
+  "schema.Number(amount)",
+  "other.parseInt(text)",
+  "// Number(amount) and parseInt(text)",
+  'const example = "Number(amount)";',
+].join("\n");
+const EXPECTED_RAW_NUMERIC_COERCIONS = 5;
+
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,
   `const helper = cn("rounded", active && "transition");`,
@@ -6072,6 +6169,61 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const rawNumericCoercionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "raw-numeric-coercions";
+  const metric = RATCHET_METRICS.find((entry) => entry.id === id);
+  const measured = requireSnapshot(snapshot, id);
+  if (metric?.scope !== "file") {
+    return [`${id} is not registered as a file metric`];
+  }
+  if (metric.growth !== "shrink-only" || metric.perFile !== true) {
+    failures.push(`${id} is not per-file shrink-only`);
+  }
+  if (measured.count !== EXPECTED_RAW_NUMERIC_COERCIONS) {
+    failures.push(
+      `${id} counted ${measured.count}, expected ${EXPECTED_RAW_NUMERIC_COERCIONS}`,
+    );
+  }
+  for (const file of [
+    "apps/web/src/raw-numeric-coercions.test.ts",
+    "apps/web/src/raw-numeric-coercions.gen.ts",
+    "apps/web/src/scripts/raw-numeric-coercions.ts",
+    "packages/example/src/evals/raw-numeric-coercions.ts",
+    "packages/agent-input/src/numeric-token.ts",
+  ]) {
+    if (file in measured.files) {
+      failures.push(`${id} counted excluded source ${file}`);
+    }
+  }
+  const newCall = "Number(variable)";
+  const after = metric.count(`${SELF_TEST_RAW_NUMERIC_COERCIONS}\n${newCall}`, {
+    file: "apps/web/src/raw-numeric-coercions.ts",
+    role: "head",
+  });
+  const change = diffMetric(
+    id,
+    {
+      count: after,
+      files: { "apps/web/src/raw-numeric-coercions.ts": after },
+    },
+    {
+      count: EXPECTED_RAW_NUMERIC_COERCIONS,
+      files: {
+        "apps/web/src/raw-numeric-coercions.ts": EXPECTED_RAW_NUMERIC_COERCIONS,
+      },
+    },
+    metricGate(metric),
+  );
+  if (
+    after !== EXPECTED_RAW_NUMERIC_COERCIONS + 1 ||
+    change.status !== "regressed"
+  ) {
+    failures.push(`${id} did not reject a newly added Number(variable) call`);
+  }
+  return failures;
+};
+
 const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
@@ -6512,6 +6664,36 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
+      "apps/web/src/raw-numeric-coercions.ts",
+      SELF_TEST_RAW_NUMERIC_COERCIONS,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.test.ts",
+      "Number(testValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.gen.ts",
+      "Number(generatedValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/scripts/raw-numeric-coercions.ts",
+      "Number(scriptValue)",
+    );
+    writeFixture(
+      root,
+      "packages/example/src/evals/raw-numeric-coercions.ts",
+      "Number(evalValue)",
+    );
+    writeFixture(
+      root,
+      "packages/agent-input/src/numeric-token.ts",
+      "Number(tokenValue)",
+    );
+    writeFixture(
+      root,
       "apps/web/src/legacy-paint-transitions.tsx",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS,
     );
@@ -6918,6 +7100,7 @@ const runSelfTest = (): number => {
     failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
     failures.push(...asCastSelfTestFailures(snapshot));
+    failures.push(...rawNumericCoercionSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 

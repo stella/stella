@@ -33,6 +33,7 @@
     "./country": "./src/country.ts",
     "./date-value": "./src/date-value.ts",
     "./locale": "./src/locale.ts",
+    "./numeric-token": "./src/numeric-token.ts",
     "./string-list": "./src/string-list.ts"
   },
   "publishConfig": {
