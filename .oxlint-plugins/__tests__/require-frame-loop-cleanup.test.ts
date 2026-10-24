@@ -112,7 +112,7 @@ test("requires an effect-started frame loop to cancel in the cleanup", async () 
       [
         "useExternalSyncEffect(() => {",
         "  let frame = 0;",
-        "  let cleanup = () => {};",
+        "  const cleanup = () => cancelAnimationFrame(frame);",
         "  const sync = () => {",
         "    if (editor === null) {",
         "      frame = requestAnimationFrame(sync);",
@@ -121,7 +121,7 @@ test("requires an effect-started frame loop to cancel in the cleanup", async () 
         "    apply(editor);",
         "  };",
         "  sync();",
-        "  cleanup = () => cancelAnimationFrame(frame);",
+        "",
         "  return cleanup;",
         "}, [editor]);",
         "useMountEffect(() => {",
@@ -388,4 +388,156 @@ test("effect ownership follows invoked cleanup helpers, not dormant closures", a
   expect(results.slice(0, dormant.length)).toEqual([[1], [1], [1]]);
   expect(results.slice(dormant.length, -1)).toEqual([[], [], [], []]);
   expect(results.at(-1)).not.toEqual([]);
+});
+
+test("effect cleanup ownership covers every reachable path and immutable alias", async () => {
+  const cases = [
+    [
+      "let cleanup = () => clearInterval(id); cleanup = () => {}; return cleanup;",
+      false,
+    ],
+    [
+      "function cleanup() { clearInterval(id); } cleanup = () => {}; return cleanup;",
+      false,
+    ],
+    [
+      "let stop = () => clearInterval(id); stop = () => {}; return () => stop();",
+      false,
+    ],
+    [
+      "let stop = () => clearInterval(id); const alias = stop; stop = () => {}; return alias;",
+      false,
+    ],
+    [
+      "let cleanup = () => {}; if (ready()) cleanup = () => clearInterval(id); return cleanup;",
+      false,
+    ],
+    [
+      "const stop = () => clearInterval(id); const alias = stop; return alias;",
+      true,
+    ],
+    [
+      "function stop() { clearInterval(id); } const alias = stop; return () => alias();",
+      true,
+    ],
+    ["if (ready()) return () => {}; return () => clearInterval(id);", false],
+    ["if (ready()) return; return () => clearInterval(id);", false],
+    [
+      "if (ready()) return () => clearInterval(id); return () => clearInterval(id);",
+      true,
+    ],
+    ["return () => { if (ready()) clearInterval(id); };", false],
+    ["return () => { if (ready()) return; clearInterval(id); };", false],
+    [
+      "return () => { if (ready()) clearInterval(id); else clearInterval(id); };",
+      true,
+    ],
+    [
+      "return () => { if (ready()) { clearInterval(id); return; } clearInterval(id); };",
+      true,
+    ],
+    ["return () => { if (!id) return; clearInterval(id); };", true],
+    ["return () => id && clearInterval(id);", true],
+    ["return () => { if (id !== 0) clearInterval(id); };", true],
+    ["return () => ready() && clearInterval(id);", false],
+    ["const unused = () => consume(id); return () => {};", false],
+    ["return () => { const unused = () => consume(id); };", false],
+    ["return () => { if (ready()) consume(id); };", false],
+    ["return () => consume(id);", true],
+    ["consume(id); return () => {};", true],
+    ["if (ready()) consume(id); return () => {};", false],
+    ["return () => ready() ? clearInterval(id) : undefined;", false],
+    ["return () => { while (ready()) clearInterval(id); };", false],
+    [
+      "return () => { try { throw failure; } finally { clearInterval(id); } };",
+      true,
+    ],
+    [
+      "return () => { try { throw failure; } catch { clearInterval(id); } };",
+      true,
+    ],
+    [
+      "return () => { try { if (ready()) return; } finally { clearInterval(id); } };",
+      true,
+    ],
+    [
+      "return () => { try { while (true) {} } finally { clearInterval(id); } };",
+      false,
+    ],
+    [
+      "return () => { function stop() { return; } stop(); clearInterval(id); };",
+      true,
+    ],
+    [
+      "return () => { function stop() { throw failure; } stop(); clearInterval(id); };",
+      false,
+    ],
+    [
+      "return () => { function stop() { stop(); clearInterval(id); } stop(); };",
+      false,
+    ],
+    ["function* cleanup() { clearInterval(id); } return cleanup;", false],
+    ["return async () => { await wait(); clearInterval(id); };", false],
+    ["return async () => { clearInterval(id); await wait(); };", true],
+    [
+      "return () => { async function flush() { await wait(); } flush(); clearInterval(id); };",
+      true,
+    ],
+    [
+      "return () => { async function flush() { throw failure; } flush(); clearInterval(id); };",
+      true,
+    ],
+    [
+      "const stop = () => clearInterval(id); return () => { const unused = () => stop(); };",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([body]) =>
+      lintSingleRule(
+        RULE,
+        `useEffect(() => { const id = setInterval(tick, 10); ${body} }, []);`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
+});
+
+test("an earlier handle handoff does not own a subsequently started timer", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      "useEffect(() => { let id; consume(id); id = setInterval(tick, 10); return () => {}; }, []);",
+    ),
+  ).not.toEqual([]);
+});
+
+test("effect-started component frame loops belong to that effect cleanup", async () => {
+  const cases = [
+    [
+      "useMountEffect(() => { frame.current = requestAnimationFrame(tick); }); const onClick = () => cancelAnimationFrame(frame.current);",
+      false,
+    ],
+    [
+      "useMountEffect(() => { frame.current = requestAnimationFrame(tick); return () => cancelAnimationFrame(frame.current); });",
+      true,
+    ],
+    [
+      "useMountEffect(() => { frame.current = requestAnimationFrame(() => tick()); }); const onClick = () => cancelAnimationFrame(frame.current);",
+      false,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(async ([start]) =>
+      lintSingleRule(
+        RULE,
+        `const Comp = () => { const frame = { current: 0 }; const tick = () => { if (visible()) frame.current = requestAnimationFrame(tick); }; ${start} };`,
+      ),
+    ),
+  );
+  expect(results.map((lines) => lines.length === 0)).toEqual(
+    cases.map(([, owned]) => owned),
+  );
 });

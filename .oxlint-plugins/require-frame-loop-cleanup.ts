@@ -48,6 +48,7 @@ import {
   isAstNode,
   isIdentifier,
   isIdentifierReference,
+  isSingleAssignment,
   resolveVariable,
   stableInitializer,
   unwrapExpression,
@@ -355,30 +356,35 @@ const sourceText = (context: LoopContext, node: AstNode): string =>
 // The function a callback expression names: an inline function, a function
 // declaration, or a never-reassigned function binding.
 const functionFor = (context: LoopContext, node: unknown): AstNode | null => {
-  const expression = unwrapExpression(node);
-  if (expression === null) {
-    return null;
+  let expression = unwrapExpression(node);
+  const visited = new Set<Variable>();
+  while (expression !== null) {
+    if (FUNCTION_TYPES.has(expression.type)) {
+      return expression;
+    }
+    if (!isIdentifierReference(expression)) {
+      return null;
+    }
+    const variable = resolveVariable(context, expression);
+    if (
+      variable === null ||
+      visited.has(variable) ||
+      !isSingleAssignment(variable)
+    ) {
+      return null;
+    }
+    visited.add(variable);
+    const definition = variable.defs.at(0);
+    if (
+      variable.defs.length === 1 &&
+      definition?.type === "FunctionName" &&
+      isFunctionNode(definition.node)
+    ) {
+      return definition.node;
+    }
+    expression = unwrapExpression(stableInitializer(variable));
   }
-  if (isFunctionNode(expression)) {
-    return expression;
-  }
-  if (!isIdentifierReference(expression)) {
-    return null;
-  }
-  const variable = resolveVariable(context, expression);
-  if (variable === null) {
-    return null;
-  }
-  const definition = variable.defs.at(0);
-  if (
-    variable.defs.length === 1 &&
-    definition?.type === "FunctionName" &&
-    isFunctionNode(definition.node)
-  ) {
-    return definition.node;
-  }
-  const initializer = stableInitializer(variable);
-  return isFunctionNode(initializer) ? initializer : null;
+  return null;
 };
 
 // The function a named call invokes, or null for any other call.
@@ -411,27 +417,23 @@ const frameLoopFunction = (
   return enclosing.find((candidate) => called.has(candidate)) ?? null;
 };
 
-// A binding returned or handed to another function transfers ownership of
-// the handle.
-const bindingHandle = (context: LoopContext, variable: Variable): Handle => {
-  const transferred = variable.references.some((reference) => {
+// A handle handed to another function transfers ownership only when that
+// handoff executes. A reference inside a dormant closure does not own it.
+const bindingTransfers = (context: LoopContext, variable: Variable): Cancel[] =>
+  variable.references.flatMap((reference) => {
     const identifier: unknown = reference.identifier;
     if (!isAstNode(identifier)) {
-      return false;
+      return [];
     }
     const parent = parentOf(identifier);
-    if (parent?.type === "ReturnStatement") {
-      return true;
-    }
-    return (
-      parent?.type === "CallExpression" &&
-      callArguments(parent).includes(identifier) &&
-      !isGlobalCall(context, parent, CANCEL_NAMES.frame) &&
-      !isGlobalCall(context, parent, CANCEL_NAMES.interval)
-    );
+    return parent?.type === "ReturnStatement" ||
+      (parent?.type === "CallExpression" &&
+        callArguments(parent).includes(identifier) &&
+        !isGlobalCall(context, parent, CANCEL_NAMES.frame) &&
+        !isGlobalCall(context, parent, CANCEL_NAMES.interval))
+      ? [{ argument: identifier, node: parent }]
+      : [];
   });
-  return transferred ? { kind: "transferred" } : { kind: "binding", variable };
-};
 
 const assignedHandle = (
   context: LoopContext,
@@ -439,7 +441,7 @@ const assignedHandle = (
 ): Handle | null => {
   if (isIdentifierReference(target)) {
     const variable = resolveVariable(context, target);
-    return variable === null ? null : bindingHandle(context, variable);
+    return variable === null ? null : { kind: "binding", variable };
   }
   return target?.type === "MemberExpression"
     ? { kind: "member", text: sourceText(context, target) }
@@ -511,63 +513,318 @@ const cancelsHandle = (
   );
 };
 
-// The functions an effect returns: inline, or bound to a returned name.
-const returnedFunctions = (
-  context: LoopContext,
-  effect: AstNode,
-): AstNode[] => {
-  const returned: AstNode[] = [];
+// Every possible cleanup must own the handle. Bare early returns before the
+// start do not matter; an unknown cleanup after it fails closed.
+type ReturnedFunctionsOptions = {
+  context: LoopContext;
+  effect: AstNode;
+  start: AstNode;
+};
+
+const returnedFunctions = ({
+  context,
+  effect,
+  start,
+}: ReturnedFunctionsOptions): (AstNode | null)[] => {
   const body = unwrapExpression(effect.body);
-  if (effect.type === "ArrowFunctionExpression" && isFunctionNode(body)) {
-    returned.push(body);
+  if (
+    effect.type === "ArrowFunctionExpression" &&
+    body?.type !== "BlockStatement"
+  ) {
+    return [functionFor(context, body)];
   }
-  for (const node of everyNode(effect.body)) {
+  return everyNode(effect.body).flatMap((node) => {
     if (
       node.type !== "ReturnStatement" ||
       enclosingFunctions(node).at(0) !== effect
     ) {
-      continue;
+      return [];
     }
-    const value = unwrapExpression(node.argument);
-    if (isFunctionNode(value)) {
-      returned.push(value);
-    } else if (isIdentifierReference(value)) {
-      const declared = functionFor(context, value);
-      if (declared !== null) {
-        returned.push(declared);
-      }
-      const variable = resolveVariable(context, value);
-      for (const reference of variable?.references ?? []) {
-        const written = unwrapExpression(reference.writeExpr);
-        if (isFunctionNode(written)) {
-          returned.push(written);
-        }
-      }
+    const returned = functionFor(context, node.argument);
+    if (returned === null && node.range[0] < start.range[0]) {
+      return [];
     }
-  }
-  return returned;
+    return [returned];
+  });
 };
 
-// Functions an effect returns as its cleanup, plus functions those cleanups
-// call by name.
-const cleanupFunctions = (context: LoopContext, effect: AstNode): AstNode[] => {
-  const cleanups = new Set(returnedFunctions(context, effect));
-  // Iterating the growing set follows invoked helpers once, including cycles.
-  for (const cleanup of cleanups) {
-    for (const node of everyNode(cleanup.body)) {
-      if (
-        node.type !== "CallExpression" ||
-        enclosingFunctions(node).at(0) !== cleanup
-      ) {
-        continue;
+type CleanupProof = {
+  context: LoopContext;
+  handle: Handle;
+  cancels: Cancel[];
+  visiting: ReadonlySet<AstNode>;
+  completed: Map<AstNode, ReadonlySet<UncancelledPath>>;
+};
+type CleanupTruth = "truthy" | "falsy" | "unknown";
+type UncancelledPath =
+  "continues" | "returns" | "throws" | "blocks" | "suspends";
+
+const handleTruth = (proof: CleanupProof, node: unknown): CleanupTruth => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return "unknown";
+  }
+  const matchesHandle = (argument: AstNode) =>
+    cancelsHandle(proof.context, { argument, node: argument }, proof.handle);
+  if (matchesHandle(expression)) {
+    return "truthy";
+  }
+  if (expression.type === "Literal" && typeof expression.value === "boolean") {
+    return expression.value ? "truthy" : "falsy";
+  }
+  if (expression.type === "UnaryExpression" && expression.operator === "!") {
+    const truth = handleTruth(proof, expression.argument);
+    return truth === "unknown"
+      ? truth
+      : truth === "truthy"
+        ? "falsy"
+        : "truthy";
+  }
+  if (expression.type === "BinaryExpression") {
+    const left = unwrapExpression(expression.left);
+    const right = unwrapExpression(expression.right);
+    const absent = (value: AstNode | null) =>
+      value !== null &&
+      ((value.type === "Literal" &&
+        (value.value === 0 || value.value === null)) ||
+        isGlobalName(proof.context, value, "undefined"));
+    if (
+      (left !== null && matchesHandle(left) && absent(right)) ||
+      (right !== null && matchesHandle(right) && absent(left))
+    ) {
+      if (expression.operator === "!==" || expression.operator === "!=") {
+        return "truthy";
       }
-      const called = functionFor(context, node.callee);
-      if (called !== null) {
-        cleanups.add(called);
+      if (expression.operator === "===" || expression.operator === "==") {
+        return "falsy";
       }
     }
   }
-  return [...cleanups];
+  return "unknown";
+};
+
+const continueCleanupPaths = (
+  paths: Set<UncancelledPath>,
+  evaluate: () => Set<UncancelledPath>,
+): Set<UncancelledPath> => {
+  if (!paths.has("continues")) {
+    return paths;
+  }
+  const remaining = new Set(paths);
+  remaining.delete("continues");
+  for (const path of evaluate()) {
+    remaining.add(path);
+  }
+  return remaining;
+};
+
+const cleanupExpressionPaths = (
+  proof: CleanupProof,
+  node: unknown,
+): Set<UncancelledPath> => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return new Set(["continues"]);
+  }
+  if (expression.type === "CallExpression") {
+    let paths = new Set<UncancelledPath>(["continues"]);
+    for (const argument of callArguments(expression)) {
+      paths = continueCleanupPaths(paths, () =>
+        cleanupExpressionPaths(proof, argument),
+      );
+    }
+    return continueCleanupPaths(paths, () => {
+      if (proof.cancels.some((cancel) => cancel.node === expression)) {
+        return new Set();
+      }
+      const called = functionFor(proof.context, expression.callee);
+      return called === null
+        ? new Set(["continues"])
+        : new Set(
+            [...cleanupFunctionPaths(proof, called)].map((path) =>
+              path === "returns" ||
+              (called.async === true &&
+                (path === "suspends" || path === "throws"))
+                ? "continues"
+                : path,
+            ),
+          );
+    });
+  }
+  if (expression.type === "ConditionalExpression") {
+    return continueCleanupPaths(
+      cleanupExpressionPaths(proof, expression.test),
+      () => {
+        const truth = handleTruth(proof, expression.test);
+        if (truth !== "unknown") {
+          return cleanupExpressionPaths(
+            proof,
+            truth === "truthy" ? expression.consequent : expression.alternate,
+          );
+        }
+        return new Set([
+          ...cleanupExpressionPaths(proof, expression.consequent),
+          ...cleanupExpressionPaths(proof, expression.alternate),
+        ]);
+      },
+    );
+  }
+  if (expression.type === "LogicalExpression") {
+    return continueCleanupPaths(
+      cleanupExpressionPaths(proof, expression.left),
+      () => {
+        const truth = handleTruth(proof, expression.left);
+        const right = () => cleanupExpressionPaths(proof, expression.right);
+        if (truth === "unknown") {
+          return new Set(["continues", ...right()]);
+        }
+        return (expression.operator === "&&" && truth === "truthy") ||
+          (expression.operator === "||" && truth === "falsy")
+          ? right()
+          : new Set(["continues"]);
+      },
+    );
+  }
+  if (
+    expression.type === "SequenceExpression" &&
+    Array.isArray(expression.expressions)
+  ) {
+    let paths = new Set<UncancelledPath>(["continues"]);
+    for (const part of expression.expressions) {
+      paths = continueCleanupPaths(paths, () =>
+        cleanupExpressionPaths(proof, part),
+      );
+    }
+    return paths;
+  }
+  if (expression.type === "AwaitExpression") {
+    return new Set(
+      [...cleanupExpressionPaths(proof, expression.argument)].map((path) =>
+        path === "continues" ? "suspends" : path,
+      ),
+    );
+  }
+  if (
+    expression.type === "UnaryExpression" ||
+    expression.type === "SpreadElement"
+  ) {
+    return cleanupExpressionPaths(proof, expression.argument);
+  }
+  if (expression.type === "AssignmentExpression") {
+    return cleanupExpressionPaths(proof, expression.right);
+  }
+  return new Set(["continues"]);
+};
+
+// Only uncancelled paths remain. Safe branches disappear; returns, throws,
+// loops and suspension cannot be repaired by a later unreachable cancel.
+const cleanupPaths = (
+  proof: CleanupProof,
+  node: unknown,
+): Set<UncancelledPath> => {
+  if (!isAstNode(node)) {
+    return new Set(["continues"]);
+  }
+  if (node.type === "BlockStatement" && Array.isArray(node.body)) {
+    let paths = new Set<UncancelledPath>(["continues"]);
+    for (const statement of node.body) {
+      paths = continueCleanupPaths(paths, () => cleanupPaths(proof, statement));
+    }
+    return paths;
+  }
+  if (node.type === "IfStatement") {
+    return continueCleanupPaths(
+      cleanupExpressionPaths(proof, node.test),
+      () => {
+        const truth = handleTruth(proof, node.test);
+        if (truth !== "unknown") {
+          return cleanupPaths(
+            proof,
+            truth === "truthy" ? node.consequent : node.alternate,
+          );
+        }
+        return new Set([
+          ...cleanupPaths(proof, node.consequent),
+          ...cleanupPaths(proof, node.alternate),
+        ]);
+      },
+    );
+  }
+  if (node.type === "TryStatement") {
+    let paths = cleanupPaths(proof, node.block);
+    if (paths.has("throws") && isAstNode(node.handler)) {
+      paths.delete("throws");
+      paths = new Set([...paths, ...cleanupPaths(proof, node.handler.body)]);
+    }
+    if (isAstNode(node.finalizer)) {
+      const final = cleanupPaths(proof, node.finalizer);
+      paths = new Set(
+        [...paths].flatMap((path) =>
+          path === "blocks" || path === "suspends"
+            ? [path]
+            : [...final].map((after) => (after === "continues" ? path : after)),
+        ),
+      );
+    }
+    return paths;
+  }
+  if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
+    return new Set(
+      [...cleanupExpressionPaths(proof, node.argument)].map((path) =>
+        path === "continues"
+          ? node.type === "ReturnStatement"
+            ? "returns"
+            : "throws"
+          : path,
+      ),
+    );
+  }
+  if (
+    CONDITIONAL_PARENTS.has(node.type) ||
+    node.type === "SwitchStatement" ||
+    node.type === "BreakStatement" ||
+    node.type === "ContinueStatement"
+  ) {
+    return new Set(["continues", "blocks"]);
+  }
+  const expressions =
+    node.type === "ExpressionStatement"
+      ? [node.expression]
+      : node.type === "VariableDeclaration" && Array.isArray(node.declarations)
+        ? node.declarations.flatMap((declaration) =>
+            isAstNode(declaration) ? [declaration.init] : [],
+          )
+        : [];
+  let paths = new Set<UncancelledPath>(["continues"]);
+  for (const expression of expressions) {
+    paths = continueCleanupPaths(paths, () =>
+      cleanupExpressionPaths(proof, expression),
+    );
+  }
+  return paths;
+};
+
+const cleanupFunctionPaths = (
+  proof: CleanupProof,
+  fn: AstNode,
+): Set<UncancelledPath> => {
+  if (proof.visiting.has(fn)) {
+    return new Set(["blocks"]);
+  }
+  if (fn.generator === true) {
+    return new Set(["continues"]);
+  }
+  const cached = proof.completed.get(fn);
+  if (cached !== undefined) {
+    return new Set(cached);
+  }
+  const nested = { ...proof, visiting: new Set([...proof.visiting, fn]) };
+  const paths =
+    isAstNode(fn.body) && fn.body.type === "BlockStatement"
+      ? cleanupPaths(nested, fn.body)
+      : cleanupExpressionPaths(nested, fn.body);
+  proof.completed.set(fn, new Set(paths));
+  return paths;
 };
 
 // `start`'s loop body is `loopBody`; the effect enclosing `effectAnchor`,
@@ -590,16 +847,44 @@ const isOwned = (
   if (handle.kind === "transferred") {
     return true;
   }
-  const effect = enclosingEffect(effectAnchor);
-  const owners = effect === null ? null : cleanupFunctions(context, effect);
-  return cancels.some(
+  const transfers =
+    handle.kind === "binding" ? bindingTransfers(context, handle.variable) : [];
+  const matching = [...cancels, ...transfers].filter(
     (cancel) =>
       cancelsHandle(context, cancel, handle) &&
-      (loopBody === null || !isWithin(cancel.node, loopBody)) &&
-      (owners === null ||
-        owners.some(
-          (owner) => enclosingFunctions(cancel.node).at(0) === owner,
-        )),
+      (loopBody === null || !isWithin(cancel.node, loopBody)),
+  );
+  const effect = enclosingEffect(effectAnchor);
+  if (effect === null) {
+    return matching.length > 0;
+  }
+  const proof: CleanupProof = {
+    context,
+    handle,
+    cancels: matching,
+    visiting: new Set(),
+    completed: new Map(),
+  };
+  const startupTransfers = transfers.filter(
+    (transfer) =>
+      transfer.node.range[0] > start.range[1] &&
+      (loopBody === null || !isWithin(transfer.node, loopBody)),
+  );
+  if (
+    cleanupPaths(
+      { ...proof, cancels: startupTransfers, completed: new Map() },
+      effect.body,
+    ).size === 0
+  ) {
+    return true;
+  }
+  const returned = returnedFunctions({ context, effect, start });
+  return (
+    returned.length > 0 &&
+    returned.every(
+      (cleanup) =>
+        cleanup !== null && cleanupFunctionPaths(proof, cleanup).size === 0,
+    )
   );
 };
 
@@ -875,7 +1160,7 @@ const frameLoopReports = (
     for (const call of calls) {
       if (
         !isOwned(context, cancels.frame, {
-          effectAnchor: loop,
+          effectAnchor: call,
           loopBody: loop,
           start: call,
         })
