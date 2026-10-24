@@ -59,4 +59,5 @@ export const feedbackRoute = new Elysia({ prefix: "/v1/feedback" })
   .post("/", createFeedbackReport.handler, {
     body: createFeedbackReport.config.body,
     permissions: createFeedbackReport.config.permissions,
+    accountAccess: createFeedbackReport.config.accountAccess,
   });

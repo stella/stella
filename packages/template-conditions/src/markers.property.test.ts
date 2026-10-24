@@ -8,12 +8,12 @@ import {
   classifyMarker,
   classifyMarkerDefect,
   DIRECTIVE_KINDS,
+  type DirectiveKind,
   FILTER_NAMES,
   LOOP_PROPERTIES,
+  type MarkerMeta,
   scanInvalidMarkers,
   scanMarkers,
-  type DirectiveKind,
-  type MarkerMeta,
 } from "./markers.js";
 
 // One generated marker: the authored text and the metadata it must classify

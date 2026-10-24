@@ -4,8 +4,8 @@ import fc from "fast-check";
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
-  TEXT_ABSENCE_REASONS,
   TEXT_ABSENCE_REASON,
+  TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 import { propertyConfig } from "@stll/property-testing";
 

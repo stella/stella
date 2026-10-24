@@ -19,10 +19,12 @@ const authenticatedCatalogueRoute = new Elysia({ prefix: "/catalogue" })
   .guard({ validateAuth: true })
   .get("/", listCatalogue.handler, {
     permissions: listCatalogue.config.permissions,
+    accountAccess: listCatalogue.config.accountAccess,
   })
   .post("/install-skill", installBundledSkill.handler, {
     body: installBundledSkill.config.body,
     permissions: installBundledSkill.config.permissions,
+    accountAccess: installBundledSkill.config.accountAccess,
   });
 
 export const catalogueRoute = new Elysia()

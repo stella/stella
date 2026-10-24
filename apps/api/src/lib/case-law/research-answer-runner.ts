@@ -11,10 +11,10 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  publishedCaseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -29,8 +29,8 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
-  ResearchAnswerClaim,
   ResearchAnswerCell,
+  ResearchAnswerClaim,
 } from "@/api/lib/case-law/research-answer-queue";
 import {
   buildAnswerJustification,

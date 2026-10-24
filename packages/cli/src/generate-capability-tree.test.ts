@@ -4,10 +4,10 @@ import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
-  type CatalogTransport,
   capabilityCommandPath,
-  formatCapabilityCommand,
+  type CatalogTransport,
   deriveCapabilityLeaf,
+  formatCapabilityCommand,
   insertCapabilities,
   isCatalogTransportInvocable,
 } from "./generate-capability-tree.js";

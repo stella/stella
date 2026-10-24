@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -73,8 +73,7 @@ const UNRECOGNIZED_STATE = { status: "unrecognized" } as const;
  * below without a case.
  */
 type ReadDerivativeState =
-  | NonNullable<DerivativeState>
-  | typeof UNRECOGNIZED_STATE;
+  NonNullable<DerivativeState> | typeof UNRECOGNIZED_STATE;
 
 const storedDerivativeStateSchema = v.union([
   v.object({ status: v.literal("not-required") }),

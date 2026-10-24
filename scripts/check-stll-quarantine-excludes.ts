@@ -3,17 +3,18 @@
  *
  * 1. Every first-party `@stll/*` package the lockfile resolves from npm must
  *    be excluded and record when that permanent exclusion began.
- * 2. A temporary third-party exclusion annotated with
- *    `# quarantine-expires: <timestamp>` must be removed once Bun's release-age
- *    gate can take over again.
+ * 2. A temporary third-party exclusion carries an exact
+ *    `# quarantine-expires: <timestamp>` annotation, removed once Bun's
+ *    release-age gate can take over again.
  *
- * An expiry is a wall-clock instant, so failing at that instant turns every
- * open branch red at once for a change nobody made. Removal is automatic
- * instead: `quarantine-prune.yml` runs `--prune` hourly and opens the PR that
- * deletes the entry. An expired entry is therefore only a warning while that
- * PR waits to be merged, and fails once it has been ignored past the window.
- * It has to fail eventually: a stale exclude is not inert, because the next
- * version of that package published would skip the quarantine unnoticed.
+ * This guard checks the annotations' shape, never their expiry. An expiry is
+ * a wall-clock instant, so failing at that instant would turn every open
+ * branch red at once for a change nobody made. Instead the expiry has owners
+ * that cannot: `quarantine-prune.yml` runs `--prune` hourly and opens the PR
+ * that deletes the entry, scripts/dated-waivers.ts inventories it, and
+ * scripts/check-lockfile-release-ages.ts stops exempting the package once its
+ * entry has expired, so a stale exclude cannot let the next version of that
+ * package skip the quarantine.
  *
  * The 5-day quarantine is a supply-chain control for third-party code. First-
  * party packages publish continuously, so they are excluded by name. The
@@ -36,7 +37,6 @@ import path from "node:path";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
-const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
 const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
 export const RELEASE_AGE_EXCEPTION_SOURCES = ["docker-compose.yml"] as const;
@@ -362,22 +362,6 @@ export const readReleaseAgeExceptions = (
   return { entries, errors };
 };
 
-const readReleaseAgeExceptionErrors = (
-  sources: Readonly<Record<string, string>>,
-  now: Date,
-): string[] => {
-  const parsed = readReleaseAgeExceptions(sources);
-  return [
-    ...parsed.errors,
-    ...parsed.entries
-      .filter((entry) => Date.parse(entry.expiresAt) <= now.getTime())
-      .map(
-        (entry) =>
-          `${entry.source}:${entry.line} release-age quarantine exception expired at ${entry.expiresAt}`,
-      ),
-  ];
-};
-
 export type TemporaryExclude = {
   name: string;
   expiresAt: string;
@@ -507,7 +491,7 @@ export const checkQuarantineExcludes = ({
     ...temporary.errors,
     ...readDuplicateExcludeErrors(bunfig),
     ...readExcludeAnnotationErrors(bunfig, now),
-    ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources, now),
+    ...readReleaseAgeExceptions(releaseAgeExceptionSources).errors,
   ];
 
   if (missing.length > 0) {
@@ -521,20 +505,6 @@ export const checkQuarantineExcludes = ({
         `is blocked is skipped silently, so the failure surfaces at runtime ` +
         `rather than at install.`,
     );
-  }
-
-  const nowMs = now.getTime();
-  for (const { expiresAt, name } of temporary.entries) {
-    const expiresAtMs = Date.parse(expiresAt);
-
-    if (nowMs >= expiresAtMs) {
-      errors.push(
-        `${BUNFIG} temporary quarantine exclude "${name}" expired at ${expiresAt} ` +
-          `and is still here. Remove it (\`bun ${SCRIPT_PATH} --prune\`): the ` +
-          `release-age gate admits the package on its own now, and leaving the ` +
-          `entry lets the next version of it publish straight past the quarantine.`,
-      );
-    }
   }
 
   return {
@@ -642,7 +612,7 @@ const main = () => {
   console.log(
     `${BUNFIG}: ${result.excludeCount} quarantine excludes cover all ` +
       `${result.firstPartyCount} registry-backed first-party packages; ` +
-      `${result.activeTemporaryCount} temporary exclude(s) remain active.`,
+      `${result.activeTemporaryCount} temporary exclude(s) are listed.`,
   );
 };
 

@@ -18,8 +18,8 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/
 import {
   ADD_MATTER_MEMBER_PROJECTION,
   REMOVE_MATTER_MEMBER_PROJECTION,
-  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
+  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
@@ -46,10 +46,10 @@ import {
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
+  legalCitationLinkFields,
   nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  legalCitationLinkFields,
   uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
