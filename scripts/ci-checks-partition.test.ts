@@ -350,7 +350,11 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
       return `${prefix} \\\n${kept.map((line) => line.replace(/[ \t]*\\$/u, "")).join(" \\\n")}`;
     },
   );
-const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
+// A migration test must also hold once its migration is on the base:
+// CI_CHECKS_PARTITION_BASE=HEAD compares the head with itself.
+const mergeBase =
+  process.env["CI_CHECKS_PARTITION_BASE"] ??
+  git(["merge-base", "origin/main", "HEAD"]);
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
 }).transformSync(
@@ -1361,15 +1365,6 @@ test("code-quality pool preserves every moved check exactly once", () => {
     "API timeout mutation guard",
     "Result consumption (rest)",
   ];
-  const originalSteps = v.parse(
-    headJobSchema,
-    baseJobs["code-quality-web-rest"],
-  ).steps;
-  const originals = originalSteps.filter(({ name }) =>
-    movedNames.includes(name),
-  );
-  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
-
   const withoutPoolMetadata = (step: Record<string, unknown>) => {
     const normalized = { ...step };
     // An ordinary step's implicit success() is `!cancelled()` in the pool.
@@ -1400,9 +1395,40 @@ test("code-quality pool preserves every moved check exactly once", () => {
     return normalized;
   };
 
+  // Before the move the merge base runs these checks inline; once it lands,
+  // the base schema expands the base pool. Either way the head's pool
+  // preserves the base's checks.
+  const originals = v
+    .parse(headJobSchema, baseJobs["code-quality-web-rest"])
+    .steps.filter(({ name }) => movedNames.includes(name))
+    .map(withoutPoolMetadata);
+  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
+
   expect(pooled.map(({ name }) => name)).toEqual(movedNames);
-  expect(pooled.map(withoutPoolMetadata)).toEqual(originals);
+  // A merge base may already carry the pool; normalize both sides alike.
+  expect(pooled.map(withoutPoolMetadata)).toEqual(
+    originals.map(withoutPoolMetadata),
+  );
 });
+
+// A migration-shape test that reads the old shape from the merge base fails
+// main once its own migration lands there. Every test here must also pass
+// with the head as its own base.
+test.skipIf(process.env["CI_CHECKS_PARTITION_BASE"] !== undefined)(
+  "every partition test also holds once its migration is on the base",
+  () => {
+    const run = Bun.spawnSync(
+      ["bun", "test", "./scripts/ci-checks-partition.test.ts"],
+      {
+        cwd: repository,
+        env: { ...process.env, CI_CHECKS_PARTITION_BASE: "HEAD" },
+      },
+    );
+    expect(run.stderr.toString()).toContain(" 0 fail");
+    expect(run.exitCode).toBe(0);
+  },
+  60_000,
+);
 
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>
