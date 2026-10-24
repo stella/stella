@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
 
 import { epochMilliseconds } from "@/connection/clock";
+import { TokenError } from "@/connection/errors";
 import {
   deviceCrypto,
   deviceSessionStore,
@@ -85,7 +86,27 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       if (Result.isError(signedIn)) {
         return Result.err(signedIn.error);
       }
-      await deviceSessionStore.write(signedIn.value.session);
+      const { session } = signedIn.value;
+      const stored = await Result.tryPromise({
+        try: async () => {
+          await deviceSessionStore.write(session);
+        },
+        catch: (cause) =>
+          new TokenError({
+            message: "The keychain refused the session",
+            cause,
+          }),
+      });
+      if (Result.isError(stored)) {
+        // A grant the phone cannot keep is one nobody can use; give it back.
+        await revokeRefreshToken({
+          clientId: session.clientId,
+          fetch,
+          refreshToken: session.refreshToken,
+          revocationEndpoint: session.revocationEndpoint,
+        });
+        return Result.err(stored.error);
+      }
       setState({
         status: "signed-in",
         source: sourceFor(signedIn.value.session, signedIn.value.access),
@@ -103,7 +124,11 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
           revocationEndpoint: session.revocationEndpoint,
         });
       }
-      await deviceSessionStore.clear();
+      // The refresh token is revoked already, so a session the keychain
+      // keeps fails its first refresh and ends; signing out still happens.
+      await Result.tryPromise(async () => {
+        await deviceSessionStore.clear();
+      });
       setState({ status: "signed-out", ended: false });
     },
     end: () => {
