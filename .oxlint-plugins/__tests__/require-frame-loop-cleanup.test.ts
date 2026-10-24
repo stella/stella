@@ -49,6 +49,15 @@ test("effects own directly invoked component frame helpers", async () => {
   const cases = [
     ["useMountEffect(() => { tick(); });", false],
     ["useMountEffect(() => { tick(); return stop; });", true],
+    ["useMountEffect(() => { tick(); tick(); return stop; });", false],
+    ["useMountEffect(() => { tick(); stop(); tick(); return stop; });", true],
+    [
+      "const twice=()=>{tick();tick();}; useMountEffect(()=>{twice();return stop;});",
+      false,
+    ],
+    ["useMountEffect(()=>{if(ready())tick();else tick();return stop;});", true],
+    ["useMountEffect(()=>{for(let i=0;i<2;i++)tick();return stop;});", false],
+
     ["const alias = tick; useMountEffect(() => { alias(); });", false],
     ["const begin = () => tick(); useMountEffect(() => { begin(); });", false],
     [
@@ -68,6 +77,26 @@ test("effects own directly invoked component frame helpers", async () => {
   expect(results.map((lines) => lines.length === 0)).toEqual(
     cases.map(([, owned]) => owned),
   );
+});
+
+test("repeated frame starts distinguish one factory instance from distinct allocations", async () => {
+  const factory = (starts: string) =>
+    `const factory=()=>{const frame={current:0};const tick=()=>{if(visible())frame.current=requestAnimationFrame(tick);};${starts}return()=>cancelAnimationFrame(frame.current);};`;
+  const cases = [
+    [factory("tick();tick();") + "useMountEffect(()=>factory());", false],
+    [
+      factory("tick();") +
+        "useMountEffect(()=>{const first=factory();const second=factory();return()=>{first();second();};});",
+      true,
+    ],
+  ] as const;
+  const results = await Promise.all(
+    cases.map(
+      async ([code]) =>
+        (await lintSingleRule(RULE, `const Comp=()=>{${code}};`)).length === 0,
+    ),
+  );
+  expect(results).toEqual(cases.map(([, owned]) => owned));
 });
 
 test("effects own invoked component interval helpers", async () => {

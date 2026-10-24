@@ -1767,17 +1767,29 @@ const frameLoopReports = (
       continue;
     }
     if (enclosingEffect(loop) === null) {
+      const repeated = calls.some(
+        (start) =>
+          isWithin(start, loop) &&
+          hasUncancelledRepeatedInvocation({
+            context,
+            cancels: cancels.frame,
+            start,
+            owner: loop,
+            invocations: effectInvocations,
+          }),
+      );
       for (const invocation of effectInvocations) {
         if (
           invokesFunction(context, invocation, loop) &&
           calls.some(
             (start) =>
               isWithin(start, loop) &&
-              !isOwned(context, cancels.frame, {
-                effectAnchor: invocation,
-                loopBody: loop,
-                start,
-              }),
+              (repeated ||
+                !isOwned(context, cancels.frame, {
+                  effectAnchor: invocation,
+                  loopBody: loop,
+                  start,
+                })),
           )
         ) {
           reports.push({
@@ -1803,7 +1815,7 @@ const frameLoopReports = (
   return reports;
 };
 
-type IntervalInvocationOptions = {
+type LoopInvocationOptions = {
   context: LoopContext;
   invocation: AstNode;
   target: AstNode;
@@ -1811,15 +1823,15 @@ type IntervalInvocationOptions = {
   budget: { remaining: number };
 };
 
-const MAX_INTERVAL_INVOCATION_PATHS = 64;
+const MAX_LOOP_INVOCATION_PATHS = 64;
 
-const intervalInvocationPaths = ({
+const loopInvocationPaths = ({
   context,
   invocation,
   target,
   visiting = new Set(),
   budget,
-}: IntervalInvocationOptions): AstNode[][] | null => {
+}: LoopInvocationOptions): AstNode[][] | null => {
   if (budget.remaining <= 0) {
     return null;
   }
@@ -1833,7 +1845,7 @@ const intervalInvocationPaths = ({
     paths.push([invocation]);
   } else {
     for (const call of directFunctionCalls(called)) {
-      const nested = intervalInvocationPaths({
+      const nested = loopInvocationPaths({
         context,
         invocation: call,
         target,
@@ -1842,7 +1854,7 @@ const intervalInvocationPaths = ({
       });
       if (
         nested === null ||
-        paths.length + nested.length > MAX_INTERVAL_INVOCATION_PATHS
+        paths.length + nested.length > MAX_LOOP_INVOCATION_PATHS
       ) {
         return null;
       }
@@ -1867,7 +1879,7 @@ const intervalInvocationPaths = ({
         "DoWhileStatement",
       ].includes(parent.type)
     ) {
-      return paths.length * 2 > MAX_INTERVAL_INVOCATION_PATHS
+      return paths.length * 2 > MAX_LOOP_INVOCATION_PATHS
         ? null
         : [...paths, ...paths];
     }
@@ -1875,7 +1887,7 @@ const intervalInvocationPaths = ({
   return paths;
 };
 
-type RepeatedIntervalInvocationOptions = {
+type RepeatedLoopInvocationOptions = {
   context: LoopContext;
   cancels: Cancel[];
   start: AstNode;
@@ -1889,24 +1901,25 @@ const hasUncancelledRepeatedInvocation = ({
   start,
   owner,
   invocations,
-}: RepeatedIntervalInvocationOptions): boolean => {
+}: RepeatedLoopInvocationOptions): boolean => {
   const handle = handleOf(context, start);
   if (handle === null || handle.kind === "transferred") {
     return false;
   }
   const variable =
     handle.kind === "binding" ? handle.variable : handle.rootVariable;
-  if (
-    variable.defs.some(
-      (definition) =>
-        isAstNode(definition.node) &&
-        isWithin(definition.node, owner) &&
-        (handle.kind === "binding" ||
-          ["ObjectExpression", "ArrayExpression"].includes(
-            unwrapExpression(definition.node.init)?.type ?? "",
-          )),
-    )
-  ) {
+  const declaration =
+    variable.defs.length === 1 ? variable.defs.at(0)?.node : null;
+  const freshOwner =
+    isAstNode(declaration) &&
+    (handle.kind === "binding" ||
+      (isSingleAssignment(variable) &&
+        ["ObjectExpression", "ArrayExpression"].includes(
+          unwrapExpression(declaration.init)?.type ?? "",
+        )))
+      ? enclosingFunctions(declaration).at(0)
+      : undefined;
+  if (freshOwner === owner) {
     return false;
   }
   const proof: CleanupProof = {
@@ -1922,9 +1935,9 @@ const hasUncancelledRepeatedInvocation = ({
     return false;
   }
   const paths: AstNode[][] = [];
-  const budget = { remaining: MAX_INTERVAL_INVOCATION_PATHS };
+  const budget = { remaining: MAX_LOOP_INVOCATION_PATHS };
   for (const invocation of invocations) {
-    const nested = intervalInvocationPaths({
+    const nested = loopInvocationPaths({
       context,
       invocation,
       target: owner,
@@ -1932,7 +1945,7 @@ const hasUncancelledRepeatedInvocation = ({
     });
     if (
       nested === null ||
-      paths.length + nested.length > MAX_INTERVAL_INVOCATION_PATHS
+      paths.length + nested.length > MAX_LOOP_INVOCATION_PATHS
     ) {
       return true;
     }
@@ -1954,6 +1967,18 @@ const hasUncancelledRepeatedInvocation = ({
       );
       if (divergence < 0) {
         return true;
+      }
+      // Only divergence before entering the allocation owner creates two instances.
+      if (
+        freshOwner !== undefined &&
+        [left, right].every((path) => {
+          const allocation = path.findIndex(
+            (call) => namedCallTarget(context, call) === freshOwner,
+          );
+          return allocation >= divergence;
+        })
+      ) {
+        continue;
       }
       const earlier = left[divergence];
       const later = right[divergence];
