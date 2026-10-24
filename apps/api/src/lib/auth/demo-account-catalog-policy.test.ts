@@ -67,6 +67,7 @@ const requiresStandardResourceWrite = (permissions: Record<string, string[]>) =>
 const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/account-exports/create.ts",
   "apps/api/src/handlers/account-exports/download.ts",
+  "apps/api/src/handlers/account-exports/download/get.ts",
   "apps/api/src/handlers/account-exports/get.ts",
   "apps/api/src/handlers/account-exports/status/get.ts",
   "apps/api/src/handlers/agent-auth/confirm.ts",
@@ -184,6 +185,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
 const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
   "apps/api/src/handlers/account-exports/create.ts",
   "apps/api/src/handlers/account-exports/download.ts",
+  "apps/api/src/handlers/account-exports/download/get.ts",
   "apps/api/src/handlers/account-exports/get.ts",
   "apps/api/src/handlers/account-exports/status/get.ts",
   "apps/api/src/handlers/agent-auth/confirm.ts",

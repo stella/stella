@@ -10,12 +10,15 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import Elysia from "elysia";
 
 import { oauthClient, oauthConsent, session } from "@/api/db/auth-schema";
+import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
 import { agentAuthConfirmRoute } from "@/api/handlers/agent-auth/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { meRoute } from "@/api/handlers/me/routes";
-import { getAuth } from "@/api/lib/auth";
+import { createAccountExportAuthMacro, getAuth } from "@/api/lib/auth";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import { HANDOFF_AUTH_ENDPOINT_POLICY } from "@/api/lib/auth/handoff-auth-endpoint-policy";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
@@ -104,6 +107,17 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       query: { disableCookieCache: true },
     });
     expect(stored?.session.originConsentId).toBe(consentId);
+    expect(accountExportsRoute.routes).not.toHaveLength(0);
+    for (const { method, path } of accountExportsRoute.routes) {
+      await expectStepUp(
+        await accountExportsRoute.handle(
+          new Request(
+            `http://localhost${path.replaceAll(":exportId", () => Bun.randomUUIDv7())}`,
+            { method, headers },
+          ),
+        ),
+      );
+    }
     await expectStepUp(
       await meRoute.handle(
         new Request(`http://localhost/me/oauth-connections/${consentId}`, {
@@ -188,6 +202,42 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       }),
     );
     expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  test("a cached account snapshot cannot revive a revoked export session", async () => {
+    const human = await createHumanSession({
+      email: `export-revoked-session-${Bun.randomUUIDv7()}@stella.dev`,
+      orgName: "Organization",
+      orgSlugPrefix: "export-revoked-session",
+    });
+    const snapshot = await getAuth().api.getSession({
+      headers: human.browser.headers(),
+      returnHeaders: true,
+    });
+    if (snapshot.response === null) {
+      panic("Expected the signed-in account snapshot");
+    }
+    const sessionId = snapshot.response.session.id;
+    await getAuth().api.signOut({ headers: human.browser.headers() });
+    expect(
+      await db
+        .select({ id: session.id })
+        .from(session)
+        .where(eq(session.id, sessionId)),
+    ).toEqual([]);
+
+    const app = new Elysia()
+      .use(createAccountExportAuthMacro({ getSession: async () => snapshot }))
+      .get("/export", () => ({ authenticated: true }), {
+        validateAccountExport: "read",
+        accountAccess: ACCOUNT_ACCESS.accountControl,
+      });
+    const response = await app.handle(
+      new Request("http://localhost/export", {
+        headers: human.browser.headers(),
+      }),
+    );
+    expect(response.status).toBe(401);
   });
 
   test("server-only authentication helpers retain their own refusal", async () => {

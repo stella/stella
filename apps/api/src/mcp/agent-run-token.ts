@@ -52,6 +52,8 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   "stella:billing_write": "excluded",
   "stella:admin_read": "excluded",
   "stella:admin_write": "excluded",
+  "stella:account_export_read": "excluded",
+  "stella:account_export_write": "excluded",
   "stella:onboarding": "excluded",
   "stella:skills": "default",
   "stella:external_mcps": "excluded",

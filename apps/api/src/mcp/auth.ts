@@ -2,6 +2,7 @@ import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resourc
 import { Result } from "better-result";
 import type { JWTPayload } from "jose";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
 
 import {
@@ -25,6 +26,10 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import {
+  getMcpResourceScopes,
+  MCP_MODES,
+} from "@/api/mcp/resource-policy-contract";
 
 export type McpSession = {
   userId: string;
@@ -279,6 +284,45 @@ export const authenticateMcpRequest = async (
           ...(verifyToken === undefined ? {} : { verifyToken }),
         })
       ).andThen(extractMcpSession);
+  return authenticated.map((session) =>
+    narrowReviewOrganizationScopes(session, reviewAccount),
+  );
+};
+
+/** Only resource audiences advertising account consent may deliver exports. */
+export const authenticateAccountExportRequest = async (
+  bearerToken: string,
+  {
+    verifyToken,
+    reviewAccount = getReviewAccountConfig(),
+  }: {
+    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+    reviewAccount?: Pick<ReviewAccountConfig, "organizationId">;
+  } = {},
+): Promise<Result<McpSession, McpAuthenticationFailure>> => {
+  if (isMachineApiKeyCredential(bearerToken)) {
+    return Result.err(
+      new McpAuthenticationError({
+        message: "Account exports require OAuth consent",
+      }),
+    );
+  }
+  const audiences = MCP_MODES.filter((mode) =>
+    getMcpResourceScopes(mode).some(
+      (scope) => scope === ACCOUNT_EXPORT_SCOPES.read,
+    ),
+  ).map((mode) => getMcpResourceUrl(mode));
+  const options = getMcpAccessTokenVerificationOptions();
+  const authenticated = (
+    await Result.tryPromise({
+      try: async () =>
+        await (verifyToken ?? getVerifyBearerToken())(bearerToken, {
+          ...options,
+          verifyOptions: { ...options.verifyOptions, audience: audiences },
+        }),
+      catch: classifyMcpTokenVerificationError,
+    })
+  ).andThen(extractMcpSession);
   return authenticated.map((session) =>
     narrowReviewOrganizationScopes(session, reviewAccount),
   );

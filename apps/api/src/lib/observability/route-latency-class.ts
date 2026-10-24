@@ -250,6 +250,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/me/data-exports/": "crud",
   "GET /v1/me/data-exports/:exportId": "crud",
   "GET /v1/me/data-exports/:exportId/download": "crud",
+  "GET /v1/me/data-exports/:exportId/download-link": "crud",
   "GET /v1/me/delete/pending-tasks": "crud",
   "GET /v1/me/oauth-connections": "crud",
   "GET /v1/me/professional-use": "crud",

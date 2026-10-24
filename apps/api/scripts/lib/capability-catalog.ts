@@ -1579,6 +1579,7 @@ export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
  * there, and that is correct.
  */
 const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
+  "stella:account_export_write": "stella:account_export_read",
   "stella:admin_write": "stella:admin_read",
   "stella:billing_write": "stella:read",
   "stella:contacts_write": "stella:read",

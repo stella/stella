@@ -73,6 +73,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
+import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 
@@ -587,6 +588,8 @@ function ProfilePageBody() {
       <TwoFactorCard />
 
       <SessionsCard />
+
+      <PersonalDataExportCard />
 
       <Frame className="border-destructive/32">
         <FrameHeader>

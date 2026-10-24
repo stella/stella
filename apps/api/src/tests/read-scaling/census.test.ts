@@ -12,6 +12,7 @@ import {
   ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { decisionSummaryScalingScenario } from "./decision-summary";
@@ -38,6 +39,7 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  accountExportDownloadScalingScenario,
   ...claimCommentScalingScenarios,
 ];
 const measuredApiReads = api.routes

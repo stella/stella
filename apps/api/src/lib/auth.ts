@@ -90,6 +90,7 @@ import {
 } from "@/api/lib/auth-adapter-options";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
+import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
@@ -331,11 +332,13 @@ import {
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
+import type { authenticateAccountExportRequest } from "@/api/mcp/auth";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
+import { McpTokenVerificationError } from "@/api/mcp/errors";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
@@ -890,6 +893,14 @@ const MEMBERSHIP_UPDATE_FAILED = failureSink({
 });
 const MEMBERSHIP_REMOVAL_FAILED = failureSink({
   event: "auth.membership_removal_failed",
+  expected: [],
+});
+const ACCOUNT_EXPORT_VERIFICATION_FAILED = failureSink({
+  event: "auth.account_export_verification_failed",
+  expected: [],
+});
+const ACCOUNT_EXPORT_MEMBERSHIP_READ_FAILED = failureSink({
+  event: "auth.account_export_membership_read_failed",
   expected: [],
 });
 
@@ -2694,7 +2705,9 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
-type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set">;
+type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set"> & {
+  getSession?: AuthSessionReader | undefined;
+};
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -2708,9 +2721,10 @@ const resolveSessionAuth = async ({
   status,
   request,
   set,
+  getSession = readAuthSession,
 }: ResolveSessionAuthOptions) => {
   const sessionResult = await Result.tryPromise(async () => {
-    const resolved = await getAuth().api.getSession({
+    const resolved = await getSession({
       headers: request.headers,
       returnHeaders: true,
     });
@@ -2796,6 +2810,110 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
     detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
     beforeHandle: createHandoffStepUpGuard({ accountAccess }),
   }));
+
+type AccountExportAuthDependencies = {
+  authenticate?: typeof authenticateAccountExportRequest;
+  resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+  getSession?: AuthSessionReader;
+};
+
+/** Export OAuth grants are accepted only on this account-specific surface. */
+export const createAccountExportAuthMacro = ({
+  authenticate,
+  resolveAuthorization,
+  getSession,
+}: AccountExportAuthDependencies = {}) =>
+  new Elysia({
+    name: "accountExportAuthMacro",
+  })
+    .macro({
+      validateAccountExport: (access: "read" | "write") => ({
+        async resolve({ status, request, set }) {
+          const authorizationHeader = request.headers.get("authorization");
+          if (authorizationHeader !== null) {
+            const match = /^Bearer ([^\s]+)$/iu.exec(authorizationHeader);
+            const token = match?.at(1);
+            if (token === undefined) {
+              return status(401, AUTH_REJECTION_BODY[401]);
+            }
+            // Load the OAuth verifier at the request boundary; it imports this
+            // owner's authorization reader and must not initialize during auth setup.
+            const authenticateToken =
+              authenticate ??
+              (await import("@/api/mcp/auth")).authenticateAccountExportRequest;
+            const authenticated = await authenticateToken(token);
+            if (Result.isError(authenticated)) {
+              if (McpTokenVerificationError.is(authenticated.error)) {
+                observeFailure(authenticated.error, {
+                  sink: ACCOUNT_EXPORT_VERIFICATION_FAILED,
+                  request,
+                });
+                return status(500, AUTH_REJECTION_BODY[500]);
+              }
+              return status(401, AUTH_REJECTION_BODY[401]);
+            }
+            const session = authenticated.value;
+            if (
+              !hasAccountExportAuthority(
+                {
+                  credential: session.credential,
+                  grantedScopes: session.scopes,
+                },
+                access,
+              )
+            ) {
+              return status(403, AUTH_REJECTION_BODY[403]);
+            }
+            const userId = toSafeId<"user">(session.userId);
+            const memberResult = await Result.tryPromise(
+              async () =>
+                await (
+                  resolveAuthorization ?? resolveCredentialMemberAuthorization
+                )({
+                  organizationId: brandPersistedOrganizationId(
+                    session.organizationId,
+                  ),
+                  userId,
+                }),
+            );
+            if (Result.isError(memberResult)) {
+              observeFailure(memberResult.error, {
+                sink: ACCOUNT_EXPORT_MEMBERSHIP_READ_FAILED,
+                request,
+              });
+              return status(500, AUTH_REJECTION_BODY[500]);
+            }
+            const memberAuthorization = memberResult.value;
+            if (
+              memberAuthorization === null ||
+              memberAuthorization.userDeleted ||
+              (session.memberId !== undefined &&
+                session.memberId !== memberAuthorization.memberId)
+            ) {
+              return status(401, AUTH_REJECTION_BODY[401]);
+            }
+            enrichRequestContext(request, { posthogDistinctId: userId });
+            return {
+              handoffOriginConsentId: null,
+              user: { id: userId, email: memberAuthorization.email },
+            };
+          }
+
+          return await resolveSessionAuth({
+            getSession,
+            status,
+            request,
+            set,
+          });
+        },
+      }),
+    })
+    .macro("accountAccess", (accountAccess: AccountAccess) => ({
+      detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
+      beforeHandle: createHandoffStepUpGuard({ accountAccess }),
+    }));
+
+export const accountExportAuthMacro = createAccountExportAuthMacro();
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can

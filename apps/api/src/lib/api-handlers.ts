@@ -562,6 +562,11 @@ export type SessionHandlerConfig = InputSchema &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
     mcp: McpExposure;
+    /**
+     * Session handlers run outside an organization scope, so they can only
+     * state that a successful call announces no resource sets.
+     */
+    realtime?: NoResourceSetUpdates;
   };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<

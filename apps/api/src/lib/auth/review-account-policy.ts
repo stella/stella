@@ -292,6 +292,8 @@ export const resolveReviewAccountBodyEmailOperation = ({
 
 /** Scopes a token for the review organization never carries. */
 export const REVIEW_ACCOUNT_EXCLUDED_SCOPES = [
+  "stella:account_export_read",
+  "stella:account_export_write",
   "stella:admin_read",
   "stella:admin_write",
   "stella:billing_write",

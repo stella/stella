@@ -18,6 +18,10 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
+import {
+  hasAccountExportAuthority,
+  isAccountExportScope,
+} from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -884,13 +888,18 @@ const capabilityFeatureEnabled = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
-  entry.featureAccess === "conditional" ||
-  isMcpDescriptorFeatureEnabled({
-    context,
-    kind: "capabilities",
-    id: entry.id,
-    featureId: entry.featureId,
-  });
+  (!(
+    capabilityDomain(entry.id) === "account-exports" ||
+    requiredScopesOf(entry).some(isAccountExportScope)
+  ) ||
+    hasAccountExportAuthority(context, entry.access)) &&
+  (entry.featureAccess === "conditional" ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id: entry.id,
+      featureId: entry.featureId,
+    }));
 
 export const accessibleFeatureCapabilityIds = async (
   context: McpRequestContext,
@@ -898,6 +907,7 @@ export const accessibleFeatureCapabilityIds = async (
   (await getCatalog())
     .filter(
       (entry) =>
+        capabilityFeatureEnabled(entry, context) &&
         resolveMcpDescriptorFeatureId({
           context,
           kind: "capabilities",
