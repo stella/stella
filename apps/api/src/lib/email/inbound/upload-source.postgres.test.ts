@@ -13,11 +13,11 @@ import {
   correspondence,
   correspondenceAttachments,
   correspondenceSources,
-  workspaceMembers,
   entities,
   entityVersions,
   fields,
   properties,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";

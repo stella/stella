@@ -9,7 +9,7 @@
 import * as asn1js from "asn1js";
 import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
-import { parseXmlDocument, type Element } from "slimdom";
+import { type Element, parseXmlDocument } from "slimdom";
 
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 import {
