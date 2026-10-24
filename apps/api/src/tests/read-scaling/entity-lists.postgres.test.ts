@@ -7,6 +7,7 @@ import { entities } from "@/api/db/schema";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { formatFieldContent } from "@/api/lib/views/export-format";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -134,9 +135,36 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const small = await seedEntityReadScaling(db, 10);
         const large = await seedEntityReadScaling(db, 200);
         try {
-          const at10 = await small.measure("visible");
-          const at200 = await large.measure("visible");
-          const allFields = await large.measure("full");
+          const at10 = await small.measure({
+            fieldMode: "visible",
+            textMode: "preview",
+          });
+          const at200 = await large.measure({
+            fieldMode: "visible",
+            textMode: "preview",
+          });
+          const allFields = await large.measure({
+            fieldMode: "full",
+            textMode: "preview",
+          });
+          const exportFields = await large.measure({
+            fieldMode: "visible",
+            textMode: "full",
+          });
+          for (const row of exportFields.entities) {
+            const field =
+              row.fields.at(0) ??
+              panic("Full export fixture requires a selected text field");
+            expect(field.content).toEqual({
+              version: 1,
+              type: "text",
+              value: large.textValue,
+            });
+            expect(formatFieldContent(field.content, "en")).toBe(
+              large.textValue,
+            );
+          }
+
           console.info(
             JSON.stringify({
               entityList: {

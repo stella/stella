@@ -61,6 +61,7 @@ export const createReadEntitiesHandler = (
           limit: body.limit,
           queryEntitiesImpl,
           query: {
+            textMode: "preview",
             safeDb,
             scope: { type: "matter", workspaceId },
             currentUserId: currentUser.id,

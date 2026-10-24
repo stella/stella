@@ -146,6 +146,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
         rows.map(({ id }) => id),
       ),
     );
+  const textValue = "x".repeat(512 + size * 4);
   const fieldRows = rows.flatMap(({ versionId }) =>
     propertyIds.map((propertyId) => ({
       id: createSafeId<"field">(),
@@ -155,7 +156,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
       content: {
         version: 1 as const,
         type: "text" as const,
-        value: "x".repeat(512 + size * 4),
+        value: textValue,
       },
     })),
   );
@@ -179,7 +180,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
       content: {
         version: 1 as const,
         type: "text" as const,
-        value: "x".repeat(512 + size * 4),
+        value: textValue,
       },
     })),
   );
@@ -191,6 +192,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
   return {
     db,
     size,
+    textValue,
     organizationId,
     userId,
     workspaceId,
@@ -210,13 +212,19 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
       await db.delete(organization).where(eq(organization.id, organizationId));
       await db.delete(user).where(eq(user.id, userId));
     },
-    measure: async (
-      fieldMode: "full" | "visible",
+    measure: async ({
+      fieldMode,
+      textMode,
       selected = propertyIds.slice(0, 1),
-    ) =>
+    }: {
+      fieldMode: "full" | "visible";
+      textMode: "full" | "preview";
+      selected?: typeof propertyIds;
+    }) =>
       await runWithMeasuredQueryCounter(async (counter) => {
         const result = (
           await queryEntities({
+            textMode,
             safeDb,
             scope: { type: "matter", workspaceId },
             currentUserId: userId,

@@ -563,7 +563,10 @@ const InlineTextEditor = ({
       dir={contentDir(state.draft)}
       onBlur={() => {
         const trimmed = state.draft.trim();
-        if (trimmed !== state.originalValue) {
+        if (
+          state.draft !== state.originalValue &&
+          trimmed !== state.originalValue
+        ) {
           onSave(trimmed);
         }
         setState({ status: "display" });

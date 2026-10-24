@@ -4,7 +4,10 @@ import path from "node:path";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import api from "@/api/server";
 
-import { runLedgerMembershipGuard } from "../../../../../scripts/ledger-membership";
+import {
+  ledgerMergeBase,
+  runLedgerMembershipGuard,
+} from "../../../../../scripts/ledger-membership";
 import apiLedger from "./api-scaling-ledger.json";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
@@ -119,7 +122,10 @@ for (const { kind, surface, ledger, measured } of [
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",
-          args: ["--base", "origin/main"],
+          args: [
+            "--base",
+            ledgerMergeBase({ repoRoot, baseRef: "origin/main" }),
+          ],
         }),
       ).toBe(0);
     });

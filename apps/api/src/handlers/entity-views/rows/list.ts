@@ -151,6 +151,7 @@ const listRows = createSafeRootHandler(
           };
     const result = yield* Result.await(
       queryEntities({
+        textMode: "preview",
         safeDb,
         scope,
         currentUserId: user.id,

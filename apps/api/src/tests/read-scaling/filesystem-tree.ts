@@ -48,6 +48,7 @@ export const measureCompleteFilesystemTree = async (
   await runWithMeasuredQueryCounter(async (counter) => {
     const result = (
       await queryEntities({
+        textMode: "full",
         safeDb: large.safeDb,
         scope: { type: "matter", workspaceId: large.workspaceId },
         currentUserId: large.userId,

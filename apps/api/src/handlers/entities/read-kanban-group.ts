@@ -93,6 +93,7 @@ const readKanbanGroup = createSafeHandler(
     );
     const result = yield* Result.await(
       queryEntities({
+        textMode: "preview",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: currentUser.id,

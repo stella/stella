@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseRepeatedSqlFingerprintLedger } from "./check-repeated-sql-fingerprints-ledger.ts";
-import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
+import {
+  addedEntries,
+  ledgerMergeBase,
+  runLedgerMembershipGuard,
+} from "./ledger-membership.ts";
 
 const ledgerPath =
   "apps/api/src/lib/observability/repeated-sql-fingerprints.json";
@@ -27,11 +31,7 @@ test("repeated SQL callsite ledger starts empty and can only shrink", () => {
   expect(addedEntries(members(2), members(3))).toEqual([]);
   expect(addedEntries(members(3), members(2))).toEqual(["callsite::3"]);
 
-  const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
-    cwd: repoRoot,
-    stderr: "pipe",
-  });
-  expect(base.exitCode).toBe(0);
+  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
   expect(
     runLedgerMembershipGuard({
       ledgerRel: ledgerPath,
@@ -39,7 +39,7 @@ test("repeated SQL callsite ledger starts empty and can only shrink", () => {
       parseLedger: parseRepeatedSqlFingerprintLedger,
       label: "repeated-sql-fingerprints",
       remediation: "remove repeats or reduce recorded repeat counts",
-      args: ["--base", base.stdout.toString().trim()],
+      args: ["--base", base],
       log: () => undefined,
       error: () => undefined,
     }),
