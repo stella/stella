@@ -1079,10 +1079,15 @@ const GENERATOR_DECLARATIONS = [
       ".agents/skills/**/SKILL.md",
       ".claude/skills/**/SKILL.md",
     ],
-    inputs: [".ai/manifest.json", ".ai/local/**", ".ai/shared"],
+    inputs: [
+      ".ai/manifest.json",
+      ".ai/local/**",
+      ".ai/local-skills/**",
+      ".ai/shared",
+    ],
     write: ["bun", "run", "sync-ai"],
     check: ["bash", ".ai/shared/scripts/sync-ai-skills.sh", "--check", "."],
-    autofix: false,
+    autofix: true,
     after: [],
   },
 ] as const satisfies readonly Generator[];

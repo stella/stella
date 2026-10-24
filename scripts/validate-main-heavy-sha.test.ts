@@ -4,10 +4,14 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Script } from "node:vm";
 import * as v from "valibot";
+
+import { contextFromNested, evaluate } from "./github-expression";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  if: v.optional(v.string()),
   run: v.optional(v.string()),
   uses: v.optional(v.string()),
   with: v.optional(v.record(v.string(), v.unknown())),
@@ -37,6 +41,40 @@ const namedStep = (name: string) => {
 };
 const validateFormat = namedStep("Validate SHA format");
 const verifyAncestry = namedStep("Verify main ancestry");
+const actionStep = (name: string) => {
+  const step = validationSteps.find((candidate) => candidate.name === name);
+  const script = step?.with?.["script"];
+  if (step?.if === undefined || typeof script !== "string") {
+    panic(`main-heavy.yml is missing action step ${name}`);
+  }
+  return { condition: step.if, script };
+};
+const versionStaging = actionStep("Dispatch version commit staging");
+
+const runActionScript = async (
+  script: string,
+  context: object,
+  github: object,
+  env: Record<string, string> = {},
+) => {
+  const calls: unknown[] = [];
+  const api = {
+    ...github,
+    rest: {
+      ...(github as { rest?: object }).rest,
+      actions: {
+        createWorkflowDispatch: async (input: unknown) => calls.push(input),
+      },
+    },
+  };
+  await new Script(`(async () => { ${script} })()`).runInNewContext({
+    context,
+    core: { info: () => undefined },
+    github: api,
+    process: { env },
+  });
+  return calls;
+};
 
 const runGit = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
@@ -175,6 +213,7 @@ test("only trusted main tooling is checked out before target verification", () =
     "Setup Bun",
     "Reuse completed release proof",
     "Dispatch release PR-depth checks",
+    "Dispatch version commit staging",
     "Select untested heavy SHA",
     "Validate SHA format",
     "Fetch main history",
@@ -187,6 +226,102 @@ test("only trusted main tooling is checked out before target verification", () =
   expect(checkouts.at(0)?.with?.["ref"]).toBe("main");
   expect(checkouts.at(0)?.with?.["path"]).toBe(".release-proof");
   expect(checkouts.at(0)?.with?.["persist-credentials"]).toBe(false);
+});
+
+test("version commit staging reuses only an identical head's newest bot proof", async () => {
+  expect(
+    evaluate(
+      versionStaging.condition,
+      contextFromNested({
+        github: {
+          event_name: "push",
+          event: { head_commit: { message: "ordinary change" } },
+        },
+      }),
+    ),
+  ).toBe(false);
+  expect(
+    evaluate(
+      versionStaging.condition,
+      contextFromNested({
+        github: {
+          event_name: "push",
+          event: { head_commit: { message: "chore: release v1.2.3" } },
+        },
+      }),
+    ),
+  ).toBe(true);
+
+  const versionSha = "b".repeat(40);
+  const headSha = "a".repeat(40);
+  const passed = {
+    context: "staging/verified",
+    creator: { login: "github-actions[bot]" },
+    state: "success",
+  };
+  const dispatchFor = async (headTree: string, statuses: unknown[]) =>
+    runActionScript(
+      versionStaging.script,
+      {
+        repo: { owner: "stella", repo: "stella" },
+        sha: versionSha,
+      },
+      {
+        rest: {
+          repos: {
+            listPullRequestsAssociatedWithCommit: async () => ({
+              data: [
+                {
+                  head: {
+                    repo: { full_name: "stella/stella" },
+                    sha: headSha,
+                  },
+                  merge_commit_sha: versionSha,
+                  merged_at: "2026-10-24T00:00:00Z",
+                  title: "chore: release v1.2.3",
+                },
+              ],
+            }),
+            listCommitStatusesForRef: async () => ({ data: statuses }),
+          },
+          git: {
+            getCommit: async ({ commit_sha }: { commit_sha: string }) => ({
+              data: {
+                tree: { sha: commit_sha === headSha ? headTree : "tree" },
+              },
+            }),
+          },
+        },
+      },
+    );
+  const reuse = await dispatchFor("tree", [passed]);
+  expect(reuse).toEqual([
+    {
+      owner: "stella",
+      repo: "stella",
+      workflow_id: "deploy-staging.yml",
+      ref: "main",
+      inputs: { proof_sha: headSha, sha: versionSha },
+    },
+  ]);
+  for (const full of [
+    await dispatchFor("different", [passed]),
+    await dispatchFor("tree", []),
+    await dispatchFor("tree", [
+      { ...passed, creator: { login: "human" } },
+      passed,
+    ]),
+  ]) {
+    expect(full).toEqual([
+      {
+        owner: "stella",
+        repo: "stella",
+        workflow_id: "deploy-staging.yml",
+        ref: "main",
+        inputs: { release_candidate: "true", sha: versionSha },
+      },
+    ]);
+  }
 });
 
 test("scheduled main validation delegates ancestry to trusted main tooling before suite checkout", () => {

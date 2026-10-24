@@ -17,6 +17,7 @@ import {
   pruneBaseline,
   readBaseline,
   runDependencyAuditCli,
+  runReleaseCheck as executeReleaseAudit,
 } from "./dependency-audit";
 import {
   expiringAcceptances,
@@ -79,10 +80,17 @@ const runCheck = async (
 const runReleaseCheck = async (
   advisories: Advisory[],
   baseline: Baseline,
+  previousAdvisories: Advisory[] = [],
   today = "2026-10-02",
 ) => {
-  const output: { error: string[]; warn: string[] } = { error: [], warn: [] };
-  const info = spyOn(console, "info").mockImplementation(() => undefined);
+  const output: { error: string[]; info: string[]; warn: string[] } = {
+    error: [],
+    info: [],
+    warn: [],
+  };
+  const info = spyOn(console, "info").mockImplementation((message) => {
+    output.info.push(String(message));
+  });
   const warn = spyOn(console, "warn").mockImplementation((message) => {
     output.warn.push(String(message));
   });
@@ -90,7 +98,7 @@ const runReleaseCheck = async (
     output.error.push(String(message));
   });
   try {
-    const status = await checkRelease(advisories, {
+    const status = await checkRelease(advisories, previousAdvisories, {
       baseline,
       latestVersion: async () => "1.4.0",
       now: () => new Date(`${today}T00:00:00Z`),
@@ -165,6 +173,111 @@ describe("release audit acceptance", () => {
     expect(result.status).toBe(2);
     expect(result.error.join("\n")).toContain(advisory.id);
     expect(result.error.join("\n")).toContain("non-placeholder owner");
+  });
+});
+
+describe("release audit delta", () => {
+  test("a carried advisory warns without a baseline entry", async () => {
+    const result = await runReleaseCheck(
+      [currentAdvisory],
+      { ...auditBaseline(), accepted: [] },
+      [currentAdvisory],
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.warn.join("\n")).toContain(advisory.id);
+    expect(result.warn.join("\n")).toContain("production already carries");
+    expect(result.warn.join("\n")).toContain(
+      "Add a baseline entry with an owner and an expiry",
+    );
+  });
+
+  test("a carried advisory warning names its baseline owner and expiry", async () => {
+    const result = await runReleaseCheck(
+      [currentAdvisory],
+      auditBaseline("2026-11-01"),
+      [currentAdvisory],
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.warn.join("\n")).toContain("test owner");
+    expect(result.warn.join("\n")).toContain("2026-11-01");
+  });
+
+  test("an added advisory is refused unless release-grade acceptance covers it", async () => {
+    const refused = await runReleaseCheck([currentAdvisory], {
+      ...auditBaseline(),
+      accepted: [],
+    });
+    const accepted = await runReleaseCheck(
+      [currentAdvisory],
+      auditBaseline("2026-11-01"),
+    );
+
+    expect(refused.status).toBe(1);
+    expect(accepted.status).toBe(0);
+  });
+
+  test("matching ids in different packages are separate advisories", async () => {
+    const result = await runReleaseCheck(
+      [currentAdvisory],
+      { ...auditBaseline(), accepted: [] },
+      [{ ...currentAdvisory, package: "other-pkg" }],
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.warn.join("\n")).not.toContain("production already carries");
+  });
+
+  test("an advisory absent from the release is reported as fixed", async () => {
+    const result = await runReleaseCheck(
+      [],
+      { ...auditBaseline(), accepted: [] },
+      [currentAdvisory],
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.info.join("\n")).toContain(`fixed ${advisory.id} for pkg`);
+  });
+
+  test("the release runner audits both trees and fails closed on the previous tree", async () => {
+    const calls: (string | undefined)[] = [];
+    const status = await executeReleaseAudit({
+      audit: async (cwd) => {
+        calls.push(cwd);
+        if (cwd === undefined) {
+          return [currentAdvisory];
+        }
+        throw new AuditCommandError("previous audit failed");
+      },
+      gitFile: async (_revision, file) => `${file} fixture`,
+      previousReleaseTag: async () => "v1.2.3",
+    }).then(
+      () => -1,
+      (error: unknown) => {
+        expect(error).toBeInstanceOf(AuditCommandError);
+        expect(String(error)).toContain("previous release v1.2.3");
+        return 3;
+      },
+    );
+
+    expect(status).toBe(3);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toBeUndefined();
+    expect(calls[1]).toContain("stella-release-audit-");
+  });
+
+  test("without a previous release every advisory counts as added", async () => {
+    const output = spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const status = await executeReleaseAudit({
+        audit: async () => [currentAdvisory],
+        previousReleaseTag: async () => undefined,
+      });
+      expect(status).toBe(1);
+    } finally {
+      output.mockRestore();
+    }
   });
 });
 
@@ -639,3 +752,30 @@ describe("CLI exit codes", () => {
 const panicUnexpectedAttempt = (): never => {
   throw new Error("unexpected extra audit attempt");
 };
+
+describe("acceptance identity", () => {
+  test("an acceptance covers only the package it names, even for a shared GHSA", async () => {
+    const otherPackage = { ...currentAdvisory, package: "pkg-b" };
+    const baseline = auditBaseline("2026-11-01");
+
+    const release = await runReleaseCheck(
+      [currentAdvisory, otherPackage],
+      baseline,
+    );
+    expect(release.status).not.toBe(0);
+    expect(release.info.join("\n")).toContain("pkg-b");
+
+    const gate = await runCheck(
+      [currentAdvisory, otherPackage],
+      baseline,
+      "2026-10-02",
+    );
+    expect(gate.status).not.toBe(0);
+    expect(
+      gate.info.filter((line) => line.endsWith("NEW")).join("\n"),
+    ).toContain("pkg-b");
+
+    const accepted = await runCheck([currentAdvisory], baseline, "2026-10-02");
+    expect(accepted.status).toBe(0);
+  });
+});
