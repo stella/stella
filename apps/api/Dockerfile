@@ -44,7 +44,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # `process.env.NODE_ENV` reads (dependencies included) at bundle time, and
 # inlines "development" when it is unset. Every bundle is also built with
 # `--define __STELLA_RELEASE__=true`, so a published artifact refuses local
-# development access whatever its runtime environment says.
+# development access whatever its runtime environment says. Every bundle is
+# minified with --keep-names: error tags and logs read class and function
+# names, which plain --minify renames.
 FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
@@ -66,6 +68,8 @@ RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/
 # mapping never reads.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --sourcemap=linked \
     --target bun \
     --outdir /app/bundles \
@@ -78,6 +82,8 @@ RUN bun build \
 # apps/api/docker/collab launcher.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -91,6 +97,8 @@ RUN bun build \
 #   command override -> ["bun", "/app/backfill.js"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -100,6 +108,8 @@ RUN bun build \
 #   command override -> ["bun", "/app/seed-usage-policies.js"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -112,6 +122,8 @@ RUN bun build \
 #   command override -> ["bun", "/app/replay-provider-events.js"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -126,6 +138,8 @@ RUN bun build \
 #    "https://api.stll.app"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -136,6 +150,8 @@ RUN bun build \
 # sub-to-oid map to the task's private tmpfs without logging identity values.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -145,6 +161,8 @@ RUN bun build \
 # baseline before mutating and runs the post-backfill audit before succeeding.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -154,6 +172,8 @@ RUN bun build \
 # a migration rehearsal and compared after it.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -163,6 +183,8 @@ RUN bun build \
 # provider served locally; counts only.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -175,6 +197,8 @@ RUN bun build \
 #   ["bun", "/app/replay-case-law-source.js", "--adapter", "eu-ecj"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -187,6 +211,8 @@ RUN bun build \
 #   ["bun", "/app/review-account.js", "set-password"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -195,6 +221,8 @@ RUN bun build \
 # One bounded, load-aware background replay tick; enrolment is reviewed in code.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -203,6 +231,8 @@ RUN bun build \
 # Weekly Czech Constitutional Court roster import and load-aware relink.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -211,6 +241,8 @@ RUN bun build \
 # Bounded EU completion ticks and operator controls.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -218,6 +250,8 @@ RUN bun build \
     apps/api/src/scripts/eu-completion-tick.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -229,6 +263,8 @@ RUN bun build \
 #   ["bun", "/app/case-law-raw-layout.js", "sweep-legacy", "--source", "<id>"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -236,6 +272,8 @@ RUN bun build \
     apps/api/src/scripts/redact-case-law-decision.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -246,6 +284,8 @@ RUN bun build \
 #   ["bun", "/app/complete-sk-us-raw.js", "--checkpoint", "/tmp/sk-us.json"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -260,6 +300,8 @@ RUN bun build \
 #   ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -267,6 +309,8 @@ RUN bun build \
     apps/api/src/scripts/decision-analysis-candidates.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -274,6 +318,8 @@ RUN bun build \
     apps/api/src/scripts/decision-analysis-input.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -286,6 +332,8 @@ RUN bun build \
 #   ["bun", "/app/repair-cz-ns-court.js", "--apply"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -293,6 +341,8 @@ RUN bun build \
     apps/api/src/scripts/repair-publisher-absent-text.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -305,6 +355,8 @@ RUN bun build \
 #   ["bun", "/app/classify-citations.js", "--recheck", "--language", "cs"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -317,6 +369,8 @@ RUN bun build \
 #    "--results", "/tmp/results.jsonl", "--apply"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -328,6 +382,8 @@ RUN bun build \
 #   ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -340,6 +396,8 @@ RUN bun build \
 #    "--out-dir", "/tmp/snippets"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -350,6 +408,8 @@ RUN bun build \
 # in-image through the isolated local ONNX worker.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --sourcemap=linked \
     --outdir /app/bundles \
@@ -363,6 +423,8 @@ RUN bun build \
 # to /app/apps/api/drizzle after the tree is copied to /app.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles/apps/api/src/db \
     --public-path /app/apps/api/src/db/ \
@@ -376,6 +438,8 @@ RUN bun build \
 RUN mkdir -p /app/bundles/runtime/workers && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -383,6 +447,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -390,6 +456,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -399,6 +467,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -406,6 +476,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/ocr-searchable-pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -413,6 +485,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/files/office-evidence-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -448,6 +522,8 @@ RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
 # native addons load from sidecars.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -459,6 +535,8 @@ RUN bun build \
 # layout, and run by the verification stage below.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
