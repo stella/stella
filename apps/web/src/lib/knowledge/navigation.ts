@@ -1,5 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 
+import { linkOptions } from "@tanstack/react-router";
+
 import {
   ClipboardCheckIcon,
   LayoutTemplateIcon,
@@ -14,13 +16,15 @@ import type { TranslationKey } from "@/i18n/types";
 export type KnowledgeSection = {
   key: "templates" | "styles" | "clauses" | "playbooks" | "workflows" | "tools";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to:
-    | "/knowledge/templates"
-    | "/knowledge/styles"
-    | "/knowledge/clauses"
-    | "/knowledge/playbooks"
-    | "/knowledge/workflows"
-    | "/knowledge/tools";
+  link: {
+    to:
+      | "/knowledge/templates"
+      | "/knowledge/styles"
+      | "/knowledge/clauses"
+      | "/knowledge/playbooks"
+      | "/knowledge/workflows"
+      | "/knowledge/tools";
+  };
   // "clauses", "playbooks", and "workflows" reuse the shared common.* labels
   // instead of feature-scoped duplicates; other sections use their own title.
   titleKey: Extract<
@@ -38,37 +42,37 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
   {
     key: "tools",
     icon: PackageIcon,
-    to: "/knowledge/tools",
+    link: linkOptions({ to: "/knowledge/tools" }),
     titleKey: "knowledge.sections.tools.title",
   },
   {
     key: "templates",
     icon: LayoutTemplateIcon,
-    to: "/knowledge/templates",
+    link: linkOptions({ to: "/knowledge/templates" }),
     titleKey: "knowledge.sections.templates.title",
   },
   {
     key: "styles",
     icon: PaletteIcon,
-    to: "/knowledge/styles",
+    link: linkOptions({ to: "/knowledge/styles" }),
     titleKey: "styleSets.title",
   },
   {
     key: "clauses",
     icon: TextQuoteIcon,
-    to: "/knowledge/clauses",
+    link: linkOptions({ to: "/knowledge/clauses" }),
     titleKey: "common.clauses",
   },
   {
     key: "playbooks",
     icon: ClipboardCheckIcon,
-    to: "/knowledge/playbooks",
+    link: linkOptions({ to: "/knowledge/playbooks" }),
     titleKey: "common.playbooks",
   },
   {
     key: "workflows",
     icon: WorkflowIcon,
-    to: "/knowledge/workflows",
+    link: linkOptions({ to: "/knowledge/workflows" }),
     titleKey: "common.workflows",
   },
 ];

@@ -1,3 +1,5 @@
+import { linkOptions } from "@tanstack/react-router";
+
 import {
   BanknoteIcon,
   BrainIcon,
@@ -43,30 +45,30 @@ const ACCOUNT_SECTION = {
   labelKey: "settings.account.title",
   items: [
     {
-      to: "/settings/account/profile",
+      link: linkOptions({ to: "/settings/account/profile" }),
       labelKey: "common.profile",
       icon: UserIcon,
     },
     {
-      to: "/settings/account/desktop",
+      link: linkOptions({ to: "/settings/account/desktop" }),
       labelKey: "settings.account.desktop",
       icon: MonitorIcon,
     },
     {
-      to: "/settings/account/connections",
+      link: linkOptions({ to: "/settings/account/connections" }),
       labelKey: "settings.connections.title",
       icon: PlugIcon,
     },
     {
       // Personal + firm + matter memory in one panel. RLS scopes what each
       // member sees; firm-library creation is gated inside the panel.
-      to: "/settings/account/memory",
+      link: linkOptions({ to: "/settings/account/memory" }),
       labelKey: "memory.pageTitle",
       icon: BrainIcon,
       gate: "memory",
     },
     {
-      to: "/settings/account/beta",
+      link: linkOptions({ to: "/settings/account/beta" }),
       labelKey: "settings.account.beta",
       icon: FlaskConicalIcon,
       gate: "beta",
@@ -79,11 +81,23 @@ const ORGANIZATION_SECTIONS = [
     id: "organization",
     labelKey: "common.organization",
     items: [
-      { to: "/admin/general", labelKey: "admin.general", icon: BuildingIcon },
-      { to: "/admin/members", labelKey: "common.members", icon: UsersIcon },
-      { to: "/admin/usage", labelKey: "admin.planAndUsage", icon: GaugeIcon },
       {
-        to: "/admin/audit-logs",
+        link: linkOptions({ to: "/admin/general" }),
+        labelKey: "admin.general",
+        icon: BuildingIcon,
+      },
+      {
+        link: linkOptions({ to: "/admin/members" }),
+        labelKey: "common.members",
+        icon: UsersIcon,
+      },
+      {
+        link: linkOptions({ to: "/admin/usage" }),
+        labelKey: "admin.planAndUsage",
+        icon: GaugeIcon,
+      },
+      {
+        link: linkOptions({ to: "/admin/audit-logs" }),
         labelKey: "settings.organization.auditLogs",
         icon: HistoryIcon,
       },
@@ -93,14 +107,18 @@ const ORGANIZATION_SECTIONS = [
     id: "ai",
     labelKey: "admin.ai",
     items: [
-      { to: "/admin/ai", labelKey: "admin.modelsAndProviders", icon: CpuIcon },
       {
-        to: "/admin/anonymization",
+        link: linkOptions({ to: "/admin/ai" }),
+        labelKey: "admin.modelsAndProviders",
+        icon: CpuIcon,
+      },
+      {
+        link: linkOptions({ to: "/admin/anonymization" }),
         labelKey: "settings.organization.anonymization.title",
         icon: EyeOffIcon,
       },
       {
-        to: "/admin/tools",
+        link: linkOptions({ to: "/admin/tools" }),
         labelKey: "knowledge.sections.tools.title",
         icon: WrenchIcon,
       },
@@ -111,35 +129,35 @@ const ORGANIZATION_SECTIONS = [
     labelKey: "admin.firmSetup",
     items: [
       {
-        to: "/admin/matter-numbering",
+        link: linkOptions({ to: "/admin/matter-numbering" }),
         labelKey: "settings.organization.matterNumbering",
         icon: HashIcon,
       },
       {
-        to: "/admin/document-types",
+        link: linkOptions({ to: "/admin/document-types" }),
         labelKey: "settings.organization.documentTypes.title",
         icon: FileTextIcon,
       },
       {
-        to: "/admin/time-policy",
+        link: linkOptions({ to: "/admin/time-policy" }),
         labelKey: "settings.organization.timePolicy.title",
         icon: ClockIcon,
         gate: "timeBilling",
       },
       {
-        to: "/admin/number-series",
+        link: linkOptions({ to: "/admin/number-series" }),
         labelKey: "billing.numberSeries.title",
         icon: ListOrderedIcon,
         gate: "billing",
       },
       {
-        to: "/admin/vat-rates",
+        link: linkOptions({ to: "/admin/vat-rates" }),
         labelKey: "billing.vatRates.title",
         icon: LandmarkIcon,
         gate: "billing",
       },
       {
-        to: "/admin/billing",
+        link: linkOptions({ to: "/admin/billing" }),
         labelKey: "admin.billingProfiles",
         icon: BanknoteIcon,
         gate: "billing",

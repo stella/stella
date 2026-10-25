@@ -489,7 +489,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       label: t(s.titleKey),
       icon: <Icon />,
       onClick: () => {
-        detached(navigate({ to: s.to }), "app-sidebar.navigate");
+        detached(navigate(s.link), "app-sidebar.navigate");
       },
     });
   }
@@ -707,7 +707,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                         <SidebarMenuButton asChild tooltip={label}>
                           <Link
                             activeProps={{ "data-active": true }}
-                            to={item.to}
+                            {...item.link}
                           >
                             <Icon />
                             <span>{label}</span>

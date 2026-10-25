@@ -48,7 +48,7 @@ const KnowledgePublicTopBar = () => {
     ({ key }) => key !== "templates" || templatesAvailable,
   );
   const section = visibleSections.find(
-    ({ to }) => pathname === to || pathname.startsWith(`${to}/`),
+    ({ link }) => pathname === link.to || pathname.startsWith(`${link.to}/`),
   );
 
   return (
@@ -74,7 +74,7 @@ const KnowledgePublicTopBar = () => {
             <span className="text-foreground-placeholder">/</span>
             <Link
               className="text-muted-foreground hover:text-foreground shrink-0"
-              to={section.to}
+              {...section.link}
             >
               {t(section.titleKey)}
             </Link>

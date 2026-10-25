@@ -1,5 +1,7 @@
 import type { ComponentType } from "react";
 
+import { linkOptions } from "@tanstack/react-router";
+
 import {
   BlocksIcon,
   CaseLawIcon,
@@ -36,7 +38,7 @@ type WorkspacePrimaryNavItem = {
   | {
       readonly audience: "authenticated" | "public";
       readonly kind: "route";
-      readonly to: WorkspacePrimaryRoute;
+      readonly link: { readonly to: WorkspacePrimaryRoute };
     }
 );
 
@@ -54,7 +56,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "authenticated",
     kind: "route",
     labelKey: "navigation.chat",
-    to: "/chat",
+    link: linkOptions({ to: "/chat" }),
   },
   {
     icon: InboxIcon,
@@ -62,7 +64,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "authenticated",
     kind: "route",
     labelKey: "navigation.inbox",
-    to: "/inbox",
+    link: linkOptions({ to: "/inbox" }),
   },
   {
     icon: MattersNavIcon,
@@ -70,7 +72,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "authenticated",
     kind: "route",
     labelKey: "common.matters",
-    to: "/workspaces",
+    link: linkOptions({ to: "/workspaces" }),
   },
   {
     icon: Clock3Icon,
@@ -78,7 +80,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "authenticated",
     kind: "route",
     labelKey: "billing.timesheets",
-    to: "/time",
+    link: linkOptions({ to: "/time" }),
   },
   {
     icon: CaseLawIcon,
@@ -86,7 +88,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "public",
     kind: "route",
     labelKey: "common.caseLaw",
-    to: "/law",
+    link: linkOptions({ to: "/law" }),
   },
   {
     icon: BlocksIcon,
@@ -97,7 +99,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     labelKey: "knowledge.sections.tools.title",
     // The older top-level tools pages; this entry goes with them once the
     // Knowledge flag is permanent.
-    to: "/tools",
+    link: linkOptions({ to: "/tools" }),
   },
   {
     icon: LibraryBigIcon,
@@ -105,7 +107,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "authenticated",
     kind: "route",
     labelKey: "navigation.knowledge",
-    to: "/knowledge",
+    link: linkOptions({ to: "/knowledge" }),
   },
   {
     icon: UsersIcon,
@@ -113,7 +115,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     audience: "authenticated",
     kind: "route",
     labelKey: "navigation.contacts",
-    to: "/contacts",
+    link: linkOptions({ to: "/contacts" }),
   },
 ] as const satisfies readonly WorkspacePrimaryNavItem[];
 
@@ -124,7 +126,7 @@ const PUBLIC_KNOWLEDGE_NAV_ITEM = {
   audience: "public",
   kind: "route",
   labelKey: "navigation.knowledge",
-  to: "/knowledge",
+  link: linkOptions({ to: "/knowledge" }),
 } as const satisfies WorkspacePrimaryNavItem;
 
 export type WorkspacePrimaryNavId =

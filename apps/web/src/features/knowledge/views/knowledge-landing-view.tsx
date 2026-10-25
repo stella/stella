@@ -19,7 +19,7 @@ type LandingCardContent = {
 /** A Knowledge section card: a link to the section, or a button when the
  *  section needs something first. */
 export type KnowledgeLandingCard = LandingCardContent &
-  ({ to: KnowledgeSection["to"] } | { onOpen: () => void });
+  ({ link: KnowledgeSection["link"] } | { onOpen: () => void });
 
 type KnowledgeLandingViewProps = {
   cards: readonly KnowledgeLandingCard[];
@@ -65,8 +65,8 @@ export const KnowledgeLandingView = ({
   <div className="flex flex-1 flex-col p-6">
     <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {cards.map((card) =>
-        "to" in card ? (
-          <Link className={CARD_CLASS} key={card.key} to={card.to}>
+        "link" in card ? (
+          <Link className={CARD_CLASS} key={card.key} {...card.link}>
             <CardBody card={card} />
           </Link>
         ) : (

@@ -14,7 +14,7 @@ import type { FileRouteTypes } from "@/routeTree.gen";
 type GuideStaticRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
 
 export type GuideRoute =
-  | { type: "static"; to: GuideStaticRoute }
+  | { type: "static"; link: { to: GuideStaticRoute } }
   | { type: "workspace-unfiltered-table" };
 
 export type GuidePlacement = "top" | "right" | "bottom" | "left";

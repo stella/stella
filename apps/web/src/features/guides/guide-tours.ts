@@ -1,3 +1,5 @@
+import { linkOptions } from "@tanstack/react-router";
+
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { GUIDE_TOUR_IDS, type GuideTour } from "@/features/guides/guide-types";
 
@@ -14,7 +16,10 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.chatComposer,
-        route: { type: "static", to: "/chat" },
+        route: {
+          type: "static",
+          link: linkOptions({ to: "/chat" }),
+        },
         titleKey: "guides.tours.chat.steps.composer.title",
         bodyKey: "guides.tours.chat.steps.composer.body",
         placement: "top",
@@ -87,7 +92,10 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.chatToolsButton,
-        route: { type: "static", to: "/chat" },
+        route: {
+          type: "static",
+          link: linkOptions({ to: "/chat" }),
+        },
         titleKey: "guides.tours.chatPower.steps.plusMenu.title",
         bodyKey: "guides.tours.chatPower.steps.plusMenu.body",
         placement: "top",
@@ -151,7 +159,10 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.playbooksOverview,
-        route: { type: "static", to: "/knowledge/playbooks" },
+        route: {
+          type: "static",
+          link: linkOptions({ to: "/knowledge/playbooks" }),
+        },
         titleKey: "guides.tours.playbooks.steps.overview.title",
         bodyKey: "guides.tours.playbooks.steps.overview.body",
         placement: "right",
@@ -192,7 +203,10 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.workflowsOverview,
-        route: { type: "static", to: "/knowledge/workflows" },
+        route: {
+          type: "static",
+          link: linkOptions({ to: "/knowledge/workflows" }),
+        },
         titleKey: "guides.tours.workflows.steps.overview.title",
         bodyKey: "guides.tours.workflows.steps.overview.body",
         whenKey: "guides.tours.workflows.steps.overview.when",

@@ -316,7 +316,7 @@ const PublicSidebar = ({
                       <Link
                         activeProps={{ "data-active": true }}
                         aria-label={label}
-                        to={item.to}
+                        {...item.link}
                       >
                         <Icon />
                         <span>{label}</span>
@@ -333,12 +333,12 @@ const PublicSidebar = ({
                     disabled={authStatus.status === "checking"}
                     onClick={() => {
                       if (authStatus.isAuthenticated) {
-                        navigate({ to: item.to }).catch((error: unknown) => {
+                        navigate(item.link).catch((error: unknown) => {
                           getAnalytics().captureError(error);
                         });
                         return;
                       }
-                      requestPrivateFeature(item.to);
+                      requestPrivateFeature(item.link.to);
                     }}
                     tooltip={label}
                   >

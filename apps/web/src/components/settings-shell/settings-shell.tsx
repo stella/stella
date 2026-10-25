@@ -70,7 +70,9 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
 
   const activeItem = sections
     .flatMap(({ items }) => items)
-    .find(({ to }) => pathname === to || pathname.startsWith(`${to}/`));
+    .find(
+      ({ link }) => pathname === link.to || pathname.startsWith(`${link.to}/`),
+    );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
@@ -95,10 +97,10 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                   const Icon = item.icon;
                   return (
                     <MenuItem
-                      key={item.to}
+                      key={item.link.to}
                       render={
                         <Link
-                          to={item.to}
+                          {...item.link}
                           aria-current={
                             item === activeItem ? "page" : undefined
                           }
@@ -136,13 +138,13 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                   const Icon = item.icon;
                   return (
                     <Link
-                      key={item.to}
+                      key={item.link.to}
                       activeProps={{
                         className:
                           "bg-sidebar-accent text-sidebar-accent-foreground",
                       }}
                       className={NAV_ITEM_CLASS}
-                      to={item.to}
+                      {...item.link}
                     >
                       <Icon className="size-4" />
                       <span>{t(item.labelKey)}</span>

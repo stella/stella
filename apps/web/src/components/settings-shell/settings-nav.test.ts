@@ -15,7 +15,7 @@ const ALL_OPEN = {
 const paths = (access: SettingsNavAccess) =>
   settingsNavSections(access).map(({ id, items }) => [
     id,
-    items.map(({ to }) => to),
+    items.map(({ link }) => link.to),
   ]);
 
 describe("settingsNavSections", () => {
@@ -81,7 +81,9 @@ describe("settingsNavSections", () => {
       beta: false,
       timeBilling: false,
     });
-    const shown = sections.flatMap(({ items }) => items.map(({ to }) => to));
+    const shown = sections.flatMap(({ items }) =>
+      items.map(({ link }) => link.to),
+    );
     for (const hidden of [
       "/settings/account/memory",
       "/settings/account/beta",

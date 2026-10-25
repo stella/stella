@@ -28,7 +28,7 @@ export const MemberKnowledgeLanding = () => {
         section.key === "styles"
           ? t("styleSets.description")
           : t(`knowledge.sections.${section.key}.description`),
-      to: section.to,
+      link: section.link,
     });
   }
 

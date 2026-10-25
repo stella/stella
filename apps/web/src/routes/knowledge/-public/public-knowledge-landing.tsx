@@ -67,7 +67,7 @@ export const PublicKnowledgeLanding = ({
           : t(`knowledge.sections.${section.key}.description`),
     };
     if (OPEN_SECTIONS.includes(section.key)) {
-      cards.push({ ...content, to: section.to });
+      cards.push({ ...content, link: section.link });
     } else if (
       ACCOUNT_SECTIONS.includes(section.key) &&
       requestSignIn !== null
@@ -75,7 +75,7 @@ export const PublicKnowledgeLanding = ({
       cards.push({
         ...content,
         note: t("knowledge.landing.withAccount"),
-        onOpen: () => requestSignIn(section.to),
+        onOpen: () => requestSignIn(section.link.to),
       });
     }
   }

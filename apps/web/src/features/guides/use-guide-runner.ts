@@ -242,10 +242,10 @@ export const useGuideRunner = ({
       switch (route.type) {
         case "static":
           return await navigateAndWaitForRoute({
-            pathname: route.to,
+            pathname: route.link.to,
             signal,
             startNavigation: async () => {
-              await navigate({ to: route.to });
+              await navigate(route.link);
             },
           });
         case "workspace-unfiltered-table": {
