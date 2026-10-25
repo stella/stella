@@ -25,6 +25,9 @@ const partyRefusal = (record: InvoiceExportRecord): string | null => {
   }
   // The Slovak mandate covers domestic supplies (zákon 385/2025 Z. z.); a
   // foreign buyer is reached through its own channel, not a 0245 endpoint.
+  if (countryCodeOf(record.buyer.country) === null) {
+    return "buyer country is required";
+  }
   if (countryCodeOf(record.buyer.country) !== "SK") {
     return "Peppol (Slovakia) covers buyers in Slovakia; the buyer country is not SK";
   }
