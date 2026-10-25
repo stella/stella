@@ -43,6 +43,7 @@ const createStore = (): ReviewAccountStore => ({
       ),
     ),
   ),
+  acceptProfessionalUse: async () => undefined,
   findUserIdByEmail: async (email) =>
     (
       await testDb

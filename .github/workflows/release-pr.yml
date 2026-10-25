@@ -56,6 +56,7 @@ jobs:
     name: Check release versioning state
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -109,3 +110,214 @@ jobs:
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+
+  # An open release versions the changesets pending at its cut. A `@stll/cli`
+  # entry that reaches main later stays pending beside the release, which the
+  # tag refuses (scripts/check-cli-release-coupling.ts), so the release branch
+  # takes main and versions the entry. Only `@stll/cli` entries trigger it; the
+  # refreshed head re-runs every release proof.
+  refresh-release-plan:
+    needs: gate
+    if: >-
+      !cancelled() && needs.gate.result == 'success' &&
+      needs.gate.outputs.may-version == 'false' && vars.STELLA_MERGE_HOLD == ''
+    name: Plan the release pull request refresh
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      refresh: ${{ steps.plan.outputs.refresh }}
+      number: ${{ steps.plan.outputs.number }}
+      branch: ${{ steps.plan.outputs.branch }}
+      head: ${{ steps.plan.outputs.head }}
+      merge: ${{ steps.plan.outputs.merge }}
+    steps:
+      - name: Check out the refresh planner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            packages/collation/src/collation.ts
+            scripts/changeset-entry.ts
+            scripts/changeset-guard.ts
+            scripts/check-cli-release-coupling.ts
+            scripts/gh-retry.sh
+            scripts/release-pull-request-refresh.ts
+            scripts/release-pull-requests.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Decide whether the release takes main
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          release_state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY")
+          RELEASE_NUMBERS=$(sed -n 's/^numbers=//p' <<<"$release_state") \
+            bun scripts/release-pull-request-refresh.ts plan
+
+  # No install runs in this job: the token exists only beside GitHub's merge.
+  # The merge lands on the release's staging branch; the release branch moves
+  # only in the version job, once the staged head is versioned.
+  refresh-release-stage:
+    needs: refresh-release-plan
+    if: >-
+      !cancelled() && needs.refresh-release-plan.result == 'success' &&
+      needs.refresh-release-plan.outputs.refresh == 'true'
+    name: Stage main and the release head
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      head: ${{ steps.stage.outputs.head }}
+    steps:
+      - name: Check out the refresh planner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            packages/collation/src/collation.ts
+            scripts/changeset-entry.ts
+            scripts/changeset-guard.ts
+            scripts/check-cli-release-coupling.ts
+            scripts/gh-retry.sh
+            scripts/release-pull-request-refresh.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Mint release refresh token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.CHANGELOG_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # GitHub merges, so the merge commit is signed.
+      - name: Stage the release head and merge main into it
+        id: stage
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_PULL_REQUEST: ${{ needs.refresh-release-plan.outputs.number }}
+          HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
+          MAIN_SHA: ${{ github.sha }}
+          MERGE_MAIN: ${{ needs.refresh-release-plan.outputs.merge }}
+        run: bun scripts/release-pull-request-refresh.ts stage
+
+  # Versions the staged head, then moves the release branch from the planned
+  # head to the versioned tip in one update, so the release never holds main
+  # without its versioning. A release whose head pends a `@stll/cli` entry (main
+  # merged in by hand) is versioned the same way, without a merge.
+  refresh-release-version:
+    needs: [refresh-release-plan, refresh-release-stage]
+    if: >-
+      !cancelled() && needs.refresh-release-stage.result == 'success'
+    name: Version the changesets main added to the release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # The install's workspace hygiene check reads the app-boundary ledger at
+      # the merge base with origin/main, so the checkout carries full history.
+      - name: Check out the staged release head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.refresh-release-stage.outputs.head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      # Install hooks run before a write-capable credential exists in the job.
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile
+
+      - name: Version the pending changesets into the release
+        id: refresh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bun scripts/prepare-maintenance-release.ts --refresh
+          generated="$RUNNER_TEMP/release-refresh-generated-paths"
+          jq -r '.generatedPaths[]' scripts/changeset-policy.json > "$generated"
+          # The commit carries only the release paths, so a change anywhere
+          # else would be dropped from it; refuse instead of committing less.
+          unexpected=""
+          while IFS= read -r path; do
+            case "$path" in
+              .changeset/* | docs/changelog/*) continue ;;
+            esac
+            grep -qxF -- "$path" "$generated" || unexpected+="  $path"$'\n'
+          done < <(git status --porcelain=v1 --untracked-files=all | cut -c4-)
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::The refresh changed files outside the release paths:"
+            printf '%s' "$unexpected"
+            exit 1
+          fi
+          {
+            echo "paths<<PATHS_EOF"
+            echo ".changeset"
+            echo "docs/changelog"
+            cat "$generated"
+            echo "PATHS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint release refresh token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.CHANGELOG_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # Appends only on top of the staged head checked out above; a commit
+      # pushed to the staging branch meanwhile fails the step.
+      - name: Commit the refreshed release files to the staging branch
+        id: commit
+        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: append
+          branch: release-refresh/${{ needs.refresh-release-plan.outputs.number }}
+          paths: ${{ steps.refresh.outputs.paths }}
+          commit-message: "chore: version changesets that reached main after the release cut"
+
+      - name: Move the release branch to the versioned head
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_PULL_REQUEST: ${{ needs.refresh-release-plan.outputs.number }}
+          RELEASE_BRANCH: ${{ needs.refresh-release-plan.outputs.branch }}
+          HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
+          STAGED_HEAD: ${{ steps.commit.outputs.commit-sha }}
+        run: bun scripts/release-pull-request-refresh.ts publish

@@ -177,10 +177,62 @@ test("the outfile guard detects every script bundle when regressed individually"
   ).toEqual([]);
 });
 
-test("long-running API builds map frames to source", () => {
-  for (const output of ["/app/server", "/app/document-processing-worker.js"]) {
-    expect(buildForOutput(output), output).toContain("--sourcemap=inline");
+// The runner runs every entrypoint with the base image's Bun; a --compile
+// binary would embed another full copy of the runtime in the image.
+test("the image ships one Bun runtime: no builder bundle compiles", () => {
+  expect(
+    bundleBuilds(stage("builder")).filter((bundle) =>
+      /--compile(?:\s|$)/u.test(bundle),
+    ),
+  ).toEqual([]);
+});
+
+// Bun emits a `with { type: "file" }` import as "./name-hash.ext" unless the
+// build names a public path, and that relative path resolves against the
+// process working directory (/app/apps/api), not the bundle. Each bundle must
+// therefore name the absolute directory its output occupies on the runner.
+test("every bundle resolves its file assets from its runner directory", () => {
+  const bundles = bundleBuilds(stage("builder"));
+  expect(bundles.length).toBeGreaterThan(0);
+  for (const bundle of bundles) {
+    const output = buildOutput(bundle);
+    const publicPath = /--public-path(?:=|\s+)(\S+)/u.exec(bundle)?.at(1);
+    const runnerDirectories = runnerOutputs(output).map(
+      (runnerOutput) => `${nodePath.posix.dirname(runnerOutput)}/`,
+    );
+    expect(runnerDirectories, output).toHaveLength(1);
+    expect(publicPath, output).toBe(runnerDirectories.at(0));
   }
+});
+
+// Error fingerprints need source positions, so long-running bundles ship a
+// linked map beside the bundle. The map's embedded source text is never read
+// at runtime, so each build strips it in the same instruction.
+const STRIP_SOURCE_MAP = "bun apps/api/scripts/strip-source-map-content.ts";
+
+test("long-running API builds map frames to source without embedded source text", () => {
+  const instructions = logicalInstructions(stage("builder"));
+  for (const output of [
+    "/app/server.js",
+    "/app/document-processing-worker.js",
+  ]) {
+    const bundle = buildForOutput(output);
+    expect(bundle, output).toContain("--sourcemap=linked");
+    const map = `${buildOutput(bundle ?? "")}.map`;
+    expect(runnerOutputs(map), output).toEqual([`${output}.map`]);
+    const instruction = instructions.find((candidate) =>
+      candidate.includes(bundle ?? "\0"),
+    );
+    expect(instruction, output).toContain(`&& ${STRIP_SOURCE_MAP} ${map}`);
+  }
+});
+
+test("no builder bundle embeds an inline source map", () => {
+  expect(
+    bundleBuilds(stage("builder")).filter((bundle) =>
+      /--sourcemap(?:=inline)?(?:\s|$)/u.test(bundle),
+    ),
+  ).toEqual([]);
 });
 
 // The case-law runner is the third long-running bundle that reports errors
@@ -189,10 +241,41 @@ test("long-running API builds map frames to source", () => {
 // the bundle: they name no source position, and they move whenever a rebuild
 // shifts the layout, so one recurring failure splits across as many issues as
 // it sees builds. Both image stages and the CI production smoke bundle the
-// runner through its own package script, so the flag is asserted there rather
-// than at each `bun --filter` call site.
+// runner through its own package script, so the flags are asserted there rather
+// than at each `bun --filter` call site. The images rename each bundle, so the
+// map is external (Bun finds `<bundle>.map` beside it, with no URL comment
+// naming the old file) and each image copies it beside the renamed bundle.
+const RUNNER_BUNDLES = [
+  { dist: "dist/index.js", runner: "/app/legal-atlas.js" },
+  { dist: "dist/eu-ecj-refetch.js", runner: "/app/eu-ecj-refetch.js" },
+] as const;
+const RUNNER_DOCKERFILES = [
+  "apps/api/Dockerfile",
+  "apps/legal-atlas-runner/Dockerfile",
+];
+
 test("the long-running case-law runner build maps frames to source", () => {
-  expect(runnerPackage.scripts.build).toContain("--sourcemap=inline");
+  const build = runnerPackage.scripts.build;
+  expect(build).not.toMatch(/--sourcemap(?:=inline)?(?:\s|$)/u);
+  expect(build.match(/--sourcemap=external/gu)).toHaveLength(
+    RUNNER_BUNDLES.length,
+  );
+  expect(build).toContain(
+    `&& bun ../api/scripts/strip-source-map-content.ts ${RUNNER_BUNDLES.map(
+      ({ dist }) => `${dist}.map`,
+    ).join(" ")}`,
+  );
+  for (const file of RUNNER_DOCKERFILES) {
+    const source = readFileSync(
+      nodePath.resolve(import.meta.dirname, "..", file),
+      "utf-8",
+    );
+    for (const { dist, runner } of RUNNER_BUNDLES) {
+      expect(source, file).toContain(
+        `--from=builder /app/apps/legal-atlas-runner/${dist}.map ${runner}.map\n`,
+      );
+    }
+  }
 });
 
 // Bun inlines direct `process.env.NODE_ENV` reads at bundle time, and inlines

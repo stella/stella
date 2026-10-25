@@ -38,7 +38,7 @@ const readInvoices = createSafeHandler(
     contract: "patch",
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
-      "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
+      "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
       "and total, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
@@ -87,6 +87,7 @@ const readInvoices = createSafeHandler(
             invoiceDate: invoices.invoiceDate,
             dueDate: invoices.dueDate,
             currency: invoices.currency,
+            language: invoices.language,
             totalAmount: invoices.totalAmount,
             billingMode: invoices.billingMode,
             flatFeeAmount: invoices.flatFeeAmount,
@@ -120,6 +121,7 @@ const readInvoices = createSafeHandler(
         invoiceDate: row.invoiceDate,
         dueDate: row.dueDate,
         currency: row.currency,
+        language: row.language,
         totalAmount: row.totalAmount,
         billingMode: row.billingMode,
         flatFeeAmount: row.flatFeeAmount,

@@ -64,10 +64,10 @@ export default eslintCompatPlugin({
               return;
             }
             const source = value ? context.sourceCode.getText(value) : "";
-            // File attachment downloads retain their attachment content/controls.
+            // An attachment chip's title opens its file and keeps the chip shell.
             if (
-              filename.endsWith("/chat-thread-messages.tsx") &&
-              source === "{sanitizeHref(contentUrl)}"
+              filename.endsWith("/chat/attachment-chip.tsx") &&
+              source === "{sanitizeHref(open.href)}"
             ) {
               return;
             }

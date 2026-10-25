@@ -105,6 +105,11 @@ import {
 } from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
+  CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
+  recordClientMetadataValidated,
+  withStaleIfError,
+} from "@/api/lib/auth/cimd-stale-if-error";
+import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
   getDemoAccountConfig,
@@ -193,6 +198,7 @@ import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
+import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
@@ -204,6 +210,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -2103,6 +2110,7 @@ export const createAuth = (
     }),
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+      CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createMcpWebHandoffPlugin({ service: getWebHandoffService }),
       createAgentUserPlugin(),
@@ -2274,11 +2282,15 @@ export const createAuth = (
               },
             },
             {
-              clientDiscovery: createCimdClientDiscovery({
-                fetchClientMetadataResource: withOwnClientDocuments(
-                  fetchClientMetadataResource,
-                ),
-              }),
+              clientDiscovery: withStaleIfError(
+                createCimdClientDiscovery({
+                  fetchClientMetadataResource: withOwnClientDocuments(
+                    fetchClientMetadataResource,
+                  ),
+                  onClientCreated: recordClientMetadataValidated,
+                  onClientRefreshed: recordClientMetadataValidated,
+                }),
+              ),
             },
           ],
           accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
@@ -2400,6 +2412,7 @@ export const createAuth = (
       ),
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
+      createSessionTokenRedactionPlugin(createAuthMiddleware),
       // Last, so it records the answer every other hook has settled on.
       createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
@@ -3110,6 +3123,7 @@ export const resolveWorkspaceRealtimeAudience = async (
  * the reasons given on each resolver.
  */
 export const realtimeAuthorizers = {
+  sessions: readCurrentLiveSseSessions,
   user: async (
     lookup: Parameters<typeof resolveUserRealtimeAuthorization>[0],
   ) => await resolveUserRealtimeAuthorization(lookup, rootDb),

@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import Elysia from "elysia";
 import type { Context } from "elysia";
 
@@ -19,6 +19,7 @@ import {
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -121,7 +122,9 @@ import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entrie
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -138,7 +141,9 @@ import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
@@ -159,6 +164,7 @@ import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -665,6 +671,24 @@ const countChatMessages = async (threadId: SafeId<"chatThread">) =>
       .where(eq(chatMessages.threadId, threadId))
   ).length;
 
+const CZECH_PRESET_CODES = [
+  ...new Set(VAT_RATE_PRESETS.CZ.map(({ code }) => code)),
+];
+
+/** An organization's Czech preset rows, read past RLS after a handler ran. */
+const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
+  (
+    await testDb
+      .select({ id: vatRates.id })
+      .from(vatRates)
+      .where(
+        and(
+          eq(vatRates.organizationId, organizationId),
+          inArray(vatRates.code, CZECH_PRESET_CODES),
+        ),
+      )
+  ).length;
+
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
     await testDb
@@ -1075,6 +1099,52 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.docxSuggestionB1),
   },
   {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
     name: "document review source list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listDocumentReviewSources, workspaceA, {
@@ -1293,6 +1363,38 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "VAT rate preset applies only to the active organization",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+      const otherBefore = await countCzechPresetRates(testIds.orgB);
+      const result = await runHandler(applyVatRatePreset, workspaceA, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgA),
+        otherUnchanged:
+          (await countCzechPresetRates(testIds.orgB)) === otherBefore,
+      };
+    },
+    runBPositive: async ({ ids: testIds, workspaceB }) => {
+      const result = await runHandler(applyVatRatePreset, workspaceB, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgB),
+      };
+    },
+    expectDenied: (outcome) =>
+      expect(outcome).toEqual({
+        added: 5,
+        activeRows: 5,
+        otherUnchanged: true,
+      }),
+    expectPositive: (outcome) =>
+      expect(outcome).toEqual({ added: 5, activeRows: 5 }),
   },
   {
     name: "time entry read by id",
@@ -1590,6 +1692,26 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
+    // `pinned: false` matches the fixture, so the positive run reaches the
+    // locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
+  },
+  {
     name: "memory delete",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(deleteMemory, workspaceA, {
@@ -1708,6 +1830,21 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesField(result, "id", notificationB),
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
     name: "chat thread list",
