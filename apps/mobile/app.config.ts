@@ -159,14 +159,20 @@ const readSigning = (
     : panic("APPLE_TEAM_ID and MOBILE_PROFILE_UUID sign a release together");
 };
 
+/** A release workflow's setting; Node's environment holds only strings. */
+const readEnv = (name: string): string | undefined => {
+  const value: unknown = process.env[name];
+  return typeof value === "string" ? value : undefined;
+};
+
 const appConfig = (): ExpoConfig =>
   appConfigFor({
-    buildNumber: readBuildNumber(process.env["MOBILE_BUILD_NUMBER"]),
+    buildNumber: readBuildNumber(readEnv("MOBILE_BUILD_NUMBER")),
     signing: readSigning(
-      process.env["APPLE_TEAM_ID"],
-      process.env["MOBILE_PROFILE_UUID"],
+      readEnv("APPLE_TEAM_ID"),
+      readEnv("MOBILE_PROFILE_UUID"),
     ),
-    variant: readVariant(process.env["APP_VARIANT"]),
+    variant: readVariant(readEnv("APP_VARIANT")),
   });
 
 export default appConfig;
