@@ -8,7 +8,22 @@
   "chat": {
     "description": "أبقِ عملك الجاري في متناولك وتابعه من أي جهاز.",
     "emptyTitle": "لا توجد محادثات بعد",
-    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة."
+    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة.",
+    "loadFailed": "تعذّر تحميل محادثاتك.",
+    "retry": "إعادة المحاولة",
+    "untitled": "محادثة بلا عنوان",
+    "loadMoreFailed": "تحميل المزيد",
+    "loadOlderFailed": "تحميل الرسائل السابقة",
+    "toolUsed": "تم استخدام: {tool}",
+    "threadTitle": "محادثة",
+    "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
+    "threadEmptyDescription": "لا تحتوي هذه المحادثة على رسائل بعد.",
+    "sections": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "week": "آخر 7 أيام",
+      "earlier": "سابقًا"
+    }
   },
   "tasks": {
     "description": "اطّلع على ما يحتاج إلى اهتمامك دون فتح مساحة العمل بالكامل.",

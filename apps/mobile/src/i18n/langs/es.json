@@ -8,7 +8,22 @@
   "chat": {
     "description": "Ten a mano el trabajo en curso y continúa desde cualquier dispositivo.",
     "emptyTitle": "Aún no hay conversaciones",
-    "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes."
+    "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes.",
+    "loadFailed": "No se pudieron cargar sus conversaciones.",
+    "retry": "Reintentar",
+    "untitled": "Conversación sin título",
+    "loadMoreFailed": "Cargar más",
+    "loadOlderFailed": "Cargar mensajes anteriores",
+    "toolUsed": "Usado: {tool}",
+    "threadTitle": "Conversación",
+    "threadLoadFailed": "No se pudo cargar esta conversación.",
+    "threadEmptyDescription": "Esta conversación aún no tiene mensajes.",
+    "sections": {
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "week": "Últimos 7 días",
+      "earlier": "Anteriores"
+    }
   },
   "tasks": {
     "description": "Consulta lo que requiere atención sin abrir todo el espacio de trabajo.",

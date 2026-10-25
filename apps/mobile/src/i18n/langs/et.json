@@ -8,7 +8,22 @@
   "chat": {
     "description": "Hoidke pooleliolev töö käepärast ja jätkake mis tahes seadmest.",
     "emptyTitle": "Vestlusi pole veel",
-    "emptyDescription": "Uued vestlused ja hiljutised lõimed ilmuvad siia."
+    "emptyDescription": "Uued vestlused ja hiljutised lõimed ilmuvad siia.",
+    "loadFailed": "Teie vestlusi ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "untitled": "Pealkirjata vestlus",
+    "loadMoreFailed": "Laadi veel",
+    "loadOlderFailed": "Laadi varasemad sõnumid",
+    "toolUsed": "Kasutatud: {tool}",
+    "threadTitle": "Vestlus",
+    "threadLoadFailed": "Seda vestlust ei õnnestunud laadida.",
+    "threadEmptyDescription": "Selles vestluses pole veel sõnumeid.",
+    "sections": {
+      "today": "Täna",
+      "yesterday": "Eile",
+      "week": "Viimased 7 päeva",
+      "earlier": "Varem"
+    }
   },
   "tasks": {
     "description": "Vaadake, mis vajab tähelepanu, ilma kogu tööruumi avamata.",
