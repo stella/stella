@@ -11907,12 +11907,12 @@
       },
       "deepseek/deepseek-v4-flash-0731": {
         "cost": {
-          "cache_read": 0.001414,
-          "input": 0.04444,
-          "output": 0.13332
+          "cache_read": 0.028,
+          "input": 0.0422,
+          "output": 0.1694
         },
         "limit": {
-          "output": 131072
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -11968,9 +11968,9 @@
       },
       "deepseek/deepseek-v4-pro": {
         "cost": {
-          "cache_read": 0.04843,
-          "input": 0.58116,
-          "output": 1.16232
+          "cache_read": 0.0174,
+          "input": 0.2088,
+          "output": 0.4176
         },
         "limit": {
           "output": 384000
@@ -13433,6 +13433,26 @@
         "temperature": true,
         "tool_call": false
       },
+      "liquid/lfm-2.5-2.6b": {
+        "cost": {
+          "cache_read": 0.04,
+          "input": 0.35,
+          "output": 0.5
+        },
+        "limit": {
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [],
+        "release_date": "2026-08-11",
+        "temperature": true,
+        "tool_call": true
+      },
       "liquid/lfm-2.5-2.6b:free": {
         "cost": {
           "input": 0,
@@ -13574,11 +13594,11 @@
       },
       "meta-llama/llama-3.2-3b-instruct": {
         "cost": {
-          "input": 0.0509,
-          "output": 0.335
+          "input": 0.05,
+          "output": 0.33
         },
         "limit": {
-          "output": 72000
+          "output": 117964
         },
         "modalities": {
           "input": [
@@ -14060,11 +14080,11 @@
       "minimax/minimax-m2.5": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.27,
-          "output": 0.95
+          "input": 0.3,
+          "output": 1.2
         },
         "limit": {
-          "output": 32768
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -15299,24 +15319,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "openai/gpt-3.5-turbo": {
-        "cost": {
-          "input": 0.5,
-          "output": 1.5
-        },
-        "limit": {
-          "output": 4096
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2023-03-01",
-        "temperature": true,
-        "tool_call": true
-      },
       "openai/gpt-3.5-turbo-0613": {
         "cost": {
           "input": 1,
@@ -15352,24 +15354,6 @@
         "release_date": "2023-08-28",
         "temperature": true,
         "tool_call": true
-      },
-      "openai/gpt-3.5-turbo-instruct": {
-        "cost": {
-          "input": 1.5,
-          "output": 2
-        },
-        "limit": {
-          "output": 3685
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2023-09-28",
-        "temperature": true,
-        "tool_call": false
       },
       "openai/gpt-4": {
         "cost": {
@@ -21098,9 +21082,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.228,
-          "input": 0.238,
-          "output": 16
+          "cache_read": 0.19,
+          "input": 0.19,
+          "output": 8.94
         },
         "limit": {
           "output": 943718
@@ -21441,9 +21425,9 @@
       },
       "~z-ai/glm-flash-latest": {
         "cost": {
-          "cache_read": 0.0262,
-          "input": 0.0262,
-          "output": 0.1028
+          "cache_read": 0.03,
+          "input": 0.0511,
+          "output": 0.0761
         },
         "limit": {
           "output": 131072
@@ -21472,12 +21456,12 @@
       },
       "~z-ai/glm-latest": {
         "cost": {
-          "cache_read": 0.078,
-          "input": 0.079,
-          "output": 1.4
+          "cache_read": 0.0703,
+          "input": 0.0703,
+          "output": 4.3843
         },
         "limit": {
-          "output": 943718
+          "output": 131072
         },
         "modalities": {
           "input": [
