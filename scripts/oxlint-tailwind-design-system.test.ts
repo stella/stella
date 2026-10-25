@@ -13,7 +13,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { tailwindEntryPoints } from "./generate-tailwind-classes";
+import {
+  cacheProblems,
+  mergeCache,
+  tailwindEntryPoints,
+  tailwindFailureMessages,
+} from "./generate-tailwind-classes";
 import { generatorsForFiles } from "./generated-files";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
@@ -175,7 +180,8 @@ test("answers for classes named like object properties persist and reload", asyn
   );
   try {
     await cp(generatedCache, cache, { recursive: true });
-    const source = 'const a = <div className="constructor toString" />;';
+    const source =
+      'const a = <div className="constructor toString __proto__" />;';
     const generated = await lintFixture({ cache, source, readOnly: false });
     const reloaded = await lintFixture({ cache, source });
     for (const result of [generated, reloaded]) {
@@ -202,14 +208,106 @@ test("answers for classes named like object properties persist and reload", asyn
       declarations: [],
       values: {},
     });
-    expect(answers.get("toString")).toEqual({
-      valid: false,
-      declarations: [],
-      values: {},
-    });
+    for (const token of ["toString", "__proto__"]) {
+      expect({ token, answer: answers.get(token) }).toEqual({
+        token,
+        answer: { valid: false, declarations: [], values: {} },
+      });
+    }
   } finally {
     await rm(cache, { recursive: true, force: true });
   }
+});
+
+const snapshotA = `${"a".repeat(32)}.json`;
+const shardA = `${"a".repeat(32)}.decl-00.json`;
+const shard = (answers: Record<string, unknown>) =>
+  `${JSON.stringify(answers)}\n`;
+
+test("the cache check fails only on missing or changed answers", () => {
+  const generated = new Map([
+    [snapshotA, '{"v":1}\n'],
+    [shardA, shard({ "w-[1px]": { valid: true }, "w-[2px]": { valid: true } })],
+  ]);
+  expect(
+    cacheProblems(
+      new Map([
+        [snapshotA, '{"v":1}\n'],
+        [
+          shardA,
+          shard({
+            "w-[1px]": { valid: true },
+            "w-[2px]": { valid: true },
+            "w-[9px]": { valid: true },
+          }),
+        ],
+        [
+          `${"a".repeat(32)}.decl-ff.json`,
+          shard({ "h-[9px]": { valid: true } }),
+        ],
+        [`${"b".repeat(32)}.json`, '{"v":0}\n'],
+      ]),
+      generated,
+    ),
+  ).toEqual([]);
+  expect(
+    cacheProblems(
+      new Map([[shardA, shard({ "w-[1px]": { valid: false } })]]),
+      generated,
+    ),
+  ).toEqual([
+    `- ${shardA}: w-[1px] (answer changed), w-[2px] (missing)`,
+    `- ${snapshotA}: design-system snapshot missing`,
+  ]);
+});
+
+test("the cache write keeps unused answers and drops obsolete snapshots", () => {
+  const obsolete = "b".repeat(32);
+  const merged = mergeCache(
+    new Map([
+      [`${obsolete}.json`, '{"v":0}\n'],
+      [`${obsolete}.decl-00.json`, shard({ "w-[1px]": { valid: true } })],
+      [snapshotA, '{"v":0}\n'],
+      [
+        shardA,
+        shard({ "w-[1px]": { valid: false }, "w-[9px]": { valid: true } }),
+      ],
+      [`${"a".repeat(32)}.decl-ff.json`, shard({ "h-[9px]": { valid: true } })],
+    ]),
+    new Map([
+      [snapshotA, '{"v":1}\n'],
+      [
+        shardA,
+        shard({ "w-[1px]": { valid: true }, "w-[2px]": { valid: true } }),
+      ],
+    ]),
+  );
+  expect(Object.fromEntries(merged)).toEqual({
+    [shardA]: shard({
+      "w-[1px]": { valid: true },
+      "w-[2px]": { valid: true },
+      "w-[9px]": { valid: true },
+    }),
+    [`${"a".repeat(32)}.decl-ff.json`]: shard({ "h-[9px]": { valid: true } }),
+    [snapshotA]: '{"v":1}\n',
+  });
+});
+
+test("a crash inside the Tailwind plugin fails generation", () => {
+  const crash =
+    "Error running JS plugin.\nTypeError: boom\n    at ask (/repo/node_modules/oxlint-tailwindcss/dist/index.cjs:1:1)";
+  expect(
+    tailwindFailureMessages([
+      crash,
+      "Error running JS plugin.\nTypeError: other\n    at rule (/repo/.oxlint-plugins/other.ts:1:1)",
+      "tailwind design system not loaded: Tailwind cache is incomplete",
+      "Unused oxlint-disable directive",
+      crash,
+    ]),
+  ).toEqual([
+    crash,
+    "tailwind design system not loaded: Tailwind cache is incomplete",
+  ]);
 });
 
 test("oxlint.config.ts makes every lint read the committed cache", () => {

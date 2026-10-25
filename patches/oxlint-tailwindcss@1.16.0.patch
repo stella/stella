@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c..71b1fb0 100644
+index 6d9820c..193fe51 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -135,7 +135,7 @@ index 6d9820c..71b1fb0 100644
 +			const value = declaration[2];
 +			if (Object.hasOwn(response.values, value)) values[value] = response.values[value];
 +		}
-+		entries[cls] = { valid: !invalid.has(cls), declarations, values };
++		Object.defineProperty(entries, cls, { value: { valid: !invalid.has(cls), declarations, values }, enumerable: true, writable: true, configurable: true });
 +	}
 +	for (const [file, entries] of byFile) {
 +		const lockPath = `${file}.lock`;
@@ -148,7 +148,7 @@ index 6d9820c..71b1fb0 100644
 +		try {
 +			let merged = {};
 +			try { const existing = JSON.parse((0, node_fs.readFileSync)(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
-+			Object.assign(merged, entries);
++			for (const [token, answer] of Object.entries(entries)) Object.defineProperty(merged, token, { value: answer, enumerable: true, writable: true, configurable: true });
 +			const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
 +			const tmp = `${file}.${process.pid}.${node_worker_threads.threadId}.${tmpSeq++}.tmp`;
 +			(0, node_fs.writeFileSync)(tmp, `${JSON.stringify(sorted)}\n`);
@@ -176,7 +176,7 @@ index 6d9820c..71b1fb0 100644
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c6242..3d720db 100644
+index 61c6242..d95d7ed 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -312,7 +312,7 @@ index 61c6242..3d720db 100644
 +			const value = declaration[2];
 +			if (Object.hasOwn(response.values, value)) values[value] = response.values[value];
 +		}
-+		entries[cls] = { valid: !invalid.has(cls), declarations, values };
++		Object.defineProperty(entries, cls, { value: { valid: !invalid.has(cls), declarations, values }, enumerable: true, writable: true, configurable: true });
 +	}
 +	for (const [file, entries] of byFile) {
 +		const lockPath = `${file}.lock`;
@@ -325,7 +325,7 @@ index 61c6242..3d720db 100644
 +		try {
 +			let merged = {};
 +			try { const existing = JSON.parse(readFileSync(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
-+			Object.assign(merged, entries);
++			for (const [token, answer] of Object.entries(entries)) Object.defineProperty(merged, token, { value: answer, enumerable: true, writable: true, configurable: true });
 +			const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
 +			const tmp = `${file}.${process.pid}.${threadId}.${tmpSeq++}.tmp`;
 +			writeFileSync(tmp, `${JSON.stringify(sorted)}\n`);

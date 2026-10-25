@@ -34,9 +34,25 @@ const lintReport = v.object({
 });
 
 /**
- * Lints every Tailwind entry point and returns its design-system failures.
- * Findings of other rules are left to the lint jobs that enforce them.
+ * The diagnostics that mean the Tailwind rules did not run: the design system
+ * or its cache was unavailable, or the Tailwind plugin itself threw. Findings
+ * of other rules are left to the lint jobs that enforce them.
  */
+export const tailwindFailureMessages = (
+  messages: readonly string[],
+): string[] =>
+  [
+    ...new Set(
+      messages.filter(
+        (message) =>
+          message.includes("tailwind design system not loaded") ||
+          (message.includes("Error running JS plugin") &&
+            message.includes("oxlint-tailwindcss")),
+      ),
+    ),
+  ].toSorted();
+
+/** Lints every Tailwind entry point and returns why its rules did not run. */
 const tailwindFailures = async (env: Record<string, string | undefined>) => {
   const child = Bun.spawn(
     [
@@ -59,13 +75,14 @@ const tailwindFailures = async (env: Record<string, string | undefined>) => {
   if (exitCode !== 0 && exitCode !== 1) {
     panic(`oxlint exited with ${exitCode} while linting the Tailwind sources.`);
   }
-  const messages = v
-    .parse(lintReport, JSON.parse(stdout))
-    .diagnostics.map(({ message }) => message)
-    .filter((message) => message.includes("tailwind design system not loaded"));
-  return [...new Set(messages)].toSorted();
+  return tailwindFailureMessages(
+    v
+      .parse(lintReport, JSON.parse(stdout))
+      .diagnostics.map(({ message }) => message),
+  );
 };
 
+/** Fills `cacheDirectory` from nothing with exactly what the sources need. */
 const generate = async (cacheDirectory: string) => {
   await rm(cacheDirectory, { recursive: true, force: true });
   await mkdir(cacheDirectory, { recursive: true });
@@ -78,7 +95,7 @@ const generate = async (cacheDirectory: string) => {
   const generationFailures = await tailwindFailures(env);
   if (generationFailures.length > 0) {
     panic(
-      `Tailwind design system failed to load while generating the cache:\n${generationFailures.join("\n")}`,
+      `Tailwind rules failed while generating the cache:\n${generationFailures.join("\n")}`,
     );
   }
   for (const name of await readdir(cacheDirectory)) {
@@ -104,98 +121,167 @@ const generate = async (cacheDirectory: string) => {
   }
 };
 
-const snapshot = async (directory: string) => {
-  const entries = new Map<string, Uint8Array>();
+/** Cache artifacts by file name. */
+export type CacheFiles = ReadonlyMap<string, string>;
+
+const readCache = async (directory: string): Promise<CacheFiles> => {
+  const files = new Map<string, string>();
   try {
     for (const name of (await readdir(directory)).toSorted()) {
-      entries.set(name, await readFile(path.join(directory, name)));
+      if (artifact.test(name)) {
+        files.set(name, await readFile(path.join(directory, name), "utf-8"));
+      }
     }
   } catch {
-    // A missing output directory is represented by an empty snapshot.
+    // A missing cache directory holds no artifacts.
   }
-  return entries;
+  return files;
 };
 
-const parseAnswers = (bytes: Uint8Array | undefined) =>
-  bytes === undefined
-    ? new Map<string, string>()
-    : new Map(
-        Object.entries(
-          v.parse(
-            v.record(v.string(), v.unknown()),
-            JSON.parse(new TextDecoder().decode(bytes)),
-          ),
-        ).map(([token, answer]) => [token, JSON.stringify(answer)]),
-      );
+const isDeclarationShard = (name: string) => name.includes(".decl-");
 
-/** One stale artifact, naming the class tokens whose answers differ. */
-const describeChange = (
-  name: string,
-  committed: Uint8Array | undefined,
-  generated: Uint8Array | undefined,
+/** Class token → its answer as JSON; own properties only, so any token is safe. */
+const answersOf = (text: string | undefined) => {
+  if (text === undefined) {
+    return new Map<string, string>();
+  }
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return new Map<string, string>();
+  }
+  return new Map(
+    Object.entries(parsed).map(([token, answer]) => [
+      token,
+      JSON.stringify(answer),
+    ]),
+  );
+};
+
+/**
+ * Why the committed cache cannot serve the sources: a snapshot that is missing
+ * or different, or a linted class whose answer is missing or different. An
+ * answer the sources no longer use is harmless, because lint only reads.
+ */
+export const cacheProblems = (
+  committed: CacheFiles,
+  generated: CacheFiles,
+): string[] => {
+  const problems: string[] = [];
+  for (const [name, text] of generated) {
+    const kept = committed.get(name);
+    if (!isDeclarationShard(name)) {
+      if (kept !== text) {
+        problems.push(
+          `- ${name}: design-system snapshot ${kept === undefined ? "missing" : "differs"}`,
+        );
+      }
+      continue;
+    }
+    const have = answersOf(kept);
+    const classes = [...answersOf(text)]
+      .filter(([token, answer]) => have.get(token) !== answer)
+      .map(([token]) =>
+        have.has(token) ? `${token} (answer changed)` : `${token} (missing)`,
+      )
+      .toSorted();
+    if (classes.length > 0) {
+      problems.push(`- ${name}: ${classes.join(", ")}`);
+    }
+  }
+  return problems.toSorted();
+};
+
+/**
+ * The committed cache after a generation. Fresh answers win; an answer the
+ * sources no longer use stays, because a concurrent change may use that class
+ * again; only artifacts of a snapshot that is no longer generated go.
+ */
+export const mergeCache = (
+  committed: CacheFiles,
+  generated: CacheFiles,
+): Map<string, string> => {
+  const currentSnapshots = new Set(
+    [...generated.keys()].map((name) => name.slice(0, 32)),
+  );
+  const merged = new Map<string, string>();
+  for (const [name, text] of committed) {
+    if (isDeclarationShard(name) && currentSnapshots.has(name.slice(0, 32))) {
+      merged.set(name, text);
+    }
+  }
+  for (const [name, text] of generated) {
+    if (!isDeclarationShard(name)) {
+      merged.set(name, text);
+      continue;
+    }
+    const answers = answersOf(merged.get(name));
+    for (const [token, answer] of answersOf(text)) {
+      answers.set(token, answer);
+    }
+    // Code-unit order, so the bytes do not depend on the machine's locale.
+    const sorted = [...answers].toSorted(([left], [right]) =>
+      left < right ? -1 : 1,
+    );
+    merged.set(
+      name,
+      `${JSON.stringify(
+        Object.fromEntries(
+          sorted.map(([token, answer]) => [token, JSON.parse(answer)]),
+        ),
+      )}\n`,
+    );
+  }
+  return merged;
+};
+
+const withGenerated = async <T>(
+  consume: (generated: CacheFiles) => Promise<T>,
 ) => {
-  let state = "differs";
-  if (committed === undefined) {
-    state = "missing from the commit";
-  } else if (generated === undefined) {
-    state = "no longer generated";
-  }
-  if (!name.includes(".decl-")) {
-    return `- ${name}: design-system snapshot ${state}`;
-  }
-  const before = parseAnswers(committed);
-  const after = parseAnswers(generated);
-  const tokens = [...new Set([...before.keys(), ...after.keys()])]
-    .filter((token) => before.get(token) !== after.get(token))
-    .toSorted()
-    .map((token) => {
-      if (!before.has(token)) {
-        return `${token} (new)`;
-      }
-      if (!after.has(token)) {
-        return `${token} (no longer linted)`;
-      }
-      return `${token} (answer changed: ${before.get(token)} -> ${after.get(token)})`;
-    });
-  return `- ${name}: ${state}; classes: ${tokens.join(", ") || "(byte order only)"}`;
-};
-
-const check = async () => {
   const temporaryRoot = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-cache-"),
   );
   try {
     await generate(temporaryRoot);
-    const [expected, actual] = await Promise.all([
-      snapshot(committedCache),
-      snapshot(temporaryRoot),
-    ]);
-    const names = new Set([...expected.keys(), ...actual.keys()]);
-    const changed = [...names]
-      .filter((name) => {
-        const left = expected.get(name);
-        const right = actual.get(name);
-        return !left || !right || !Buffer.from(left).equals(Buffer.from(right));
-      })
-      .toSorted();
-    if (changed.length > 0) {
-      const details = changed.map((name) =>
-        describeChange(name, expected.get(name), actual.get(name)),
-      );
-      process.stderr.write(
-        `Tailwind cache is stale:\n${details.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
-      );
-      process.exitCode = 1;
-    }
+    return await consume(await readCache(temporaryRoot));
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
 };
 
+const write = async () => {
+  await withGenerated(async (generated) => {
+    const merged = mergeCache(await readCache(committedCache), generated);
+    await mkdir(committedCache, { recursive: true });
+    for (const name of await readdir(committedCache)) {
+      if (!merged.has(name)) {
+        await rm(path.join(committedCache, name), {
+          recursive: true,
+          force: true,
+        });
+      }
+    }
+    for (const [name, text] of merged) {
+      await Bun.write(path.join(committedCache, name), text);
+    }
+  });
+};
+
+const check = async () => {
+  await withGenerated(async (generated) => {
+    const problems = cacheProblems(await readCache(committedCache), generated);
+    if (problems.length > 0) {
+      process.stderr.write(
+        `Tailwind cache misses answers the sources need:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
+      );
+      process.exitCode = 1;
+    }
+  });
+};
+
 if (import.meta.main) {
   const mode = process.argv[2];
   if (mode === "--write") {
-    await generate(committedCache);
+    await write();
   } else if (mode === "--check") {
     await check();
   } else {
