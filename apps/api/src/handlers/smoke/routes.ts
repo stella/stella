@@ -37,11 +37,9 @@ import { logger } from "@/api/lib/observability/logger";
 import { releaseLoadAllowed } from "@/api/lib/scheduler/release-load-deployment";
 import {
   bringReleaseLoadJobsForward,
-  readReleaseLoadJobs,
-} from "@/api/lib/scheduler/release-load-jobs";
-import {
   mintSmokeSession,
   parseSmokePrincipal,
+  readReleaseLoadJobs,
 } from "@/api/lib/smoke-session/store";
 
 const notAvailable = () => new Response("Not available", { status: 404 });

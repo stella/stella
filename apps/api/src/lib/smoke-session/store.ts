@@ -15,19 +15,25 @@
  * organization settings API, exactly as a real owner would.
  */
 
+import { panic } from "better-result";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import type { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { runtimeMode } from "@/api/runtime-mode";
 
@@ -206,3 +212,66 @@ export const mintSmokeSession = async (
     expiresAt: expiresAt.toISOString(),
   };
 };
+
+type DeclaredSchedulerJobId = (typeof DECLARED_SCHEDULER_JOBS)[number]["id"];
+
+/**
+ * The recurring jobs that read the public corpus. The staging release proof
+ * brings them forward and runs its MCP load while they run, because a heavy
+ * job and user traffic only interfere when they overlap.
+ */
+const RELEASE_LOAD_JOB_IDS = [
+  "caseLaw.reportFreshness.fiveMinute",
+  "caseLaw.refreshSitemapShards.hourly",
+  "caseLaw.refreshBrowseFacets.hourly",
+  "caseLaw.refreshSourceArrivals.threeHourly",
+  "legislation.refreshSitemapShards.hourly",
+  "legislation.refreshFacetCounts.hourly",
+] as const satisfies readonly DeclaredSchedulerJobId[];
+
+const releaseLoadJobColumns = {
+  id: schedulerJobs.id,
+  lastRunAt: schedulerJobs.lastRunAt,
+  lockedAt: schedulerJobs.lockedAt,
+  nextRunAt: schedulerJobs.nextRunAt,
+};
+
+const releaseLoadJobListed = inArray(schedulerJobs.id, RELEASE_LOAD_JOB_IDS);
+
+/** When each release-load job last ran, is running, and runs next. */
+export const readReleaseLoadJobs = async () => {
+  const read = await readBounded(
+    rootDb
+      .select(releaseLoadJobColumns)
+      .from(schedulerJobs)
+      .where(releaseLoadJobListed)
+      .orderBy(schedulerJobs.id),
+    RELEASE_LOAD_JOB_IDS.length,
+  );
+  // The ids are the primary key, so at most one row each can match.
+  return read.type === "complete"
+    ? read.rows
+    : panic("More scheduler rows than release-load job ids", { cap: read.cap });
+};
+
+/**
+ * Makes every enabled, unpaused release-load job due now; the next scheduler
+ * sweep on any replica claims them through its usual lease. A job already
+ * running keeps its lease, and its finish sets its next slot as usual.
+ */
+export const bringReleaseLoadJobsForward = async () =>
+  // audit: skip — scheduler system state on the staging deployment; the smoke route logs the ids it moved.
+  await rootDb
+    .update(schedulerJobs)
+    .set({ nextRunAt: sql`now()` })
+    .where(
+      and(
+        releaseLoadJobListed,
+        eq(schedulerJobs.enabled, true),
+        or(
+          isNull(schedulerJobs.pausedUntil),
+          lte(schedulerJobs.pausedUntil, sql`now()`),
+        ),
+      ),
+    )
+    .returning(releaseLoadJobColumns);
