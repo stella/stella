@@ -339,6 +339,7 @@ export const FAILURE_TAGS = [
   "ReplayStageError",
   "ReportExportInspectionError",
   "ReportExportRequeueError",
+  "RequestBodyTooLargeError",
   "ResearchPassageRetrievalError",
   "ResponsePolicyError",
   "ReviewAccountCommandError",
