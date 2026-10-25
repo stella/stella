@@ -1109,11 +1109,6 @@ test("malformed ledger and dependency schemas fail in both measurement roles", (
         diagnostic: "internal-module-mock ledger must be a JSON array",
       },
       {
-        relative: "scripts/parser-validator-call-ledger.json",
-        contents: "{}",
-        diagnostic: "parser-validator-call ledger must be a JSON array",
-      },
-      {
         relative: "packages/invalid/package.json",
         contents: '{"dependencies":[]}',
         diagnostic: "dependencies must be an object",

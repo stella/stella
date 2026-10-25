@@ -23,7 +23,6 @@ describe("Austrian RIS XML parser", () => {
       xml,
     }).unwrap();
 
-    expect(parsed.validationIssues).toEqual([]);
     expect(parsed.documentAst.source.documentId).toBe(
       "JJT_19250416_OGH0002_0030OB00270_2500000_000",
     );
@@ -101,6 +100,5 @@ describe("Austrian RIS XML parser", () => {
     }).unwrap();
 
     expect(parsed.fulltext).toContain("Unbekannter strukturierter Inhalt");
-    expect(parsed.validationIssues).toEqual([]);
   });
 });

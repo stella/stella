@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 // parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
@@ -44,7 +45,6 @@ import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   inlinesToPlainText,
@@ -85,13 +85,6 @@ export const parseNssDecisionHtml = (
     caseNumber: input.caseNumber,
     url: input.sourceUrl,
   });
-
-  validateAndLog(
-    { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
-    input.html,
-    blocks,
-    { document: $ },
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))

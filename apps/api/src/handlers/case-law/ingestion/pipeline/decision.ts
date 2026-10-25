@@ -50,10 +50,12 @@ import type {
   ProcessDecisionAttemptOptions,
   ProcessDecisionOptions,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { startDecisionRetentionCheck } from "@/api/handlers/case-law/ingestion/retention/retention-check";
 import {
   composeDecisionWithSupplements,
   type StoredSupplement,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
@@ -145,6 +147,7 @@ const storedInputMatchesDecision = (
  */
 const runDecisionAttempt = async ({
   metadataUrlSchema,
+  retention,
   statedEcliIdentity,
   input,
   inputProvenance,
@@ -219,7 +222,6 @@ const runDecisionAttempt = async ({
   if (existingPolicyOutcome !== null) {
     return existingPolicyOutcome;
   }
-
   signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
     ...(signal === undefined ? {} : { signal }),
@@ -340,6 +342,21 @@ const runDecisionAttempt = async ({
   if (settled !== null) {
     return settled;
   }
+  // The row is committed. Its retention check starts now, off this write:
+  // it reads the adapter's own observation, before any supplement joined it,
+  // since the projection reads what this decision's publisher served. It
+  // runs once per applied write, so an unchanged decision or a retried
+  // contention is not reported again, and nothing it does (a PDF parse, a
+  // failure, this write's abort) can delay or fail the write's outcome.
+  if (shape.incomingCarriesDocument) {
+    detached(
+      startDecisionRetentionCheck({
+        ...retention,
+        result: observation.observed,
+      }),
+      "case-law.retention-check",
+    );
+  }
 
   signal?.throwIfAborted();
   const flushed = await enqueueCorpusMirror({
@@ -406,11 +423,16 @@ const processDecisionFromInput = async (
     options.scopedDb,
   ),
 ): Promise<ProcessResult> => {
-  const { metadataUrlSchema, sourceFingerprintVersion, statedEcliIdentity } =
-    await resolveSourceContract(options.sourceId);
+  const {
+    metadataUrlSchema,
+    retention,
+    sourceFingerprintVersion,
+    statedEcliIdentity,
+  } = await resolveSourceContract(options.sourceId);
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
+    retention,
     sourceFingerprintVersion,
     sourceFingerprintFromStoredRaw: readStoredFingerprint,
     statedEcliIdentity,

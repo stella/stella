@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored XHTML; the parse itself is unchanged.
 // parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
@@ -55,7 +56,6 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /**
  * What a dropped anonymized run reads as.
@@ -544,16 +544,6 @@ export const parseSkUsDocumentXhtml = ({
     caseNumber,
     url: documentUrl,
   });
-
-  validateAndLog(
-    {
-      parser: "sk-us",
-      caseNumber,
-      url: documentUrl,
-    },
-    xhtml,
-    blocks,
-  );
 
   const fulltext = blocks
     .map(({ plainText }) => plainText)

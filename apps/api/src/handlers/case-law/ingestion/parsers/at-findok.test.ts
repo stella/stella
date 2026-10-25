@@ -30,7 +30,6 @@ describe("Austrian Findok XML parser", () => {
     });
     expect(parsed.fulltext).toContain("Entscheidungsgründe");
     expect(parsed.fulltext).toContain("Rechtliche Würdigung");
-    expect(parsed.validationIssues).toEqual([]);
   });
 
   it("rejects an envelope without decision XHTML", () => {
@@ -51,7 +50,7 @@ describe("Austrian Findok XML parser", () => {
   });
 });
 
-it("excludes script and style text from embedded XHTML and validation", () => {
+it("excludes script and style text from embedded XHTML", () => {
   const parsed = parseFindokDecisionXml({
     caseNumber: "RV/1/2026",
     court: "BFG",
@@ -66,5 +65,4 @@ it("excludes script and style text from embedded XHTML and validation", () => {
     "Visible decision",
   ]);
   expect(parsed.fulltext).toBe("Title\n\nVisible decision");
-  expect(parsed.validationIssues).toEqual([]);
 });

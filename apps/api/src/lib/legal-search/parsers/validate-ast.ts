@@ -1,3 +1,4 @@
+// parser-output-unchanged: hyphenatedLineBreaks is a new option no parser passes; every existing verdict is computed exactly as before.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
 // parser-output-unchanged: Callers may reuse their already-parsed document; reference extraction, validation diagnostics, and stored parser output are unchanged.
@@ -68,7 +69,8 @@ export type ValidationResult = {
 
 /** Source text accepted by validation without requiring structured parsers to serialize HTML. */
 export type ValidationSource =
-  string | { type: "paragraphs"; paragraphs: readonly string[] };
+  | string
+  | { type: "paragraphs"; paragraphs: readonly string[] };
 
 /** Explicit publisher policy; other sources keep the shared validation semantics. */
 export type ValidationSourcePolicy = {
@@ -282,6 +284,17 @@ const BOUNDARY_WHITESPACE = "BOUNDARY_WHITESPACE";
 
 // ── Validator ──────────────────────────────────────────────
 
+/**
+ * Rejoin words broken at a line end. A hyphen the word really holds and the
+ * next line repeats ("polsko- -niemiecki") is kept once; a break continued
+ * by a lowercase letter ("rozpo- znaniu") loses it. Applied to both sides of
+ * the comparison, so it only ever adds a reading of the same text.
+ */
+const rejoinLineBreakHyphenation = (text: string): string =>
+  text
+    .replace(/(\p{L})-\s+-(\p{L})/gu, "$1-$2")
+    .replace(/(\p{L})-\s*(\p{Ll})/gu, "$1$2");
+
 export const validateAst = (
   source: ValidationSource,
   blocks: Block[],
@@ -290,6 +303,14 @@ export const validateAst = (
     maxMissingWords?: number;
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
+    /**
+     * The source keeps words a typesetter broke at a line end (a PDF line
+     * ending "rozpo-" before one starting "znaniu"). A parser may faithfully
+     * rejoin such a word or keep the break, so words are compared with the
+     * breaks rejoined on the source side and either form accepted on the
+     * AST side. Retention ratios are measured on the text as it stands.
+     */
+    hyphenatedLineBreaks?: boolean;
     sourcePolicy?: ValidationSourcePolicy;
     /** Already-parsed source document; subtree sources must omit this. */
     document?: cheerio.CheerioAPI;
@@ -407,8 +428,16 @@ export const validateAst = (
     blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
   );
 
-  const originalWords = extractValidationWords(originalText);
-  const astWords = extractValidationWords(astText);
+  const hyphenated = options?.hyphenatedLineBreaks === true;
+  const originalWords = extractValidationWords(
+    hyphenated ? rejoinLineBreakHyphenation(originalText) : originalText,
+  );
+  const astWords = hyphenated
+    ? new Set([
+        ...extractValidationWords(astText),
+        ...extractValidationWords(rejoinLineBreakHyphenation(astText)),
+      ])
+    : extractValidationWords(astText);
 
   const sourceHasContent = !validationTextHoldsOnlyDecoration(originalText);
 

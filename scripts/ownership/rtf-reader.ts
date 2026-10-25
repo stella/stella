@@ -34,6 +34,11 @@ export default {
         reason: "Provides synthetic RTF input to the adapter.",
       },
       {
+        path: "apps/api/src/handlers/case-law/ingestion/retention/sources/rtf-paragraphs.ts",
+        reason:
+          "The retention oracle's own reading of a publisher's RTF: it must not share the reader whose parse it checks.",
+      },
+      {
         path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
         reason: "Verifies the rejecting second-reader mutation.",
       },
