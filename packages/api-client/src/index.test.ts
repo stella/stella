@@ -418,7 +418,7 @@ class CloneTrackedResponse extends Response {
 test("scoped observers retain declared methods and parameter names across concurrent requests", async () => {
   const seen: unknown[] = [];
   const transportSymbols: symbol[][] = [];
-  const client = createApiClient<TestRoutes>("https://api.example", {
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
     fetcher: testFetcher(async (_input, init) => {
       transportSymbols.push(Object.getOwnPropertySymbols(init ?? {}));
       await Promise.resolve();
@@ -431,8 +431,8 @@ test("scoped observers retain declared methods and parameter names across concur
     },
   });
   await Promise.all([
-    client.v1.items({ itemId: "first-private-id" }).get(),
-    client.v1.items({ itemId: "second-private-id" }).patch({}),
+    scopedClient.v1.items({ itemId: "first-private-id" }).get(),
+    scopedClient.v1.items({ itemId: "second-private-id" }).patch({}),
   ]);
   expect(seen).toContainEqual({
     type: "request",
@@ -468,14 +468,14 @@ test("scoped observation leaves streamed success bodies for the caller", async (
     headers: { "content-type": "application/json" },
   });
   let observed: ScopedResponse | undefined;
-  const client = createApiClient<TestRoutes>("https://api.example", {
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
     fetcher: testFetcher(async () => response),
     onScopedResponse: ({ response: observedResponse }) => {
       observed = observedResponse;
     },
   });
 
-  const result = await client.v1.answers.json.get();
+  const result = await scopedClient.v1.answers.json.get();
 
   expect(result.data).toEqual({ items: [1] });
   expect(observed).toBe(response);
@@ -486,7 +486,7 @@ test("scoped observation leaves streamed success bodies for the caller", async (
 test("scoped clients resolve the current default fetch at request time", async () => {
   const previousFetch = globalThis.fetch;
   const observed: string[] = [];
-  const client = createApiClient<TestRoutes>("https://api.example", {
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
     onScopedResponse: ({ scope }) => {
       observed.push(scope.routeTemplate);
     },
@@ -497,7 +497,7 @@ test("scoped clients resolve the current default fetch at request time", async (
     return jsonResponse();
   });
   try {
-    await client.v1.answers.json.get();
+    await scopedClient.v1.answers.json.get();
     expect(calls).toBe(1);
     expect(observed).toEqual(["/v1/answers/json"]);
   } finally {
@@ -514,7 +514,7 @@ test.each(["request", "fetch", "scoped-response", "response"] as const)(
     const fail = () => {
       throw failure;
     };
-    const client = createApiClient<TestRoutes>("https://api.example", {
+    const scopedClient = createApiClient<TestRoutes>("https://api.example", {
       ...(boundary === "request" ? { onRequest: fail } : {}),
       fetcher: async () => {
         fetchCalls += 1;
@@ -523,7 +523,7 @@ test.each(["request", "fetch", "scoped-response", "response"] as const)(
       ...(boundary === "scoped-response" ? { onScopedResponse: fail } : {}),
       ...(boundary === "response" ? { onResponse: fail } : {}),
     });
-    expect(await rejectionOf(client.v1.answers.json.get())).toBe(failure);
+    expect(await rejectionOf(scopedClient.v1.answers.json.get())).toBe(failure);
     expect(fetchCalls).toBe(boundary === "request" ? 0 : 1);
     expect(response.bodyUsed).toBe(false);
   },
@@ -532,7 +532,7 @@ test.each(["request", "fetch", "scoped-response", "response"] as const)(
 test("scoped and ordinary observers see the same unread response before decoding", async () => {
   const response = jsonResponse();
   const order: string[] = [];
-  const client = createApiClient<TestRoutes>("https://api.example", {
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
     fetcher: async () => response,
     onScopedResponse: ({ response: observed }) => {
       expect(observed).toBe(response);
@@ -545,7 +545,7 @@ test("scoped and ordinary observers see the same unread response before decoding
       order.push("ordinary");
     },
   });
-  const result = await client.v1.answers.json.get();
+  const result = await scopedClient.v1.answers.json.get();
   expect(order).toEqual(["scoped", "ordinary"]);
   expect(result.response).toBe(response);
   expect(result.data).toEqual({ items: [1] });

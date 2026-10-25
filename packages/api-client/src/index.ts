@@ -19,6 +19,7 @@ import { panic, Result } from "better-result";
 import { toWireInput } from "@stll/api-contract/http-input";
 
 import type { ScopedResponseObserver } from "./scoped-response";
+
 export type { ScopedResponse } from "./scoped-response";
 
 const METHOD_NAMES = [
