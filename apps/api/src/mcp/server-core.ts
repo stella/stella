@@ -24,6 +24,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import type { HandlerExceptionScope } from "@stll/errors";
 
 import type { captureError as captureApiError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/analytics/capture";
@@ -635,6 +636,12 @@ const readFactoryState = (): McpFactoryState => {
 /** Hint (seconds) for a client to back off before retrying a transient fault. */
 const MCP_RETRY_AFTER_SECONDS = 2;
 
+/** The exception scope every MCP transport exchange of a mode runs in. */
+const mcpTransportExceptionScope = (mode: McpMode): HandlerExceptionScope => ({
+  type: "handler",
+  handlerId: `mcp.transport.${mode}`,
+});
+
 const MCP_TRANSPORT_FAILURE_SINK = failureSink({
   event: "mcp.transport_failed",
   expected: [],
@@ -651,6 +658,7 @@ const observeMcpTransportFailure = (
   observeFailure(error, {
     sink: MCP_TRANSPORT_FAILURE_SINK,
     request,
+    scope: mcpTransportExceptionScope(mode),
     ctx: { mode, phase: "transport", source: "mcp" },
   });
 };
@@ -1501,7 +1509,7 @@ export const createMcpHttpRequestHandler = ({
     }: { clientIp?: string | null | undefined; mode?: McpMode } = {},
   ): Promise<Response> =>
     await withExceptionScope(
-      { type: "handler", handlerId: `mcp.transport.${mode}` },
+      mcpTransportExceptionScope(mode),
       async () =>
         await observeMcpRequest({
           method: incomingRequest.headers.get("mcp-method"),
