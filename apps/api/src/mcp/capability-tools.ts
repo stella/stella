@@ -603,8 +603,13 @@ const unionDiscriminator = (union: unknown): UnionDiscriminator | undefined => {
   return undefined;
 };
 
+// The values JSON has no text for are named by their type.
 const receivedValue = (value: unknown): string =>
-  value === undefined ? "undefined" : (JSON.stringify(value) ?? String(value));
+  value === undefined ||
+  typeof value === "function" ||
+  typeof value === "symbol"
+    ? typeof value
+    : JSON.stringify(value);
 
 /**
  * A strict object's refusal of an undeclared key, which an agent reads as a

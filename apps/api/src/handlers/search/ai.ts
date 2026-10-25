@@ -877,9 +877,7 @@ const loadSummaryContexts = async ({
       mimeTypes: filters.mimeTypes,
       updatedFrom: filters.updatedFrom,
       updatedTo: filters.updatedTo,
-      limit: normalizeTenantPageLimit(
-        filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
-      ),
+      limit: normalizeTenantPageLimit(filters.limit),
     },
     { scopedDb },
   );

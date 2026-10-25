@@ -100,7 +100,7 @@ export const searchFacetsHandler = async ({
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,
       updatedTo: body.updatedTo,
-      limit: normalizeTenantPageLimit(body.limit ?? FACET_BUCKET_LIMIT_DEFAULT),
+      limit: normalizeTenantPageLimit(body.limit),
     },
     scopedDb,
   );
