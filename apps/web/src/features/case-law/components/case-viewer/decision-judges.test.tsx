@@ -140,6 +140,18 @@ describe("the bench of a decision", () => {
     expect(markup).toContain(messages.caseLaw.viewer.judgeRole.dissenting);
   });
 
+  test("draws a presiding judge who reported the case once, under both parts", () => {
+    const markup = render(
+      <DecisionJudges
+        judges={[{ ...RAPPORTEUR, role: "presiding" }, RAPPORTEUR, DISSENTER]}
+      />,
+    );
+
+    expect(markup.split(">NJ<")).toHaveLength(2);
+    expect(markup).toContain(messages.caseLaw.viewer.judgeRole.presiding);
+    expect(markup).toContain(messages.caseLaw.viewer.judgeRole.rapporteur);
+  });
+
   test("fetches a portrait from the API root, version prefix and all", () => {
     // The read's path already carries `/v1`, so the src is composed against
     // the API root; `apiUrl` would prepend the prefix a second time. The
