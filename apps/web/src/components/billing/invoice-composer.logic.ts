@@ -244,6 +244,31 @@ export const parseHoursInput = (text: string): number | null => {
 };
 
 /** The issue date plus a payment term, as an ISO date. */
+/**
+ * What a client invoice states from the composed body: everything a matter
+ * invoice states except its sources, which the client invoice groups per
+ * matter. Removing only those keeps every other detail (language, dates,
+ * seller) on both paths.
+ */
+export const clientInvoiceDetails = <
+  TBody extends {
+    timeEntryIds?: unknown;
+    expenseIds?: unknown;
+    entryAdjustments?: unknown;
+    documentType?: unknown;
+    originalInvoiceId?: unknown;
+    invoiceNumber?: unknown;
+  },
+>({
+  timeEntryIds: _timeEntryIds,
+  expenseIds: _expenseIds,
+  entryAdjustments: _entryAdjustments,
+  documentType: _documentType,
+  originalInvoiceId: _originalInvoiceId,
+  invoiceNumber: _invoiceNumber,
+  ...details
+}: TBody) => details;
+
 export const dueDateFor = (invoiceDate: string, days: number) =>
   parsePlainDate(invoiceDate)?.add({ days }).toString() ?? null;
 

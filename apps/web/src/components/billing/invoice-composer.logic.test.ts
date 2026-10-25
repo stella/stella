@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  clientInvoiceDetails,
   composeTotals,
   dueDateFor,
   editableHoursText,
@@ -308,4 +309,27 @@ describe("editableHoursText", () => {
       expect(parseHoursInput(text)).toBe(minutes);
     },
   );
+});
+
+describe("clientInvoiceDetails", () => {
+  test("keeps every detail and drops only the per-matter sources", () => {
+    const details = clientInvoiceDetails({
+      invoiceDate: "2026-10-20",
+      dueDate: "2026-11-03",
+      currency: "EUR",
+      language: "pl" as const,
+      sellerProfileId: "seller",
+      timeEntryIds: ["entry"],
+      expenseIds: ["expense"],
+      entryAdjustments: [],
+      documentType: "invoice" as const,
+    });
+    expect(details).toEqual({
+      invoiceDate: "2026-10-20",
+      dueDate: "2026-11-03",
+      currency: "EUR",
+      language: "pl",
+      sellerProfileId: "seller",
+    });
+  });
 });

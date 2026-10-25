@@ -75,6 +75,7 @@ import type {
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 
 import {
+  clientInvoiceDetails,
   composeTotals,
   dueDateFor,
   editableHoursText,
@@ -423,20 +424,7 @@ const useComposerSubmit = ({
                 clientId: toSafeId<"contact">(client.clientId),
               }).put(
                 {
-                  invoiceDate: body.invoiceDate,
-                  ...(body.dueDate === undefined
-                    ? {}
-                    : { dueDate: body.dueDate }),
-                  ...(body.taxableSupplyDate === undefined
-                    ? {}
-                    : { taxableSupplyDate: body.taxableSupplyDate }),
-                  currency: body.currency,
-                  ...(body.sellerProfileId === undefined
-                    ? {}
-                    : { sellerProfileId: body.sellerProfileId }),
-                  ...(body.expectedTotalAmount === undefined
-                    ? {}
-                    : { expectedTotalAmount: body.expectedTotalAmount }),
+                  ...clientInvoiceDetails(body),
                   matters: client.matters.flatMap((matter) => {
                     const timeEntryIds = matter.prefill.timeEntries
                       .filter((entry) =>
