@@ -26,7 +26,10 @@ type CaseLawFreshnessReport = {
   backlogItems: number;
   oldestUnpublishedAgeSeconds: number;
   oldestUnpublishedAgeSource:
-    "desired_at" | "state_created_at_fallback" | "intent_created_at" | "none";
+    | "desired_at"
+    | "state_created_at_fallback"
+    | "intent_created_at"
+    | "none";
   sourceAges: readonly { source: string; ageSeconds: number }[];
   convergence: string | null;
 };

@@ -62,7 +62,9 @@ type DecisionPassageCitation = {
 };
 
 export type Citation =
-  PdfBatesCitation | DocxFolioCitation | DecisionPassageCitation;
+  | PdfBatesCitation
+  | DocxFolioCitation
+  | DecisionPassageCitation;
 
 /**
  * The workspace file a citation points into, or null when it points at

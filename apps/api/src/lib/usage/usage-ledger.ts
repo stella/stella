@@ -66,7 +66,8 @@ import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state"
 const UNRECOGNIZED_STATUS = "unrecognized" as const;
 
 type ReadEntitlementStatus =
-  UsageEntitlementStatus | typeof UNRECOGNIZED_STATUS;
+  | UsageEntitlementStatus
+  | typeof UNRECOGNIZED_STATUS;
 
 const storedEntitlementStatusSchema = v.picklist(USAGE_ENTITLEMENT_STATUSES);
 

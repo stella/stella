@@ -104,7 +104,10 @@ const PAGINATION_CURSOR_KEY = "cursor";
 type Finding = {
   node: AstNode;
   messageId:
-    "unboundedString" | "unboundedArray" | "unboundedFile" | "unboundedFiles";
+    | "unboundedString"
+    | "unboundedArray"
+    | "unboundedFile"
+    | "unboundedFiles";
 };
 
 const typeboxBuilderName = (node: unknown): string | null => {

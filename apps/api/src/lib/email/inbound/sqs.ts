@@ -54,7 +54,8 @@ class InboundQueueMessageError extends TaggedError("InboundQueueMessageError")<{
 }> {}
 
 type InboundQueueNotification =
-  { type: "received"; event: unknown } | { type: "setup" };
+  | { type: "received"; event: unknown }
+  | { type: "setup" };
 
 const parseJson = (text: string) =>
   Result.try({

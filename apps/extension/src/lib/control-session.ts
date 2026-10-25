@@ -1,5 +1,6 @@
 type CommandOutcome<T> =
-  { result: T; status: "completed" } | { status: "busy" };
+  | { result: T; status: "completed" }
+  | { status: "busy" };
 
 type AdmittedCommand = {
   stop: AbortController;

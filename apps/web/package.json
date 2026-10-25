@@ -25,7 +25,7 @@
     "typegen": "bun run generate:messages && bun scripts/sync-prepaint-locales.ts",
     "glossary": "bun ../../packages/scripts/src/glossary-gen.ts src/i18n",
     "typecheck": "([ -n \"$TURBO_HASH\" ] || bun run --cwd ../.. generate) && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=e2e/tsconfig.json && bun check --no-pretty --all --project=e2e/unit/tsconfig.json",
-    "lint": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/web",
+    "lint": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/web && bun test scripts/mutation-query-census.test.ts scripts/check-mutation-query-invalidation.test.ts && bun scripts/check-mutation-query-invalidation.ts --check",
     "lint:fix": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
     "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --unused-in=src --unused-in=scripts --unused-in=../../packages/ai-catalog/src && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts --check",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n && bun scripts/sync-prepaint-locales.ts",

@@ -128,7 +128,8 @@ export type RefMediationEntry = {
  * contract, so a projectable entry without a projection schema cannot compile.
  */
 export type RegistryRefFieldMapEntry =
-  { chatProjectable: false } | ({ chatProjectable: true } & RefMediationEntry);
+  | { chatProjectable: false }
+  | ({ chatProjectable: true } & RefMediationEntry);
 
 export type ChatProjectableToolName<TMap> = {
   [TName in keyof TMap]: TMap[TName] extends { chatProjectable: true }

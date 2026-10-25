@@ -31,7 +31,8 @@ export type ResolvedCommandAction = CommandAction & {
 };
 
 type UploadRequest =
-  { type: "closed" } | { type: "open"; workspaceId: string | undefined };
+  | { type: "closed" }
+  | { type: "open"; workspaceId: string | undefined };
 
 type UseCommandActionsResult = {
   uploadRequest: UploadRequest;

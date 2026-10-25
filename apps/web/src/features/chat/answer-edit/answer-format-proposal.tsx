@@ -1,9 +1,10 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -14,6 +15,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
 import { AnswerEditNotice, AnswerEditPanel } from "./answer-edit-panel";
@@ -94,24 +96,32 @@ export const AnswerFormatProposal = ({
     end: selection.end,
     action,
   });
-  const query = useQuery({
-    queryKey: chatKeys.answerSnapshot({
-      activeOrganizationId: user.activeOrganizationId,
-      userId: user.id,
-      threadId,
-      messageId: anchor.messageId,
-      revision: anchor.baseRevision,
-    }),
-    queryFn: async ({ signal }) =>
-      unwrapEden(
-        await api.chat
-          .threads({ threadId })
-          .messages({ messageId: anchor.messageId })
-          .get({ fetch: { signal } }),
-      ),
-    enabled: result.status === "proposal",
-    retry: false,
-  });
+  const query = useQuery(
+    resourceQueryOptions(
+      queryOptions({
+        queryKey: chatKeys.answerSnapshot({
+          activeOrganizationId: user.activeOrganizationId,
+          userId: user.id,
+          threadId,
+          messageId: anchor.messageId,
+          revision: anchor.baseRevision,
+        }),
+        queryFn: async ({ signal }) =>
+          unwrapEden(
+            await api.chat
+              .threads({ threadId })
+              .messages({ messageId: anchor.messageId })
+              .get({ fetch: { signal } }),
+          ),
+        enabled: result.status === "proposal",
+        retry: false,
+      }),
+      {
+        resources: [RESOURCE_TYPE.CHAT_MESSAGE],
+        scope: { type: "organization" },
+      },
+    ),
+  );
   const view = useQueryView(query);
   useQueryViewError(view);
   if (refreshError) {

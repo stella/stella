@@ -250,7 +250,8 @@ type SnapshotDockerTargetOptions = {
   tlsDefaults: typeof defaultCertificatePath;
 };
 type DockerTLSSettings =
-  { type: "plain" } | { type: "tls"; source: string | undefined };
+  | { type: "plain" }
+  | { type: "tls"; source: string | undefined };
 const dockerTLSSettings = ({
   inspection,
   env,

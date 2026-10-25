@@ -43,7 +43,8 @@ export type NewDocumentVersionOperation = {
 };
 
 export type DocumentWriteOperation =
-  CreateDocumentOperation | NewDocumentVersionOperation;
+  | CreateDocumentOperation
+  | NewDocumentVersionOperation;
 
 type DocumentWriteOperationType = DocumentWriteOperation["type"];
 

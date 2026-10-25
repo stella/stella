@@ -395,7 +395,8 @@ type McpTaskSpec = {
    * model is asked to read.
    */
   preflight?:
-    { type: "capability-described" } | { type: "compat-search-returned" };
+    | { type: "capability-described" }
+    | { type: "compat-search-returned" };
   /**
    * The tool names this task exposes, for a task about a client that carries
    * fewer tools than the surface has. Absent exposes the whole default

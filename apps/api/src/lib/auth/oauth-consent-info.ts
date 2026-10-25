@@ -20,7 +20,8 @@ type HttpsUrl = `https://${string}`;
  * where the vendor documents that form.
  */
 type VerifiedClientLocation =
-  { readonly exact: HttpsUrl } | { readonly oneSegmentUnder: `${HttpsUrl}/` };
+  | { readonly exact: HttpsUrl }
+  | { readonly oneSegmentUnder: `${HttpsUrl}/` };
 
 type VerifiedClientUrl = VerifiedClientLocation & {
   readonly source: HttpsUrl;

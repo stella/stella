@@ -32,7 +32,9 @@ import { emailAddressSchema } from "@/api/lib/email/normalized-email";
  * (no oracle for forging assertions).
  */
 export type IdJagErrorCode =
-  "issuer_not_enabled" | "login_required" | "invalid_assertion";
+  | "issuer_not_enabled"
+  | "login_required"
+  | "invalid_assertion";
 
 export class IdJagValidationError {
   readonly code: IdJagErrorCode;

@@ -543,7 +543,8 @@ export type CompareOptions = {
 };
 
 export type ParsedCompareArgs =
-  { type: "help" } | { type: "options"; options: CompareOptions };
+  | { type: "help" }
+  | { type: "options"; options: CompareOptions };
 
 export const USAGE = `Usage: bun --env-file=.env src/scripts/polarity-system-one-compare.ts [options]
 

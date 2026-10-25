@@ -185,7 +185,8 @@ type CensusPassOptions = {
 };
 
 export type CensusRefusal =
-  CorpusGenerationCensusDriftError | CorpusGenerationCensusUnreadableError;
+  | CorpusGenerationCensusDriftError
+  | CorpusGenerationCensusUnreadableError;
 
 /** Page one census pass over one index to its end; resolves with the revisions inspected. */
 const runCensusPass = async ({

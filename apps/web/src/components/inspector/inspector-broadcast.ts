@@ -91,7 +91,8 @@ type InspectorBroadcastTab =
   | LegacyDecisionChatTab;
 
 type InspectorBroadcastMessage =
-  InspectorTabsRequestMessage | InspectorTabsSyncMessage;
+  | InspectorTabsRequestMessage
+  | InspectorTabsSyncMessage;
 
 type InspectorBroadcastSession = {
   dispose: () => void;

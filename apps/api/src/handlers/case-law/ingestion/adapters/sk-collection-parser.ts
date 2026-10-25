@@ -85,7 +85,8 @@ const nonemptyLine = (lines: readonly IssueLine[], start: number) => {
 };
 
 type EntryTitle =
-  { status: "not-entry" } | { status: "entry"; title: number | null };
+  | { status: "not-entry" }
+  | { status: "entry"; title: number | null };
 
 type FindEntryTitleOptions = {
   issue: SkCollectionIssue;

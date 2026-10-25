@@ -3,7 +3,9 @@ import { panic } from "better-result";
 import type { DesktopAccountSnapshot } from "../shared/rpc";
 
 export type DesktopAccountState =
-  DesktopAccountSnapshot | { status: "loading" } | { status: "unavailable" };
+  | DesktopAccountSnapshot
+  | { status: "loading" }
+  | { status: "unavailable" };
 
 /** The host a person recognises ("my.stll.app"), not the full origin. */
 export const serverHost = (origin: string) => {

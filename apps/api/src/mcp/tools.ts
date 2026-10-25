@@ -125,7 +125,8 @@ export const findUndeclaredArguments = ({
  * cannot describe different operations.
  */
 type TransportConfirmation =
-  { required: false } | { required: true; message: string; hint: string };
+  | { required: false }
+  | { required: true; message: string; hint: string };
 
 const NO_CONFIRMATION: TransportConfirmation = { required: false };
 
@@ -296,7 +297,8 @@ const featureUnavailableToolResult = ({
   toolName,
   args,
 }: McpToolSurface & { toolName: string; args: Record<string, unknown> }):
-  CallToolResult | undefined => {
+  | CallToolResult
+  | undefined => {
   const definition = getStaticMcpToolDefinition(toolName, mode);
   if (
     isMcpDescriptorFeatureEnabled({

@@ -81,7 +81,8 @@ type CreateRememberToolProps = {
   workspaceId: SafeId<"workspace"> | null;
   /** The turn's statuses of the member's accessible matters. */
   workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
 };
 
 type MemoryWriteScopeRequestOptions = Pick<

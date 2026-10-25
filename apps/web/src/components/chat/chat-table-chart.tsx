@@ -31,6 +31,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export type ChatTableChartProps = ComponentProps<"table"> & {
   node?: Element | undefined;
@@ -99,13 +100,18 @@ const ChartableTable = ({
       const hash = await sha256Hex(JSON.stringify(table));
       // The loader is bound to the complete source whose digest owns the cache entry.
       const loadPlan = async () => await requestPlan(table);
-      return await queryClient.query({
-        queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
-        queryFn: loadPlan,
-        staleTime: Infinity,
-        gcTime: Infinity,
-        retry: false,
-      });
+      return await queryClient.query(
+        resourceQueryOptions(
+          {
+            queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
+            queryFn: loadPlan,
+            staleTime: Infinity,
+            gcTime: Infinity,
+            retry: false,
+          },
+          { type: "independent" },
+        ),
+      );
     });
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);

@@ -31,7 +31,8 @@ const legacyConditionSchema = v.variant("type", [
 ]);
 
 export type ParsedStoredCondition =
-  { status: "valid"; condition: ConditionNode | null } | { status: "invalid" };
+  | { status: "valid"; condition: ConditionNode | null }
+  | { status: "invalid" };
 
 const exceedsStoredDepth = (value: unknown): boolean => {
   const pending = [{ value, depth: 0 }];

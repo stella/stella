@@ -783,7 +783,9 @@ const valueIdentifier = (value: ts.Expression): string | null => {
 };
 
 type FunctionLike =
-  ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration;
+  | ts.ArrowFunction
+  | ts.FunctionExpression
+  | ts.FunctionDeclaration;
 
 const isFunctionLike = (node: ts.Node): node is FunctionLike =>
   ts.isArrowFunction(node) ||

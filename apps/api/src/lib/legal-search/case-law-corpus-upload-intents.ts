@@ -409,7 +409,8 @@ const recordCorpusPackRefsTx = async (
 };
 
 export type CaseLawCorpusUploadApplyResult =
-  { type: "applied" } | { type: "superseded" };
+  | { type: "applied" }
+  | { type: "superseded" };
 
 type SettleReservedCaseLawCorpusUploadOptions = {
   /**

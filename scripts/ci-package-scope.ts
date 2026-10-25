@@ -134,7 +134,8 @@ const identifierExpressions = ({
   code,
   source,
 }: Pick<PathExpressionOptions, "expression" | "code" | "source">):
-  readonly string[] | undefined => {
+  | readonly string[]
+  | undefined => {
   if (
     identifierBindingCache?.source !== source ||
     identifierBindingCache.code !== code
@@ -564,7 +565,8 @@ const declaredMarkdownInputs = (
 };
 
 type GlobPathResult =
-  PathExpressionResult | { kind: "declared"; inputs: readonly string[] };
+  | PathExpressionResult
+  | { kind: "declared"; inputs: readonly string[] };
 
 type GlobPathOptions = PathExpressionOptions & {
   target: string;

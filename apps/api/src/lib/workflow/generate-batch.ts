@@ -139,7 +139,9 @@ export type PreparedExtractedTextFile = {
 };
 
 export type PreparedInputFile =
-  PreparedPdfFile | PreparedDocxFile | PreparedExtractedTextFile;
+  | PreparedPdfFile
+  | PreparedDocxFile
+  | PreparedExtractedTextFile;
 
 export const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],

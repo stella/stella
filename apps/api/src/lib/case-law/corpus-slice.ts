@@ -21,7 +21,8 @@ export type CorpusSliceRow = {
 };
 
 export type CorpusSliceYear =
-  { type: "year"; year: number } | { type: "undated" };
+  | { type: "year"; year: number }
+  | { type: "undated" };
 
 const corpusSliceYearSchema = v.variant("type", [
   v.strictObject({

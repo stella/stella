@@ -114,7 +114,8 @@ export type ChatClientToolsFor<
   TTools extends ChatToolMap,
   TApprovalNames extends string = never,
 > = readonly (
-  ChatClientToolUnionFor<TTools, TApprovalNames> | ExternalMcpClientTool
+  | ChatClientToolUnionFor<TTools, TApprovalNames>
+  | ExternalMcpClientTool
 )[];
 
 /**

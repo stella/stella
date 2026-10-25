@@ -40,7 +40,8 @@ export const createReaderController = (
   let previewGeneration = 0;
   let received: OpenDecision | undefined;
   let lastProvision:
-    ReaderPager["provisionAnchors"][number]["provision"] | undefined;
+    | ReaderPager["provisionAnchors"][number]["provision"]
+    | undefined;
   let snapshot = createReaderSnapshot();
   const publish = () => {
     for (const listener of listeners) {

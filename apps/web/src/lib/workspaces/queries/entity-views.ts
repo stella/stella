@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { isTaskStatus } from "@stll/api-contract";
+import { isTaskStatus, RESOURCE_TYPE } from "@stll/api-contract";
 import { ENTITY_VIEW_ROW_KIND } from "@stll/api-contract/entity-views";
 
 import { isProposalType } from "@/components/entity-views/types";
@@ -17,6 +17,7 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { toWorkspaceEntity } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
@@ -47,66 +48,75 @@ export const entityViewRowsOptions = ({
   inboxView,
 }: EntityViewRowsOptions) => {
   const asOf = localISODate();
-  return infiniteQueryOptions({
-    queryKey: [
-      ...entityViewKeys.all(organizationId, userId),
-      scope,
-      layout.filters,
-      layout.sorts,
-      inboxView,
-      asOf,
-    ],
-    initialPageParam: stringCursorSeed(),
-    queryFn: async ({ signal, pageParam }) => {
-      const page = unwrapEden(
-        await api["entity-views"]["query-window"].post(
-          {
-            scope:
-              scope.type === "matter"
-                ? {
-                    type: "matter",
-                    matterId: toSafeId<"workspace">(scope.matterId),
-                  }
-                : { type: "organization" },
-            filters: layout.filters,
-            sorts: layout.sorts,
-            includeAssignees: true,
-            fieldMode: "visible",
-            inboxView,
-            asOf,
-            ...(pageParam ? { cursor: pageParam } : {}),
-          },
-          { fetch: { signal } },
-        ),
-      );
-      return {
-        ...page,
-        items: page.items.map((item): EntityViewEntry => {
-          switch (item.kind) {
-            case ENTITY_VIEW_ROW_KIND.ENTITY:
-              return {
-                type: "entity",
-                entity: toWorkspaceEntity(item.entity),
-                workspaceId: item.entity.workspaceId,
-                workspaceName: item.entity.workspaceName,
-                workRisk: item.workRisk,
-              };
-            case ENTITY_VIEW_ROW_KIND.SIGNAL:
-              return {
-                type: "proposal",
-                signal: item.signal,
-                projection: toProposalProjection(item.projection),
-              };
-            default:
-              item satisfies never;
-              return panic("Unknown entity view row kind");
-          }
-        }),
-      };
+  return resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: [
+        ...entityViewKeys.all(organizationId, userId),
+        scope,
+        layout.filters,
+        layout.sorts,
+        inboxView,
+        asOf,
+      ],
+      initialPageParam: stringCursorSeed(),
+      queryFn: async ({ signal, pageParam }) => {
+        const page = unwrapEden(
+          await api["entity-views"]["query-window"].post(
+            {
+              scope:
+                scope.type === "matter"
+                  ? {
+                      type: "matter",
+                      matterId: toSafeId<"workspace">(scope.matterId),
+                    }
+                  : { type: "organization" },
+              filters: layout.filters,
+              sorts: layout.sorts,
+              includeAssignees: true,
+              fieldMode: "visible",
+              inboxView,
+              asOf,
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+            { fetch: { signal } },
+          ),
+        );
+        return {
+          ...page,
+          items: page.items.map((item): EntityViewEntry => {
+            switch (item.kind) {
+              case ENTITY_VIEW_ROW_KIND.ENTITY:
+                return {
+                  type: "entity",
+                  entity: toWorkspaceEntity(item.entity),
+                  workspaceId: item.entity.workspaceId,
+                  workspaceName: item.entity.workspaceName,
+                  workRisk: item.workRisk,
+                };
+              case ENTITY_VIEW_ROW_KIND.SIGNAL:
+                return {
+                  type: "proposal",
+                  signal: item.signal,
+                  projection: toProposalProjection(item.projection),
+                };
+              default:
+                item satisfies never;
+                return panic("Unknown entity view row kind");
+            }
+          }),
+        };
+      },
+      getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
+      staleTime: 60_000,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ENTITY],
+      scope:
+        scope.type === "matter"
+          ? { type: "workspace", workspaceId: scope.matterId }
+          : { type: "organization" },
     },
-    getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
-    staleTime: 60_000,
-  });
+  );
 };
 
 type WireProjection = {

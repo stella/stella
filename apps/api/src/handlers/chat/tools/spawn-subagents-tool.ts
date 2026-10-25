@@ -209,7 +209,8 @@ export const resolveValidatedSubagentModelId = ({
 };
 
 type SubagentBatchPreflightResult =
-  { ok: true } | { ok: false; message: string };
+  | { ok: true }
+  | { ok: false; message: string };
 
 type PreflightSubagentBatchUsageArgs = {
   safeDb: SafeDb;

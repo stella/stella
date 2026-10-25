@@ -196,7 +196,8 @@ export type DocumentWindowObservation = {
 };
 
 export type DocumentStageObservation =
-  DocumentFetchObservation | DocumentWindowObservation;
+  | DocumentFetchObservation
+  | DocumentWindowObservation;
 export type DocumentStageObserver = (
   observation: DocumentStageObservation,
 ) => void | Promise<void>;

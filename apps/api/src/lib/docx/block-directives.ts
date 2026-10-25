@@ -695,7 +695,8 @@ export type InlineIterationTextOptions = {
 
 export type DirectiveProcessingContext = {
   scopeInlineText?:
-    ((options: InlineIterationTextOptions) => string) | undefined;
+    | ((options: InlineIterationTextOptions) => string)
+    | undefined;
   inlineDataByParagraph: Map<slimdom.Element, Record<string, unknown>>;
   inlineClauseScopes: Map<
     string,

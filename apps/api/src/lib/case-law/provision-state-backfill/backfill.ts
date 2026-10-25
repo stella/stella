@@ -101,7 +101,8 @@ const readCursorCompletion = async (
 };
 
 type ProvisionRepairCursor =
-  { type: "complete" } | { type: "pending"; cursor: string | null };
+  | { type: "complete" }
+  | { type: "pending"; cursor: string | null };
 
 const readCursor = async (
   connection: ProvisionBackfillSession,

@@ -254,9 +254,11 @@ type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
   isDragBlocked: boolean;
   instanceId: symbol;
   onContextMenu:
-    ((view: View, event: React.MouseEvent<HTMLElement>) => void) | undefined;
+    | ((view: View, event: React.MouseEvent<HTMLElement>) => void)
+    | undefined;
   onDoubleClick:
-    ((view: View, event: React.MouseEvent<HTMLElement>) => void) | undefined;
+    | ((view: View, event: React.MouseEvent<HTMLElement>) => void)
+    | undefined;
   onReorder: (
     draggedId: string,
     targetId: string,

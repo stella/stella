@@ -573,11 +573,9 @@ const writeOut = (text: string) => {
       offset += writeSync(1, bytes, offset);
     } catch (error) {
       // A non-blocking pipe that is full: wait briefly and retry.
-      if (!(
-        error instanceof Error &&
-        "code" in error &&
-        error.code === "EAGAIN"
-      )) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "EAGAIN")
+      ) {
         throw error;
       }
       Atomics.wait(pause, 0, 0, 5);

@@ -38,7 +38,10 @@ export type InboundAcceptance =
     };
 
 export type AttachmentScanVerdict =
-  "pass" | "fail" | "inconclusive" | "unavailable";
+  | "pass"
+  | "fail"
+  | "inconclusive"
+  | "unavailable";
 
 type EvaluateInboundAcceptanceOptions = {
   outerSender: string | null;

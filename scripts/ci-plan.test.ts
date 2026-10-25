@@ -645,7 +645,11 @@ type EvaluateResultOptions = {
   liveDraft?: boolean;
   suiteResults?: Record<string, string>;
   cancellationEvidence?:
-    "superseded" | "timeout" | "step-timeout" | "missing" | "wrong-group";
+    | "superseded"
+    | "timeout"
+    | "step-timeout"
+    | "missing"
+    | "wrong-group";
   apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
   newerRun?:
     | "same-group"

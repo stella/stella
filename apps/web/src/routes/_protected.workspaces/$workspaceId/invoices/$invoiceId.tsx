@@ -57,6 +57,7 @@ import {
   toFormErrors,
   trimmedStringSchema,
 } from "@/lib/schema";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   invoiceByIdOptions,
   invoicesKeys,
@@ -241,19 +242,35 @@ const InvoiceDetail = ({
   };
 
   type TransitionAction =
-    "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+    | "finalize"
+    | "send"
+    | "mark_paid"
+    | "void"
+    | "revert_to_draft";
 
   const transitionMutation = useMutation({
-    mutationFn: async (action: TransitionAction) => {
-      const response = await api
-        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
-          invoiceId: toSafeId<"invoice">(invoiceId),
-        })
-        .transition.post({
-          action,
-        });
-      return unwrapEden(response);
-    },
+    mutationFn: resourceMutation({
+      mutation: "transitionInvoice",
+      queryClient,
+      mutationFn: async ({
+        action,
+        workspaceId: mutationWorkspaceId,
+      }: {
+        action: TransitionAction;
+        workspaceId: string;
+      }) => {
+        const response = await api
+          .invoices({
+            workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+          })({
+            invoiceId: toSafeId<"invoice">(invoiceId),
+          })
+          .transition.post({
+            action,
+          });
+        return unwrapEden(response);
+      },
+    }),
     onSuccess: () => {
       invalidateAll();
     },
@@ -353,7 +370,9 @@ const InvoiceDetail = ({
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}
             onEdit={() => setEditOpen(true)}
-            onTransition={(action) => transitionMutation.mutate(action)}
+            onTransition={(action) =>
+              transitionMutation.mutate({ action, workspaceId })
+            }
           />
         </div>
       </div>

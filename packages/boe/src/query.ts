@@ -62,7 +62,10 @@ const escapeQueryStringPhrase = (value: string): QueryStringSafe => {
  * invariant cannot be bypassed by a future caller.
  */
 type BoeFieldName =
-  "titulo" | "departamento@codigo" | "rango@codigo" | "materia@codigo";
+  | "titulo"
+  | "departamento@codigo"
+  | "rango@codigo"
+  | "materia@codigo";
 
 const fieldClause = (
   field: BoeFieldName,

@@ -77,7 +77,9 @@ type BilingualReviewState = {
  * mirrored here.
  */
 type BilingualTranslateState =
-  { step: "pick" } | BilingualReviewState | { step: "run"; runId: string };
+  | { step: "pick" }
+  | BilingualReviewState
+  | { step: "run"; runId: string };
 
 export const BilingualTranslateDialog = ({
   workspaceId,

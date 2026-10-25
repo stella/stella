@@ -240,7 +240,8 @@ export type DiscoveredTemplate = {
    *  they render (per loop iteration, never in a pruned branch or slot);
    *  `unconditional` ones have a marker that renders whatever the values. */
   renderedFieldPaths?:
-    { scoped: string[]; unconditional: string[] } | undefined;
+    | { scoped: string[]; unconditional: string[] }
+    | undefined;
   /** Per clause slot key, the field paths only that slot's clause body
    *  renders (the template's own content never does). Their requiredness
    *  holds where the slot renders, once per loop iteration it renders in. */
@@ -476,7 +477,12 @@ const DERIVED_SOURCE_PROPERTIES = {
 } as const satisfies Record<DerivedSourceMode, string>;
 
 type DerivedSourceMode =
-  "ai-adapt" | "ai-prompt" | "condition" | "formula" | "lookup" | "source";
+  | "ai-adapt"
+  | "ai-prompt"
+  | "condition"
+  | "formula"
+  | "lookup"
+  | "source";
 
 /** `lookup` and `source` are only presence-checked, so the snake_case MCP
  *  mirror can pass its own shape of each. */

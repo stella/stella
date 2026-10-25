@@ -46,7 +46,8 @@ const GITHUB_FETCH_HEADERS = {
 const USER_GITHUB_FETCH_ACCESS = { source: "user" } as const;
 
 type GithubSkillFetchAccess =
-  { source: "catalogue"; githubToken?: string } | { source: "user" };
+  | { source: "catalogue"; githubToken?: string }
+  | { source: "user" };
 
 const githubSkillFetchHeaders = ({
   access,

@@ -419,7 +419,11 @@ function ProfilePageBody() {
     reassignments,
   });
   let dialogStep:
-    "loading" | "tasks" | "confirm" | "otp" | "pendingTasksError" = step;
+    | "loading"
+    | "tasks"
+    | "confirm"
+    | "otp"
+    | "pendingTasksError" = step;
   if (step === "loading" && pendingTasksError) {
     dialogStep = "pendingTasksError";
   }

@@ -26,7 +26,11 @@ import { invalidateMemories } from "@/routes/_protected.settings/-queries/memori
 import type { MemoryScope } from "@/routes/_protected.settings/-queries/memories";
 
 type MemoryKind =
-  "preference" | "instruction" | "fact" | "decision" | "relationship";
+  | "preference"
+  | "instruction"
+  | "fact"
+  | "decision"
+  | "relationship";
 
 type MemoryCreateFormProps =
   | { scope: "user"; workspaceId?: never }

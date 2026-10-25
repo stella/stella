@@ -1231,7 +1231,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 type ChatPartPersistenceDecision =
-  { type: "drop"; partType: string } | { type: "persist"; part: ChatPart };
+  | { type: "drop"; partType: string }
+  | { type: "persist"; part: ChatPart };
 
 export const classifyChatPartForPersistence = (
   part: unknown,

@@ -55,7 +55,11 @@ import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 type TransitionAction =
-  "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+  | "finalize"
+  | "send"
+  | "mark_paid"
+  | "void"
+  | "revert_to_draft";
 
 const TRANSITIONS = {
   finalize: {

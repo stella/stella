@@ -162,7 +162,8 @@ let persistedCursor: string | null | undefined;
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
 let existingDecision:
-  (Record<string, unknown> & { hasStoredDocument: boolean }) | undefined;
+  | (Record<string, unknown> & { hasStoredDocument: boolean })
+  | undefined;
 /** Whether the observation still owns the mirror when it settles. */
 let mirrorSettlementApplied = true;
 let intentStatus: "active" | "cleanup" = "active";

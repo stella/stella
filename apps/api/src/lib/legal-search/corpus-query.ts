@@ -78,7 +78,8 @@ const findPhraseEnd = (text: string, from: number, closers: string): number => {
  * change what the reader asked to match adjacently.
  */
 export type CorpusQueryToken =
-  { type: "phrase"; value: string } | { type: "term"; value: string };
+  | { type: "phrase"; value: string }
+  | { type: "term"; value: string };
 
 /**
  * Split free user text into phrase and term tokens. The single splitter over

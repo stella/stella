@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -24,10 +24,11 @@ import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 export const NativeToolsList = () => {
   const t = useTranslations();
@@ -79,14 +80,18 @@ const NativeToolRow = ({
   canEdit: boolean;
 }) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const mutation = useSettingsMutation({
-    mutationFn: async (enabled: boolean) =>
-      unwrapEden(
-        await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),
-      ),
-    invalidate: mcpConnectorsOptions(activeOrganizationId).queryKey,
-    errorToast: { title: t("errors.actionFailed") },
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "updateNativeTool",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (enabled: boolean) =>
+        unwrapEden(
+          await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),
+        ),
+    }),
+    onError: (error) => notifyUserError(error, t("errors.actionFailed")),
   });
 
   return (

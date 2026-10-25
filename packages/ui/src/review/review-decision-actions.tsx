@@ -13,7 +13,11 @@ import { cn } from "../lib/utils";
  * so the row does not resize while the write lands.
  */
 export type ReviewDecisionState =
-  "pending" | "accepted" | "rejected" | "dismissed" | "applying";
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "dismissed"
+  | "applying";
 
 export type ReviewDecisionSize = "xs" | "sm";
 

@@ -3,7 +3,13 @@ import { TaggedError } from "better-result";
 import type { CountryCode } from "@stll/country-codes";
 
 export type SanctionsSource =
-  "eu" | "un" | "cz" | "us-sdn" | "us-non-sdn" | "uk" | "ch";
+  | "eu"
+  | "un"
+  | "cz"
+  | "us-sdn"
+  | "us-non-sdn"
+  | "uk"
+  | "ch";
 
 export type SanctionsIssuer = "EU" | "UN" | "CZ" | "US" | "GB" | "CH" | "UA";
 
@@ -17,7 +23,11 @@ export type ListVersion = {
 };
 
 export type EntityType =
-  "person" | "organisation" | "vessel" | "aircraft" | "unknown";
+  | "person"
+  | "organisation"
+  | "vessel"
+  | "aircraft"
+  | "unknown";
 
 /** Lists mark some aliases as weak (nicknames, call signs, partial names). */
 export type AliasQuality = "strong" | "weak" | "unknown";

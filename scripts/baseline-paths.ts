@@ -17,6 +17,9 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
+  /** scripts/check-mutation-query-invalidation.ts */
+  mutationQueryInvalidation:
+    "scripts/mutation-query-invalidation-baseline.json",
   /** scripts/check-actionlint-baseline.ts */
   actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */

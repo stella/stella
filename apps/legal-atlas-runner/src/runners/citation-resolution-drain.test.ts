@@ -132,7 +132,8 @@ test("a short citation chunk settles without another empty query", async () => {
 });
 
 type DrainEvent =
-  { type: "batch"; atMs: number } | { type: "sleep"; ms: number };
+  | { type: "batch"; atMs: number }
+  | { type: "sleep"; ms: number };
 
 type DrainRun = {
   events: DrainEvent[];

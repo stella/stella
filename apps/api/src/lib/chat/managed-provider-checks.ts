@@ -21,7 +21,8 @@ const PROVIDER_CHECK_FAILURE_SINK = failureSink({
 });
 
 let availability:
-  ReturnType<typeof createManagedProviderAvailability> | undefined;
+  | ReturnType<typeof createManagedProviderAvailability>
+  | undefined;
 
 export const checkManagedOpenRouterModel = (
   model: string,

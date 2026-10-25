@@ -210,7 +210,8 @@ export type LegislationIndexReadContract = {
 };
 
 export type CorpusIndexReadContract =
-  CaseLawIndexReadContract | LegislationIndexReadContract;
+  | CaseLawIndexReadContract
+  | LegislationIndexReadContract;
 
 /**
  * Query capabilities owned by a generation's physical schema. Every field name

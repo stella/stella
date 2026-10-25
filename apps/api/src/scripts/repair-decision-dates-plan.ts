@@ -320,7 +320,8 @@ type CitationGraphTx = CitationGraphTransaction;
  * and reports how many rows it left for a later reconcile sweep.
  */
 export type DecisionDateProjectionReconcile =
-  ((entityId: SafeId<"caseLawDecision">) => Promise<void>) | null;
+  | ((entityId: SafeId<"caseLawDecision">) => Promise<void>)
+  | null;
 
 export type DecisionDateRepairCollaborators = {
   reconcileProjection: DecisionDateProjectionReconcile;

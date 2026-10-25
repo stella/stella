@@ -29,7 +29,8 @@ const ALL_MATTERS_STACK_COLORS = [
 ] as const;
 
 type MatterIconProps = { className?: string | undefined } & (
-  { matter: { id: string; color: string | null } } | { variant: "none" | "all" }
+  | { matter: { id: string; color: string | null } }
+  | { variant: "none" | "all" }
 );
 
 export const MatterIcon = (props: MatterIconProps) => {

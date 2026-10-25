@@ -21,7 +21,9 @@ const propertyId = toSafeId<"property">("ai-property");
 const propertyRunRow = (
   entityId: string,
   content:
-    { type: "error" | "pending" } | { type: "text"; value: string } | null,
+    | { type: "error" | "pending" }
+    | { type: "text"; value: string }
+    | null,
   options: {
     kind?: "document" | "folder";
     locked?: boolean;

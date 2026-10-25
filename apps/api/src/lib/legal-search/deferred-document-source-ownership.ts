@@ -42,7 +42,8 @@ export type DeferredDocumentSourceFence = {
 };
 
 export type DeferredDocumentOwnershipRefusal =
-  { status: "busy" } | { status: "lost" };
+  | { status: "busy" }
+  | { status: "lost" };
 
 type WithDeferredDocumentSourceOwnershipOptions<T> = {
   decisionId: SafeId<"caseLawDecision">;

@@ -152,7 +152,7 @@ Arabic:
 | **Remove**   | إزالة        |
 | **Add**      | إضافة        |
 | **Edit**     | تحرير        |
-| **Close**    | إغلاق        |
+| **Close**    | إغلاق         |
 | **Send**     | إرسال        |
 | **Download** | تنزيل        |
 | **Export**   | تصدير        |
@@ -381,25 +381,25 @@ Arabic:
 
 <!-- glossary-gen:legal-arabic start -->
 
-| Concept           | Arabic           |
-| ----------------- | ---------------- |
-| **Matter**        | ملف قانوني       |
-| **Team**          | فريق             |
+| Concept           | Arabic          |
+| ----------------- | --------------- |
+| **Matter**        | ملف قانوني      |
+| **Team**          | فريق            |
 | **Case law**      | الاجتهاد القضائي |
-| **Court**         | محكمة            |
-| **Party**         | طرف              |
-| **Clause**        | بند              |
-| **Template**      | قالب             |
-| **View**          | عرض              |
-| **Preset**        | إعداد مسبق       |
-| **Folder**        | مجلد             |
-| **Tag**           | وسم              |
-| **Draft**         | مسودة            |
-| **Contact**       | جهة اتصال        |
-| **Playbook**      | دليل مراجعة      |
-| **Due diligence** | العناية الواجبة  |
-| **Escalation**    | التصعيد          |
-| **Rationale**     | المبررات         |
+| **Court**         | محكمة           |
+| **Party**         | طرف             |
+| **Clause**        | بند             |
+| **Template**      | قالب            |
+| **View**          | عرض             |
+| **Preset**        | إعداد مسبق      |
+| **Folder**        | مجلد            |
+| **Tag**           | وسم             |
+| **Draft**         | مسودة           |
+| **Contact**       | جهة اتصال       |
+| **Playbook**      | دليل مراجعة     |
+| **Due diligence** | العناية الواجبة |
+| **Escalation**    | التصعيد         |
+| **Rationale**     | المبررات        |
 
 <!-- glossary-gen:legal-arabic end -->
 

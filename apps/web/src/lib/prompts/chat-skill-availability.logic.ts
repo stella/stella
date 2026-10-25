@@ -52,7 +52,8 @@ export const fileOverlaySkillDocument = ({
   hasActiveDraft,
 }: {
   activeFile:
-    { entityId: string; fileFieldId?: string | undefined } | undefined;
+    | { entityId: string; fileFieldId?: string | undefined }
+    | undefined;
   editMode: ActiveDocxEditModeState;
   hasActiveDraft: boolean;
 }): Pick<ComposerSkillChatContext, "document" | "editApplyMode"> => {

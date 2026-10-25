@@ -269,7 +269,8 @@ export const clientAddressConfigurationWarning = ({
   originVerifySecret,
   originVerifySecretPrevious,
 }: ClientAddressConfigurationOptions):
-  "client_ip.viewer_address_unconfigured" | null =>
+  | "client_ip.viewer_address_unconfigured"
+  | null =>
   requiresOriginProof(edgeHeader) &&
   normalizeOriginSecrets({
     current: originVerifySecret,

@@ -32,7 +32,8 @@ type SiblingScope = {
 
 type ReadSiblingNamesOptions = Omit<SiblingScope, "parentId"> & {
   scope:
-    { type: "parent"; parentId: SafeId<"entity"> | null } | { type: "matter" };
+    | { type: "parent"; parentId: SafeId<"entity"> | null }
+    | { type: "matter" };
 };
 
 /** The workspace cap bounds this complete internal sibling set. */

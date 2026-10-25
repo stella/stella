@@ -173,7 +173,8 @@ export type ReferenceGrading = {
   consensus: ReferenceConsensus;
   impact: ReferenceImpact;
   explanation:
-    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
+    | { type: "comparison"; text: string }
+    | { type: "insufficient-evidence" };
   recommendation: string | null;
   citations: DocxFolioCitation[];
   referenceCitations: {

@@ -61,7 +61,9 @@ export type DateFilter = {
 
 /** `any` = matter has a lead; `none` = no lead; `user` = specific lead. */
 export type LeadFilter =
-  { type: "any" } | { type: "none" } | { type: "user"; userId: string };
+  | { type: "any" }
+  | { type: "none" }
+  | { type: "user"; userId: string };
 
 export type NumericFilter = {
   gte?: number;

@@ -67,7 +67,8 @@ export type WorkspaceDecisionColumnRender =
  * half's factory stops compiling until it draws it.
  */
 export type WorkspaceColumnRender =
-  WorkspaceEntityColumnRender | WorkspaceDecisionColumnRender;
+  | WorkspaceEntityColumnRender
+  | WorkspaceDecisionColumnRender;
 
 export type WorkspaceTableSchema<
   TRender extends WorkspaceColumnRender = WorkspaceEntityColumnRender,

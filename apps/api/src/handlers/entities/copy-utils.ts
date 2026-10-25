@@ -668,7 +668,8 @@ type CopyEntitiesProps = {
         sourceSnapshot: EntitySnapshot[];
       };
   fieldMapping:
-    { type: "omit" } | { type: "single"; sourceFieldId: SafeId<"field"> };
+    | { type: "omit" }
+    | { type: "single"; sourceFieldId: SafeId<"field"> };
   dependencies?: CopyEntitiesDependencies | undefined;
 };
 

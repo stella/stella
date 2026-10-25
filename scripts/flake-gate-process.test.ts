@@ -269,11 +269,13 @@ test.skipIf(process.platform !== "linux")(
         });
         if (killed.isErr()) {
           const error = killed.error;
-          if (!(
-            error instanceof Error &&
-            "code" in error &&
-            error.code === "ESRCH"
-          )) {
+          if (
+            !(
+              error instanceof Error &&
+              "code" in error &&
+              error.code === "ESRCH"
+            )
+          ) {
             cleanupFailure = error;
           }
         }

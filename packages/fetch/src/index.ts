@@ -2,7 +2,8 @@
 export { isConnectionFailure } from "./connection-failure";
 
 export type FetchTimeout =
-  { type: "headers"; ms: number } | { type: "idle"; ms: number };
+  | { type: "headers"; ms: number }
+  | { type: "idle"; ms: number };
 
 export type TransportRequestInit = RequestInit & {
   timeout?: FetchTimeout;

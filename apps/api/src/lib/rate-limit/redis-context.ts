@@ -91,7 +91,12 @@ type RedisRateLimitClient = {
 };
 
 type RedisRateLimitOperation =
-  "connect" | "decrement" | "increment" | "read" | "reset" | "complete";
+  | "connect"
+  | "decrement"
+  | "increment"
+  | "read"
+  | "reset"
+  | "complete";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;

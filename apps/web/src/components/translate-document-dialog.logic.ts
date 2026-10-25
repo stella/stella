@@ -45,7 +45,9 @@ type CanStartDocumentTranslationOptions = {
 };
 
 export type TranslationChoice =
-  "bilingual:ai" | "translated:ai" | "translated:deepl";
+  | "bilingual:ai"
+  | "translated:ai"
+  | "translated:deepl";
 
 /**
  * stella AI is what the dialog opens on. DeepL is offered last and is never
@@ -131,7 +133,9 @@ export const defaultDocumentTranslationTarget = ({
 };
 
 export type DocumentTranslationCommentPolicy =
-  "original" | "original-and-translated" | "translated";
+  | "original"
+  | "original-and-translated"
+  | "translated";
 
 export type DocumentTranslationCommentPolicyState =
   | { type: "unchecked" }

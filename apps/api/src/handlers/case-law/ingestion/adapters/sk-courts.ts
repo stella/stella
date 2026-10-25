@@ -759,7 +759,8 @@ type SkCourtsMetadata = Record<string, unknown> & {
   updateDate: string | undefined;
   updateDateIso: string | undefined;
   updateDateDefect:
-    { type: "invalid-publisher-date"; value: string } | undefined;
+    | { type: "invalid-publisher-date"; value: string }
+    | undefined;
   statedSourceUrl: string | undefined;
   sourceUrlStatus: SkCourtsSourceUrlStatus;
 };

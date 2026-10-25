@@ -946,7 +946,8 @@ export const readChatTurnView = async ({
 export type ChatTurnExecutionClaim = {
   acceptedTurnId: SafeId<"chatTurn"> | null;
   continuationInteraction?:
-    { toolCallId: string; type: ChatTurnInteractionType } | undefined;
+    | { toolCallId: string; type: ChatTurnInteractionType }
+    | undefined;
   incomingMessageId: SafeId<"chatMessage">;
   incomingMessageRole: ChatMessageRole;
   organizationId: SafeId<"organization">;

@@ -196,7 +196,8 @@ export const createStoredStyleSet = async ({
   });
 
 type ReplacementName =
-  { type: "preserve" } | { type: "replace"; value: string };
+  | { type: "preserve" }
+  | { type: "replace"; value: string };
 
 type ReplaceStoredStyleSetOptions = {
   safeDb: SafeDb;

@@ -200,7 +200,9 @@ export type StoredReadAbsence = {
 
 /** The typed outcome a decision carries for a read it was stored without. */
 export type StoredReadOutcome =
-  StoredReadUnavailable | ReadRefusal | StoredReadAbsence;
+  | StoredReadUnavailable
+  | ReadRefusal
+  | StoredReadAbsence;
 
 const storedCause = (
   cause: ReadUnavailableCause,
