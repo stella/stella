@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "5e602969bcbe820271a4ab4f8c43a9a3a24e26b58dcdd9335cc67fec9b027310",
+  "sourceUrl": "https://jurisprudencia.stf.jus.br/api/search/search (POST {\"query\":{\"bool\":{\"filter\":[{\"term\":{\"base\":\"decisoes\"}},{\"range\":{\"julgamento_data\":{\"gte\":\"2020-03-03\",\"lte\":\"2020-03-03\"}}}]}},\"sort\":[{\"julgamento_data\":\"asc\"},{\"processo_numero\":\"asc\"},{\"dg_unique\":\"asc\"}],\"size\":3,\"track_total_hits\":true})",
+  "capturedAt": "2026-10-25T02:15:14.000Z",
+  "note": "three decisões monocráticas of 3 March 2020; decisao_texto prints one paragraph per line and numbers the reasoning"
+}

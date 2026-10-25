@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-stf adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
@@ -122,7 +123,8 @@ export type SkippedProcessedField = {
  * below, which is where a blank `how` or justification fails to compile.
  */
 export type ProcessedFieldDisposition =
-  ProvidedProcessedField | SkippedProcessedField;
+  | ProvidedProcessedField
+  | SkippedProcessedField;
 
 /** Recorded publisher bytes the conformance suite parses for the claim. */
 const recordedEvidence = (
@@ -376,6 +378,16 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.BR_STF]: {
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.SOURCE_LACKS,
+      "STF decisions are cited by page of the inteiro teor; numbered points open only parts of a text (an ementa, a relatório) and run across no decision's reasoning, so the shared reader finds no numbering",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-stf-search-acordaos-2020-03.json.gz",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-stf-search-decisoes-2020-03-03.json.gz",
       ),
     ),
   },

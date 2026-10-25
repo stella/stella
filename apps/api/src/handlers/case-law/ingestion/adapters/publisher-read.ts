@@ -1,3 +1,4 @@
+// parser-output-unchanged: exports the bounded body reader and adds a read that returns redirects unfollowed; existing reads and parsed output are unchanged.
 // parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
 // parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**
@@ -121,7 +122,14 @@ const readGatedResponse = async ({
   if (Result.isError(fetched)) {
     return fetched.error;
   }
-  const response = fetched.value;
+  return await classifiedResponse(fetched.value, refusalScope);
+};
+
+/** What an answer's status establishes; the body is released unless served. */
+const classifiedResponse = async (
+  response: Response,
+  refusalScope: ReadRefusalScope,
+): Promise<ReadOutcome<Response>> => {
   const outcome = readOutcomeOfStatus(
     response.status,
     refusalScope,
@@ -164,7 +172,7 @@ export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
  * is `thrown`. All three are failures to read, never a document. Any other
  * outcome passes through unread.
  */
-const readBodyBytes = async (
+export const readBodyBytes = async (
   outcome: ReadOutcome<Response>,
   signal: AbortSignal | undefined,
 ): Promise<ReadOutcome<Uint8Array>> => {
@@ -227,6 +235,45 @@ export const readPublisher = async (
   init: PublisherReadInit,
 ): Promise<ReadOutcome<Response>> =>
   await readGatedResponse(sharedGateRead(url, init));
+
+/** An answer that names another address instead of serving the read. */
+export type PublisherRedirect = {
+  readonly type: "redirect";
+  readonly status: number;
+  /** The `Location` the publisher stated, unresolved and unchecked. */
+  readonly location: string | null;
+};
+
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([
+  301, 302, 303, 307, 308,
+]);
+
+/**
+ * One publisher request that does not follow redirects: a redirect comes back
+ * with the address it names, for the caller to hold to its own allowed
+ * origins before anything follows it (rule 21); every other answer is typed
+ * as {@link readPublisher} types it.
+ */
+export const readPublisherRedirect = async (
+  url: string | URL,
+  init: PublisherReadInit,
+): Promise<PublisherRedirect | ReadOutcome<Response>> => {
+  const { request, signal, refusalScope } = sharedGateRead(url, {
+    ...init,
+    redirect: "manual",
+  });
+  const fetched = await readStep(request, signal);
+  if (Result.isError(fetched)) {
+    return fetched.error;
+  }
+  const response = fetched.value;
+  if (!REDIRECT_STATUSES.has(response.status)) {
+    return await classifiedResponse(response, refusalScope);
+  }
+  const location = response.headers.get("location");
+  await response.body?.cancel();
+  return { type: "redirect", status: response.status, location };
+};
 
 /** {@link readGatedResponse} whose body is text; see {@link readBodyText}. */
 export const readGatedResponseText = async (

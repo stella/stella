@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "fb3eae13b4536c048aa2622d24f44d2127f1c98b66c2682616fe4198cdff9ce6",
+  "sourceUrl": "https://jurisprudencia.stf.jus.br/api/search/search (POST {\"query\":{\"bool\":{\"filter\":[{\"term\":{\"base\":\"acordaos\"}},{\"range\":{\"julgamento_data\":{\"gte\":\"2020-03-01\",\"lte\":\"2020-03-31\"}}}]}},\"sort\":[{\"julgamento_data\":\"asc\"},{\"processo_numero\":\"asc\"},{\"dg_unique\":\"asc\"}],\"size\":2,\"track_total_hits\":true})",
+  "capturedAt": "2026-10-25T02:14:44.000Z",
+  "note": "two acórdãos of March 2020 whose records carry inteiro_teor_texto inline"
+}

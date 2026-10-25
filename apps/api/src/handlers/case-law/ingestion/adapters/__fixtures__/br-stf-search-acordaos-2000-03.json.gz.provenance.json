@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "5f05f247bb07bbab42344d1d104472609f6b2c8d52155e5c59bc70855fa0edd7",
+  "sourceUrl": "https://jurisprudencia.stf.jus.br/api/search/search (POST {\"query\":{\"bool\":{\"filter\":[{\"term\":{\"base\":\"acordaos\"}},{\"range\":{\"julgamento_data\":{\"gte\":\"2000-03-01\",\"lte\":\"2000-03-31\"}}}]}},\"sort\":[{\"julgamento_data\":\"asc\"},{\"processo_numero\":\"asc\"},{\"dg_unique\":\"asc\"}],\"size\":3,\"track_total_hits\":true})",
+  "capturedAt": "2026-10-25T02:15:27.000Z",
+  "note": "three acórdãos of March 2000 with no inline text; their full text is only the PDF behind inteiro_teor_url"
+}

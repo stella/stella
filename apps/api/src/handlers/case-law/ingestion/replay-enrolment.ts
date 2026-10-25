@@ -54,6 +54,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.PL_UODO]: { mode: "off" },
   [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },
   [ADAPTER_KEYS.CZ_UOHS]: { mode: "off" },
+  [ADAPTER_KEYS.BR_STF]: { mode: "off" },
 } as const satisfies Record<AdapterKey, ReplayEnrolment>;
 
 export const BACKGROUND_REPLAY_LIMITS = {

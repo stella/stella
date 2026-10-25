@@ -56,6 +56,8 @@ import {
   atFindokFixture,
   atRisFixture,
   type AtRisFixtureAdapter,
+  brStfFixture,
+  brStfPdfFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -132,6 +134,10 @@ const SURFACE_EVIDENCE = {
   ],
   [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
   [ADAPTER_KEYS.CZ_UOHS]: [{ kind: "built", fixture: czUohsFixture }],
+  [ADAPTER_KEYS.BR_STF]: [
+    { kind: "built", fixture: brStfFixture },
+    { kind: "built", fixture: brStfPdfFixture },
+  ],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },

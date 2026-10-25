@@ -27,6 +27,8 @@ import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fing
 import {
   atFindokFixture,
   atRisFixture,
+  brStfFixture,
+  brStfPdfFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -103,6 +105,10 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.PL_UOKIK]: [
     { name: "decision", fixture: plUokikFixture },
     { name: "ruling", fixture: plUokikRulingFixture },
+  ],
+  [ADAPTER_KEYS.BR_STF]: [
+    { name: "decision", fixture: brStfFixture },
+    { name: "document", fixture: brStfPdfFixture },
   ],
 } as const satisfies Record<
   SourceRegistrationKey,

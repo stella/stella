@@ -185,6 +185,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   docketNumberCore: INSPECTED,
   docketNumberRaw: INSPECTED,
   docketRangeMembers: INSPECTED,
+  docketReading: INSPECTED,
   docketRecognised: INSPECTED,
   doctrine: INSPECTED,
   docType: INSPECTED,
@@ -424,6 +425,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   statusId: excluded(PUBLISHER_ID),
   statusLabel: INSPECTED,
   statutes: INSPECTED,
+  stfRecord: INSPECTED,
   subArea: INSPECTED,
   structure: INSPECTED,
   subject: INSPECTED,
@@ -471,7 +473,8 @@ export const METADATA_TEXT_DISPOSITIONS = {
 export const isClassifiedMetadataKey = (
   key: string,
 ): key is
-  keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS =>
+  | keyof typeof METADATA_TEXT_DISPOSITIONS
+  | typeof META_URL_DIAGNOSTICS =>
   key === META_URL_DIAGNOSTICS ||
   Object.hasOwn(METADATA_TEXT_DISPOSITIONS, key);
 

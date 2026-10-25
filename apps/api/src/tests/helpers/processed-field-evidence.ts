@@ -14,6 +14,11 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import {
+  assembleBrStfDecision,
+  brStfInlineTextOf,
+  readBrStfSearchAnswer,
+} from "@/api/handlers/case-law/ingestion/adapters/br-stf";
 import { parseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
@@ -97,6 +102,36 @@ const readCzNs: EvidenceReader = async (fixture) =>
       }).documentAst,
     };
   });
+
+/** Every record of a recorded search answer whose text the record carries. */
+const readBrStf: EvidenceReader = async (fixture) => {
+  const answer = readBrStfSearchAnswer(
+    new TextDecoder().decode(await bytesOf(fixture)),
+  );
+  if (answer === null) {
+    return panic(`${fixture}: not a search answer`);
+  }
+  const documents: EvidenceDocument[] = [];
+  for (const { hit } of answer.hits) {
+    const source = hit["_source"];
+    const base = isRecord(source) ? source["base"] : undefined;
+    const text =
+      isRecord(source) && (base === "acordaos" || base === "decisoes")
+        ? brStfInlineTextOf(base, source)
+        : undefined;
+    if (text === undefined) {
+      continue;
+    }
+    const built = await assembleBrStfDecision({ hit, document: text });
+    if (built.type === "built" && isDocumentAst(built.decision.documentAst)) {
+      documents.push({
+        id: `${fixture}#${String(hit["_id"])}`,
+        ast: built.decision.documentAst,
+      });
+    }
+  }
+  return documents;
+};
 
 const readCzUohs: EvidenceReader = async (fixture) => [
   {
@@ -389,5 +424,6 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "pl-kis": null,
   "pl-uodo": null,
   "pl-uokik": null,
+  "br-stf": readBrStf,
   "us-courtlistener": null,
 } as const satisfies Record<ProcessedFieldSourceKey, EvidenceReader | null>;

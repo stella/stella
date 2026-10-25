@@ -28,6 +28,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { BR_STF_SYNTHETIC_HIT } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/br-stf.synthetic";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
@@ -60,6 +61,12 @@ import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs
 import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import {
+  assembleBrStfDecision,
+  brStfInlineTextOf,
+  buildBrStfDecision,
+  readBrStfSearchAnswer,
+} from "@/api/handlers/case-law/ingestion/adapters/br-stf";
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
@@ -2806,6 +2813,97 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+const BR_STF_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+/** Every field either base states, from the synthetic union hit. */
+export const brStfFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {},
+  buildDecision: async () => {
+    const built = await assembleBrStfDecision({
+      hit: BR_STF_SYNTHETIC_HIT,
+      document:
+        brStfInlineTextOf("acordaos", BR_STF_SYNTHETIC_HIT._source) ??
+        panic("the synthetic STF hit lost its text"),
+    });
+    return built.type === "built"
+      ? built.decision
+      : panic(`the synthetic STF hit is unkeyable: ${built.reason}`);
+  },
+});
+
+/**
+ * A recorded decisão whose text is read from its recorded PDF: the record's
+ * inline text is withheld so the document path, and the envelope object it
+ * stores, is what this fixture exercises.
+ */
+export const brStfPdfFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {},
+  buildDecision: async () => {
+    const pdf = await Bun.file(
+      new URL("br-stf-decisao-despacho1077076.pdf", BR_STF_FIXTURES),
+    ).bytes();
+    globalThis.fetch = asFetchMock(
+      async () =>
+        await Promise.resolve(
+          new Response(pdf, { headers: { "Content-Type": "application/pdf" } }),
+        ),
+    );
+    const answer = readBrStfSearchAnswer(
+      await readGzipText(
+        new URL("br-stf-search-decisoes-2020-03-03.json.gz", BR_STF_FIXTURES),
+      ),
+    );
+    const listed =
+      answer?.hits.find(({ hit }) => hit["_id"] === "despacho1077076")?.hit ??
+      panic("the recorded STF page lost despacho1077076");
+    const source = isRecord(listed["_source"])
+      ? listed["_source"]
+      : panic("the recorded STF hit has no _source");
+    const hit = { ...listed, _source: { ...source, decisao_texto: null } };
+    const built = await buildBrStfDecision(hit);
+    switch (built.type) {
+      case "built":
+        break;
+      // What the pipeline stores for the item once its bound is spent: the
+      // listing-only row with the typed outcome.
+      case "unread":
+        return (
+          planUnreadItems([built.item], {
+            [built.item.listing.sourceDocumentId]:
+              UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+          }).terminal.at(0) ?? panic("br-stf unread item stored nothing")
+        );
+      case "unkeyable":
+        return panic(`the recorded STF hit is unkeyable: ${built.reason}`);
+      default:
+        built satisfies never;
+        return panic(`Unhandled br-stf build: ${String(built)}`);
+    }
+    const decision = built.decision;
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: ADAPTER_KEYS.BR_STF,
+            documentId: decision.sourceDocumentId ?? "br-stf-fixture",
+            bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -2839,6 +2937,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
+  [ADAPTER_KEYS.BR_STF]: brStfFixture,
 } as const satisfies Record<
   SourceRegistrationKey,
   () => EnrolledAdapterFixture

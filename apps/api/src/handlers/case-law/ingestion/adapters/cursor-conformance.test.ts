@@ -413,6 +413,20 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.BR_STF]: {
+    disposition: "exercised",
+    // The search answers a month or day it holds nothing for with an exact
+    // zero count and no hits. The sweep steps over its empty months to the
+    // frontier, whose boundary day has not closed yet.
+    exhaustedSource: () =>
+      jsonResponse({
+        result: { hits: { total: { value: 0, relation: "eq" }, hits: [] } },
+      }),
+    // A frontier day that has not closed is the cursor it was given, at no
+    // request.
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     disposition: "exercised",
     // The search answers a window it holds nothing for with an empty list and

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-stf adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
@@ -43,6 +44,20 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
   "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
+  /**
+   * Politeness, not a publisher statement: the STF states no limit and sends
+   * no rate-limit headers. The search API, the portal that serves decision
+   * PDFs and the paginator acórdão PDFs redirect to are one court's hosts.
+   */
+  "stf-br": {
+    publisher: "Supremo Tribunal Federal",
+    intervalMs: 1000,
+    hosts: [
+      "jurisprudencia.stf.jus.br",
+      "portal.stf.jus.br",
+      "redir.stf.jus.br",
+    ],
+  },
   "edpb-eu": {
     publisher: "European Data Protection Board",
     intervalMs: 1000,
