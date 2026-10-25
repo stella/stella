@@ -93,7 +93,7 @@ export const UPDATE_SIGNING_CERTIFICATE = "./certs/mobile-update-signing.pem";
 const updatesFor = (
   variant: Variant,
   signingCertificatePresent: boolean,
-): ExpoConfig["updates"] =>
+): NonNullable<ExpoConfig["updates"]> =>
   variant === "development" || !signingCertificatePresent
     ? { enabled: false }
     : {
