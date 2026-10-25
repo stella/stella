@@ -10,8 +10,9 @@
 // `continue-on-error` holds: then its conclusion is success. Every failed check
 // still emits an error annotation so the failure digest can report its cause.
 // Each check runs under its budget (scripts/ci-check-budgets.ts, derived from
-// its measured p95). A check stopped at its budget is a timeout: a typed
-// infrastructure failure the digest never reports as a finding. A check that
+// its measured p95). A check stopped at its budget with no failure of its own
+// is a typed infrastructure timeout, never reported as a finding; one that
+// had already failed a test or reported an error stays a finding. A check that
 // passes after most of its budget is a warning, before it ever times out.
 //
 // The pool runs even when dependency installation failed (install-free checks
@@ -232,6 +233,8 @@ export const planChecks = (
 export type Launched = {
   exitCode: number;
   timedOut: boolean;
+  /** For a timed-out check, the failures it reported before it was stopped. */
+  reportedFailures: readonly string[];
   maxRssBytes: number | undefined;
 };
 export type CheckResult = {
@@ -240,14 +243,40 @@ export type CheckResult = {
   outcome: "success" | "failure" | "skipped";
   /** A failure that `continue-on-error` lets pass: conclusion success. */
   continuedOnError: boolean;
-  /** The pool stopped the check at its budget: an infrastructure failure. */
+  /** The pool stopped the check at its budget. */
   timedOut: boolean;
+  /**
+   * Failures a timed-out check established before it was stopped. With
+   * none, the timeout is an infrastructure failure; with any, a finding.
+   */
+  reportedFailures: readonly string[];
   detail: string;
   seconds: number;
   /** Undefined for a check that never ran. */
   budget: CheckBudget | undefined;
   maxRssBytes: number | undefined;
 };
+
+// A failed Bun test or an error command, raw (`::error`) or as the runner
+// renders it (`##[error]`); ci-failure-digest.ts applies the same rule to
+// a check's log group, and a test binds the two.
+const REPORTED_FAILURE = /^(?:\(fail\) |::error\b|##\[error\])/u;
+
+/** The failures a check established itself in its output. */
+export const reportedFailures = (output: string): string[] =>
+  output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => REPORTED_FAILURE.test(line));
+
+/**
+ * A timeout with nothing else wrong: the runner was too slow, so a rerun may
+ * pass. A timed-out check that had already failed a test or reported an
+ * error is a finding, whatever stopped it.
+ */
+export const isInfraTimeout = (
+  result: Pick<CheckResult, "timedOut" | "reportedFailures">,
+) => result.timedOut && result.reportedFailures.length === 0;
 
 /** A failed check's detail when it printed no failed test or error line. */
 export const exitCodeDetail = (exitCode: number) => `exit code ${exitCode}`;
@@ -316,6 +345,7 @@ export const runChecks = async ({
       id: entry.check.id,
       continuedOnError: false,
       timedOut: false,
+      reportedFailures: [],
       seconds: 0,
       budget: undefined,
       maxRssBytes: undefined,
@@ -360,6 +390,7 @@ export const runChecks = async ({
           seconds,
           maxRssBytes: launched.maxRssBytes,
           timedOut: launched.timedOut,
+          reportedFailures: launched.timedOut ? launched.reportedFailures : [],
           ...outcome,
           continuedOnError:
             item.continueOnError && outcome.outcome === "failure",
@@ -371,6 +402,7 @@ export const runChecks = async ({
           maxRssBytes: undefined,
           outcome: "failure",
           timedOut: false,
+          reportedFailures: [],
           continuedOnError: item.continueOnError,
           detail: error instanceof Error ? error.message : String(error),
         });
@@ -448,6 +480,9 @@ export const processLauncher =
     return {
       exitCode,
       timedOut,
+      reportedFailures: timedOut
+        ? reportedFailures(readFileSync(logPath(directory, index), "utf-8"))
+        : [],
       maxRssBytes: usage?.maxRSS,
     };
   };
@@ -683,7 +718,12 @@ const cell = (value: string) =>
 
 const resultLabel = (result: CheckResult) => {
   if (result.outcome === "failure") {
-    const failure = result.timedOut ? "timeout (infra)" : "failure";
+    let failure = "failure";
+    if (result.timedOut) {
+      failure = isInfraTimeout(result)
+        ? "timeout (infra)"
+        : "failure, then timeout";
+    }
     return `${failure}${result.continuedOnError ? " (continue-on-error)" : ""}: ${result.detail}`;
   }
   return isNearBudget(result) ? "success (near budget)" : result.outcome;
@@ -727,15 +767,16 @@ const print = (...parts: string[]) => {
 
 /**
  * The step's failure kind for automation: `finding` when any blocking check
- * failed on its own, `infra` when every blocking failure is a timeout (a
- * rerun on a calmer runner may pass), `none` when the step passes.
+ * failed, `infra` when every blocking failure is a timeout that reported no
+ * failure of its own (a rerun on a calmer runner may pass), `none` when the
+ * step passes.
  */
 export const failureKind = (results: readonly CheckResult[]) => {
   const failed = blockingFailures(results);
   if (failed.length === 0) {
     return "none";
   }
-  return failed.every(({ timedOut }) => timedOut) ? "infra" : "finding";
+  return failed.every(isInfraTimeout) ? "infra" : "finding";
 };
 
 /** Failures that fail the pool step: those `continue-on-error` does not cover. */
@@ -901,7 +942,11 @@ const main = async () => {
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");
-      if (result.outcome === "failure" && result.timedOut && result.budget) {
+      if (
+        result.outcome === "failure" &&
+        isInfraTimeout(result) &&
+        result.budget
+      ) {
         const cause = timedOutCheckCause(result.seconds, result.budget);
         print(timedOutCheckAnnotation(result, cause));
         print(failedCheckRecord(result.name, cause));
@@ -942,8 +987,8 @@ const main = async () => {
     ),
   );
   const failed = blockingFailures(results);
-  const findings = failed.filter(({ timedOut }) => !timedOut);
-  const timedOut = failed.filter(({ timedOut: stopped }) => stopped);
+  const findings = failed.filter((result) => !isInfraTimeout(result));
+  const timedOut = failed.filter(isInfraTimeout);
   if (findings.length > 0) {
     print(
       `${findings.length} check(s) failed: ${findings.map(({ name }) => name).join("; ")}`,

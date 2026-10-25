@@ -15,6 +15,7 @@ import {
   exitCodeDetail,
   FAILED_CHECK_RECORD,
   failedCheckRecord,
+  reportedFailures,
   timedOutCheckCause,
 } from "./ci-check-pool";
 import {
@@ -46,6 +47,7 @@ import {
   playwrightEntry,
   POOLED_FAILURE_PREFIX,
   renderTail,
+  REPORTED_FAILURE_LINE,
   RESULT_GATE,
   runIdOf,
   segmentForStep,
@@ -1894,4 +1896,58 @@ test("a pooled check stopped at its budget is an infrastructure record, never a 
   });
   expect(ratchet?.step).toBe("Ratchet guard");
   expect(ratchet?.kind).not.toBe("infra");
+});
+
+test("a check that failed a test and then hung in teardown is a finding that shows the assertion", () => {
+  const cause = timedOutCheckCause(91, { seconds: 91, p95Seconds: 30.1 });
+  const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-rest", [
+    "##[group]Teardown hang: TIMED OUT in 91.0 s",
+    "scripts/parser.test.ts:",
+    "(pass) parser > accepts input [0.10ms]",
+    "error: expect(received).toBe(expected)",
+    "Expected: 3",
+    "Received: 2",
+    "(fail) parser > rejects input [0.20ms]",
+    "##[endgroup]",
+    `##[error]${cause}: timed out after 91.0 s`,
+    failedCheckRecord("Teardown hang", cause),
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+  const job = {
+    id: 17,
+    name: "ci-checks-rest (1)",
+    conclusion: "failure",
+    html_url: "https://github.com/o/r/actions/runs/1/job/17",
+    steps: [
+      {
+        name: "Run repository checks",
+        number: 4,
+        conclusion: "failure",
+        started_at: "2026-10-25T16:00:04Z",
+        completed_at: "2026-10-25T16:10:05Z",
+      },
+    ],
+  };
+  const [teardown] = buildDigest({ jobs: [job], logFor: () => log });
+  const messages = teardown?.lines.map(({ message }) => message) ?? [];
+  expect(teardown?.step).toBe("Teardown hang");
+  expect(teardown?.kind).not.toBe("infra");
+  expect(messages.join("\n")).toContain("parser > rejects input");
+  expect(messages.join("\n")).toContain("expect(received).toBe(expected)");
+  // The timeout itself stays on the record.
+  expect(messages).toContain(cause);
+});
+
+test("the digest and the pool agree on what a check reported itself", () => {
+  const sample = [
+    "(pass) a [1ms]",
+    "(fail) b [2ms]",
+    "::error file=a.ts::boom",
+    "##[error]rendered",
+    "error: plain",
+    "::warning::advisory",
+  ];
+  expect(sample.filter((line) => REPORTED_FAILURE_LINE.test(line))).toEqual(
+    reportedFailures(sample.join("\n")),
+  );
 });

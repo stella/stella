@@ -26,6 +26,7 @@ import {
   continueOnErrorHolds,
   failedCheckAnnotation,
   failureKind,
+  isInfraTimeout,
   isNearBudget,
   type Launched,
   nearBudgetWarning,
@@ -35,6 +36,7 @@ import {
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
+  reportedFailures,
   resolveEnv,
   runChecks,
   selectChecks,
@@ -461,6 +463,7 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
             return {
               exitCode: entries[index]?.fails === true ? 1 : 0,
               timedOut: false,
+              reportedFailures: [],
               maxRssBytes: undefined,
             };
           },
@@ -672,6 +675,7 @@ test("the summary table keeps one row per check whatever a failure says", () => 
       outcome: "failure",
       continuedOnError: false,
       timedOut: false,
+      reportedFailures: [],
       detail: "exit code 1\nsee a|b \\ c",
       seconds: 1.25,
       budget: BUDGET,
@@ -683,6 +687,7 @@ test("the summary table keeps one row per check whatever a failure says", () => 
       outcome: "skipped",
       continuedOnError: false,
       timedOut: false,
+      reportedFailures: [],
       detail: "condition false",
       seconds: 0,
       budget: undefined,
@@ -712,6 +717,7 @@ test("continue-on-error lets a failed check pass the pool only when it holds", a
       launch: async (): Promise<Launched> => ({
         exitCode: 1,
         timedOut: false,
+        reportedFailures: [],
         maxRssBytes: undefined,
       }),
     });
@@ -750,6 +756,7 @@ test("an undecidable continue-on-error fails closed", async () => {
     launch: async (): Promise<Launched> => ({
       exitCode: 1,
       timedOut: false,
+      reportedFailures: [],
       maxRssBytes: undefined,
     }),
   });
@@ -986,6 +993,7 @@ test("a check past its budget is stopped and reported as a typed infrastructure 
     expect(fails).toMatchObject({
       outcome: "failure",
       timedOut: false,
+      reportedFailures: [],
       detail: "exit code 3",
     });
     // Only timeouts: automation may rerun. Any finding: a red result.
@@ -1026,6 +1034,7 @@ test("a check that passes after most of its budget is a warning, not a failure",
     outcome: "success",
     continuedOnError: false,
     timedOut: false,
+    reportedFailures: [],
     detail: "passed",
     seconds,
     budget,
@@ -1053,4 +1062,71 @@ test("a selected check without a budget is invalid, never unbounded", () => {
   expect(planned?.status === "invalid" ? planned.message : "").toContain(
     'ci-checks-rest: "Unknown" has no entry in scripts/ci-check-budgets.json',
   );
+});
+
+test("a check that failed before it timed out is a finding, never infra", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-teardown-"));
+  try {
+    // A test fails, then teardown hangs until the budget stops it.
+    const run = [
+      "echo '(pass) parser > accepts input [0.10ms]'",
+      "echo 'error: expect(received).toBe(expected)'",
+      "echo '(fail) parser > rejects input [0.20ms]'",
+      "sleep 30",
+    ].join("\n");
+    const results = await runChecks({
+      planned: planChecks(
+        [
+          check("Teardown hang", { run }),
+          check("Plain hang", { run: "sleep 30" }),
+        ],
+        context("merge_group", ""),
+        () => ({ seconds: 0.5, p95Seconds: 0.1 }),
+      ),
+      concurrency: 2,
+      launch: processLauncher({ root, directory }),
+      report: () => undefined,
+    });
+    const [teardown, plain] = results;
+    expect(teardown).toMatchObject({
+      outcome: "failure",
+      timedOut: true,
+      reportedFailures: ["(fail) parser > rejects input [0.20ms]"],
+    });
+    expect(plain).toMatchObject({ timedOut: true, reportedFailures: [] });
+    expect(plain !== undefined && isInfraTimeout(plain)).toBe(true);
+    expect(teardown !== undefined && isInfraTimeout(teardown)).toBe(false);
+    expect(failureKind(results.slice(0, 1))).toBe("finding");
+    expect(failureKind(results.slice(1))).toBe("infra");
+    expect(failureKind(results)).toBe("finding");
+    expect(summaryTable(results).split("\n")[2]).toStartWith(
+      "| Teardown hang | failure, then timeout: timed out after ",
+    );
+    // Its annotation names the assertion, not the timeout.
+    expect(
+      failedCheckAnnotation(
+        teardown ?? { name: "", detail: "" },
+        readFileSync(path.join(directory, "000.log"), "utf-8"),
+      ),
+    ).toBe(
+      "::error title=FAILED check%3A Teardown hang::(fail) parser > rejects input [0.20ms] -- error: expect(received).toBe(expected)",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reported failures are failed tests and error commands only", () => {
+  expect(
+    reportedFailures(
+      [
+        "(pass) a [1ms]",
+        "  (fail) b [2ms]",
+        "::error file=a.ts::boom",
+        "##[error]rendered",
+        "error: plain text is not an annotation",
+        "::warning::advisory",
+      ].join("\n"),
+    ),
+  ).toEqual(["(fail) b [2ms]", "::error file=a.ts::boom", "##[error]rendered"]);
 });

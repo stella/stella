@@ -1277,14 +1277,44 @@ export const isFailedJob = (job: ApiJob): boolean =>
   ((job.conclusion === "cancelled" || job.conclusion === null) &&
     (job.steps ?? []).some(({ conclusion }) => conclusion === "failure"));
 
+// A failure a check established itself: a failed Bun test or an error
+// command (REPORTED_FAILURE in ci-check-pool.ts; a test binds the two).
+export const REPORTED_FAILURE_LINE = /^(?:\(fail\) |::error\b|##\[error\])/u;
+
+/**
+ * The failures a timed-out check reported before it was stopped: its test
+ * and compiler diagnostics when it printed any, else its error lines.
+ */
+const timeoutReportedFailures = (
+  groupLines: readonly string[],
+): FailureLine[] => {
+  const reported = groupLines
+    .map((raw) => logLine(raw).text.trim())
+    .filter((text) => REPORTED_FAILURE_LINE.test(text));
+  if (reported.length === 0) {
+    return [];
+  }
+  const own = checkOutputLines(groupLines, MAX_LINES_PER_STEP - 1);
+  return own.specific
+    ? own.lines
+    : reported
+        .slice(0, MAX_LINES_PER_STEP - 1)
+        .map((text) => ({ message: truncate(withoutErrorCommand(text)) }));
+};
+
 /** The lines of one failed pooled check: its own output, then its cause. */
 const pooledLines = (
   cause: string,
   groupLines: readonly string[],
 ): FailureLine[] => {
-  // A timeout's partial output is no finding: the typed cause stands alone.
+  // A timed-out check that had already failed a test or reported an error
+  // keeps those diagnostics, so it is classified by them, never as `infra`.
+  // Only a timeout with nothing else wrong is the typed cause alone.
   if (TYPED_INFRA_FAILURE.test(cause)) {
-    return [{ message: truncate(cause) }];
+    const reported = timeoutReportedFailures(groupLines);
+    return reported.length === 0
+      ? [{ message: truncate(cause) }]
+      : dedupe([...reported, { message: truncate(cause) }]);
   }
   const generic = BARE_EXIT_CAUSE.test(cause) || RUNNER_EXIT.test(cause);
   const own = checkOutputLines(
