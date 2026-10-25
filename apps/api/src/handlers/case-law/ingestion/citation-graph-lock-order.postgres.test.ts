@@ -6,8 +6,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
-  caseLawDecisionIdentifierBackfills,
   caseLawCitations,
+  caseLawDecisionIdentifierBackfills,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
@@ -18,16 +18,16 @@ import {
 } from "@/api/handlers/case-law/citation-graph-transaction";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
-  withInterleaving,
   type InterleavingToken,
+  withInterleaving,
 } from "@/api/tests/helpers/transaction-interleaving";
 
 import { citationKeyOf } from "./citation-extractor";
@@ -131,13 +131,17 @@ if (!databaseUrl || !enabled) {
                 string[]
               >`array_agg(a.attname::text ORDER BY pk_key.ordinality)`,
             })
-            .from(sql`pg_constraint AS c
+            .from(
+              sql`pg_constraint AS c
               JOIN pg_class AS t ON t.oid = c.conrelid
               JOIN pg_namespace AS n ON n.oid = t.relnamespace
               CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS pk_key(attnum, ordinality)
-              JOIN pg_attribute AS a ON a.attrelid = t.oid AND a.attnum = pk_key.attnum`)
-            .where(sql`n.nspname = ${namespace}
-              AND t.relname = 'case_law_decision_identifiers' AND c.contype = 'p'`)
+              JOIN pg_attribute AS a ON a.attrelid = t.oid AND a.attnum = pk_key.attnum`,
+            )
+            .where(
+              sql`n.nspname = ${namespace}
+              AND t.relname = 'case_law_decision_identifiers' AND c.contype = 'p'`,
+            )
             .groupBy(sql`c.conname`);
           expect(constraints).toHaveLength(1);
           const [constraint] = constraints;
@@ -295,6 +299,7 @@ if (!databaseUrl || !enabled) {
             composedSupplements: [],
             observedAt: new Date("2026-01-02"),
             observationOrder: 2n,
+            sourceFingerprintVersion: 0,
             shape: classifyObservation({
               result: observed.observed,
               existing: identity.existing,

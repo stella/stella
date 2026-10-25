@@ -6,8 +6,8 @@ import { DetachedWindowAPI } from "happy-dom";
 
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
-  ReaderAnswerErrorCode,
   ReaderAnswer,
+  ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
@@ -578,9 +578,11 @@ test("selecting decision text and clicking Explain opens the persisted margin an
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: () => undefined,
-            remove: () => undefined,
-            update: () => undefined,
+            create: async () => undefined,
+            redo: async () => undefined,
+            remove: async () => undefined,
+            undo: async () => undefined,
+            update: async () => undefined,
           }}
           mode="authenticated"
           onClearActive={() => undefined}

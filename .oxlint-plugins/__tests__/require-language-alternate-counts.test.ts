@@ -43,18 +43,27 @@ test("reports the absent search implementation at the program boundary", async (
 });
 
 test("requires the canonical reader binding rather than a local spelling", async () => {
-  for (const setup of [
-    'import { readPublicDecisionLanguageAlternatesByGroup } from "./other-reader";',
-    "const readPublicDecisionLanguageAlternatesByGroup = () => [];",
-  ]) {
-    expect(
-      await lintSingleRule(
-        "require-language-alternate-counts",
-        `${setup}\nfunction searchPostgresDecisions() { return readPublicDecisionLanguageAlternatesByGroup(); }\nconst searchCorpusIndexDecisions = () => readPublicDecisionLanguageAlternatesByGroup();\nconst listCaseLawProvisionDecisions = () => readPublicDecisionLanguageAlternatesByGroup();`,
-        { plugin: "public-law-read-boundary" },
-      ),
-    ).toEqual([2, 3, 4]);
-  }
+  const results = await Promise.all(
+    [
+      'import { readPublicDecisionLanguageAlternatesByGroup } from "./other-reader";',
+      "const readPublicDecisionLanguageAlternatesByGroup = () => [];",
+    ].map(async (lintCase, index) => {
+      const setup = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lintSingleRule(
+          "require-language-alternate-counts",
+          `${setup}\nfunction searchPostgresDecisions() { return readPublicDecisionLanguageAlternatesByGroup(); }\nconst searchCorpusIndexDecisions = () => readPublicDecisionLanguageAlternatesByGroup();\nconst listCaseLawProvisionDecisions = () => readPublicDecisionLanguageAlternatesByGroup();`,
+          { plugin: "public-law-read-boundary" },
+        ),
+        expected: [2, 3, 4],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("resolves canonical reader aliases and lexical shadowing", async () => {

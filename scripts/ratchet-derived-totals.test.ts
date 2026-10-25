@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
-  readFileSync,
-  readdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,8 +18,8 @@ import {
   allowanceAdjustmentCommand,
   allowanceRemovalCommand,
   inspectConfiguration,
-  scanAll,
   type RatchetMetric,
+  scanAll,
 } from "./ratchet";
 import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
@@ -98,9 +98,10 @@ const commit = (root: string, message: string) => {
   git(root, "-c", "commit.gpgsign=false", "commit", "-m", message);
 };
 
-// The definition paths name the guard's entry points and the files it loads
-// by path; their relative imports are followed here, so a module the guard
-// starts importing is copied without being listed by hand.
+// The definition paths list the guard's whole relative import closure (merge
+// gates read the list as complete). Imports are followed here too, so the
+// clone copies everything and the test below fails on a module the guard
+// imports without the list naming it.
 const RELATIVE_SPECIFIER = /^\.\.?\//u;
 const SCANNED_SOURCE = /\.[cm]?ts$/u;
 // The transpiler rejects a hashbang; it carries no imports.
@@ -174,10 +175,20 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
     if (branch !== undefined) {
       git(seed, "branch", branch);
     }
+    // Keep an unreachable object-store entry so the fixture proves cloning uses
+    // Git's transport instead of racing a filesystem copy of the live store.
+    const objectFanout = path.join(seed, ".git/objects/ff");
+    mkdirSync(objectFanout, { recursive: true });
+    symlinkSync(
+      "missing",
+      path.join(objectFanout, "00000000000000000000000000000000000000"),
+    );
     git(
       temporary,
       "clone",
       "--quiet",
+      // Keep each fixture's object database independent of its disposable seed.
+      "--no-local",
       ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
       seed,
       clone,
@@ -194,6 +205,17 @@ const withClone = (exercise: (root: string) => void, branch?: string) => {
     rmSync(temporary, { recursive: true, force: true });
   }
 };
+
+test("the definition paths list the guard's whole import closure", () => {
+  const listed = new Set(
+    ratchetDefinitionPaths.flatMap((pattern) => [
+      ...new Bun.Glob(pattern).scanSync({ cwd: ROOT, onlyFiles: true }),
+    ]),
+  );
+  expect(
+    RATCHET_DEFINITION_CLOSURE.filter((file) => !listed.has(file)).toSorted(),
+  ).toEqual([]);
+});
 
 test("a metric increase fails even with a forged committed budget", () => {
   withClone((root) => {
@@ -1019,6 +1041,7 @@ test("the base may predate a required domain action definition but head may not 
   });
 }, 30_000);
 
+// Measured p95: 10.2 s; this must run the ratchet repeatedly in a real Git clone.
 test("untracked files cannot increase file, duplication, directory or dependency metrics", () => {
   withClone((root) => {
     const libFile = "apps/api/src/lib/domain/helper.ts";
@@ -1075,7 +1098,7 @@ test("untracked files cannot increase file, duplication, directory or dependency
     expect(staged.code, staged.output).toBe(1);
     expect(staged.output).toContain("as-casts: 6 -> 16");
   });
-}, 30_000);
+}, 25_000);
 
 test("malformed ledger and dependency schemas fail in both measurement roles", () => {
   withClone((root) => {

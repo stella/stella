@@ -70,7 +70,7 @@ export class ProviderCallError extends HandlerError {
   readonly providerStatus: number | undefined;
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
-  readonly retryAfterMs: number | undefined;
+  override readonly retryAfterMs: number | undefined;
 
   get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
     return diagnostics.get(this);
@@ -90,6 +90,7 @@ export class ProviderCallError extends HandlerError {
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status,
       code,
+      ...(retryAfterMs === undefined ? {} : { retryable: true, retryAfterMs }),
       ...(facts === undefined
         ? {}
         : {
@@ -122,12 +123,7 @@ export class ProviderCallError extends HandlerError {
  */
 export type ModelRunFinish = {
   finish:
-    | "content_filter"
-    | "length"
-    | "none"
-    | "stop"
-    | "tool_calls"
-    | "unfinished";
+    "content_filter" | "length" | "none" | "stop" | "tool_calls" | "unfinished";
   providerStopReason?: string | undefined;
 };
 

@@ -11,8 +11,8 @@ import {
   type UnavailableStreaks,
 } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,

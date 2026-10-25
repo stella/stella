@@ -13,8 +13,8 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  toPlainTextIngestionResult,
   STORED_RAW_REPARSE_REJECTION,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
@@ -33,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 17;
+export const COURTLISTENER_PARSER_VERSION = 18;
 
 const textField = (value: string) =>
   hasVisibleText(value)

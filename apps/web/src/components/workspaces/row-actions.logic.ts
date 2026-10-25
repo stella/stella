@@ -2,6 +2,10 @@ import { panic, Result } from "better-result";
 
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
+import {
+  type CopyToMatterEntity,
+  getCopyToMatterRootEntities,
+} from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -189,4 +193,30 @@ export const requestDesktopEditTakeover = async ({
     return;
   }
   awaitConsent();
+};
+
+type FolderFromSelectionPlan = {
+  entityIds: string[];
+  parentId: string | null;
+};
+
+/**
+ * Where a folder made from a selection goes and what moves into it. An entity
+ * whose ancestor is also selected moves with that ancestor, so only the
+ * top-level targets are sent. The folder goes to the deepest folder that
+ * contains every target (their shared parent when they are siblings), or the
+ * matter root when none does. A chain cut short by a missing lookup only loses
+ * its upper ancestors, so the answer falls back to the root, never to a folder
+ * that does not contain every target.
+ */
+export const planFolderFromSelection = (
+  selection: readonly CopyToMatterEntity[],
+): FolderFromSelectionPlan => {
+  const targets = getCopyToMatterRootEntities(selection);
+  const [first, ...rest] = targets;
+  const parentId =
+    first?.ancestorIds.find((ancestorId) =>
+      rest.every((target) => target.ancestorIds.includes(ancestorId)),
+    ) ?? null;
+  return { entityIds: targets.map((target) => target.entityId), parentId };
 };

@@ -7,12 +7,12 @@ import {
   type BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  ELEMENT_REFERENCE_SHADOW_SEGMENT,
   type BrowserControlCommand,
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserObservedTab,
+  ELEMENT_REFERENCE_SHADOW_SEGMENT,
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";
@@ -1203,8 +1203,7 @@ const runPageOperation = async (
   });
 
 type ActionFrameCheck =
-  | { error: BrowserControlResult; ok: false }
-  | { ok: true; origin: string };
+  { error: BrowserControlResult; ok: false } | { ok: true; origin: string };
 
 /**
  * Reads the origin of the document an element ref points into and holds it
