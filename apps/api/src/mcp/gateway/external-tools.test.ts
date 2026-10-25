@@ -21,8 +21,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const loadActiveMcpConnectionsForUserMock = mock();
 const refreshCachedMcpToolsForConnectionMock = mock(async () => undefined);
 const proxyMcpToolCallMock = mock();
+const consumeMcpGatewayRateLimitMock = mock(async () => true);
 
 const dependencies = {
+  consumeMcpGatewayRateLimit: consumeMcpGatewayRateLimitMock,
   loadActiveMcpConnectionsForUser: loadActiveMcpConnectionsForUserMock,
   proxyMcpToolCall: proxyMcpToolCallMock,
   refreshCachedMcpToolsForConnection: refreshCachedMcpToolsForConnectionMock,
@@ -125,6 +127,8 @@ describe("external MCP gateway tools", () => {
     proxyMcpToolCallMock.mockReset();
     refreshCachedMcpToolsForConnectionMock.mockReset();
     refreshCachedMcpToolsForConnectionMock.mockResolvedValue(undefined);
+    consumeMcpGatewayRateLimitMock.mockReset();
+    consumeMcpGatewayRateLimitMock.mockResolvedValue(true);
   });
 
   test("refreshes missing cached tools before exposing existing connections", async () => {
@@ -193,5 +197,51 @@ describe("external MCP gateway tools", () => {
     expect(parsed.error.retryable).toBe(true);
     expect(parsed.error.code).not.toBe("unknown_tool");
     expect(result.isError).toBe(true);
+  });
+
+  test("charges the user and connector budget before proxying a call", async () => {
+    const callOrder: string[] = [];
+    consumeMcpGatewayRateLimitMock.mockImplementation(async () => {
+      callOrder.push("consume");
+      return true;
+    });
+    proxyMcpToolCallMock.mockImplementation(async () => {
+      callOrder.push("proxy");
+      return { content: [] };
+    });
+    const context = createContext([[row({ cachedTools: [cachedTool] })]]);
+
+    await callGatewayExternalMcpTool({
+      args: {},
+      context,
+      toolName: "mcp__registry__lookup",
+      dependencies,
+    });
+
+    expect(consumeMcpGatewayRateLimitMock).toHaveBeenCalledWith({
+      connectorSlug: "registry",
+      userId: context.userId,
+    });
+    expect(proxyMcpToolCallMock).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["consume", "proxy"]);
+  });
+
+  test("refuses a call over the gateway budget without reaching the connector", async () => {
+    consumeMcpGatewayRateLimitMock.mockResolvedValue(false);
+    const context = createContext([[row({ cachedTools: [cachedTool] })]]);
+
+    const result = await callGatewayExternalMcpTool({
+      args: {},
+      context,
+      toolName: "mcp__registry__lookup",
+      dependencies,
+    });
+
+    const item = result.content.at(0);
+    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(parsed.error.code).toBe("rate_limited");
+    expect(parsed.error.retryable).toBe(true);
+    expect(result.isError).toBe(true);
+    expect(proxyMcpToolCallMock).not.toHaveBeenCalled();
   });
 });
