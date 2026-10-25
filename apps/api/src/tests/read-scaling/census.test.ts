@@ -19,6 +19,7 @@ import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -41,6 +42,7 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   ...claimCommentScalingScenarios,
   mobileClientMetadataScalingScenario,
+  mobileUpdateScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

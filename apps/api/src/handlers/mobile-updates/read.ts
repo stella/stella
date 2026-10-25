@@ -15,6 +15,7 @@ import {
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  type CdnFetch,
   cdnFetch,
   mobileUpdateResponse,
   readSignedMobileUpdate,
@@ -40,55 +41,60 @@ const config = {
  * they reach a CDN path. A build nothing was published for gets 404 and
  * keeps the bundle it shipped.
  */
-const readMobileUpdate = createSafeBoundedPublicHandler(
-  config,
-  async function* ({ params: { variant }, request }) {
-    const platform = MOBILE_UPDATE_PLATFORMS.find(
-      (candidate) => candidate === request.headers.get("expo-platform"),
-    );
-    const runtimeVersion = request.headers.get("expo-runtime-version") ?? "";
-    if (
-      platform === undefined ||
-      !MOBILE_RUNTIME_VERSION_PATTERN.test(runtimeVersion)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "expo-platform and expo-runtime-version are required",
+export const createReadMobileUpdateHandler = (
+  fetchObject: () => CdnFetch = () => cdnFetch(grantThirdPartyOutboundPermit()),
+) =>
+  createSafeBoundedPublicHandler(
+    config,
+    async function* ({ params: { variant }, request }) {
+      const platform = MOBILE_UPDATE_PLATFORMS.find(
+        (candidate) => candidate === request.headers.get("expo-platform"),
+      );
+      const runtimeVersion = request.headers.get("expo-runtime-version") ?? "";
+      if (
+        platform === undefined ||
+        !MOBILE_RUNTIME_VERSION_PATTERN.test(runtimeVersion)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "expo-platform and expo-runtime-version are required",
+          }),
+        );
+      }
+      const update = yield* Result.ok(
+        await readSignedMobileUpdate({
+          fetchObject: fetchObject(),
+          target: { variant, platform, runtimeVersion },
         }),
       );
-    }
-    const update = yield* Result.ok(
-      await readSignedMobileUpdate({
-        fetchObject: cdnFetch(grantThirdPartyOutboundPermit()),
-        target: { variant, platform, runtimeVersion },
-      }),
-    );
-    switch (update.type) {
-      case "present":
-        return Result.ok(
-          mobileUpdateResponse(update.value, Bun.randomUUIDv7()),
-        );
-      case "absent":
-      case "refused":
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            message: "No update for this build",
-          }),
-        );
-      case "unavailable":
-        return Result.err(
-          new HandlerError({
-            status: 503,
-            message: "The current update cannot be read right now",
-          }),
-        );
-      default:
-        update satisfies never;
-        return panic("Unhandled update read outcome");
-    }
-  },
-);
+      switch (update.type) {
+        case "present":
+          return Result.ok(
+            mobileUpdateResponse(update.value, Bun.randomUUIDv7()),
+          );
+        case "absent":
+        case "refused":
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "No update for this build",
+            }),
+          );
+        case "unavailable":
+          return Result.err(
+            new HandlerError({
+              status: 503,
+              message: "The current update cannot be read right now",
+            }),
+          );
+        default:
+          update satisfies never;
+          return panic("Unhandled update read outcome");
+      }
+    },
+  );
+
+const readMobileUpdate = createReadMobileUpdateHandler();
 
 export default readMobileUpdate;
