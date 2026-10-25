@@ -3702,7 +3702,9 @@ jobs:
   database-migrations-check:
     needs: ci-plan
     if: >-
-      inputs.heavy_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && inputs.heavy_only != true
       && inputs.pr_depth_only != true
       && needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.trusted == 'true'
@@ -3753,7 +3755,9 @@ jobs:
     # errors, and any migration that would crash on a real DB.
     needs: ci-plan
     if: >-
-      inputs.heavy_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && inputs.heavy_only != true
       && inputs.pr_depth_only != true
       && needs.ci-plan.outputs.run_required != 'false'
       && needs.ci-plan.outputs.trusted == 'true'
