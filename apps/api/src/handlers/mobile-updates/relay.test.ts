@@ -12,7 +12,7 @@ import {
   MOBILE_UPDATES_CDN_ORIGIN,
   mobileUpdateAnswer,
   readSignedMobileUpdate,
-} from "@/api/lib/mobile-updates/relay";
+} from "@/api/handlers/mobile-updates/relay";
 
 const TARGET = {
   variant: "preview",
