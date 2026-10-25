@@ -32,6 +32,7 @@ test("coverage year bounds cannot read capped facet years", async () => {
 
   const coverage = await loadCaseLawCoverage({
     excludedSourceIds: [],
+    onPartialFailure: () => undefined,
     now: new Date("2026-10-22T00:00:00.000Z"),
     readSources: async () => [
       {
@@ -75,6 +76,7 @@ test("coverage year bounds cannot read capped facet years", async () => {
 test("an unread slice ledger leaves every source not reconciled, never failing the page", async () => {
   const coverage = await loadCaseLawCoverage({
     excludedSourceIds: [],
+    onPartialFailure: () => undefined,
     now: new Date("2026-10-22T00:00:00.000Z"),
     readSources: async () => [
       {

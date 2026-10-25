@@ -223,7 +223,7 @@ const presignInput = async ({
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
     contentLength: file.size,
-    sha256Base64: Buffer.from(file.sha256Hex, "hex").toString("base64"),
+    sha256Base64: Buffer.from(file.sha256Hex, "hex").toBase64(),
     scope: { organizationId, workspaceId: null },
     tagAsTemporaryUpload: true,
   });

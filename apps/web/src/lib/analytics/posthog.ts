@@ -861,6 +861,7 @@ const forwardedCaptures: Pick<
   | "captureFeedbackDialogOpened"
   | "captureFeedbackReportSubmitted"
   | "captureProvisionPlacementGaps"
+  | "captureCaseLawAnalysisTiming"
   | "captureInspectorRestoreRecovered"
   | "captureFollowupShown"
   | "captureFollowupSelected"
@@ -883,6 +884,9 @@ const forwardedCaptures: Pick<
   },
   captureProvisionPlacementGaps: (properties) => {
     posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+  },
+  captureCaseLawAnalysisTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming, properties);
   },
   captureInspectorRestoreRecovered: (properties) => {
     posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
@@ -975,6 +979,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
         case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
         case WEB_ANALYTICS_EVENTS.followupShown:
         case WEB_ANALYTICS_EVENTS.followupSelected:

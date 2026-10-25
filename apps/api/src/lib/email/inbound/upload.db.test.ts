@@ -169,7 +169,7 @@ const signedEml = async () => {
   expect(signed.errors).toEqual([]);
   const publicKeyRecord = publicKey
     .export({ type: "spki", format: "der" })
-    .toString("base64");
+    .toBase64();
   const verifyOriginal = createOriginalSignatureVerifier(() => ({
     resolve: async (domain: string, rrtype: string) =>
       domain === "case._domainkey.example.com" && rrtype === "TXT"

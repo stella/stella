@@ -4770,7 +4770,6 @@
     "modelError": "El modelo no pudo completar esta respuesta.",
     "networkError": "La conexión se ha interrumpido. Inténtalo de nuevo.",
     "regenerate": "Regenerar respuesta",
-    "selectionError": "Selecciona texto dentro de un solo párrafo (hasta 2000 caracteres).",
     "send": "Enviar pregunta de seguimiento",
     "share": "Compartir con el equipo",
     "timeoutError": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo.",

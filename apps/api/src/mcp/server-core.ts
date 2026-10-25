@@ -100,10 +100,8 @@ import {
   getMcpWwwAuthenticateHeader,
   type McpChallengeError,
 } from "@/api/mcp/metadata";
-import {
-  classifyMcpMetricToolName,
-  observeMcpToolCall,
-} from "@/api/mcp/observe-tool-call";
+import { classifyMcpMetricToolName } from "@/api/mcp/metric-tool-name";
+import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   addMcpPhaseDuration,
   mcpRequestStartedAt,
