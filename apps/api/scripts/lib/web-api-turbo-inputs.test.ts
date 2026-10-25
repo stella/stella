@@ -14,8 +14,7 @@ const stamp = (files: readonly string[]): CompilerInputStamp => ({
   files: { present: [], absent: [] },
   directories: { present: [], absent: [] },
   realpaths: {},
-  subdirectories: {},
-  listings: [],
+  entries: {},
 });
 
 test("Turbo inputs cover every repository file read by the compiler", () => {

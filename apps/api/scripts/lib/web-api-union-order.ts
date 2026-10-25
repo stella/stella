@@ -19,12 +19,18 @@
 // Within a rank, ties keep the printed text order, and equal text is the same
 // printout either way.
 
-import ts from "typescript6";
-
-import { hasFlag } from "./typescript-internals";
+/** What a union member is, as far as its place in the order goes. */
+export type UnionMemberKind =
+  | { type: "null" }
+  | { type: "undefined" }
+  | { type: "string"; value: string }
+  | { type: "number"; value: number }
+  | { type: "bigint" }
+  | { type: "boolean" }
+  | { type: "other" };
 
 export type PrintedUnionMember = {
-  type: ts.Type;
+  kind: UnionMemberKind;
   printed: string;
 };
 
@@ -46,29 +52,36 @@ const LITERAL_KIND = {
   boolean: 3,
 } as const;
 
-const rankOf = ({ type, printed }: PrintedUnionMember): number => {
-  if (hasFlag(type.flags, ts.TypeFlags.Null)) {
-    return RANK.null;
+const rankOf = ({ kind, printed }: PrintedUnionMember): number => {
+  switch (kind.type) {
+    case "null":
+      return RANK.null;
+    case "undefined":
+      return RANK.undefined;
+    case "string":
+    case "number":
+    case "bigint":
+    case "boolean":
+      return RANK.literal;
+    case "other":
+      return printed.includes(NODE_TOKEN) ? RANK.node : RANK.printed;
   }
-  if (hasFlag(type.flags, ts.TypeFlags.Undefined)) {
-    return RANK.undefined;
-  }
-  if (type.isLiteral() || hasFlag(type.flags, ts.TypeFlags.BooleanLiteral)) {
-    return RANK.literal;
-  }
-  return printed.includes(NODE_TOKEN) ? RANK.node : RANK.printed;
 };
 
-const literalKind = (type: ts.Type): number => {
-  if (type.isStringLiteral()) {
-    return LITERAL_KIND.string;
+const literalKind = (kind: UnionMemberKind): number => {
+  switch (kind.type) {
+    case "string":
+      return LITERAL_KIND.string;
+    case "number":
+      return LITERAL_KIND.number;
+    case "bigint":
+      return LITERAL_KIND.bigint;
+    case "boolean":
+    case "null":
+    case "undefined":
+    case "other":
+      return LITERAL_KIND.boolean;
   }
-  if (type.isNumberLiteral()) {
-    return LITERAL_KIND.number;
-  }
-  return hasFlag(type.flags, ts.TypeFlags.BigIntLiteral)
-    ? LITERAL_KIND.bigint
-    : LITERAL_KIND.boolean;
 };
 
 const compareText = (left: string, right: string): number => {
@@ -91,17 +104,17 @@ const compareLiterals = (
   left: PrintedUnionMember,
   right: PrintedUnionMember,
 ): number => {
-  const byKind = literalKind(left.type) - literalKind(right.type);
+  const byKind = literalKind(left.kind) - literalKind(right.kind);
   if (byKind !== 0) {
     return byKind;
   }
-  if (left.type.isStringLiteral() && right.type.isStringLiteral()) {
-    return compareText(left.type.value, right.type.value);
+  if (left.kind.type === "string" && right.kind.type === "string") {
+    return compareText(left.kind.value, right.kind.value);
   }
-  if (left.type.isNumberLiteral() && right.type.isNumberLiteral()) {
-    return left.type.value - right.type.value;
+  if (left.kind.type === "number" && right.kind.type === "number") {
+    return left.kind.value - right.kind.value;
   }
-  if (literalKind(left.type) === LITERAL_KIND.bigint) {
+  if (left.kind.type === "bigint") {
     return compareBigIntText(left.printed, right.printed);
   }
   return 0;
