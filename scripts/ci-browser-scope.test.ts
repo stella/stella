@@ -61,7 +61,7 @@ const configFiles = [
   "packages/ui/vite.config.ts",
 ];
 
-test("analytics imports stay independent of generated web route projections", () => {
+test("analytics imports stay independent of generated web route projections", async () => {
   const inventory = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: ROOT });
   expect(inventory.exitCode).toBe(0);
   const files = inventory.stdout.toString().split("\0").filter(Boolean);
@@ -73,7 +73,7 @@ test("analytics imports stay independent of generated web route projections", ()
   }
   const seen = new Set<string>();
   expect(
-    sourceClosureProblems(
+    await sourceClosureProblems(
       ROOT,
       tree,
       [
@@ -89,7 +89,7 @@ test("analytics imports stay independent of generated web route projections", ()
   }
 });
 
-test("browser scope skips unrelated API implementation and preserves every served runtime dependency", () => {
+test("browser scope skips unrelated API implementation and preserves every served runtime dependency", async () => {
   expect(
     requiresCiBrowser({
       root: ROOT,
@@ -116,7 +116,7 @@ test("browser scope skips unrelated API implementation and preserves every serve
         file.startsWith("apps/extension/tests/")),
   );
   const seen = new Set<string>();
-  const problems = sourceClosureProblems(
+  const problems = await sourceClosureProblems(
     ROOT,
     tree,
     entries.map((file) => `/app/${file}`),
@@ -206,7 +206,7 @@ test("the shared import reader identifies dependencies that need conservative di
   ).toHaveLength(1);
 });
 
-test("browser source consumption preserves an independently pinned alias chain", () => {
+test("browser source consumption preserves an independently pinned alias chain", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "browser-alias-scope-"));
   const entry = "apps/web/src/alias-entry.ts";
   const dependency = "packages/browser-scope-fixture/src/dependency.ts";
@@ -234,9 +234,9 @@ test("browser source consumption preserves an independently pinned alias chain",
       Object.keys(files).map((file) => [`/app/${file}`, file]),
     );
     const seen = new Set<string>();
-    expect(sourceClosureProblems(root, tree, [`/app/${entry}`], seen)).toEqual(
-      [],
-    );
+    expect(
+      await sourceClosureProblems(root, tree, [`/app/${entry}`], seen),
+    ).toEqual([]);
     expect(seen).toEqual(new Set(expected.map((file) => `/app/${file}`)));
     const required = ciBrowserScopePredicate({ root });
     for (const file of expected) {
