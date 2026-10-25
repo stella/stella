@@ -13,8 +13,8 @@ import {
 import {
   type AstNode,
   isAstNode,
-  isGlobalReference,
   isIdentifierReference,
+  isUnshadowedGlobalIdentifier,
   memberPropertyName,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
@@ -156,7 +156,7 @@ const hasNativeBinding = ({
     }
   }
   if (isIdentifierReference(node)) {
-    if (node.name === name && isGlobalReference(context, node)) {
+    if (node.name === name && isUnshadowedGlobalIdentifier(context, node)) {
       return true;
     }
     const variable = resolveVariable(context, node);
@@ -172,7 +172,7 @@ const hasNativeBinding = ({
     memberPropertyName(node) === name &&
     isIdentifierReference(node.object) &&
     node.object.name === "globalThis" &&
-    isGlobalReference(context, node.object)
+    isUnshadowedGlobalIdentifier(context, node.object)
   );
 };
 

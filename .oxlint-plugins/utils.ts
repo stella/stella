@@ -536,7 +536,7 @@ export const resolveVariable = (
   return null;
 };
 
-export const isGlobalReference = (
+export const isUnshadowedGlobalIdentifier = (
   context: Context,
   value: unknown,
 ): boolean => {
