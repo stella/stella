@@ -634,7 +634,6 @@ const captureLocale = async ({
       }
       await page.locator("body").waitFor({ state: "visible" });
       await page.evaluate(async () => document.fonts.ready);
-      await page.waitForTimeout(300);
       await page.addStyleTag({
         content: `
           *, *::before, *::after {

@@ -204,10 +204,11 @@ const HEAVY_MATTER_FOLDER_COUNT = 25;
 const AKVIZICE_MATTER_LABEL = "ws-akvizice-energo";
 // The org taxonomy labels in the seeded firm's language, keyed like the
 // default taxonomy.
-const documentTypeLabels: Readonly<Record<string, string>> =
-  SEED_CONTENT.documentTypeLabels;
+const documentTypeLabels = new Map(
+  Object.entries(SEED_CONTENT.documentTypeLabels),
+);
 const documentTypeLabel = (key: string): string =>
-  documentTypeLabels[key] ?? panic(`Missing document type label: ${key}`);
+  documentTypeLabels.get(key) ?? panic(`Missing document type label: ${key}`);
 // The taxonomy key the Czech playbook is scoped to; its label classifies the
 // akvizice SPA document so the gate matches.
 const SPA_DOCUMENT_TYPE_KEY = "spa";
