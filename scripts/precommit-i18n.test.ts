@@ -11,6 +11,9 @@ import path from "node:path";
 
 import { runPrecommitI18n } from "./precommit-i18n";
 
+// Dynamic reads consume temporary Git fixtures, never repository Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
 // Every git call names its own identity and reads no global or system
 // config, so a developer machine behaves like a CI runner that has none.
 const git = (cwd: string, ...args: string[]): string => {
