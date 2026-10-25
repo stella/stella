@@ -4,17 +4,20 @@ import os from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { sha256Base64Url } from "@stll/sha256/bun";
+
 import { createTestState } from "@/api/tests/helpers/test-state";
 
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
 
 /**
- * stella's own native clients signing in end to end: the CLI's and the mobile
- * app's own sign-in code (discovery, client choice, authorize URL, token
- * exchange) against the real server and auth handler, with only the browser,
- * the CLI's loopback listener and the app's auth session simulated. The app's
- * token then reads matters over REST, and every place it must not reach
- * refuses it.
+ * stella's own native clients signing in end to end against the real server
+ * and auth handler. The CLI runs its own sign-in code, with only the browser
+ * and its loopback listener simulated. The mobile app is an app of its own,
+ * so its sign-in is replayed here at the protocol level, as the app's
+ * sign-in code performs it (discovery, the app's client document, PKCE, the
+ * person's consent, the code exchange); the app's own tests cover that code. The app's token then reads matters over REST,
+ * and every place it must not reach refuses it.
  *
  * The deployment's public address is https here, as in production, so this
  * file runs in a process of its own (`SOLO_TEST_PATHS`) and sets it before
@@ -41,17 +44,16 @@ const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
   await import("../../../../packages/cli/src/auth/constants.ts");
 const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
-const { MOBILE_CLIENT_METADATA_PATH, buildMobileClientMetadataDocument } =
-  await import("@stll/api-contract/mobile-client");
+const {
+  MOBILE_CLIENT_METADATA_PATH,
+  MOBILE_REDIRECT_URI,
+  MOBILE_SCOPES,
+  buildMobileClientMetadataDocument,
+} = await import("@stll/api-contract/mobile-client");
 const { apiOAuthResourceUrl } =
   await import("@stll/api-contract/api-oauth-resource");
 const { readCredentialFile } =
   await import("../../../../packages/cli/src/auth/credential-store.ts");
-const { signIn } = await import("../../../mobile/src/connection/sign-in.ts");
-const { createAccessTokenSource } =
-  await import("../../../mobile/src/connection/session.ts");
-const { webCrypto } =
-  await import("../../../mobile/src/connection/test-support/web-crypto.ts");
 
 const MOBILE_CLIENT_ID = `${PUBLIC_URL}${MOBILE_CLIENT_METADATA_PATH}`;
 
@@ -179,28 +181,79 @@ const cliLogin = async (browser: Browser) => {
   return result.value;
 };
 
+const authorizationServerSchema = v.looseObject({
+  issuer: v.string(),
+  authorization_endpoint: v.string(),
+  token_endpoint: v.string(),
+  client_id_metadata_document_supported: v.optional(v.boolean()),
+});
+
+const tokenResponseSchema = v.looseObject({
+  access_token: v.string(),
+  refresh_token: v.string(),
+});
+
+/** The app's token request, as a form like the app sends. */
+const requestTokens = async (
+  tokenEndpoint: string,
+  parameters: Record<string, string>,
+) => {
+  const response = await serveInProcess(tokenEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(parameters).toString(),
+  });
+  expect(response.status).toBe(200);
+  return v.parse(tokenResponseSchema, await response.json());
+};
+
+const base64Url = (bytes: Uint8Array) =>
+  Buffer.from(bytes).toString("base64url");
+
 /** Sign the mobile app in as it does on a phone, with `browser` approving. */
 const mobileSignIn = async (browser: Browser) => {
-  let redirectedTo: string | undefined;
-  const result = await signIn({
-    crypto: webCrypto,
-    fetch: serveInProcess,
-    now: () => Date.now(),
-    openAuthSession: async (authorizeUrl, redirectUri) => {
-      const callback = await consentInBrowser(browser, authorizeUrl);
-      redirectedTo = `${callback.protocol}${callback.pathname}`;
-      expect(redirectedTo).toBe(redirectUri);
-      return { type: "success", url: callback.toString() };
-    },
-    resourceFor: apiOAuthResourceUrl,
-    serverUrlInput: SERVER_URL,
-    // The test server answers its endpoints on its local http address.
-    transport: { allowPlainHttp: true },
-  });
-  if (result.isErr()) {
-    throw result.error;
+  const discovered = await serveInProcess(
+    new URL("/api/auth/.well-known/oauth-authorization-server", SERVER_URL),
+  );
+  const metadata = v.parse(authorizationServerSchema, await discovered.json());
+  expect(metadata.client_id_metadata_document_supported).toBe(true);
+  const resource = apiOAuthResourceUrl(SERVER_URL);
+  const codeVerifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const state = base64Url(crypto.getRandomValues(new Uint8Array(16)));
+  const authorize = new URL(metadata.authorization_endpoint);
+  for (const [name, value] of Object.entries({
+    response_type: "code",
+    client_id: MOBILE_CLIENT_ID,
+    redirect_uri: MOBILE_REDIRECT_URI,
+    code_challenge: sha256Base64Url(codeVerifier),
+    code_challenge_method: "S256",
+    state,
+    resource,
+    scope: MOBILE_SCOPES.join(" "),
+    prompt: "consent",
+  })) {
+    authorize.searchParams.set(name, value);
   }
-  return result.value;
+  const callback = await consentInBrowser(browser, authorize.toString());
+  expect(`${callback.protocol}${callback.pathname}`).toBe(MOBILE_REDIRECT_URI);
+  expect(callback.searchParams.get("state")).toBe(state);
+  const tokens = await requestTokens(metadata.token_endpoint, {
+    grant_type: "authorization_code",
+    client_id: MOBILE_CLIENT_ID,
+    code: callback.searchParams.get("code") ?? "",
+    code_verifier: codeVerifier,
+    redirect_uri: MOBILE_REDIRECT_URI,
+    resource,
+  });
+  return {
+    session: {
+      clientId: MOBILE_CLIENT_ID,
+      tokenEndpoint: metadata.token_endpoint,
+      resource,
+      refreshToken: tokens.refresh_token,
+    },
+    access: { token: tokens.access_token },
+  };
 };
 
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
@@ -426,30 +479,17 @@ describe("stella mobile client document", () => {
   test("the app's session refreshes and rotates its refresh token", async () => {
     const browser = await signInWithOrganization("mobile-refresh@example.test");
     const signedIn = await mobileSignIn(browser);
-    const written: string[] = [];
-    const source = createAccessTokenSource({
-      fetch: serveInProcess,
-      initialAccess: undefined,
-      now: () => Date.now(),
-      session: signedIn.session,
-      store: {
-        read: async () => signedIn.session,
-        write: async (session) => {
-          written.push(session.refreshToken);
-        },
-        clear: async () => {},
-      },
+    const refreshed = await requestTokens(signedIn.session.tokenEndpoint, {
+      grant_type: "refresh_token",
+      client_id: signedIn.session.clientId,
+      refresh_token: signedIn.session.refreshToken,
+      resource: signedIn.session.resource,
     });
-    const refreshed = await source.accessToken();
-    if (refreshed.isErr()) {
-      throw refreshed.error;
-    }
-    expect(refreshed.value).not.toBe(signedIn.access.token);
-    expect(written).toHaveLength(1);
-    expect(written[0]).not.toBe(signedIn.session.refreshToken);
+    expect(refreshed.access_token).not.toBe(signedIn.access.token);
+    expect(refreshed.refresh_token).not.toBe(signedIn.session.refreshToken);
 
     const listed = await serveInProcess(new URL("/v1/workspaces", SERVER_URL), {
-      headers: bearer(refreshed.value),
+      headers: bearer(refreshed.access_token),
     });
     expect(listed.status).toBe(200);
   });
