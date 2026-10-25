@@ -204,7 +204,7 @@ test("managed checks require an explicit supported provider and bounded configur
   }
 });
 
-test("free tier managed checks require an isolated OpenRouter credential", () => {
+test("a managed free tier requires an isolated OpenRouter credential", () => {
   const configured = {
     ...environment,
     AI_PROVIDER: "openrouter" as const,
@@ -221,6 +221,13 @@ test("free tier managed checks require an isolated OpenRouter credential", () =>
   expect(envApiInvariantViolation(configured)).toContain(
     "requires OPENROUTER_FAST_TIER_API_KEY",
   );
+  // Catalog checks off: the free floor still runs on managed OpenRouter.
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      FEATURE_MANAGED_PROVIDER_CHECKS: false,
+    }),
+  ).toContain("requires OPENROUTER_FAST_TIER_API_KEY");
   expect(
     envApiInvariantViolation({
       ...configured,

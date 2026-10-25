@@ -1033,6 +1033,17 @@ const managedProviderCheckInvariantViolation = ({
   ) {
     return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
   }
+  // The free floor runs on the fast tier's own credential and never on the
+  // standard one, so a managed free tier without it would refuse every
+  // request; refuse the configuration at boot instead.
+  if (
+    FEATURE_FREE_TIER &&
+    AI_PROVIDER === "openrouter" &&
+    !OPENROUTER_FAST_TIER_API_KEY?.trim() &&
+    !(OPENROUTER_FAST_TIER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+  ) {
+    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
+  }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
@@ -1042,17 +1053,6 @@ const managedProviderCheckInvariantViolation = ({
       !(OPENROUTER_WIF_POLICY_ID && configuredSharedWifFields === 2)
     ) {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
-    }
-    if (
-      FEATURE_FREE_TIER &&
-      !OPENROUTER_FAST_TIER_API_KEY?.trim() &&
-      !(
-        OPENROUTER_FAST_TIER_WIF_POLICY_ID &&
-        OPENROUTER_WIF_AUDIENCE &&
-        OPENROUTER_WIF_STS_REGION
-      )
-    ) {
-      return "FEATURE_FREE_TIER with FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
     }
     if (
       MANAGED_PROVIDER_CHECK_INTERVAL_MS === undefined ||
