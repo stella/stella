@@ -72,7 +72,11 @@ describe("MCP over a served socket", () => {
     const observeTransportFailure = mock();
     const app = createHttpApp({
       routes: createMcpRoute({
-        handleMcpHttpRequest: handlerWith({ observeTransportFailure }),
+        handleMcpHttpRequest: handlerWith({
+          observeTransportFailure: (error, context) => {
+            observeTransportFailure(error, context);
+          },
+        }),
       }),
       middleware: [awaitedStage],
     });
@@ -116,7 +120,9 @@ describe("MCP over a served socket", () => {
     const observeTransportFailure = mock();
     const injected = await handlerWith({
       authenticateMcpRequest,
-      observeTransportFailure,
+      observeTransportFailure: (failure, context) => {
+        observeTransportFailure(failure, context);
+      },
     })(request());
     expect(injected.status).toBe(503);
     expect(observeTransportFailure.mock.calls).toEqual([
