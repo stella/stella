@@ -63,17 +63,21 @@ RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/
 # Every bundle sets --public-path to the directory it lands in on the runner.
 # Without it Bun emits `with { type: "file" }` asset paths as "./name-hash.ext",
 # which resolve against the working directory instead of the bundle.
+# Long-running bundles ship a linked source map so error frames name source
+# positions; the strip step drops the embedded source text, which runtime
+# mapping never reads.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
-    --sourcemap=inline \
+    --sourcemap=linked \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
     --entry-naming server.js \
-    apps/api/src/server.ts
+    apps/api/src/server.ts && \
+    bun apps/api/scripts/strip-source-map-content.ts /app/bundles/server.js.map
 # Dedicated Hocuspocus collaboration service. The infrastructure runs it from
-# the same immutable image with command override ["/app/collab"], the launcher
-# the runner stage writes.
+# the same immutable image with command override ["/app/collab"], through the
+# apps/api/docker/collab launcher.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
@@ -349,11 +353,12 @@ RUN bun build \
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
-    --sourcemap=inline \
+    --sourcemap=linked \
     --outdir /app/bundles \
     --public-path /app/ \
     --entry-naming document-processing-worker.js \
-    apps/api/src/scripts/document-processing-worker.ts
+    apps/api/src/scripts/document-processing-worker.ts && \
+    bun apps/api/scripts/strip-source-map-content.ts /app/bundles/document-processing-worker.js.map
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Mirror the source directory under the bundle tree
 # so its runtime `import.meta.dir`-relative migrationsFolder lookup resolves
@@ -391,6 +396,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
       --entry-naming extraction-worker.js \
+      --external @firecrawl/anydoc-linux-arm64-musl \
+      --external @firecrawl/anydoc-linux-x64-musl \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
@@ -490,7 +497,9 @@ COPY --chown=stella:stella --from=install-inputs /app/apps/api/docker/collab /ap
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js.map /app/legal-atlas.js.map
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js.map /app/eu-ecj-refetch.js.map
 # The bundled entrypoint reads migration SQL from this external folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 # ONNX Runtime is the one native exception: its binding dynamically links a
