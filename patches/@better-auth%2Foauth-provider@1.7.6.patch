@@ -1,3 +1,11 @@
+Continue steps (selected, created, postLogin) treat a session created after
+the signed request was issued as answering its prompt=login, the rule
+consent() already applies (withSatisfiedLoginPrompt). Upstream 1.7.6
+re-enters authorize with the login prompt intact, so after a fresh sign-in the
+organization step's continue sends the browser back to sign-in in a loop.
+Keep this hunk until upstream continue steps honour a satisfied login prompt.
+Runtime regression: apps/api/src/lib/oauth-organization-picker.db.test.ts.
+
 diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
 index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..6c2058cb67540d5d3c42e2513ed6ffe96c597a5f 100644
 --- a/dist/authorize-CLuqtSXQ.mjs
