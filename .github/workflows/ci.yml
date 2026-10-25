@@ -1985,8 +1985,7 @@ jobs:
       CI_CANCELLATION_CONTEXT: Queue failure cancellation depends on workflow outcomes.
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - &checks_checkout
-        name: Checkout
+      - name: Checkout
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -3122,8 +3121,7 @@ jobs:
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - &full_checkout_with_submodules
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -5986,7 +5984,9 @@ jobs:
     timeout-minutes: 20
     needs: ci-plan
     if: >-
-      inputs.heavy_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && inputs.heavy_only != true
       && inputs.pr_depth_only != true
       && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
       && needs.ci-plan.outputs.run_required != 'false'
@@ -6032,7 +6032,9 @@ jobs:
   dependency-review:
     needs: ci-plan
     if: >-
-      inputs.heavy_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && inputs.heavy_only != true
       && inputs.pr_depth_only != true
       && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
       && needs.ci-plan.outputs.run_required != 'false'
