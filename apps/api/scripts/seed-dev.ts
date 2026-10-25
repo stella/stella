@@ -80,6 +80,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -5275,7 +5276,10 @@ export async function seed(organizationId?: string, userId?: string) {
               color: c.color,
               registrationNumber:
                 "registrationNumber" in c ? c.registrationNumber : undefined,
-              taxId: "taxId" in c ? c.taxId : undefined,
+              ...contactTaxIdentifiers({
+                taxId: "taxId" in c ? c.taxId : null,
+                vatId: null,
+              }),
               bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
               billingAddress:
                 "billingAddress" in c ? c.billingAddress : undefined,
@@ -5306,7 +5310,7 @@ export async function seed(organizationId?: string, userId?: string) {
               displayName: c.displayName,
               organizationName: c.organizationName,
               registrationNumber: c.registrationNumber,
-              taxId: c.taxId,
+              ...contactTaxIdentifiers({ taxId: c.taxId, vatId: null }),
               billingAddress: c.billingAddress,
               defaultHourlyRate: cents(c.defaultHourlyRate),
               currency: c.currency,
