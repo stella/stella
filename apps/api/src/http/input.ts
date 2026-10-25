@@ -83,6 +83,7 @@ const readJson = async (request: Request): Promise<unknown> => {
 
 const readFormData = async (request: Request): Promise<RequestFormData> => {
   try {
+    // oxlint-disable-next-line typescript/no-deprecated -- Bun parses the form natively, within Bun.serve's request body limit; the deprecation is undici's advice for its own parser
     return await request.formData();
   } catch (error) {
     throw new HttpFailureError(HTTP_FAILURE.malformed, { cause: error });

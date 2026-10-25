@@ -174,7 +174,7 @@ const diagnosticMessage = (diagnostic: Diagnostic, depth: number): string =>
     ),
   ].join("\n");
 
-export const formatDiagnostics = (
+const formatDiagnostics = (
   diagnostics: readonly Diagnostic[],
   sourceText: (fileName: string) => string | undefined,
 ): string =>

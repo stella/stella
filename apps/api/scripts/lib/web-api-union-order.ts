@@ -52,36 +52,34 @@ const LITERAL_KIND = {
   boolean: 3,
 } as const;
 
+const LITERAL_KINDS: ReadonlySet<UnionMemberKind["type"]> = new Set([
+  "string",
+  "number",
+  "bigint",
+  "boolean",
+]);
+
 const rankOf = ({ kind, printed }: PrintedUnionMember): number => {
-  switch (kind.type) {
-    case "null":
-      return RANK.null;
-    case "undefined":
-      return RANK.undefined;
-    case "string":
-    case "number":
-    case "bigint":
-    case "boolean":
-      return RANK.literal;
-    case "other":
-      return printed.includes(NODE_TOKEN) ? RANK.node : RANK.printed;
+  if (kind.type === "null") {
+    return RANK.null;
   }
+  if (kind.type === "undefined") {
+    return RANK.undefined;
+  }
+  if (LITERAL_KINDS.has(kind.type)) {
+    return RANK.literal;
+  }
+  return printed.includes(NODE_TOKEN) ? RANK.node : RANK.printed;
 };
 
 const literalKind = (kind: UnionMemberKind): number => {
-  switch (kind.type) {
-    case "string":
-      return LITERAL_KIND.string;
-    case "number":
-      return LITERAL_KIND.number;
-    case "bigint":
-      return LITERAL_KIND.bigint;
-    case "boolean":
-    case "null":
-    case "undefined":
-    case "other":
-      return LITERAL_KIND.boolean;
+  if (kind.type === "string") {
+    return LITERAL_KIND.string;
   }
+  if (kind.type === "number") {
+    return LITERAL_KIND.number;
+  }
+  return kind.type === "bigint" ? LITERAL_KIND.bigint : LITERAL_KIND.boolean;
 };
 
 const compareText = (left: string, right: string): number => {

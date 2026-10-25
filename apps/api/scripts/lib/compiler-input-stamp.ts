@@ -86,7 +86,7 @@ const EMPTY_ENTRIES: FileSystemEntries = { files: [], directories: [] };
  * A directory's entries as the compiler sees them: names only, a symbolic link
  * counted as what it points at, sorted. Unreadable directories have none.
  */
-export const accessibleEntries = (directory: string): FileSystemEntries => {
+const accessibleEntries = (directory: string): FileSystemEntries => {
   const listed = Result.try(() =>
     readdirSync(directory, { withFileTypes: true }),
   );
