@@ -48,6 +48,7 @@ import {
 } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { routeSearchSchema } from "@/route-search-params";
 
 const optionalPublicDecisionSearchQuerySchema = v.optional(
   v.pipe(
@@ -58,7 +59,7 @@ const optionalPublicDecisionSearchQuerySchema = v.optional(
   ),
 );
 
-export const publicDecisionSearchSchema = v.object({
+export const publicDecisionSearchSchema = routeSearchSchema({
   // A stale or hand-edited value drops the note rather than failing the page.
   match: v.fallback(
     v.optional(v.picklist(Object.values(PUBLIC_DECISION_MATCH))),

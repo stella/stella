@@ -407,13 +407,18 @@ const runtimeRoots = (
   };
   findEntries(source);
   for (const statement of source.statements) {
+    if (!ts.isExpressionStatement(statement)) {
+      continue;
+    }
+    const expression = ts.isAwaitExpression(statement.expression)
+      ? statement.expression.expression
+      : statement.expression;
     if (
-      ts.isExpressionStatement(statement) &&
-      ts.isCallExpression(statement.expression) &&
-      ts.isIdentifier(statement.expression.expression) &&
-      statement.expression.expression.text.startsWith("register")
+      ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text.startsWith("register")
     ) {
-      enqueueNode(statement.expression);
+      enqueueNode(expression);
     }
   }
 

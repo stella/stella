@@ -2,36 +2,32 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { decisionDateRange } from "@/features/case-law/case-law-index-search.logic";
+import { parseRouteSearch } from "@/route-search-params";
 
 import { searchSchema } from "./-case-law-search-schema";
 
-// The router reads each URL value as JSON before the schema sees it, so these
-// are the values `?year=2026&court=123` actually delivers.
-test("reads facets the router parsed as numbers as the text the URL spells", () => {
-  const search = v.parse(searchSchema, {
-    country: "cze",
-    court: 123,
-    type: 456,
-    year: 2026,
-  });
-
-  expect(search).toMatchObject({ court: "123", type: "456", year: "2026" });
+test("a legacy year link opens that year's decisions", () => {
+  const search = v.parse(
+    searchSchema,
+    parseRouteSearch("?court=%C3%9Astavn%C3%AD+soud&year=2026"),
+  );
+  expect(search.court).toBe("Ústavní soud");
   expect(decisionDateRange(search)).toEqual({
     from: "2026-01-01",
     to: "2026-12-31",
   });
 });
 
-test("drops an unreadable facet instead of failing the page", () => {
-  const search = v.parse(searchSchema, {
-    country: "cze",
-    court: { nested: true },
-    lang: true,
-    year: "20266",
+test("number-like text stays the reader's text", () => {
+  const search = v.parse(
+    searchSchema,
+    parseRouteSearch("?q=2026&court=123&type=1&lang=1&strict=1"),
+  );
+  expect(search).toMatchObject({
+    court: "123",
+    lang: "1",
+    q: "2026",
+    strict: "1",
+    type: "1",
   });
-
-  expect(search.court).toBeUndefined();
-  expect(search.lang).toBeUndefined();
-  expect(search.year).toBeUndefined();
-  expect(search.country).toBe("cze");
 });

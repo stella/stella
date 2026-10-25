@@ -13,25 +13,17 @@ import {
 import { CASE_LAW_MAX_PAGE } from "@/features/case-law/case-law-route-pages.logic";
 import { searchQuestionsParam } from "@/features/case-law/research/search-questions.logic";
 import { optionalUuidSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 
-/**
- * A text facet. The router reads each URL value as JSON, so `year=2026` or
- * `court=123` arrives as a number; it is the same text the URL spells. Any
- * other unreadable value is dropped like a bad date: a public URL may be typed
- * or crawled, and it is a page without that facet, not an error screen.
- */
 const optionalBrowseStringSchema = (maxLength: number) =>
-  v.fallback(
-    v.optional(
-      v.pipe(
-        v.union([v.string(), v.pipe(v.number(), v.transform(String))]),
-        v.trim(),
-        v.maxLength(maxLength),
-        v.transform((value) => (value.length > 0 ? value : undefined)),
-      ),
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(maxLength),
+      v.transform((value) => (value.length > 0 ? value : undefined)),
     ),
-    undefined,
   );
 
 /**
@@ -65,7 +57,7 @@ const optionalStrictSchema = v.fallback(
   undefined,
 );
 
-export const searchSchema = v.object({
+export const searchSchema = routeSearchSchema({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
   from: optionalDateSchema,
