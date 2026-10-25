@@ -1,10 +1,11 @@
 import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { env } from "@/api/env";
+import { reframeBoundedRequest } from "@/api/http/request-body";
+import type { BoundedRequest } from "@/api/http/request-body";
 import { logger } from "@/api/lib/observability/logger";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
 
@@ -81,83 +82,16 @@ const requestTooLarge = () =>
   });
 
 /**
- * Whether an incoming request carries a body, asked without reading it. This
- * module owns every look at an incoming request's body stream; readers take
- * the bytes from {@link reframeBoundedRequest} or the request's own `text()`,
- * `json()` and `arrayBuffer()`.
+ * Meters and re-frames a tenant action's request body against the action
+ * size policy; an oversized body is refused as `request_too_large`.
  */
-export const hasRequestBody = (request: Request): boolean =>
-  request.body !== null;
-
-/** A request whose body was read once and re-framed from its metered bytes. */
-export type BoundedRequest = {
-  readonly request: Request;
-  /** The body's actual size in bytes; 0 without a body. */
-  readonly bytes: number;
-};
-
-/**
- * The one reader that meters and re-frames a request body. A declared
- * Content-Length is checked first without touching the body; the actual bytes
- * are metered even when it is present, at most the allowed body is retained,
- * and the source is cancelled at the chunk that crosses the bound.
- *
- * The body is read once from the request itself, never through a tee: under
- * `Bun.serve({ routes })`, `clone()` of a request whose body has already
- * arrived leaves the original's stream locked, so a later stream reader of it
- * fails. The answer is a new request framed from exactly the metered bytes:
- * same url, method, signal and headers, with `content-length` set to the
- * metered size and `transfer-encoding` dropped. No reader needs the
- * socket-bound original: the pipeline resolves and seals the client address
- * once, before any body is read, and every resolver reads that sealed address
- * first. A request without a body is returned as is.
- */
-export const reframeBoundedRequest = async (
+export const boundActionRequest = async (
   request: Request,
   maximum: number,
-): Promise<Result<BoundedRequest, ActionSizeError>> => {
-  const length = request.headers.get("content-length");
-  if (
-    length !== null &&
-    parseIntegerToken(length, { sign: "unsigned", max: maximum }).isErr()
-  ) {
-    return Result.err(requestTooLarge());
-  }
-  if (request.body === null) {
-    return Result.ok({ request, bytes: 0 });
-  }
-  // Bun types the stream's chunks as `any`; a request body is bytes.
-  const stream: ReadableStream<Uint8Array> = request.body;
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  for await (const chunk of stream) {
-    bytes += chunk.byteLength;
-    if (bytes > maximum) {
-      // Leaving the loop cancels the source: the rest of the upload is never
-      // read into this process.
-      return Result.err(requestTooLarge());
-    }
-    chunks.push(chunk);
-  }
-  const body = new Uint8Array(bytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  const headers = new Headers(request.headers);
-  headers.set("content-length", String(bytes));
-  headers.delete("transfer-encoding");
-  return Result.ok({
-    request: new Request(request.url, {
-      body,
-      headers,
-      method: request.method,
-      signal: request.signal,
-    }),
-    bytes,
-  });
-};
+): Promise<Result<BoundedRequest, ActionSizeError>> =>
+  (await reframeBoundedRequest(request, maximum)).mapError(() =>
+    requestTooLarge(),
+  );
 
 export const actionSizeErrorResponse = (
   error: ActionSizeError,

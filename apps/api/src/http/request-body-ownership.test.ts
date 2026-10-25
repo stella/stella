@@ -1,5 +1,5 @@
 /**
- * An incoming request's body stream has one owner: `action-size-limits.ts`.
+ * An incoming request's body stream has one owner: `http/request-body.ts`.
  * It meters and re-frames the body once (`reframeBoundedRequest`) and answers
  * whether one is present (`hasRequestBody`). A module that tees the request
  * (`clone()`) or reads its `body` stream itself can lock the stream another
@@ -14,9 +14,9 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import ts from "typescript6";
 
-const API_ROOT = path.resolve(import.meta.dir, "../../..");
+const API_ROOT = path.resolve(import.meta.dir, "../..");
 /** The one module allowed to read an incoming request's body stream. */
-const OWNER = "src/lib/rate-limit/action-size-limits.ts";
+const OWNER = "src/http/request-body.ts";
 const INCOMING_NAMES = new Set([
   "request",
   "req",

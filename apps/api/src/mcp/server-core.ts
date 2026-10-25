@@ -26,6 +26,8 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import type { HandlerExceptionScope } from "@stll/errors";
 
+import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
+import type { BoundedRequest } from "@/api/http/request-body";
 import type { captureError as captureApiError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/analytics/capture";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
@@ -42,14 +44,12 @@ import {
 import {
   actionSizeErrorResponse,
   boundActionJsonResponse,
+  boundActionRequest,
   getActionSizePolicy,
   getTenantActionSizePolicy,
-  hasRequestBody,
   recordActionResponseOversize,
-  reframeBoundedRequest,
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
-import type { BoundedRequest } from "@/api/lib/rate-limit/action-size-limits";
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
@@ -1553,7 +1553,7 @@ export const createMcpHttpRequestHandler = ({
             // it again.
             let metered: BoundedRequest | undefined;
             if (policy !== undefined) {
-              const bounded = await reframeBoundedRequest(
+              const bounded = await boundActionRequest(
                 incomingRequest,
                 policy.requestBytes,
               );

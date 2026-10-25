@@ -5,8 +5,8 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   actionSizeErrorResponse,
   boundActionJsonResponse,
+  boundActionRequest,
   getActionSizePolicy,
-  reframeBoundedRequest,
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
 
@@ -48,7 +48,7 @@ export const tenantActionAdmission =
     }
     const limits = resolved.value;
     return await withTenantActionSizePolicy(limits, async () => {
-      const bounded = await reframeBoundedRequest(
+      const bounded = await boundActionRequest(
         ctx.request,
         limits.requestBytes,
       );

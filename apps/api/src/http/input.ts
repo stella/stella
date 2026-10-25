@@ -6,7 +6,7 @@ import type {
 } from "@stll/api-contract";
 
 import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
-import { hasRequestBody } from "@/api/lib/rate-limit/action-size-limits";
+import { hasRequestBody } from "@/api/http/request-body";
 
 /** Keys that would walk up the prototype chain if written onto an object. */
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
