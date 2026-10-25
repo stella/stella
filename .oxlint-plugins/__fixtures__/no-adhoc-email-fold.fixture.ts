@@ -18,7 +18,7 @@ const _direct = email.toLowerCase();
 // oxlint-disable-next-line no-adhoc-email-fold/no-adhoc-email-fold -- fixture proves a trimmed fold of a property is reported
 const _trimmed = user.email.trim().toLowerCase();
 // oxlint-disable-next-line no-adhoc-email-fold/no-adhoc-email-fold -- fixture proves a locale fold of a computed key is reported
-const _computed = profile["email"]?.toLocaleLowerCase();
+const _computed = profile.email?.toLocaleLowerCase();
 // oxlint-disable-next-line no-adhoc-email-fold/no-adhoc-email-fold -- fixture proves a lowercase action in an address schema is reported
 const _schema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
 // oxlint-disable-next-line no-adhoc-email-fold/no-adhoc-email-fold -- fixture proves a hand-written SQL fold of an address column is reported
