@@ -314,6 +314,25 @@ export const apiTypecheckInputIssues = async (
   return issues;
 };
 
+type DeclarationOutputNameOptions = { source: string; outFile?: string };
+const declarationOutputName = ({
+  source,
+  outFile,
+}: DeclarationOutputNameOptions) => {
+  if (outFile) {
+    return `${outFile.replace(/\.[^./\\]+$/u, "")}.d.ts`;
+  }
+  return source.replace(/\.(?:[jt]sx?|[mc][jt]s)$/u, (extension) => {
+    if (extension === ".mts" || extension === ".mjs") {
+      return ".d.mts";
+    }
+    if (extension === ".cts" || extension === ".cjs") {
+      return ".d.cts";
+    }
+    return ".d.ts";
+  });
+};
+
 const checkResolvedApiTestPartition = async (root: string) => {
   const api = path.join(root, "apps/api");
   const programs = new Map(
@@ -330,39 +349,32 @@ const checkResolvedApiTestPartition = async (root: string) => {
   const surface = await readApiTypecheckConfig(
     path.join(api, "tsconfig.declarations.json"),
   );
+  const outputRoot = surface.options.declarationDir ?? surface.options.outDir;
+  const directories = surface.fileNames
+    .filter((source) => !/\.d\.[cm]?ts$/u.test(source))
+    .map((source) => path.dirname(source));
+  let common = directories.at(0) ?? api;
+  for (const directory of directories) {
+    while (
+      common !== path.parse(common).root &&
+      directory !== common &&
+      !directory.startsWith(`${common}${path.sep}`)
+    ) {
+      common = path.dirname(common);
+    }
+  }
+  const sourceRoot =
+    surface.options.rootDir ?? (surface.options.composite ? api : common);
   for (const file of surface.fileNames.filter(
     (source) => !/\.d\.[cm]?ts$/u.test(source),
   )) {
-    const outputRoot = surface.options.declarationDir ?? surface.options.outDir;
-    const directories = surface.fileNames
-      .filter((source) => !/\.d\.[cm]?ts$/u.test(source))
-      .map((source) => path.dirname(source));
-    let common = directories.at(0) ?? api;
-    for (const directory of directories) {
-      while (
-        directory !== common &&
-        !directory.startsWith(`${common}${path.sep}`)
-      ) {
-        common = path.dirname(common);
-      }
-    }
-    const sourceRoot =
-      surface.options.rootDir ?? (surface.options.composite ? api : common);
-    const declaration = /\.d\.[cm]?ts$/u.test(file)
-      ? undefined
-      : (outputRoot
-          ? path.join(outputRoot, repoRelativePath(sourceRoot, file))
-          : file
-        ).replace(/\.(?:tsx?|mts|cts)$/u, (extension) => {
-          if (extension === ".mts") {
-            return ".d.mts";
-          }
-          if (extension === ".cts") {
-            return ".d.cts";
-          }
-          return ".d.ts";
-        });
-    if (!declaration || !existsSync(declaration)) {
+    const declaration = declarationOutputName({
+      source: outputRoot
+        ? path.join(outputRoot, repoRelativePath(sourceRoot, file))
+        : file,
+      outFile: surface.options.outFile,
+    });
+    if (!existsSync(declaration)) {
       panic(`Missing API declaration for ${file}`);
     }
   }

@@ -164,6 +164,25 @@ const readCompilerProject = async (project: string) => {
   }
 };
 
+type DeclarationOutputNameOptions = { source: string; outFile?: string };
+const declarationOutputName = ({
+  source,
+  outFile,
+}: DeclarationOutputNameOptions) => {
+  if (outFile) {
+    return `${outFile.replace(/\.[^./\\]+$/u, "")}.d.ts`;
+  }
+  return source.replace(/\.(?:[jt]sx?|[mc][jt]s)$/u, (extension) => {
+    if (extension === ".mts" || extension === ".mjs") {
+      return ".d.mts";
+    }
+    if (extension === ".cts" || extension === ".cjs") {
+      return ".d.cts";
+    }
+    return ".d.ts";
+  });
+};
+
 const assertReferenceDeclarations = async (project: string) => {
   const parsed = await readCompilerProject(project);
   if (!parsed.options.disableSourceOfProjectReferenceRedirect) {
@@ -180,6 +199,7 @@ const assertReferenceDeclarations = async (project: string) => {
     let common = directories.at(0) ?? path.dirname(config);
     for (const directory of directories) {
       while (
+        common !== path.parse(common).root &&
         directory !== common &&
         !directory.startsWith(`${common}${path.sep}`)
       ) {
@@ -192,21 +212,14 @@ const assertReferenceDeclarations = async (project: string) => {
     const outputRoot =
       producer.options.declarationDir ?? producer.options.outDir;
     for (const source of producer.fileNames) {
-      if (/\.d\.[cm]?ts$/u.test(source) || !/\.[cm]?tsx?$/u.test(source)) {
+      if (/\.d\.[cm]?ts$/u.test(source) || !/\.[cm]?[jt]sx?$/u.test(source)) {
         continue;
       }
-      const output = (
-        outputRoot
+      const output = declarationOutputName({
+        source: outputRoot
           ? path.join(outputRoot, repoRelativePath(sourceRoot, source))
-          : source
-      ).replace(/\.(?:tsx?|mts|cts)$/u, (extension) => {
-        if (extension === ".mts") {
-          return ".d.mts";
-        }
-        if (extension === ".cts") {
-          return ".d.cts";
-        }
-        return ".d.ts";
+          : source,
+        outFile: producer.options.outFile,
       });
       if (!existsSync(output)) {
         panic(

@@ -11,6 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   apiResolvedTypecheckInputs,
   nativeProgramSpansWorkspaces as spansWorkspaces,
@@ -453,3 +456,89 @@ test("cache input exclusions cannot impersonate dependency inputs", () => {
     "missing input $TURBO_DEFAULT$",
   );
 });
+
+for (const fixture of [
+  { extension: "js", output: "dist/value.d.ts", mode: "individual" },
+  { extension: "jsx", output: "dist/value.d.ts", mode: "individual" },
+  { extension: "mjs", output: "dist/value.d.mts", mode: "individual" },
+  { extension: "cjs", output: "dist/value.d.cts", mode: "individual" },
+  { extension: "ts", output: "dist/bundle.d.ts", mode: "bundle" },
+  { extension: "ts", output: "dist/value.d.ts", mode: "common-root" },
+]) {
+  // timeout: each case starts compilers for the consumer and its referenced producer configs.
+  test(`reference declaration preparation checks ${fixture.extension} ${fixture.mode} output`, async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "reference-output-"));
+    const externalDirectory =
+      fixture.mode === "common-root"
+        ? mkdtempSync(path.join(root, ".declaration-root-"))
+        : undefined;
+    const write = (filename: string, value: unknown) => {
+      const target = path.join(directory, filename);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(
+        target,
+        typeof value === "string" ? value : JSON.stringify(value),
+      );
+    };
+    try {
+      write("turbo.json", { tasks: { "@stll/consumer#typecheck": {} } });
+      write("packages/consumer/package.json", {
+        name: "@stll/consumer",
+        scripts: { typecheck: "bun check --project=tsconfig.json" },
+      });
+      write("packages/consumer/entry.ts", "export {};\n");
+      write("packages/consumer/tsconfig.json", {
+        files: ["entry.ts"],
+        references: [{ path: "../producer" }],
+        compilerOptions: { disableSourceOfProjectReferenceRedirect: true },
+      });
+      write(
+        `packages/producer/value.${fixture.extension}`,
+        "export const value = 1;\n",
+      );
+      const externalSource = externalDirectory
+        ? path.join(externalDirectory, "external.ts")
+        : undefined;
+      if (externalSource) {
+        writeFileSync(externalSource, "export const external = 1;\n");
+      }
+      write("packages/producer/tsconfig.json", {
+        files: [
+          `value.${fixture.extension}`,
+          ...(externalSource ? [externalSource] : []),
+        ],
+        compilerOptions: {
+          composite: true,
+          declaration: true,
+          rootDir: externalSource ? path.parse(directory).root : undefined,
+          allowJs: fixture.extension !== "ts",
+          ...(fixture.mode === "bundle"
+            ? { outFile: "dist/bundle.js", module: "AMD" }
+            : { outDir: "dist" }),
+        },
+      });
+      const output = externalSource
+        ? path
+            .join(
+              directory,
+              "packages/producer/dist",
+              repoRelativePath(
+                path.parse(directory).root,
+                path.join(directory, "packages/producer/value.ts"),
+              ),
+            )
+            .replace(/\.ts$/u, ".d.ts")
+        : path.join(directory, "packages/producer", fixture.output);
+      expect(
+        await rejectionOf(typecheckCacheContractIssues(directory)),
+      ).toMatchObject({
+        message: `Prepare declaration output before native cache audit: ${output}`,
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+      if (externalDirectory) {
+        rmSync(externalDirectory, { recursive: true, force: true });
+      }
+    }
+  }, 30_000);
+}
