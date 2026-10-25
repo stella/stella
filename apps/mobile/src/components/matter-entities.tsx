@@ -54,7 +54,7 @@ export const MatterEntities = ({
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
-  const [load, setLoad] = useState(() => loadPage(EMPTY_ENTITIES_LOAD));
+  const [load, setLoad] = useState(async () => loadPage(EMPTY_ENTITIES_LOAD));
   const [refreshing, startRefresh] = useTransition();
   const [loadingMore, startLoadMore] = useTransition();
   const reload = () => {
