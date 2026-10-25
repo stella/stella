@@ -25,6 +25,7 @@ export const REACHABILITY_CATEGORIES = [
   "sql-or-schema-reader",
   "artifact-or-workflow-guard",
   "repository-text-guard",
+  "patched-dependency-subject",
 ] as const;
 
 export type ReachabilityCategory = (typeof REACHABILITY_CATEGORIES)[number];
@@ -664,6 +665,7 @@ const siblingExportNames = async ({
 type ImportReachability = {
   hasFactory: boolean;
   importedRuntimeBindings: Set<CompilerSymbol>;
+  patchedDependencyBindings: Set<CompilerSymbol>;
   reachesSourceFileIndex: boolean;
   reachedSiblingExports: Set<string>;
 };
@@ -676,19 +678,51 @@ type ImportReachabilityOptions = {
   source: ts.SourceFile;
   checker: Checker;
   usedSymbols: ReadonlySet<CompilerSymbol>;
+  patchedPackages: ReadonlySet<string>;
 };
 
-const dynamicImportBindings = async (
+// The repository owns the behaviour its committed dependency patches add, so a
+// test that drives a patched package reaches repository code.
+const patchedPackageNames = (repoRoot: string): ReadonlySet<string> => {
+  const manifestPath = path.join(repoRoot, "package.json");
+  if (!existsSync(manifestPath)) {
+    return new Set();
+  }
+  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  const patched =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "patchedDependencies")
+      : undefined;
+  if (typeof patched !== "object" || patched === null) {
+    return new Set();
+  }
+  return new Set(
+    Object.keys(patched).map((key) => {
+      const versionAt = key.lastIndexOf("@");
+      return versionAt > 0 ? key.slice(0, versionAt) : key;
+    }),
+  );
+};
+
+const packageNameOf = (specifier: string): string => {
+  const segments = specifier.split("/");
+  return specifier.startsWith("@")
+    ? segments.slice(0, 2).join("/")
+    : (segments.at(0) ?? specifier);
+};
+
+type DynamicImport = { specifier: string; bindings: readonly CompilerSymbol[] };
+
+// `const { name } = await import("specifier")` at the top of a test.
+const dynamicImport = async (
   statement: ts.Statement,
   checker: Checker,
-  repoRoot: string,
-  file: string,
-) => {
+): Promise<DynamicImport | undefined> => {
   if (
     !ts.isVariableStatement(statement) ||
     statement.declarationList.declarations.length !== 1
   ) {
-    return [];
+    return undefined;
   }
   const declaration = statement.declarationList.declarations.at(0);
   const awaited = declaration?.initializer;
@@ -702,20 +736,19 @@ const dynamicImportBindings = async (
     imported.expression.kind !== ts.SyntaxKind.ImportKeyword ||
     imported.arguments.length !== 1
   ) {
-    return [];
+    return undefined;
   }
   const specifier = imported.arguments.at(0);
-  if (
-    !specifier ||
-    !ts.isStringLiteral(specifier) ||
-    !existingSource(repoRoot, file, specifier.text)
-  ) {
-    return [];
+  if (!specifier || !ts.isStringLiteral(specifier)) {
+    return undefined;
   }
   const symbols = await checker.getSymbolAtLocation(
     declaration.name.elements.map(({ name }) => name),
   );
-  return symbols.filter((symbol) => symbol !== undefined);
+  return {
+    specifier: specifier.text,
+    bindings: symbols.filter((symbol) => symbol !== undefined),
+  };
 };
 
 const importReachability = async ({
@@ -724,8 +757,10 @@ const importReachability = async ({
   source,
   checker,
   usedSymbols,
+  patchedPackages,
 }: ImportReachabilityOptions): Promise<ImportReachability> => {
   const importedRuntimeBindings = new Set<CompilerSymbol>();
+  const patchedDependencyBindings = new Set<CompilerSymbol>();
   const reachedSiblingExports = new Set<string>();
   const siblingStem = path.resolve(
     repoRoot,
@@ -734,18 +769,30 @@ const importReachability = async ({
   let hasFactory = false;
   let reachesSourceFileIndex = false;
   for (const statement of source.statements) {
-    for (const symbol of await dynamicImportBindings(
-      statement,
-      checker,
-      repoRoot,
-      file,
-    )) {
-      importedRuntimeBindings.add(symbol);
+    const dynamic = await dynamicImport(statement, checker);
+    if (dynamic && patchedPackages.has(packageNameOf(dynamic.specifier))) {
+      for (const symbol of dynamic.bindings) {
+        patchedDependencyBindings.add(symbol);
+      }
+    } else if (dynamic && existingSource(repoRoot, file, dynamic.specifier)) {
+      for (const symbol of dynamic.bindings) {
+        importedRuntimeBindings.add(symbol);
+      }
     }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier)
     ) {
+      continue;
+    }
+    if (patchedPackages.has(packageNameOf(statement.moduleSpecifier.text))) {
+      for (const name of namedImports(statement)) {
+        const binding = importedBinding(statement, name);
+        const symbol = binding && (await checker.getSymbolAtLocation(binding));
+        if (symbol) {
+          patchedDependencyBindings.add(symbol);
+        }
+      }
       continue;
     }
     const resolvedSource = existingSource(
@@ -794,6 +841,7 @@ const importReachability = async ({
   return {
     hasFactory,
     importedRuntimeBindings,
+    patchedDependencyBindings,
     reachesSourceFileIndex,
     reachedSiblingExports,
   };
@@ -877,6 +925,7 @@ export const analyzeTestSubjectReachability = async ({
   const parser = new API({ cwd: repoRoot });
   try {
     const { program, checker } = opened;
+    const patchedPackages = patchedPackageNames(repoRoot);
     // The compiler's resolution-aware index already owns imported siblings.
     // Keep reuse inside this scan so changed sources/resolution cannot go stale.
     const sourceFor =
@@ -893,6 +942,7 @@ export const analyzeTestSubjectReachability = async ({
       const {
         hasFactory,
         importedRuntimeBindings,
+        patchedDependencyBindings,
         reachesSourceFileIndex,
         reachedSiblingExports,
       } = await importReachability({
@@ -901,6 +951,7 @@ export const analyzeTestSubjectReachability = async ({
         source,
         checker,
         usedSymbols,
+        patchedPackages,
       });
       let category = namedCategory({
         file,
@@ -911,6 +962,11 @@ export const analyzeTestSubjectReachability = async ({
         category = "repository-text-guard";
       } else if (includesRuntimeBinding(usedSymbols, importedRuntimeBindings)) {
         category = hasFactory ? "source-factory" : "imported-source-subject";
+      } else if (
+        !category &&
+        includesRuntimeBinding(usedSymbols, patchedDependencyBindings)
+      ) {
+        category = "patched-dependency-subject";
       }
       if (!category) {
         let attempted: readonly ReachabilityCategory[] =

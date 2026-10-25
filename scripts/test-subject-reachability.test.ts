@@ -15,6 +15,7 @@ import {
   checkReachabilityBaselineMembership,
   REACHABILITY_CATEGORIES,
   type ReachabilityCategory,
+  type ReachabilityFinding,
 } from "./test-subject-reachability";
 
 const TEST_FILE = "apps/example/src/widget.test.tsx";
@@ -135,6 +136,56 @@ describe("test subject reachability", () => {
         attempted: REACHABILITY_CATEGORIES,
       },
     ]);
+  });
+
+  test("a test that drives a patched dependency reaches the committed patch", async () => {
+    const drives =
+      "import { PostMessageTransport } from '@vendor/client';\ntest('limits', () => new PostMessageTransport());\n";
+    const unclassified: ReachabilityFinding[] = [
+      {
+        file: TEST_FILE,
+        kind: "no-classified-reachability",
+        attempted: REACHABILITY_CATEGORIES,
+      },
+    ];
+    const analyze = async (source: string, patchedDependencies?: object) => {
+      const input = fixture(source);
+      if (patchedDependencies) {
+        writeFileSync(
+          path.join(input.root, "package.json"),
+          JSON.stringify({ patchedDependencies }),
+        );
+      }
+      return await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      });
+    };
+    const patched = {
+      "@vendor/client@7.1.1": "patches/@vendor%2Fclient@7.1.1.patch",
+    };
+
+    expect(await analyze(drives, patched)).toEqual([]);
+    const drivesDynamically =
+      "const { PostMessageTransport } = await import('@vendor/client');\ntest('limits', () => new PostMessageTransport());\n";
+    expect(await analyze(drivesDynamically, patched)).toEqual([]);
+    expect(await analyze(drivesDynamically)).toEqual(unclassified);
+    expect(
+      await analyze(
+        drives.replace("@vendor/client", "@vendor/client/transport"),
+        patched,
+      ),
+    ).toEqual([]);
+    expect(await analyze(drives)).toEqual(unclassified);
+    expect(
+      await analyze(drives, { "@vendor/other@1.0.0": "patches/other.patch" }),
+    ).toEqual(unclassified);
+    expect(
+      await analyze(
+        "import { PostMessageTransport } from '@vendor/client';\ntest('limits', () => expect(true).toBe(true));\n",
+        patched,
+      ),
+    ).toEqual(unclassified);
   });
 
   test("follows an alias wrapper to the real subject", async () => {

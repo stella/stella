@@ -78,6 +78,7 @@ jobs:
         run: |
           cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
           cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          cp scripts/verify-release-candidate-tree.mjs "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"
           cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
