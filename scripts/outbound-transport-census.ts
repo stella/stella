@@ -340,6 +340,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "apps/api/src/lib/vat-exchange-rates.ts",
+    class: "third-party",
+    reason: "Requests official exchange rates from ČNB, ECB and NBP.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/api/src/lib/web-search/jina.ts",
     class: "third-party",
     reason: "Sends validation and page requests to Jina endpoints.",

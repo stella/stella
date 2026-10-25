@@ -153,15 +153,28 @@ describe("official VAT exchange rates", () => {
         today: "2026-10-26",
         fetcher: fixtureFetch("", seen),
       });
-      expect(Result.isError(result) && result.error).toBeInstanceOf(
-        VatRateNotPublishedError,
-      );
-      expect(Result.isError(result) && result.error.availableFrom).toBe(
-        availableFrom,
-      );
+      const error = Result.isError(result) ? result.error : null;
+      expect(error).toBeInstanceOf(VatRateNotPublishedError);
+      expect(
+        error instanceof VatRateNotPublishedError ? error.availableFrom : null,
+      ).toBe(availableFrom);
       expect(seen).toEqual([]);
     },
   );
+
+  test("SK: on a Sunday, a Monday tax point takes Friday's ECB rate at once", async () => {
+    // Required: Sunday 2026-10-25, a non-publication day; Friday's rate is final.
+    const rate = valueOf(
+      await fetchVatExchangeRate({
+        country: "SK",
+        currency: "USD",
+        referenceDate: "2026-10-26",
+        today: "2026-10-25",
+        fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json")),
+      }),
+    );
+    expect(rate.effectiveDate).toBe("2026-10-23");
+  });
 
   test("SK: today's ECB publication still pending refuses instead of using yesterday's", async () => {
     // Required: Monday 2026-10-26 (the day before a Tuesday tax point); the

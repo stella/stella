@@ -1,6 +1,12 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import {
+  createFetchWithTimeout,
+  type Fetcher,
+  fetchWithTimeout,
+  type FetchWithTimeoutInit,
+} from "@stll/fetch";
 import { normalizeVatExchangeRate, type VatRateCountry } from "@stll/invoicing";
 import { Temporal } from "@stll/time";
 
@@ -26,17 +32,15 @@ export type VatExchangeRate = {
   sourceReference: string | null;
 };
 
-type Fetcher = (
-  input: string | URL | Request,
-  init?: RequestInit,
-) => Promise<Response>;
-const TIMEOUT_MS = 10_000;
+/** The shared outbound transport, bound to an injected fetcher in tests. */
+type Send = (url: string, init: FetchWithTimeoutInit) => Promise<Response>;
+const HEADERS_TIMEOUT_MS = 10_000;
 const daysBefore = (date: string, days: number) =>
   Temporal.PlainDate.from(date).subtract({ days }).toString();
 
 type RateHttpRequest = {
   url: string;
-  fetcher: Fetcher;
+  send: Send;
   /** ECB and NBP answer 404 for a currency they do not publish. */
   currencyOn404?: { source: string; currency: string };
 };
@@ -48,13 +52,13 @@ type RateHttpResult = Result<
 
 const request = async ({
   url,
-  fetcher,
+  send,
   currencyOn404,
 }: RateHttpRequest): Promise<RateHttpResult> => {
   const requested = await Result.tryPromise({
     try: async () =>
-      await fetcher(url, {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+      await send(url, {
+        timeout: { type: "headers", ms: HEADERS_TIMEOUT_MS },
         headers: { accept: "application/json, text/plain" },
       }),
     catch: (error) =>
@@ -137,7 +141,7 @@ type RateRequest = {
   referenceDate: string;
   /** Today in Prague time (CET/CEST), where ČNB, ECB and NBP publish. */
   today: string;
-  fetcher: Fetcher;
+  send: Send;
 };
 
 const notPublished = (availableFrom: string) =>
@@ -148,10 +152,15 @@ const notPublished = (availableFrom: string) =>
     }),
   );
 
+const isWeekend = (date: string) =>
+  Temporal.PlainDate.from(date).dayOfWeek >= 6;
+
 /**
  * A day-before source must hold its publication for `required`: while that day
- * is ahead, or is today and its rate is not out yet, the latest observation is
- * the wrong one. Once the day has passed, a gap is a non-publication day.
+ * is ahead, or is a weekday today whose rate is not out yet, the latest
+ * observation is the wrong one. ECB and NBP never publish at weekends, so a
+ * weekend `required` is final at once, and a passed day's gap is final too. A
+ * weekday holiday is refused only on the holiday itself, until it has passed.
  */
 const publicationPending = (input: {
   required: string;
@@ -159,14 +168,16 @@ const publicationPending = (input: {
   today: string;
 }) =>
   input.required > input.today ||
-  (input.required === input.today && input.latest !== input.required);
+  (input.required === input.today &&
+    input.latest !== input.required &&
+    !isWeekend(input.required));
 type RateResult = Promise<Result<VatExchangeRate, VatExchangeRateError>>;
 
 const fetchCnbRate = async ({
   currency,
   referenceDate,
   today,
-  fetcher,
+  send,
 }: RateRequest): RateResult => {
   // ČNB's file for a future date carries the latest rate, not the one valid then.
   if (referenceDate > today) {
@@ -176,7 +187,7 @@ const fetchCnbRate = async ({
   const displayDate = referenceDate.split("-").toReversed().join(".");
   const requested = await request({
     url: `https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=${displayDate}`,
-    fetcher,
+    send,
   });
   if (Result.isError(requested)) {
     return requested;
@@ -232,7 +243,7 @@ const fetchEcbRate = async ({
   currency,
   referenceDate,
   today,
-  fetcher,
+  send,
 }: RateRequest): RateResult => {
   // SK zákon 222/2004 Z. z. § 26 ods. 1: use the ECB rate from the day before the tax point; latest earlier publication on a gap (weekend rule UNVERIFIED).
   const end = daysBefore(referenceDate, 1);
@@ -241,7 +252,7 @@ const fetchEcbRate = async ({
   }
   const requested = await request({
     url: `https://data-api.ecb.europa.eu/service/data/EXR/D.${encodeURIComponent(currency)}.EUR.SP00.A?startPeriod=${daysBefore(end, 10)}&endPeriod=${end}&format=jsondata`,
-    fetcher,
+    send,
     currencyOn404: { source: "ECB", currency },
   });
   if (Result.isError(requested)) {
@@ -307,7 +318,7 @@ const fetchNbpRate = async ({
   currency,
   referenceDate,
   today,
-  fetcher,
+  send,
 }: RateRequest): RateResult => {
   // PL ustawa o VAT art. 31a ust. 1: use NBP table A's latest effectiveDate strictly before the tax point.
   const end = daysBefore(referenceDate, 1);
@@ -316,7 +327,7 @@ const fetchNbpRate = async ({
   }
   const requested = await request({
     url: `https://api.nbp.pl/api/exchangerates/rates/a/${encodeURIComponent(currency)}/${daysBefore(end, 10)}/${end}/?format=json`,
-    fetcher,
+    send,
     currencyOn404: { source: "NBP", currency },
   });
   if (Result.isError(requested)) {
@@ -386,7 +397,7 @@ const VAT_RATE_SOURCES = {
 
 export const fetchVatExchangeRate = async ({
   country,
-  fetcher = fetch,
+  fetcher,
   today = Temporal.Now.plainDateISO("Europe/Prague").toString(),
   ...rateRequest
 }: {
@@ -394,6 +405,14 @@ export const fetchVatExchangeRate = async ({
   currency: string;
   referenceDate: string;
   today?: string;
+  /** Replaces the global fetch underneath the shared transport. */
   fetcher?: Fetcher;
 }): RateResult =>
-  await VAT_RATE_SOURCES[country]({ ...rateRequest, today, fetcher });
+  await VAT_RATE_SOURCES[country]({
+    ...rateRequest,
+    today,
+    send:
+      fetcher === undefined
+        ? fetchWithTimeout
+        : createFetchWithTimeout(fetcher),
+  });
