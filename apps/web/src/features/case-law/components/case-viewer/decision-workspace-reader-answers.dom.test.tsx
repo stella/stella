@@ -237,10 +237,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: passage,
-    startOffset: 0,
-    endOffset: passage.length,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: passage,
+        startOffset: 0,
+        endOffset: passage.length,
+      },
+    ],
   },
   messages: [
     {

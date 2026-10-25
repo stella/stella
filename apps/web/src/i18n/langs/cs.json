@@ -4770,7 +4770,6 @@
     "modelError": "Model nedokázal tuto odpověď dokončit.",
     "networkError": "Spojení bylo přerušeno. Zkuste to znovu.",
     "regenerate": "Vygenerovat odpověď znovu",
-    "selectionError": "Vyberte text v rámci jednoho odstavce (nejvýše 2 000 znaků).",
     "send": "Odeslat doplňující otázku",
     "share": "Sdílet s týmem",
     "timeoutError": "Vypršel časový limit pro odpověď. Zkuste to znovu.",

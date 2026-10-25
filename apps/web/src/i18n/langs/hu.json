@@ -4770,7 +4770,6 @@
     "modelError": "A modell nem tudta befejezni ezt a választ.",
     "networkError": "A kapcsolat megszakadt. Próbálja újra.",
     "regenerate": "Válasz újragenerálása",
-    "selectionError": "Jelöljön ki szöveget egyetlen bekezdésen belül (legfeljebb 2000 karaktert).",
     "send": "Kiegészítő kérdés küldése",
     "share": "Megosztás a csapattal",
     "timeoutError": "Lejárt a válaszadás időkorlátja. Próbálja újra.",
