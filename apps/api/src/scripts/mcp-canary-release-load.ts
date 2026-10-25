@@ -14,7 +14,7 @@
  * What it cannot catch: a cost that only appears at a full corpus's size.
  * Staging's corpus is smaller, so a statement that reads the whole table can
  * still be fast here. The read budgets measured on the corpus fixture
- * (`apps/api/src/lib/read-budgets.ts`) are the data-volume gate; this step is
+ * (`apps/api/src/lib/db/read-budgets.ts`) are the data-volume gate; this step is
  * the concurrency gate.
  *
  * Bounded cost: a fixed duration and concurrency against the existing staging
