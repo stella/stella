@@ -192,7 +192,8 @@ export const PARSER_VERSION_SCOPES = {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
@@ -207,77 +208,88 @@ export const PARSER_VERSION_SCOPES = {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_VFGH]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_VWGH]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_BVWG]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_LVWG]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_ASYLGH]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_UBAS]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_UVS]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_VERG]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_UMSE]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_BKS]: {
     version: 9,
     scope: {
       type: "all",
-      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.AT_FINDOK]: {

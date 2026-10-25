@@ -63,8 +63,8 @@ test("nested fence declarations do not certify graph writes", async () => {
     "const unused = function () { return citationTextRevisionFence(evidence.revision); };",
     "function unused() { return citationTextRevisionFence(evidence.revision); }",
   ];
-  for (const declaration of declarations) {
-    const source = [
+  const sources = declarations.map((declaration) =>
+    [
       'import { caseLawCitations } from "@/api/db/schema";',
       'import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";',
       'import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";',
@@ -73,13 +73,16 @@ test("nested fence declarations do not certify graph writes", async () => {
       "return tx.update(caseLawCitations).set({ polarityEvidenceWindows: evidence.windows });",
       "});",
       "export const guarded = (transaction, evidence) => runCitationGraphTransaction(transaction, (tx) => tx.update(caseLawCitations).set({ polarityEvidenceWindows: evidence.windows }).where(citationTextRevisionFence(evidence.revision)));",
-    ].join("\n");
-    expect(
-      await lintSingleRule("citation-evidence-text-fence", source, {
+    ].join("\n"),
+  );
+  const reports = await Promise.all(
+    sources.map((source) =>
+      lintSingleRule("citation-evidence-text-fence", source, {
         sourcePath: "apps/api/src/handlers/case-law/polarity/example.ts",
       }),
-    ).toEqual([6]);
-  }
+    ),
+  );
+  expect(reports).toEqual(declarations.map(() => [6]));
 });
 
 test("citation evidence field discovery follows the schema-owned group", () => {
@@ -126,14 +129,14 @@ test("synthetic citation fixtures stay outside the production writer guard", asy
     "export const seed = (tx, rows) => tx.insert(caseLawCitations).values(rows);",
     "export const rawSeed = (tx) => tx.execute(sql`INSERT INTO case_law_citations (citation_text) VALUES ('fixture')`);",
   ].join("\n");
-  for (const sourcePath of [
+  const sourcePaths = [
     "apps/api/src/tests/security/public-law-search-census.ts",
     "apps/api/src/tests/query-plans/seed.ts",
-  ]) {
-    expect(
-      await lintSingleRule("citation-evidence-text-fence", source, {
-        sourcePath,
-      }),
-    ).toEqual([]);
-  }
+  ];
+  const reports = await Promise.all(
+    sourcePaths.map((sourcePath) =>
+      lintSingleRule("citation-evidence-text-fence", source, { sourcePath }),
+    ),
+  );
+  expect(reports).toEqual(sourcePaths.map(() => []));
 });
