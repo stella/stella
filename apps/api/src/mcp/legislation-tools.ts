@@ -51,9 +51,9 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import {
   countryInputSchema,
   countryNormalization,
+  cursorInput,
   ELI_NORMALIZATION,
   FILTER_NORMALIZATION,
-  cursorInput,
   nullAsAbsent,
   uuidInputSchema,
 } from "@/api/mcp/input-schemas";
@@ -91,9 +91,7 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildLegislationDocumentAppUrl,
   DEFAULT_SEARCH_LIMIT,
-  ELI_NORMALIZATION,
   errorResult,
-  FILTER_NORMALIZATION,
   handlerStatusOf,
   invalidCursorResult,
   isToolErrorResult,

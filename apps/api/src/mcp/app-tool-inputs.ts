@@ -1,3 +1,7 @@
+import {
+  MCP_WEB_HANDOFF_TOOL_NAME,
+  mcpWebHandoffLinkInputSchema,
+} from "@stll/api-contract/mcp-web-handoff";
 import type { PresentationApp } from "@stll/mcp-apps/manifest";
 
 import { readCaseLawCitationsArgsSchema } from "./case-law-citations-input";
@@ -11,6 +15,7 @@ import {
   previewProvisionArgs,
   readDecisionBlocksArgs,
 } from "./decision-reader-contract";
+import { nullAsAbsent } from "./input-schemas";
 import {
   LEGAL_RESOLVE_INPUT_NORMALIZATION,
   resolveDecisionArgsSchema,
@@ -29,6 +34,9 @@ type AppToolName = PresentationApp["callableTools"][number];
  * no handlers, environment or services.
  */
 const MCP_APP_TOOL_INPUTS = {
+  [MCP_WEB_HANDOFF_TOOL_NAME]: {
+    inputSchema: nullAsAbsent(mcpWebHandoffLinkInputSchema),
+  },
   // Browser contracts carry no descriptions, so the guidance mode is moot.
   search_case_law: {
     inputSchema: searchCaseLawArgsSchema(searchCaseLawTexts("off")),
