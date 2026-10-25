@@ -97,12 +97,8 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
     const xml = contentOf(
       peppolRecord({
         number: "2027-002",
-        buyer: {
-          ...buyer,
-          name: "EU Buyer",
-          country: "DE",
-          vatId: "DE123456789",
-        },
+        // Domestic reverse charge (zákon 222/2004 Z. z. § 69): both parties are Slovak.
+        buyer: { ...buyer, name: "Domestic reverse-charge buyer" },
         lines: [
           {
             description: "EU advice",
@@ -175,6 +171,7 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
   const { taxId: _buyerTaxId, ...buyerWithoutTaxId } = buyer;
   const { iban: _sellerIban, ...sellerWithoutIban } = seller;
   const { vatId: _sellerVatId, ...sellerWithoutVatId } = seller;
+  const { country: _buyerCountry, ...buyerWithoutCountry } = buyer;
   const invalidRecords: readonly (readonly [
     string,
     () => ReturnType<typeof peppolRecord>,
@@ -248,6 +245,55 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
           lines: [{ description: "Work", netAmountMinor: cents(100) }],
         }),
     ],
+    [
+      "buyer name is required",
+      () =>
+        peppolRecord({
+          number: "invalid",
+          buyer: { ...buyer, name: "" },
+          lines: [{ description: "Work", netAmountMinor: cents(100) }],
+        }),
+    ],
+    [
+      "buyer country is required",
+      () =>
+        peppolRecord({
+          number: "invalid",
+          buyer: buyerWithoutCountry,
+          lines: [{ description: "Work", netAmountMinor: cents(100) }],
+        }),
+    ],
+    [
+      "covers buyers in Slovakia",
+      () =>
+        peppolRecord({
+          number: "invalid",
+          buyer: { ...buyer, country: "DE", vatId: "DE123456789" },
+          lines: [{ description: "Work", netAmountMinor: cents(100) }],
+        }),
+    ],
+    [
+      "different exemption bases",
+      () =>
+        peppolRecord({
+          number: "invalid",
+          lines: [
+            {
+              description: "Exempt one",
+              netAmountMinor: cents(100),
+              vatTreatment: "exempt" as const,
+              exemptionReason: "§ 37",
+            },
+            {
+              description: "Exempt two",
+              netAmountMinor: cents(100),
+              vatTreatment: "exempt" as const,
+              exemptionReason: "§ 39",
+            },
+          ],
+        }),
+    ],
+    ["at least one line", () => peppolRecord({ number: "invalid", lines: [] })],
     [
       "only for sellers in Slovakia",
       () =>

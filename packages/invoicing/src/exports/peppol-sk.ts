@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 
 import { invalidInput, type InvoicingResult } from "../errors";
-import { countryCodeOf, type InvoiceExportRecord } from "./record";
+import {
+  countryCodeOf,
+  type InvoiceExportRecord,
+  vatPercentText,
+} from "./record";
 import { serializeUblFiles } from "./ubl";
 
 const CUSTOMIZATION_ID =
@@ -13,15 +17,22 @@ const SLOVAK_VAT_RATES = new Set([500, 1900, 2300]);
 const refusal = (record: InvoiceExportRecord, reason: string) =>
   invalidInput(`Invoice ${record.number}: ${reason}`);
 
-const validate = (record: InvoiceExportRecord): string | null => {
+// EN 16931 BT-27/BT-44 names, BT-40/BT-55 countries and at least one line
+// (BG-25) are mandatory; an empty value would serialize a non-conforming file.
+const partyRefusal = (record: InvoiceExportRecord): string | null => {
   if (countryCodeOf(record.seller.country) !== "SK") {
     return "Peppol (Slovakia) is available only for sellers in Slovakia";
   }
-  if (record.documentType === "advance") {
-    return "advance invoices are not supported; issue invoice type 380 for each received payment and deduct it on the final invoice";
+  // The Slovak mandate covers domestic supplies (zákon 385/2025 Z. z.); a
+  // foreign buyer is reached through its own channel, not a 0245 endpoint.
+  if (countryCodeOf(record.buyer.country) !== "SK") {
+    return "Peppol (Slovakia) covers buyers in Slovakia; the buyer country is not SK";
   }
-  if (record.currency !== "EUR") {
-    return "Peppol (Slovakia) currently supports EUR invoices only";
+  if (!record.seller.name.trim()) {
+    return "seller name is required";
+  }
+  if (!record.buyer.name.trim()) {
+    return "buyer name is required";
   }
   if (!SLOVAK_TAX_ID.test(record.seller.taxId?.trim() ?? "")) {
     return "seller DIČ (tax ID) must be a 10-digit Slovak DIČ";
@@ -35,14 +46,28 @@ const validate = (record: InvoiceExportRecord): string | null => {
   if (!record.seller.vatId?.trim()) {
     return "the seller must be a VAT payer with an IČ DPH; non-VAT-payer sellers may not issue Slovak e-invoices";
   }
-  if (record.documentType === "credit_note") {
-    if (!record.originalNumber || !record.originalIssueDate) {
-      return "a credit note needs the corrected invoice number and issue date";
-    }
-  } else if (!record.dueDate) {
-    return "a payment due date is required";
-  }
+  return null;
+};
 
+const documentRefusal = (record: InvoiceExportRecord): string | null => {
+  if (record.documentType === "advance") {
+    return "advance invoices are not supported; issue invoice type 380 for each received payment and deduct it on the final invoice";
+  }
+  if (record.currency !== "EUR") {
+    return "Peppol (Slovakia) currently supports EUR invoices only";
+  }
+  if (record.lines.length === 0) {
+    return "an e-invoice needs at least one line";
+  }
+  if (record.documentType === "credit_note") {
+    return !record.originalNumber || !record.originalIssueDate
+      ? "a credit note needs the corrected invoice number and issue date"
+      : null;
+  }
+  return record.dueDate ? null : "a payment due date is required";
+};
+
+const lineRefusal = (record: InvoiceExportRecord): string | null => {
   const categories = new Set(record.lines.map((line) => line.vatTreatment));
   if (categories.has("not_vat_payer")) {
     return "non-VAT-payer sellers may not issue Slovak e-invoices";
@@ -50,20 +75,33 @@ const validate = (record: InvoiceExportRecord): string | null => {
   if (categories.has("outside_scope") && categories.size > 1) {
     return "an outside-scope (O) line cannot be mixed with other VAT categories; export it on a separate invoice";
   }
-  for (const line of record.lines) {
-    if (
+  // EN 16931 carries one exemption reason per VAT breakdown (BG-23).
+  const exemptionBases = new Set(
+    record.lines.flatMap((line) =>
+      line.vatTreatment === "exempt"
+        ? [line.exemptionReason?.trim() ?? ""]
+        : [],
+    ),
+  );
+  if (exemptionBases.has("")) {
+    return "each exempt line needs its stored statutory exemption basis";
+  }
+  if (exemptionBases.size > 1) {
+    return "exempt lines with different exemption bases cannot share one VAT breakdown; export them on separate invoices";
+  }
+  const foreignRate = record.lines.find(
+    (line) =>
       line.vatTreatment === "domestic_vat" &&
       line.vatRateBps !== 0 &&
-      !SLOVAK_VAT_RATES.has(line.vatRateBps)
-    ) {
-      return `domestic VAT rate ${String(line.vatRateBps / 100)}% is not a Slovak 23%, 19%, or 5% rate`;
-    }
-    if (line.vatTreatment === "exempt" && !line.exemptionReason?.trim()) {
-      return "each exempt line needs its stored statutory exemption basis";
-    }
-  }
-  return null;
+      !SLOVAK_VAT_RATES.has(line.vatRateBps),
+  );
+  return foreignRate === undefined
+    ? null
+    : `domestic VAT rate ${vatPercentText(foreignRate.vatRateBps)}% is not a Slovak 23%, 19%, or 5% rate`;
 };
+
+const validate = (record: InvoiceExportRecord): string | null =>
+  partyRefusal(record) ?? documentRefusal(record) ?? lineRefusal(record);
 
 /** Peppol BIS Billing 3.0 UBL for invoices issued by Slovak VAT payers. */
 export const buildPeppolSkFiles = (
