@@ -45,7 +45,10 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { listReconciliationSlice } from "@/api/handlers/case-law/ingestion/slice-listing";
+import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -435,6 +438,7 @@ const countSlice = async ({
     try: async () =>
       await listReconciliationSlice({
         adapterKey: adapter.key,
+        proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
         pageDelayMs: adapter.minRequestIntervalMs,
         pageTimeoutMs: adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE,
