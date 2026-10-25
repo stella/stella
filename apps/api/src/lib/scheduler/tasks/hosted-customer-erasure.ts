@@ -64,8 +64,6 @@ const claimDueErasures = async (
             AND ${hostedCustomerErasures.attempts} < ${HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS}
             AND ${hostedCustomerErasures.nextAttemptAt} <= now()`,
         )
-        .orderBy(hostedCustomerErasures.nextAttemptAt)
-        .limit(BATCH_SIZE)
         .$dynamic(),
     run: async (tx, rows) => {
       if (rows.length === 0) {

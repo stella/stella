@@ -1267,13 +1267,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/api/src/lib/hosted-usage-provider/client.ts",
-    "function": "module/postProviderJson",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "function": "module/readServingCorpusIndexGenerationTx",
     "kind": "constant-limit",
