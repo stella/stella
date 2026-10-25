@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Sheet,
@@ -16,6 +15,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { InvoiceComposer } from "@/components/billing/invoice-composer";
+import { ContactReadError } from "@/components/contact-read-error";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
 import { clientInvoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
@@ -88,19 +88,12 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
     );
   } else if (query.isError) {
     content = (
-      <div className="flex flex-col items-start gap-2 p-6">
-        <p role="alert" className="text-destructive text-sm">
-          {t("billing.clientComposer.loadFailed")}
-        </p>
-        <Button
-          onClick={() =>
-            detached(query.refetch(), "client-invoice-composer.refetch")
-          }
-          variant="outline"
-        >
-          {t("common.retry")}
-        </Button>
-      </div>
+      <ContactReadError
+        error={query.error}
+        onRetry={() =>
+          detached(query.refetch(), "client-invoice-composer.refetch")
+        }
+      />
     );
   } else if (first === undefined || matters === undefined) {
     content = (
