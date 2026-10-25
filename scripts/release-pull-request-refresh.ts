@@ -7,16 +7,21 @@
 // the release, and the tag refuses that shape (check-cli-release-coupling.ts):
 // a server contract change must not deploy without its CLI version. So when
 // such an entry lands while a release is open, the release branch takes main
-// and versions it. The Version packages workflow runs two steps from here:
+// and versions it. The Version packages workflow runs three steps from here:
 //
-//   plan    which release, and whether main added a `@stll/cli` entry since
-//           the release branched from it or one still pends on the release
-//           head after an unfinished refresh (read-only)
-//   update  merge main into the release branch through GitHub, guarded by
-//           its head, so the merge commit is signed
+//   plan     which release, and whether main added a `@stll/cli` entry since
+//            the release branched from it or one still pends on the release
+//            head (read-only)
+//   stage    point the release's staging branch at the planned head and merge
+//            main into it through GitHub, so the merge commit is signed
+//   publish  move the release branch to the staged tip in one fast-forward,
+//            only from the planned head and only when every staged commit is
+//            signed
 //
-// The versioning itself is `prepare-maintenance-release.ts --refresh`, and its
-// files are committed by the shared signed-commit action. Runs without
+// Between stage and publish, `prepare-maintenance-release.ts --refresh`
+// versions the staged head and the shared signed-commit action commits its
+// files to the staging branch. The release branch therefore moves once, from
+// the cut to merged and versioned, or not at all. Runs without
 // `bun install`, so it uses only Bun and Node built-ins.
 
 import { appendFileSync } from "node:fs";
@@ -29,8 +34,9 @@ const ROOT = path.resolve(import.meta.dir, "..");
 const CHANGESET_DIRECTORY = ".changeset";
 const CHANGESET_README = "README.md";
 const FULL_SHA = /^[0-9a-f]{40}$/u;
-const BRANCH_POLL_ATTEMPTS = 30;
-const BRANCH_POLL_INTERVAL_MS = 4000;
+const STAGING_PREFIX = "release-refresh/";
+// A refresh stages one merge commit and the versioning commits after it.
+const STAGED_COMMIT_LIMIT = 20;
 
 export class ReleaseRefreshError extends Error {
   constructor(message: string) {
@@ -146,9 +152,9 @@ export type RefreshPlan =
  * Decides from repository state, not from the push that ran it. The release
  * needs main when main holds a `@stll/cli` entry the release branch point did
  * not, and needs versioning while its own head still holds a pending
- * `@stll/cli` entry: the cut consumed everything pending, so such an entry is
- * a refresh whose merge landed and whose versioning did not, which the next run
- * resumes. Once both are done a run finds nothing to do.
+ * `@stll/cli` entry: the cut consumed everything pending, so such an entry
+ * came with main merged in by hand, and the next run versions it. Once both
+ * are done a run finds nothing to do.
  */
 export const planReleaseRefresh = async ({
   request,
@@ -224,48 +230,151 @@ export const planReleaseRefresh = async ({
   };
 };
 
+/** The branch a refresh builds on; the release branch moves only to its tip. */
+export const stagingBranch = (number: number): string =>
+  `${STAGING_PREFIX}${String(number)}`;
+
 /**
- * Merges main into the release branch through GitHub, refusing when the
- * branch moved since the plan read it, then waits for the new head.
+ * Points the staging branch at the planned release head, then merges main into
+ * it through GitHub, so the merge commit is signed. The release branch itself
+ * does not move here: a refresh that fails later leaves it as the plan read it.
+ * Returns the staged head the versioning builds on.
  */
-export const updateReleaseBranch = async ({
+export const stageReleaseRefresh = async ({
   request,
   repo,
   number,
   head,
-  sleep = Bun.sleep,
+  mainSha,
+  merge,
 }: {
   request: GitHubRequest;
   repo: string;
   number: number;
   head: string;
-  sleep?: (ms: number) => Promise<void>;
+  mainSha: string;
+  merge: boolean;
 }): Promise<string> => {
   fullSha(head, "planned head");
+  fullSha(mainSha, "main commit");
+  const branch = stagingBranch(number);
+  const ref = `refs/heads/${branch}`;
+  const existing = await request([
+    `repos/${repo}/git/matching-refs/heads/${branch}`,
+  ]);
+  if (!Array.isArray(existing)) {
+    throw new ReleaseRefreshError(`GitHub ${branch} ref listing is not a list`);
+  }
+  // A prefix listing: release-refresh/68 also lists release-refresh/680.
+  const stale = existing.some(
+    (entry) => field(entry, "ref", "staging ref") === ref,
+  );
+  // A failed earlier refresh leaves its staging branch; it restarts at the head.
+  await (stale
+    ? request(
+        [`repos/${repo}/git/${ref}`, "--method", "PATCH", "--input", "-"],
+        { sha: head, force: true },
+      )
+    : request([`repos/${repo}/git/refs`, "--method", "POST", "--input", "-"], {
+        ref,
+        sha: head,
+      }));
+  if (!merge) {
+    return head;
+  }
+  const merged = await request(
+    [`repos/${repo}/merges`, "--method", "POST", "--input", "-"],
+    {
+      base: branch,
+      head: mainSha,
+      commit_message: `Merge main into release #${String(number)}`,
+    },
+  );
+  // GitHub answers 204 without a body when the branch already holds main.
+  return merged === null
+    ? head
+    : fullSha(field(merged, "sha", "merge"), "merge");
+};
+
+/**
+ * Moves the release branch from the planned head to the staged tip in one
+ * update. Refuses an empty refresh, an unsigned staged commit, and a release
+ * that moved since the plan; the fast-forward-only update refuses the rest.
+ */
+export const publishReleaseRefresh = async ({
+  request,
+  repo,
+  number,
+  branch,
+  head,
+  staged,
+}: {
+  request: GitHubRequest;
+  repo: string;
+  number: number;
+  branch: string;
+  head: string;
+  /** Staging tip after the versioning commit; empty when nothing was committed. */
+  staged: string;
+}): Promise<void> => {
+  fullSha(head, "planned head");
+  if (staged === "") {
+    throw new ReleaseRefreshError(
+      `The refresh of release #${String(number)} versioned nothing; the release keeps ${head}`,
+    );
+  }
+  fullSha(staged, "staged tip");
+  // First parents lead from the versioning commits through the merge commit
+  // to the planned head; main's own commits are second parents.
+  let commit = staged;
+  for (let step = 0; commit !== head; step += 1) {
+    if (step === STAGED_COMMIT_LIMIT) {
+      throw new ReleaseRefreshError(
+        `Staged tip ${staged} does not reach ${head} within ${String(STAGED_COMMIT_LIMIT)} first parents`,
+      );
+    }
+    const reply = await request([`repos/${repo}/commits/${commit}`]);
+    const verification = field(
+      field(reply, "commit", "commit"),
+      "verification",
+      "commit",
+    );
+    if (field(verification, "verified", "commit verification") !== true) {
+      throw new ReleaseRefreshError(`Staged commit ${commit} is not signed`);
+    }
+    const parents = field(reply, "parents", "commit");
+    if (!Array.isArray(parents) || parents.length === 0) {
+      throw new ReleaseRefreshError(
+        `Staged commit ${commit} has no parent on the way to ${head}`,
+      );
+    }
+    commit = fullSha(field(parents.at(0), "sha", "parent"), "parent");
+  }
+  const current = await request([`repos/${repo}/git/ref/heads/${branch}`]);
+  const at = fullSha(
+    field(field(current, "object", "release ref"), "sha", "release ref"),
+    "release head",
+  );
+  if (at !== head) {
+    throw new ReleaseRefreshError(
+      `Release #${String(number)} moved from ${head} to ${at} during the refresh`,
+    );
+  }
   await request(
     [
-      `repos/${repo}/pulls/${String(number)}/update-branch`,
+      `repos/${repo}/git/refs/heads/${branch}`,
       "--method",
-      "PUT",
+      "PATCH",
       "--input",
       "-",
     ],
-    { expected_head_sha: head },
+    { sha: staged, force: false },
   );
-  for (let attempt = 0; attempt < BRANCH_POLL_ATTEMPTS; attempt += 1) {
-    const pull = await request([`repos/${repo}/pulls/${String(number)}`]);
-    const current = fullSha(
-      field(field(pull, "head", "pull request"), "sha", "pull request head"),
-      "head",
-    );
-    if (current !== head) {
-      return current;
-    }
-    await sleep(BRANCH_POLL_INTERVAL_MS);
-  }
-  throw new ReleaseRefreshError(
-    `Release #${String(number)} still points at ${head} after the update`,
-  );
+  await request([
+    `repos/${repo}/git/refs/heads/${stagingBranch(number)}`,
+    "--method",
+    "DELETE",
+  ]);
 };
 
 const requiredEnv = (name: string): string => {
@@ -287,7 +396,7 @@ const writeOutputs = (outputs: Record<string, string>) => {
   process.stdout.write(lines);
 };
 
-const COMMANDS = ["plan", "update"] as const;
+const COMMANDS = ["plan", "stage", "publish"] as const;
 type Command = (typeof COMMANDS)[number];
 
 const isCommand = (value: string | undefined): value is Command =>
@@ -326,14 +435,27 @@ const main = async () => {
       );
       return;
     }
-    case "update": {
-      const head = await updateReleaseBranch({
+    case "stage": {
+      const head = await stageReleaseRefresh({
         request: ghRetryRequest,
         repo,
         number: Number(requiredEnv("RELEASE_PULL_REQUEST")),
         head: requiredEnv("HEAD_SHA"),
+        mainSha: requiredEnv("MAIN_SHA"),
+        merge: requiredEnv("MERGE_MAIN") === "true",
       });
       writeOutputs({ head });
+      return;
+    }
+    case "publish": {
+      await publishReleaseRefresh({
+        request: ghRetryRequest,
+        repo,
+        number: Number(requiredEnv("RELEASE_PULL_REQUEST")),
+        branch: requiredEnv("RELEASE_BRANCH"),
+        head: requiredEnv("HEAD_SHA"),
+        staged: process.env["STAGED_HEAD"] ?? "",
+      });
       return;
     }
     default: {

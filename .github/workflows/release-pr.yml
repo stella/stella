@@ -168,19 +168,20 @@ jobs:
             bun scripts/release-pull-request-refresh.ts plan
 
   # No install runs in this job: the token exists only beside GitHub's merge.
-  refresh-release-merge:
+  # The merge lands on the release's staging branch; the release branch moves
+  # only in the version job, once the staged head is versioned.
+  refresh-release-stage:
     needs: refresh-release-plan
     if: >-
       !cancelled() && needs.refresh-release-plan.result == 'success' &&
-      needs.refresh-release-plan.outputs.refresh == 'true' &&
-      needs.refresh-release-plan.outputs.merge == 'true'
-    name: Merge main into the release pull request
+      needs.refresh-release-plan.outputs.refresh == 'true'
+    name: Stage main and the release head
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
     outputs:
-      head: ${{ steps.merge.outputs.head }}
+      head: ${{ steps.stage.outputs.head }}
     steps:
       - name: Check out the refresh planner
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -211,36 +212,40 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
-          permission-pull-requests: write
 
-      # GitHub merges, so the merge commit is signed, and only from the head
-      # the plan read: a release that moved meanwhile fails this run.
-      - name: Merge main into the release branch
-        id: merge
+      # GitHub merges, so the merge commit is signed.
+      - name: Stage the release head and merge main into it
+        id: stage
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
           RELEASE_PULL_REQUEST: ${{ needs.refresh-release-plan.outputs.number }}
           HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
-        run: bun scripts/release-pull-request-refresh.ts update
+          MAIN_SHA: ${{ github.sha }}
+          MERGE_MAIN: ${{ needs.refresh-release-plan.outputs.merge }}
+        run: bun scripts/release-pull-request-refresh.ts stage
 
-  # Also resumes a refresh whose merge landed and whose versioning did not:
-  # the plan then reports pending entries on the release head and no merge.
+  # Versions the staged head, then moves the release branch from the planned
+  # head to the versioned tip in one update, so the release never holds main
+  # without its versioning. A release whose head pends a `@stll/cli` entry (main
+  # merged in by hand) is versioned the same way, without a merge.
   refresh-release-version:
-    needs: [refresh-release-plan, refresh-release-merge]
+    needs: [refresh-release-plan, refresh-release-stage]
     if: >-
-      !cancelled() && needs.refresh-release-plan.outputs.refresh == 'true' &&
-      contains(fromJSON('["success", "skipped"]'), needs.refresh-release-merge.result)
+      !cancelled() && needs.refresh-release-stage.result == 'success'
     name: Version the changesets main added to the release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
     steps:
-      - name: Check out the merged release branch
+      # The install's workspace hygiene check reads the app-boundary ledger at
+      # the merge base with origin/main, so the checkout carries full history.
+      - name: Check out the staged release head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.refresh-release-merge.outputs.head || needs.refresh-release-plan.outputs.head }}
+          ref: ${{ needs.refresh-release-stage.outputs.head }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Bun
@@ -295,13 +300,24 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      # Appends only on top of the merged head checked out above; a commit
-      # pushed to the release meanwhile fails the step.
-      - name: Commit the refreshed release files
+      # Appends only on top of the staged head checked out above; a commit
+      # pushed to the staging branch meanwhile fails the step.
+      - name: Commit the refreshed release files to the staging branch
+        id: commit
         uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: append
-          branch: ${{ needs.refresh-release-plan.outputs.branch }}
+          branch: release-refresh/${{ needs.refresh-release-plan.outputs.number }}
           paths: ${{ steps.refresh.outputs.paths }}
           commit-message: "chore: version changesets that reached main after the release cut"
+
+      - name: Move the release branch to the versioned head
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_PULL_REQUEST: ${{ needs.refresh-release-plan.outputs.number }}
+          RELEASE_BRANCH: ${{ needs.refresh-release-plan.outputs.branch }}
+          HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
+          STAGED_HEAD: ${{ steps.commit.outputs.commit-sha }}
+        run: bun scripts/release-pull-request-refresh.ts publish

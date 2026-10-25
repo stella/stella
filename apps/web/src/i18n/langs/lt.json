@@ -4813,6 +4813,8 @@
     "recentDocuments": "Naujausi dokumentai",
     "recentSearches": "Naujausios paieškos",
     "recentlyOpenedFiles": "Neseniai atidaryti failai",
+    "registryCandidateNameMismatch": "Oficialus pavadinimas „{officialName}“ nesutampa",
+    "registryCandidateNoOfficialRecord": "Oficialiame registre nėra įrašo su šiuo numeriu",
     "registryChoose": "Pasirinkite įmonių registrą",
     "registryCredentialAskAdmin": "Paprašykite organizacijos administratoriaus sukonfigūruoti prieigą prie šio registro.",
     "registryCredentialSaved": "Prieiga prie registro išsaugota",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Įmonių registro duomenys laikinai nepasiekiami"
     },
     "registryKrsHint": "KRS ieško pagal registracijos numerį, o ne įmonės pavadinimą. Įveskite 10 skaitmenų KRS numerį su nuliais pradžioje (pvz., 0000006865).",
+    "registryNameSearchNotFound": "Nė viena patikrinta įmonė neatitiko šio pavadinimo. Šie kandidatai buvo atmesti:",
     "registryVatHint": "VIES tikrina PVM mokėtojų kodus, o ne įmonių pavadinimus. Įveskite PVM mokėtojo kodą su šalies prefiksu (pvz., CZ27082440); formatas priklauso nuo šalies.",
     "renameSearchTitle": "Pervadinti išsaugotą paiešką",
     "requestCountry": "Prašyti pridėti naują šalį",

@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -23,7 +24,10 @@ import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter } from "@/i18n/formatting-context";
+import {
+  useLocale as useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -165,7 +169,8 @@ export const AskUserCard = ({
   restorationPairs,
 }: AskUserCardProps) => {
   const t = useTranslations();
-  const format = useFormatter();
+  const formattingLocale = useFormattingLocale();
+  const markerStyle = useStepsMarkerStyle();
   // Stable empty fallback so useMemo deps don't churn when the
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
@@ -400,78 +405,86 @@ export const AskUserCard = ({
 
       <form onSubmit={handleFormSubmit}>
         {/* Questions */}
-        <div className="border-border/50 space-y-3 border-t px-3 py-3">
-          {input.questions.map((q, i) => {
-            const hasOptions = (q.options?.length ?? 0) > 0;
-            return (
-              <div className="space-y-1.5" key={q.question}>
-                <p className="text-xs font-medium" dir="auto">
-                  {format.number(i + 1)}. {renderAnonPills(q.question, pairs)}
-                </p>
+        <div className="border-border/50 border-t px-3 py-3">
+          <Steps lang={formattingLocale} markerStyle={markerStyle}>
+            {input.questions.map((q, i) => {
+              const hasOptions = (q.options?.length ?? 0) > 0;
+              return (
+                <Step key={q.question}>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium" dir="auto">
+                      {renderAnonPills(q.question, pairs)}
+                    </p>
 
-                {!isDone && hasOptions && !customMode[i] && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {q.options?.map((opt) => (
-                      <button
-                        className={cn(
-                          "rounded-md border px-2 py-1 text-xs",
-                          answers[i] === opt
-                            ? "border-foreground bg-foreground text-background"
-                            : "hover:bg-muted",
+                    {!isDone && hasOptions && !customMode[i] && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {q.options?.map((opt) => (
+                          <button
+                            className={cn(
+                              "rounded-md border px-2 py-1 text-xs",
+                              answers[i] === opt
+                                ? "border-foreground bg-foreground text-background"
+                                : "hover:bg-muted",
+                            )}
+                            key={opt}
+                            onClick={() => setAnswer(i, opt)}
+                            type="button"
+                          >
+                            {renderAnonPills(opt, pairs, {
+                              interactive: false,
+                            })}
+                          </button>
+                        ))}
+                        <button
+                          className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
+                          onClick={() => toggleCustom(i)}
+                          type="button"
+                        >
+                          <PencilIcon className="size-2.5" />
+                          {t("chat.askUser.custom")}
+                        </button>
+                      </div>
+                    )}
+
+                    {!isDone && (!hasOptions || customMode[i]) && (
+                      <div className="flex gap-1.5">
+                        <input
+                          className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
+                          dir={contentDir(answers[i] ?? "")}
+                          onChange={(e) => setAnswer(i, e.target.value)}
+                          placeholder={
+                            q.default ?? t("chat.askUser.placeholder")
+                          }
+                          type="text"
+                          value={answers[i] ?? ""}
+                        />
+                        {hasOptions && customMode[i] && (
+                          <button
+                            className="text-muted-foreground hover:text-foreground text-xs"
+                            onClick={() => toggleCustom(i)}
+                            type="button"
+                          >
+                            A/B/C
+                          </button>
                         )}
-                        key={opt}
-                        onClick={() => setAnswer(i, opt)}
-                        type="button"
-                      >
-                        {renderAnonPills(opt, pairs, { interactive: false })}
-                      </button>
-                    ))}
-                    <button
-                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
-                      onClick={() => toggleCustom(i)}
-                      type="button"
-                    >
-                      <PencilIcon className="size-2.5" />
-                      {t("chat.askUser.custom")}
-                    </button>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {!isDone && (!hasOptions || customMode[i]) && (
-                  <div className="flex gap-1.5">
-                    <input
-                      className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
-                      dir={contentDir(answers[i] ?? "")}
-                      onChange={(e) => setAnswer(i, e.target.value)}
-                      placeholder={q.default ?? t("chat.askUser.placeholder")}
-                      type="text"
-                      value={answers[i] ?? ""}
-                    />
-                    {hasOptions && customMode[i] && (
-                      <button
-                        className="text-muted-foreground hover:text-foreground text-xs"
-                        onClick={() => toggleCustom(i)}
-                        type="button"
-                      >
-                        A/B/C
-                      </button>
+                    {isDone && (
+                      <p className="text-muted-foreground text-xs">
+                        {renderAnonPills(
+                          answeredOutput?.answers[i]?.answer ||
+                            answers[i] ||
+                            t("chat.askUser.noAnswer"),
+                          pairs,
+                        )}
+                      </p>
                     )}
                   </div>
-                )}
-
-                {isDone && (
-                  <p className="text-muted-foreground text-xs">
-                    {renderAnonPills(
-                      answeredOutput?.answers[i]?.answer ||
-                        answers[i] ||
-                        t("chat.askUser.noAnswer"),
-                      pairs,
-                    )}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+                </Step>
+              );
+            })}
+          </Steps>
         </div>
 
         {/* Submit */}
