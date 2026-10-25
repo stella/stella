@@ -33,6 +33,7 @@ const PRODUCT_NAMES = {
   flexibee: "ABRA Flexi (XML)",
   ledes_1998b: "LEDES 1998B",
   ubl: "UBL 2.1 (EN 16931)",
+  peppol_sk: "Peppol (Slovakia)",
 } as const;
 
 type FormatLabel = TranslationKey | { name: string };
@@ -59,6 +60,7 @@ const FORMAT_GROUPS = [
     labelKey: "billing.invoices.export.eBilling",
     formats: [
       ["ubl", { name: PRODUCT_NAMES.ubl }],
+      ["peppol_sk", { name: PRODUCT_NAMES.peppol_sk }],
       ["ksef_fa3", "billing.invoices.export.ksefFa3"],
       ["ledes_1998b", { name: PRODUCT_NAMES.ledes_1998b }],
     ],

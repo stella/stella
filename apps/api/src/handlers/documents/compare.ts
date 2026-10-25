@@ -518,8 +518,7 @@ export const createDocumentCompareGenerator = (
       AbortSignal.timeout(DOCUMENT_COMPARE_DEADLINE_MS),
     ]);
     const documentId = params.documentId;
-    const mode = body.mode ?? "strict";
-    const granularity = body.granularity ?? "word";
+    const { mode, granularity } = body;
     const selection = body.selection;
     const targetIds =
       selection.type === "versions"

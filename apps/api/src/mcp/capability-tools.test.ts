@@ -1424,6 +1424,127 @@ describe("list_capabilities", () => {
       expect(catalogById.get(id)?.access).toBe("write");
     }
   });
+
+  test.each(["", " ", "  ", "\t\n", "\u00a0\u2003"])(
+    "blank query %j preserves id-order pages and cursor binding",
+    async (query) => {
+      const first = parseToolPayload<{ nextCursor: string | null }>(
+        await call("list_capabilities", { limit: 1 }),
+      );
+      const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+      for (const args of [{ limit: 1 }, { limit: 1, cursor }]) {
+        expect(await call("list_capabilities", { ...args, query })).toEqual(
+          await call("list_capabilities", args),
+        );
+      }
+    },
+  );
+
+  test("surrounding query whitespace preserves relevance cursor binding", async () => {
+    const first = parseToolPayload<{ nextCursor: string | null }>(
+      await call("list_capabilities", { query: "time entries", limit: 1 }),
+    );
+    const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+    expect(
+      await call("list_capabilities", { query: "  time entries ", cursor }),
+    ).toEqual(
+      await call("list_capabilities", { query: "time entries", cursor }),
+    );
+  });
+
+  test("ranks suggestion capabilities by id before description-only matches", async () => {
+    const result = await call("list_capabilities", {
+      query: "suggestion",
+      limit: 20,
+    });
+    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const ids = payload.items.map(({ id }) => id);
+    const idMatches = ids.filter((id) => id.includes("suggestion"));
+
+    expect(idMatches).toEqual(
+      expect.arrayContaining([
+        "time-entries.suggestions.decisions.create",
+        "time-entries.suggestions.list",
+      ]),
+    );
+    expect(ids.slice(0, idMatches.length)).toEqual(idMatches);
+    expect(ids).toContain("templates.fields.suggest");
+    expect(ids.indexOf("templates.fields.suggest")).toBeGreaterThanOrEqual(
+      idMatches.length,
+    );
+  });
+
+  test("pages a query in relevance order without repeats", async () => {
+    const all = parseToolPayload<{ items: { id: string }[] }>(
+      await call("list_capabilities", { query: "time entries", limit: 100 }),
+    ).items.map(({ id }) => id);
+    expect(all.length).toBeGreaterThan(3);
+
+    const paged: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: { items: { id: string }[]; nextCursor: string | null } =
+        parseToolPayload(
+          await call("list_capabilities", {
+            query: "time entries",
+            limit: 2,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        );
+      paged.push(...page.items.map(({ id }) => id));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    expect(paged).toEqual(all);
+  });
+
+  test("a query cursor must name an entry of that ranking", async () => {
+    const result = await call("list_capabilities", {
+      query: "suggestion",
+      cursor: encodePaginationCursor(["invoices.list"]),
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("a cursor resumes only the query that issued it", async () => {
+    const first: { items: { id: string }[]; nextCursor: string | null } =
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      );
+    const issued = first.nextCursor ?? expect.unreachable("Need a second page");
+    const sameId = first.items[0]?.id ?? expect.unreachable("Need an item");
+
+    // Reusing it under another query, or without one, is refused even though
+    // its id also appears in those listings.
+    for (const args of [
+      { query: "time", cursor: issued },
+      { cursor: issued },
+      { query: "time entries", cursor: encodePaginationCursor([sameId]) },
+    ]) {
+      const result = await call("list_capabilities", args);
+      expect(result.isError).toBe(true);
+    }
+    const resumed = await call("list_capabilities", {
+      query: "time entries",
+      cursor: issued,
+    });
+    expect(resumed.isError).not.toBe(true);
+  });
+
+  test("without a query a cursor for a hidden entry resumes after its id", async () => {
+    const first = parseToolPayload<{ items: { id: string }[] }>(
+      await call("list_capabilities", { domain: "time-entries", limit: 50 }),
+    ).items.map(({ id }) => id);
+    const anchor = first[1] ?? expect.unreachable("Need two time-entries");
+    const resumed = parseToolPayload<{ items: { id: string }[] }>(
+      await call("list_capabilities", {
+        domain: "time-entries",
+        limit: 50,
+        // A cursor id that sorts just after the anchor but names no entry.
+        cursor: encodePaginationCursor([`${anchor}~`]),
+      }),
+    ).items.map(({ id }) => id);
+    expect(resumed).toEqual(first.filter((id) => id > `${anchor}~`));
+  });
 });
 
 // --- describe_capability -----------------------------------------------------

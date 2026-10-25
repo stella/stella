@@ -51,6 +51,7 @@ const verifyRoomNameCaller: VerifyCaller<
 const authorizeFolioCollabSessionHandler = createSafeTokenHandler(
   config,
   verifyRoomNameCaller,
+  // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* ({ caller }) {
     const { room: value } = yield* Result.ok(caller);
     return Result.ok({

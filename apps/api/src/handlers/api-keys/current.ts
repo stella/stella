@@ -52,6 +52,7 @@ export const createCurrentMachineApiKeyHandler = (
       mcp: { type: "internal", reason: "auth_plumbing" },
     },
     verifyMachineApiKeyCaller(resolveCredential),
+    // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
     async function* ({ caller, set }) {
       set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
       const credential = yield* Result.ok(caller);

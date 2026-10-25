@@ -140,8 +140,7 @@ export type WebApiContract = { Tool: Local<number> };
   }
   // A local alias must reach the imported interface, rather than bypassing
   // the fault by referring to the package export directly.
-  const toolType =
-    (await checker.getTypeOfSymbol(tool)) ?? panic("tool has no type");
+  const toolType = await checker.getTypeOfSymbol(tool);
   expect((await toolType.getAliasSymbol())?.name).toBe("Local");
   const result = await printContract({
     program,

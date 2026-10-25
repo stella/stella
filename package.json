@@ -133,7 +133,6 @@
     "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
-    "hooks:deps": "bash scripts/ensure-hook-deps.sh",
     "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
@@ -190,6 +189,7 @@
     "adm-zip": "0.6.1",
     "body-parser": "2.4.0",
     "brace-expansion": "5.0.11",
+    "dompurify": "3.4.17",
     "expo-constants": "57.0.21",
     "expo-modules-core": "57.0.21",
     "fast-uri": "3.1.8",
@@ -324,6 +324,7 @@
   "patchedDependencies": {
     "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
+    "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
     "mailauth@7.1.1": "patches/mailauth@7.1.1.patch",
     "@astrojs/mdx@7.0.7": "patches/@astrojs__mdx@7.0.7.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",

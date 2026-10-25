@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import type { GenericSchema } from "valibot";
 
 import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const JSON_NUMBER_MAX_BYTES = 25;
 const JSON_ESCAPED_UTF8_BYTE_MAX_BYTES = 6;
@@ -69,8 +69,8 @@ const jsonByteBound = (schema: unknown, path: SchemaPath = "$"): number => {
         ? schema["additionalItems"]
         : schema["items"];
       const elementSchemas = [
-        ...(Array.isArray(prefix) ? prefix : []),
-        ...(rest === undefined || Array.isArray(rest) ? [] : [rest]),
+        ...(isUnknownArray(prefix) ? prefix : []),
+        ...(rest === undefined || isUnknownArray(rest) ? [] : [rest]),
       ];
       const elementBytes = Math.max(
         ...elementSchemas.map((element) => jsonByteBound(element, `${path}[]`)),

@@ -177,6 +177,9 @@ const diagnosticMessage = (diagnostic: Diagnostic, depth: number): string =>
     ),
   ].join("\n");
 
+// tsrs reports a diagnostic's category as a plain number.
+const ERROR_CATEGORY: number = DiagnosticCategory.Error;
+
 const formatDiagnostics = (
   diagnostics: readonly Diagnostic[],
   sourceText: (fileName: string) => string | undefined,
@@ -192,7 +195,7 @@ const formatDiagnostics = (
               text === undefined ? "" : lineAndColumn(text, diagnostic.pos)
             }: `;
       const category =
-        diagnostic.category === DiagnosticCategory.Error ? "error" : "warning";
+        diagnostic.category === ERROR_CATEGORY ? "error" : "warning";
       return `${location}${category} TS${diagnostic.code}: ${diagnosticMessage(diagnostic, 0).trimStart()}`;
     })
     .join("\n");
@@ -369,9 +372,7 @@ const createCachedCompiler = (checker: Checker, contractSource: SourceFile) => {
     if (known !== undefined) {
       return await known;
     }
-    const fetched = (async () =>
-      (await checker.getTypeOfSymbol(symbol)) ??
-      panic(`generate-web-api-types: ${symbol.name} has no type`))();
+    const fetched = checker.getTypeOfSymbol(symbol);
     symbolTypes.set(symbol.id, fetched);
     return await fetched;
   };
@@ -981,9 +982,7 @@ export const printContract = async ({
     const predicate = await checker.getTypePredicateOfSignature(sig);
     let returned: string;
     if (predicate === undefined) {
-      const returnType =
-        (await checker.getReturnTypeOfSignature(sig)) ??
-        panic("generate-web-api-types: signature without a return type");
+      const returnType = await checker.getReturnTypeOfSignature(sig);
       returned = await at("=>", async () => print(returnType));
     } else {
       const asserts =

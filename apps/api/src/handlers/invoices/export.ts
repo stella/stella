@@ -31,7 +31,7 @@ const exportInvoicesBody = v.object({
   format: v.pipe(
     v.picklist(INVOICE_EXPORT_FORMATS),
     v.description(
-      "xlsx: one row per invoice; xlsx_lines: one row per invoice line; pohoda, money_s3, flexibee: accounting import XML; isdoc: ISDOC 6.0.2; ubl: UBL 2.1 e-invoices per EN 16931; ksef_fa3: Polish KSeF FA(3) e-invoices (isdoc, ubl and ksef_fa3 are a zip for several invoices); eso9: ESO9 import sheet; ledes_1998b: LEDES 1998B e-billing file",
+      "xlsx: one row per invoice; xlsx_lines: one row per invoice line; pohoda, money_s3, flexibee: accounting import XML; isdoc: ISDOC 6.0.2; ubl: UBL 2.1 e-invoices per EN 16931; peppol_sk: Peppol BIS Billing 3.0 for Slovak sellers; ksef_fa3: Polish KSeF FA(3) e-invoices (isdoc, ubl, peppol_sk and ksef_fa3 are a zip for several invoices); eso9: ESO9 import sheet; ledes_1998b: LEDES 1998B e-billing file",
     ),
   ),
   invoiceIds: v.optional(
@@ -54,7 +54,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       contract: "patch",
       contentDelivery: { type: "audited" },
       description:
-        "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC, UBL (EN 16931) or Polish KSeF FA(3) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection; one export holds at most 500 invoices. Refused when a format cannot hold the data, e.g. Money S3 or ISDOC for an invoice outside the seller's home currency, or KSeF FA(3) for a credit note. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
+        "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC, UBL (EN 16931), Peppol BIS Billing 3.0 for Slovak sellers or Polish KSeF FA(3) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection; one export holds at most 500 invoices. Refused when a format cannot hold the data. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
       permissions: { workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       featureAccess: { featureId: "time-billing", type: "required" },

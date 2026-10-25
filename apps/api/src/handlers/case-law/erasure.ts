@@ -17,7 +17,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
-  lockCaseLawDecisionErasureRows,
+  lockCaseLawDecisionRows,
   lockCaseLawRepublication,
 } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -369,7 +369,7 @@ export const redactCaseLawDecision = async ({
       });
     }
     const lockedIds = lockedSubjects.map(({ subject }) => subject.entityId);
-    await lockCaseLawDecisionErasureRows({ tx, decisionIds: lockedIds });
+    await lockCaseLawDecisionRows({ tx, decisionIds: lockedIds });
     const decisions = await tx
       .select({
         id: caseLawDecisions.id,

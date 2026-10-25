@@ -97,6 +97,7 @@ export const createRedeemPdfSigningHandoffEndpoint = (
   createSafeTokenHandler(
     config,
     verifyHandoffCaller(dependencies),
+    // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
     async function* ({ caller }) {
       const { identity, redeemed } = yield* Result.ok(caller);
       return Result.ok({

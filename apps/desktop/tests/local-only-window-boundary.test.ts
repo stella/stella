@@ -288,9 +288,14 @@ describe("local-only data stays in the feature's own windows", () => {
     if (!isRecord(updater)) {
       throw new TypeError("plugins.updater is required");
     }
-    expect(Object.keys(updater).toSorted()).toEqual(["endpoints", "pubkey"]);
+    expect(Object.keys(updater).toSorted()).toEqual([
+      "endpoints",
+      "pubkey",
+      "requireSignedVersion",
+    ]);
     expect(typeof updater["pubkey"]).toBe("string");
     expect(String(updater["pubkey"]).length).toBeGreaterThan(0);
+    expect(updater["requireSignedVersion"]).toBe(true);
     const endpoints = stringArray(updater["endpoints"], "endpoints");
     expect(endpoints.length).toBeGreaterThan(0);
     for (const endpoint of endpoints) {

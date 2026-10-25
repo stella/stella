@@ -265,7 +265,7 @@ const CASES: readonly LifecycleCase[] = [
         shadow("transient", "upstream_unavailable"),
       ],
     ],
-    captures: 1,
+    captures: 0,
     metricReasons: ["upstream_unavailable"],
   },
   {
@@ -285,7 +285,7 @@ const CASES: readonly LifecycleCase[] = [
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
-    captures: 1,
+    captures: 0,
     metricReasons: ["pg_connection_lifecycle"],
   },
   {
@@ -311,7 +311,7 @@ const CASES: readonly LifecycleCase[] = [
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
-    captures: 1,
+    captures: 0,
     metricReasons: ["pg_connection_lifecycle"],
   },
   {
@@ -684,11 +684,11 @@ describe("the request lifecycle", () => {
       flush: async () => await Promise.resolve(),
     });
     try {
-      const response = await lifecycleServer.fetch(get("/v1/signals/")());
+      const response = await lifecycleServer.fetch(get("/v1/contacts/")());
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(400);
       expect(await response.text()).toBe(
-        '{"code":"internal_server_error","message":"Internal server error"}',
+        '{"code":"access_denied","message":"Access denied"}',
       );
       expect(
         logs.records

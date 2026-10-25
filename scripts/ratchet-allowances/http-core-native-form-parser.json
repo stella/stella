@@ -1,5 +1,5 @@
 {
   "metric": "lint-suppression-directives",
-  "delta": 1,
-  "reason": "The HTTP core reads multipart forms with Bun's native Request.formData within Bun.serve's body limit; the deprecation it suppresses is undici's advice for its own parser, which the API does not run."
+  "delta": 4,
+  "reason": "The HTTP core reads multipart forms with Bun's native Request.formData within Bun.serve's body limit; the deprecation it suppresses is undici's advice for its own parser, which the API does not run. Three token handlers now receive a caller verified before they run and await nothing; safe handlers must remain async generators for Result.gen error capture, the waiver main already uses for such handlers."
 }

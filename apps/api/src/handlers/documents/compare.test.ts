@@ -286,6 +286,9 @@ const createHarness = ({
   const context = asTestRaw<Ctx>({
     body: {
       filePropertyId: propertyId,
+      // Parsed bodies carry the schema defaults.
+      mode: "strict",
+      granularity: "word",
       selection: {
         type: previous ? "previous" : "versions",
         ...(previous
