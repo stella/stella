@@ -125,20 +125,70 @@ describe("release promotion diagnosis", () => {
     });
   });
 
-  test("names the earliest stable tag when several contain the bump", async () => {
-    const tagCalls: (readonly string[])[] = [];
-    const base = journeyGit({ tag: "v1.2.4-rc.1\nv1.2.3\nv1.2.4" });
-    const gitRunner: GitRunner = (args) => {
-      if (args.at(0) === "tag") {
-        tagCalls.push(args);
-      }
-      return base(args);
+  test("names the earliest stable version despite reversed annotated-tag creation dates", async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "journey-release-tags-"),
+    );
+    const runGit = (args: readonly string[], date = "2026-01-01T00:00:00Z") => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-C",
+          directory,
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          ...args,
+        ],
+        {
+          env: {
+            ...process.env,
+            GIT_CONFIG_GLOBAL: "/dev/null",
+            GIT_CONFIG_NOSYSTEM: "1",
+            GIT_COMMITTER_DATE: date,
+            GIT_AUTHOR_DATE: date,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode).toBe(0);
+      return {
+        exitCode: result.exitCode,
+        stdout: new TextDecoder().decode(result.stdout),
+      };
     };
-    const { lines } = await runJourney({ gitRunner });
-    expect(tagCalls).toEqual([
-      ["tag", "--contains", BUMP_COMMIT, "--sort=creatordate"],
-    ]);
-    expect(lines).toContain("journey-detail registry-@stll/cli awaits v1.2.3");
+    try {
+      runGit(["init", "--quiet"]);
+      runGit(["commit", "--allow-empty", "-qm", "fixture"]);
+      const commit = runGit(["rev-parse", "HEAD"]).stdout.trim();
+      runGit(["tag", "-a", "v1.2.5-rc.1", "-m", "prerelease"]);
+      runGit(
+        ["tag", "-a", "v1.2.4", "-m", "later version"],
+        "2026-01-02T00:00:00Z",
+      );
+      runGit(
+        ["tag", "-a", "v1.2.3", "-m", "earlier version"],
+        "2026-01-03T00:00:00Z",
+      );
+      expect(
+        runGit(["tag", "--contains", commit, "--sort=creatordate"])
+          .stdout.trim()
+          .split("\n"),
+      ).toEqual(["v1.2.5-rc.1", "v1.2.4", "v1.2.3"]);
+      const base = journeyGit();
+      const gitRunner: GitRunner = (args) =>
+        args.at(0) === "tag"
+          ? runGit(args.map((arg) => (arg === BUMP_COMMIT ? commit : arg)))
+          : base(args);
+      const { lines } = await runJourney({ gitRunner });
+      expect(lines).toContain(
+        "journey-detail registry-@stll/cli awaits v1.2.3",
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test("names an untagged bump from its VERSION file", async () => {

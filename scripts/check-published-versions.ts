@@ -102,11 +102,16 @@ export const checkPublishedVersions = async ({
     return completeHistory;
   };
 
-  const assessPromotion = async (
-    directory: string,
-    target: string | undefined,
-    result: RegistryResult,
-  ): Promise<PromotionAssessment> => {
+  type PromotionAssessmentOptions = {
+    directory: string;
+    target: string | undefined;
+    result: RegistryResult;
+  };
+  const assessPromotion = async ({
+    directory,
+    target,
+    result,
+  }: PromotionAssessmentOptions): Promise<PromotionAssessment> => {
     if (result.status !== "failed" || result.reason !== "version_mismatch") {
       return { result };
     }
@@ -156,13 +161,12 @@ export const checkPublishedVersions = async ({
       "tag",
       "--contains",
       bumpCommit,
-      "--sort=creatordate",
+      "--sort=v:refname",
     ]);
     if (tags.exitCode !== 0) {
       return { result };
     }
-    // Tags are listed oldest first, so the first stable one is the earliest
-    // release carrying the bump.
+    // Version sorting puts the earliest stable release carrying the bump first.
     let release = newestStableTag(
       tags.stdout.split("\n").map((tag) => tag.trim()),
     );
@@ -225,7 +229,7 @@ export const checkPublishedVersions = async ({
           // The command boundary reports malformed manifests without their contents.
           result = { status: "failed", reason: "contract_error" };
         }
-        const assessment = await assessPromotion(directory, target, result);
+        const assessment = await assessPromotion({ directory, target, result });
         log(
           `journey registry-@stll/${directory} ${assessment.result.status} ${assessment.result.reason}`,
         );
