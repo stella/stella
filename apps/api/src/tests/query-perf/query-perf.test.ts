@@ -8,6 +8,7 @@ import {
   corpusProjectionOutstandingIntentProbe,
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 
 import {
   CASE_LAW_SCENARIOS,
@@ -252,29 +253,41 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           });
           return run.pages;
         };
-        for (const job of SCHEDULED_JOB_MEASUREMENTS) {
-          const { budgetId } = job;
+        // Every job that declares a budget, judged against the budget its own
+        // registration names; the census makes each one have a measurement.
+        for (const job of DECLARED_SCHEDULER_JOBS) {
+          if (typeof job.reads !== "object") {
+            continue;
+          }
+          const budgetId = job.reads.budget;
+          const jobId = job.id;
+          const measurement = SCHEDULED_JOB_MEASUREMENTS[jobId];
+          if (measurement === undefined) {
+            note(`${jobId} declares ${budgetId} but has no measurement`);
+            continue;
+          }
           measured.add(budgetId);
-          for (const scenario of job.scenarios) {
+          for (const scenario of measurement.scenarios) {
             const label = describeServed(scenario.size);
             // db-await-in-loop: scenarios move the served generations, so they run one at a time.
             const size = await deadline.run(
-              `run ${job.jobId} on ${label}`,
-              async () => await runPages(job.jobId, job.task, scenario.size),
+              `run ${jobId} on ${label}`,
+              async () =>
+                await runPages(jobId, measurement.task, scenario.size),
             );
             note(budgetProblem(budgetId, size));
-            const twin = "double" in scenario ? scenario.double : undefined;
+            const twin = scenario.double;
             if (twin === undefined) {
               continue;
             }
             // db-await-in-loop: the twin scenario moves the served generations after the first run finished.
             const double = await deadline.run(
-              `run ${job.jobId} on ${describeServed(twin)}`,
-              async () => await runPages(job.jobId, job.task, twin),
+              `run ${jobId} on ${describeServed(twin)}`,
+              async () => await runPages(jobId, measurement.task, twin),
             );
             note(budgetProblem(budgetId, double));
             for (const violation of scaleViolations({ size, double })) {
-              note(`${job.jobId} on ${label}: ${violation}`);
+              note(`${jobId} on ${label}: ${violation}`);
             }
           }
         }

@@ -9,6 +9,10 @@ import {
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
+import {
+  SCHEDULED_JOB_MEASUREMENTS,
+  scheduledJobMeasurementViolations,
+} from "@/api/tests/query-perf/registry";
 
 import {
   ledgerMergeBase,
@@ -61,6 +65,48 @@ describe("read budget declarations", () => {
           ];
     });
     expect(violations).toEqual([]);
+  });
+
+  test("every budgeted job has a measurement of its own", () => {
+    expect(
+      scheduledJobMeasurementViolations(
+        DECLARED_SCHEDULER_JOBS,
+        SCHEDULED_JOB_MEASUREMENTS,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a second job sharing a measured budget still needs its own measurement", () => {
+    const freshness = DECLARED_SCHEDULER_JOBS.find(
+      ({ id }) => id === "caseLaw.reportFreshness.fiveMinute",
+    );
+    expect(freshness?.reads).toEqual({
+      budget: "scheduled.caseLaw.reportFreshness",
+    });
+    const jobs = [
+      ...DECLARED_SCHEDULER_JOBS,
+      {
+        id: "caseLaw.reportFreshness.copy",
+        task: "caseLaw.reportFreshness",
+        reads: { budget: "scheduled.caseLaw.reportFreshness" },
+      } as const,
+    ];
+    expect(
+      scheduledJobMeasurementViolations(jobs, SCHEDULED_JOB_MEASUREMENTS),
+    ).toEqual([
+      "caseLaw.reportFreshness.copy declares scheduled.caseLaw.reportFreshness but has no measurement keyed by its id",
+    ]);
+    expect(
+      scheduledJobMeasurementViolations(DECLARED_SCHEDULER_JOBS, {
+        ...SCHEDULED_JOB_MEASUREMENTS,
+        "inboundMail.receive.minutely": {
+          task: "inboundMail.receive",
+          scenarios: [],
+        },
+      }),
+    ).toEqual([
+      "inboundMail.receive.minutely is measured but declares no read budget",
+    ]);
   });
 
   test("every governed backfill is declared as governed", () => {

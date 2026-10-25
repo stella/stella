@@ -59,24 +59,67 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
     expectedRows: number;
   }[];
 
+type ScheduledJobMeasurement = {
+  task: string;
+  scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
+};
+
 /**
- * Scheduled jobs measured per run, each against every corpus scenario it can
- * meet, at one size and, where the scenario has one, at twice that size.
+ * How each budgeted scheduled job is measured, keyed by the job's id: the
+ * gate runs that job's registered task against every corpus scenario it can
+ * meet, at one size and, where the scenario has one, at twice that size, and
+ * judges it against the budget the job's own registration declares. A job
+ * that declares a budget without an entry here fails the census
+ * (`scheduledJobMeasurementViolations`), however many other jobs share it.
  */
-export const SCHEDULED_JOB_MEASUREMENTS = [
-  {
-    budgetId: "scheduled.caseLaw.reportFreshness",
-    jobId: "caseLaw.reportFreshness.fiveMinute",
+export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
+  Record<string, ScheduledJobMeasurement>
+> = {
+  "caseLaw.reportFreshness.fiveMinute": {
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
     scenarios: Object.values(CASE_LAW_SCENARIOS),
   },
-] as const satisfies readonly {
-  budgetId: ScheduledJobReadBudgetId;
-  jobId: string;
+};
+
+type DeclaredJobReads = {
+  id: string;
   task: string;
-  scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
-}[];
+  reads: { budget: ScheduledJobReadBudgetId } | "load-governed" | "unmeasured";
+};
+
+/**
+ * Every job that declares a read budget has a measurement of its own, for its
+ * own task, and every measurement belongs to such a job.
+ */
+export const scheduledJobMeasurementViolations = (
+  jobs: readonly DeclaredJobReads[],
+  measurements: Readonly<Record<string, ScheduledJobMeasurement>>,
+): string[] => {
+  const budgeted = jobs.filter(
+    (job): job is DeclaredJobReads & { reads: { budget: string } } =>
+      typeof job.reads === "object",
+  );
+  const declared = new Set(budgeted.map(({ id }) => id));
+  return [
+    ...budgeted.flatMap((job) => {
+      const measurement = measurements[job.id];
+      if (measurement === undefined) {
+        return [
+          `${job.id} declares ${job.reads.budget} but has no measurement keyed by its id`,
+        ];
+      }
+      return measurement.task === job.task
+        ? []
+        : [
+            `${job.id} runs ${job.task}, but its measurement runs ${measurement.task}`,
+          ];
+    }),
+    ...Object.keys(measurements)
+      .filter((id) => !declared.has(id))
+      .map((id) => `${id} is measured but declares no read budget`),
+  ];
+};
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
