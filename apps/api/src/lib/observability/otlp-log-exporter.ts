@@ -1,5 +1,5 @@
 /**
- * OTLP/HTTP JSON log exporter on Bun's `fetch`.
+ * OTLP/HTTP JSON log exporter on the operator-endpoint transport.
  *
  * Records are queued in memory and exported in batches: on a timer, as soon as
  * a full batch is waiting, and on `flush()`. Export never blocks or throws into
@@ -15,8 +15,10 @@
 
 import { Result } from "better-result";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
+
+import { postToOperatorEndpoint } from "@/api/lib/safe-outbound-fetch";
 
 /** OTLP severity numbers for the levels the API logger emits. */
 export const LOG_SEVERITY_NUMBER = {
@@ -30,11 +32,16 @@ export type LogSeverityNumber =
   (typeof LOG_SEVERITY_NUMBER)[keyof typeof LOG_SEVERITY_NUMBER];
 
 export type LogAttributeValue =
-  boolean | boolean[] | number | number[] | string | string[];
+  | boolean
+  | boolean[]
+  | number
+  | number[]
+  | string
+  | string[];
 
-export type LogAttributes = Record<string, LogAttributeValue>;
+type LogAttributes = Record<string, LogAttributeValue>;
 
-export type OtlpLogRecordInput = {
+type OtlpLogRecordInput = {
   readonly attributes?: LogAttributes | undefined;
   readonly body: string;
   readonly severityNumber: LogSeverityNumber;
@@ -154,9 +161,9 @@ const parseRetryAfterMs = (header: string | null): number | undefined => {
   if (header === null) {
     return undefined;
   }
-  const seconds = Number.parseInt(header, 10);
-  if (Number.isInteger(seconds)) {
-    return Math.max(seconds, 0) * 1000;
+  const seconds = parseIntegerToken(header, { sign: "unsigned" });
+  if (Result.isOk(seconds)) {
+    return seconds.value * 1000;
   }
   // HTTP-date is IMF-fixdate rather than an ISO Temporal grammar. Date is the
   // platform parser for this legacy protocol form.
@@ -241,23 +248,14 @@ export const createOtlpLogExporter = (
     payload: string,
     timeoutMs: number,
   ): Promise<AttemptOutcome> => {
-    const sent = await Result.tryPromise({
-      try: async () => {
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- LOGS_OTLP_URL from the API's validated environment; the operator chooses it, no request selects it
-        const response = await fetchWithTimeout(options.url, {
-          body: payload,
-          headers,
-          method: "POST",
-          timeoutMs,
-        });
-        // Only the status matters; release the body unread.
-        await response.body?.cancel();
-        return response;
-      },
-      catch: (error: unknown) => error,
+    const sent = await postToOperatorEndpoint({
+      body: payload,
+      headers,
+      timeout: { type: "headers", ms: timeoutMs },
+      url: options.url,
     });
     if (sent.isErr()) {
-      return { kind: "network", errorName: errorName(sent.error) };
+      return { kind: "network", errorName: errorName(sent.error.cause) };
     }
     const response = sent.value;
     if (response.ok) {

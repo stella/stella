@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "postToOperatorEndpoint in the outbound owner takes the narrow call-site suppression require-safe-outbound-target prescribes for runtime-configured services: its URL is an operator setting from the API environment, and the operator-endpoint-transport ownership row confines its callers to the PostHog and OTLP clients. It replaces the posthog-node and OpenTelemetry exporter transports."
+}

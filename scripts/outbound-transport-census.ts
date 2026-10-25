@@ -469,12 +469,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-sqs"],
   },
   {
-    path: "apps/api/src/lib/observability/otlp-log-exporter.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Exports sanitized logs to the configured OTLP endpoint.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/api/src/lib/stella-openrouter-text-adapter.ts",
     class: "vendor-sdk",
     reason: "Sends model requests through the OpenRouter adapter and client.",
@@ -511,7 +505,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason: "Reads and writes objects using configured S3-compatible services.",
     transports: [
-      "global:fetch",
+      "module:@stll/fetch",
       "module:@aws-sdk/client-s3",
       "module:@stll/fetch",
       "module:bun",
@@ -521,8 +515,9 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/lib/safe-outbound-fetch.ts",
     class: "package-owned-client",
     reason:
-      "Validates destinations and pins resolved addresses for HTTP requests.",
+      "Validates destinations and pins resolved addresses for HTTP requests, and posts to operator-configured endpoints for the confined telemetry clients.",
     transports: [
+      "module:@stll/fetch",
       "module:node:dns/promises",
       "module:node:http",
       "module:node:https",
@@ -615,12 +610,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/infosoud"],
   },
   {
-    path: "apps/api/src/lib/analytics/posthog-client.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Sends configured analytics events to the PostHog batch API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
     class: "vendor-sdk",
     reason:
@@ -657,7 +646,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason: "Runs an authentication replay against the configured API origin.",
     transports: [
-      "global:fetch",
+      "module:@stll/fetch",
       "module:better-auth",
       "module:better-auth/plugins",
     ],

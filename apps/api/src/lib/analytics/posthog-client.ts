@@ -1,5 +1,6 @@
 /**
- * PostHog capture client on Bun's `fetch`, speaking the `/batch/` API.
+ * PostHog capture client speaking the `/batch/` API through the
+ * operator-endpoint transport.
  *
  * Events are queued in memory and sent in gzip-compressed batches when the
  * queue reaches `flushAt`, on a timer, and on `flush()` (the API flushes after
@@ -10,10 +11,9 @@
  * failures, a 413 halving the batch, events kept for the next flush after a
  * network failure, and a bounded queue that drops its oldest event.
  */
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
-import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
@@ -21,9 +21,10 @@ import type {
   ServerAnalytics,
   ServerAnalyticsCaptureParams,
 } from "@/api/lib/analytics/server-analytics";
-import { errorTag } from "@/api/lib/errors/error-tag";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { RELEASE_VERSION_PROPERTY } from "@/api/lib/observability/release-failure-contract";
+import { postToOperatorEndpoint } from "@/api/lib/safe-outbound-fetch";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 /** Library stamp on every event, in place of the SDK's own. */
@@ -32,13 +33,6 @@ const LIBRARY_ID = "stella-api";
 const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
   Object.values(SERVER_ANALYTICS_EVENTS),
 );
-
-/** A batch the PostHog API did not accept; the flush logs it. */
-export class PostHogDeliveryError extends TaggedError("PostHogDeliveryError")<{
-  message: string;
-  status?: number;
-  cause?: unknown;
-}> {}
 
 export type PostHogClientOptions = {
   readonly flushAt?: number;
@@ -73,7 +67,12 @@ type PostHogMessage = {
 type SendOutcome =
   | { readonly kind: "ok" }
   | { readonly kind: "http_status"; readonly status: number }
-  | { readonly kind: "network"; readonly cause: unknown };
+  | { readonly kind: "network"; readonly errorType: string };
+
+/** Why a batch was not delivered; the flush logs it. */
+type DeliveryFailure =
+  | { readonly reason: "rejected"; readonly status: number }
+  | { readonly reason: "unreached"; readonly errorType: string };
 
 const isRetryable = (outcome: SendOutcome): boolean =>
   outcome.kind === "network" ||
@@ -82,13 +81,20 @@ const isRetryable = (outcome: SendOutcome): boolean =>
       outcome.status === 429 ||
       outcome.status >= 500));
 
-const normalizeHost = (host: string): string => host.replace(/\/+$/u, "");
+/** The host without trailing slashes, as the SDK joined it to `/batch/`. */
+const normalizeHost = (host: string): string => {
+  let end = host.length;
+  while (end > 0 && host[end - 1] === "/") {
+    end -= 1;
+  }
+  return host.slice(0, end);
+};
 
 /** ISO 8601 at millisecond precision, the form the PostHog SDK sent. */
 const isoNow = (): string =>
   Temporal.Now.instant().toString({ smallestUnit: "millisecond" });
 
-export const createPostHogAnalytics = (
+export const createPostHogServerAnalytics = (
   key: string,
   host: string,
   options: PostHogClientOptions = {},
@@ -116,28 +122,20 @@ export const createPostHogAnalytics = (
   );
   let queue: PostHogMessage[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // Sends run one at a time, in order; every flush chains onto this tail,
-  // which carries the previous drain's failure without ever rejecting.
-  let flushTail: Promise<PostHogDeliveryError | null> = Promise.resolve(null);
+  // Sends run one at a time, in order; every flush chains onto this tail.
+  // Each drain logs its own failure, so the tail never rejects and a
+  // failed drain cannot stall the flushes queued behind it.
+  let flushTail: Promise<void> = Promise.resolve();
 
   const sendOnce = async (body: Uint8Array): Promise<SendOutcome> => {
-    const sent = await Result.tryPromise({
-      try: async () => {
-        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- POSTHOG_HOST from the API's validated environment; the operator chooses it, no request selects it
-        const response = await fetchWithTimeout(batchUrl, {
-          body,
-          headers,
-          method: "POST",
-          timeoutMs: requestTimeoutMs,
-        });
-        // Only the status matters; release the body unread.
-        await response.body?.cancel();
-        return response;
-      },
-      catch: (error: unknown) => error,
+    const sent = await postToOperatorEndpoint({
+      body,
+      headers,
+      timeout: { type: "headers", ms: requestTimeoutMs },
+      url: batchUrl,
     });
     if (sent.isErr()) {
-      return { kind: "network", cause: sent.error };
+      return { kind: "network", errorType: errorTag(sent.error.cause) };
     }
     return sent.value.ok
       ? { kind: "ok" }
@@ -180,7 +178,7 @@ export const createPostHogAnalytics = (
    * a batch that never reached PostHog goes back to the front of the queue
    * for the next flush. Either way the flush logs the failure.
    */
-  const drain = async (): Promise<PostHogDeliveryError | null> => {
+  const drain = async (): Promise<DeliveryFailure | null> => {
     clearTimer();
     let remaining = queue.length;
     while (remaining > 0 && queue.length > 0) {
@@ -202,40 +200,45 @@ export const createPostHogAnalytics = (
       }
       if (outcome.kind === "network") {
         queue = [...batch, ...queue].slice(0, maxQueueSize);
-        return new PostHogDeliveryError({
-          message: `PostHog batch of ${batch.length} events did not reach ${batchUrl}; the events stay queued for the next flush`,
-          cause: outcome.cause,
-        });
+        return { reason: "unreached", errorType: outcome.errorType };
       }
-      return new PostHogDeliveryError({
-        message: `PostHog rejected a batch of ${batch.length} events with HTTP ${outcome.status}; the batch is dropped`,
-        status: outcome.status,
-      });
+      return { reason: "rejected", status: outcome.status };
     }
     return null;
   };
 
-  const flush = async (): Promise<void> => {
-    const next = flushTail.then(drain);
-    flushTail = next;
-    const failure = await next;
-    if (failure !== null) {
+  // observeFailure captures through this client, so the client sits below it
+  // and logs its failures directly, as a warning: a captured failure would be
+  // queued behind the batch that just failed.
+  const drainAndReport = async (): Promise<void> => {
+    const drained = await Result.tryPromise(drain);
+    if (Result.isError(drained)) {
       logger.warn("analytics.delivery.failed", {
-        "error.type": failure._tag,
-        ...(failure.status === undefined
-          ? {}
-          : { "http.status_code": failure.status }),
+        "analytics.delivery.failure": "drain_failed",
+        "error.type": errorTag(drained.error),
       });
+      return;
     }
+    const failure = drained.value;
+    if (failure === null) {
+      return;
+    }
+    logger.warn("analytics.delivery.failed", {
+      "analytics.delivery.failure": failure.reason,
+      ...(failure.reason === "rejected"
+        ? { "http.status_code": failure.status }
+        : { "error.type": failure.errorType }),
+    });
   };
 
-  /** Flush on the client's own initiative; nobody awaits it, so log here. */
-  const flushInBackground = () => {
-    flush().catch((error: unknown) => {
-      logger.warn("analytics.background_flush.failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  /** Queue a flush behind the ones already running; nothing awaits it. */
+  const flushInBackground = (): void => {
+    flushTail = flushTail.then(drainAndReport);
+  };
+
+  const flush = async (): Promise<void> => {
+    flushInBackground();
+    await flushTail;
   };
 
   const enqueue = (message: Omit<PostHogMessage, "timestamp" | "uuid">) => {

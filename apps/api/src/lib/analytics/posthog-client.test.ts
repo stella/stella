@@ -8,7 +8,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 import {
-  createPostHogAnalytics,
+  createPostHogServerAnalytics,
   type PostHogClientOptions,
 } from "./posthog-client";
 
@@ -99,7 +99,7 @@ const startReceiver = (
 };
 
 const analyticsFor = (host: string, options: PostHogClientOptions = {}) =>
-  createPostHogAnalytics("phc_test", host, {
+  createPostHogServerAnalytics("phc_test", host, {
     // Timer and size flushes stay out of the way unless a test asks for them.
     flushAt: 1000,
     flushIntervalMs: 60_000,
@@ -323,7 +323,7 @@ describe("PostHog server analytics", () => {
 
     analytics.capture(feedbackEvent("rejected_user"));
     expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
-      { "error.type": "PostHogDeliveryError", "http.status_code": 400 },
+      { "analytics.delivery.failure": "rejected", "http.status_code": 400 },
     ]);
     analytics.capture(feedbackEvent("next_user"));
     await analytics.flush();
@@ -337,10 +337,12 @@ describe("PostHog server analytics", () => {
   });
 
   test("keeps events that never reached PostHog for the next flush", async () => {
+    // Requests stall until the test has seen the flush give up on them.
     let healthy = false;
+    const stalled = Promise.withResolvers<undefined>();
     const receiver = startReceiver(async () => {
       if (!healthy) {
-        await Bun.sleep(5000);
+        await stalled.promise;
       }
       return Response.json({ status: "Ok" });
     });
@@ -352,13 +354,17 @@ describe("PostHog server analytics", () => {
     analytics.capture(feedbackEvent("user_1"));
     const startedAt = performance.now();
     expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
-      { "error.type": "PostHogDeliveryError" },
+      {
+        "analytics.delivery.failure": "unreached",
+        "error.type": "TimeoutError",
+      },
     ]);
     // One attempt and one retry, each cut off by the request timeout.
     expect(performance.now() - startedAt).toBeLessThan(2000);
     expect(receiver.requests).toHaveLength(2);
 
     healthy = true;
+    stalled.resolve(undefined);
     analytics.capture(feedbackEvent("user_2"));
     await analytics.flush();
 
@@ -377,8 +383,11 @@ describe("PostHog server analytics", () => {
 
     analytics.capture(feedbackEvent("user_1"));
 
-    expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
-      { "error.type": "PostHogDeliveryError" },
+    expect(await deliveryFailuresDuring(analytics.flush)).toMatchObject([
+      {
+        "analytics.delivery.failure": "unreached",
+        "error.type": expect.any(String),
+      },
     ]);
   });
 });

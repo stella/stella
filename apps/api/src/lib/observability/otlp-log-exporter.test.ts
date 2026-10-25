@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { Temporal } from "@stll/time";
+
 import {
   createOtlpLogExporter,
   LOG_SEVERITY_NUMBER,
@@ -126,7 +128,7 @@ describe("OTLP log export", () => {
   test("sends OTLP/HTTP JSON with resource, scope, severity, typed attributes and nanosecond times", async () => {
     const receiver = startReceiver();
     const { exporter, failures } = exporterFor(receiver.url);
-    const beforeNanos = BigInt(Date.now()) * 1_000_000n;
+    const beforeNanos = Temporal.Now.instant().epochNanoseconds;
 
     exporter.emit({
       attributes: {
@@ -143,7 +145,7 @@ describe("OTLP log export", () => {
     });
     exporter.emit(info("api.shutdown_started"));
     await exporter.flush();
-    const afterNanos = BigInt(Date.now()) * 1_000_000n;
+    const afterNanos = Temporal.Now.instant().epochNanoseconds;
 
     expect(failures).toEqual([]);
     expect(receiver.requests).toHaveLength(1);
@@ -353,8 +355,10 @@ describe("OTLP log export", () => {
   });
 
   test("bounds an export to a slow endpoint by the export deadline", async () => {
+    // The endpoint answers only once the test has seen the export give up.
+    const stalled = Promise.withResolvers<undefined>();
     const receiver = startReceiver(async () => {
-      await Bun.sleep(5000);
+      await stalled.promise;
       return new Response("{}", { status: 200 });
     });
     const { exporter, failures } = exporterFor(receiver.url, {
@@ -364,6 +368,7 @@ describe("OTLP log export", () => {
     exporter.emit(info("slow.record"));
     const startedAt = performance.now();
     await exporter.flush();
+    stalled.resolve(undefined);
 
     expect(performance.now() - startedAt).toBeLessThan(2000);
     expect(failures).toEqual([

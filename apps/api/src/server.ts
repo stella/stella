@@ -1,6 +1,6 @@
 import "./register-schema-formats";
 import cors from "@elysia/cors";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { Elysia } from "elysia";
 
 import {
@@ -945,17 +945,10 @@ const startServer = async (): Promise<void> => {
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
     // Telemetry queued in memory leaves before the process does. Analytics
-    // goes first: a failed analytics flush logs a record of its own.
+    // goes first: its flush never rejects and logs a failed delivery, which
+    // the log export then carries.
     const flushTelemetry = async (): Promise<void> => {
-      const analyticsFlush = await Result.tryPromise({
-        try: async () => await getServerAnalytics().flush(),
-        catch: (error: unknown) => error,
-      });
-      if (analyticsFlush.isErr()) {
-        logger.error("analytics.flush.failed", {
-          "error.type": errorTag(analyticsFlush.error),
-        });
-      }
+      await getServerAnalytics().flush();
       await flushLogExport();
     };
     await Promise.race([

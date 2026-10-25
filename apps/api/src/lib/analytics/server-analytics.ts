@@ -116,7 +116,10 @@ export type McpSessionInitializedProperties = {
  * are three different facts.
  */
 export type FeedbackDeliveryOutcome =
-  "delivered" | "failed" | "not_configured" | "skipped_duplicate";
+  | "delivered"
+  | "failed"
+  | "not_configured"
+  | "skipped_duplicate";
 
 /**
  * One filed report, as telemetry. Content never appears here: the event says
@@ -216,6 +219,9 @@ export type ServerAnalytics = {
   capture: (params: ServerAnalyticsCaptureParams) => void;
   /** Upsert the organization group profile in PostHog. */
   identifyOrganizationGroup: (params: OrganizationGroupIdentifyParams) => void;
-  /** Flush queued events. No-op for providers without a queue. */
+  /**
+   * Flush queued events. Never rejects: a provider reports its own failed
+   * deliveries. No-op for providers without a queue.
+   */
   flush: () => Promise<void>;
 };
