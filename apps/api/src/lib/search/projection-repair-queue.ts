@@ -13,6 +13,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -358,10 +359,13 @@ const repairClaim = async ({
 
   if (Result.isError(attempt)) {
     outcome.failed += 1;
-    captureError(attempt.error, {
-      searchProjectionKind: claim.kind,
-      searchProjectionSourceId: claim.sourceId,
-    });
+    captureError(
+      attempt.error,
+      handlerErrorContext("search.repairClaim.attempt_error", {
+        searchProjectionKind: claim.kind,
+        searchProjectionSourceId: claim.sourceId,
+      }),
+    );
     logger.error("search.projection_repair_failed", {
       "error.type": errorTag(attempt.error),
       searchProjectionKind: claim.kind,

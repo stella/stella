@@ -18,6 +18,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -362,7 +364,11 @@ export class CorpusIndexGroupNotReadyError extends TaggedError(
   message: string;
   indexId: string;
   reason: Extract<CorpusIndexGroupReadiness, { type: "unready" }>["reason"];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type AttestedGroupsOptions = {
   /**

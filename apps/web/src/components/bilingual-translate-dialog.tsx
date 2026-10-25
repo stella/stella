@@ -47,6 +47,7 @@ import {
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { defaultLanguagePair } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
@@ -106,8 +107,18 @@ export const BilingualTranslateDialog = ({
   const [state, setState] = useState<BilingualTranslateState>({ step: "pick" });
   const [initialReview, setInitialReview] = useState("");
 
-  const reportFailure = (error: unknown, title: string) => {
-    analytics.captureError(error);
+  type ReportFailureOptions = {
+    title: string;
+    fingerprintKey: ExceptionFingerprintKey;
+  };
+  const reportFailure = (
+    error: unknown,
+    { title, fingerprintKey }: ReportFailureOptions,
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, title, {
       description: userErrorFromThrown(error, t("errors.actionFailed")),
     });
@@ -134,7 +145,10 @@ export const BilingualTranslateDialog = ({
       setState(review);
     },
     onError: (error: unknown) => {
-      reportFailure(error, t("bilingualTranslate.error.prepareTitle"));
+      reportFailure(error, {
+        title: t("bilingualTranslate.error.prepareTitle"),
+        fingerprintKey: "BilingualTranslateDialog:prepare",
+      });
     },
   });
 
@@ -157,7 +171,10 @@ export const BilingualTranslateDialog = ({
       setState({ step: "run", runId });
     },
     onError: (error: unknown) => {
-      reportFailure(error, t("bilingualTranslate.error.startTitle"));
+      reportFailure(error, {
+        title: t("bilingualTranslate.error.startTitle"),
+        fingerprintKey: "BilingualTranslateDialog:start",
+      });
     },
   });
 

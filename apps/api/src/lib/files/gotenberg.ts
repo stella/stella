@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
@@ -77,7 +78,11 @@ export class ConversionInputError extends TaggedError("ConversionInputError")<{
   message: string;
   reason: ConversionInputErrorReason;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason.kind"]);
+  }
+}
 
 const conversionInputRefusalMessage = (
   reason: ConversionInputRefusal,

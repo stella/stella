@@ -24,6 +24,7 @@ import type {
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type {
@@ -660,7 +661,11 @@ export class ExecutorSavepointError extends TaggedError(
   message: string;
   cause: unknown;
   phase: "setup" | "callback" | "cleanup";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["phase"]);
+  }
+}
 
 /**
  * A savepoint for execute-only callbacks. The callback must not acquire typed

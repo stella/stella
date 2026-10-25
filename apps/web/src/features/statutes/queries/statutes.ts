@@ -395,6 +395,13 @@ const readStatuteVersionsFrom = async ({
         action: "statutes.versions-walk",
         message: "Statute version walk stopped at the page cap",
       }),
+      {
+        fingerprintKey: "readStatuteVersionsFrom:ClientOperationError",
+        scope: {
+          type: "handler",
+          handlerId: "readStatuteVersionsFrom:ClientOperationError",
+        },
+      },
     );
 
     return collected;

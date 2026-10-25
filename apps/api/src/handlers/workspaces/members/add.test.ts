@@ -41,6 +41,7 @@ const createContext = ({
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
     request: recorderBindings.request,
+    route: "/v1/workspaces/:workspaceId/members/:userId",
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },
