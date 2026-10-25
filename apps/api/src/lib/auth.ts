@@ -1541,7 +1541,7 @@ export const createAuth = (
     if (model !== "oauthAccessToken" && model !== "oauthRefreshToken") {
       return undefined;
     }
-    const { userId, sessionId, authorizationCodeId } = data;
+    const { userId, sessionId, authorizationCodeId, referenceId } = data;
     if (typeof userId !== "string") {
       return undefined;
     }
@@ -1550,6 +1550,11 @@ export const createAuth = (
       sessionId: typeof sessionId === "string" ? sessionId : null,
       grantId:
         typeof authorizationCodeId === "string" ? authorizationCodeId : null,
+      // An organization-scoped grant names its organization as the reference.
+      organizationId:
+        typeof referenceId === "string"
+          ? brandPersistedOrganizationId(referenceId)
+          : null,
     };
   };
 
