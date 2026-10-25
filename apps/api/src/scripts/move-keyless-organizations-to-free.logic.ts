@@ -63,10 +63,10 @@ export const classifyKeylessOrganizationMoves = async (
 };
 
 export const applyKeylessOrganizationMoves = async (
-  db: Pick<Transaction, "update" | "select">,
-  { now }: { now: Date },
+  db: Pick<Transaction, "update" | "select" | "insert">,
+  options: Parameters<typeof moveKeylessOrganizationsToFree>[1],
 ): Promise<KeylessOrganizationMoveResult[]> =>
-  (await moveKeylessOrganizationsToFree(db, { now })).map((organizationId) => ({
+  (await moveKeylessOrganizationsToFree(db, options)).map((organizationId) => ({
     organizationId,
     outcome: KEYLESS_ORGANIZATION_MOVE_OUTCOME.moved,
   }));

@@ -14,7 +14,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -22,6 +22,7 @@ import { apikey, member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  auditLogs,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   organizationSettings,
@@ -37,6 +38,7 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -231,7 +233,10 @@ describe("moving keyless organizations to the free floor", () => {
 
     const beforeEvaluating = await readState(accessIds.evaluating);
     const beforeEnded = await readState(accessIds.ended);
-    const moved = await moveKeylessOrganizationsToFree(ownerDb(), { now });
+    const moved = await moveKeylessOrganizationsToFree(ownerDb(), {
+      now,
+      actor: "operator:test",
+    });
     const expectedMoved = [
       accessIds.keyless,
       accessIds.personalKey,
@@ -266,8 +271,25 @@ describe("moving keyless organizations to the free floor", () => {
     ).toEqual([{ id: entitlementId }]);
     const movedAgain = await moveKeylessOrganizationsToFree(ownerDb(), {
       now: new Date(now.getTime() + DAY_IN_MS),
+      actor: "operator:test",
     });
     expect(movedAgain).toEqual([]);
+    // One audit event per moved organization, none for a re-run or a kept one.
+    for (const organizationId of [...expectedMoved, accessIds.ownKey]) {
+      const audits = await testDb
+        .select({ resourceId: auditLogs.resourceId })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.organizationId, organizationId),
+            eq(
+              auditLogs.resourceType,
+              AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+            ),
+          ),
+        );
+      expect(audits).toHaveLength(organizationId === accessIds.ownKey ? 0 : 1);
+    }
     if (unrelatedMoved.length > 0) {
       await testDb
         .update(organizationAccessStates)

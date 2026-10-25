@@ -283,7 +283,8 @@ const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
     : "matter";
 
 type AuditActivityCategoryResolver =
-  AuditActivityCategory | ((event: AuditEvent) => AuditActivityCategory);
+  | AuditActivityCategory
+  | ((event: AuditEvent) => AuditActivityCategory);
 
 const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   service_oauth_client: "team",
@@ -348,6 +349,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   mcp_connection: "other",
   mcp_gateway_tool: "other",
   mcp_web_handoff: "other",
+  organization_access_state: "other",
   organization_settings: "other",
   property: "other",
   rate_entry: "other",

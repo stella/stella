@@ -20,6 +20,11 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
@@ -196,11 +201,18 @@ export const recordMissingOrganizationAccessStates = async (
  * its validated plaintext always contains at least one provider, so this path
  * neither needs nor attempts to decrypt it.
  */
+const KEYLESS_MOVE_AUDIT_SOURCE = "keyless-organization-move";
+
+type MoveKeylessOrganizationsOptions = {
+  now: Date;
+  /** The operator recorded on each moved organization's audit event. */
+  actor: string;
+};
+
 export const moveKeylessOrganizationsToFree = async (
-  db: Pick<Transaction, "update" | "select">,
-  { now }: Pick<OrganizationAccessStateChange, "now">,
+  db: Pick<Transaction, "update" | "select" | "insert">,
+  { now, actor }: MoveKeylessOrganizationsOptions,
 ): Promise<SafeId<"organization">[]> => {
-  // audit: skip - organization access-state transitions have no audit helper.
   const moved = await db
     .update(organizationAccessStates)
     .set({
@@ -231,6 +243,28 @@ export const moveKeylessOrganizationsToFree = async (
     )
     .returning({ organizationId: organizationAccessStates.organizationId });
 
+  for (const { organizationId } of moved) {
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      organizationId,
+      workspaceId: null,
+      userId: actor,
+      execution: {
+        performer: { type: "service", id: actor, name: actor },
+        trigger: { type: "system", source: KEYLESS_MOVE_AUDIT_SOURCE },
+      },
+    });
+    await recordAuditEvent(db, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+      resourceId: organizationId,
+      changes: {
+        state: {
+          old: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+          new: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+        },
+      },
+    });
+  }
   return moved.map((row) => row.organizationId);
 };
 
