@@ -19,6 +19,7 @@ export const CI_GENERATED_OUTPUTS = {
     "apps/api/src/mcp/generated/capability-catalog.ts",
     "apps/api/src/mcp/generated/capability-feature-bindings.ts",
   ],
+  cliRegistry: ["apps/api/mcp-connect-tool-weights.json"],
   cliRuntime: [
     "packages/cli/src/generated/route-map.ts",
     "packages/cli/src/generated/tool-annotations.ts",
