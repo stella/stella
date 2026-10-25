@@ -361,7 +361,7 @@ export const createRawChatFilePart = ({
     type: "document",
     source: {
       type: "data",
-      value: Buffer.from(bytes).toString("base64"),
+      value: Buffer.from(bytes).toBase64(),
       mimeType,
     },
     metadata,

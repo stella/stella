@@ -57,7 +57,7 @@ const decodeBase64Der = (value: string): Uint8Array | null => {
   const bytes = Buffer.from(value, "base64");
   // Buffer.from ignores anything it cannot decode, so a round trip is the
   // only way to tell valid base64 from silently truncated input.
-  return bytes.length > 0 && bytes.toString("base64") === value
+  return bytes.length > 0 && bytes.toBase64() === value
     ? new Uint8Array(bytes)
     : null;
 };
@@ -274,7 +274,7 @@ const submitPdfSigningCertificate = createSafeTokenHandler(
               placeholderSize,
               signedAttributes,
               signerCertificateChain: signerChain.map((der) =>
-                Buffer.from(der).toString("base64"),
+                Buffer.from(der).toBase64(),
               ),
               signerCertificateDer: certificate,
               signingTime,

@@ -4,7 +4,7 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
+import type { Context, ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 
 import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
 import { canonicalModuleId } from "./module-id.ts";
@@ -534,6 +534,20 @@ export const resolveVariable = (
     scope = scope.upper;
   }
   return null;
+};
+
+export const isGlobalReference = (
+  context: Context,
+  value: unknown,
+): boolean => {
+  if (!isIdentifierReference(value)) {
+    return false;
+  }
+  if (context.sourceCode.isGlobalReference(value)) {
+    return true;
+  }
+  const variable = resolveVariable(context, value);
+  return variable === null || variable.defs.length === 0;
 };
 
 // Whether a variable is never reassigned after its declaration, so its
