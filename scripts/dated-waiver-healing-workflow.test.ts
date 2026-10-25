@@ -294,9 +294,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   }
 });
 
-// A main run lists only what its commit changed, so a waiver that elapses
-// overnight fails the commit that touches its file, never the next main run.
-test("CI expiry runs on main list the files their commit changed", () => {
+// A run lists the change it carries, so a waiver that elapses overnight fails
+// the change touching its file, never a main run that changed nothing.
+test("CI expiry runs list the files their change touched", () => {
   const ci: unknown = Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -322,48 +322,70 @@ test("CI expiry runs on main list the files their commit changed", () => {
     throw new TypeError("Missing dated waiver change listing");
   }
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-scope-"));
+  const runnerTemp = mkdtempSync(path.join(tmpdir(), "dated-waiver-runner-"));
   try {
     const git = (...args: string[]) => {
       const result = Bun.spawnSync(["git", ...args], { cwd: directory });
       expect(result.exitCode).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const commit = (file: string) => {
+      writeFileSync(path.join(directory, file), `${file}\n`);
+      git("add", file);
+      git("commit", "--quiet", "--message", file);
     };
     git("init", "--quiet", "--initial-branch=main");
     git("config", "user.email", "ci@example.invalid");
     git("config", "user.name", "CI");
-    writeFileSync(path.join(directory, "waivers.ts"), "expiresAt\n");
-    git("add", "waivers.ts");
-    git("commit", "--quiet", "--message", "waiver");
-    writeFileSync(path.join(directory, "unrelated.ts"), "change\n");
-    git("add", "unrelated.ts");
-    git("commit", "--quiet", "--message", "unrelated");
+    commit("readme.md");
+    const before = git("rev-parse", "HEAD");
+    // One push carries the waiver change and then an unrelated commit.
+    commit("waivers.ts");
+    commit("unrelated.ts");
+    git("update-ref", "refs/remotes/origin/main", before);
 
-    for (const event of ["push", "workflow_dispatch", "schedule"]) {
-      const githubEnv = path.join(directory, `${event}.env`);
+    const listed = (event: string, env: Record<string, string> = {}) => {
+      const githubEnv = path.join(runnerTemp, `${event}.env`);
       writeFileSync(githubEnv, "");
-      const listed = Bun.spawnSync(["bash", "-euo", "pipefail", "-c", list], {
+      const run = Bun.spawnSync(["bash", "-euo", "pipefail", "-c", list], {
         cwd: directory,
         env: {
           ...process.env,
           GITHUB_ENV: githubEnv,
           GITHUB_EVENT_NAME: event,
-          RUNNER_TEMP: directory,
+          RUNNER_TEMP: runnerTemp,
           TARGET_REF: "",
+          PUSH_BEFORE: "",
+          ...env,
         },
       });
-      expect(listed.stderr.toString(), event).toBe("");
-      expect(listed.exitCode, event).toBe(0);
-      expect(
-        readFileSync(
-          path.join(directory, "dated-waiver-changed-files"),
-          "utf-8",
-        ),
-        event,
-      ).toBe("unrelated.ts\0");
+      expect(run.stderr.toString(), event).toBe("");
+      expect(run.exitCode, event).toBe(0);
+      const changed = path.join(runnerTemp, "dated-waiver-changed-files");
       expect(readFileSync(githubEnv, "utf-8"), event).toBe(
-        `DATED_WAIVER_CHANGED_FILES=${directory}/dated-waiver-changed-files\n`,
+        `DATED_WAIVER_CHANGED_FILES=${changed}\n`,
       );
+      return readFileSync(changed, "utf-8");
+    };
+
+    expect(listed("push", { PUSH_BEFORE: before })).toBe(
+      "unrelated.ts\0waivers.ts\0",
+    );
+    // A pushed-from commit outside the checkout lists every tracked file.
+    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe(
+      "readme.md\0unrelated.ts\0waivers.ts\0",
+    );
+    expect(listed("pull_request", { TARGET_REF: "main" })).toBe(
+      "unrelated.ts\0waivers.ts\0",
+    );
+    expect(listed("merge_group", { TARGET_REF: "refs/heads/main" })).toBe(
+      "unrelated.ts\0waivers.ts\0",
+    );
+    for (const event of ["schedule", "workflow_dispatch"]) {
+      expect(listed(event), event).toBe("");
     }
   } finally {
     rmSync(directory, { force: true, recursive: true });
+    rmSync(runnerTemp, { force: true, recursive: true });
   }
 });
