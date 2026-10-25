@@ -615,8 +615,11 @@ const singleReturnExpression = (
   if (!body) {
     return undefined;
   }
-  if (!ts.isBlock(body)) {
+  if (ts.isArrowFunction(functionNode) && !ts.isBlock(body)) {
     return body;
+  }
+  if (!ts.isBlock(body)) {
+    return undefined;
   }
   const [statement] = body.statements;
   return body.statements.length === 1 &&
@@ -1102,7 +1105,7 @@ test("every mutation resource declaration agrees with its registered backend rou
       const realtimeSource = readSource(
         localImportFile(realtimeImport.module, handlerPath),
       );
-      const realtimeDeclaration = declarations(realtimeSource).get(
+      const realtimeDeclaration = declarations(realtimeSource).values.get(
         realtimeImport.name,
       );
       if (!realtimeDeclaration || !ts.isCallExpression(realtimeDeclaration)) {
