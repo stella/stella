@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillRevisions, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import { HttpStatusResponse } from "@/api/http/status";
+import { isHttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -64,7 +64,7 @@ type HandlerFailure = { code: number; message: string };
 
 /** The status and message of a handler result, or null when it succeeded. */
 export const handlerFailure = (result: unknown): HandlerFailure | null => {
-  if (!(result instanceof HttpStatusResponse)) {
+  if (!isHttpStatusResponse(result)) {
     return null;
   }
   const response: unknown = result.response;

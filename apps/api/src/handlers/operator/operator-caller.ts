@@ -20,7 +20,7 @@ export const verifyOperatorCaller =
     refusedEvent,
     configuredToken,
   }: VerifyOperatorCallerOptions): VerifyCaller<void> =>
-  async ({ request }) => {
+  ({ request }) => {
     const access = authorizeConfiguredBearer({
       authorizationHeader: request.headers.get("authorization"),
       configuredToken: configuredToken(),

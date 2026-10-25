@@ -7,6 +7,9 @@ export default {
     "packages/errors/src/failure.ts",
     "apps/api/src/lib/observability/failure-evidence.ts",
     "apps/api/src/lib/observability/failure.ts",
+    "apps/api/src/lib/observability/failure-tag-policy.ts",
+    "apps/api/src/lib/observability/failure-tags.gen.ts",
+    "apps/api/src/lib/observability/failure-output-policy.ts",
     "apps/api/src/lib/observability/observe-failure.ts",
     "apps/api/src/lib/observability/failure-shadow.ts",
   ],
@@ -15,9 +18,11 @@ export default {
     "sink, so no sink can drop the cause, the SQLSTATE or the provider " +
     "status another one keeps. A finite reason decides the grade through one " +
     "policy map; boundaries classify what they know through an owned brand " +
-    "rather than a property a foreign error could carry. observeFailure " +
-    "composes the record, owned fields last, and owns severity, capture and " +
-    "the transient metric. The direct-failure-sinks ratchet counts the " +
+    "rather than a property a foreign error could carry. An AST census binds " +
+    "every production TaggedError tag to an explicit baseline policy. " +
+    "The grade decides exception capture, including at legacy sinks; " +
+    "observeFailure composes the record, owned fields last, and owns " +
+    "severity and the transient metric. The direct-failure-sinks ratchet counts the " +
     "emissions still outside it, per file.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

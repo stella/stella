@@ -91,6 +91,26 @@ const failClosedDetector = (name: string, detect: () => unknown) => {
   return true;
 };
 
+// The migration checks share their path predicate with the security workflow
+// detector, so one script decides both.
+const migrationsChanged = (files: readonly string[], root = REPO_ROOT) => {
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      "scripts/detect-security-workflow-changes.sh",
+      "migrations",
+      "--files",
+      ...files,
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  const answer = result.stdout.toString().trim();
+  if (result.exitCode !== 0 || (answer !== TRUE && answer !== FALSE)) {
+    return undefined;
+  }
+  return answer === TRUE;
+};
+
 // A service-suite detector failure cannot prove any suite unaffected.
 const failClosedServiceSuites = (
   files: readonly string[],
@@ -346,7 +366,12 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     legal_atlas_image_required: TRUE,
     legal_atlas_image_pr_required: TRUE,
     dependency_malware_required: TRUE,
+    // The dependency jobs run only for pull requests and merge groups.
+    dependency_changes_required: bool(
+      input.eventName === "pull_request" || input.eventName === "merge_group",
+    ),
     lockfile_ages_required: FALSE,
+    database_migrations_required: TRUE,
     migration_rehearsal_required: TRUE,
     mobile_build_required: TRUE,
     model_catalog_drift_required: TRUE,
@@ -428,7 +453,9 @@ const deriveScopeFacts = (
         legal_atlas_image_required: FALSE,
         legal_atlas_image_pr_required: FALSE,
         dependency_malware_required: FALSE,
+        dependency_changes_required: FALSE,
         lockfile_ages_required: FALSE,
+        database_migrations_required: FALSE,
         migration_rehearsal_required: FALSE,
         mobile_build_required: FALSE,
         model_catalog_drift_required: FALSE,
@@ -672,7 +699,9 @@ export const OUTPUT_ORDER = [
   "legal_atlas_image_required",
   "legal_atlas_image_pr_required",
   "dependency_malware_required",
+  "dependency_changes_required",
   "lockfile_ages_required",
+  "database_migrations_required",
   "migration_rehearsal_required",
   "mobile_build_required",
   "model_catalog_drift_required",
@@ -832,6 +861,40 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "dependency_malware_required", ({ files }) =>
       bool(requiresMalwareScan(files)),
     ),
+  dependency_changes_required: (facts) =>
+    scopeRule(facts, "dependency_changes_required", ({ p }) =>
+      bool(
+        p([
+          "scripts/dependency-audit.ts",
+          "scripts/check-trusted-dependencies.ts",
+          "scripts/retry.sh",
+          "bun.lock",
+          "*/bun.lock",
+          "package.json",
+          "*/package.json",
+          "bunfig.toml",
+          "*/bunfig.toml",
+          "patches/*",
+          ".github/workflows/*",
+          "action.yml",
+          "action.yaml",
+          "*/action.yml",
+          "*/action.yaml",
+          "Cargo.toml",
+          "*/Cargo.toml",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "pyproject.toml",
+          "*/pyproject.toml",
+          "uv.lock",
+          "*/uv.lock",
+          "requirements*.txt",
+          "*/requirements*.txt",
+          "requirements*.in",
+          "*/requirements*.in",
+        ]),
+      ),
+    ),
   lockfile_ages_required: (facts) =>
     scopeRule(facts, "lockfile_ages_required", ({ p }) =>
       bool(
@@ -843,6 +906,14 @@ export const OUTPUT_RULES = {
           "scripts/check-stll-quarantine-excludes.ts",
           "scripts/bun-lock-text.ts",
         ]),
+      ),
+    ),
+  database_migrations_required: (facts) =>
+    scopeRule(facts, "database_migrations_required", ({ files, input }) =>
+      bool(
+        failClosedDetector("migration change", () =>
+          migrationsChanged(files, input.root),
+        ),
       ),
     ),
   migration_rehearsal_required: (facts) =>

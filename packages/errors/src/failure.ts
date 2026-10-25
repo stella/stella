@@ -1,4 +1,4 @@
-// parser-output-unchanged: failure grades classify telemetry; no parser reads this vocabulary.
+// parser-output-unchanged: total failure grading changes telemetry observation policy; no parser reads this vocabulary.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -19,6 +19,8 @@ export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
   upstream_unavailable: "transient",
+  work_capacity_unavailable: "transient",
+  work_deadline_exceeded: "transient",
   provider_unavailable: "transient",
   // The provider's stream stopped before its answer finished: a dropped
   // connection or a provider-side cut, not a fault of this service.
@@ -50,6 +52,8 @@ export const FAILURE_REASON_GRADE = {
   // wrong address.
   upstream_connection_refused: "transient",
   generation_cancelled: "anticipated",
+  work_cancelled: "anticipated",
+  publisher_resource_limit: "anticipated",
   chat_loop_detected: "anticipated",
   chat_empty_completion: "anticipated",
   // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
@@ -57,6 +61,7 @@ export const FAILURE_REASON_GRADE = {
   visual_preview_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
+  publisher_refused: "anticipated",
   model_unavailable: "anticipated",
   // A complete structured answer that does not match the requested schema:
   // the model's choice, which this service rejects rather than stores.
@@ -87,6 +92,7 @@ export const FAILURE_REASON_GRADE = {
   request_malformed: "client",
   method_not_allowed: "client",
   unclassified: "defect",
+  tagged_failure: "defect",
   // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
   // A provider answered 400 to a request this service built and nothing more
   // specific named it: the request broke the provider's contract, which is

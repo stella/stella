@@ -62,9 +62,13 @@ export function status(code: number, response?: unknown) {
   );
 }
 
-// `instanceof` alone narrows to `HttpStatusResponse<any, any>`.
-const isStatusResponse = (value: unknown): value is HttpStatusResponse =>
-  value instanceof HttpStatusResponse;
+/**
+ * Whether a value is a status answer, with its code and body typed: `instanceof`
+ * alone narrows to `HttpStatusResponse<any, any>`.
+ */
+export const isHttpStatusResponse = (
+  value: unknown,
+): value is HttpStatusResponse => value instanceof HttpStatusResponse;
 
 /** The innermost value and effective status of a possibly nested answer. */
 export const unwrapStatus = (
@@ -72,7 +76,7 @@ export const unwrapStatus = (
 ): { value: unknown; code: number | undefined } => {
   let current = value;
   let code: number | undefined;
-  while (isStatusResponse(current)) {
+  while (isHttpStatusResponse(current)) {
     code = current.code;
     current = current.response;
   }

@@ -198,9 +198,7 @@ export const searchHandler = async ({
       updatedFrom: body.updatedFrom,
       updatedTo: body.updatedTo,
       cursor: body.cursor,
-      limit: normalizeTenantPageLimit(
-        body.limit ?? LIMITS.searchPageSizeDefault,
-      ),
+      limit: normalizeTenantPageLimit(body.limit),
     },
     { scopedDb },
   );

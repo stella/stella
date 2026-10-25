@@ -935,6 +935,10 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "desktop-rust-lint",
         "query-perf",
         "scan-engine-wasm-drift",
+        "dependency-audit",
+        "dependency-review",
+        "database-migrations-check",
+        "database-migrations-apply-fresh",
       ]),
     ].toSorted(),
   );

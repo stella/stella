@@ -285,6 +285,7 @@ test("every API code-quality graph task has an explicit budget entry", async () 
   const plan = planCheck({
     changedPaths,
     presentChangedPaths: changedPaths,
+    repositoryPaths: changedPaths,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
   });

@@ -444,6 +444,110 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
   ).toEqual(["true"]);
 });
 
+test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
+  const dependencyInputs = [
+    "scripts/dependency-audit.ts",
+    "scripts/check-trusted-dependencies.ts",
+    "scripts/retry.sh",
+    "bun.lock",
+    "package.json",
+    "apps/web/package.json",
+    "bunfig.toml",
+    "patches/example.patch",
+    "Cargo.lock",
+    "apps/desktop/Cargo.toml",
+    "pyproject.toml",
+    "uv.lock",
+    "requirements.txt",
+    ".github/workflows/ci.yml",
+    ".github/actions/example/action.yml",
+    "action.yml",
+    "action.yaml",
+  ];
+  const cases = [
+    ...dependencyInputs.map((file) => ({ files: [file], expected: "true" })),
+    { files: ["apps/web/src/example.ts"], expected: "false" },
+  ];
+  for (const { item, plan } of planSelector(
+    cases.map(({ files }) => ({
+      files,
+      outputs: ["dependency_changes_required"] as const,
+    })),
+  )) {
+    const expected = cases.find(({ files }) => files[0] === item.files[0]);
+    if (!expected) {
+      throw new TypeError(
+        `Missing dependency selector case: ${String(item.files[0])}`,
+      );
+    }
+    expect(plan, item.files[0]).toEqual([expected.expected]);
+  }
+});
+
+test("wide scopes plan dependency checks only for events that run them", () => {
+  const wide = (eventName: string) =>
+    computeChangedFileScope({
+      changedFiles: [],
+      comparisonBase: "",
+      scopeUnknown: true,
+      eventName,
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    })["dependency_changes_required"];
+  expect(wide("workflow_dispatch")).toBe("false");
+  for (const eventName of ["pull_request", "merge_group"]) {
+    expect(wide(eventName), eventName).toBe("true");
+  }
+});
+
+test("migration checks follow migration inputs and skip unrelated changes", () => {
+  for (const file of [
+    "apps/api/drizzle/0001_example.sql",
+    "apps/api/src/db/schema.ts",
+    "scripts/check-migrations.sh",
+    "docker/postgres/init.sql",
+    ".github/workflows/ci.yml",
+  ]) {
+    expect(runSelector([file], ["database_migrations_required"]), file).toEqual(
+      ["true"],
+    );
+  }
+  expect(
+    runSelector(["apps/web/src/example.ts"], ["database_migrations_required"]),
+  ).toEqual(["false"]);
+});
+
+test("migration detector skips only on a successful explicit false answer", () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "migration-detector-"));
+  mkdirSync(nodePath.join(root, "scripts"));
+  try {
+    for (const { answer, exitCode, expected } of [
+      { answer: "false", exitCode: 0, expected: "false" },
+      { answer: "true", exitCode: 0, expected: "true" },
+      { answer: "false", exitCode: 1, expected: "true" },
+      { answer: "unknown", exitCode: 0, expected: "true" },
+      { answer: "", exitCode: 0, expected: "true" },
+    ]) {
+      writeFileSync(
+        nodePath.join(root, "scripts/detect-security-workflow-changes.sh"),
+        `printf '%s\n' '${answer}'\nexit ${exitCode}\n`,
+      );
+      const scope = computeChangedFileScope({
+        ...detectorInput("pull_request"),
+        changedFiles: ["README.md"],
+        root,
+      });
+      expect(
+        scope["database_migrations_required"],
+        `${answer}/${exitCode}`,
+      ).toBe(expected);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("the lockfile release-age guard follows every tracked lockfile", () => {
   for (const file of [
     "bun.lock",
