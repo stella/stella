@@ -62,19 +62,35 @@ const LEGISLATION_SOURCE_ID = "01990000-00a0-7000-8000-000000000001";
 
 type SeedHandle = Pick<TransactionOf<GatedTestDb>, "execute">;
 
+/** The seeded tables whose guard triggers the fixture's writes skip. */
+const GUARDED_TABLES = [
+  "corpus_index_generations",
+  "corpus_index_projection_states",
+  "corpus_index_projection_intents",
+  "legislation_documents",
+] as const;
+
 /**
  * Writes rows in their final state directly. The projection tables' triggers
  * admit only the projector's own transitions (a revision starts reserved, a
- * state changes under the mutation fence), so the fixture's transaction skips
- * them, as a restore does; the rows written satisfy every table check.
+ * state changes under the mutation fence), so the fixture's transaction turns
+ * the tables' own triggers off around its writes, as a restore does. Foreign
+ * keys and checks still apply; the rows written satisfy all of them.
  */
 const withoutTriggers = async (
   database: GatedTestDb,
   write: (tx: SeedHandle) => Promise<void>,
 ) => {
   await database.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL session_replication_role = replica`);
+    for (const table of GUARDED_TABLES) {
+      // db-await-in-loop: four fixed tables; ALTER TABLE takes one table per statement.
+      await tx.execute(sql.raw(`ALTER TABLE ${table} DISABLE TRIGGER USER`));
+    }
     await write(tx);
+    for (const table of GUARDED_TABLES) {
+      // db-await-in-loop: four fixed tables; ALTER TABLE takes one table per statement.
+      await tx.execute(sql.raw(`ALTER TABLE ${table} ENABLE TRIGGER USER`));
+    }
   });
 };
 
