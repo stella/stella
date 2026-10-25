@@ -39,6 +39,7 @@ export const invoicesRoute = new Elysia({
     query: readInvoices.config.query,
   })
   .get("/prefill", prefillInvoice.handler, {
+    response: prefillInvoice.config.response,
     permissions: prefillInvoice.config.permissions,
     accountAccess: prefillInvoice.config.accountAccess,
     query: prefillInvoice.config.query,

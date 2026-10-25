@@ -1,10 +1,12 @@
 import { Result } from "better-result";
+import { t } from "elysia";
 
 import { accountExportParams } from "@/api/handlers/account-exports/params";
 import { recordAccountExportDownload } from "@/api/lib/account-export/store";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
+  safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
@@ -15,10 +17,14 @@ import {
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 
+// The handler streams a Response; its successful wire body is a file.
+const exportFileResponseSchema = t.Unsafe<Response>(t.File());
+
 const downloadPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
+    response: safeHandlerResponseSchemas(exportFileResponseSchema),
     mcp: { type: "internal", reason: "auth_plumbing" },
     params: accountExportParams,
     contentDelivery: { type: "audited" },

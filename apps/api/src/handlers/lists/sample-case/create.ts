@@ -33,7 +33,11 @@ import {
 } from "@/api/db/schema";
 import type { LegalListSampleCase } from "@/api/db/schema";
 import { taskCreateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeHandler,
+  safeHandlerResponseSchemas,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -116,6 +120,13 @@ const config = {
     reason: "document_processing",
     consumesServices: true,
   },
+  response: safeHandlerResponseSchemas(
+    t.Object({
+      listId: t.String(),
+      documentEntityId: t.String(),
+      fileFieldId: t.String(),
+    }),
+  ),
   body: t.Object({
     /** Name for the matter's file property if it has none yet (localized). */
     filePropertyName: tDefaultVarchar,

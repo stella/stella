@@ -12,6 +12,7 @@ test("favicon bytes require an authenticated chat principal", async () => {
     .use(permissionMacro)
     .guard({ validateAuth: true })
     .get("/chat/link-icons/:hostname", getLinkIcon.handler, {
+      response: getLinkIcon.config.response,
       params: getLinkIcon.config.params,
       permissions: getLinkIcon.config.permissions,
     });

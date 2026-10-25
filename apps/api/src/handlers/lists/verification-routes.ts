@@ -68,6 +68,7 @@ export const createListVerificationRoutes = (
       accountAccess: deleteClaimComment.config.accountAccess,
     })
     .post("/sample-case", createSampleCase.handler, {
+      response: createSampleCase.config.response,
       body: createSampleCase.config.body,
       permissions: createSampleCase.config.permissions,
       accountAccess: createSampleCase.config.accountAccess,

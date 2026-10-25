@@ -52,6 +52,7 @@ export const memoriesRoute = new Elysia({
     accountAccess: updateMemory.config.accountAccess,
   })
   .delete("/:memoryId", deleteMemory.handler, {
+    response: deleteMemory.config.response,
     params: deleteMemory.config.params,
     permissions: deleteMemory.config.permissions,
     accountAccess: deleteMemory.config.accountAccess,

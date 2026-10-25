@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeTokenHandler,
+  safeHandlerResponseSchemas,
+} from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { acknowledgeFolioCollabSeed } from "@/api/lib/folio-collab-rooms";
@@ -17,6 +21,7 @@ const config = {
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
+  response: safeHandlerResponseSchemas(t.Object({ generation: t.Number() })),
   body: permissiveBodySchema({
     keys: ["roomId", "token", "snapshotSha256Hex"],
   }),

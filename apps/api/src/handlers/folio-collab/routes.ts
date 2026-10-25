@@ -23,6 +23,7 @@ export const folioCollabRoute = new Elysia({
     body: loadFolioCollabSnapshotHandler.config.body,
   })
   .post("/snapshot/seed", acknowledgeFolioCollabSeed.handler, {
+    response: acknowledgeFolioCollabSeed.config.response,
     body: acknowledgeFolioCollabSeed.config.body,
   })
   .post("/snapshot/store", storeFolioCollabSnapshotHandler.handler, {

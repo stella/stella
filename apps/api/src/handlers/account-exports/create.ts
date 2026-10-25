@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { accountExportStatusSchema } from "@/api/handlers/account-exports/response";
 import { enqueueAccountExport } from "@/api/lib/account-export/enqueue";
 import {
   accountExportStatus,
@@ -8,6 +9,7 @@ import {
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
+  safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -22,6 +24,7 @@ const requestPersonalDataExport = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
+    response: safeHandlerResponseSchemas(accountExportStatusSchema),
     access: "write",
     mcp: { type: "internal", reason: "auth_plumbing" },
   },

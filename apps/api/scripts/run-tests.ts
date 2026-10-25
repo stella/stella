@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import {
   mkdtempSync,
   readdirSync,
@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
 
+import { RESPONSE_CONFORMANCE_BATCH_DIRECTORY } from "../src/tests/helpers/response-conformance-execution-collector";
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
 import {
@@ -24,6 +25,10 @@ import {
   batchMemoryVerdict,
   maxRssBytesToMb,
 } from "./resource-usage";
+import {
+  readSuccessfulResponseConformanceBatch,
+  writeResponseConformanceExecutionReport,
+} from "./response-conformance-execution-report";
 import {
   measuredTestRssTable,
   parseRssMeasurementArguments,
@@ -176,6 +181,10 @@ const printError = (text: string) => {
   process.stderr.write(`${text}\n`);
 };
 
+const testArtifactDirectory =
+  process.env["API_TEST_ARTIFACT_DIR"] ??
+  mkdtempSync(path.join(tmpdir(), "stella-api-test-diagnostics-"));
+
 const processSupervisor = new TestProcessSupervisor({
   // The dedicated memory workflow allows two hours for a serial per-file
   // sweep; nightly jobs declare budgets explicitly, while PR defaults stay bounded.
@@ -183,9 +192,7 @@ const processSupervisor = new TestProcessSupervisor({
     process.env,
     rssMode.mode === "measure-rss" ? 110 * 60_000 : undefined,
   ),
-  directory:
-    process.env["API_TEST_ARTIFACT_DIR"] ??
-    mkdtempSync(path.join(tmpdir(), "stella-api-test-diagnostics-")),
+  directory: testArtifactDirectory,
   onProgress: print,
   onDiagnostic: printError,
   onStdout: (text) => {
@@ -454,6 +461,23 @@ const measurePreloadBaseline = async () => {
 const baselineMb =
   rssMode.mode === "measure-rss" ? await measurePreloadBaseline() : 0;
 
+// Full runs (including nightly shards) report runtime execution separately.
+// Explicitly selected PR/test runs keep their existing selection and cost.
+const fullConformanceSelection =
+  selectedTestPaths === null &&
+  !process.env["API_TEST_FILES"] &&
+  !propertyOnly &&
+  rssMode.mode === "batched" &&
+  bunArguments.length === 0;
+const responseConformanceReportPath =
+  process.env["RESPONSE_CONFORMANCE_REPORT"] ??
+  (fullConformanceSelection
+    ? path.join(testArtifactDirectory, "response-conformance-execution.json")
+    : undefined);
+const successfulConformanceBatches: ReturnType<
+  typeof readSuccessfulResponseConformanceBatch
+>[] = [];
+
 type RunTestsOptions = {
   batch: PlannedTestBatch;
   log: BatchLog;
@@ -477,24 +501,72 @@ const runTests = async ({
     testArguments.push("--isolate");
   }
   testArguments.push(...bunArguments);
+  const preparedConformanceDirectory = Result.try(() =>
+    responseConformanceReportPath === undefined
+      ? undefined
+      : mkdtempSync(path.join(tmpdir(), "response-conformance-batch-")),
+  );
+  if (Result.isError(preparedConformanceDirectory)) {
+    log.err(
+      `Could not prepare response conformance report: ${preparedConformanceDirectory.error.message}`,
+    );
+  }
+  const conformanceDirectory = preparedConformanceDirectory.isOk()
+    ? preparedConformanceDirectory.value
+    : undefined;
   const startedAt = performance.now();
-  const { exitCode, usage, output } = await processSupervisor.run({
-    command: (junitPath) =>
-      buildApiTestCommand({
-        bunExecutable: process.execPath,
-        bunRuntimeArguments: ["--smol"],
-        testArguments: [
-          ...testArguments,
-          "--reporter=junit",
-          `--reporter-outfile=${junitPath}`,
-        ],
-        testFiles,
-      }),
-    cwd: apiRoot,
-    env: testProcessEnv,
-    identity: { kind: "batch", label, files: testFiles, lane },
-    mode: bufferBatchOutput ? "buffered" : "stream",
-  });
+  const { exitCode, usage, output } = await processSupervisor
+    .run({
+      command: (junitPath) =>
+        buildApiTestCommand({
+          bunExecutable: process.execPath,
+          bunRuntimeArguments: ["--smol"],
+          testArguments: [
+            ...testArguments,
+            "--reporter=junit",
+            `--reporter-outfile=${junitPath}`,
+          ],
+          testFiles,
+        }),
+      cwd: apiRoot,
+      env: {
+        ...testProcessEnv,
+        [RESPONSE_CONFORMANCE_BATCH_DIRECTORY]: conformanceDirectory,
+      },
+      identity: { kind: "batch", label, files: testFiles, lane },
+      mode: bufferBatchOutput ? "buffered" : "stream",
+    })
+    .then((result) => {
+      if (conformanceDirectory !== undefined && result.exitCode === 0) {
+        const collected = Result.try(() =>
+          readSuccessfulResponseConformanceBatch(conformanceDirectory, {
+            label,
+            testFiles,
+          }),
+        );
+        if (collected.isOk()) {
+          successfulConformanceBatches.push(collected.value);
+        } else {
+          log.err(
+            `Could not collect response conformance report: ${collected.error.message}`,
+          );
+        }
+      }
+      return result;
+    })
+    .finally(() => {
+      if (conformanceDirectory === undefined) {
+        return;
+      }
+      const removed = Result.try(() =>
+        rmSync(conformanceDirectory, { recursive: true, force: true }),
+      );
+      if (removed.isErr()) {
+        log.err(
+          `Could not remove response conformance journal: ${removed.error.message}`,
+        );
+      }
+    });
   if (bufferBatchOutput) {
     log.out(output);
   }
@@ -636,6 +708,28 @@ if (rssMode.mode === "measure-rss") {
   print(
     `Wrote ${measurements.length} per-file peak RSS measurements to ${rssMode.outputPath}`,
   );
+}
+if (responseConformanceReportPath !== undefined) {
+  const report = Result.try(() =>
+    writeResponseConformanceExecutionReport({
+      outputPath: responseConformanceReportPath,
+      successfulBatches: successfulConformanceBatches,
+      plannedBatches: plannedBatches.length,
+      complete:
+        laneRunExitCode(outcomes) === 0 &&
+        successfulConformanceBatches.length === plannedBatches.length,
+      sourceRevision: process.env["GITHUB_SHA"],
+    }),
+  );
+  if (report.isOk()) {
+    print(
+      `Runtime response conformance ${JSON.stringify(report.value)}; report: ${responseConformanceReportPath}`,
+    );
+  } else {
+    printError(
+      `Could not write runtime response conformance report: ${report.error.message}`,
+    );
+  }
 }
 processSupervisor.dispose();
 process.exitCode = laneRunExitCode(outcomes);

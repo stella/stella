@@ -11,6 +11,7 @@ import {
   expenses,
   timeEntries,
 } from "@/api/db/schema";
+import { invoicePrefillResponseSchema } from "@/api/handlers/invoices/prefill-response";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveInvoicePrefill } from "@/api/lib/billing/invoice-prefill";
@@ -64,6 +65,7 @@ const prefillInvoice = createSafeHandler(
       consumesServices: false,
     },
     access: "read",
+    response: invoicePrefillResponseSchema,
     query: t.Object({
       sellerProfileId: t.Optional(tSafeId("sellerProfile")),
     }),

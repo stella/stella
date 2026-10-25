@@ -16,7 +16,7 @@ import {
 import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
-import { listMcpTools } from "@/api/mcp/tools";
+import { handleMcpToolCall, listMcpTools } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
@@ -386,4 +386,49 @@ describe("matter membership and organization settings", () => {
       ),
     ).toContain("document_processing_mode");
   });
+});
+
+test("member dispatch requires an accessible matter and settings reject empty updates", async () => {
+  const add = await handleMcpToolCall({
+    mode: "advanced",
+    toolName: "add_matter_member",
+    args: { matter_id: WORKSPACE_ID },
+    context: createContext(),
+  });
+  expect(add.isError).toBe(true);
+  expect(JSON.stringify(add.content)).toContain(
+    "There is no matter to work in yet",
+  );
+
+  const advancedRemoval = await handleMcpToolCall({
+    mode: "advanced",
+    toolName: "remove_matter_member",
+    args: { matter_id: WORKSPACE_ID, confirm: true },
+    context: createContext(),
+  });
+  expect(advancedRemoval.isError).toBe(true);
+  expect(JSON.stringify(advancedRemoval.content)).toContain(
+    "There is no matter to work in yet",
+  );
+
+  const defaultRemoval = await handleMcpToolCall({
+    toolName: "remove_matter_member",
+    args: { matter_id: WORKSPACE_ID, confirm: true },
+    context: createContext(),
+  });
+  expect(defaultRemoval.isError).toBe(true);
+  expect(JSON.stringify(defaultRemoval.content)).toContain(
+    "There is no matter to work in yet",
+  );
+
+  const settings = await handleMcpToolCall({
+    mode: "advanced",
+    toolName: "update_organization_settings",
+    args: {},
+    context: createContext(),
+  });
+  expect(settings.isError).toBe(true);
+  expect(JSON.stringify(settings.content)).toContain(
+    "Provide at least one setting to change",
+  );
 });

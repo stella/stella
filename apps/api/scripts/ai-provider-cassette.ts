@@ -98,17 +98,11 @@ const canonicalRequest = async ({
   apiKey,
 }: CanonicalRequestOptions): Promise<CassetteEntry["request"]> => {
   const request =
-    input instanceof Request
-      ? input.clone()
-      : new Request(input.toString(), init);
+    input instanceof Request ? input : new Request(input.toString(), init);
   const method = init?.method ?? request.method;
   const headers = new Headers(
     init?.headers ?? Object.fromEntries(request.headers.entries()),
   );
-  const bodyText =
-    init?.body === undefined
-      ? await request.text()
-      : await new Response(init.body).text();
   const url = new URL(request.url);
   if (permittedOrigins !== undefined && !permittedOrigins.has(url.origin)) {
     fail("request origin is not permitted");
@@ -126,6 +120,21 @@ const canonicalRequest = async ({
     contentTypeBase(headers.get("content-type") ?? "") !== "application/json"
   ) {
     fail("only JSON requests can be recorded or replayed");
+  }
+  const ownedClone =
+    init?.body === undefined && input instanceof Request
+      ? input.clone()
+      : undefined;
+  let bodyText: string;
+  try {
+    bodyText =
+      init?.body === undefined
+        ? await (ownedClone ?? request).text()
+        : await new Response(init.body).text();
+  } finally {
+    // The upstream request has not read its branch yet.
+    // swallow-ok: cancellation cleanup must not replace the recording failure
+    void ownedClone?.body?.cancel().catch(() => undefined);
   }
   let body: StableStringifyInput;
   try {

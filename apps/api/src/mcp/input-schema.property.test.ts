@@ -13,11 +13,11 @@ import { isRecord } from "@/api/lib/type-guards";
 import { normalizeObjectInputAtBoundary } from "@/api/mcp/input-normalization";
 import { plainRecord } from "@/api/mcp/input-schemas";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { schemaComparisonArbitrary } from "@/api/tests/helpers/wire-json-schema";
 import {
   compileWireSchema,
   createWireSchemaValidator,
-  schemaComparisonArbitrary,
-} from "@/api/tests/helpers/wire-json-schema";
+} from "@/api/tests/helpers/wire-json-schema-validator";
 
 describe("MCP input contracts", () => {
   const validator = createWireSchemaValidator();

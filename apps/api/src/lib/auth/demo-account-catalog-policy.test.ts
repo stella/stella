@@ -300,6 +300,7 @@ describe("handler account policy census", () => {
           safeDb: NO_DB,
           scopedDb: NO_DB,
           user: { email: "account@example.test" },
+          route: endpoint.id,
         });
         // Feature-gated operations admit the enrolled caller, so the account
         // check is what refuses them.

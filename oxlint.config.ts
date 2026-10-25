@@ -2904,6 +2904,18 @@ const config = defineConfig({
           {
             approvedAdapters: [
               {
+                path: "apps/api/src/handlers/account-exports/download.ts",
+                binding: "exportFileResponseSchema",
+                reason:
+                  "The handler streams a Response without buffering; the preserved Elysia File schema validates its binary wire representation.",
+              },
+              {
+                path: "apps/api/src/handlers/chat/link-icons/get.ts",
+                binding: "iconFileResponseSchema",
+                reason:
+                  "The handler returns a Blob; the preserved Elysia File schema validates its binary wire representation beside JSON fallback variants.",
+              },
+              {
                 path: "apps/api/src/handlers/desktop-time-entries/batch.ts",
                 binding: "responseSchema",
                 reason:

@@ -14,15 +14,19 @@ export const accountExportsRoute = new Elysia({ prefix: "/me" }).group(
       .guard({ validateSession: true })
       .get("/", latestPersonalDataExport.handler, {
         accountAccess: latestPersonalDataExport.config.accountAccess,
+        response: latestPersonalDataExport.config.response,
       })
       .post("/", requestPersonalDataExport.handler, {
         accountAccess: requestPersonalDataExport.config.accountAccess,
+        response: requestPersonalDataExport.config.response,
       })
       .get("/:exportId", personalDataExportStatus.handler, {
+        response: personalDataExportStatus.config.response,
         params: personalDataExportStatus.config.params,
         accountAccess: personalDataExportStatus.config.accountAccess,
       })
       .get("/:exportId/download", downloadPersonalDataExport.handler, {
+        response: downloadPersonalDataExport.config.response,
         params: downloadPersonalDataExport.config.params,
         accountAccess: downloadPersonalDataExport.config.accountAccess,
       }),

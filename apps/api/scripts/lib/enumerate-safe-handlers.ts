@@ -177,6 +177,7 @@ export type CollectedEndpoint = {
   /** `undefined` for the default export, the export name otherwise. */
   exportName: string | undefined;
   config: Record<string, unknown>;
+  handler: unknown;
   exposure: ParsedExposure;
 };
 
@@ -201,6 +202,7 @@ const collectModuleEndpoints = (
       id: moduleId,
       exportName: undefined,
       config: defaultExport.config,
+      handler: defaultExport.handler,
       exposure: parseExposure(defaultExport.config["mcp"]),
     });
   }
@@ -214,6 +216,7 @@ const collectModuleEndpoints = (
       id: `${moduleId}#${key}`,
       exportName: key,
       config: value.config,
+      handler: value.handler,
       exposure: parseExposure(value.config["mcp"]),
     });
   }

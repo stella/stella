@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { accountExportParams } from "@/api/handlers/account-exports/params";
+import { accountExportStatusSchema } from "@/api/handlers/account-exports/response";
 import {
   accountExportStatus,
   readAccountExport,
@@ -8,6 +9,7 @@ import {
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
+  safeHandlerResponseSchemas,
 } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -15,6 +17,7 @@ const personalDataExportStatus = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
+    response: safeHandlerResponseSchemas(accountExportStatusSchema),
     access: "read",
     mcp: { type: "internal", reason: "auth_plumbing" },
     params: accountExportParams,

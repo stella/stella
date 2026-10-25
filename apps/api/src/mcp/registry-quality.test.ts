@@ -57,11 +57,11 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { schemaComparisonArbitrary } from "@/api/tests/helpers/wire-json-schema";
 import {
   compileWireSchema,
   createWireSchemaValidator,
-  schemaComparisonArbitrary,
-} from "@/api/tests/helpers/wire-json-schema";
+} from "@/api/tests/helpers/wire-json-schema-validator";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import {

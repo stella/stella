@@ -42,6 +42,7 @@ import { WorkRefusal } from "@/api/lib/load/work-admission";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -512,8 +513,8 @@ describe("createSafeRootHandler usage preflight", () => {
   });
 });
 
-const createContext = (
-  endpoint: ReturnType<typeof createSafeRootHandler>,
+const createContext = <TContext>(
+  _endpoint: { handler: (context: TContext) => unknown },
   safeDb: SafeDb,
   {
     orgAIConfig = null,
@@ -524,8 +525,8 @@ const createContext = (
     orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
-): Parameters<typeof endpoint.handler>[0] =>
-  ({
+) =>
+  createTestHandlerContext<TContext>({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
     set: { headers: {} },
@@ -549,10 +550,9 @@ const createContext = (
     orgAIConfigStatus,
     managedAIResidency: "eu",
     promptCachingEnabled: false,
-    recordAuditEvent: noopAuditRecorder,
+    audit: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
-  }) as unknown as Parameters<typeof endpoint.handler>[0];
+  });
 
 const createOrgAIConfig = (): OrgAIConfig => ({
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
