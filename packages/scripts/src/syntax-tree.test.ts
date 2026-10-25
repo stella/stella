@@ -1,0 +1,41 @@
+import { expect, test } from "bun:test";
+
+import { parseSource, Visitor } from "./syntax-tree";
+
+test("locates nodes by UTF-16 offset across non-ASCII lines", () => {
+  const source = 'const ž = "čšř😀";\n\n  export const b = 1;\n';
+  const parsed = parseSource("fixture.ts", source);
+  const names: string[] = [];
+  new Visitor({
+    VariableDeclarator(node) {
+      if (node.id.type === "Identifier") {
+        names.push(node.id.name);
+        expect(parsed.locate(node.id.start)).toEqual(
+          node.id.name === "b"
+            ? { column: 16, line: 3 }
+            : { column: 7, line: 1 },
+        );
+      }
+    },
+  }).visit(parsed.program);
+  expect(names).toEqual(["ž", "b"]);
+  expect(parsed.locate(source.length)).toEqual({ column: 1, line: 4 });
+});
+
+test("parses TypeScript-only syntax and keeps comments", () => {
+  const parsed = parseSource(
+    "fixture.tsx",
+    "// lead\nconst t = { a: 'x' } satisfies object;\nexport const C = <div>{t.a}</div>; /* tail */\n",
+  );
+  expect(parsed.comments.map(({ value }) => value.trim())).toEqual([
+    "lead",
+    "tail",
+  ]);
+  expect(parsed.module.staticExports).toHaveLength(1);
+});
+
+test("refuses a file that does not parse", () => {
+  expect(() => parseSource("broken.ts", "const = ;")).toThrow(
+    "broken.ts does not parse",
+  );
+});
