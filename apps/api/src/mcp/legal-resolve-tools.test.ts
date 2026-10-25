@@ -9,9 +9,9 @@ import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import type { McpRequestContext } from "./context";
 import { hasGrantedScope } from "./gateway/static-tool-visibility";
 import { normalizeObjectInputAtBoundary } from "./input-normalization";
 import {
@@ -33,9 +33,11 @@ if (Result.isError(admitted)) {
   panic("expected fixture admission");
 }
 const contextWith = (
-  testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
+  testDependencies: NonNullable<
+    AuthorizedMcpRequestContext["testDependencies"]
+  >,
 ) =>
-  asTestRaw<McpRequestContext>({
+  asTestRaw<AuthorizedMcpRequestContext>({
     organizationId,
     testDependencies: {
       admitLawRead: () => admitted,

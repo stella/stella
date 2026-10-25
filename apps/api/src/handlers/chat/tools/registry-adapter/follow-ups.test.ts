@@ -12,7 +12,8 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
@@ -40,24 +41,26 @@ const FIELD_UUID = "33333333-3333-4333-8333-333333333333";
 const TE_UUID = "55555555-5555-4555-8555-555555555555";
 const INV_UUID = "66666666-6666-4666-8666-666666666666";
 
-const buildContext = (tx: unknown): McpRequestContext => {
+const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock(tx);
-  return buildMcpContextFromChat({
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
-      organizationId: "org_1",
-      userId: "user_1",
+  return authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId: "org_1",
+        userId: "user_1",
+      }),
+      memberRole: sessionMemberRole("owner"),
+      organizationId: toSafeId<"organization">("org_1"),
+      safeDb,
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
+        pinnedIds: [],
+      }),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
     }),
-    memberRole: sessionMemberRole("owner"),
-    organizationId: toSafeId<"organization">("org_1"),
-    safeDb,
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
-      pinnedIds: [],
-    }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  );
 };
 
 const chainable = (rows: readonly unknown[]) => {

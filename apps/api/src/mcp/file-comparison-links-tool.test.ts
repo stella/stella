@@ -7,9 +7,9 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { toSafeId } from "@/api/lib/branded-types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handlePrepareFileComparisonFromLinksTool } from "@/api/mcp/file-comparison-links-tool";
 import type { PrepareFileComparisonFromLinksDependencies } from "@/api/mcp/file-comparison-links-tool";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -77,7 +77,7 @@ const createHarness = ({
     }),
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set<string>(),
     accessibleWorkspaceStatusById: new Map(),

@@ -93,8 +93,8 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -1299,7 +1299,7 @@ const resolveTaskWorkspace = async ({
   context,
   taskId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
 }): Promise<ResolvedTask> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -1388,7 +1388,7 @@ const readTaskDetail = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }) => {
@@ -1780,7 +1780,7 @@ const validateLinkTarget = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   linkEntityId: string;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1842,7 +1842,7 @@ const validateUnlinkTarget = async ({
   unlinkLinkId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
   unlinkLinkId: string;
   workspaceId: SafeId<"workspace">;
@@ -1894,7 +1894,7 @@ const validateSaveTaskTargets = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   input: v.InferOutput<typeof saveTaskArgsSchema>;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -2286,7 +2286,7 @@ const resolveUnlinkWorkspaceContactId = async ({
   workspaceId,
 }: {
   contactId: string | undefined;
-  context: McpRequestContext;
+  context: McpRequestResources;
   workspaceContactId: string | undefined;
   workspaceId: SafeId<"workspace">;
 }): Promise<SafeId<"workspaceContact"> | ReturnType<typeof errorResult>> => {
@@ -2472,6 +2472,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "excluded",
@@ -2561,6 +2562,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
@@ -2603,6 +2605,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
@@ -2625,6 +2628,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
