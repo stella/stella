@@ -9,7 +9,8 @@
 
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 /** The one module allowed to resolve the client address. */
@@ -25,38 +26,44 @@ const ALLOWED: Readonly<Record<string, string>> = {
 type RawRead = { kind: "request-ip" | "forwarded-for"; line: number };
 
 const findRawReads = (file: string, source: string): RawRead[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSource(file, source);
   const reads: RawRead[] = [];
-  const lineOf = (node: ts.Node): number =>
-    sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-  const visit = (node: ts.Node): void => {
-    // `server.requestIP(...)`, `server?.requestIP`, `server["requestIP"]`, or
-    // a destructured `{ requestIP }`; type members only describe the shape.
-    if (
-      (ts.isPropertyAccessExpression(node) && node.name.text === "requestIP") ||
-      (ts.isElementAccessExpression(node) &&
-        ts.isStringLiteralLike(node.argumentExpression) &&
-        node.argumentExpression.text === "requestIP") ||
-      (ts.isBindingElement(node) &&
-        (node.propertyName ?? node.name).getText(sourceFile) === "requestIP")
-    ) {
-      reads.push({ kind: "request-ip", line: lineOf(node) });
+  walk(sourceFile.program, (node, ancestors) => {
+    let literal: string | null | undefined;
+    if (node.type === "Literal" && typeof node.value === "string") {
+      literal = node.value;
     }
-    if (
-      ts.isStringLiteralLike(node) &&
-      node.text.trim().toLowerCase() === FORWARDED_FOR
-    ) {
-      reads.push({ kind: "forwarded-for", line: lineOf(node) });
+    if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+      literal = node.quasis.at(0)?.value.cooked;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    const parent = ancestors.at(-1);
+    if (
+      (node.type === "MemberExpression" &&
+        ((!node.computed &&
+          node.property.type === "Identifier" &&
+          node.property.name === "requestIP") ||
+          (node.computed &&
+            ((node.property.type === "Literal" &&
+              node.property.value === "requestIP") ||
+              (node.property.type === "TemplateLiteral" &&
+                node.property.expressions.length === 0 &&
+                node.property.quasis.at(0)?.value.cooked === "requestIP"))))) ||
+      (node.type === "Property" &&
+        parent?.type === "ObjectPattern" &&
+        source.slice(node.key.start, node.key.end) === "requestIP")
+    ) {
+      reads.push({
+        kind: "request-ip",
+        line: sourceFile.locate(node.start).line,
+      });
+    }
+    if (literal?.trim().toLowerCase() === FORWARDED_FOR) {
+      reads.push({
+        kind: "forwarded-for",
+        line: sourceFile.locate(node.start).line,
+      });
+    }
+  });
   return reads;
 };
 
@@ -89,46 +96,41 @@ const findDirectSecretComparisons = (
   file: string,
   source: string,
 ): number[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const namesSecret = (node: ts.Node): boolean =>
-    /(?:presented|secrets?)\b/iu.test(node.getText(sourceFile));
+  const sourceFile = parseSource(file, source);
+  const namesSecret = (node: Node): boolean =>
+    /(?:presented|secrets?)\b/iu.test(source.slice(node.start, node.end));
   const lines: number[] = [];
-  const visit = (node: ts.Node): void => {
+  walk(sourceFile.program, (node) => {
     const equality =
-      ts.isBinaryExpression(node) &&
-      [
-        ts.SyntaxKind.EqualsEqualsEqualsToken,
-        ts.SyntaxKind.ExclamationEqualsEqualsToken,
-        ts.SyntaxKind.EqualsEqualsToken,
-        ts.SyntaxKind.ExclamationEqualsToken,
-      ].includes(node.operatorToken.kind) &&
+      node.type === "BinaryExpression" &&
+      ["===", "!==", "==", "!="].includes(node.operator) &&
       [node.left, node.right].every(
         (side) =>
-          side.kind !== ts.SyntaxKind.NullKeyword &&
-          !ts.isNumericLiteral(side) &&
-          !(ts.isPropertyAccessExpression(side) && side.name.text === "length"),
+          !(
+            side.type === "Literal" &&
+            (side.value === null || typeof side.value === "number")
+          ) &&
+          !(
+            side.type === "MemberExpression" &&
+            !side.computed &&
+            side.property.type === "Identifier" &&
+            side.property.name === "length"
+          ),
       ) &&
       (namesSecret(node.left) || namesSecret(node.right));
     const membership =
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ["includes", "indexOf"].includes(node.expression.name.text) &&
-      ((ts.isIdentifier(node.expression.expression) &&
-        namesSecret(node.expression.expression)) ||
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier" &&
+      ["includes", "indexOf"].includes(node.callee.property.name) &&
+      ((node.callee.object.type === "Identifier" &&
+        namesSecret(node.callee.object)) ||
         node.arguments.some(namesSecret));
     if (equality || membership) {
-      lines.push(
-        sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-      );
+      lines.push(sourceFile.locate(node.start).line);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return [...new Set(lines)];
 };
 

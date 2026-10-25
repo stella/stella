@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  type Node,
+  type ObjectExpression,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 
@@ -41,45 +46,45 @@ const readSource = (file: string): string =>
  * (`caseNumber: true`), a column type tag (`caseNumber: "text"`), or the
  * column itself in a select (`caseNumber: caseLawDecisions.caseNumber`).
  */
-const namesColumn = (initializer: ts.Expression): boolean =>
-  initializer.kind === ts.SyntaxKind.TrueKeyword ||
-  ts.isStringLiteral(initializer) ||
-  (ts.isPropertyAccessExpression(initializer) &&
-    ts.isIdentifier(initializer.expression) &&
-    initializer.expression.text === "caseLawDecisions");
+const namesColumn = (initializer: Node): boolean =>
+  (initializer.type === "Literal" &&
+    (initializer.value === true || typeof initializer.value === "string")) ||
+  (initializer.type === "MemberExpression" &&
+    !initializer.computed &&
+    initializer.object.type === "Identifier" &&
+    initializer.object.name === "caseLawDecisions");
 
 /** The properties a literal assigns a value to. */
-const writtenPropertyNames = (
-  literal: ts.ObjectLiteralExpression,
-): Set<string> =>
+const writtenPropertyNames = (literal: ObjectExpression): Set<string> =>
   new Set(
     literal.properties.flatMap((property) => {
-      if (ts.isShorthandPropertyAssignment(property)) {
-        return [property.name.text];
+      if (
+        property.type !== "Property" ||
+        property.kind !== "init" ||
+        property.method ||
+        property.computed ||
+        property.key.type !== "Identifier"
+      ) {
+        return [];
       }
-      return ts.isPropertyAssignment(property) &&
-        ts.isIdentifier(property.name) &&
-        !namesColumn(property.initializer)
-        ? [property.name.text]
+      return property.shorthand || !namesColumn(property.value)
+        ? [property.key.name]
         : [];
     }),
   );
 
 /** Object literals that state a decision's reference with its citation key. */
 const referenceLiterals = (file: string, text: string): string[] => {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const source = parseSource(file, text);
   const found: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isObjectLiteralExpression(node)) {
+  walk(source.program, (node) => {
+    if (node.type === "ObjectExpression") {
       const names = writtenPropertyNames(node);
       if (names.has("caseNumber") && names.has("citationKey")) {
-        const { line } = source.getLineAndCharacterOfPosition(node.getStart());
-        found.push(`${file}:${String(line + 1)}`);
+        found.push(`${file}:${String(source.locate(node.start).line)}`);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return found;
 };
 

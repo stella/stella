@@ -12,7 +12,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type Node,
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import type { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
@@ -117,68 +123,61 @@ const sourceFiles = (): string[] =>
     )
     .toSorted();
 
-const parse = (file: string): ts.SourceFile =>
-  ts.createSourceFile(
-    file,
-    readFileSync(path.join(API_ROOT, file), "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+const parse = (file: string) =>
+  parseSource(file, readFileSync(path.join(API_ROOT, file), "utf-8"));
 
-const walk = (node: ts.Node, visit: (node: ts.Node) => void) => {
-  visit(node);
-  ts.forEachChild(node, (child) => walk(child, visit));
-};
-
-const typeQueryName = (type: ts.TypeNode | undefined): string | null =>
-  type !== undefined &&
-  ts.isTypeQueryNode(type) &&
-  ts.isIdentifier(type.exprName)
-    ? type.exprName.text
+const typeQueryName = (type: Node | null | undefined): string | null =>
+  type?.type === "TSTypeAnnotation" &&
+  type.typeAnnotation.type === "TSTypeQuery" &&
+  type.typeAnnotation.exprName.type === "Identifier"
+    ? type.typeAnnotation.exprName.name
     : null;
 
-const nameText = (name: ts.Node): string | null =>
-  ts.isIdentifier(name) ? name.text : null;
-
 /** Names under which a module holds a writer: injected, defaulted, re-exported. */
-const writerAliases = (source: ts.SourceFile): Map<string, boolean> => {
+const writerAliases = (source: ParsedSource): Map<string, boolean> => {
   const aliases = new Map<string, boolean>();
-  walk(source, (node) => {
+  walk(source.program, (node, ancestors) => {
     let alias: string | null = null;
     let target: string | null = null;
+    const parent = ancestors.at(-1);
     if (
-      ts.isParameter(node) ||
-      ts.isPropertySignature(node) ||
-      ts.isPropertyDeclaration(node) ||
-      ts.isVariableDeclaration(node)
+      node.type === "Identifier" &&
+      parent !== undefined &&
+      (parent.type === "FunctionDeclaration" ||
+        parent.type === "FunctionExpression" ||
+        parent.type === "ArrowFunctionExpression") &&
+      parent.params.includes(node)
     ) {
-      alias = nameText(node.name);
-      target = typeQueryName(node.type);
-      if (
-        target === null &&
-        ts.isVariableDeclaration(node) &&
-        node.initializer !== undefined &&
-        ts.isIdentifier(node.initializer)
-      ) {
-        target = node.initializer.text;
+      alias = node.name;
+      target = typeQueryName(node.typeAnnotation);
+    }
+    if (
+      node.type === "TSPropertySignature" ||
+      node.type === "PropertyDefinition"
+    ) {
+      alias = node.key.type === "Identifier" ? node.key.name : null;
+      target = typeQueryName(node.typeAnnotation);
+    }
+    if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+      alias = node.id.name;
+      target = typeQueryName(node.id.typeAnnotation);
+      if (target === null && node.init?.type === "Identifier") {
+        target = node.init.name;
       }
     }
     if (
-      ts.isBindingElement(node) &&
-      node.initializer !== undefined &&
-      ts.isIdentifier(node.initializer)
+      node.type === "AssignmentPattern" &&
+      node.left.type === "Identifier" &&
+      node.right.type === "Identifier"
     ) {
-      alias = nameText(node.name);
-      target = node.initializer.text;
+      alias = node.left.name;
+      target = node.right.name;
     }
     if (alias !== null && target !== null && WRITERS.has(target)) {
       const exported =
-        ts.isVariableDeclaration(node) &&
-        ts.isVariableStatement(node.parent.parent) &&
-        (ts
-          .getModifiers(node.parent.parent)
-          ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword) ??
-          false);
+        node.type === "VariableDeclarator" &&
+        parent?.type === "VariableDeclaration" &&
+        ancestors.at(-2)?.type === "ExportNamedDeclaration";
       aliases.set(alias, exported);
     }
   });
@@ -186,24 +185,25 @@ const writerAliases = (source: ts.SourceFile): Map<string, boolean> => {
 };
 
 /** The writer names a callee can stand for (`a ?? b`, `(x)`, `deps.w`). */
-const calleeNames = (callee: ts.Expression): string[] => {
-  if (ts.isParenthesizedExpression(callee)) {
+const calleeNames = (callee: Node): string[] => {
+  if (
+    callee.type === "ParenthesizedExpression" ||
+    callee.type === "ChainExpression"
+  ) {
     return calleeNames(callee.expression);
   }
-  if (
-    ts.isBinaryExpression(callee) &&
-    callee.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
-  ) {
+  if (callee.type === "LogicalExpression" && callee.operator === "??") {
     return [...calleeNames(callee.left), ...calleeNames(callee.right)];
   }
-  if (ts.isIdentifier(callee)) {
-    return [callee.text];
+  if (callee.type === "Identifier") {
+    return [callee.name];
   }
   if (
-    ts.isPropertyAccessExpression(callee) ||
-    ts.isPropertyAccessChain(callee)
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier"
   ) {
-    return [callee.name.text];
+    return [callee.property.name];
   }
   return [];
 };
@@ -235,77 +235,82 @@ const collect = () => {
       ...(localAliases.get(file) ?? []),
     ]);
     const ordinals = new Map<string, number>();
-    walk(source, (node) => {
+    walk(source.program, (node, ancestors) => {
       if (
-        ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text === DETECTOR_MODULE
+        node.type === "ImportDeclaration" &&
+        node.source.value === DETECTOR_MODULE
       ) {
         importsDetector.add(file);
       }
-      if (ts.isCallExpression(node)) {
-        const writer = calleeNames(node.expression).find((name) =>
-          names.has(name),
-        );
+      if (node.type === "CallExpression") {
+        const writer = calleeNames(node.callee).find((name) => names.has(name));
         const input = node.arguments.at(0);
         if (writer === undefined || input === undefined) {
           return;
         }
         const ordinal = ordinals.get(writer) ?? 0;
         ordinals.set(writer, ordinal + 1);
-        const property = ts.isObjectLiteralExpression(input)
-          ? input.properties.find(
-              (element) =>
-                element.name !== undefined &&
-                ts.isIdentifier(element.name) &&
-                element.name.text === "encryption",
-            )
-          : undefined;
+        const property =
+          input.type === "ObjectExpression"
+            ? input.properties.find(
+                (element) =>
+                  element.type === "Property" &&
+                  !element.computed &&
+                  element.key.type === "Identifier" &&
+                  element.key.name === "encryption",
+              )
+            : undefined;
         let encryption: string | null = null;
-        if (property !== undefined && ts.isPropertyAssignment(property)) {
-          encryption = property.initializer.getText(source);
-        } else if (
-          property !== undefined &&
-          ts.isShorthandPropertyAssignment(property)
+        if (
+          property?.type === "Property" &&
+          property.kind === "init" &&
+          !property.method
         ) {
-          encryption = property.name.text;
+          encryption =
+            property.shorthand && property.key.type === "Identifier"
+              ? property.key.name
+              : source.sourceText.slice(
+                  property.value.start,
+                  property.value.end,
+                );
         }
         sites.push({ key: `${file}:${writer}:${ordinal}`, encryption });
       }
       // The stored file shape written by hand: it must be the minted-content
       // writer's own input.
-      if (ts.isObjectLiteralExpression(node)) {
+      if (node.type === "ObjectExpression") {
         const keys = new Set(
           node.properties.flatMap((element) =>
-            element.name !== undefined && ts.isIdentifier(element.name)
-              ? [element.name.text]
+            element.type === "Property" &&
+            !element.computed &&
+            element.key.type === "Identifier"
+              ? [element.key.name]
               : [],
           ),
         );
         const isFileType = node.properties.some(
           (element) =>
-            ts.isPropertyAssignment(element) &&
-            ts.isIdentifier(element.name) &&
-            element.name.text === "type" &&
-            ts.isStringLiteral(element.initializer) &&
-            element.initializer.text === "file",
+            element.type === "Property" &&
+            element.kind === "init" &&
+            !element.method &&
+            !element.shorthand &&
+            !element.computed &&
+            element.key.type === "Identifier" &&
+            element.key.name === "type" &&
+            element.value.type === "Literal" &&
+            element.value.value === "file",
         );
-        const parent = node.parent;
+        const parent = ancestors.at(-1);
         const isMintedInput =
-          ts.isCallExpression(parent) &&
-          calleeNames(parent.expression).includes(
-            "fileContentWithMintedObject",
-          );
+          parent?.type === "CallExpression" &&
+          calleeNames(parent.callee).includes("fileContentWithMintedObject");
         if (
           isFileType &&
           keys.has("sha256Hex") &&
           keys.has("fileName") &&
           !isMintedInput
         ) {
-          const { line } = source.getLineAndCharacterOfPosition(
-            node.getStart(source),
-          );
-          handBuiltContent.push(`${file}:${line + 1}`);
+          handBuiltContent.push(`${file}:${source.locate(node.start).line}`);
         }
       }
     });

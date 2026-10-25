@@ -3,9 +3,14 @@ import { SQL } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import {
+  type Node,
+  type ObjectExpression,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -183,49 +188,43 @@ describe("audit detail policy census", () => {
 });
 
 const auditedWrites = (source: string) => {
-  const file = ts.createSourceFile(
-    "writer.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const file = parseSource("writer.ts", source);
   const writes: { resourceType: string; operation: string | null }[] = [];
   const operationImports = new Set(
-    file.statements.flatMap((statement) => {
+    file.program.body.flatMap((statement) => {
       if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !== "@/api/lib/lists/item-operations"
+        statement.type !== "ImportDeclaration" ||
+        statement.source.value !== "@/api/lib/lists/item-operations"
       ) {
         return [];
       }
-      const bindings = statement.importClause?.namedBindings;
-      if (!bindings || !ts.isNamedImports(bindings)) {
-        return [];
-      }
-      return bindings.elements
-        .filter(
-          (binding) =>
-            (binding.propertyName ?? binding.name).text ===
-            "LIST_VERIFICATION_ITEM_OPERATION",
-        )
-        .map((binding) => binding.name.text);
+      return statement.specifiers.flatMap((binding) =>
+        binding.type === "ImportSpecifier" &&
+        (binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value) === "LIST_VERIFICATION_ITEM_OPERATION"
+          ? [binding.local.name]
+          : [],
+      );
     }),
   );
-  const operationValue = (operation: ts.Expression | undefined) => {
+  const operationValue = (operation: Node | undefined) => {
     if (!operation) {
       return null;
     }
-    if (ts.isStringLiteral(operation)) {
-      return operation.text;
+    if (operation.type === "Literal" && typeof operation.value === "string") {
+      return operation.value;
     }
     if (
-      ts.isPropertyAccessExpression(operation) &&
-      ts.isIdentifier(operation.expression) &&
-      operationImports.has(operation.expression.text)
+      operation.type === "MemberExpression" &&
+      !operation.computed &&
+      operation.property.type === "Identifier" &&
+      operation.object.type === "Identifier" &&
+      operationImports.has(operation.object.name)
     ) {
+      const operationName = operation.property.name;
       const value = Object.entries(LIST_VERIFICATION_ITEM_OPERATION).find(
-        ([name]) => name === operation.name.text,
+        ([name]) => name === operationName,
       )?.[1];
       if (value !== undefined) {
         return value;
@@ -235,44 +234,52 @@ const auditedWrites = (source: string) => {
       "Feature audit operation requires a shared constant or literal classification",
     );
   };
-  const property = (object: ts.ObjectLiteralExpression, name: string) =>
-    object.properties.find(
-      (entry): entry is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(entry) && entry.name.getText(file) === name,
-    )?.initializer;
-  const mappedObjectLiteral = (expression: ts.Expression) => {
+  const property = (object: ObjectExpression, name: string) => {
+    const entry = object.properties.find(
+      (candidate) =>
+        candidate.type === "Property" &&
+        candidate.kind === "init" &&
+        !candidate.method &&
+        !candidate.shorthand &&
+        source.slice(candidate.key.start, candidate.key.end) === name,
+    );
+    return entry?.type === "Property" ? entry.value : undefined;
+  };
+  const mappedObjectLiteral = (expression: Node) => {
     if (
-      !ts.isCallExpression(expression) ||
-      !ts.isPropertyAccessExpression(expression.expression) ||
-      expression.expression.name.text !== "map"
+      expression.type !== "CallExpression" ||
+      expression.callee.type !== "MemberExpression" ||
+      expression.callee.computed ||
+      expression.callee.property.type !== "Identifier" ||
+      expression.callee.property.name !== "map"
     ) {
       return undefined;
     }
     const mapper = expression.arguments.at(0);
-    if (!mapper || !ts.isArrowFunction(mapper)) {
+    if (!mapper || mapper.type !== "ArrowFunctionExpression") {
       return undefined;
     }
-    const body = ts.isParenthesizedExpression(mapper.body)
-      ? mapper.body.expression
-      : mapper.body;
-    return ts.isObjectLiteralExpression(body) ? body : undefined;
+    const body =
+      mapper.body.type === "ParenthesizedExpression"
+        ? mapper.body.expression
+        : mapper.body;
+    return body.type === "ObjectExpression" ? body : undefined;
   };
   // A batch write is inspected entry by entry: each element is an object
   // literal or a spread of `items.map((item) => ({ ... }))`.
-  const auditPayloads = (
-    payload: ts.Expression | undefined,
-  ): ts.ObjectLiteralExpression[] => {
-    if (payload && ts.isObjectLiteralExpression(payload)) {
+  const auditPayloads = (payload: Node | undefined): ObjectExpression[] => {
+    if (payload?.type === "ObjectExpression") {
       return [payload];
     }
-    if (payload && ts.isArrayLiteralExpression(payload)) {
+    if (payload?.type === "ArrayExpression") {
       return payload.elements.map((element) => {
-        if (ts.isObjectLiteralExpression(element)) {
+        if (element?.type === "ObjectExpression") {
           return element;
         }
-        const mapped = ts.isSpreadElement(element)
-          ? mappedObjectLiteral(element.expression)
-          : undefined;
+        const mapped =
+          element?.type === "SpreadElement"
+            ? mappedObjectLiteral(element.argument)
+            : undefined;
         if (!mapped) {
           throw new TypeError(
             "Feature audit writes require a classified object payload",
@@ -285,23 +292,27 @@ const auditedWrites = (source: string) => {
       "Feature audit writes require a classified object payload",
     );
   };
-  const classify = (payload: ts.ObjectLiteralExpression) => {
+  const classify = (payload: ObjectExpression) => {
     const resource = property(payload, "resourceType");
     if (
       !resource ||
-      !ts.isPropertyAccessExpression(resource) ||
-      resource.expression.getText(file) !== "AUDIT_RESOURCE_TYPE"
+      resource.type !== "MemberExpression" ||
+      resource.computed ||
+      resource.property.type !== "Identifier" ||
+      source.slice(resource.object.start, resource.object.end) !==
+        "AUDIT_RESOURCE_TYPE"
     ) {
       throw new TypeError("Feature audit writes require a resource constant");
     }
+    const resourceName = resource.property.name;
     const resourceType = Object.entries(AUDIT_RESOURCE_TYPE).find(
-      ([name]) => name === resource.name.text,
+      ([name]) => name === resourceName,
     )?.[1];
     if (!resourceType) {
       throw new TypeError("Feature audit resource requires a classification");
     }
     const metadata = property(payload, "metadata");
-    if (metadata && !ts.isObjectLiteralExpression(metadata)) {
+    if (metadata && metadata.type !== "ObjectExpression") {
       throw new TypeError(
         "Feature audit metadata requires an explicit operation classification",
       );
@@ -309,19 +320,17 @@ const auditedWrites = (source: string) => {
     const operation = metadata ? property(metadata, "operation") : undefined;
     writes.push({ resourceType, operation: operationValue(operation) });
   };
-  const visit = (node: ts.Node) => {
+  walk(file.program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "recordAuditEvent"
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "recordAuditEvent"
     ) {
       for (const payload of auditPayloads(node.arguments.at(1))) {
         classify(payload);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return writes;
 };
 
