@@ -113,6 +113,11 @@ import {
   PREPARE_FILE_COMPARISON_OUTPUT_CONTRACT,
   PREPARE_FILE_COMPARISON_TOOL_DEFINITION,
 } from "@/api/mcp/file-comparison-prepare-tool";
+import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import {
   defineTextFieldSpec,
@@ -129,7 +134,6 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -139,11 +143,9 @@ import {
   isToolErrorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {

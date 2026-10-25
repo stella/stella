@@ -6,9 +6,7 @@ import type { CitationPage } from "./parse";
 
 type GraphBridge = NonNullable<Parameters<typeof createGraphController>[0]>;
 type BridgeSnapshot = ReturnType<GraphBridge["getSnapshot"]>;
-type BridgeToolResult = NonNullable<
-  Awaited<ReturnType<GraphBridge["requestTool"]>>
->;
+type BridgeToolResult = Awaited<ReturnType<GraphBridge["requestTool"]>>;
 type ToolRequest = Parameters<GraphBridge["requestTool"]>[0];
 
 const page = ({
@@ -93,7 +91,7 @@ const createBridge = ({
   };
   let listener: (() => void) | undefined;
   const requests: ToolRequest[] = [];
-  const pending: ((result: BridgeToolResult | undefined) => void)[] = [];
+  const pending: ((result: BridgeToolResult) => void)[] = [];
   const openedLinks: string[] = [];
   const bridge = {
     subscribe: (next: () => void) => {
@@ -106,7 +104,7 @@ const createBridge = ({
     supportsTools: () => supportsTools,
     requestTool: async (request: ToolRequest) => {
       requests.push(request);
-      return new Promise<BridgeToolResult | undefined>((resolve) => {
+      return new Promise<BridgeToolResult>((resolve) => {
         pending.push(resolve);
       });
     },
@@ -129,7 +127,7 @@ const createBridge = ({
       current = { ...current, result };
       listener?.();
     },
-    resolveNext: (result: BridgeToolResult | undefined) => {
+    resolveNext: (result: BridgeToolResult) => {
       const resolve = pending.shift();
       if (resolve === undefined) {
         throw new Error("No pending synthetic tool request");
