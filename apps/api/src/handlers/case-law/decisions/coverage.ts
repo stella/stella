@@ -274,7 +274,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
             AND coverage_decisions.decision_date IS NOT NULL
-          ORDER BY coverage_decisions.decision_date ASC
+          ORDER BY coverage_decisions.decision_date ASC, coverage_decisions.id ASC
           LIMIT 1
         )`,
         decisionYearTo: sql<number | null>`(
@@ -282,7 +282,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
             AND coverage_decisions.decision_date IS NOT NULL
-          ORDER BY coverage_decisions.decision_date DESC
+          ORDER BY coverage_decisions.decision_date DESC, coverage_decisions.id DESC
           LIMIT 1
         )`,
       })

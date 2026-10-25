@@ -855,6 +855,11 @@ export const LIMITS = {
    *  retryable. The wait comes before the upload is claimed, so it never
    *  counts against the claim timeout. */
   uploadFinalizeAdmissionWaitMs: 20_000,
+  workPoolHeavySidecarSlots: 1,
+  workPoolHeavySidecarBytes: 150 * 1024 * 1024,
+  workPoolHeavySidecarMaxWaiters: 0,
+  workPoolHeavySidecarMaxWaitMs: 0,
+  workPoolHeavySidecarDeadlineMs: 120_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */

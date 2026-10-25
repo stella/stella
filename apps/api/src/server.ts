@@ -169,6 +169,7 @@ import {
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import {
   clientTooOldError,
@@ -228,7 +229,6 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
@@ -285,7 +285,7 @@ const readProcessMemoryReport = () => {
     rssBytes: usage.rss,
     heapUsedBytes: usage.heapUsed,
     arrayBuffersBytes: usage.arrayBuffers,
-    uploadFinalizeInFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+    workPools: readWorkPoolMetrics(),
   };
 };
 

@@ -78,8 +78,7 @@ export const REVIEW_SIDE_RULE_CLASS = {
 
 /** A clause number in the hanging margin, or any other numeric caption beside
  *  a passage. */
-export const REVIEW_CLAUSE_LABEL_CLASS =
-  "text-muted-foreground text-xs tabular-nums";
+const REVIEW_CLAUSE_LABEL_CLASS = "text-muted-foreground text-xs tabular-nums";
 
 /** The passage measure: one scale, one leading, everywhere a passage renders.
  *  The pane's own width is the measure, so nothing caps it at a column.

@@ -4813,6 +4813,8 @@
     "recentDocuments": "Hiljutised dokumendid",
     "recentSearches": "Hiljutised otsingud",
     "recentlyOpenedFiles": "Hiljuti avatud failid",
+    "registryCandidateNameMismatch": "Ametlik nimi „{officialName}“ ei ühti",
+    "registryCandidateNoOfficialRecord": "Ametlikus registris pole selle numbri kohta kannet",
     "registryChoose": "Vali äriregister",
     "registryCredentialAskAdmin": "Paluge organisatsiooni administraatoril seadistada juurdepääs sellele registrile.",
     "registryCredentialSaved": "Registri juurdepääs salvestatud",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Äriregistri andmed pole ajutiselt saadaval"
     },
     "registryKrsHint": "KRS otsib registrinumbri, mitte ettevõtte nime järgi. Sisestage 10-kohaline KRS-number koos algusnullidega (nt 0000006865).",
+    "registryNameSearchNotFound": "Ükski kontrollitud ettevõte ei vastanud sellele nimele. Järgmised kandidaadid lükati tagasi:",
     "registryVatHint": "VIES kontrollib käibemaksukohustuslasena registreerimise numbreid, mitte ettevõtete nimesid. Sisestage number koos riigikoodiga (nt CZ27082440); vorming sõltub riigist.",
     "renameSearchTitle": "Nimeta salvestatud otsing ümber",
     "requestCountry": "Taotle uue riigi lisamist",
