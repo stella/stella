@@ -2,12 +2,15 @@ import { lazy, Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
+import * as v from "valibot";
 
+import { BILLING_STATUS } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 
 import {
   getTimeEntryDateBounds,
@@ -18,16 +21,21 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { detached } from "@/lib/detached";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
+import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import {
   timeEntriesInfiniteOptions,
+  timeEntriesOptions,
   timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
+import { routeSearchSchema } from "@/route-search-params";
+import { MatterApprovalView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-approval-view";
 import { PersonalTimesheetDay } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day";
 
 const RateManagementDialog = lazy(async () => {
@@ -42,9 +50,19 @@ const BillingCodesDialog = lazy(async () => {
   return { default: module.BillingCodesDialog };
 });
 
+/**
+ * `view=approvals` opens the matter's approval queue, so the invoice composer
+ * can link straight to the work that is waiting.
+ */
+const timesheetsSearchSchema = routeSearchSchema({
+  view: v.optional(v.picklist(["approvals"])),
+});
+
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
+  validateSearch: timesheetsSearchSchema,
+  loaderDeps: ({ search }) => ({ view: search.view }),
   beforeLoad: async ({ context, params }) => {
     if (
       !(await isTimeBillingRouteEnabled(context.queryClient, {
@@ -70,7 +88,43 @@ export const Route = createFileRoute(
       });
     }
   },
-  loader: async ({ context, params }) => {
+  loader: async ({ context, deps, params }) => {
+    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const opensApprovals =
+      deps.view === "approvals" &&
+      authClient.organization.checkRolePermission({
+        role,
+        permissions: { timeEntry: ["approve"] },
+      });
+    if (opensApprovals) {
+      await Promise.all([
+        ensureRouteQueryData(
+          context.queryClient,
+          timeEntriesOptions(params.workspaceId, context.user.id, {
+            status: BILLING_STATUS.DRAFT,
+          }),
+        ),
+        ensureRouteQueryData(
+          context.queryClient,
+          timeEntriesOptions(params.workspaceId, context.user.id, {
+            status: BILLING_STATUS.APPROVED,
+          }),
+        ),
+        ensureRouteQueryData(
+          context.queryClient,
+          expensesOptions(params.workspaceId, {
+            status: BILLING_STATUS.DRAFT,
+          }),
+        ),
+        ensureRouteQueryData(
+          context.queryClient,
+          expensesOptions(params.workspaceId, {
+            status: BILLING_STATUS.APPROVED,
+          }),
+        ),
+      ]);
+      return;
+    }
     const today = Temporal.Now.instant()
       .toZonedDateTimeISO(Temporal.Now.timeZoneId())
       .toPlainDate()
@@ -125,6 +179,11 @@ function TimesheetsPage() {
   const tCommon = useTranslations("common");
   const canManageRates = usePermissions({ rate: ["create"] });
   const canManageBillingCodes = usePermissions({ billingCode: ["create"] });
+  const canApprove = usePermissions({ timeEntry: ["approve"] });
+  const navigate = Route.useNavigate();
+  const requestedView = Route.useSearch({ select: (search) => search.view });
+  const view =
+    canApprove && requestedView === "approvals" ? "approvals" : "personal";
   const [rateDialogOpen, setRateDialogOpen] = useState(false);
   const [codesDialogOpen, setCodesDialogOpen] = useState(false);
   const format = useFormatter();
@@ -149,6 +208,28 @@ function TimesheetsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
         <div className="flex flex-wrap items-center gap-2">
+          {canApprove && (
+            <Tabs
+              onValueChange={(next: typeof view) => {
+                detached(
+                  navigate({
+                    search: next === "approvals" ? { view: next } : {},
+                  }),
+                  "timesheets.switch-view",
+                );
+              }}
+              value={view}
+            >
+              <TabsList>
+                <TabsTab value="personal">
+                  {tBilling("approval.myTime")}
+                </TabsTab>
+                <TabsTab value="approvals">
+                  {tBilling("approval.title")}
+                </TabsTab>
+              </TabsList>
+            </Tabs>
+          )}
           {canManageRates && (
             <Button
               onClick={() => setRateDialogOpen(true)}
@@ -167,64 +248,72 @@ function TimesheetsPage() {
               {tBilling("codes.manageCodes")}
             </Button>
           )}
-          <Button
-            onClick={() =>
-              setDate(
-                Temporal.Now.instant()
-                  .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-                  .toPlainDate(),
-              )
-            }
-            size="sm"
-            variant="outline"
-          >
-            {tCommon("today")}
-          </Button>
-          <Button
-            aria-label={tCommon("previous")}
-            className="size-11"
-            onClick={() => moveDay(-1)}
-            size="icon"
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
-          </Button>
-          <span className="min-w-36 text-center text-sm">
-            {format.dateTime(
-              date.toZonedDateTime({
-                plainTime: Temporal.PlainTime.from("00:00"),
-                timeZone: "UTC",
-              }).epochMilliseconds,
-              { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
-            )}
-          </span>
-          <Button
-            aria-label={tCommon("next")}
-            className="size-11"
-            disabled={
-              dateValue >=
-              toISODate(
-                Temporal.Now.instant()
-                  .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-                  .toPlainDate(),
-              )
-            }
-            onClick={() => moveDay(1)}
-            size="icon"
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
-          </Button>
+          {view === "personal" && (
+            <>
+              <Button
+                onClick={() =>
+                  setDate(
+                    Temporal.Now.instant()
+                      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+                      .toPlainDate(),
+                  )
+                }
+                size="sm"
+                variant="outline"
+              >
+                {tCommon("today")}
+              </Button>
+              <Button
+                aria-label={tCommon("previous")}
+                className="size-11"
+                onClick={() => moveDay(-1)}
+                size="icon"
+                variant="ghost"
+              >
+                <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
+              </Button>
+              <span className="min-w-36 text-center text-sm">
+                {format.dateTime(
+                  date.toZonedDateTime({
+                    plainTime: Temporal.PlainTime.from("00:00"),
+                    timeZone: "UTC",
+                  }).epochMilliseconds,
+                  { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
+                )}
+              </span>
+              <Button
+                aria-label={tCommon("next")}
+                className="size-11"
+                disabled={
+                  dateValue >=
+                  toISODate(
+                    Temporal.Now.instant()
+                      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+                      .toPlainDate(),
+                  )
+                }
+                onClick={() => moveDay(1)}
+                size="icon"
+                variant="ghost"
+              >
+                <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
+              </Button>
+            </>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-auto p-4">
         <Suspense fallback={<TimesheetSkeleton />}>
-          <PersonalTimesheetDay
-            canCreateTimeEntry={canLogTime}
-            date={dateValue}
-            key={dateValue}
-            workspaceId={workspaceId}
-          />
+          {view === "personal" ? (
+            <PersonalTimesheetDay
+              canCreateTimeEntry={canLogTime}
+              date={dateValue}
+              key={dateValue}
+              workspaceId={workspaceId}
+            />
+          ) : (
+            <MatterApprovalView workspaceId={workspaceId} />
+          )}
         </Suspense>
       </div>
       <Suspense fallback={null}>

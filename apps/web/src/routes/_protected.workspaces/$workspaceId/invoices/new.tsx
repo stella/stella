@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -8,10 +8,14 @@ import { ArrowLeftIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { invoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { InvoiceComposer } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer";
 
 export const Route = createFileRoute(
@@ -33,10 +37,31 @@ export const Route = createFileRoute(
     }
   },
   loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      invoicePrefillOptions(params.workspaceId),
-    );
+    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const canApprove = authClient.organization.checkRolePermission({
+      role,
+      permissions: { timeEntry: ["approve"] },
+    });
+    await Promise.all([
+      ensureRouteQueryData(
+        context.queryClient,
+        invoicePrefillOptions(params.workspaceId),
+      ),
+      ...(canApprove
+        ? [
+            ensureRouteQueryData(
+              context.queryClient,
+              timeEntriesOptions(params.workspaceId, context.user.id, {
+                status: "draft",
+              }),
+            ),
+            ensureRouteQueryData(
+              context.queryClient,
+              expensesOptions(params.workspaceId, { status: "draft" }),
+            ),
+          ]
+        : []),
+    ]);
   },
   pendingComponent: NewInvoicePending,
   component: NewInvoicePage,
@@ -81,6 +106,31 @@ function NewInvoicePage() {
   const { data: prefill } = useSuspenseQuery(
     invoicePrefillOptions(workspaceId),
   );
+  const userId = Route.useRouteContext({
+    select: (context) => context.user.id,
+  });
+  // Only someone who can approve is sent to the approval queue; the API
+  // lists every timekeeper's drafts to them alone.
+  const canApprove = usePermissions({ timeEntry: ["approve"] });
+  const canApproveExpenses = usePermissions({ expense: ["update"] });
+  // The count is a hint; a failed read reports itself and shows no count.
+  const pendingTime = useQueryView(
+    useQuery({
+      ...timeEntriesOptions(workspaceId, userId, { status: "draft" }),
+      enabled: canApprove,
+    }),
+  );
+  useQueryViewError(pendingTime);
+  const pendingExpenses = useQueryView(
+    useQuery({
+      ...expensesOptions(workspaceId, { status: "draft" }),
+      enabled: canApprove && canApproveExpenses,
+    }),
+  );
+  useQueryViewError(pendingExpenses);
+  const pendingCount =
+    (pendingTime.type === "items" ? pendingTime.items.length : 0) +
+    (pendingExpenses.type === "items" ? pendingExpenses.items.length : 0);
   return (
     <div className="flex h-full flex-col">
       <PageHeader workspaceId={workspaceId} />
@@ -89,6 +139,7 @@ function NewInvoicePage() {
         <InvoiceComposer
           key={workspaceId}
           prefill={prefill}
+          pendingApprovalCount={canApprove ? pendingCount : 0}
           workspaceId={workspaceId}
         />
       </ScrollArea>

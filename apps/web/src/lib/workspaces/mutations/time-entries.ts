@@ -2,8 +2,68 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
+import {
+  approveTimeEntries,
+  returnTimeEntry,
+  sendTimeEntryMutation,
+} from "@/lib/workspaces/time-entries-api";
+
+/**
+ * Approves a selection in one call. The API answers per entry, so a refusal
+ * (no rate, locked month, missing description) comes back as a result, not
+ * as a failed request.
+ */
+export const useApproveTimeEntries = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+    }: {
+      workspaceId: string;
+      ids: readonly string[];
+    }) => await approveTimeEntries(ids),
+    onSuccess: async (_result, { workspaceId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: timeEntriesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: invoicesKeys.all(workspaceId),
+        }),
+      ]);
+    },
+    onError: (error) => analytics.captureError(error),
+  });
+};
+
+export const useReturnTimeEntry = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      comment,
+    }: {
+      workspaceId: string;
+      id: string;
+      comment: string;
+    }) => await returnTimeEntry({ id, comment }),
+    onSuccess: async (_result, { workspaceId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: timeEntriesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: invoicesKeys.all(workspaceId),
+        }),
+      ]);
+    },
+    onError: (error) => analytics.captureError(error),
+  });
+};
 
 type CreateTimeEntryVars = {
   workspaceId: string;
