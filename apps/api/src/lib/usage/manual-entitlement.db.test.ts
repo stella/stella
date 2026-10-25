@@ -278,6 +278,35 @@ describe("manual entitlements", () => {
     });
   });
 
+  test("an end time already in the past ends the plan now, never backdated", async () => {
+    const organizationId = await insertOrganization();
+    const usagePolicyId = await insertPolicy();
+    await db.transaction(async (testTx) => {
+      const tx = asTestRaw<Transaction>(testTx);
+      expect(Result.isOk(await grant(tx, organizationId, usagePolicyId))).toBe(
+        true,
+      );
+      const before = Date.now();
+      // A period that began two minutes ago, so ending now is a valid end.
+      await tx
+        .update(usageEntitlements)
+        .set({ currentPeriodStart: new Date(before - 120_000) })
+        .where(eq(usageEntitlements.organizationId, organizationId));
+      const ended = await endManualEntitlement(tx, {
+        organizationId,
+        endsAt: new Date(before - 60_000),
+        actor: "operator:test",
+        reason: "End immediately",
+      });
+      expect(Result.isOk(ended)).toBe(true);
+      if (Result.isOk(ended)) {
+        expect(ended.value.currentPeriodEnd.getTime()).toBeGreaterThanOrEqual(
+          before,
+        );
+      }
+    });
+  });
+
   test("ending never extends a period or revives a lapsed one", async () => {
     const organizationId = await insertOrganization();
     const usagePolicyId = await insertPolicy();

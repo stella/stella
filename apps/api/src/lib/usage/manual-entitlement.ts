@@ -235,8 +235,10 @@ type EndManualEntitlementOptions = ManualEntitlementActor & {
 };
 
 /**
- * Ends the organization's manual plan at `endsAt` (now or later). Ending can
- * only shorten the period, never extend or revive it; a hosted entitlement is
+ * Ends the organization's manual plan at `endsAt`, or now when `endsAt` has
+ * already passed (an operator's "now" is behind the clock by the time the
+ * transaction runs), so the recorded end is never backdated. Ending can only
+ * shorten the period, never extend or revive it; a hosted entitlement is
  * refused.
  */
 export const endManualEntitlement = async (
@@ -260,17 +262,18 @@ export const endManualEntitlement = async (
   if (entitlement.currentPeriodEnd <= now) {
     return refused("The manual entitlement has already ended");
   }
-  if (endsAt > entitlement.currentPeriodEnd) {
+  const effectiveEnd = endsAt < now ? now : endsAt;
+  if (effectiveEnd > entitlement.currentPeriodEnd) {
     return refused(
       "Ending cannot extend the period; grant again to renew instead",
     );
   }
-  if (endsAt <= entitlement.currentPeriodStart) {
+  if (effectiveEnd <= entitlement.currentPeriodStart) {
     return refused("The end must fall after the period start");
   }
   const updated = await tx
     .update(usageEntitlements)
-    .set({ currentPeriodEnd: endsAt, cancelAtPeriodEnd: true })
+    .set({ currentPeriodEnd: effectiveEnd, cancelAtPeriodEnd: true })
     .where(eq(usageEntitlements.id, entitlement.id))
     .returning()
     .then((rows) => rows.at(0));
@@ -285,7 +288,10 @@ export const endManualEntitlement = async (
     resourceType: AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
     resourceId: updated.id,
     changes: {
-      currentPeriodEnd: { old: entitlement.currentPeriodEnd, new: endsAt },
+      currentPeriodEnd: {
+        old: entitlement.currentPeriodEnd,
+        new: effectiveEnd,
+      },
       reason: { old: null, new: reason },
     },
   });
