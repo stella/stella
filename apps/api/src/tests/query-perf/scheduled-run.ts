@@ -44,7 +44,8 @@ const asQuery = ({ text, params }: CapturedStatement): SQL => {
     if (position < 0 || position >= params.length) {
       return panic(`Captured statement names missing parameter $${part}`);
     }
-    return sql`${params[position]}`;
+    // One bound value each, as captured: an array stays one array parameter.
+    return sql.param(params[position]);
   });
   return sql.join(chunks, sql.raw(""));
 };
