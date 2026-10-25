@@ -206,10 +206,10 @@
       "advanced": {"title": 15, "description": 364, "inputSchema": 913, "outputSchema": 95, "annotations": 92, "payloadUtf8Bytes": 1579}
     },
     "read_case_law_citations": {
-      "advanced": {"title": 23, "description": 915, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 4144},
-      "anonymized": {"title": 23, "description": 915, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 4144},
-      "default": {"title": 23, "description": 915, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 4144},
-      "law": {"title": 23, "description": 915, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 4144}
+      "advanced": {"title": 23, "description": 757, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 3986},
+      "anonymized": {"title": 23, "description": 757, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 3986},
+      "default": {"title": 23, "description": 757, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 3986},
+      "law": {"title": 23, "description": 757, "inputSchema": 1140, "outputSchema": 1768, "annotations": 101, "payloadUtf8Bytes": 3986}
     },
     "read_case_law_decision": {
       "advanced": {"title": 22, "description": 558, "inputSchema": 2623, "outputSchema": 394, "annotations": 100, "payloadUtf8Bytes": 3806},
