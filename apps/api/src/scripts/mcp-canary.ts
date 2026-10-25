@@ -38,6 +38,12 @@ import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+import {
+  describeReleaseLoad,
+  jobsRunSince,
+  judgeReleaseLoad,
+  runReleaseLoad,
+} from "./mcp-canary-release-load";
 
 export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
@@ -1516,12 +1522,120 @@ export const runDesktopProbe = async (
   return results;
 };
 
+const RELEASE_LOAD_PROBE = "release load during scheduled jobs";
+
+const scheduledLoadJobsSchema = v.object({
+  jobs: v.array(
+    v.object({
+      id: v.string(),
+      lastRunAt: v.nullable(v.string()),
+      lockedAt: v.nullable(v.string()),
+    }),
+  ),
+});
+
+/**
+ * Brings the scheduled corpus jobs forward, runs the MCP load while they run
+ * (`mcp-canary-release-load.ts`), and fails when a heavy tool's 95th
+ * percentile is over its budget or when no job ran inside the window.
+ */
+export const runReleaseLoadProbe = async (
+  { baseUrl, token, smokeSecret }: CanaryTarget & { smokeSecret: string },
+  fetcher: CanaryFetcher = deploymentFetcher,
+  load: typeof runReleaseLoad = runReleaseLoad,
+): Promise<ProbeResult> =>
+  await runNamedProbe(RELEASE_LOAD_PROBE, async () => {
+    const jobsUrl = new URL("/smoke/scheduled-jobs", baseUrl);
+    const smokeHeaders = { "x-smoke-secret": smokeSecret };
+    const forward = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "POST",
+        headers: smokeHeaders,
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    if (
+      forward.status !== 200 ||
+      !v.is(
+        v.object({ dueAt: v.string(), jobs: v.array(v.unknown()) }),
+        forward.body,
+      )
+    ) {
+      return failed(
+        RELEASE_LOAD_PROBE,
+        "could not bring the scheduled corpus jobs forward",
+      );
+    }
+    const { dueAt } = forward.body;
+    const search = await readProbeResponse(
+      await fetcher(new URL("/v1/case/decisions/search", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "contract", country: "CZ", limit: 5 }),
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const decisionIds = v.is(
+      v.object({ hits: v.array(v.object({ decisionId: v.string() })) }),
+      search.body,
+    )
+      ? search.body.hits.map(({ decisionId }) => decisionId)
+      : [];
+    if (decisionIds.length === 0) {
+      return failed(RELEASE_LOAD_PROBE, "no case-law decision to read");
+    }
+    let id = 100;
+    const samples = await load({
+      decisionIds,
+      call: async ({ toolName, arguments: args }) => {
+        id += 1;
+        const response = await postJsonRpc(
+          {
+            baseUrl,
+            token,
+            era: "modern",
+            id,
+            method: "tools/call",
+            params: { name: toolName, arguments: args },
+          },
+          fetcher,
+        );
+        if (response.status === 429) {
+          return "rate_limited";
+        }
+        return evaluateToolCall(response).status === PROBE_STATUS.passed
+          ? "answered"
+          : "failed";
+      },
+    });
+    const { verdicts, failures } = judgeReleaseLoad(samples);
+    const after = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "GET",
+        headers: smokeHeaders,
+        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const ran = v.is(scheduledLoadJobsSchema, after.body)
+      ? jobsRunSince(after.body.jobs, dueAt)
+      : [];
+    if (ran.length === 0) {
+      failures.push("no scheduled corpus job ran during the load");
+    }
+    const detail = `${describeReleaseLoad(verdicts)}; jobs run during the load: ${ran.join(", ") || "none"}`;
+    return failures.length === 0
+      ? passed(RELEASE_LOAD_PROBE, detail)
+      : failed(RELEASE_LOAD_PROBE, `${failures.join("; ")}; ${detail}`);
+  });
+
 type StagingJourneyOptions = {
   baseUrl: string;
   smokeSecret?: string | undefined;
+  /** Runs the release load after the credentialed probes. */
+  load?: boolean | undefined;
 };
 export const runStagingCredentialJourneys = async (
-  { baseUrl, smokeSecret }: StagingJourneyOptions,
+  { baseUrl, smokeSecret, load = false }: StagingJourneyOptions,
   fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> => {
   const bootstrapName = "staging credential bootstrap";
@@ -1535,6 +1649,9 @@ export const runStagingCredentialJourneys = async (
         skipped(name, "no staging smoke session available"),
       ),
       skipped("desktop handoff redeem", "missing SMOKE_SESSION_SECRET"),
+      ...(load
+        ? [skipped(RELEASE_LOAD_PROBE, "missing SMOKE_SESSION_SECRET")]
+        : []),
     ];
   }
   const results: ProbeResult[] = [];
@@ -1618,11 +1735,22 @@ export const runStagingCredentialJourneys = async (
           fetcher,
         )),
       );
+      if (load) {
+        results.push(
+          await runReleaseLoadProbe(
+            { baseUrl, token: mintedToken, smokeSecret },
+            fetcher,
+          ),
+        );
+      }
     } else {
       results.push(
         ...AUTHENTICATED_PROBES.map(({ name }) =>
           skipped(name, "staging credential bootstrap failed"),
         ),
+        ...(load
+          ? [skipped(RELEASE_LOAD_PROBE, "staging credential bootstrap failed")]
+          : []),
       );
     }
     const browserCookie = sessionCookie;
@@ -2899,6 +3027,7 @@ const run = async () => {
           process.env[
             MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
           ],
+        load: process.env["MCP_CANARY_RELEASE_LOAD"] === "on",
       })),
     );
   } else {

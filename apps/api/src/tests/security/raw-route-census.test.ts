@@ -108,6 +108,11 @@ const RAW_ROUTES = {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public readiness probe.",
   },
+  "GET /smoke/scheduled-jobs": {
+    access: RAW_ROUTE_ACCESS.sessionless,
+    reason:
+      "Authorized by a shared secret; inert unless the secret is configured. Reads when fixed corpus jobs last ran.",
+  },
   "GET /started": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public startup probe.",
@@ -182,6 +187,11 @@ const RAW_ROUTES = {
   "POST /public/feedback": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason: "Public feedback intake, rate-limited per IP and deduplicated.",
+  },
+  "POST /smoke/scheduled-jobs": {
+    access: RAW_ROUTE_ACCESS.sessionless,
+    reason:
+      "Authorized by a shared secret; inert unless the secret is configured. Only moves fixed recurring corpus jobs' next run forward.",
   },
   "POST /smoke/session": {
     access: RAW_ROUTE_ACCESS.sessionless,

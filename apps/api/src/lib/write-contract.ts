@@ -146,6 +146,9 @@ export const RAW_WRITE_CONTRACTS = {
   "POST /public/feedback": {
     contract: "patch",
   },
+  "POST /smoke/scheduled-jobs": {
+    contract: "patch",
+  },
   "POST /smoke/session": {
     contract: "patch",
   },

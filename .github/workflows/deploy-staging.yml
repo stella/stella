@@ -876,6 +876,9 @@ jobs:
           # Release verification requires every journey, including the
           # authenticated probes, rather than accepting partial coverage.
           MCP_CANARY_REQUIRE_CREDENTIALS: "true"
+          # About a minute of concurrent heavy-tool calls while the scheduled
+          # corpus jobs run; each tool's p95 against its latency budget.
+          MCP_CANARY_RELEASE_LOAD: "on"
           APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
           APP_REVIEW_ORGANIZATION_ID: ${{ vars.STAGING_APP_REVIEW_ORGANIZATION_ID }}
           REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}
