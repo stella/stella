@@ -5,7 +5,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 import {
   type CallExpression,
-  type Identifier,
+  type IdentifierNode as Identifier,
   type MemberExpression,
   parseSource,
   walk,

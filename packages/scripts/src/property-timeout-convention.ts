@@ -1,5 +1,5 @@
 import {
-  type Identifier,
+  type IdentifierNode as Identifier,
   type Node,
   type ObjectExpression,
   parseSource,

@@ -19,8 +19,8 @@ export type * from "oxc-parser";
  * reference, object literal entry, pattern entry, …); these are every node
  * that carries the ESTree tag.
  */
-export type Identifier = Extract<Node, { type: "Identifier" }>;
-export type Property = Extract<Node, { type: "Property" }>;
+export type IdentifierNode = Extract<Node, { type: "Identifier" }>;
+export type PropertyNode = Extract<Node, { type: "Property" }>;
 export type SourceLocation = {
   /** 1-based line. */
   readonly line: number;
