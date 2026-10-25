@@ -19,6 +19,11 @@ export default {
         path: "apps/api/src/lib/observability/otlp-log-exporter.ts",
         reason: "Exports log records to LOGS_OTLP_URL from the environment.",
       },
+      {
+        path: "apps/api/src/lib/safe-outbound-fetch.type-test.ts",
+        reason:
+          "Reads the owner's exports as types to prove every request export takes a permit; it never calls postToOperatorEndpoint.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

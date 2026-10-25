@@ -72,7 +72,15 @@ type SendOutcome =
 /** Why a batch was not delivered; the flush logs it. */
 type DeliveryFailure =
   | { readonly reason: "rejected"; readonly status: number }
-  | { readonly reason: "unreached"; readonly errorType: string };
+  | {
+      readonly reason: "drain_failed" | "unreached";
+      readonly errorType: string;
+    };
+
+// The name, not the class: a request timeout is a DOMException named
+// TimeoutError.
+const errorName = (error: unknown): string =>
+  error instanceof Error ? error.name : "UnknownError";
 
 const isRetryable = (outcome: SendOutcome): boolean =>
   outcome.kind === "network" ||
@@ -135,7 +143,7 @@ export const createPostHogServerAnalytics = (
       url: batchUrl,
     });
     if (sent.isErr()) {
-      return { kind: "network", errorType: errorTag(sent.error.cause) };
+      return { kind: "network", errorType: errorName(sent.error.cause) };
     }
     return sent.value.ok
       ? { kind: "ok" }
@@ -212,14 +220,9 @@ export const createPostHogServerAnalytics = (
   // queued behind the batch that just failed.
   const drainAndReport = async (): Promise<void> => {
     const drained = await Result.tryPromise(drain);
-    if (Result.isError(drained)) {
-      logger.warn("analytics.delivery.failed", {
-        "analytics.delivery.failure": "drain_failed",
-        "error.type": errorTag(drained.error),
-      });
-      return;
-    }
-    const failure = drained.value;
+    const failure: DeliveryFailure | null = Result.isError(drained)
+      ? { reason: "drain_failed", errorType: errorTag(drained.error.cause) }
+      : drained.value;
     if (failure === null) {
       return;
     }
