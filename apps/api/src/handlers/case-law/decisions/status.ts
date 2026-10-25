@@ -25,6 +25,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -134,22 +135,27 @@ type CaseLawSourceHealthRow = {
 /**
  * The redistributable sources with only what their health is judged from.
  * The source table carries no country; the adapter's manifest places each
- * row, as it does for the coverage page.
+ * row, as it does for the coverage page. A registry past the bound is
+ * reported as such: a truncated list could leave out the one stalled source.
  */
 export const readCaseLawSourceHealthQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawSourceHealth,
-  async (tx: CaseLawPublicReadTransaction): Promise<CaseLawSourceHealthRow[]> =>
-    await tx
-      .select({
-        id: caseLawSources.id,
-        adapterKey: caseLawSources.adapterKey,
-        enabled: caseLawSources.enabled,
-        lastSyncAt: caseLawSources.lastSyncAt,
-      })
-      .from(caseLawSources)
-      .where(redistributableCaseLawSource)
-      .orderBy(caseLawSources.adapterKey)
-      .limit(CASE_LAW_SOURCE_ROWS_BOUND),
+  async (
+    tx: CaseLawPublicReadTransaction,
+  ): Promise<BoundedReadResult<CaseLawSourceHealthRow>> =>
+    await readBounded(
+      tx
+        .select({
+          id: caseLawSources.id,
+          adapterKey: caseLawSources.adapterKey,
+          enabled: caseLawSources.enabled,
+          lastSyncAt: caseLawSources.lastSyncAt,
+        })
+        .from(caseLawSources)
+        .where(redistributableCaseLawSource)
+        .orderBy(caseLawSources.adapterKey),
+      CASE_LAW_SOURCE_ROWS_BOUND,
+    ),
 );
 
 type CorpusStatusLoad = CorpusUpdatedAtRead & {
@@ -164,7 +170,7 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
     read: CorpusUpdatedAtRead,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
   readUpdatedAt: (read: CorpusUpdatedAtRead) => Promise<string | null>;
-  readSources: () => Promise<readonly CaseLawSourceHealthRow[]>;
+  readSources: () => Promise<BoundedReadResult<CaseLawSourceHealthRow>>;
   /** The instant the health windows are measured back from. */
   now: Date;
 };
@@ -226,6 +232,13 @@ export const loadCaseLawCorpusStatus = async ({
   if (Result.isError(sources)) {
     return sources;
   }
+  if (sources.value.type === "overflow") {
+    return Result.err(
+      new CorpusStatusError({
+        message: `The case-law source registry exceeds the status read bound of ${sources.value.cap} rows.`,
+      }),
+    );
+  }
   // A jurisdiction the corpus holds nothing for has no bucket at all: that is
   // the empty corpus, not a missed lookup.
   const bucket = facets.value.value.country.find(
@@ -233,7 +246,7 @@ export const loadCaseLawCorpusStatus = async ({
   );
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const health = caseLawCountryHealth(
-    sources.value
+    sources.value.rows
       .filter(
         (source) =>
           !withheld.has(String(source.id)) &&

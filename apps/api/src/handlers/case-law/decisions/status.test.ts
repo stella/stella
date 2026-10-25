@@ -6,6 +6,7 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { loadCaseLawCorpusStatus } from "@/api/handlers/case-law/decisions/status";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 
@@ -44,16 +45,21 @@ const sourceOf = (
 
 const CURRENT_CZ_SOURCE = sourceOf(ADAPTER_KEYS.CZ_NS, 0);
 
+const complete = (rows: SourceRow[]): BoundedReadResult<SourceRow> => ({
+  type: "complete",
+  rows,
+});
+
 const loadWith = async ({
   excludedSourceIds = [],
   readFacets = async () => Result.ok(facetsOf([{ value: "CZE", count: 12 }])),
-  readSources = async () => [CURRENT_CZ_SOURCE],
+  readSources = async () => complete([CURRENT_CZ_SOURCE]),
 }: {
   excludedSourceIds?: SourceRow["id"][];
   readFacets?: (
     country: string,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
-  readSources?: () => Promise<readonly SourceRow[]>;
+  readSources?: () => Promise<BoundedReadResult<SourceRow>>;
 }) => {
   const scopes: string[] = [];
   const result = await loadCaseLawCorpusStatus({
@@ -70,8 +76,10 @@ const loadWith = async ({
   return { result, scopes };
 };
 
-const healthOf = async (sources: readonly SourceRow[]) => {
-  const { result } = await loadWith({ readSources: async () => sources });
+const healthOf = async (sources: SourceRow[]) => {
+  const { result } = await loadWith({
+    readSources: async () => complete(sources),
+  });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -154,6 +162,18 @@ test("a failed source read fails the status instead of claiming a source never r
   expect(result.error.message).toBe("reader pool exhausted");
 });
 
+test("a source registry past the read bound fails the status instead of judging part of it", async () => {
+  const { result } = await loadWith({
+    readSources: async () => ({ type: "overflow", cap: 1 }),
+  });
+
+  // The rows left out could hold the one stalled court.
+  if (!Result.isError(result)) {
+    throw new TypeError("expected the overflow to reach the caller");
+  }
+  expect(result.error.message).toContain("read bound of 1 rows");
+});
+
 test("one stalled court makes the country stalled, as on the coverage page", async () => {
   expect(
     await healthOf([CURRENT_CZ_SOURCE, sourceOf(ADAPTER_KEYS.CZ_REGIONAL, 9)]),
@@ -182,7 +202,7 @@ test("a withheld source does not count towards the health", async () => {
   const withheld = sourceOf(ADAPTER_KEYS.CZ_REGIONAL, 30);
   const { result } = await loadWith({
     excludedSourceIds: [withheld.id],
-    readSources: async () => [CURRENT_CZ_SOURCE, withheld],
+    readSources: async () => complete([CURRENT_CZ_SOURCE, withheld]),
   });
 
   if (Result.isError(result)) {
