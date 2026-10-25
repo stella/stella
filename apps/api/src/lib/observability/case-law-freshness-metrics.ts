@@ -32,7 +32,7 @@ type PendingSinceSource = "desired_at" | "state_created_at_fallback";
  * gauge is not worth another index on the projection table's hottest write
  * path; the report says it cannot tell rather than publishing a younger age.
  */
-export type CaseLawOldestUnpublishedAge =
+type CaseLawOldestUnpublishedAge =
   | { type: "measured"; seconds: number; source: PendingSinceSource }
   | { type: "no-backlog" }
   | { type: "incomplete" };

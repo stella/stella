@@ -343,21 +343,16 @@ test("one cap covers every served generation", async () => {
     ),
     status: "building",
   });
-  for (const [index, generation] of [
-    OTHER_GENERATION,
-    PARTIAL_GENERATION,
-    THIRD_GENERATION,
-  ].entries()) {
-    // db-await-in-loop: three fixture generations
-    await db.execute(sql`
-      INSERT INTO ${corpusIndexProjectionStates}
-        (family, generation, entity_id, desired_action, desired_epoch)
-      SELECT 'case_law', ${generation},
-        ('0198e331-e578-7000-d00' || ${String(index)} || '-' || lpad(n::text, 12, '0'))::uuid,
-        'erase', 1
-      FROM generate_series(1, ${perGeneration}) AS generated(n)
-    `);
-  }
+  await db.execute(sql`
+    INSERT INTO ${corpusIndexProjectionStates}
+      (family, generation, entity_id, desired_action, desired_epoch)
+    SELECT 'case_law', served.generation,
+      ('0198e331-e578-7000-d00' || served.ordinal || '-' || lpad(n::text, 12, '0'))::uuid,
+      'erase', 1
+    FROM unnest(ARRAY[${OTHER_GENERATION}, ${PARTIAL_GENERATION}, ${THIRD_GENERATION}]::text[])
+      WITH ORDINALITY AS served(generation, ordinal)
+    CROSS JOIN generate_series(1, ${perGeneration}) AS generated(n)
+  `);
   const backlog = await db.transaction(
     async (tx) =>
       await readServedCaseLawBacklogTx(asTestRaw<Transaction>(tx), [
