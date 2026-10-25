@@ -18,17 +18,26 @@ type SanctionsStartupWarmupStatus =
   | { status: "warming" }
   | {
       status: "terminal";
-      lists: ReadonlyMap<SanctionsSource, "warm" | "load-failed">;
+      lists: ReadonlyMap<SanctionsSource, "warm" | "unavailable">;
       reason: "settled" | "warming-bound-exceeded";
     };
 
-type StartupScreen = () => Promise<
-  readonly {
-    source: SanctionsSource;
-    reason: string | null;
-    loaderState: "warming" | "retrying" | "terminal" | null;
-  }[]
->;
+type StartupList = {
+  source: SanctionsSource;
+  reason: string | null;
+  loaderState: "warming" | "retrying" | "terminal" | null;
+};
+
+type StartupScreen = () => Promise<Result<readonly StartupList[], unknown>>;
+
+/** A list screens once its reason clears; any other reason leaves it unavailable. */
+const listOutcomes = (lists: readonly StartupList[]) =>
+  new Map<SanctionsSource, "warm" | "unavailable">(
+    lists.map(({ source, reason }) => [
+      source,
+      reason === null ? "warm" : "unavailable",
+    ]),
+  );
 
 export const createSanctionsStartupWarmup = ({
   screen,
@@ -52,33 +61,30 @@ export const createSanctionsStartupWarmup = ({
     }
     const startedAt = now();
     running = (async () => {
-      let lastLists: Awaited<ReturnType<StartupScreen>> = [];
+      let lastLists: readonly StartupList[] = [];
       for (;;) {
-        const screened = await Result.tryPromise({
-          try: screen,
-          catch: (cause) => cause,
-        });
+        // A failed screening and a rejected one are both retried.
+        const screened = (
+          await Result.tryPromise({ try: screen, catch: (cause) => cause })
+        ).andThen((outcome) => outcome);
         if (Result.isOk(screened)) {
           lastLists = screened.value;
         } else {
           observeFailure(screened.error, { sink: STARTUP_SCREEN_FAILED_SINK });
         }
+        // A list is still settling while its loader warms or waits to retry,
+        // whatever reason the screening that raced it reported.
         const warming = lastLists.filter(
           ({ reason, loaderState }) =>
-            reason === "warming" || loaderState === "retrying",
+            reason === "warming" ||
+            loaderState === "warming" ||
+            loaderState === "retrying",
         );
         if (Result.isOk(screened) && warming.length === 0) {
           state = {
             status: "terminal",
             reason: "settled",
-            lists: new Map(
-              lastLists.map(({ source, reason, loaderState }) => [
-                source,
-                loaderState === "terminal" && reason === "load-failed"
-                  ? "load-failed"
-                  : "warm",
-              ]),
-            ),
+            lists: listOutcomes(lastLists),
           };
           return;
         }
@@ -87,14 +93,7 @@ export const createSanctionsStartupWarmup = ({
           state = {
             status: "terminal",
             reason: "warming-bound-exceeded",
-            lists: new Map(
-              lastLists.map(({ source, reason }) => [
-                source,
-                reason === "warming" || reason === "load-failed"
-                  ? "load-failed"
-                  : "warm",
-              ]),
-            ),
+            lists: listOutcomes(lastLists),
           };
           logger.error("sanctions.startup_warmup_bound_exceeded", {
             sources: warming.map(({ source }) => source).join(","),

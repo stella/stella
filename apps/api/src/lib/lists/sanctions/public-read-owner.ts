@@ -16,15 +16,17 @@ export const sanctionsStartupWarmup = createSanctionsStartupWarmup({
       },
       practiceJurisdictions: [],
     });
-    return result
-      .unwrap("Startup screening failure must be retried by the warmup owner")
-      .lists.map((list) => ({
+    // Only the loader's own outcomes can still change by waiting; a list
+    // that is not loaded, stale or refused is terminal for startup.
+    return result.map(({ lists }) =>
+      lists.map((list) => ({
         ...list,
         loaderState:
-          list.reason === null
-            ? null
-            : screenPublicSanctionsSubject.warmupStartupState(list.source),
-      }));
+          list.reason === "warming" || list.reason === "load-failed"
+            ? screenPublicSanctionsSubject.warmupStartupState(list.source)
+            : null,
+      })),
+    );
   },
   terminalize: screenPublicSanctionsSubject.warmupTerminalize,
 });

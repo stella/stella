@@ -497,6 +497,12 @@ const extractionFields = (
     fields["terminationReason"] = String(readKey(state, termination, "reason"));
     return fields;
   }
+  const workerErrorClass = nonEmptyString(
+    readKey(state, value, "workerErrorClass"),
+  );
+  if (workerErrorClass !== undefined) {
+    fields["workerErrorClass"] = workerErrorClass;
+  }
   fields["exitCode"] = String(readKey(state, value, "exitCode"));
   return fields;
 };

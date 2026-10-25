@@ -879,6 +879,98 @@ test("a cold start converges when editions load for longer than any request dead
   }
 });
 
+test("a startup failure remains tied to its edition while a replacement warms", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const original =
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).find(
+      ({ source }) => source === "eu",
+    )?.edition ?? panic("Missing EU fixture edition");
+  const replacement = { ...original, id: Bun.randomUUIDv7() };
+  const reading = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const loaded: string[] = [];
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    clock,
+    loadEntries: async (options) => {
+      loaded.push(options.edition.id);
+      if (options.edition.id === original.id) {
+        reading.resolve(undefined);
+        await release.promise;
+      }
+      // The freshness seam changes identity; both use the actual stored fixture bytes.
+      return await loadEditionEntries({ ...options, edition: original });
+    },
+  });
+  try {
+    expect(publicScreen.warmupWant(requestDb, "eu", original)).toBe("warming");
+    await reading.promise;
+    publicScreen.warmupTerminalize();
+    expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+    expect(publicScreen.warmupWant(requestDb, "eu", original)).toBe(
+      "load-failed",
+    );
+    expect(publicScreen.warmupWant(requestDb, "eu", replacement)).toBe(
+      "warming",
+    );
+    expect(publicScreen.warmupStartupState("eu")).toBe("warming");
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    expect(loaded).toEqual([original.id, replacement.id]);
+    expect(
+      await pool.run(
+        async (session) =>
+          await Promise.resolve(session.hasEdition("eu", replacement.id)),
+      ),
+    ).toMatchObject({ status: "completed", value: true });
+  } finally {
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    await pool.close();
+  }
+});
+
+test("an edition that finishes loading after startup gave up clears its failure", async () => {
+  const clock = createMatcherTestClock();
+  const pool = createSanctionsMatcherPool({ clock });
+  const edition =
+    (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).find(
+      ({ source }) => source === "eu",
+    )?.edition ?? panic("Missing EU fixture edition");
+  const reading = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const publicScreen = createPublicSanctionsScreening({
+    pool,
+    clock,
+    loadEntries: async (options) => {
+      reading.resolve(undefined);
+      await release.promise;
+      return await loadEditionEntries(options);
+    },
+  });
+  try {
+    expect(publicScreen.warmupWant(requestDb, "eu", edition)).toBe("warming");
+    await reading.promise;
+    publicScreen.warmupTerminalize();
+    expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    // No failure remains for the edition the worker now holds.
+    expect(publicScreen.warmupStartupState("eu")).toBe("warming");
+    expect(
+      await pool.run(
+        async (session) =>
+          await Promise.resolve(session.hasEdition("eu", edition.id)),
+      ),
+    ).toMatchObject({ status: "completed", value: true });
+  } finally {
+    release.resolve(undefined);
+    await publicScreen.warmupSettled();
+    await pool.close();
+  }
+});
+
 test("public screening refuses a pool whose workers could hold different indexes", async () => {
   const pool = createSanctionsMatcherPool({ size: 2 });
   try {

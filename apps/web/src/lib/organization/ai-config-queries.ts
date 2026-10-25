@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { InferDataFromTag } from "@tanstack/react-query";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -94,11 +94,6 @@ export const aiAvailabilityOptions = ({
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-type OrganizationAIAvailability = InferDataFromTag<
-  unknown,
-  ReturnType<typeof aiAvailabilityOptions>["queryKey"]
->;
-
 type UpdateCachedAIAvailabilityOptions = {
   current: OrganizationAIAvailability | undefined;
   instanceProvisioned?: boolean;
@@ -128,6 +123,10 @@ export const updateCachedAIAvailability = ({
   return {
     ...current,
     available: nextInstanceProvisioned || orgConfigured,
+    unavailableReason:
+      nextInstanceProvisioned || orgConfigured
+        ? null
+        : "provider_not_configured",
     instanceProvisioned: nextInstanceProvisioned,
     orgConfigured,
   };

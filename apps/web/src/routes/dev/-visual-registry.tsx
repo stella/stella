@@ -12,6 +12,20 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "task-metadata": {
+    load: async () => {
+      const { TaskMetadataPlayground } =
+        await import("./-components/task-metadata-playground");
+      return { default: TaskMetadataPlayground };
+    },
+  },
+  "column-composer": {
+    load: async () => {
+      const { ColumnComposerPlayground } =
+        await import("./-components/column-composer-playground");
+      return { default: ColumnComposerPlayground };
+    },
+  },
   "handoff-confirmation": {
     load: async () => {
       const { HandoffConfirmationPlayground } =
@@ -61,6 +75,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-continuation-error": {
+    load: async () => {
+      const { ChatContinuationErrorPlayground } =
+        await import("./-components/chat-continuation-error-playground");
+      return { default: ChatContinuationErrorPlayground };
+    },
+  },
   "chat-status": {
     load: async () => {
       const { ChatStatusPlayground } =
@@ -73,6 +94,20 @@ const visualLoaders = {
       const { ChatCitationsPlayground } =
         await import("./-components/chat-citations-playground");
       return { default: ChatCitationsPlayground };
+    },
+  },
+  "chat-statute-citations": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_STATUTE_CITATIONS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-statute-citations-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
     },
   },
   "chat-link-icons": {

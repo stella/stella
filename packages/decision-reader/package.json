@@ -15,6 +15,7 @@
     "./cited-provision": "./src/cited-provision.tsx",
     "./court-name": "./src/court-name.tsx",
     "./decision-identity": "./src/decision-identity.tsx",
+    "./decision-title": "./src/decision-title.ts",
     "./court-tier-badge": "./src/court-tier-badge.tsx",
     "./decision-body-state.logic": "./src/decision-body-state.logic.ts",
     "./decision-text": "./src/decision-text.tsx",

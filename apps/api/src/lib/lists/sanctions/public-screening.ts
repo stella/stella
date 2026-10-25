@@ -86,7 +86,6 @@ type EditionWarmerState = {
   active: boolean;
   running: Promise<void> | null;
   holdsMatcher: boolean;
-  terminalized: boolean;
 };
 
 const initialEditionWarmerState = (): EditionWarmerState => ({
@@ -94,7 +93,6 @@ const initialEditionWarmerState = (): EditionWarmerState => ({
   active: false,
   running: null,
   holdsMatcher: false,
-  terminalized: false,
 });
 
 const warmFailure = (
@@ -270,12 +268,17 @@ const createEditionWarmer = ({
     outcome: MatcherWorkOutcome<Result<void, WarmFailure>>,
   ) => {
     // A newer edition replaced this one while it loaded; the next pass loads it.
-    if (targets.get(source) !== target || target.terminal) {
+    if (targets.get(source) !== target) {
       return;
     }
     const failure = warmFailure(outcome);
+    // A load that lands after startup gave up still clears the failure.
     if (failure === null) {
       targets.delete(source);
+      return;
+    }
+    // An edition that missed startup is not retried.
+    if (target.terminal) {
       return;
     }
     target.failures += 1;
@@ -349,13 +352,13 @@ const createEditionWarmer = ({
       }
       return target.retryAt > now() ? "retrying" : "warming";
     },
+    // Failure belongs to the edition that missed startup, not later publications.
     terminalize: () => {
-      state.terminalized = true;
       for (const target of targets.values()) {
         target.terminal = true;
       }
     },
-    terminalized: () => state.terminalized,
+    terminalized: () => [...targets.values()].some((target) => target.terminal),
     /** Every pass started so far, including any that start as one ends. */
     settled: async () => {
       while (state.running !== null) {
@@ -379,7 +382,7 @@ const createEditionWarmer = ({
           edition,
           failures: 0,
           retryAt: instant,
-          terminal: state.terminalized,
+          terminal: false,
         };
         targets.set(source, target);
       }

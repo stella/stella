@@ -1008,6 +1008,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
+    path: "apps/web/src/routes/sitemap[.]xml.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Passes the default fetch transport to public case-law and statute shard readers for the root sitemap.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/bun-docker/api.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1104,6 +1111,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Probes development service endpoints and local TCP ports for the configured stack.",
     transports: ["global:fetch", "module:node:net"],
+  },
+  {
+    path: "packages/scripts/src/sanctions-startup-proof.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Probes the operator-configured API startup gate and public sanctions readiness before sending traffic.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/scripts/src/model-catalog-benchmarks-gen.ts",

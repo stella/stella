@@ -5,7 +5,12 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName, isAstNode, isIdentifier } from "./utils.ts";
+import {
+  getImportedName,
+  isAstNode,
+  isIdentifier,
+  memberPropertyName,
+} from "./utils.ts";
 
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
 const DIRECT_UUID_GENERATORS = new Set(["v4", "v7"]);
@@ -33,14 +38,11 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const randomUuidAliases = new Set();
-        const cryptoAliases = new Set(["crypto"]);
         const uuidModuleAliases = new Set<string>();
 
         return {
           before() {
             randomUuidAliases.clear();
-            cryptoAliases.clear();
-            cryptoAliases.add("crypto");
             uuidModuleAliases.clear();
           },
           ImportDeclaration(node) {
@@ -77,16 +79,6 @@ export default eslintCompatPlugin({
             }
 
             for (const specifier of node.specifiers) {
-              if (specifier.type === "ImportDefaultSpecifier") {
-                cryptoAliases.add(specifier.local.name);
-                continue;
-              }
-
-              if (specifier.type === "ImportNamespaceSpecifier") {
-                cryptoAliases.add(specifier.local.name);
-                continue;
-              }
-
               if (getImportedName(specifier) === "randomUUID") {
                 randomUuidAliases.add(specifier.local.name);
                 context.report({
@@ -126,10 +118,9 @@ export default eslintCompatPlugin({
             }
 
             if (
+              !isAstNode(callee) ||
               callee.type !== "MemberExpression" ||
-              callee.computed ||
-              !isIdentifier(callee.property, "randomUUID") ||
-              !isCryptoObject(callee.object, cryptoAliases)
+              memberPropertyName(callee) !== "randomUUID"
             ) {
               return;
             }
@@ -144,17 +135,3 @@ export default eslintCompatPlugin({
     },
   },
 });
-
-const isCryptoObject = (node: unknown, cryptoAliases: Set<string>): boolean => {
-  if (isIdentifier(node) && cryptoAliases.has(node.name)) {
-    return true;
-  }
-
-  return (
-    isAstNode(node) &&
-    node.type === "MemberExpression" &&
-    node.computed === false &&
-    isIdentifier(node.object, "globalThis") &&
-    isIdentifier(node.property, "crypto")
-  );
-};

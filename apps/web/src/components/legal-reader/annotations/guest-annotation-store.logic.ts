@@ -7,8 +7,8 @@ import {
   READER_ANNOTATION_MAX_SPANS,
   READER_ANNOTATION_QUOTE_MAX_LENGTH,
   READER_ANNOTATION_STYLES,
-  READER_ANNOTATION_TARGET_TYPES,
   READER_ANNOTATION_VISIBILITIES,
+  READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
 
 import type {
@@ -37,7 +37,7 @@ export const GUEST_ANNOTATIONS_MAX_ITEMS = 100;
 const annotationColorSchema = v.picklist(READER_ANNOTATION_COLORS);
 const annotationStyleSchema = v.picklist(READER_ANNOTATION_STYLES);
 const annotationVisibilitySchema = v.picklist(READER_ANNOTATION_VISIBILITIES);
-const annotationTargetTypeSchema = v.picklist(READER_ANNOTATION_TARGET_TYPES);
+const annotationTargetTypeSchema = v.picklist(READER_DOCUMENT_TARGET_TYPES);
 const uuidSchema = v.pipe(v.string(), v.uuid());
 const spanSchema = v.object({
   blockAnchorId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
