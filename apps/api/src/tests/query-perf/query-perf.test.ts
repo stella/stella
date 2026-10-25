@@ -1,56 +1,78 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import * as v from "valibot";
 
-import { sha256Hex } from "@stll/sha256/bun";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusProjectionOutstandingIntentProbe,
+  corpusProjectionUnpublishedIntentProbe,
+} from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/read-budgets";
 
-import { parseQueryPerfBaselineFile } from "./baseline";
-import { completeQueryPerfRun } from "./baseline-recording";
+import {
+  CASE_LAW_SCENARIOS,
+  type CaseLawScenarioGeneration,
+  seedCorpusReadBudgets,
+  serveCaseLawGeneration,
+} from "./corpus-seed";
 import { withQueryPerfFixture } from "./fixture";
 import {
   budgetViolations,
+  measureOwnerStatement,
   measureQueryPerf,
-  QUERY_PERF_BUFFER_HEADROOM,
+  scaleViolations,
   shapeViolations,
 } from "./measurement";
 import { QUERY_PERF_PROFILES } from "./profiles";
-import { queryPerfRegistry } from "./registry";
-import { QUERY_PERF_SEED_ID, seedQueryPerf } from "./seed";
-import { QUERY_PERF_SETTINGS } from "./settings";
+import {
+  corpusStatementRegistry,
+  queryPerfRegistry,
+  READ_BUDGET_PROFILES,
+  SCHEDULED_JOB_MEASUREMENTS,
+} from "./registry";
+import { measureScheduledJobRun } from "./scheduled-run";
+import { seedQueryPerf } from "./seed";
+import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
-const SETTINGS_DIGEST = sha256Hex(JSON.stringify(QUERY_PERF_SETTINGS));
+const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
 
-describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
-  test("both document-search profiles pass and a correlated policy exceeds each buffer budget", async () => {
-    const databaseUrl = process.env["DATABASE_URL"];
-    if (databaseUrl === undefined) {
+const log = (record: Record<string, unknown>) => {
+  console.info(JSON.stringify(record));
+};
+
+const profileBudgets = (profile: "corpus" | "tenant") =>
+  Object.entries(READ_BUDGET_PROFILES)
+    .filter(([, owner]) => owner === profile)
+    .map(([id]) => id)
+    .toSorted();
+
+/**
+ * An entry marked over budget must stay over it: once a change brings it
+ * under, the marker has to go, so the budget is enforced again.
+ */
+const expectWithinBudget = (id: ReadBudgetId, sharedBlocks: number) => {
+  const budget = READ_BUDGETS[id];
+  const over = budgetViolations(
+    { sharedBlocks, executionTimeMs: 0 },
+    budget.pages,
+  );
+  if ("overBudget" in budget) {
+    expect(
+      over,
+      `${id} is marked over budget but measured ${sharedBlocks} <= ${budget.pages}; remove its overBudget marker`,
+    ).not.toEqual([]);
+    return;
+  }
+  expect(over, `${id}: ${sharedBlocks} pages`).toEqual([]);
+};
+
+describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
+  test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
       panic("DATABASE_URL required for query perf");
-    }
-    const mode = v.parse(
-      v.picklist(["compare", "record"]),
-      process.env["QUERY_PERF_BASELINE_MODE"] ?? "compare",
-    );
-    const baselineFile = Bun.file(new URL("baseline.json", import.meta.url));
-    const baseline =
-      mode === "record" || !(await baselineFile.exists())
-        ? null
-        : parseQueryPerfBaselineFile(await baselineFile.json());
-    if (
-      baseline !== null &&
-      (baseline.seedId !== QUERY_PERF_SEED_ID ||
-        baseline.settingsDigest !== SETTINGS_DIGEST)
-    ) {
-      panic(
-        "Query perf baseline seed or planner settings differ; record and review a new baseline",
-      );
-    }
-    const recorded: Record<
-      string,
-      { sharedBlocks: number; executionTimeMs: number }
-    > = {};
-    const measuredIds: string[] = [];
+    const measured = new Set<string>();
     for (const profileId of QUERY_PERF_PROFILES) {
       // db-await-in-loop: fresh profile databases must be seeded and measured sequentially to avoid benchmark contention.
       await withQueryPerfFixture({
@@ -62,15 +84,14 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
             async () => await seedQueryPerf(db, profileId),
           );
           expect(seed.context.featureIds).toEqual([]);
-          for (const [entryId, entry] of Object.entries(
-            queryPerfRegistry(seed),
-          )) {
-            const id = `${profileId}-${entryId}`;
-            measuredIds.push(id);
-            const expected = baseline?.entries[id];
+          for (const entry of queryPerfRegistry(seed)) {
+            const { budgetId } = entry;
+            const id = budgetId;
+            measured.add(budgetId);
+            const budget = READ_BUDGETS[budgetId];
             // db-await-in-loop: one bounded registry measurement at a time, avoiding cross-query benchmark contention.
             const good = await deadline.run(
-              `measure ${entryId}`,
+              `measure ${id}`,
               async () =>
                 await measureQueryPerf({
                   database: db,
@@ -78,51 +99,35 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
                   query: entry.query,
                 }),
             );
-            console.info(
-              JSON.stringify({
-                event: "query_perf_measurement",
-                profileId,
-                entryId,
-                ...good.metrics,
-                samples: good.samples,
-                baseline: expected,
-                nearBufferBudget:
-                  expected !== undefined &&
-                  good.metrics.sharedBlocks >=
-                    expected.sharedBlocks * QUERY_PERF_BUFFER_HEADROOM * 0.95,
-              }),
-            );
+            log({
+              event: "read_budget_measurement",
+              profileId,
+              budgetId,
+              budgetPages: budget.pages,
+              ...good.metrics,
+              samples: good.samples,
+            });
             expect(
               good.plan.Plan["Actual Rows"],
               `actual row budget: measured ${String(good.plan.Plan["Actual Rows"])}; expected ${entry.expectedRows}`,
             ).toBe(entry.expectedRows);
-            console.info(
-              JSON.stringify({
-                event: "query_perf_plan",
-                profileId,
-                entryId,
-                plan: good.plan.Plan,
-              }),
-            );
-            const violations = shapeViolations(good.plan, profileId);
-            expect(
-              violations,
-              `plan shape violations: measured ${violations.length}; budget 0`,
-            ).toEqual([]);
-            recorded[id] = good.metrics;
-            if (expected === undefined) {
-              continue;
-            }
-            expect(budgetViolations(good.metrics, expected)).toEqual([]);
+            log({
+              event: "read_budget_plan",
+              profileId,
+              budgetId,
+              plan: good.plan.Plan,
+            });
+            expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            expect(budgetViolations(good.metrics, budget.pages)).toEqual([]);
             await deadline.run(
-              `CREATE POLICY ${entryId}`,
+              `CREATE POLICY ${id}`,
               async () =>
                 await db.execute(sql`CREATE POLICY query_perf_correlated_fixture ON search_documents AS RESTRICTIVE FOR SELECT TO stella USING (
               (SELECT count(*) FROM entities policy_entity WHERE policy_entity.id = search_documents.entity_id) > 0
             )`),
             );
             const bad = await deadline.run(
-              `measure policy fixture ${entryId}`,
+              `measure policy fixture ${id}`,
               async () =>
                 await measureQueryPerf({
                   database: db,
@@ -130,27 +135,29 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
                   query: entry.query,
                 }),
             );
-            console.info(
-              JSON.stringify({
-                event: "query_perf_measurement",
-                profileId,
-                entryId,
-                fixture: "correlated-policy",
-                ...bad.metrics,
-                samples: bad.samples,
-                baseline: expected,
-              }),
-            );
-            // The fixture must reach the policy and fail the measured budget, independently of shape checks.
+            log({
+              event: "read_budget_measurement",
+              profileId,
+              budgetId,
+              fixture: "correlated-policy",
+              ...bad.metrics,
+            });
+            // The fixture must reach the policy at either size, and at the
+            // size the budget is stated for it must fail the budget
+            // independently of the shape check.
             expect(shapeViolations(bad.plan, profileId)).toContain(
               "per-row policy subplan on search_documents",
             );
-            expect(
-              budgetViolations(bad.metrics, expected).map(({ kind }) => kind),
-            ).toContain("shared-buffer-budget");
+            if (profileId === "growth") {
+              expect(
+                budgetViolations(bad.metrics, budget.pages).map(
+                  ({ kind }) => kind,
+                ),
+              ).toContain("shared-buffer-budget");
+            }
             // Failed entries leave the policy in their disposable database for fixture teardown.
             await deadline.run(
-              `DROP POLICY ${entryId}`,
+              `DROP POLICY ${id}`,
               async () =>
                 await db.execute(
                   sql`DROP POLICY IF EXISTS query_perf_correlated_fixture ON search_documents`,
@@ -160,24 +167,175 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
         },
       });
     }
-    if (baseline !== null) {
-      expect(
-        [
-          ...new Set([
-            ...Object.keys(baseline.entries),
-            ...Object.keys(recorded),
-          ]),
-        ].toSorted(),
-      ).toEqual(measuredIds.toSorted());
-    }
-    await completeQueryPerfRun({
-      mode,
-      baseline,
-      recorded,
-      seedId: QUERY_PERF_SEED_ID,
-      settingsDigest: SETTINGS_DIGEST,
-      baselinePath: new URL("baseline.json", import.meta.url),
-      outputPath: process.env["GITHUB_OUTPUT"],
+    expect([...measured].toSorted()).toEqual(profileBudgets("tenant"));
+  }, 420_000); // timeout: two fresh databases are seeded and measured; each profile owns a 150-second deadline.
+
+  test("corpus statements and scheduled jobs stay within their budgets at production shape", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    const measured = new Set<string>();
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async (db, deadline, openClient) => {
+        const seed = await deadline.run(
+          "seed",
+          async () => await seedCorpusReadBudgets(db),
+        );
+
+        for (const entry of corpusStatementRegistry(seed)) {
+          const { budgetId } = entry;
+          const id = budgetId;
+          measured.add(budgetId);
+          // db-await-in-loop: one bounded registry measurement at a time, avoiding cross-query benchmark contention.
+          const result = await deadline.run(
+            `measure ${id}`,
+            async () =>
+              await measureOwnerStatement({ database: db, build: entry.build }),
+          );
+          log({
+            event: "read_budget_measurement",
+            profileId: "corpus",
+            budgetId,
+            budgetPages: READ_BUDGETS[budgetId].pages,
+            ...result.metrics,
+            perRow: result.metrics.sharedBlocks / entry.expectedRows,
+          });
+          log({
+            event: "read_budget_plan",
+            profileId: "corpus",
+            budgetId,
+            plan: result.plan.Plan,
+          });
+          expect(result.plan.Plan["Actual Rows"]).toBe(entry.expectedRows);
+          expectWithinBudget(budgetId, result.metrics.sharedBlocks);
+        }
+
+        const runPages = async (
+          jobId: string,
+          task: string,
+          generation: CaseLawScenarioGeneration,
+        ) => {
+          await serveCaseLawGeneration(db, generation);
+          const run = await measureScheduledJobRun({
+            database: db,
+            openClient,
+            jobId,
+            task,
+          });
+          log({
+            event: "read_budget_job_run",
+            jobId,
+            generation,
+            pages: run.pages,
+            statements: run.statements,
+          });
+          return run.pages;
+        };
+        for (const job of SCHEDULED_JOB_MEASUREMENTS) {
+          const { budgetId } = job;
+          measured.add(budgetId);
+          const budget = READ_BUDGETS[budgetId];
+          for (const scenario of job.scenarios) {
+            // db-await-in-loop: scenarios move the serving generation, so they run one at a time.
+            const size = await deadline.run(
+              `run ${job.jobId} on ${scenario.size}`,
+              async () => await runPages(job.jobId, job.task, scenario.size),
+            );
+            // db-await-in-loop: the twin scenario moves the serving generation after the first run finished.
+            const double = await deadline.run(
+              `run ${job.jobId} on ${scenario.double}`,
+              async () => await runPages(job.jobId, job.task, scenario.double),
+            );
+            expect(
+              budgetViolations(
+                { sharedBlocks: size, executionTimeMs: 0 },
+                budget.pages,
+              ),
+            ).toEqual([]);
+            expect(
+              budgetViolations(
+                { sharedBlocks: double, executionTimeMs: 0 },
+                budget.pages,
+              ),
+            ).toEqual([]);
+            expect(
+              scaleViolations({ size, double }),
+              `${job.jobId} on ${scenario.size}`,
+            ).toEqual([]);
+          }
+        }
+
+        // The gate must refuse what it exists to refuse. The freshness
+        // report's former reads go over its budget on this fixture, and the
+        // census-readiness revision checks, which it no longer runs, grow
+        // with the generation.
+        const unbounded = await deadline.run(
+          "measure unbounded freshness reads",
+          async () => {
+            let pages = 0;
+            for (const query of UNBOUNDED_FRESHNESS_STATEMENTS) {
+              // db-await-in-loop: two fixed statements, measured one at a time.
+              const result = await measureOwnerStatement({
+                database: db,
+                build: () => query,
+              });
+              pages += result.metrics.sharedBlocks;
+            }
+            return pages;
+          },
+        );
+        log({
+          event: "read_budget_refusal",
+          fixture: "unbounded-freshness",
+          pages: unbounded,
+        });
+        expect(
+          budgetViolations(
+            { sharedBlocks: unbounded, executionTimeMs: 0 },
+            READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages,
+          ).map(({ kind }) => kind),
+        ).toEqual(["shared-buffer-budget"]);
+
+        const revisionChecks = async (
+          generation: CaseLawScenarioGeneration,
+        ) => {
+          const target = { family: "case_law" as const, generation };
+          let pages = 0;
+          for (const query of [
+            corpusProjectionOutstandingIntentProbe(target),
+            corpusProjectionUnpublishedIntentProbe(
+              target,
+              CORPUS_INDEX_MANIFESTS[generation],
+            ),
+          ]) {
+            // db-await-in-loop: the two revision checks, measured one at a time.
+            const result = await measureOwnerStatement({
+              database: db,
+              build: () => query,
+            });
+            pages += result.metrics.sharedBlocks;
+          }
+          return pages;
+        };
+        const quiet = CASE_LAW_SCENARIOS.quiet;
+        const growth = await deadline.run(
+          "measure revision checks",
+          async () => ({
+            size: await revisionChecks(quiet.size),
+            double: await revisionChecks(quiet.double),
+          }),
+        );
+        log({
+          event: "read_budget_refusal",
+          fixture: "convergence-revision-checks",
+          ...growth,
+        });
+        expect(scaleViolations(growth)).not.toEqual([]);
+      },
     });
-  }, 420_000);
+    expect([...measured].toSorted()).toEqual(profileBudgets("corpus"));
+  }, 420_000); // timeout: the corpus profile seeds about a million rows inside its own 300-second deadline.
 });

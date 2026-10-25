@@ -98,7 +98,7 @@ type OpenClientOptions = {
   };
 };
 
-type GatedTestClientScope = {
+export type GatedTestClientScope = {
   /** Opens a client with a pool of its own, closed when the scope ends. */
   readonly openClient: (options?: OpenClientOptions) => GatedTestClient;
 };

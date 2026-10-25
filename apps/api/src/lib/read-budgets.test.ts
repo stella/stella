@@ -1,0 +1,117 @@
+import { describe, expect, test } from "bun:test";
+import path from "node:path";
+
+import {
+  MCP_TOOL_READ_BUDGETS,
+  READ_BUDGETS,
+  UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
+} from "@/api/lib/read-budgets";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
+
+import {
+  ledgerMergeBase,
+  parseReasonedLedger,
+  runLedgerMembershipGuard,
+} from "../../../../scripts/ledger-membership.ts";
+import unmeasuredLedger from "./read-budgets-unmeasured.json";
+
+const repoRoot = path.resolve(import.meta.dir, "../../../..");
+const LEDGER = "apps/api/src/lib/read-budgets-unmeasured.json";
+const unmeasured = new Set(
+  parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
+);
+
+/**
+ * A scheduled job or MCP tool that reads without a declared budget is how an
+ * unbounded statement reaches production unmeasured. Every declaration is
+ * checked here, without a database, so a new job or tool fails before the
+ * gate that measures it is even scheduled.
+ */
+describe("read budget declarations", () => {
+  test("every scheduled job declares its reads", () => {
+    const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
+    const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
+      const listed = unmeasured.has(`job:${job.id}`);
+      if (job.reads === "unmeasured") {
+        return listed
+          ? []
+          : [
+              `${job.id}: unmeasured reads need a ledger entry; declare a budget instead`,
+            ];
+      }
+      if (listed) {
+        return [`${job.id}: declares its reads, so remove its ledger entry`];
+      }
+      if (job.reads === "load-governed") {
+        return governed.has(job.id)
+          ? []
+          : [
+              `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
+            ];
+      }
+      const budget = READ_BUDGETS[job.reads.budget];
+      return budget.pages <= UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING
+        ? []
+        : [
+            `${job.id}: ${budget.pages} pages per run is over the ${UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING}-page ceiling for a job outside the load governor`,
+          ];
+    });
+    expect(violations).toEqual([]);
+  });
+
+  test("every governed backfill is declared as governed", () => {
+    for (const id of Object.values(SCHEDULER_BACKFILL_IDS)) {
+      expect(
+        DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
+        id,
+      ).toBe("load-governed");
+    }
+  });
+
+  test("every MCP tool has a budget or a ledger entry, never both", () => {
+    const budgeted = new Set<string>(Object.keys(MCP_TOOL_READ_BUDGETS));
+    const violations = MCP_STATIC_TOOL_NAMES.flatMap((tool) => {
+      const listed = unmeasured.has(`mcp:${tool}`);
+      if (budgeted.has(tool) === listed) {
+        return [
+          `${tool}: ${listed ? "has a budget and a ledger entry" : "declares no read budget"}`,
+        ];
+      }
+      return [];
+    });
+    expect(violations).toEqual([]);
+  });
+
+  test("the ledger names only declared jobs and tools", () => {
+    const known = new Set([
+      ...DECLARED_SCHEDULER_JOBS.map(({ id }) => `job:${id}`),
+      ...MCP_STATIC_TOOL_NAMES.map((tool) => `mcp:${tool}`),
+    ]);
+    expect([...unmeasured].filter((id) => !known.has(id))).toEqual([]);
+  });
+
+  test("the unmeasured ledger only shrinks", () => {
+    expect(
+      runLedgerMembershipGuard({
+        ledgerRel: LEDGER,
+        repoRoot,
+        parseLedger: parseReasonedLedger,
+        label: "read-budgets-unmeasured",
+        remediation: "declare a read budget and measure it instead",
+        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
+      }),
+    ).toBe(0);
+  });
+
+  test("an over-budget entry is a measured statement with a reason", () => {
+    for (const [id, budget] of Object.entries(READ_BUDGETS)) {
+      if ("overBudget" in budget) {
+        expect(budget.surface, id).toBe("statement");
+        expect(budget.overBudget.reason.trim().length, id).toBeGreaterThan(0);
+      }
+      expect(Number.isInteger(budget.pages) && budget.pages > 0, id).toBe(true);
+    }
+  });
+});
