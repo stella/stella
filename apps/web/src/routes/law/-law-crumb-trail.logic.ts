@@ -29,6 +29,7 @@ export const statuteLawCrumbTrailOf = ({
 >) => {
   const identity = statuteDocumentIdentity(eli);
   const label = statuteActLabel({ eli, title });
+  const year = identity.year === null ? null : Number(identity.year);
   return {
     kind: "statute",
     status,
@@ -39,14 +40,14 @@ export const statuteLawCrumbTrailOf = ({
     shortTitle: label.name,
     fullTitle: title,
     yearLink:
-      identity.year === null
+      year === null
         ? null
         : {
-            year: Number(identity.year),
+            year,
             link: linkOptions({
               to: "/law/$country/statutes",
               params: { country: toStatuteCountrySegment(country) },
-              search: { year: Number(identity.year) },
+              search: { year },
             }),
           },
   } as const;
