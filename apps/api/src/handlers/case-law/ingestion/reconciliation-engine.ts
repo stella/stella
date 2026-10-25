@@ -86,6 +86,7 @@ import {
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
+  SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
@@ -1508,6 +1509,7 @@ const walkSlice = async ({
   // the failure surfaces in the loop's tally.
   const listing = await listReconciliationSlice({
     adapterKey,
+    proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
     pageDelayMs: LIST_DELAY_MS,
     pageTimeoutMs: LIST_TIMEOUT_MS,
