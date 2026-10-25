@@ -127,11 +127,9 @@ describe("US provision keys", () => {
 
   test("labels read in the codes' own printed form", () => {
     const { provision } = keyOf("12 C.F.R. § 1026.18(c)(1)");
-    expect(usa.citationForm).toMatchObject({ type: "printed" });
-    if (usa.citationForm.type === "printed") {
-      expect(usa.citationForm.format(provision.reference)).toBe(
-        "§ 1026.18(c)(1)",
-      );
-    }
+    expect(usa.citationForm.type).toBe("printed");
+    expect(usa.citationForm.format(provision.reference)).toBe(
+      "§ 1026.18(c)(1)",
+    );
   });
 });
