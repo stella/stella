@@ -71,6 +71,7 @@ import {
   createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
+  type TestHandlerContextOverrides,
 } from "@/api/tests/helpers/handler-context";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
@@ -1613,12 +1614,20 @@ if (!databaseUrl || !runPostgres) {
         invoiceId: SafeId<"invoice">,
         workspaceId: SafeId<"workspace">,
       ) =>
-        (
-          await db
-            .select({ share: invoiceMatterShare(invoices, workspaceId) })
-            .from(invoices)
-            .where(eq(invoices.id, invoiceId))
-        ).at(0)?.share;
+        // Through the application role: invoice_lines forces row security,
+        // so only a scoped read sees a client invoice's lines.
+        await scoped(
+          { orgId: scenario.orgId },
+          scenario.actors.owner,
+        )(
+          async (tx) =>
+            (
+              await tx
+                .select({ share: invoiceMatterShare(invoices, workspaceId) })
+                .from(invoices)
+                .where(eq(invoices.id, invoiceId))
+            ).at(0)?.share,
+        );
       expect(await shareOf(legacyId, scenario.firstMatterId)).toBe(363);
       expect(await shareOf(legacyId, scenario.secondMatterId)).toBe(0);
       expect(await shareOf(scenario.invoiceId, scenario.firstMatterId)).toBe(
@@ -2076,25 +2085,24 @@ if (!databaseUrl || !runPostgres) {
           scenario.orgId,
           userId,
         );
-        const handlerContext = <TContext>() =>
-          createTestHandlerContext<TContext>({
-            safeDb,
-            scopedDb,
-            audit: async () => {},
-            memberRole: sessionMemberRole(actor),
-            session: { activeOrganizationId: scenario.orgId },
-            user: { id: userId },
-            workspaceId: scenario.firstMatterId,
-            params,
-            getActiveWorkspaceIds: async () => matterIds,
-            getAccessibleWorkspaces: async () =>
-              matterIds.map((id) => ({ id, status: "active" })),
-            getWorkspaceAccess: async (id: SafeId<"workspace">) =>
-              matterIds.includes(id) ? { id, status: "active" } : null,
-            pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
-              matterIds.includes(id),
-          });
-        const renderedMatters: SafeId<"workspace">[][] = [];
+        const contextOverrides: TestHandlerContextOverrides = {
+          safeDb,
+          scopedDb,
+          audit: async () => {},
+          memberRole: sessionMemberRole(actor),
+          session: { activeOrganizationId: scenario.orgId },
+          user: { id: userId },
+          workspaceId: scenario.firstMatterId,
+          params,
+          getActiveWorkspaceIds: async () => matterIds,
+          getAccessibleWorkspaces: async () =>
+            matterIds.map((id) => ({ id, status: "active" })),
+          getWorkspaceAccess: async (id: SafeId<"workspace">) =>
+            matterIds.includes(id) ? { id, status: "active" } : null,
+          pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
+            matterIds.includes(id),
+        };
+        const renderedMatters: string[][] = [];
         const pdfExport = createInvoicePdfExport(
           async () => panic("This test stops the export before storing it"),
           async ({ invoice }) => {
@@ -2116,12 +2124,15 @@ if (!databaseUrl || !runPostgres) {
                 columns: { id: true },
               }),
           ),
-          detail:
-            await readInvoiceById.handler(
-              handlerContext<Parameters<typeof readInvoiceById.handler>[0]>(),
-            ),
+          detail: await readInvoiceById.handler(
+            createTestHandlerContext<
+              Parameters<typeof readInvoiceById.handler>[0]
+            >(contextOverrides),
+          ),
           pdf: await pdfExport.handler(
-            handlerContext<Parameters<typeof pdfExport.handler>[0]>(),
+            createTestHandlerContext<Parameters<typeof pdfExport.handler>[0]>(
+              contextOverrides,
+            ),
           ),
           renderedMatters,
           accounting: await scopedDb(async (tx) =>
