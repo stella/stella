@@ -579,6 +579,14 @@ if (!databaseUrl || !runPostgresTests) {
       "a start for %s supersedes the open session",
       async (_name, requestsFor) => {
         await withRolledBackFixture(async (tx, fixture) => {
+          // A seat count is checked against the organization's recorded
+          // access state, so the organization needs one.
+          await tx.insert(organizationAccessStates).values({
+            organizationId: fixture.organizationId,
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationStartedAt: sql`now()`,
+            evaluationEndsAt: sql`now() + interval '14 days'`,
+          });
           const requests = requestsFor(fixture);
           const provider = installFakeProvider(sessionResponse);
           try {

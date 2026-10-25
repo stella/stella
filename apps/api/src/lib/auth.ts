@@ -2731,10 +2731,6 @@ type AuthSessionReader = typeof readAuthSession;
 
 const API_KEYS_ROUTE_PATH = "/api-keys";
 const COOKIE_CACHE_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const AUTHORITATIVE_SESSION_QUERY = {
-  disableCookieCache: true,
-  disableRefresh: true,
-} as const;
 
 export const requiresAuthoritativeApiSession = (request: Request): boolean => {
   if (COOKIE_CACHE_SAFE_METHODS.has(request.method)) {
@@ -2752,17 +2748,44 @@ type ReadRequestAuthSessionOptions = {
   request: Request;
 };
 
-export const readRequestAuthSession = async ({
-  getSession,
-  request,
-}: ReadRequestAuthSessionOptions) =>
-  await getSession({
+/** Whether the stored session a cached cookie names still exists unexpired. */
+const isStoredSessionLive = async (token: string): Promise<boolean> =>
+  (
+    await rootDb
+      .select({ id: authSession.id })
+      .from(authSession)
+      .where(
+        and(
+          eq(authSession.token, token),
+          sql`${authSession.expiresAt} > now()`,
+        ),
+      )
+      .limit(1)
+  ).length > 0;
+
+type StoredSessionLiveness = (token: string) => Promise<boolean>;
+
+/**
+ * The caller's session. An API-key mutation also confirms the cached session
+ * against storage, so a session revoked within the cookie cache window cannot
+ * mint a durable credential. Only the session row is read: the key endpoints
+ * load the owner themselves.
+ */
+export const readRequestAuthSession = async (
+  { getSession, request }: ReadRequestAuthSessionOptions,
+  isLive: StoredSessionLiveness = isStoredSessionLive,
+) => {
+  const resolved = await getSession({
     headers: request.headers,
     returnHeaders: true,
-    ...(requiresAuthoritativeApiSession(request)
-      ? { query: AUTHORITATIVE_SESSION_QUERY }
-      : {}),
   });
+  if (resolved.response === null || !requiresAuthoritativeApiSession(request)) {
+    return resolved;
+  }
+  return (await isLive(resolved.response.session.token))
+    ? resolved
+    : { ...resolved, response: null };
+};
 
 type GetSessionAndMemberAuthorizationOptions = {
   getSession?: AuthSessionReader | undefined;

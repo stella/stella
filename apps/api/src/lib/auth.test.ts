@@ -1112,24 +1112,45 @@ describe("session freshness", () => {
     ["http://localhost/v1/api-keys", "DELETE"],
     ["http://localhost/v1/api-keys/personal", "PATCH"],
   ])(
-    "API-key mutation reads the session from storage (%s %s)",
+    "API-key mutation confirms the cached session in storage (%s %s)",
     async (url, method) => {
       const reads: unknown[] = [];
+      const checked: string[] = [];
+      const cached = {
+        headers: new Headers(),
+        response: asTestRaw<
+          Awaited<
+            ReturnType<
+              Parameters<typeof readRequestAuthSession>[0]["getSession"]
+            >
+          >["response"]
+        >({ session: { token: "cached-token" }, user: { id: "user-1" } }),
+      };
+      const read = async (live: boolean) =>
+        await readRequestAuthSession(
+          {
+            request: new Request(url, { method }),
+            getSession: async (options) => {
+              reads.push(options);
+              return cached;
+            },
+          },
+          async (token) => {
+            checked.push(token);
+            return live;
+          },
+        );
 
-      await readRequestAuthSession({
-        request: new Request(url, { method }),
-        getSession: async (options) => {
-          reads.push(options);
-          return { headers: new Headers(), response: null };
-        },
-      });
+      const current = await read(true);
+      const revoked = await read(false);
 
+      expect(current.response).toBe(cached.response);
+      expect(revoked.response).toBeNull();
+      expect(checked).toEqual(["cached-token", "cached-token"]);
+      // The owner row is not reloaded: only the session row is checked.
       expect(reads).toEqual([
-        {
-          headers: new Headers(),
-          query: { disableCookieCache: true, disableRefresh: true },
-          returnHeaders: true,
-        },
+        { headers: new Headers(), returnHeaders: true },
+        { headers: new Headers(), returnHeaders: true },
       ]);
     },
   );
@@ -1141,14 +1162,32 @@ describe("session freshness", () => {
     "ordinary request retains the cookie-cache path (%s %s)",
     async (url, method) => {
       const reads: unknown[] = [];
+      const checked: string[] = [];
 
-      await readRequestAuthSession({
-        request: new Request(url, { method }),
-        getSession: async (options) => {
-          reads.push(options);
-          return { headers: new Headers(), response: null };
+      await readRequestAuthSession(
+        {
+          request: new Request(url, { method }),
+          getSession: async (options) => {
+            reads.push(options);
+            return {
+              headers: new Headers(),
+              response: asTestRaw<
+                Awaited<
+                  ReturnType<
+                    Parameters<typeof readRequestAuthSession>[0]["getSession"]
+                  >
+                >["response"]
+              >({ session: { token: "cached-token" }, user: { id: "user-1" } }),
+            };
+          },
         },
-      });
+        async (token) => {
+          checked.push(token);
+          return true;
+        },
+      );
+
+      expect(checked).toEqual([]);
 
       expect(reads).toEqual([
         {

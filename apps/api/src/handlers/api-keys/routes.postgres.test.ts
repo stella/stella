@@ -80,6 +80,23 @@ describe.skipIf(!runPostgresTests)("personal API keys (postgres)", () => {
       "revoked-browser",
     );
     expect(rejected.status).toBe(401);
+    // A machine key has no issuance fence of its own: the confirmed session
+    // is what refuses it.
+    const rejectedMachine = await server.fetch(
+      new Request("http://localhost/api-keys", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: revokedBrowser.cookieHeader(),
+        },
+        body: JSON.stringify({
+          name: "revoked-machine",
+          scopes: ["stella:read"],
+          permissions: { workspace: ["read"] },
+        }),
+      }),
+    );
+    expect(rejectedMachine.status).toBe(401);
     expect(
       await rootDb
         .select({ id: apikey.id })
