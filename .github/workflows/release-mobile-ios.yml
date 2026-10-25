@@ -62,11 +62,12 @@ jobs:
           no-cache: true
 
       # Signing secrets reach only the steps below that sign or upload, never
-      # the install, so no dependency lifecycle script can read them.
+      # the install, so no dependency lifecycle script can read them. A cold
+      # install, as every release job: a signed build restores no cache
+      # another job wrote.
       - name: Install mobile dependencies
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       # The profile is a public record of what may be signed, not a key; the
       # app config reads its UUID to sign the app target with it.
