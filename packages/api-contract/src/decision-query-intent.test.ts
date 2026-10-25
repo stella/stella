@@ -305,6 +305,20 @@ describe("the hits that are the named decision", () => {
     ).toEqual({ type: "text", text: "2079" });
   });
 
+  test("a Brazilian citation as the citation formatter writes it reads as its docket", () => {
+    const brazil = { grammar: DECISION_DOCKET_GRAMMARS.BRA } as const;
+    for (const entry of [
+      "STF, RE 99234567 AgR, j. 03/02/2020",
+      "TST, RR - 751-20.2099.5.08.0017",
+    ]) {
+      expect(parseDecisionQuery(entry, brazil)).toMatchObject({
+        type: "identifier",
+        kind: "docket",
+        jurisdiction: "BRA",
+      });
+    }
+  });
+
   test("unscoped, those forms read as text, as they did before any scope declared them", () => {
     for (const text of ["10-12", "No. 5", "20A87", "No. 8, Orig."]) {
       expect(parseDecisionQuery(text)).toEqual({ type: "text", text });

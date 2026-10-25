@@ -1006,7 +1006,7 @@ const BR_CNJ_DIGITS_RE =
   /^(?<sequence>\d{7})(?<check>\d{2})(?<year>\d{4})(?<branch>\d)(?<tribunal>\d{2})(?<origin>\d{4})$/u;
 
 const BR_CLASS_NUMBER_RE = new RegExp(
-  String.raw`^(?<incidents>(?:${alternation(BR_LEADING_INCIDENTS)} ${alternation(BR_INCIDENT_CONNECTORS)} )*)(?<className>${alternation(BR_SUPERIOR_COURT_CLASSES)}) (?<number>\d{1,3}(?:\.\d{3})+|\d{1,9})(?:/(?<state>${alternation(BR_STATES)}))?(?: (?<trailing>${alternation(BR_TRAILING_INCIDENTS)}(?:-${alternation(BR_TRAILING_INCIDENTS)}){0,5}))?$`,
+  String.raw`^(?<incidents>(?:${alternation(BR_LEADING_INCIDENTS)} ${alternation(BR_INCIDENT_CONNECTORS)} )*)(?<className>${alternation(BR_SUPERIOR_COURT_CLASSES)}) (?<number>\d{1,3}(?:\.\d{3}){1,2}|\d{1,9})(?:/(?<state>${alternation(BR_STATES)}))?(?: (?<trailing>${alternation(BR_TRAILING_INCIDENTS)}(?:-${alternation(BR_TRAILING_INCIDENTS)}){0,5}))?$`,
   "iu",
 );
 
@@ -1189,7 +1189,7 @@ const DECISION_DOCKET_GRAMMAR_LIST: readonly DecisionDocketGrammar[] =
  * jurisdiction it comes from; an unscoped entry never reaches them.
  */
 const SCOPED_ONLY_DOCKET_JURISDICTIONS: ReadonlySet<DecisionDocketJurisdiction> =
-  new Set<DecisionDocketJurisdiction>(["USA"]);
+  new Set<DecisionDocketJurisdiction>(["BRA", "USA"]);
 
 const UNSCOPED_DECISION_DOCKET_GRAMMARS: readonly DecisionDocketGrammar[] =
   DECISION_DOCKET_GRAMMAR_LIST.filter(

@@ -627,8 +627,9 @@ const HUNGARIAN_FUNCTION_WORDS = [
  *
  * The negations (`não`, `nem`, `nunca`), the privative `sem` and the
  * exceptives (`exceto`, `salvo`) are absent for the reason stated above.
- * `deve` is absent too: it is the modal and also "owes", the subject of a
- * debt dispute.
+ * `deve` and `poder` are absent too: `deve` is the modal and also "owes",
+ * the subject of a debt dispute, and `poder` is the modal and also "power"
+ * (abuso de poder, poder familiar).
  */
 const PORTUGUESE_FUNCTION_WORDS = [
   "como",
@@ -702,7 +703,6 @@ const PORTUGUESE_FUNCTION_WORDS = [
   "ter",
   "pode",
   "podem",
-  "poder",
   "aquele",
   "aquela",
   "essa",

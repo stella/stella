@@ -80,7 +80,9 @@ export type DecisionIdentifierKind = "docket" | "ecli" | "reporter" | "neutral";
  * do not claim is text, verbatim.
  */
 export type DecisionQueryIntent =
-  { type: "empty" } | DecisionIdentifierIntent | { type: "text"; text: string };
+  | { type: "empty" }
+  | DecisionIdentifierIntent
+  | { type: "text"; text: string };
 
 const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
 
@@ -251,9 +253,10 @@ const identifierWithin = (
     const longest = Math.min(tokens.length, start + EMBEDDED_WINDOW_MAX_TOKENS);
     for (let end = start + 1; end <= longest; end += 1) {
       const window = tokens.slice(start, end).join(" ");
-      // Every docket grammar the entry can reach writes a slash; an ECLI is a
-      // single word. Anything else is not worth a grammar's time.
-      if (!window.includes("/") && !/ecli:/iu.test(window)) {
+      // Every docket and every ECLI carries a digit; a window without one is
+      // not worth a grammar's time. A slash is not required: a CNJ number, a
+      // superior-court class number and a neutral citation write none.
+      if (!/\p{Nd}/u.test(window)) {
         continue;
       }
       const reading = readingOfWindow({ end, grammar, start, tokens });
