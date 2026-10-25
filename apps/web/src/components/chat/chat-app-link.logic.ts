@@ -1,3 +1,4 @@
+import { linkOptions } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -120,11 +121,11 @@ export const createStatuteDayTarget = (work: LinkedStatute, asOf: string) => {
     version: null,
   });
 
-  return {
+  return linkOptions({
     params: { country: params.country, slug: params.slug },
     search: { asOf },
     to: "/law/$country/statutes/$slug",
-  } as const;
+  });
 };
 
 /** `appOrigins`: the origins this app answers on (the page's, the public URL). */

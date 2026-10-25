@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { linkOptions } from "@tanstack/react-router";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
@@ -230,7 +231,7 @@ describe("organization settings admission request wave", () => {
             const denial = Result.isError(outcome) ? outcome.error : undefined;
             expect(isRedirect(denial)).toBe(true);
             expect(denial).toMatchObject({
-              options: { to: "/settings/account/profile" },
+              options: linkOptions({ to: "/settings/account/profile" }),
             });
             expect(
               queryClient.getQueryState(navigationOptions.queryKey)

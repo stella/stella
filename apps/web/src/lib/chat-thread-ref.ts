@@ -1,3 +1,5 @@
+import { linkOptions } from "@tanstack/react-router";
+
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -63,8 +65,8 @@ export const chatThreadRoute = ({
   workspaceId?: string | null | undefined;
 }): ChatThreadRoute =>
   workspaceId
-    ? {
+    ? linkOptions({
         to: "/chat/workspaces/$workspaceId/$threadId",
         params: { workspaceId, threadId },
-      }
-    : { to: "/chat/$threadId", params: { threadId } };
+      })
+    : linkOptions({ to: "/chat/$threadId", params: { threadId } });

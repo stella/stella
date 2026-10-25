@@ -1,3 +1,4 @@
+import { linkOptions } from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -436,11 +437,11 @@ describe("document routes", () => {
       }),
     ).toEqual({
       fileFieldId: "current-field",
-      route: {
+      route: linkOptions({
         to: "/workspaces/$workspaceId/$viewId/document",
         params: { workspaceId: "workspace-1", viewId: "all" },
         search: { entity: "entity-1", field: "current-field" },
-      },
+      }),
     });
   });
 
@@ -456,10 +457,10 @@ describe("document routes", () => {
       }),
     ).toEqual({
       fileFieldId: null,
-      route: {
+      route: linkOptions({
         to: "/workspaces/$workspaceId/$viewId",
         params: { workspaceId: "workspace-1", viewId: "all" },
-      },
+      }),
     });
   });
 

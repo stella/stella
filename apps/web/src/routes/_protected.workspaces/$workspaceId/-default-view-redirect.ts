@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { linkOptions, useNavigate } from "@tanstack/react-router";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -34,13 +34,13 @@ export const resolveDefaultWorkspaceViewTarget = async ({
   const firstView = views.at(0);
 
   if (!firstView) {
-    return { to: "/workspaces" };
+    return linkOptions({ to: "/workspaces" });
   }
 
-  return {
+  return linkOptions({
     to: "/workspaces/$workspaceId/$viewId",
     params: { workspaceId, viewId: firstView.id },
-  };
+  });
 };
 
 // Mounted-component redirect to the workspace's default view. Shared by the

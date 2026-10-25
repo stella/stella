@@ -1,3 +1,4 @@
+import { linkOptions } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import type { WebApiRoutes } from "@/lib/api";
@@ -33,16 +34,16 @@ export const resolveMatterNavigationTarget = ({
   id,
 }: MatterNavigationIdentity): MatterNavigationTarget => {
   if (defaultViewId === null || defaultViewId === undefined) {
-    return {
+    return linkOptions({
       params: { workspaceId: id },
       to: "/workspaces/$workspaceId",
-    };
+    });
   }
 
-  return {
+  return linkOptions({
     params: { viewId: defaultViewId, workspaceId: id },
     to: "/workspaces/$workspaceId/$viewId",
-  };
+  });
 };
 
 export const resolveAutomaticExpandedMatterId = ({

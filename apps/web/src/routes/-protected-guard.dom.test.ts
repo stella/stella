@@ -1,5 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag } from "@tanstack/react-query";
+import { linkOptions } from "@tanstack/react-router";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -75,10 +76,10 @@ describe("signed-in route guard", () => {
       const thrown = Result.isError(guarded) ? guarded.error : undefined;
       expect(isRedirect(thrown)).toBe(true);
       expect(thrown).toMatchObject({
-        options: {
+        options: linkOptions({
           to: "/auth/professional-use",
           search: { redirectTo: "/workspaces?view=list" },
-        },
+        }),
       });
       // Nothing signed-in was requested for an account the API still refuses.
       expect(

@@ -1,3 +1,4 @@
+import { linkOptions } from "@tanstack/react-router";
 import type { NavigateOptions, RegisteredRouter } from "@tanstack/react-router";
 import { Result } from "better-result";
 import * as v from "valibot";
@@ -81,20 +82,22 @@ export const toAppRedirectTo = (
  */
 export const afterSignInNavigation = (
   redirectTo: string,
-): NavigateTo<"/auth/organization"> => ({
-  to: "/auth/organization",
-  search: { redirectTo },
-  replace: true,
-});
+): NavigateTo<"/auth/organization"> =>
+  linkOptions({
+    to: "/auth/organization",
+    search: { redirectTo },
+    replace: true,
+  });
 
 /** An account without an organization sets one up, keeping the destination. */
 export const onboardingNavigation = (
   redirectTo: string | undefined,
-): NavigateTo<"/onboarding"> => ({
-  to: "/onboarding",
-  search: { redirectTo: toAppRedirectTo(redirectTo) },
-  replace: true,
-});
+): NavigateTo<"/onboarding"> =>
+  linkOptions({
+    to: "/onboarding",
+    search: { redirectTo: toAppRedirectTo(redirectTo) },
+    replace: true,
+  });
 
 const ONBOARDING_LANDING = "/chat";
 

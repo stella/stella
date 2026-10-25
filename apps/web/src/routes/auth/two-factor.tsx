@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, linkOptions, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/auth/two-factor")({
     if (context.session) {
       throw redirect(
         search.linkProvider
-          ? {
+          ? linkOptions({
               to: "/auth/error",
               search: {
                 error: "account_not_linked",
@@ -27,15 +27,15 @@ export const Route = createFileRoute("/auth/two-factor")({
                 redirectTo: search.redirectTo,
               },
               replace: true,
-            }
-          : {
+            })
+          : linkOptions({
               to: "/auth/organization",
               search: {
                 devQuickStart: search.devQuickStart,
                 redirectTo: search.redirectTo,
               },
               replace: true,
-            },
+            }),
       );
     }
   },

@@ -1,3 +1,4 @@
+import { linkOptions } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
@@ -145,17 +146,17 @@ export const getEntityDocumentRoute = ({
   workspaceId,
 }: EntityDocumentRouteInput): EntityNavigationRoute => {
   if (fileFieldId === null) {
-    return {
+    return linkOptions({
       to: "/workspaces/$workspaceId/$viewId",
       params: { workspaceId, viewId: "all" },
-    };
+    });
   }
 
-  return {
+  return linkOptions({
     to: "/workspaces/$workspaceId/$viewId/document",
     params: { workspaceId, viewId: "all" },
     search: { entity: entityId, field: fileFieldId },
-  };
+  });
 };
 
 type ResolveEntityDocumentRouteOptions = {
@@ -244,11 +245,12 @@ export const getRecentFileRoute = ({
   workspaceId,
 }: Pick<RecentFileWithIdentity, "entityId" | "workspaceId"> & {
   fileFieldId: string;
-}): EntityNavigationRoute => ({
-  to: "/workspaces/$workspaceId/$viewId/document",
-  params: { workspaceId, viewId: "all" },
-  search: { entity: entityId, field: fileFieldId },
-});
+}): EntityNavigationRoute =>
+  linkOptions({
+    to: "/workspaces/$workspaceId/$viewId/document",
+    params: { workspaceId, viewId: "all" },
+    search: { entity: entityId, field: fileFieldId },
+  });
 
 type DialogCloseActionState =
   { status: "idle" } | { status: "pending"; run: () => void };
@@ -357,16 +359,16 @@ export const getCaseLawHitRoute = (
     : {};
 
   return language === undefined
-    ? {
+    ? linkOptions({
         to: "/law/$country/cases/$court/$slug",
         params: { country, court, slug },
         search,
-      }
-    : {
+      })
+    : linkOptions({
         to: "/law/$country/cases/$court/$language/$slug",
         params: { country, court, language, slug },
         search,
-      };
+      });
 };
 
 /**

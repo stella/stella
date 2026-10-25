@@ -7,7 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { getRouteApi, Link } from "@tanstack/react-router";
+import { getRouteApi, Link, linkOptions } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useNow, useTimeZone, useTranslations } from "use-intl";
 
@@ -447,17 +447,17 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
                     openChatThreadDecision(event, thread);
                   }}
                   {...(threadRef.scope === "global"
-                    ? {
+                    ? linkOptions({
                         to: "/chat/$threadId",
                         params: { threadId: threadRef.threadId },
-                      }
-                    : {
+                      })
+                    : linkOptions({
                         to: "/chat/workspaces/$workspaceId/$threadId",
                         params: {
                           threadId: threadRef.threadId,
                           workspaceId: threadRef.workspaceId,
                         },
-                      })}
+                      }))}
                 />
               }
             >

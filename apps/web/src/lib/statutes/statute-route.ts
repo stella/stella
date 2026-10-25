@@ -1,3 +1,5 @@
+import { linkOptions } from "@tanstack/react-router";
+
 import {
   isPublicLegislationCountry,
   isPublicLegislationPageCountry,
@@ -87,16 +89,16 @@ export const createStatuteLinkTarget = ({
   });
 
   return params.version === undefined
-    ? {
+    ? linkOptions({
         params: { country: params.country, slug: params.slug },
         to: "/law/$country/statutes/$slug",
-      }
-    : {
+      })
+    : linkOptions({
         params: {
           country: params.country,
           slug: params.slug,
           version: params.version,
         },
         to: "/law/$country/statutes/$slug/v/$version",
-      };
+      });
 };

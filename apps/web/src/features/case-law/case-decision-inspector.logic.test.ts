@@ -1,3 +1,4 @@
+import { linkOptions } from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -191,7 +192,7 @@ describe("case decision inspector", () => {
     });
 
     expect(calls).toEqual([
-      {
+      linkOptions({
         to: "/law/$country/cases/$court/$slug",
         params: {
           country: "cz",
@@ -199,8 +200,8 @@ describe("case decision inspector", () => {
           slug: "4-as-3-2008",
         },
         search: { q: undefined },
-      },
-      {
+      }),
+      linkOptions({
         to: "/law/$country/cases/$court/$language/$slug",
         params: {
           country: "eu",
@@ -209,8 +210,8 @@ describe("case decision inspector", () => {
           slug: "c-400-99-f472865427c41152",
         },
         search: { q: undefined },
-      },
-      {
+      }),
+      linkOptions({
         to: "/law/$country/cases/$court/$slug",
         params: {
           country: "cz",
@@ -219,7 +220,7 @@ describe("case decision inspector", () => {
         },
         search: { q: "náhrada škody" },
         hash: "p-12",
-      },
+      }),
     ]);
   });
 

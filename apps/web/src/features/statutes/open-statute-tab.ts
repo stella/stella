@@ -7,7 +7,7 @@
 
 import type { MouseEvent } from "react";
 
-import { useNavigate } from "@tanstack/react-router";
+import { linkOptions, useNavigate } from "@tanstack/react-router";
 
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -32,10 +32,10 @@ export const statuteListLinkTarget = (statute: StatuteOpenTarget) => {
     slug: statute.slug,
     version: null,
   });
-  return {
+  return linkOptions({
     params: { country, slug },
     to: "/law/$country/statutes/$slug",
-  } as const;
+  });
 };
 
 export const useOpenStatuteTab = (searchQuery?: string) => {

@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { linkOptions } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -222,10 +223,10 @@ describe("the address a statute consolidation is canonical at", () => {
         load(queryClient, { slug: SLUG, version: "2024-01-01" }),
       ),
     ).toMatchObject({
-      options: {
+      options: linkOptions({
         params: { country: COUNTRY_SEGMENT, slug: SLUG },
         to: "/law/$country/statutes/$slug",
-      },
+      }),
     });
   });
 
@@ -268,10 +269,10 @@ describe("the address a statute consolidation is canonical at", () => {
         load(queryClient, { slug: SLUG, version: "2024-01-01" }),
       ),
     ).toMatchObject({
-      options: {
+      options: linkOptions({
         params: { country: COUNTRY_SEGMENT, slug: SLUG },
         to: "/law/$country/statutes/$slug",
-      },
+      }),
     });
   });
 
@@ -292,7 +293,7 @@ describe("the address a statute consolidation is canonical at", () => {
         }),
       ),
     ).toMatchObject({
-      options: {
+      options: linkOptions({
         hash: "sec-2079",
         params: {
           country: COUNTRY_SEGMENT,
@@ -301,7 +302,7 @@ describe("the address a statute consolidation is canonical at", () => {
         },
         search: { jump: JUMP, q: "odpovědnost" },
         to: "/law/$country/statutes/$slug/v/$version",
-      },
+      }),
     });
   });
 
@@ -325,14 +326,14 @@ describe("the address a statute consolidation is canonical at", () => {
         }),
       ),
     ).toMatchObject({
-      options: {
+      options: expect.objectContaining({
         search: {
           compare: "2020-01-01",
           provision: "sec-2079",
           show: "all",
         },
         to: "/law/$country/statutes/$slug",
-      },
+      }),
     });
   });
 });
