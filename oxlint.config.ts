@@ -44,6 +44,8 @@ import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
 } from "./scripts/sql-perf-scope.ts";
+// Defaults every lint to the committed, read-only Tailwind cache.
+import "./scripts/tailwind-lint-cache.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>

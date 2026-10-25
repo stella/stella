@@ -1,0 +1,1 @@
+{"opacity-[calc(1-0.1*var(--nested-dialogs))]":{"valid":true,"declarations":[["","opacity","calc(1 - 0.1 * var(--nested-dialogs))"]],"values":{"calc(1 - 0.1 * var(--nested-dialogs))":{"p":["--nested-dialogs"],"f":[],"u":false}}}}
