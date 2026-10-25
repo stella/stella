@@ -20,11 +20,16 @@ import {
   selectionAnchorsFrom,
 } from "./selection-anchor";
 
-GlobalRegistrator.register();
+GlobalRegistrator.register({ url: "http://self-hosted.example.test/reader" });
 const { BlockRenderer } =
   await import("@stll/decision-reader/document-ast-text");
 const { ReaderPresentationProvider } =
   await import("@stll/decision-reader/reader-adapters");
+const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { DecisionCitationChip } =
+  await import("@/components/references/decision-citation-chip");
+const appMessages = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(() => {
   document.getSelection()?.removeAllRanges();
@@ -106,47 +111,67 @@ const blocks: Block[] = [
   },
 ];
 
-/**
- * The decision link the web reader draws over a cited case number: the words
- * stay inside the trigger, and the badge after them is chrome, as
- * `DecisionCitationChip` draws a citing text.
- */
-const chip = (chrome: boolean) => (children: ReactNode) => (
-  <a href="#cited">
-    {children}
-    <span data-reader-chrome={chrome ? "" : undefined}>
-      {" "}
-      <span>NS {citedCase}</span>
-    </span>
-  </a>
-);
+/** How the citation over the cited case number is drawn. */
+const CHIP = {
+  /** The production chip, with the citing words as its text. */
+  real: "real",
+  /** A badge drawn as decision words, which the reader must never do. */
+  badgeAsWords: "badge-as-words",
+} as const;
+type Chip = (typeof CHIP)[keyof typeof CHIP];
 
-const render = (chrome: boolean) => {
+const CHIP_RENDER = {
+  [CHIP.real]: (children: ReactNode) => (
+    <DecisionCitationChip
+      citingText={children}
+      decision={{
+        decisionId: "00000000-0000-4000-8000-000000000001",
+        court: "Nejvyšší soud",
+        courtShortCode: "NS",
+        caseNumber: citedCase,
+        decisionDate: "2019-06-12",
+        readerUrl: "/law/cze/cases/nejvyssi-soud/23-cdo-1192-2019",
+        originalUrl: null,
+      }}
+    />
+  ),
+  [CHIP.badgeAsWords]: (children: ReactNode) => (
+    <a href="#cited">
+      {children} <span>NS</span>
+    </a>
+  ),
+} as const satisfies Record<Chip, (children: ReactNode) => ReactNode>;
+
+const render = (chip: Chip) => {
   const start = citing.indexOf(citedCase);
   const root = document.createElement("article");
   // safe-html: React renderToStaticMarkup escapes the fixture text.
   root.innerHTML = renderToStaticMarkup(
-    <ReaderPresentationProvider adapters={{ messages }}>
-      {blocks.map((block) => (
-        <BlockRenderer
-          activeMatchIndex={-1}
-          anchorsByPieceId={{
-            paragraph: [
-              {
-                end: start + citedCase.length,
-                key: "citation",
-                render: chip(chrome),
-                start,
-              },
-            ],
-          }}
-          block={block}
-          key={block.id}
-          rangesByPieceId={{}}
-          variant="case-law"
-        />
-      ))}
-    </ReaderPresentationProvider>,
+    <IntlProvider locale="en" messages={appMessages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ReaderPresentationProvider adapters={{ messages }}>
+          {blocks.map((block) => (
+            <BlockRenderer
+              activeMatchIndex={-1}
+              anchorsByPieceId={{
+                paragraph: [
+                  {
+                    end: start + citedCase.length,
+                    key: "citation",
+                    render: CHIP_RENDER[chip],
+                    start,
+                  },
+                ],
+              }}
+              block={block}
+              key={block.id}
+              rangesByPieceId={{}}
+              variant="case-law"
+            />
+          ))}
+        </ReaderPresentationProvider>
+      </FormattingProvider>
+    </IntlProvider>,
   );
   document.body.append(root);
   const anchored = [...root.querySelectorAll<HTMLElement>("[data-anchor]")];
@@ -200,7 +225,7 @@ const accepted = (root: HTMLElement, element: HTMLElement, from: number) => {
 };
 
 test("every unit the reader anchors is one the server's anchor pieces accept", () => {
-  const { root, units } = render(true);
+  const { root, units } = render(CHIP.real);
   expect(units.map((unit) => unit.dataset["anchor"])).toEqual(
     blocks.flatMap(readerAnchorPiecesOf).map(({ anchorId }) => anchorId),
   );
@@ -211,11 +236,16 @@ test("every unit the reader anchors is one the server's anchor pieces accept", (
 });
 
 test("a selection past a cited case number keeps the decision's offsets", () => {
-  const { root, units } = render(true);
+  const { root, units } = render(CHIP.real);
   const paragraph = units.find((unit) => unit.dataset["anchor"] === "p-7");
   if (!paragraph) {
     throw new TypeError("Missing cited paragraph");
   }
+  // The production chip draws its badge inside the paragraph, after the
+  // citing words.
+  expect(paragraph.querySelector("[data-decision-citation]")?.textContent).toBe(
+    `${citedCase} NS`,
+  );
   const from = citing.indexOf("a věc");
   expect(selectionAnchorsFrom(select(paragraph, from), root)).toEqual([
     {
@@ -229,7 +259,7 @@ test("a selection past a cited case number keeps the decision's offsets", () => 
 });
 
 test("a citation chip drawn as words would move the offsets off the decision", () => {
-  const { root, units } = render(false);
+  const { root, units } = render(CHIP.badgeAsWords);
   const paragraph = units.find((unit) => unit.dataset["anchor"] === "p-7");
   if (!paragraph) {
     throw new TypeError("Missing cited paragraph");
@@ -238,7 +268,7 @@ test("a citation chip drawn as words would move the offsets off the decision", (
 });
 
 test("AI-generated text in the reader anchors nothing, so no AI action takes it", () => {
-  const { root } = render(true);
+  const { root } = render(CHIP.real);
   // An AI layer as the analysis column draws it: generated text, marked as
   // reader chrome.
   const note = document.createElement("section");
