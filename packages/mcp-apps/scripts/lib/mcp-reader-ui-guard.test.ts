@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 import * as v from "valibot";
 
-import readerPackage from "../../../decision-reader/package.json";
 import {
   READER_MESSAGE_KEYS,
   READER_TEMPLATE_KEYS,
@@ -10,11 +9,12 @@ import {
 import {
   inspectMcpReaderUi,
   MCP_READER_UI_APP_DIRECTORIES,
+  MCP_SHARED_UI_MODULE_FILES,
 } from "./mcp-reader-ui-guard";
 
 const sharedModule = {
   file: "packages/decision-reader/src/document-ast-text.tsx",
-  text: "export const BlockRenderer = () => <p />; export const InlineContent = () => <span />; export const DecisionIdentity = () => <bdi />; export const CourtName = () => <span />;",
+  text: "export const BlockRenderer = () => <p />; export const InlineContent = () => <span />; export const DecisionIdentity = () => <bdi />; export const CourtName = () => <span />; export const CourtFilter = () => <fieldset />;",
 };
 const astModule = {
   file: "packages/legal-ast/src/document-ast.ts",
@@ -55,6 +55,7 @@ test("adding a duplicate renderer in a reachable dependency fails the guard", ()
     "class BlockRenderer {}",
     "const DecisionIdentity = () => <bdi />;",
     "const CourtName = () => <span />;",
+    "const CourtFilter = () => <fieldset />;",
   ]) {
     expect(
       inspectFixture(text).some((issue) =>
@@ -129,15 +130,11 @@ test("the built reader graph uses the shared package without duplicate UI", asyn
     file,
     text: await Bun.file(path.join(root, file)).text(),
   });
-  const readerSourceRoot = "packages/decision-reader/src";
-  const sharedFiles = Object.values(readerPackage.exports)
-    .filter((file) => file.endsWith(".tsx"))
-    .map((file) => path.join(readerSourceRoot, path.basename(file)));
   expect(Object.keys(graphs).toSorted()).toEqual(
     [...MCP_READER_UI_APP_DIRECTORIES].toSorted(),
   );
   const [sharedModules, astModules] = await Promise.all([
-    Promise.all(sharedFiles.map(loadModule)),
+    Promise.all(MCP_SHARED_UI_MODULE_FILES.map(loadModule)),
     Promise.all(
       [
         "packages/legal-ast/src/document-ast.ts",
@@ -205,4 +202,31 @@ test("reader messages are derived from every web locale without fallback", async
       expect(generated[locale]?.[key]).toBe(value);
     }
   }
+});
+
+test("production shared export census rejects a local court filter", async () => {
+  expect(MCP_SHARED_UI_MODULE_FILES).toContain(
+    "packages/ui/src/components/court-filter.tsx",
+  );
+  const sharedModules = await Promise.all(
+    MCP_SHARED_UI_MODULE_FILES.map(async (file) => ({
+      file,
+      text: await Bun.file(path.join(root, file)).text(),
+    })),
+  );
+  const issues = inspectMcpReaderUi({
+    sharedModules,
+    astModules: [astModule],
+    bundleModules: [
+      consumer,
+      sharedModule,
+      {
+        file: "packages/mcp-apps/src/case-law-results/filter.tsx",
+        text: "const CourtFilter = () => <fieldset />;",
+      },
+    ],
+  });
+  expect(issues).toContain(
+    "packages/mcp-apps/src/case-law-results/filter.tsx: local CourtFilter duplicates shared reader UI",
+  );
 });

@@ -47,6 +47,11 @@ import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
@@ -60,15 +65,12 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  cursorInput,
   errorResult,
   internalFailureResult,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {

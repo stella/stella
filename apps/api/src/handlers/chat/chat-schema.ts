@@ -8,6 +8,7 @@ import { deepEquals } from "bun";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
@@ -71,7 +72,6 @@ import {
 } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { withNullsOmitted } from "@/api/lib/json-value";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 import {
