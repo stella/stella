@@ -1,11 +1,15 @@
 import { Result, TaggedError } from "better-result";
+import { inArray, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import { HOSTED_CUSTOMER_ERASURE_STATUS } from "@/api/db/schema";
 import {
-  claimHostedCustomerErasures,
+  HOSTED_CUSTOMER_ERASURE_STATUS,
+  hostedCustomerErasures,
+} from "@/api/db/schema";
+import {
   withAggregateTransaction,
+  withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
 import { HOSTED_CUSTOMER_ERASURE_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
@@ -21,6 +25,7 @@ import type {
   SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const ERASE_HOSTED_CUSTOMERS_TASK =
@@ -38,25 +43,58 @@ export class HostedCustomerErasureTerminalError extends TaggedError(
   "HostedCustomerErasureTerminalError",
 )<{ message: string }> {}
 
+/** Leases due erasures: the lease and the claim audit commit with the row locks. */
 const claimDueErasures = async (
   db: SchedulerTaskContext["db"],
   runId: SchedulerTaskContext["runId"],
 ) =>
-  await claimHostedCustomerErasures({
+  await withSkipLockedBatch({
     database: db,
     limit: BATCH_SIZE,
-    leaseMilliseconds: CLAIM_LEASE_MS,
-    maximumAttempts: HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
-    recordTransitionAuditEvent: async (tx, rows) => {
+    select: (tx) =>
+      tx
+        .select({ id: hostedCustomerErasures.id })
+        .from(hostedCustomerErasures)
+        .where(
+          sql`${hostedCustomerErasures.status} IN (${HOSTED_CUSTOMER_ERASURE_STATUS.pending}, ${HOSTED_CUSTOMER_ERASURE_STATUS.failed})
+            AND ${hostedCustomerErasures.attempts} < ${HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS}
+            AND ${hostedCustomerErasures.nextAttemptAt} <= now()`,
+        )
+        .orderBy(hostedCustomerErasures.nextAttemptAt)
+        .limit(BATCH_SIZE)
+        .$dynamic(),
+    run: async (tx, rows) => {
+      if (rows.length === 0) {
+        return [];
+      }
+      const claimed = await tx
+        .update(hostedCustomerErasures)
+        .set({
+          attempts: sql`${hostedCustomerErasures.attempts} + 1`,
+          nextAttemptAt: sql`now() + (${CLAIM_LEASE_MS} * interval '1 millisecond')`,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          inArray(
+            hostedCustomerErasures.id,
+            rows.map(({ id }) => id),
+          ),
+        )
+        .returning({
+          id: hostedCustomerErasures.id,
+          externalCustomerRef: hostedCustomerErasures.externalCustomerRef,
+          attempts: hostedCustomerErasures.attempts,
+        });
       await recordSystemAudit(tx, "system:hosted-customer-erasure", {
         subject: runId,
         counts: {
-          claimed: rows.length,
+          claimed: claimed.length,
           erased: 0,
           failed: 0,
           terminalFailures: 0,
         },
       });
+      return claimed;
     },
   });
 
@@ -86,12 +124,6 @@ const productionDependencies = (now: Date): ErasureDependencies => ({
   now: () => now,
 });
 
-type FailureGroup = {
-  attempts: number;
-  code: string;
-  ids: string[];
-};
-
 export const runHostedCustomerErasures = async (
   context: SchedulerTaskContext,
   dependencies: ErasureDependencies = productionDependencies(
@@ -120,34 +152,28 @@ export const runHostedCustomerErasures = async (
     }),
   });
   const erasedIds: string[] = [];
-  const failureGroups = new Map<number, FailureGroup>();
+  const failures: { id: string; attempts: number; code: string }[] = [];
   for (const { row, result } of outcomes) {
     if (Result.isOk(result)) {
       erasedIds.push(row.id);
-      continue;
+    } else {
+      failures.push({
+        id: row.id,
+        attempts: row.attempts,
+        code: errorCode(result.error),
+      });
     }
-    const code = errorCode(result.error);
-    const group = failureGroups.get(row.attempts) ?? {
-      attempts: row.attempts,
-      code,
-      ids: [],
-    };
-    if (group.code !== code) {
-      group.code = "request_failed";
-    }
-    group.ids.push(row.id);
-    failureGroups.set(row.attempts, group);
   }
+  const terminal = failures.filter(
+    ({ attempts }) => attempts >= HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
+  );
 
   let erased = 0;
   let failed = 0;
-  const groups = [...failureGroups.values()];
-  let terminalFailures = 0;
-  for (const group of groups) {
-    if (group.attempts >= HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS) {
-      terminalFailures += group.ids.length;
-    }
-  }
+  const from = [
+    HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+    HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+  ];
   await withAggregateTransaction(db, async (tx) => {
     if (erasedIds.length > 0) {
       await transitionBatch({
@@ -155,10 +181,7 @@ export const runHostedCustomerErasures = async (
         spec: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
         ids: erasedIds,
         options: {
-          from: [
-            HOSTED_CUSTOMER_ERASURE_STATUS.pending,
-            HOSTED_CUSTOMER_ERASURE_STATUS.failed,
-          ],
+          from,
           to: HOSTED_CUSTOMER_ERASURE_STATUS.erased,
           set: { lastErrorCode: null },
         },
@@ -167,57 +190,43 @@ export const runHostedCustomerErasures = async (
         },
       });
     }
-    const transitionFailureGroup = async (
-      group: FailureGroup | undefined,
-    ): Promise<void> => {
-      if (group !== undefined) {
-        const { attempts, code, ids } = group;
-        await transitionBatch({
-          tx,
-          spec: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
-          ids,
-          options: {
-            from: [
-              HOSTED_CUSTOMER_ERASURE_STATUS.pending,
-              HOSTED_CUSTOMER_ERASURE_STATUS.failed,
-            ],
-            to: HOSTED_CUSTOMER_ERASURE_STATUS.failed,
-            set: {
-              lastErrorCode: code,
-              nextAttemptAt: new Date(
-                dependencies.now().getTime() + 60_000 * 2 ** (attempts - 1),
+    if (failures.length > 0) {
+      // One statement for the batch: each row keeps its own error code and
+      // backs off from its own attempt count.
+      await transitionBatch({
+        tx,
+        spec: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
+        ids: failures.map(({ id }) => id),
+        options: {
+          from,
+          to: HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+          set: {
+            lastErrorCode: sqlCaseFragment({
+              operand: sql`${hostedCustomerErasures.id}`,
+              branches: failures.map(
+                ({ id, code }) => sql`WHEN ${id}::uuid THEN ${code}`,
               ),
-            },
+              fallback: sql`${hostedCustomerErasures.lastErrorCode}`,
+            }),
+            nextAttemptAt: sql`${dependencies.now().toISOString()}::timestamptz + interval '1 minute' * power(2, ${hostedCustomerErasures.attempts} - 1)`,
           },
-          recordTransitionAuditEvent: (_tx, rows) => {
-            failed += rows.length;
-          },
-        });
-      }
-    };
-    await Promise.all([
-      transitionFailureGroup(failureGroups.get(1)),
-      transitionFailureGroup(failureGroups.get(2)),
-      transitionFailureGroup(failureGroups.get(3)),
-      transitionFailureGroup(failureGroups.get(4)),
-      transitionFailureGroup(failureGroups.get(5)),
-    ]);
+        },
+        recordTransitionAuditEvent: (_tx, rows) => {
+          failed += rows.length;
+        },
+      });
+    }
     await recordSystemAudit(tx, "system:hosted-customer-erasure", {
       subject: runId,
-      counts: { claimed: 0, erased, failed, terminalFailures },
+      counts: { claimed: 0, erased, failed, terminalFailures: terminal.length },
     });
   });
 
-  const terminalGroups = groups.filter(
-    ({ attempts }) => attempts >= HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
-  );
-  for (const { code, ids } of terminalGroups) {
-    for (const id of ids) {
-      dependencies.observe(
-        new HostedCustomerErasureTerminalError({ message: code }),
-        { sink: ERASURE_FAILED, ctx: { jobId: id } },
-      );
-    }
+  for (const { id, code } of terminal) {
+    dependencies.observe(
+      new HostedCustomerErasureTerminalError({ message: code }),
+      { sink: ERASURE_FAILED, ctx: { jobId: id } },
+    );
   }
 };
 

@@ -183,6 +183,74 @@ describe("hosted customer erasure task", () => {
     expect(observations[0]?.[1]).toMatchObject({ ctx: { jobId: intent.id } });
   });
 
+  test("one batch keeps each failure's own code and backoff", async () => {
+    const first = await insertIntent({ attempts: 0 });
+    const sibling = await insertIntent({ attempts: 0 });
+    const third = await insertIntent({
+      attempts: 2,
+      status: HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+    });
+    const last = await insertIntent({
+      attempts: HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS - 1,
+      status: HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+    });
+    const erased = await insertIntent({ attempts: 1 });
+    const statuses = new Map([
+      [first.externalCustomerRef, 500],
+      [sibling.externalCustomerRef, 502],
+      [third.externalCustomerRef, 503],
+      [last.externalCustomerRef, 429],
+      [erased.externalCustomerRef, 204],
+    ]);
+    installFetch(async (url) => {
+      const ref = decodeURIComponent(
+        urlString(url).split("/external/")[1]?.split("?")[0] ?? "",
+      );
+      return new Response(null, { status: statuses.get(ref) ?? 204 });
+    });
+    const observations: unknown[][] = [];
+
+    await run({
+      observe: (...args) => {
+        observations.push(args);
+      },
+    });
+
+    const read = async (id: string) =>
+      (
+        await db
+          .select()
+          .from(hostedCustomerErasures)
+          .where(eq(hostedCustomerErasures.id, id))
+      ).at(0);
+    const expectFailed = async (
+      id: string,
+      attempts: number,
+      code: string,
+    ): Promise<void> => {
+      const row = await read(id);
+      expect(row?.status).toBe(HOSTED_CUSTOMER_ERASURE_STATUS.failed);
+      expect(row?.attempts).toBe(attempts);
+      expect(row?.lastErrorCode).toBe(code);
+      expect(row?.nextAttemptAt.getTime()).toBe(
+        NOW.getTime() + 60_000 * 2 ** (attempts - 1),
+      );
+    };
+    await expectFailed(first.id, 1, "http_500");
+    await expectFailed(sibling.id, 1, "http_502");
+    await expectFailed(third.id, 3, "http_503");
+    await expectFailed(
+      last.id,
+      HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
+      "http_429",
+    );
+    expect((await read(erased.id))?.status).toBe(
+      HOSTED_CUSTOMER_ERASURE_STATUS.erased,
+    );
+    expect(observations).toHaveLength(1);
+    expect(observations[0]?.[1]).toMatchObject({ ctx: { jobId: last.id } });
+  });
+
   test("an overlapping run cannot claim a leased row", async () => {
     await insertIntent();
     let calls = 0;
