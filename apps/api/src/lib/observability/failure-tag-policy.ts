@@ -221,6 +221,7 @@ export const TAGGED_FAILURE_REASON = {
   HandoffCompletionError: "tagged_failure",
   HealthCheckError: "tagged_failure",
   HeavyWorkSlotError: "tagged_failure",
+  HostedCustomerErasureTerminalError: "tagged_failure",
   HostedEventOrderingConflict: "tagged_failure",
   HostedProviderContractMismatch: "tagged_failure",
   HostedProviderUnknownStatus: "tagged_failure",

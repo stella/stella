@@ -700,6 +700,18 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261025130000_hosted_customer_erasures",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS affect only the erasure intent table created by this migration, which no traffic reads yet; lock acquisition is bounded by 1s and statements by 5s.",
+  },
+  {
+    migration: "20261025130000_hosted_customer_erasures",
+    form: "create-policy",
+    reason:
+      "The deny-all policy installs on the erasure intent table created by this migration without reading any application relation, with lock acquisition bounded by 1s.",
+  },
+  {
     migration: "20261022120000_case_law_batch_slots",
     form: "add-column",
     reason:

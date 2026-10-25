@@ -126,6 +126,10 @@ export const TABLE_RETENTION = {
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
   },
+  hosted_customer_erasures: {
+    boundedBy:
+      "One reference-only intent per deleted organization, settled by the erasure task.",
+  },
   hosted_checkout_claims: {
     boundedBy:
       "At most one claim per organization, taken over in place once expired and deleted with its owner.",
