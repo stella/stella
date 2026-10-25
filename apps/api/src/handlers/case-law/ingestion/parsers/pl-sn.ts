@@ -1,4 +1,6 @@
-// parser-output-unchanged: page-furniture separation is opt-in; the default reading the Polish parsers use is byte-identical, pinned by a recorded-output digest test.
+// parser-output-unchanged: [pl-kis] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
+// parser-output-unchanged: [pl-uokik] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
+// parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading never reaches.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
@@ -53,7 +55,8 @@ export type PlSnLine =
       readonly runs: readonly PlSnRun[];
       readonly indented: boolean;
       readonly footnote?:
-        { readonly label: string; readonly noteId: string } | undefined;
+        | { readonly label: string; readonly noteId: string }
+        | undefined;
     }
   | { readonly type: "blank" };
 
@@ -134,6 +137,8 @@ type ExtractedLine = {
   readonly spans: readonly PdfSpan[];
   readonly text: string;
   readonly x: number;
+  /** Where the line ends; read only where block continuation is asked for. */
+  readonly right?: number | undefined;
 };
 
 type PageFurnitureSpan = PdfSpan & {
@@ -146,21 +151,55 @@ type PageFurnitureLine = {
   readonly bbox: { readonly x: number; readonly y: number };
 };
 
-export const PL_PDF_PAGE_FURNITURE = {
-  SEPARATE: "separate",
-} as const;
-
 export type ExtractPlSnLinesOptions = {
-  readonly pageFurniture?:
-    | (typeof PL_PDF_PAGE_FURNITURE)[keyof typeof PL_PDF_PAGE_FURNITURE]
-    | undefined;
+  /**
+   * Read the Supreme Court's page the way it is set, given the decision's
+   * docket:
+   *
+   * - the running header atop every page after the first (`I CSK 2978/25 2`,
+   *   or the bare `2`) is dropped rather than read into the paragraph it
+   *   interrupts;
+   * - empty lines at a page's edges, and empty lines set in small type,
+   *   end no paragraph: the first set off the header and the empty footer,
+   *   the second are spacing marks left inside running text;
+   * - an indented block keeps its lines in one paragraph. The operative part
+   *   is set as a block indented past the body margin, each point's first
+   *   line indented again, so measured against the body margin every line
+   *   of it reads as a first line. A line continues the one above it when
+   *   that line ran out of room for this line's first word and this line
+   *   sits no deeper than it.
+   */
+  readonly supremeCourt?: { readonly docket: string } | undefined;
+};
+
+/**
+ * Whether a page's first line is its running header: the page's own number,
+ * alone or after the docket. Requiring both the page's number and the
+ * decision's docket is what keeps a line of text that merely ends in a
+ * number in the text.
+ */
+const isRunningHeader = (
+  text: string | undefined,
+  docket: string,
+  pageNumber: number,
+): boolean => {
+  const words = text?.trim().split(/\s+/u) ?? [];
+  if (words.at(-1) !== String(pageNumber)) {
+    return false;
+  }
+  const label = words.slice(0, -1).join(" ");
+  return label === "" || label === docket.trim().split(/\s+/u).join(" ");
 };
 
 const PAGE_MARGIN_RATIO = 0.06;
 const FOOTNOTE_ZONE_RATIO = 0.25;
 const SMALL_TYPE_RATIO = 0.86;
 
-const bodyFontSizeOf = (lines: readonly PageFurnitureLine[]): number => {
+const bodyFontSizeOf = (
+  lines: readonly {
+    readonly spans: readonly { fontSize: number; text: string }[];
+  }[],
+): number => {
   const counts = new Map<number, number>();
   for (const { spans } of lines) {
     for (const { fontSize, text } of spans) {
@@ -276,24 +315,129 @@ const opensParagraph = (
   }
 };
 
+/**
+ * The x a document's full lines end at: the most common line end, since
+ * justified running text outnumbers every short or centred line.
+ */
+const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
+  const counts = new Map<number, number>();
+  for (const { right, text } of lines) {
+    if (right !== undefined && text.length > 0) {
+      const rounded = Math.round(right);
+      counts.set(rounded, (counts.get(rounded) ?? 0) + 1);
+    }
+  }
+  let edge: number | undefined;
+  let best = 0;
+  for (const [position, count] of counts) {
+    if (count > best || (count === best && position > (edge ?? 0))) {
+      edge = position;
+      best = count;
+    }
+  }
+  return edge;
+};
+
+/** A list point's own number or bullet: `2.`, `IV.`, `a)`, `–`. */
+const LIST_MARKER = /^(?:(?:\d{1,3}|[IVXLC]{1,6}|\p{Ll})[.)]|[-–•])\s/u;
+
+/** A line ending a sentence or a list point, closing quotes included. */
+const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
+/** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
+const STARTS_SENTENCE = /^[\p{Lu}[(„"]/u;
+
+/**
+ * Whether the line above ended only because `line`'s first word no longer
+ * fit on it. A line that stopped short of that ended its paragraph.
+ *
+ * A short first word fits almost any gap, so a line that ended a sentence
+ * before a capital or a list point is taken as the paragraph's end: two
+ * paragraphs merged would hide the structure, where a missed continuation
+ * only leaves the line break the reading had before.
+ */
+const ranOutOfRoom = (
+  previous: ExtractedLine,
+  line: ExtractedLine,
+  rightEdge: number,
+): boolean => {
+  const opening = line.text.trimStart();
+  if (
+    previous.right === undefined ||
+    line.right === undefined ||
+    (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
+      (STARTS_SENTENCE.test(opening) || LIST_MARKER.test(opening)))
+  ) {
+    return false;
+  }
+  const firstWord = opening.split(/\s/u, 1).at(0) ?? "";
+  const characterWidth = (line.right - line.x) / Math.max(1, line.text.length);
+  return rightEdge - previous.right < (firstWord.length + 1) * characterWidth;
+};
+
+/**
+ * Whether `line` opens a paragraph, where the indent alone misreads blocks
+ * and lists.
+ *
+ * An indented line carries on the full line above it when it sits no
+ * deeper than that line, or when that line is a list point's first line
+ * set with a hanging indent. A short line above ended its paragraph, which
+ * is what keeps two one-line points of an operative part apart. A list
+ * point that starts at the margin opens a paragraph after a short line,
+ * though nothing indents it.
+ */
+const opensBlockParagraph = (
+  previous: ExtractedLine | undefined,
+  line: ExtractedLine,
+  indented: boolean,
+  rightEdge: number,
+): boolean => {
+  if (previous === undefined || previous.text.length === 0) {
+    return indented;
+  }
+  const full = ranOutOfRoom(previous, line, rightEdge);
+  if (!indented) {
+    return !full && LIST_MARKER.test(line.text.trimStart());
+  }
+  return !(
+    full &&
+    (line.x - previous.x < INDENT_THRESHOLD_PT ||
+      LIST_MARKER.test(previous.text.trimStart()))
+  );
+};
+
 /** Read one page's lines, keeping blanks and the indent decision. */
 const readPage = (
   lines: readonly ExtractedLine[],
   paragraphStart: PlPdfParagraphStart,
   documentBodyMargin?: number,
+  blocks?: {
+    readonly rightEdge: number;
+    /** The previous page's last line, which a block may run on from. */
+    readonly carried: ExtractedLine | undefined;
+  },
 ): PlSnLine[] => {
   const margin =
     documentBodyMargin ??
     bodyMarginOf(lines.filter(({ text }) => text.length > 0).map(({ x }) => x));
-  return lines.map((line) =>
-    line.text.length === 0
-      ? { type: "blank" as const }
-      : {
-          type: "text" as const,
-          runs: runsOfLine(line),
-          indented: opensParagraph(line.x - margin, paragraphStart),
-        },
-  );
+  return lines.map((line, index) => {
+    if (line.text.length === 0) {
+      return { type: "blank" as const };
+    }
+    const indented = opensParagraph(line.x - margin, paragraphStart);
+    return {
+      type: "text" as const,
+      runs: runsOfLine(line),
+      indented:
+        blocks === undefined
+          ? indented
+          : opensBlockParagraph(
+              index === 0 ? blocks.carried : lines[index - 1],
+              line,
+              indented,
+              blocks.rightEdge,
+            ),
+    };
+  });
 };
 
 type SeparatedPdfContent = {
@@ -591,26 +735,55 @@ export const extractPlSnLines = async (
   options: ExtractPlSnLinesOptions = {},
 ): Promise<PlSnLine[]> => {
   const pdf = await PDF.load(pdfBytes);
-  if (options.pageFurniture !== PL_PDF_PAGE_FURNITURE.SEPARATE) {
-    return pdf.getPages().flatMap((page) => {
-      const { lines } = page.extractText();
-      return readPage(
-        lines.map((line) => ({
-          spans: line.spans,
-          text: normalizeSpanText(line.text),
-          x: line.bbox.x,
-        })),
-        paragraphStart,
-      );
-    });
+  const pages = pdf.getPages().map((page) =>
+    page.extractText().lines.map((line): ExtractedLine => ({
+      spans: line.spans,
+      text: normalizeSpanText(line.text),
+      x: line.bbox.x,
+      right: line.bbox.x + line.bbox.width,
+    })),
+  );
+  const { supremeCourt } = options;
+  if (supremeCourt === undefined) {
+    return pages.flatMap((lines) => readPage(lines, paragraphStart));
   }
 
-  const pages = pdf.getPages().map((page) => {
-    const { height, lines } = page.extractText();
-    return { height, lines };
+  const bodySize = bodyFontSizeOf(pages.flat());
+  const bodyPages = pages.map((lines, pageIndex) => {
+    const first = lines.findIndex(({ text }) => text.length > 0);
+    const start =
+      pageIndex > 0 &&
+      isRunningHeader(lines[first]?.text, supremeCourt.docket, pageIndex + 1)
+        ? lines.findIndex(({ text }, index) => index > first && text.length > 0)
+        : first;
+    const end = lines.findLastIndex(({ text }) => text.length > 0);
+    return start === -1
+      ? []
+      : lines
+          .slice(start, end + 1)
+          .filter(
+            ({ spans, text }) =>
+              text.length > 0 ||
+              !spans.every(
+                ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
+              ),
+          );
   });
-  const { body, notes } = readPagesWithFootnotes(pages, paragraphStart);
-  return notes.length === 0 ? body : [...body, { type: "blank" }, ...notes];
+  const rightEdge = rightEdgeOf(bodyPages.flat());
+  return bodyPages.flatMap((lines, pageIndex) =>
+    readPage(
+      lines,
+      paragraphStart,
+      undefined,
+      rightEdge === undefined
+        ? undefined
+        : {
+            rightEdge,
+            carried:
+              pageIndex === 0 ? undefined : bodyPages[pageIndex - 1]?.at(-1),
+          },
+    ),
+  );
 };
 
 export type PlPdfSeparatedContent = {
@@ -651,7 +824,9 @@ export const parsePlSnDecisionPdf = async (
   input: ParsePlSnDecisionInput,
 ): Promise<ParsePlSnDecisionOutput> => {
   const paragraphs = assemblePlSnParagraphs(
-    await extractPlSnLines(input.pdfBytes),
+    await extractPlSnLines(input.pdfBytes, PL_PDF_PARAGRAPH_START.INDENT, {
+      supremeCourt: { docket: input.caseNumber },
+    }),
   );
   return parsePlDecisionContent({
     caseNumber: input.caseNumber,
