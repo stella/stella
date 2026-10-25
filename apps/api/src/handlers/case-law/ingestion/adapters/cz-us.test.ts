@@ -1781,8 +1781,10 @@ describe("czUsAdapter.fetchPage", () => {
         listedOnlyReason: "missing-record-identity",
       },
     });
-    expect(page.decisions[0]?.sourceDocumentId).toMatch(
-      /^nalus-quarantine:[a-f0-9]+$/u,
+    // Pinned: stored rows carry this id, so the shared quarantine identity
+    // must keep producing it byte for byte.
+    expect(page.decisions[0]?.sourceDocumentId).toBe(
+      "nalus-quarantine:62ee60985f62aa9d8d36c09c38b7f3b78dcffcd78289e38ec9e2856e9832d46d",
     );
     expect(page.decisions[0]?.sourceUrl).toMatch(
       /^https:\/\/nalus\.usoud\.cz\/Search\/Results\.aspx#listing-[a-f0-9]+$/u,

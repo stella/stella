@@ -30,9 +30,8 @@ export const MAX_SLICE_PAGES = 200;
 export type ListedSlice = {
   /** Distinct keyable identities, first listing of each. */
   keyed: Map<string, ReconciliationListingItem>;
-  /** Items the publisher listed, including repeats and unkeyable ones. */
+  /** Items the publisher listed, including repeats. */
   listed: number;
-  unidentifiable: number;
   duplicate: number;
   /** Page requests the listing made, the first included. */
   pages: number;
@@ -90,7 +89,6 @@ const listSlicePass = async ({
   const listing: ListedSlice = {
     keyed: new Map(),
     listed: 0,
-    unidentifiable: 0,
     duplicate: 0,
     pages: 0,
   };
@@ -113,10 +111,6 @@ const listSlicePass = async ({
     listing.listed += listed.items.length;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);
-      if (identityKey === null) {
-        listing.unidentifiable += 1;
-        continue;
-      }
       if (listing.keyed.has(identityKey)) {
         // A publisher lists a document once per docket it settles; the same
         // identity twice is one document.

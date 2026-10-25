@@ -544,7 +544,21 @@ the alias. Never reserve the rewritten value, which may be another document's
 legitimate exact key.
 If a counted row exposes no publisher identity at all, durably quarantine its
 verbatim listing payload under a content-addressed audit identity; do not let
-one poison row pin every later record in the slice. Continue emitting that
+one poison row pin every later record in the slice. A publisher id the
+decision table cannot persist is no identity either: quarantine that row at the
+adapter boundary too. Build the identity only through
+`quarantineIdentity` in `lib/legal-search/quarantine-identity.ts`: it
+owns the `<namespace>-quarantine:<sha256>` form, normalises whitespace, and
+takes the stable fields the adapter names at the call site, never listing
+position, render markup, highlight markers, update timestamps or the malformed
+identity itself. `ListingIdentity` has no variant for a record with nothing to
+key on, and `listingIdentityKey` panics on an unkeyable one, so a listed record
+is always both reported and collected. The crawl and the reconciliation build
+both store the quarantined record as its listing-only row, which the walk
+counts as held: there is no detail to ask for until the id recovers. A
+listing entry with no body at all, such as a result the publisher counts but
+will not serve, holds nothing to store; log it rather than inventing an
+identity for it. Continue emitting that
 quarantine fingerprint as a repair-only alias after a publisher identity
 recovers, so the repair enriches the audited row instead of inserting a
 duplicate. Repair-only aliases may adopt an existing row only while it is still

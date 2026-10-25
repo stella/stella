@@ -1,5 +1,6 @@
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
+// parser-output-unchanged: [cz-us] quarantine ids move to their shared owner byte for byte; reconciliation writes the listing-only row the crawl already writes.
 import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 
@@ -104,6 +105,11 @@ import type {
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+  quarantineSourceDocumentId,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1147,8 +1153,8 @@ const parseDecisionPage = ({
       sz: nalusSz,
       ecli,
     })?.aliases,
-    sourceDocumentIdRepairAliases: nalusQuarantineIds.map(
-      (quarantineId) => `nalus-quarantine:${quarantineId}`,
+    sourceDocumentIdRepairAliases: nalusQuarantineIds.map((quarantineId) =>
+      quarantineSourceDocumentId(QUARANTINE_NAMESPACE.CZ_US, quarantineId),
     ),
     legacySourceUrls: legacySourceUrlsFor(
       parsed.caseNumber,
@@ -1264,15 +1270,16 @@ export type ListedDecision = {
  * that same string, so reading it back here is what keeps the crawl, the
  * reconciliation loop and the ledger agreeing about which rows exist.
  *
- * `unidentifiable` is unreachable from a row {@link parseResultPage} built,
- * since both branches produce a persistable id. It is stated anyway because
- * the alternative is silence: an id the decision table would reject can never
- * be held, so counting it as missing would keep the slice short forever.
+ * Both branches produce a persistable id: the exact identities are bounded by
+ * {@link persistableNalusComponent}, the quarantine identity by its fixed
+ * length.
  */
-export const czUsListingIdentity = (listed: ListedDecision): ListingIdentity =>
-  isPersistableSourceDocumentId(listed.sourceDocumentId)
-    ? { type: "document", sourceDocumentId: listed.sourceDocumentId }
-    : { type: "unidentifiable" };
+export const czUsListingIdentity = (
+  listed: ListedDecision,
+): ListingIdentity => ({
+  type: "document",
+  sourceDocumentId: listed.sourceDocumentId,
+});
 
 type SearchPage = {
   listed: ListedDecision[];
@@ -1563,32 +1570,21 @@ const hiddenField = (html: string, name: string): string | undefined =>
 
 /**
  * Stable publisher-visible fields for an anomalous row that exposes neither
- * normal NALUS identity. Render position is deliberately absent: WebForms
+ * normal NALUS identity: the visible text of the primary row and its action
+ * row with every identity-bearing control removed, the registry sign and its
+ * sibling counter. Render position is deliberately absent: WebForms
  * alternates CSS classes and embeds `pos`/`cnt` in links, so hashing the row
  * markup would mint a new quarantine identity whenever result order moves.
+ * The field order is part of the digest stored rows carry.
  */
-const quarantineFingerprint = ({
-  stablePrimaryText,
-  stableActionsText,
-  stableDetailText,
-  stableCounterText,
-}: {
+const quarantineFingerprint = (stableFields: {
   stablePrimaryText: string;
   stableActionsText: string;
   stableDetailText: string;
   stableCounterText: string;
-}): string => {
-  const normalize = (value: string): string =>
-    value.replace(/\s+/gu, " ").trim();
-  return hashContent(
-    JSON.stringify({
-      stablePrimaryText: normalize(stablePrimaryText),
-      stableActionsText: normalize(stableActionsText),
-      stableDetailText: normalize(stableDetailText),
-      stableCounterText: normalize(stableCounterText),
-    }),
-  );
-};
+}): string =>
+  quarantineIdentity({ namespace: QUARANTINE_NAMESPACE.CZ_US, stableFields })
+    .fingerprint;
 
 const cookieHeader = (responses: readonly Response[]): string => {
   const cookies = new Map<string, string>();
@@ -1788,7 +1784,10 @@ const parseResultPage = ({
       const quarantineId =
         quarantineRepairIds[0] ?? panic("Missing quarantine id");
       const publisherIdentity = exactPublisherIdentity ?? {
-        sourceDocumentId: `nalus-quarantine:${quarantineId}`,
+        sourceDocumentId: quarantineSourceDocumentId(
+          QUARANTINE_NAMESPACE.CZ_US,
+          quarantineId,
+        ),
         aliases: undefined,
       };
       const fallbackCaseNumber =
@@ -2662,8 +2661,11 @@ const listedOnlyDecision = (
     sourceDocumentIdRepairAliases:
       listed.identityQuarantined === true
         ? undefined
-        : listed.quarantineRepairIds.map(
-            (quarantineId) => `nalus-quarantine:${quarantineId}`,
+        : listed.quarantineRepairIds.map((quarantineId) =>
+            quarantineSourceDocumentId(
+              QUARANTINE_NAMESPACE.CZ_US,
+              quarantineId,
+            ),
           ),
     legacySourceUrls: legacySourceUrlsFor(
       listed.caseNumber,
@@ -2910,14 +2912,18 @@ export const buildCzUsListedRecord = async (
  * not stored: the listing-only row {@link fetchListedDecision} still builds is
  * right for the crawl and wrong here, because writing it would make the
  * identity held and take the document out of every later reconciliation.
+ * A quarantined record is the exception: it names no text to wait for, so its
+ * listing-only row is the whole record (case-law AGENTS.md rule 20) and the
+ * walk counts it held (`isQuarantineListingIdentity`).
  */
 const buildCzUsFromPayload = async (
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<ReconciliationBuildOutcome> => {
+  // Revalidated, not trusted: a parked payload is days old JSON.
   if (
     !isListedDecision(payload) ||
-    czUsListingIdentity(payload).type === "unidentifiable"
+    !isPersistableSourceDocumentId(payload.sourceDocumentId)
   ) {
     return { type: "unkeyable" };
   }
@@ -2926,7 +2932,9 @@ const buildCzUsFromPayload = async (
     case "built":
       return { type: "built", decision: built.decision };
     case "detail-unavailable":
-      return { type: "detail-unavailable" };
+      return payload.identityQuarantined === true
+        ? { type: "built", decision: built.decision }
+        : { type: "detail-unavailable" };
     default: {
       built satisfies never;
       return panic(`Unhandled cz-us build result: ${JSON.stringify(built)}`);

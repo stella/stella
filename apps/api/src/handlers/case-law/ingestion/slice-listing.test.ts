@@ -33,7 +33,7 @@ const pagedListing =
       totalPages: pages.length,
     });
 
-test("keys each identity once and counts what it could not key", async () => {
+test("keys each identity once and counts its repeats", async () => {
   const sleeps: number[] = [];
   const listing = unwrapListing(
     await listReconciliationSlice({
@@ -41,12 +41,7 @@ test("keys each identity once and counts what it could not key", async () => {
       proof: SLICE_LISTING_PROOF.IDENTITIES,
       listSlicePage: pagedListing([
         [documentItem("a"), documentItem("b")],
-        [
-          documentItem("a"),
-          { identity: { type: "unidentifiable" }, payload: null },
-          documentItem(""),
-          documentItem("c"),
-        ],
+        [documentItem("a"), documentItem("c")],
       ]),
       pageDelayMs: 1000,
       pageTimeoutMs: 5000,
@@ -63,9 +58,8 @@ test("keys each identity once and counts what it could not key", async () => {
     "document:b",
     "document:c",
   ]);
-  expect(listing.listed).toBe(6);
+  expect(listing.listed).toBe(4);
   expect(listing.duplicate).toBe(1);
-  expect(listing.unidentifiable).toBe(2);
   // Paced between pages, never before the first; the verification pass is
   // paced the same way, after a pause of its own.
   expect(sleeps).toEqual([1000, 1000, 1000]);

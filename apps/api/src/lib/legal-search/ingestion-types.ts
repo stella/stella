@@ -8,6 +8,7 @@
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
 // parser-output-unchanged: adapter definitions keep their declared reconciliation types; parsed output is unchanged.
+// parser-output-unchanged: listing identities lose the unkeyed variant; they key ledger rows and never reach a parsed decision.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -97,7 +98,8 @@ export type CzechDeclinedDecisionJudge = {
 
 /** A judge as one decision names them, before the roster is consulted. */
 export type DecisionJudgeInput =
-  PrintedDecisionJudge | CzechDeclinedDecisionJudge;
+  | PrintedDecisionJudge
+  | CzechDeclinedDecisionJudge;
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -284,7 +286,8 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
+    | Readonly<Record<string, SourceRawObjectPayload>>
+    | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -332,7 +335,8 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
+  | { type: "accepted" }
+  | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -992,18 +996,20 @@ export const readStoredRawListing = ({
  * the decision identity index: the publisher's own document id where the item
  * carries one, the docket plus its language otherwise.
  *
- * `unidentifiable` is the item an ingest also drops: with nothing to key the
- * decision on it can never be held, so it must not be counted as missing
- * either — a slice that counted it would stay short forever.
+ * There is no variant for an item with nothing to key on (case-law AGENTS.md
+ * rule 20): a record the publisher lists without a usable id is stored under
+ * its quarantine identity (`quarantine-identity.ts`), a `document` identity
+ * like any other, so every listed record is both counted and collected.
  */
 export type ListingIdentity =
   | { type: "document"; sourceDocumentId: string }
-  | { type: "case-number"; caseNumber: string; language: string }
-  | { type: "unidentifiable" };
+  | { type: "case-number"; caseNumber: string; language: string };
 
 /**
  * Mirrors `case_law_reconciliation_items.identity_key`. A key longer than the
  * column cannot be parked, so it cannot be tracked to a fixed point either.
+ * Every persistable identity fits: `source_document_id` and `case_number`
+ * are both bounded at 256 characters.
  */
 const LISTING_IDENTITY_KEY_MAX_LENGTH = 320;
 
@@ -1012,30 +1018,12 @@ const IDENTITY_KEY_PREFIX = {
   CASE_NUMBER: "case-number:",
 } as const;
 
-/**
- * The stable string form of a keyable identity, or `null` when there is none
- * to key on. Both `unidentifiable` and an over-long key answer `null`: they
- * mean the same thing to every caller — this item can be neither looked up
- * nor parked, so it is excluded from what a slice is measured against.
- */
-const unboundedListingIdentityKey = (
-  identity: ListingIdentity,
-): string | null => {
+const unboundedListingIdentityKey = (identity: ListingIdentity): string => {
   switch (identity.type) {
     case "document":
-      return identity.sourceDocumentId.length === 0
-        ? null
-        : `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
+      return `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
     case "case-number":
-      // Both halves, because either one empty produces a key the parser
-      // below rejects, and the round-trip is the property this pair exists
-      // to guarantee. An adapter that trims a docket to nothing gets an
-      // unkeyable identity rather than a key nothing can read back.
-      return identity.caseNumber.length === 0 || identity.language.length === 0
-        ? null
-        : `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
-    case "unidentifiable":
-      return null;
+      return `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
     default: {
       identity satisfies never;
       return panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
@@ -1043,14 +1031,48 @@ const unboundedListingIdentityKey = (
   }
 };
 
-export const listingIdentityKey = (
+/**
+ * Whether an identity has a key: no empty half, since an empty one produces
+ * a key the parser below rejects, and a key within the column. Adapters
+ * check an identity the publisher states with this at their boundary and
+ * quarantine the record when it fails, so {@link listingIdentityKey} never
+ * meets one that does.
+ */
+export const isKeyableListingIdentity = (
   identity: ListingIdentity,
-): string | null => {
-  const key = unboundedListingIdentityKey(identity);
-  return key !== null && key.length <= LISTING_IDENTITY_KEY_MAX_LENGTH
-    ? key
-    : null;
+): boolean => {
+  switch (identity.type) {
+    case "document":
+      return isPersistableSourceDocumentId(identity.sourceDocumentId);
+    case "case-number":
+      return (
+        identity.caseNumber.length > 0 &&
+        identity.language.length > 0 &&
+        unboundedListingIdentityKey(identity).length <=
+          LISTING_IDENTITY_KEY_MAX_LENGTH
+      );
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
+    }
+  }
 };
+
+/**
+ * The stable string form of an identity.
+ *
+ * Panics on one {@link isKeyableListingIdentity} rejects: adapters quarantine
+ * such a record at their boundary, so meeting one here is an adapter bug, and
+ * skipping it would drop a listed record from both what its slice reports and
+ * what it collects. In a reconciliation walk the panic fails the slice, which
+ * keeps the slice's previous ledger row and records the error.
+ */
+export const listingIdentityKey = (identity: ListingIdentity): string =>
+  isKeyableListingIdentity(identity)
+    ? unboundedListingIdentityKey(identity)
+    : panic(
+        `Listing identity has no key; quarantine it at the adapter boundary: ${identity.type}`,
+      );
 
 /**
  * The identity a key names, or `null` when no current rule produces that key.
@@ -1267,7 +1289,8 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    (() => SourceReconciliation["buildDecision"]) | undefined;
+    | (() => SourceReconciliation["buildDecision"])
+    | undefined;
 };
 
 /**
@@ -1459,7 +1482,9 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
+  | StoredSourceSurface
+  | ExcludedSourceSurface
+  | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({

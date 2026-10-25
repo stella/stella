@@ -144,8 +144,7 @@ const withFixture = async (
         checkedAt: new Date(now.getTime() - 2 * DAY_IN_MS),
       });
       const key = (id: string) =>
-        listingIdentityKey({ type: "document", sourceDocumentId: id }) ??
-        panic("Fixture identity must be keyable");
+        listingIdentityKey({ type: "document", sourceDocumentId: id });
       await work({
         db,
         scopedDb,
@@ -647,11 +646,10 @@ describe.skipIf(!enabled)(
             const resolved = await resolveReconciliationItem(fixture.scopedDb, {
               sourceId: fixture.sourceId,
               leaseToken: crawlLease.leaseToken,
-              identityKey:
-                listingIdentityKey({
-                  type: "document",
-                  sourceDocumentId: id,
-                }) ?? panic("Missing identity key"),
+              identityKey: listingIdentityKey({
+                type: "document",
+                sourceDocumentId: id,
+              }),
               payload: correctedPayload(id),
             });
             expect(resolved.outcome).toBe("recorded");

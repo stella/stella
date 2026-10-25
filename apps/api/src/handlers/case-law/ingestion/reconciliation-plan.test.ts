@@ -41,6 +41,7 @@ import {
 import { toUtcDateString } from "@/api/lib/dates";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import {
+  isKeyableListingIdentity,
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -714,64 +715,47 @@ describe("listing identity keys", () => {
     ] as const;
 
     for (const identity of identities) {
-      const key = listingIdentityKey(identity);
-      expect(key).not.toBeNull();
-      expect(parseListingIdentityKey(key ?? "")).toEqual(identity);
+      expect(isKeyableListingIdentity(identity)).toBe(true);
+      expect(parseListingIdentityKey(listingIdentityKey(identity))).toEqual(
+        identity,
+      );
     }
   });
 
-  test("an identity with nothing to key on has no key", () => {
-    expect(listingIdentityKey({ type: "unidentifiable" })).toBeNull();
+  test("every persistable identity fits the key column", () => {
+    // The adapters bound a publisher id and a docket at the stored columns'
+    // 256 characters, so anything they can store must also key.
+    const longest = [
+      { type: "document", sourceDocumentId: "x".repeat(256) },
+      { type: "case-number", caseNumber: "x".repeat(256), language: "cs" },
+    ] as const;
+
+    for (const identity of longest) {
+      expect(isKeyableListingIdentity(identity)).toBe(true);
+      expect(parseListingIdentityKey(listingIdentityKey(identity))).toEqual(
+        identity,
+      );
+    }
   });
 
-  test("a key too long for the column is refused rather than truncated", () => {
-    // A truncated key would collide with another decision's, and the park it
-    // wrote would then resolve on the wrong document being stored.
-    expect(
-      listingIdentityKey({
-        type: "document",
-        sourceDocumentId: "x".repeat(400),
-      }),
-    ).toBeNull();
-  });
-
-  test("an identity with an empty component has no key at all", () => {
-    // Formatting one would produce a key this module's own parser rejects,
-    // so the row would be written and then read back as unreadable. The
-    // formatter refuses instead, and the caller treats it exactly like an
-    // identity there was never anything to key on.
-    const empties = [
+  test("an identity with no key panics rather than being skipped", () => {
+    // Skipping it would leave a listed record out of both what its slice
+    // reports and what it collects; an adapter quarantines such a record at
+    // its boundary, so reaching the formatter with one is a bug. Truncating a
+    // long one instead would collide with another decision's key.
+    const unkeyable = [
       { type: "document", sourceDocumentId: "" },
+      { type: "document", sourceDocumentId: "y".repeat(257) },
       { type: "case-number", caseNumber: "", language: "cs" },
       { type: "case-number", caseNumber: "11 C 153/2025", language: "" },
+      { type: "case-number", caseNumber: "z".repeat(400), language: "cs" },
     ] as const;
 
-    for (const identity of empties) {
-      expect({ identity, key: listingIdentityKey(identity) }).toEqual({
-        identity,
-        key: null,
-      });
-    }
-  });
-
-  test("a formatted key always reads back; the two never disagree", () => {
-    // The invariant that binds the pair: whenever a key exists, parsing it
-    // returns something. Any identity the formatter accepts but the parser
-    // rejects would be stored and then silently unreadable.
-    const identities = [
-      { type: "document", sourceDocumentId: "2f0a1d6c-9c7f" },
-      { type: "case-number", caseNumber: "11 C 153/2025", language: "cs" },
-      { type: "document", sourceDocumentId: "" },
-      { type: "case-number", caseNumber: "", language: "cs" },
-      { type: "case-number", caseNumber: "x", language: "" },
-      { type: "unidentifiable" },
-      { type: "document", sourceDocumentId: "y".repeat(400) },
-    ] as const;
-
-    for (const identity of identities) {
-      const key = listingIdentityKey(identity);
-      const readable = key === null || parseListingIdentityKey(key) !== null;
-      expect({ identity, readable }).toEqual({ identity, readable: true });
+    for (const identity of unkeyable) {
+      expect(isKeyableListingIdentity(identity)).toBe(false);
+      expect(() => listingIdentityKey(identity)).toThrow(
+        "Listing identity has no key",
+      );
     }
   });
 

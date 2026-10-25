@@ -117,6 +117,7 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { isQuarantineListingIdentity } from "@/api/lib/legal-search/quarantine-identity";
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
@@ -228,11 +229,10 @@ type ReconciliationUnitSummary = {
   unit: ReconciliationWorkUnit["type"];
   reason: SliceWalkReason | null;
   slice: string | null;
-  /** Items the publisher listed, including repeats and unkeyable ones. */
+  /** Items the publisher listed, including repeats. */
   listed: number;
-  /** Distinct keyable identities; this is what the ledger's `reported` is. */
+  /** Distinct identities; this is what the ledger's `reported` is. */
   keyable: number;
-  unidentifiable: number;
   duplicate: number;
   heldBefore: number;
   /**
@@ -259,7 +259,6 @@ const emptySummary = (
   slice: null,
   listed: 0,
   keyable: 0,
-  unidentifiable: 0,
   duplicate: 0,
   heldBefore: 0,
   scheduled: 0,
@@ -754,10 +753,7 @@ const selectHeldCaseNumbers = async (
  * held row and the item that asks about it cannot be keyed differently.
  */
 const addHeldKey = (held: Set<string>, identity: ListingIdentity): void => {
-  const key = listingIdentityKey(identity);
-  if (key !== null) {
-    held.add(key);
-  }
+  held.add(listingIdentityKey(identity));
 };
 
 type HeldIdentityKeysOptions = {
@@ -775,6 +771,8 @@ type HeldIdentityKeysOptions = {
  * The identity keys, out of the given ones, this source already holds. Where
  * the source requires detail, the identities it declares complete without a
  * document are asked about without that filter, and every other one with it.
+ * A quarantine identity is always complete without one: it names no
+ * publisher id a detail request could use (see `quarantine-identity.ts`).
  */
 const selectHeldIdentityKeys = async (
   scopedDb: ScopedDb,
@@ -786,7 +784,7 @@ const selectHeldIdentityKeys = async (
     rowRules,
   }: HeldIdentityKeysOptions,
 ): Promise<Set<string>> => {
-  if (!requireDetail || heldWithoutDetail === undefined) {
+  if (!requireDetail) {
     return await selectHeldIdentityKeysUniformly(scopedDb, {
       identities,
       requireDetail,
@@ -794,9 +792,12 @@ const selectHeldIdentityKeys = async (
       rowRules,
     });
   }
+  const completeWithoutDetail = (identity: ListingIdentity): boolean =>
+    isQuarantineListingIdentity(identity) ||
+    heldWithoutDetail?.(identity) === true;
   const [exempt, detailed] = [
-    identities.filter((identity) => heldWithoutDetail(identity)),
-    identities.filter((identity) => !heldWithoutDetail(identity)),
+    identities.filter((identity) => completeWithoutDetail(identity)),
+    identities.filter((identity) => !completeWithoutDetail(identity)),
   ];
   const held = await selectHeldIdentityKeysUniformly(scopedDb, {
     identities: detailed,
@@ -827,15 +828,21 @@ const selectHeldIdentityKeysUniformly = async (
   const documentIds = new Set<string>();
   const caseNumbersByLanguage = new Map<string, Set<string>>();
   for (const identity of identities) {
-    if (identity.type === "document") {
-      documentIds.add(identity.sourceDocumentId);
-      continue;
-    }
-    if (identity.type === "case-number") {
-      const forLanguage =
-        caseNumbersByLanguage.get(identity.language) ?? new Set<string>();
-      forLanguage.add(identity.caseNumber);
-      caseNumbersByLanguage.set(identity.language, forLanguage);
+    switch (identity.type) {
+      case "document":
+        documentIds.add(identity.sourceDocumentId);
+        break;
+      case "case-number": {
+        const forLanguage =
+          caseNumbersByLanguage.get(identity.language) ?? new Set<string>();
+        forLanguage.add(identity.caseNumber);
+        caseNumbersByLanguage.set(identity.language, forLanguage);
+        break;
+      }
+      default: {
+        identity satisfies never;
+        panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
+      }
     }
   }
 
@@ -1529,7 +1536,6 @@ const walkSlice = async ({
   }
   const { keyed } = listing.value;
   summary.listed = listing.value.listed;
-  summary.unidentifiable = listing.value.unidentifiable;
   summary.duplicate = listing.value.duplicate;
 
   const items = Array.from(keyed, ([identityKey, { identity, payload }]) => ({
@@ -1759,14 +1765,11 @@ const recheckTextlessHeldRows = async ({
             language: row.language,
           }
         : { type: "document", sourceDocumentId: row.sourceDocumentId };
-    const identityKey = listingIdentityKey(identity);
-    if (identityKey === null) {
-      summary.failed += 1;
-      continue;
-    }
     const item: KeyedListingItem = {
       identity,
-      identityKey,
+      // Never throws: both halves come from columns the key column is sized
+      // to hold (see `LISTING_IDENTITY_KEY_MAX_LENGTH`).
+      identityKey: listingIdentityKey(identity),
       payload: null,
       slice: reconciliation.sliceOf(row.updatedAt),
     };
@@ -1847,16 +1850,27 @@ const retryParkedItems = async ({
   });
   summary.keyable = due.length;
 
-  const candidates: KeyedListingItem[] = due.map(
-    ({ identityKey, payload, slice }) => ({
-      identity: parseListingIdentityKey(identityKey) ?? {
-        type: "unidentifiable",
-      },
-      identityKey,
-      payload,
-      slice,
-    }),
-  );
+  const candidates: KeyedListingItem[] = [];
+  for (const { identityKey, payload, slice } of due) {
+    const identity = parseListingIdentityKey(identityKey);
+    if (identity === null) {
+      // Every parked key was written by `listingIdentityKey`, which
+      // round-trips through the parser, so this is a ledger row no current
+      // rule wrote: a bug, never an identity to guess. Reported and counted
+      // like any other failed item rather than thrown, because a throw would
+      // fail the whole unit and hold every other due retry of this source
+      // behind one bad row; the row stays due, so it reports again each
+      // visit until it is fixed.
+      summary.failed += 1;
+      logger.error("case_law.reconciliation.parked_identity_key_unparseable", {
+        adapterKey,
+        identityKey,
+        slice,
+      });
+      continue;
+    }
+    candidates.push({ identity, identityKey, payload, slice });
+  }
 
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,

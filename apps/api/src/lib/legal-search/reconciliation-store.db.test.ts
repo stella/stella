@@ -74,18 +74,16 @@ const seedSource = async (): Promise<SafeId<"caseLawSource">> => {
 };
 
 /** A key exactly as the loop writes it, from a real publisher document id. */
-const DOCUMENT_KEY =
-  listingIdentityKey({
-    type: "document",
-    sourceDocumentId: "2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
-  }) ?? "";
+const DOCUMENT_KEY = listingIdentityKey({
+  type: "document",
+  sourceDocumentId: "2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
+});
 
-const DOCKET_KEY =
-  listingIdentityKey({
-    type: "case-number",
-    caseNumber: "11 C 153/2025",
-    language: "cs",
-  }) ?? "";
+const DOCKET_KEY = listingIdentityKey({
+  type: "case-number",
+  caseNumber: "11 C 153/2025",
+  language: "cs",
+});
 
 const PAYLOAD = {
   jednaciCislo: "11 C 153/2025-38",

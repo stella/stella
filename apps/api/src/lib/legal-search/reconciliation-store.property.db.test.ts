@@ -211,16 +211,15 @@ test(
         }) => {
           const sourceId = createSafeId<"caseLawSource">();
           const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
-          const identityKey =
-            listingIdentityKey(
-              identityKind === "document"
-                ? { type: "document", sourceDocumentId: "listing-sequence" }
-                : {
-                    type: "case-number",
-                    caseNumber: "listing-sequence",
-                    language,
-                  },
-            ) ?? panic("Expected a keyable listing identity");
+          const identityKey = listingIdentityKey(
+            identityKind === "document"
+              ? { type: "document", sourceDocumentId: "listing-sequence" }
+              : {
+                  type: "case-number",
+                  caseNumber: "listing-sequence",
+                  language,
+                },
+          );
           const slice = "2026-09-01";
           const now = new Date("2026-10-02T12:00:00Z");
           const oldPayload = { publisherValue, language, revision: 1 };

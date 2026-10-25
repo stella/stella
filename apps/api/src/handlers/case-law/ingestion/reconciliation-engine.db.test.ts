@@ -70,6 +70,10 @@ import type {
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -147,14 +151,12 @@ const LISTING_ITEMS = [
       "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000002",
   },
 ] satisfies [unknown, unknown];
-const DOCUMENT_KEYS = LISTING_ITEMS.map(
-  ({ odkaz }) =>
-    listingIdentityKey({
-      type: "document",
-      sourceDocumentId:
-        odkaz.split("/").at(-1) ??
-        panic("Fixture URL needs a document identity"),
-    }) ?? panic("Fixture document identity must be keyable"),
+const DOCUMENT_KEYS = LISTING_ITEMS.map(({ odkaz }) =>
+  listingIdentityKey({
+    type: "document",
+    sourceDocumentId:
+      odkaz.split("/").at(-1) ?? panic("Fixture URL needs a document identity"),
+  }),
 );
 const FIXTURE_CASE_NUMBERS = ["999 C 1/2099", "999 Cm 2/2099"] as const;
 const FIXTURE_COURT = "Fixture court A";
@@ -343,9 +345,10 @@ const seedTerminalItem = async (
     id: createSafeId<"caseLawReconciliationItem">(),
     sourceId,
     slice,
-    identityKey:
-      listingIdentityKey({ type: "document", sourceDocumentId: slice }) ??
-      slice,
+    identityKey: listingIdentityKey({
+      type: "document",
+      sourceDocumentId: slice,
+    }),
     payload: {},
     status: RECONCILIATION_ITEM_STATUS.TERMINAL,
     attempts: 6,
@@ -985,11 +988,10 @@ test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
       checkedAt: addUtcDays(NOW, -2),
     });
 
-    const staleTerminalKey =
-      listingIdentityKey({
-        type: "document",
-        sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
-      }) ?? "";
+    const staleTerminalKey = listingIdentityKey({
+      type: "document",
+      sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
+    });
     // The retained payload could still build, but the publisher withdrew it.
     const withdrawnPayload = { withdrawn: true };
     const originalDueAt = addUtcDays(NOW, 1);
@@ -1075,6 +1077,40 @@ test("a completed walk drops every withdrawn parked row past one prune batch", a
     summary: { unit: "parked-retries" },
   });
   expect(builds).toEqual(LISTING_ITEMS);
+});
+
+test("a parked key no rule wrote is reported and counted failed, never guessed", async () => {
+  // Every parked key comes from `listingIdentityKey`, so one the parser cannot
+  // read is a bug. Guessing an identity for it would ask about the wrong row,
+  // and throwing would hold every other due retry of the source behind it.
+  const sourceId = await seedSource();
+  const dueAt = new Date(NOW.getTime() - 60 * 60 * 1000);
+  const unparseableKey = "legacy:7201";
+  await seedItem(sourceId, unparseableKey, {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 2,
+    payload: { legacy: true },
+    nextAttemptAt: dueAt,
+  });
+  await seedItem(sourceId, DOCUMENT_KEYS[0] ?? panic("Fixture key"), {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 2,
+    payload: LISTING_ITEMS[0],
+    nextAttemptAt: dueAt,
+  });
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 2, failed: 1 },
+  });
+  expect(builds).toEqual([LISTING_ITEMS[0]]);
+  const reported = logs
+    .at("ERROR")
+    .find(
+      ({ message }) =>
+        message === "case_law.reconciliation.parked_identity_key_unparseable",
+    );
+  expect(reported?.attributes?.["identityKey"]).toBe(unparseableKey);
 });
 
 test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
@@ -2244,6 +2280,48 @@ test("a merged supplement whose standalone row still stands is listed again", as
     summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
   });
   expect(builds).toHaveLength(1);
+});
+
+test("a quarantined record's listing-only row is held where the source requires detail", async () => {
+  // A quarantine identity names no publisher id, so no request could fetch a
+  // detail for it: its listing-only row is the whole record until the id
+  // recovers. A listing-only row under a publisher id is still hunted.
+  const { sourceDocumentId: quarantined } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.PL_SN,
+    stableFields: { docket: "II CSK 12/24", date: "2024-01-04" },
+  });
+  const failed = "0000000000000000000000000000000D";
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  for (const sourceDocumentId of [quarantined, failed]) {
+    await seedDecision({
+      sourceId,
+      caseNumber: sourceDocumentId,
+      sourceDocumentId,
+      isListingOnly: true,
+    });
+  }
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+      listed.push(options);
+      return await Promise.resolve({
+        items: [quarantined, failed].map((sourceDocumentId) => ({
+          identity: { type: "document", sourceDocumentId },
+          payload: { refid: sourceDocumentId },
+        })),
+        totalPages: 1,
+      });
+    },
+    heldRequiresDetail: true,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  expect(builds).toEqual([{ refid: failed }]);
 });
 
 test("a record kind declared complete without a document is held on its record alone", async () => {
