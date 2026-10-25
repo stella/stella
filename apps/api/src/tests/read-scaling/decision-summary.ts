@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -12,6 +11,7 @@ import {
 import readDecisionSummary, {
   type createReadDecisionSummaryHandler,
 } from "@/api/handlers/case-law/decisions/summary/get";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -34,7 +34,7 @@ type DecisionSummaryMeasurementOptions = {
 
 export const decisionSummaryScalingScenario = {
   name: "public decision summary",
-  handler: readDecisionSummary.handler,
+  definition: readDecisionSummary,
   measure: async ({
     size,
     db,
@@ -111,11 +111,12 @@ export const decisionSummaryScalingScenario = {
             request: new Request(
               `https://example.test/v1/case/decisions/${first.id}/summary`,
             ),
+            route: "/v1/case/decisions/:decisionId/summary",
             set: { headers: {} },
           }),
         );
         if (
-          response instanceof ElysiaCustomStatusResponse ||
+          response instanceof HttpStatusResponse ||
           response.id !== first.id ||
           response.caseNumber !== first.caseNumber ||
           response.publication !== "Publication 0"

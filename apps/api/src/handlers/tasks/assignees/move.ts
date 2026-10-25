@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
@@ -10,7 +9,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -19,17 +18,17 @@ import {
   writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
 
-const moveAssigneeBodySchema = t.Object({
-  taskId: tSafeId("entity"),
-  fromUserId: t.Nullable(tUserId),
-  toUserId: t.Nullable(tUserId),
+const moveAssigneeBodySchema = v.object({
+  taskId: resourceIdSchema("entity"),
+  fromUserId: v.nullable(userIdSchema),
+  toUserId: v.nullable(userIdSchema),
 });
 
 export type MoveAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof moveAssigneeBodySchema>;
+  body: v.InferOutput<typeof moveAssigneeBodySchema>;
 };
 
 type MoveAssigneeTxResult =

@@ -292,6 +292,25 @@ describe("invoice export", () => {
     });
   });
 
+  test("exports stored identifiers trimmed", async () => {
+    await fixture.testDb
+      .update(sellerProfiles)
+      .set({ registrationId: " 12345678 " })
+      .where(eq(sellerProfiles.id, sellerId));
+    try {
+      const { handler, writes } = capturingExport();
+      await handler.handler(
+        context("own", { format: "pohoda", invoiceIds: [issuedId] }, []),
+      );
+      expect(writtenText(writes.at(0)?.data)).toContain('ico="12345678"');
+    } finally {
+      await fixture.testDb
+        .update(sellerProfiles)
+        .set({ registrationId: "12345678" })
+        .where(eq(sellerProfiles.id, sellerId));
+    }
+  });
+
   test("refuses a draft in the selection", async () => {
     const events: AuditEvent[] = [];
     const { handler, writes } = capturingExport();

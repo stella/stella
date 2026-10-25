@@ -22,7 +22,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -227,7 +227,7 @@ export const CompareVersionsPanel = ({
     targetVersionId,
   }: RequestComparisonOptions) =>
     await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .documents({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .document({ documentId: toSafeId<"entity">(entityId) })

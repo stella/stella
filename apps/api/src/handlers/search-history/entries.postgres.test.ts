@@ -8,7 +8,6 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -21,6 +20,7 @@ import {
 } from "@/api/db/schema";
 import type { RlsDatabaseMarker } from "@/api/db/scoped";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { HttpStatusResponse } from "@/api/http/status";
 import { deleteSearchHistory } from "@/api/lib/account-deletion-steps";
 import {
   AUDIT_ACTION,
@@ -185,7 +185,7 @@ const getImportClockBody = async (fixture: HistoryFixture) => {
       identity(fixture),
     ),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return panic(
       `Expected import clock success, received status ${result.code}`,
     );
@@ -203,7 +203,7 @@ const readHistory = async (
       query,
     }),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return panic(`Expected history success, received status ${result.code}`);
   }
   return result;
@@ -216,7 +216,7 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
       body: { kind: "search", query },
     }),
   );
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return panic(`Expected record success, received status ${result.code}`);
   }
   return result;
@@ -854,8 +854,8 @@ if (!databaseUrl || !enabled) {
             query: { cursor: "invalid" },
           }),
         );
-        expect(invalid).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (invalid instanceof ElysiaCustomStatusResponse) {
+        expect(invalid).toBeInstanceOf(HttpStatusResponse);
+        if (invalid instanceof HttpStatusResponse) {
           expect(invalid.code).toBe(400);
         }
       });
@@ -989,8 +989,8 @@ if (!databaseUrl || !enabled) {
           ),
         );
         for (const response of [staleRecord, staleImport]) {
-          expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-          if (response instanceof ElysiaCustomStatusResponse) {
+          expect(response).toBeInstanceOf(HttpStatusResponse);
+          if (response instanceof HttpStatusResponse) {
             expect(response.code).toBe(403);
           }
         }
@@ -1090,8 +1090,8 @@ if (!databaseUrl || !enabled) {
           }),
         );
         expect(auditInserted).toBe(true);
-        expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (response instanceof ElysiaCustomStatusResponse) {
+        expect(response).toBeInstanceOf(HttpStatusResponse);
+        if (response instanceof HttpStatusResponse) {
           expect(response.code).toBe(500);
         }
         expect(
@@ -1143,7 +1143,7 @@ if (!databaseUrl || !enabled) {
               body,
             }),
           );
-          expect(response).not.toBeInstanceOf(ElysiaCustomStatusResponse);
+          expect(response).not.toBeInstanceOf(HttpStatusResponse);
         }
         expect(
           await importEntries.handler(

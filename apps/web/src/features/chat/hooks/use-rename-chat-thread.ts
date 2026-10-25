@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -55,7 +55,7 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
               : {},
           },
         );
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async (nextTitle) => {
       await queryClient.cancelQueries({ queryKey: groupedKey });

@@ -76,6 +76,7 @@ const plan = (
   planCheck({
     changedPaths,
     presentChangedPaths,
+    repositoryPaths: presentChangedPaths,
     affectedWorkspacePaths,
     workspacePaths: WORKSPACES,
   });
@@ -532,7 +533,6 @@ describe("affected code-check planning", () => {
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
-    ["scripts/oxlint-typebox-unsafe.test.ts", "plugin-fixtures"],
     ["scripts/oxlint-additional-guards.test.ts", "plugin-fixtures"],
     ["scripts/check-oxlint-fixture-counts.ts", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],
@@ -970,10 +970,7 @@ process.exit(childExitStatus(result));
   });
 
   test("the full check schedules every root check from the tracked tree", () => {
-    const tracked = Bun.spawnSync(["git", "ls-files", "-z"])
-      .stdout.toString()
-      .split("\0")
-      .filter(Boolean);
+    const tracked = trackedFiles();
     const workspaces = new Set(
       workspaceManifests().map(({ workspace }) => workspace),
     );
@@ -997,6 +994,54 @@ process.exit(childExitStatus(result));
       "--log-order=stream",
       "--log-prefix=task",
     ]);
+  });
+
+  // A lint-wide input changes what the root lint reports for root sources the
+  // pull request leaves untouched, so the affected check must lint the same
+  // root paths as the full check, or the change passes and main goes red.
+  test.each([
+    "oxlint.config.ts",
+    ".oxlint-plugins/test-timing.ts",
+    "scripts/ownership.ts",
+    "tsconfig.tooling.json",
+    "bun.lock",
+    "types/svg.d.ts",
+  ])("a change to %s lints every root path the full check lints", (input) => {
+    const tracked = trackedFiles();
+    const workspaces = new Set(
+      workspaceManifests().map(({ workspace }) => workspace),
+    );
+    const full = planFullCheck({ files: tracked, workspacePaths: workspaces });
+    const affected = planCheck({
+      changedPaths: [input],
+      presentChangedPaths: [input],
+      repositoryPaths: tracked,
+      affectedWorkspacePaths: [],
+      workspacePaths: workspaces,
+    });
+    if (affected.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+
+    expect(full.rootLintPaths).toContain(
+      ".claude/mcp/stella-docs-http.test.ts",
+    );
+    expect(affected.rootLintPaths).toEqual(full.rootLintPaths);
+  });
+
+  test("a root source change outside the lint-wide inputs lints only itself", () => {
+    const planned = planCheck({
+      changedPaths: [".claude/mcp/server.ts"],
+      presentChangedPaths: [".claude/mcp/server.ts"],
+      repositoryPaths: trackedFiles(),
+      affectedWorkspacePaths: [],
+      workspacePaths: WORKSPACES,
+    });
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+
+    expect(planned.rootLintPaths).toEqual([".claude/mcp/server.ts"]);
   });
 
   test("the full check fails loudly when a root check is unreachable", () => {
@@ -1179,6 +1224,12 @@ const taskInputs = (tasks: Record<string, TurboTask>, name: string) =>
   taskField(tasks, name, "inputs").toSorted();
 
 const isRootInput = (input: string) => input.startsWith("$TURBO_ROOT$/");
+
+const trackedFiles = (): string[] =>
+  Bun.spawnSync(["git", "ls-files", "-z"])
+    .stdout.toString()
+    .split("\0")
+    .filter(Boolean);
 
 type WorkspaceManifest = {
   workspace: string;

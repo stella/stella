@@ -1,6 +1,20 @@
+// Aggregate ownership of every mutation the API serves.
+//
+// Two halves, each exact:
+//
+//   - Routes. The route table the API serves (`apiRoutes`) is read as data:
+//     every POST, PUT, PATCH and DELETE route's definition either carries an
+//     ownership declaration (`declareAggregateMutation`, keyed by definition)
+//     or sits in the reasoned, shrink-only baseline, keyed by method and path.
+//   - Declarations. Every `declareAggregateMutation` call site in the API
+//     source is verified statically: it imports the owner by name and calls
+//     it directly with a literal declaration, every aggregate exists in the
+//     lock registry, and the declared handler awaits the lock for each one,
+//     itself or through a joined direct callee. The owner's registry is only
+//     written by those calls, so a route the table reports declared has a
+//     verified declaration.
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
-/** Enumerates mutation route registrations without importing the API stack. */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
@@ -12,11 +26,10 @@ import { BASELINE_PATHS } from "./baseline-paths";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
-const SERVER = `${API}server.ts`;
 const REGISTRY = `${API}lib/db/aggregate-lock.ts`;
 const OWNER = `${API}lib/db/aggregate-mutation-declaration.ts`;
+const DECLARE = "declareAggregateMutation";
 const BASELINE = BASELINE_PATHS.aggregateMutations;
-const MUTATIONS = new Set(["post", "put", "patch", "delete", "all"]);
 const baselineSchema = v.array(
   v.object({
     key: v.string(),
@@ -26,14 +39,6 @@ const baselineSchema = v.array(
 );
 export type MutationBaseline = v.InferOutput<typeof baselineSchema>;
 type SourceLoader = (file: string) => string | undefined;
-export type MutationRegistration = {
-  key: string;
-  file: string;
-  line: number;
-  method: string;
-  handler: string;
-  declared: boolean;
-};
 
 type ResolveModuleOptions = { file: string; name: string };
 const resolveModule = ({ file, name }: ResolveModuleOptions) => {
@@ -192,541 +197,11 @@ const createSourceAccess = (sourceLoader: SourceLoader) => {
       ? path.posix.join(directory, target)
       : undefined;
   };
-  type ResolveValueOptions = {
-    node: ts.Expression;
-    file: string;
-    visited?: Set<string>;
-  };
-  type ResolvedValue = { node: ts.Expression; file: string } | undefined;
-  const resolveValue = ({
-    node,
-    file,
-    visited = new Set<string>(),
-  }: ResolveValueOptions): ResolvedValue => {
-    if (
-      ts.isAsExpression(node) ||
-      ts.isSatisfiesExpression(node) ||
-      ts.isParenthesizedExpression(node)
-    ) {
-      return resolveValue({ node: node.expression, file, visited });
-    }
-    if (ts.isPropertyAccessExpression(node)) {
-      const object = resolveValue({ node: node.expression, file, visited });
-      if (object === undefined || !ts.isObjectLiteralExpression(object.node)) {
-        return undefined;
-      }
-      for (const property of object.node.properties) {
-        if (
-          ts.isPropertyAssignment(property) &&
-          property.name.getText() === node.name.text
-        ) {
-          return resolveValue({
-            node: property.initializer,
-            file: object.file,
-            visited,
-          });
-        }
-      }
-      return undefined;
-    }
-    if (!ts.isIdentifier(node)) {
-      return { node, file };
-    }
-    const key = `${file}#${node.text}`;
-    if (visited.has(key)) {
-      return undefined;
-    }
-    visited.add(key);
-    const content = load(file);
-    if (content === undefined) {
-      return undefined;
-    }
-    const source = parse({ file, source: content });
-    return resolveBinding({ node, file, visited, source });
-  };
-  type ResolveBindingOptions = {
-    node: ts.Identifier;
-    file: string;
-    visited: Set<string>;
-    source: ts.SourceFile;
-  };
-  const resolveBinding = ({
-    node,
-    file,
-    visited,
-    source,
-  }: ResolveBindingOptions): ResolvedValue => {
-    for (const statement of source.statements) {
-      if (ts.isVariableStatement(statement)) {
-        for (const binding of statement.declarationList.declarations) {
-          if (
-            ts.isIdentifier(binding.name) &&
-            binding.name.text === node.text &&
-            binding.initializer !== undefined
-          ) {
-            return resolveValue({ node: binding.initializer, file, visited });
-          }
-        }
-      }
-      if (
-        ts.isImportDeclaration(statement) &&
-        ts.isStringLiteral(statement.moduleSpecifier) &&
-        statement.importClause?.namedBindings !== undefined &&
-        ts.isNamedImports(statement.importClause.namedBindings)
-      ) {
-        const binding = statement.importClause.namedBindings.elements.find(
-          (item) => item.name.text === node.text,
-        );
-        const target = resolveSourceModule({
-          file,
-          name: statement.moduleSpecifier.text,
-        });
-        if (binding !== undefined && target !== undefined) {
-          return resolveValue({
-            node: ts.factory.createIdentifier(
-              binding.propertyName?.text ?? binding.name.text,
-            ),
-            file: target,
-            visited,
-          });
-        }
-      }
-      if (
-        ts.isExportDeclaration(statement) &&
-        statement.moduleSpecifier !== undefined &&
-        ts.isStringLiteral(statement.moduleSpecifier) &&
-        statement.exportClause !== undefined &&
-        ts.isNamedExports(statement.exportClause)
-      ) {
-        const binding = statement.exportClause.elements.find(
-          (item) => item.name.text === node.text,
-        );
-        const target = resolveSourceModule({
-          file,
-          name: statement.moduleSpecifier.text,
-        });
-        if (binding !== undefined && target !== undefined) {
-          return resolveValue({
-            node: ts.factory.createIdentifier(
-              binding.propertyName?.text ?? binding.name.text,
-            ),
-            file: target,
-            visited,
-          });
-        }
-      }
-    }
-    return undefined;
-  };
   const registry = readAggregateRegistry(load);
-  return { load, resolveSourceModule, resolveValue, registry };
+  return { load, resolveSourceModule, registry };
 };
 
 type SourceAccess = ReturnType<typeof createSourceAccess>;
-
-const elysiaConstructorNames = (source: ts.SourceFile) => {
-  const names = new Set(["Elysia"]);
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "elysia"
-    ) {
-      continue;
-    }
-    const clause = statement.importClause;
-    if (clause?.name !== undefined) {
-      names.add(clause.name.text);
-    }
-    if (
-      clause?.namedBindings !== undefined &&
-      ts.isNamedImports(clause.namedBindings)
-    ) {
-      for (const item of clause.namedBindings.elements) {
-        if ((item.propertyName?.text ?? item.name.text) === "Elysia") {
-          names.add(item.name.text);
-        }
-      }
-    }
-  }
-  return names;
-};
-
-const producesRoutes = (source: ts.SourceFile) => {
-  const names = elysiaConstructorNames(source);
-  let found = false;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      names.has(node.expression.text)
-    ) {
-      found = true;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-};
-
-type RouteReceiverOptions = {
-  source: ts.SourceFile;
-  elysiaNames: ReadonlySet<string>;
-};
-const createRouteReceiver = ({ source, elysiaNames }: RouteReceiverOptions) => {
-  const variables = new Map<string, ts.Expression>();
-  const collectVariables = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      variables.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collectVariables);
-  };
-  collectVariables(source);
-  // Visited bindings are declarations, not names: nested callbacks commonly
-  // shadow one parameter name, while a real alias cycle revisits a node.
-  const isRouteReceiver = (
-    node: ts.Expression,
-    visited = new Set<ts.Node>(),
-  ): boolean => {
-    if (
-      ts.isAsExpression(node) ||
-      ts.isParenthesizedExpression(node) ||
-      ts.isNonNullExpression(node)
-    ) {
-      return isRouteReceiver(node.expression, visited);
-    }
-    if (ts.isNewExpression(node)) {
-      return (
-        ts.isIdentifier(node.expression) &&
-        elysiaNames.has(node.expression.text)
-      );
-    }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
-    ) {
-      return isRouteReceiver(node.expression.expression, visited);
-    }
-    if (!ts.isIdentifier(node)) {
-      return false;
-    }
-    const initializer = variables.get(node.text);
-    if (initializer !== undefined) {
-      if (visited.has(initializer)) {
-        return false;
-      }
-      visited.add(initializer);
-      return isRouteReceiver(initializer, visited);
-    }
-    let ancestor = node.parent;
-    while (!ts.isSourceFile(ancestor)) {
-      if (
-        (ts.isArrowFunction(ancestor) || ts.isFunctionExpression(ancestor)) &&
-        ancestor.parameters.some(
-          (parameter) =>
-            ts.isIdentifier(parameter.name) &&
-            parameter.name.text === node.text,
-        )
-      ) {
-        if (visited.has(ancestor)) {
-          return false;
-        }
-        visited.add(ancestor);
-        const parent = ancestor.parent;
-        if (
-          ts.isCallExpression(parent) &&
-          ts.isPropertyAccessExpression(parent.expression)
-        ) {
-          return isRouteReceiver(parent.expression.expression, visited);
-        }
-      }
-      ancestor = ancestor.parent;
-    }
-    return false;
-  };
-  return isRouteReceiver;
-};
-
-type RouteTextOptions = {
-  node: ts.Expression;
-  file: string;
-  access: SourceAccess;
-  visited?: ReadonlySet<string>;
-};
-const resolveRouteText = ({
-  node,
-  file,
-  access,
-  visited = new Set<string>(),
-}: RouteTextOptions): string | undefined => {
-  const resolved = access.resolveValue({ node, file });
-  if (resolved === undefined) {
-    return undefined;
-  }
-  if (ts.isStringLiteralLike(resolved.node)) {
-    return resolved.node.text;
-  }
-  const key = `${resolved.file}:${resolved.node.pos}:${resolved.node.end}`;
-  if (visited.has(key)) {
-    return undefined;
-  }
-  const next = new Set(visited);
-  next.add(key);
-  if (ts.isTemplateExpression(resolved.node)) {
-    let text = resolved.node.head.text;
-    for (const span of resolved.node.templateSpans) {
-      const value = resolveRouteText({
-        node: span.expression,
-        file: resolved.file,
-        access,
-        visited: next,
-      });
-      if (value === undefined) {
-        return undefined;
-      }
-      text += value + span.literal.text;
-    }
-    return text;
-  }
-  if (
-    ts.isBinaryExpression(resolved.node) &&
-    resolved.node.operatorToken.kind === ts.SyntaxKind.PlusToken
-  ) {
-    const left = resolveRouteText({
-      node: resolved.node.left,
-      file: resolved.file,
-      access,
-      visited: next,
-    });
-    const right = resolveRouteText({
-      node: resolved.node.right,
-      file: resolved.file,
-      access,
-      visited: next,
-    });
-    return left === undefined || right === undefined ? undefined : left + right;
-  }
-  return undefined;
-};
-
-type RoutePrefixOptions = {
-  source: ts.SourceFile;
-  file: string;
-  access: SourceAccess;
-};
-const createRoutePrefix = ({ source, file, access }: RoutePrefixOptions) => {
-  const variables = new Map<string, ts.Expression>();
-  const collect = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      variables.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collect);
-  };
-  collect(source);
-  const literal = (node: ts.Expression, owner = file): string => {
-    const text = resolveRouteText({ node, file: owner, access });
-    if (text === undefined) {
-      panic(`Dynamic aggregate route prefix in ${file}: ${node.getText()}`);
-    }
-    return text;
-  };
-  const constructorPrefix = (node: ts.NewExpression): string => {
-    const options = node.arguments?.at(0);
-    if (options === undefined) {
-      return "";
-    }
-    const resolved = access.resolveValue({ node: options, file });
-    if (
-      resolved === undefined ||
-      !ts.isObjectLiteralExpression(resolved.node)
-    ) {
-      panic(`Dynamic aggregate router options in ${file}`);
-    }
-    for (const property of resolved.node.properties) {
-      if (
-        ts.isSpreadAssignment(property) ||
-        ts.isComputedPropertyName(property.name)
-      ) {
-        panic(`Dynamic aggregate router options in ${file}`);
-      }
-      if (property.name.text !== "prefix") {
-        continue;
-      }
-      if (ts.isPropertyAssignment(property)) {
-        return literal(property.initializer, resolved.file);
-      }
-      if (ts.isShorthandPropertyAssignment(property)) {
-        return literal(property.name, resolved.file);
-      }
-      panic(`Unsupported aggregate router prefix in ${file}`);
-    }
-    return "";
-  };
-  const prefix = (
-    node: ts.Expression,
-    visited = new Set<ts.Expression>(),
-  ): string => {
-    if (
-      ts.isAsExpression(node) ||
-      ts.isParenthesizedExpression(node) ||
-      ts.isNonNullExpression(node)
-    ) {
-      return prefix(node.expression, visited);
-    }
-    if (ts.isNewExpression(node)) {
-      return constructorPrefix(node);
-    }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
-    ) {
-      return prefix(node.expression.expression, visited);
-    }
-    if (!ts.isIdentifier(node) || visited.has(node)) {
-      panic(
-        `Unresolved aggregate route prefix in ${file}: ${node.getText(source)}`,
-      );
-    }
-    visited.add(node);
-    let ancestor = node.parent;
-    while (!ts.isSourceFile(ancestor)) {
-      if (
-        (ts.isArrowFunction(ancestor) || ts.isFunctionExpression(ancestor)) &&
-        ancestor.parameters.some(
-          (parameter) =>
-            ts.isIdentifier(parameter.name) &&
-            parameter.name.text === node.text,
-        )
-      ) {
-        const call = ancestor.parent;
-        if (
-          ts.isCallExpression(call) &&
-          ts.isPropertyAccessExpression(call.expression)
-        ) {
-          const outer = prefix(call.expression.expression, visited);
-          if (call.expression.name.text === "group") {
-            const group = call.arguments.at(0);
-            if (group === undefined) {
-              panic(`Missing aggregate route group prefix in ${file}`);
-            }
-            return joinRoutePath(outer, literal(group));
-          }
-          return outer;
-        }
-      }
-      ancestor = ancestor.parent;
-    }
-    const initializer = variables.get(node.text);
-    if (initializer === undefined) {
-      panic(`Missing aggregate route prefix receiver in ${file}: ${node.text}`);
-    }
-    return prefix(initializer, visited);
-  };
-  return prefix;
-};
-const joinRoutePath = (prefix: string, local: string): string => {
-  if (prefix === "") {
-    return local;
-  }
-  return `${prefix.replace(/\/$/u, "")}/${local.replace(/^\//u, "")}`;
-};
-
-type BindingOptions = {
-  source: ts.SourceFile;
-  file: string;
-  access: SourceAccess;
-  pending: string[];
-};
-const collectBindings = ({
-  source,
-  file,
-  access: { load, resolveSourceModule },
-  pending,
-}: BindingOptions) => {
-  const bindings = new Map<string, string>();
-  const declarationNames = new Set<string>();
-  for (const statement of source.statements) {
-    if (
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      const target = resolveSourceModule({
-        file,
-        name: statement.moduleSpecifier.text,
-      });
-      const clause = statement.importClause;
-      if (clause?.name !== undefined && target !== undefined) {
-        bindings.set(clause.name.text, target);
-      }
-      if (
-        clause?.namedBindings !== undefined &&
-        ts.isNamedImports(clause.namedBindings)
-      ) {
-        for (const item of clause.namedBindings.elements) {
-          if (target !== undefined) {
-            bindings.set(
-              item.name.text,
-              `${target}#${item.propertyName?.text ?? item.name.text}`,
-            );
-          }
-          if (
-            target === OWNER &&
-            (item.propertyName?.text ?? item.name.text) ===
-              "declareAggregateMutation"
-          ) {
-            declarationNames.add(item.name.text);
-          }
-        }
-      }
-      if (
-        clause?.namedBindings !== undefined &&
-        ts.isNamespaceImport(clause.namedBindings) &&
-        target !== undefined
-      ) {
-        bindings.set(clause.namedBindings.name.text, target);
-      }
-      if (target !== undefined && target !== OWNER) {
-        const producerContent = load(target);
-        if (
-          producerContent !== undefined &&
-          producesRoutes(parse({ file: target, source: producerContent }))
-        ) {
-          pending.push(target);
-        }
-      }
-    }
-  }
-  return { bindings, declarationNames };
-};
-
-type IdentityOptions = {
-  source: ts.SourceFile;
-  file: string;
-  bindings: ReadonlyMap<string, string>;
-};
-const createHandlerIdentity = ({ source, file, bindings }: IdentityOptions) => {
-  const identity = (handler: ts.Expression) => {
-    if (
-      ts.isPropertyAccessExpression(handler) &&
-      ts.isIdentifier(handler.expression)
-    ) {
-      return `${bindings.get(handler.expression.text) ?? `${file}#${handler.expression.text}`}.${handler.name.text}`;
-    }
-    if (ts.isIdentifier(handler)) {
-      return bindings.get(handler.text) ?? `${file}#${handler.text}`;
-    }
-    return handler.getText(source).replace(/\s+/gu, " ");
-  };
-  return identity;
-};
 
 type SourceReferenceOptions = {
   source: ts.SourceFile;
@@ -878,7 +353,9 @@ const handlerImplementation = ({
         visited,
       });
     }
-    const callback = handler.arguments.at(1);
+    // The handler callback comes last: `(config, handler)`, and a token
+    // handler's `(config, verifyCaller, handler)`.
+    const callback = handler.arguments.at(-1);
     if (
       factory?.kind !== "import" ||
       factory.module !== `${API}lib/api-handlers.ts` ||
@@ -1936,437 +1413,160 @@ const assertDeclaredHandlerLocks = ({
   }
 };
 
-type ImportedDeclarationOptions = {
-  bindings: ReadonlyMap<string, string>;
-  access: SourceAccess;
-};
-const collectImportedDeclarations = ({
-  bindings,
-  access,
-}: ImportedDeclarationOptions) => {
-  const { load, resolveSourceModule, registry } = access;
-  const declared = new Set<string>();
-  for (const target of bindings.values()) {
-    const [module, exported = "default"] = target.split("#");
-    if (module === undefined || !module.startsWith(API) || module === OWNER) {
-      continue;
-    }
-    const ownerContent = load(module);
-    if (ownerContent === undefined) {
-      continue;
-    }
-    const ownerSource = parse({ file: module, source: ownerContent });
-    const ownerHelpers = new Set<string>();
-    let exportedBinding = exported === "default" ? undefined : exported;
-    for (const statement of ownerSource.statements) {
-      if (
-        exported === "default" &&
-        ts.isExportAssignment(statement) &&
-        !statement.isExportEquals &&
-        ts.isIdentifier(statement.expression)
-      ) {
-        exportedBinding = statement.expression.text;
-      }
-      if (
-        ts.isImportDeclaration(statement) &&
-        ts.isStringLiteral(statement.moduleSpecifier) &&
-        resolveSourceModule({
-          file: module,
-          name: statement.moduleSpecifier.text,
-        }) === OWNER &&
-        statement.importClause?.namedBindings !== undefined &&
-        ts.isNamedImports(statement.importClause.namedBindings)
-      ) {
-        for (const item of statement.importClause.namedBindings.elements) {
-          if (
-            (item.propertyName?.text ?? item.name.text) ===
-            "declareAggregateMutation"
-          ) {
-            ownerHelpers.add(item.name.text);
-          }
-        }
-      }
-    }
-    const visitOwner = (node: ts.Node) => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        ownerHelpers.has(node.expression.text) &&
-        isTrustedImport({
-          identifier: node.expression,
-          access,
-          module: OWNER,
-          exported: ["declareAggregateMutation"],
-        })
-      ) {
-        const handler = node.arguments.at(0);
-        const declaration = node.arguments.at(1);
-        if (
-          handler !== undefined &&
-          exportedBinding !== undefined &&
-          handler.getText(ownerSource) === `${exportedBinding}.handler` &&
-          declaration !== undefined &&
-          ts.isObjectLiteralExpression(declaration)
-        ) {
-          validateDeclaration({
-            declaration,
-            source: ownerSource,
-            file: module,
-            registry,
-          });
-          assertDeclaredHandlerLocks({
-            declaration,
-            handler,
-            source: ownerSource,
-            file: module,
-            registry,
-            access,
-          });
-          declared.add(`${target}.handler`);
-        }
-      }
-      ts.forEachChild(node, visitOwner);
-    };
-    visitOwner(ownerSource);
-  }
-  return declared;
-};
+// --- Declaration sites ----------------------------------------------------------
 
-type LocalDeclarationOptions = {
-  source: ts.SourceFile;
-  file: string;
-  registry: ReadonlySet<string>;
-  declarationNames: ReadonlySet<string>;
-  declared: Set<string>;
-  identity: (handler: ts.Expression) => string;
-  access: SourceAccess;
-};
-const collectLocalDeclarations = ({
+/** Local names `file` imports the owner's declaration helper under. */
+const declarationNames = ({
   source,
   file,
-  registry,
-  declarationNames,
-  declared,
-  identity,
   access,
-}: LocalDeclarationOptions) => {
-  const declarationCall = (node: ts.CallExpression) =>
-    ts.isIdentifier(node.expression) &&
-    declarationNames.has(node.expression.text) &&
-    isTrustedImport({
-      identifier: node.expression,
-      access,
-      module: OWNER,
-      exported: ["declareAggregateMutation"],
-    });
-  const collectDeclarations = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && declarationCall(node)) {
-      const handler = node.arguments.at(0);
-      const declaration = node.arguments.at(1);
+}: {
+  source: ts.SourceFile;
+  file: string;
+  access: SourceAccess;
+}) => {
+  const names = new Set<string>();
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    const fromOwner =
+      access.resolveSourceModule({
+        file,
+        name: statement.moduleSpecifier.text,
+      }) === OWNER;
+    const bindings = statement.importClause?.namedBindings;
+    if (fromOwner && bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      panic(`Import ${DECLARE} by name from its owner in ${file}`);
+    }
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    for (const item of bindings.elements) {
+      if ((item.propertyName ?? item.name).text !== DECLARE) {
+        continue;
+      }
+      if (!fromOwner || item.isTypeOnly) {
+        panic(`Import ${DECLARE} from ${OWNER} in ${file}`);
+      }
+      names.add(item.name.text);
+    }
+  }
+  return names;
+};
+
+/**
+ * Verifies every declaration in one file and returns how many it holds. Any
+ * other use of the helper's name (an alias, a re-export, a value passed on, a
+ * namespace member) fails: only a direct call can be verified.
+ */
+const verifyFileDeclarations = (file: string, access: SourceAccess) => {
+  const content = access.load(file);
+  if (content === undefined) {
+    return panic(`Cannot read aggregate declaration site ${file}`);
+  }
+  const source = parse({ file, source: content });
+  const names = declarationNames({ source, file, access });
+  let verified = 0;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isIdentifier(node) &&
+      (node.text === DECLARE || names.has(node.text)) &&
+      !ts.isImportSpecifier(node.parent)
+    ) {
+      const call = node.parent;
       if (
+        !names.has(node.text) ||
+        !ts.isCallExpression(call) ||
+        call.expression !== node
+      ) {
+        panic(`Call ${DECLARE} directly in ${file}: ${call.getText(source)}`);
+      }
+      const [handler, declaration] = call.arguments;
+      if (
+        call.arguments.length !== 2 ||
         handler === undefined ||
         declaration === undefined ||
         !ts.isObjectLiteralExpression(declaration)
       ) {
         panic(`Invalid aggregate mutation declaration in ${file}`);
       }
-      validateDeclaration({ declaration, source, file, registry });
+      validateDeclaration({
+        declaration,
+        source,
+        file,
+        registry: access.registry,
+      });
       assertDeclaredHandlerLocks({
         declaration,
         handler,
         source,
         file,
-        registry,
+        registry: access.registry,
         access,
       });
-      declared.add(identity(handler));
-    }
-    ts.forEachChild(node, collectDeclarations);
-  };
-  collectDeclarations(source);
-  return declarationCall;
-};
-
-type RouteContext = {
-  source: ts.SourceFile;
-  file: string;
-  access: SourceAccess;
-  pending: string[];
-  registrations: MutationRegistration[];
-  bindings: ReadonlyMap<string, string>;
-  declared: ReadonlySet<string>;
-  identity: (handler: ts.Expression) => string;
-  declarationCall: (node: ts.CallExpression) => boolean;
-  isRouteReceiver: (node: ts.Expression) => boolean;
-  routePrefix: (node: ts.Expression) => string;
-};
-type RegistrationOptions = { node: ts.CallExpression; context: RouteContext };
-const appendMutationRegistration = ({
-  node,
-  context: {
-    source,
-    file,
-    access,
-    registrations,
-    isRouteReceiver,
-    routePrefix,
-    identity,
-    declarationCall,
-    declared,
-  },
-}: RegistrationOptions) => {
-  if (
-    ts.isPropertyAccessExpression(node.expression) &&
-    MUTATIONS.has(node.expression.name.text) &&
-    isRouteReceiver(node.expression.expression)
-  ) {
-    const route = node.arguments.at(0);
-    const handler = node.arguments.at(1);
-    // SQL delete(table) and ordinary collections are not route registrations.
-    if (handler !== undefined && route !== undefined) {
-      const localPath = resolveRouteText({
-        node: route,
-        file,
-        access,
-      });
-      if (localPath === undefined) {
-        panic(
-          `Dynamic mutation route path in ${file}: ${route.getText(source)}`,
-        );
-      }
-      const resolvedPath = joinRoutePath(
-        routePrefix(node.expression.expression),
-        localPath,
-      );
-      const actual =
-        ts.isCallExpression(handler) && declarationCall(handler)
-          ? handler.arguments.at(0)
-          : handler;
-      if (actual === undefined) {
-        panic(`Missing declared route handler in ${file}`);
-      }
-      const handlerIdentity = identity(actual);
-      const method = node.expression.name.text.toUpperCase();
-      registrations.push({
-        key: `${file}|${method}|${resolvedPath}|${handlerIdentity}`,
-        file,
-        line:
-          source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-        method,
-        handler: handlerIdentity,
-        declared: declared.has(handlerIdentity),
-      });
-    }
-  }
-};
-
-const appendInterceptorRegistrations = ({
-  node,
-  context: {
-    source,
-    file,
-    bindings,
-    registrations,
-    routePrefix,
-    isRouteReceiver,
-  },
-}: RegistrationOptions) => {
-  if (
-    ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === "onRequest" &&
-    isRouteReceiver(node.expression.expression)
-  ) {
-    const interceptorPrefix = routePrefix(node.expression.expression);
-    const collectInterceptor = (argument: ts.Node) => {
-      if (ts.isCallExpression(argument)) {
-        const expression = argument.expression;
-        let target: string | undefined;
-        if (ts.isIdentifier(expression)) {
-          target = bindings.get(expression.text);
-        } else if (
-          ts.isPropertyAccessExpression(expression) &&
-          ts.isIdentifier(expression.expression)
-        ) {
-          target = bindings.get(expression.expression.text);
-        }
-        if (target?.startsWith(`${API}handlers/`)) {
-          registrations.push({
-            key: `${file}|INTERCEPT|${interceptorPrefix}|${target}`,
-            file,
-            line:
-              source.getLineAndCharacterOfPosition(argument.getStart(source))
-                .line + 1,
-            method: "INTERCEPT",
-            handler: target,
-            declared: false,
-          });
-        }
-      }
-      ts.forEachChild(argument, collectInterceptor);
-    };
-    for (const argument of node.arguments) {
-      collectInterceptor(argument);
-    }
-  }
-};
-
-const enumerateModuleRegistrations = (context: RouteContext) => {
-  const {
-    source,
-    file,
-    access: { resolveSourceModule },
-    pending,
-    registrations,
-    bindings,
-    isRouteReceiver,
-    routePrefix,
-  } = context;
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-        const specifier = node.arguments.at(0);
-        if (specifier !== undefined && ts.isStringLiteral(specifier)) {
-          const target = resolveSourceModule({ file, name: specifier.text });
-          if (target !== undefined) {
-            pending.push(target);
-          }
-        }
-      }
-      if (
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "use" &&
-        isRouteReceiver(node.expression.expression)
-      ) {
-        const collectProducer = (argument: ts.Node) => {
-          if (ts.isIdentifier(argument)) {
-            const target = bindings.get(argument.text)?.split("#").at(0);
-            if (target !== undefined && target !== OWNER) {
-              pending.push(target);
-            }
-          }
-          ts.forEachChild(argument, collectProducer);
-        };
-        for (const argument of node.arguments) {
-          collectProducer(argument);
-        }
-      }
-      appendInterceptorRegistrations({ node, context });
-      appendMutationRegistration({ node, context });
-      if (
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "route" &&
-        isRouteReceiver(node.expression.expression)
-      ) {
-        const signature = node.arguments
-          .map((argument) => argument.getText(source).replace(/\s+/gu, " "))
-          .join("|");
-        registrations.push({
-          key: `${file}|GENERIC|${node.expression.expression.getText(source)}|${signature}`,
-          file,
-          line:
-            source.getLineAndCharacterOfPosition(node.getStart(source)).line +
-            1,
-          method: "GENERIC",
-          handler: signature,
-          declared: false,
-        });
-      }
-      if (
-        ts.isElementAccessExpression(node.expression) &&
-        isRouteReceiver(node.expression.expression)
-      ) {
-        panic(
-          `Computed route registration requires an explicit aggregate coverage implementation in ${file}`,
-        );
-      }
-      if (
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "mount" &&
-        isRouteReceiver(node.expression.expression)
-      ) {
-        const handler = node.arguments.at(0);
-        if (handler !== undefined) {
-          registrations.push({
-            key: `${file}|MOUNT|${routePrefix(node.expression.expression)}|${handler.getText(source)}`,
-            file,
-            line:
-              source.getLineAndCharacterOfPosition(node.getStart(source)).line +
-              1,
-            method: "MOUNT",
-            handler: handler.getText(source),
-            declared: false,
-          });
-        }
-      }
+      verified += 1;
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
+  return verified;
 };
 
-/** Includes local-dev imports and nested route factories; never initializes them. */
-export const enumerateAggregateMutations = (
-  sourceLoader: SourceLoader,
-): MutationRegistration[] => {
-  const access = createSourceAccess(sourceLoader);
-  const pending = [SERVER];
-  const seen = new Set<string>();
-  const registrations: MutationRegistration[] = [];
-  while (pending.length !== 0) {
-    const file = pending.pop();
-    if (file === undefined || seen.has(file)) {
+/**
+ * Verifies every declaration site among `files` (repo-relative); a file that
+ * never names the helper is skipped unparsed. Returns the declarations found.
+ */
+export const verifyAggregateDeclarations = ({
+  files,
+  load,
+}: {
+  files: readonly string[];
+  load: SourceLoader;
+}): number => {
+  const access = createSourceAccess(load);
+  let verified = 0;
+  for (const file of files) {
+    if (file !== OWNER && access.load(file)?.includes(DECLARE) === true) {
+      verified += verifyFileDeclarations(file, access);
+    }
+  }
+  return verified;
+};
+
+// --- Route coverage -------------------------------------------------------------
+
+const routeReason = (route: string) =>
+  `Existing ${route.slice(0, route.indexOf(" "))} route awaits ownership declaration at its route definition.`;
+
+/** One row per undeclared mutation route (`METHOD /path`), counted. */
+export const aggregateMutationBaseline = (
+  undeclared: readonly string[],
+): MutationBaseline => {
+  const rows = new Map<string, MutationBaseline[number]>();
+  for (const route of undeclared) {
+    const existing = rows.get(route);
+    if (existing !== undefined) {
+      existing.count += 1;
       continue;
     }
-    seen.add(file);
-    const content = access.load(file);
-    if (content === undefined) {
-      panic(`Cannot enumerate route module ${file}`);
-    }
-    const source = parse({ file, source: content });
-    const { bindings, declarationNames } = collectBindings({
-      source,
-      file,
-      access,
-      pending,
-    });
-    const isRouteReceiver = createRouteReceiver({
-      source,
-      elysiaNames: elysiaConstructorNames(source),
-    });
-    const identity = createHandlerIdentity({ source, file, bindings });
-    const declared = collectImportedDeclarations({ bindings, access });
-    const declarationCall = collectLocalDeclarations({
-      source,
-      file,
-      registry: access.registry,
-      declarationNames,
-      declared,
-      identity,
-      access,
-    });
-    enumerateModuleRegistrations({
-      source,
-      file,
-      access,
-      pending,
-      registrations,
-      bindings,
-      isRouteReceiver,
-      identity,
-      declared,
-      declarationCall,
-      routePrefix: createRoutePrefix({ source, file, access }),
-    });
+    rows.set(route, { key: route, count: 1, reason: routeReason(route) });
   }
-  return registrations.toSorted((a, b) => compareCodeUnit(a.key, b.key));
+  return [...rows.values()].toSorted((left, right) =>
+    compareCodeUnit(left.key, right.key),
+  );
 };
 
 export const checkAggregateMutationCoverage = ({
-  registrations,
+  undeclared,
   baseline,
   previous,
 }: {
-  registrations: readonly MutationRegistration[];
+  /** Mutation routes the served table mounts without a declaration. */
+  undeclared: readonly string[];
   baseline: MutationBaseline;
   previous: MutationBaseline;
 }): string[] => {
@@ -2377,7 +1577,7 @@ export const checkAggregateMutationCoverage = ({
     errors.push("Duplicate aggregate mutation baseline entries");
   }
   const needed = new Map(
-    aggregateMutationBaseline(registrations).map((entry) => [entry.key, entry]),
+    aggregateMutationBaseline(undeclared).map((entry) => [entry.key, entry]),
   );
   for (const entry of baseline) {
     if (entry.reason.trim() === "") {
@@ -2412,42 +1612,7 @@ export const checkAggregateMutationCoverage = ({
   return errors;
 };
 
-const legacyReason = (route: MutationRegistration) => {
-  switch (route.method) {
-    case "MOUNT":
-      return "Better Auth owns generated authentication mutations behind the mounted request handler.";
-    case "GENERIC":
-      return "Derived rate-limit classification router built from the existing route table; no handler execution.";
-    case "INTERCEPT":
-      return `Request dispatch is owned by ${route.handler}; its transport boundary requires separate ownership enumeration.`;
-    default:
-      return `Existing ${route.method} route ${route.handler} awaits ownership declaration at its handler boundary.`;
-  }
-};
-
-export const aggregateMutationBaseline = (
-  registrations: readonly MutationRegistration[],
-): MutationBaseline => {
-  const rows = new Map<string, MutationBaseline[number]>();
-  for (const route of registrations) {
-    if (route.declared) {
-      continue;
-    }
-    const existing = rows.get(route.key);
-    if (existing !== undefined) {
-      existing.count += 1;
-      continue;
-    }
-    rows.set(route.key, {
-      key: route.key,
-      count: 1,
-      reason: legacyReason(route),
-    });
-  }
-  return [...rows.values()].toSorted((left, right) =>
-    compareCodeUnit(left.key, right.key),
-  );
-};
+// --- CLI ------------------------------------------------------------------------
 
 const aggregateMutationComparisonCommit = () => {
   const requested =
@@ -2476,56 +1641,72 @@ const aggregateMutationComparisonCommit = () => {
   return base.stdout.trim();
 };
 
+const TEST_FILE = /\.(?:test|type-test)\.ts$/u;
+
+/** API source files a served route can import: everything but tests. */
+const apiSourceFiles = (): string[] =>
+  [...new Bun.Glob(`${API}**/*.ts`).scanSync({ cwd: ROOT })]
+    .filter((file) => !TEST_FILE.test(file))
+    .toSorted(compareCodeUnit);
+
+/**
+ * Mutation routes the served table mounts without a declaration. The env
+ * defaults are seeded first: route modules read the API env when they load.
+ */
+const undeclaredServedMutations = async (): Promise<string[]> => {
+  await import("../apps/api/src/tests/setup-env");
+  const { apiRoutes } = await import("../apps/api/src/api-routes");
+  const { collectUndeclaredAggregateMutations } =
+    await import("../apps/api/src/lib/db/aggregate-mutation-declaration");
+  return collectUndeclaredAggregateMutations(apiRoutes);
+};
+
 if (import.meta.main) {
   const comparisonCommit = aggregateMutationComparisonCommit();
   const load: SourceLoader = (file) =>
     existsSync(path.join(ROOT, file))
       ? readFileSync(path.join(ROOT, file), "utf-8")
       : undefined;
-  const registrations = enumerateAggregateMutations(load);
+  const declarations = verifyAggregateDeclarations({
+    files: apiSourceFiles(),
+    load,
+  });
+  const undeclared = await undeclaredServedMutations();
+  const baseExists =
+    spawnSync("git", ["cat-file", "-e", `${comparisonCommit}:${BASELINE}`], {
+      cwd: ROOT,
+      encoding: "utf-8",
+    }).status === 0;
   if (process.argv.includes("--generate")) {
-    const existing = spawnSync(
-      "git",
-      ["cat-file", "-e", `${comparisonCommit}:${BASELINE}`],
-      { cwd: ROOT, encoding: "utf-8" },
-    );
-    if (existing.status === 0) {
+    if (baseExists) {
       panic(
         "The aggregate mutation baseline is shrink-only; generation is initial-only",
       );
     }
     writeFileSync(
       path.join(ROOT, BASELINE),
-      `${JSON.stringify(aggregateMutationBaseline(registrations), null, 2)}\n`,
+      `${JSON.stringify(aggregateMutationBaseline(undeclared), null, 2)}\n`,
     );
   } else {
     const baseline = v.parse(
       baselineSchema,
       JSON.parse(readFileSync(path.join(ROOT, BASELINE), "utf-8")),
     );
-    const base = spawnSync("git", ["show", `${comparisonCommit}:${BASELINE}`], {
-      cwd: ROOT,
-      encoding: "utf-8",
-    });
-    // On introduction, bind the generated inventory to the base route source tree.
-    const previous =
-      base.status === 0
-        ? v.parse(baselineSchema, JSON.parse(base.stdout))
-        : aggregateMutationBaseline(
-            enumerateAggregateMutations((file) => {
-              const result = spawnSync(
-                "git",
-                ["show", `${comparisonCommit}:${file}`],
-                {
-                  cwd: ROOT,
-                  encoding: "utf-8",
-                },
-              );
-              return result.status === 0 ? result.stdout : undefined;
-            }),
-          );
+    // On introduction the committed rows must be exactly the generated
+    // inventory of the served table: no hand-added row or loosened reason.
+    const previous = baseExists
+      ? v.parse(
+          baselineSchema,
+          JSON.parse(
+            spawnSync("git", ["show", `${comparisonCommit}:${BASELINE}`], {
+              cwd: ROOT,
+              encoding: "utf-8",
+            }).stdout,
+          ),
+        )
+      : aggregateMutationBaseline(undeclared);
     const errors = checkAggregateMutationCoverage({
-      registrations,
+      undeclared,
       baseline,
       previous,
     });
@@ -2533,10 +1714,15 @@ if (import.meta.main) {
       process.stderr.write(`${error}\n`);
     }
     process.stdout.write(
-      `Aggregate mutation coverage: ${registrations.length} registrations, ${baseline.length} legacy entries\n`,
+      `Aggregate mutation coverage: ${declarations} verified declarations, ${undeclared.length} undeclared mutation routes, ${baseline.length} legacy entries\n`,
     );
     if (errors.length !== 0) {
       process.exitCode = 1;
     }
   }
+  // The route table's modules open Redis clients at import (the rate
+  // limiter connects at construction so a server's first requests reach it)
+  // and never unref them, so this one-off script's event loop would hang.
+  // The work is done here; exit explicitly like export-capability-catalog.ts.
+  process.exit();
 }

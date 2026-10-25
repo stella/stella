@@ -292,6 +292,87 @@ const jobIf = (job: unknown) =>
 
 const ciJobs = workflowJobs(workflow);
 
+test("migration coverage uses the pinned CI comparison base", () => {
+  const job = v.parse(
+    v.object({
+      steps: v.array(
+        v.looseObject({
+          name: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    ciJobs["database-migrations-check"],
+  );
+  const coverage = job.steps.find(
+    ({ name }) => name === "Check migration coverage",
+  );
+  expect(coverage?.env?.["BASE_REF"]).toBe(
+    ["$", "{{ needs.ci-plan.outputs.target_base_sha || 'HEAD^' }}"].join(""),
+  );
+});
+
+test("migration check jobs disable production load gates", () => {
+  const migrationStepNames = new Set([
+    "Test migration safety rules and historical findings",
+    "Apply all migrations to fresh Postgres",
+  ]);
+  const migrationJobs = Object.entries(ciJobs).filter(([, job]) => {
+    const { steps } = v.parse(
+      v.looseObject({
+        steps: v.optional(
+          v.array(v.looseObject({ name: v.optional(v.string()) })),
+        ),
+      }),
+      job,
+    );
+    return steps?.some(({ name }) => name && migrationStepNames.has(name));
+  });
+
+  expect(migrationJobs.map(([id]) => id).toSorted()).toEqual([
+    "database-migrations-apply-fresh",
+    "database-migrations-check",
+  ]);
+  for (const [id, job] of migrationJobs) {
+    const { env } = v.parse(
+      v.looseObject({ env: v.record(v.string(), v.string()) }),
+      job,
+    );
+    expect(env["DB_LOAD_GATE_EBS_SIGNAL"], id).toBe("disabled");
+    expect(env["DB_LOAD_GATE_BUSY_WINDOWS"], id).toBe("[]");
+  }
+});
+
+test("required checks report on pull requests and merge groups", () => {
+  const required = [
+    ["ci-result", workflow, "ci-result"],
+    ["dependency-review", workflow, "dependency-review"],
+    [
+      "cla",
+      readFileSync(
+        new URL("../.github/workflows/cla.yml", import.meta.url),
+        "utf-8",
+      ),
+      "verify-signatures",
+    ],
+  ] as const;
+  for (const [check, source, job] of required) {
+    const parsed = v.parse(
+      v.looseObject({
+        on: v.record(v.string(), v.unknown()),
+        jobs: v.record(v.string(), v.unknown()),
+      }),
+      Bun.YAML.parse(source),
+    );
+    expect(parsed.jobs, check).toHaveProperty(job);
+    expect(parsed.on, check).toHaveProperty("merge_group");
+    expect(parsed.on, check).toHaveProperty(
+      check === "cla" ? "pull_request_target" : "pull_request",
+    );
+  }
+  expect(required.at(2)?.[1]).toContain('name = "cla"');
+});
+
 // The planner and tests share the dependency-closure owner.
 const PR_HEAVY_JOBS = prHeavyJobs({ jobs: ciJobs });
 const releaseJobs = workflowJobs(

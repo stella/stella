@@ -36,10 +36,6 @@ export const DOC_SOURCES = {
     dependencies: ["@openrouter/sdk"],
     url: "https://openrouter.ai/docs/llms.txt",
   },
-  Elysia: {
-    dependencies: ["elysia", "@elysia/cors", "@elysia/eden"],
-    url: "https://elysiajs.com/llms.txt",
-  },
   Drizzle: {
     dependencies: ["drizzle-orm", "drizzle-kit"],
     url: "https://orm.drizzle.team/llms.txt",
@@ -420,12 +416,6 @@ const PROBED_WITHOUT_LLMS_TXT = [
     [
       "https://ooxml.silurus.dev/llms.txt",
       "https://ooxml.silurus.dev/docs/llms.txt",
-    ],
-  ],
-  [
-    "@sinclair/typebox",
-    [
-      "https://raw.githubusercontent.com/sinclairzx81/sinclair-typebox/HEAD/llms.txt",
     ],
   ],
   [

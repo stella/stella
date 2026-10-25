@@ -122,7 +122,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: user-journeys-staging-report
-          path: apps/web/test-results/user-journeys-deployed*/
+          path: ${{ steps.journeys.outputs.report-paths }}
           retention-days: 7
 
   local-stack:
@@ -183,7 +183,7 @@ jobs:
         with:
           name: user-journeys-local-stack-report
           path: |
-            apps/web/test-results/user-journeys-local-stack*/
+            ${{ steps.journeys.outputs.report-paths }}
             /tmp/api.log
             ${{ runner.temp }}/web-user-journeys.log
           retention-days: 7
@@ -280,5 +280,5 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: user-journeys-scheduled-report
-          path: apps/web/test-results/user-journeys-deployed*/
+          path: ${{ steps.journeys.outputs.report-paths }}
           retention-days: 7

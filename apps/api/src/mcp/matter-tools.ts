@@ -9,7 +9,7 @@ import {
   resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -1114,7 +1114,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1341,7 +1341,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1350,7 +1350,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1657,7 +1657,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
+          v.nullable(v.pipe(apiDateSchema, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),
@@ -2577,19 +2577,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Screen a company or person for due diligence. `check` picks the " +
-      "source. A register check returns one outcome: clear, found (adverse " +
-      "records), not-registered (no record; not a clearance), unavailable " +
-      "(no answer: NOT cleared) or not-covered (cannot screen this " +
-      "subject, or needs the tax ID). The sanctions check returns one " +
-      "outcome per list in `lists`, with whether it binds the firm: clear; " +
-      "possible-match (resembling entries with score and conflicting " +
-      "fields; each needs human review, none confirmed); incomplete (only " +
-      "a bounded subset screened, nothing matched: NOT cleared); or " +
-      "unavailable (stale, not loaded, or company name unreadable: NOT " +
-      "cleared, edition not screened). Top level is clear only if every " +
-      "list was fully screened clear. Person matches rest on name and " +
-      "birth date: compare the record first.",
+      "Screen a company or person; `check` selects the source. Register outcomes " +
+      "are clear, found, not-registered (not a clearance), unavailable (not " +
+      "cleared), or not-covered. Sanctions returns each list's firm applicability " +
+      "and outcome: clear, possible-match requiring human review, incomplete " +
+      "(not cleared), or unavailable (not cleared). Only fully screened clear " +
+      "lists produce top-level clear. " +
+      "Verify person matches against name and birth date.",
     inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

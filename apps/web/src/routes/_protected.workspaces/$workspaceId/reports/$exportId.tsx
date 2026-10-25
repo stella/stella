@@ -15,7 +15,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -204,7 +204,7 @@ const reportExportRecoveryOptions = ({
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports({ exportId: toSafeId<"reportExport">(exportId) })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     refetchInterval: (query) => {
       const status = query.state.data?.status;

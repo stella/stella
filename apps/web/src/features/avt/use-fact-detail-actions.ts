@@ -19,7 +19,7 @@ import type {
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListItemsOptions } from "@/lib/workspaces/queries/legal-lists";
@@ -74,7 +74,7 @@ export const useFactDetailActions = (scope: ListScope) => {
     mutationKey,
     scope: { id: mutationKey.join(":") },
     mutationFn: async ({ targetIds: [itemEntityId], details }: SaveVariables) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .lists({ workspaceId: toSafeId<"workspace">(scope.workspaceId) })
           ["item-fact-details"].put(

@@ -217,6 +217,7 @@ jobs:
       dependency_changes_required: ${{ steps.changed-files.outputs.dependency_changes_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
+      database_migrations_required: ${{ steps.changed-files.outputs.database_migrations_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -1776,6 +1777,7 @@ jobs:
             packages/cli/src/generated/document-version-upload-transport.ts \
             packages/cli/src/generated/mcp-contract.ts \
             packages/cli/src/generated/registry-snapshot.json \
+            apps/api/mcp-connect-tool-weights.json \
             packages/cli/src/generated/resource-tree.ts \
             packages/cli/src/generated/resources-snapshot.json \
             packages/cli/skills \
@@ -3695,6 +3697,289 @@ jobs:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
         run: bun --filter @stll/collab test src/server.test.ts
+
+      - *merge_group_cancel
+
+  database-migrations-check:
+    needs: ci-plan
+    if: >-
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && inputs.heavy_only != true
+      && inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
+      && needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.database_migrations_required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    # Online index builds in the disposable check instance must not wait on storage metrics or busy windows.
+    env:
+      DB_LOAD_GATE_EBS_SIGNAL: disabled
+      DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 2
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Test migration safety rules and historical findings
+        run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
+
+      - name: Check migration coverage
+        env:
+          BASE_REF: ${{ needs.ci-plan.outputs.target_base_sha || 'HEAD^' }}
+        run: bash scripts/check-migrations.sh
+
+      - *merge_group_cancel
+
+  database-migrations-apply-fresh:
+    # Validates that the shipped migrate entrypoint can apply every migration
+    # end-to-end against an empty Postgres. Catches: ordering bugs, syntax
+    # errors, and any migration that would crash on a real DB.
+    needs: ci-plan
+    if: >-
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && inputs.heavy_only != true
+      && inputs.pr_depth_only != true
+      && needs.ci-plan.outputs.run_required != 'false'
+      && needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.database_migrations_required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+      packages: read
+    # Online index builds in the disposable check instance must not wait on storage metrics or busy windows.
+    env:
+      DB_LOAD_GATE_EBS_SIGNAL: disabled
+      DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+
+    services:
+      postgres:
+        image: ${{ needs.ci-plan.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336' }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: ${{ needs.ci-plan.outputs.redis || 'docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5' }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 2
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Test Postgres owner replacement and helper replay
+        run: |
+          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+
+      - name: Apply all migrations to fresh Postgres
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        # Exercises the shipped migrate path (Bun SQL + drizzle migrator),
+        # the same entrypoint the deploy runs, not the drizzle-kit CLI.
+        run: bun run src/db/migrate.ts
+
+      - name: Verify schema parity with schema.ts
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        # `push --explain` exits with "[i] No changes detected" when the
+        # migrated schema already matches schema.ts. Any pending diff fails CI.
+        run: |
+          OUT=$(bun --bun drizzle-kit push --explain 2>&1)
+          echo "$OUT"
+          echo "$OUT" | grep -q "No changes detected" || {
+            echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
+            exit 1
+          }
+
+      - name: Verify __drizzle_migrations recorded all migrations
+        env:
+          PGPASSWORD: stella
+        run: |
+          set -euo pipefail
+          EXPECTED=$(find apps/api/drizzle -mindepth 1 -maxdepth 1 -type d -name '20*' | wc -l | tr -d ' ')
+          APPLIED=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
+          echo "Expected $EXPECTED migrations, drizzle.__drizzle_migrations has $APPLIED"
+          [ "$EXPECTED" = "$APPLIED" ] || {
+            echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
+            exit 1
+          }
+
+      - name: Rehearse interrupted Better Auth constraints migration
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        run: >-
+          bash scripts/rehearse-better-auth-constraint-retry.sh
+          --local-test-database
+
+      - name: Reject inconsistent migration history
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          PGPASSWORD: stella
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -U stella_owner -d stella -c \
+            "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1" \
+            >/dev/null
+          backup_count=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
+            "SELECT count(*) FROM drizzle.__migration_history_smoke_backup")
+          if [[ "$backup_count" != "1" ]]; then
+            echo "::error::Backed up $backup_count migration rows; expected 1."
+            exit 1
+          fi
+          corrupted=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
+            "WITH corrupted AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = repeat('0', 64) FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id RETURNING 1) SELECT count(*) FROM corrupted")
+          if [[ "$corrupted" != "1" ]]; then
+            echo "::error::Corrupted $corrupted migration rows; expected 1."
+            exit 1
+          fi
+
+          migration_exit=0
+          migration_output=$(cd apps/api && bun run src/db/migrate.ts 2>&1) || migration_exit=$?
+          echo "$migration_output"
+          if [[ "$migration_exit" != "0" || "$migration_output" != *'"event":"migrate.stale_bundle_noop"'* ]]; then
+            echo "::error::A hash mismatch with no pending SQL did not take the approved no-op path."
+            exit 1
+          fi
+
+          # The bundle now has pending SQL, so the same mismatch must refuse
+          # before that SQL creates its marker table.
+          probe_folder=apps/api/drizzle/20991231235959_ci_history_probe
+          if [[ -e "$probe_folder" ]]; then
+            echo "::error::Migration history probe folder already exists."
+            exit 1
+          fi
+          mkdir "$probe_folder"
+          trap 'rm -rf "$probe_folder"' EXIT
+          printf '%s\n' 'CREATE TABLE public.__migration_history_smoke_probe (id integer PRIMARY KEY);' >"$probe_folder/migration.sql"
+          if [[ -n "$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT to_regclass('public.__migration_history_smoke_probe')")" ]]; then
+            echo "::error::Migration history probe table already exists."
+            exit 1
+          fi
+
+          migration_exit=0
+          migration_output=$(cd apps/api && bun run src/db/migrate.ts 2>&1) || migration_exit=$?
+          echo "$migration_output"
+          if [[ "$migration_exit" == "0" || "$migration_output" != *'"event":"migrate.stale_bundle_refused"'* ]]; then
+            echo "::error::Migration command did not refuse inconsistent history with pending SQL."
+            exit 1
+          fi
+          if [[ -n "$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT to_regclass('public.__migration_history_smoke_probe')")" ]]; then
+            echo "::error::Migration SQL ran before the history preflight."
+            exit 1
+          fi
+          rm -r "$probe_folder"
+
+          restored=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
+            "WITH restored AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id AND migration.hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")
+          if [[ "$restored" != "1" ]]; then
+            echo "::error::Restored $restored migration rows; expected 1."
+            exit 1
+          fi
+          psql -h 127.0.0.1 -U stella_owner -d stella -c \
+            "DROP TABLE drizzle.__migration_history_smoke_backup" \
+            >/dev/null
+          (cd apps/api && bun run src/db/migrate.ts)
+
+      - name: Prepare API runtime sources
+        run: bun --filter @stll/api generate:capability-runtime
+
+      - name: Verify API boots with migration check enabled
+        working-directory: apps/api
+        env:
+          BETTER_AUTH_SECRET: "migration-smoke-secret-at-least-32-chars"
+          BETTER_AUTH_URL: "http://127.0.0.1:3001"
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          EMAIL_PROVIDER: smtp
+          FRONTEND_URL: "http://127.0.0.1:3000"
+          GOTENBERG_PASSWORD: migration-smoke-password
+          GOTENBERG_URL: "http://127.0.0.1:3000"
+          GOTENBERG_USERNAME: gotenberg
+          REDIS_URL: "redis://127.0.0.1:6379"
+          S3_BUCKET: stella
+          S3_CREDENTIALS_PROVIDER: none
+          S3_ENDPOINT: "http://127.0.0.1:9000"
+          S3_REGION: us-east-1
+          SMTP_HOST: "127.0.0.1"
+          SMTP_PORT: "1025"
+          TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
+        run: |
+          set -euo pipefail
+          log_file="$RUNNER_TEMP/stella-api-smoke.log"
+          CONTENT_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+            bun src/server.ts >"$log_file" 2>&1 &
+          api_pid=$!
+
+          trap 'kill "$api_pid" >/dev/null 2>&1 || true; wait "$api_pid" >/dev/null 2>&1 || true' EXIT
+
+          for _ in {1..60}; do
+            if curl -fsS http://127.0.0.1:3001/live >/dev/null \
+              && grep -q '"message":"scheduler.started"' "$log_file"; then
+              exit 0
+            fi
+            if ! kill -0 "$api_pid" >/dev/null 2>&1; then
+              cat "$log_file"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          cat "$log_file"
+          exit 1
 
       - *merge_group_cancel
 
@@ -6534,6 +6819,8 @@ jobs:
         mobile-build,
         landing-build,
         marketing-screenshots,
+        database-migrations-check,
+        database-migrations-apply-fresh,
         migration-upgrade-rehearsal,
         route-smoke,
         scan-engine-wasm-drift,
@@ -6679,6 +6966,8 @@ jobs:
             "landing-build": "landing_build_required",
             "legal-atlas-image": "legal_atlas_image_required",
             "marketing-screenshots": "marketing_screenshots_required",
+            "database-migrations-check": "database_migrations_required",
+            "database-migrations-apply-fresh": "database_migrations_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
             "release-typecheck": "release_typecheck_required",
@@ -6699,7 +6988,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-audit", "dependency-review", "dependency-malware", "ci-tests", "e2e-landing", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+            ["ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-audit", "dependency-review", "dependency-malware", "ci-tests", "e2e-landing", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf", "database-migrations-check", "database-migrations-apply-fresh"]
         run: |
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; the planner tests require every job to be in

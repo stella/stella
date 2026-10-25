@@ -122,6 +122,12 @@
     },
     "dependency-review": {
       "if": "inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'"
+    },
+    "database-migrations-check": {
+      "if": "inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.database_migrations_required == 'true'"
+    },
+    "database-migrations-apply-fresh": {
+      "if": "inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.database_migrations_required == 'true'"
     }
   }
 }

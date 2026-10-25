@@ -129,7 +129,7 @@ const modelCapabilityContext = (): AuthorizedMcpRequestContext => {
   });
 };
 
-/** A refusal arrives as Elysia's status response: `{ code, response }`. */
+/** A refusal arrives as an `HttpStatusResponse`: `{ code, response }`. */
 const statusOf = (result: unknown): number | null =>
   typeof result === "object" &&
   result !== null &&

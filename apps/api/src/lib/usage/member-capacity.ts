@@ -4,9 +4,9 @@
  * The capacity is the `organization_member_capacity` database function: an
  * organization whose access state is not `self_managed_keys` and whose
  * effective policy (`organization_effective_policy`: a live entitlement's
- * policy, or the free floor) sets `maxMembers` is bounded by it and, for a
- * per-seat policy, by its seat count. A policy without `maxMembers` (every
- * policy that predates the column) bounds nothing. The
+ * policy, or the free floor) is bounded by it: a per-seat policy by its seat
+ * count and `maxMembers`, a flat policy by `maxMembers`. A flat policy
+ * without `maxMembers` bounds nothing. The
  * `member_organization_capacity`
  * trigger enforces it inside every inserting transaction; the checks here
  * read the same bound, whatever `FEATURE_ORG_ACCESS_STATE` says, so a request
@@ -16,7 +16,7 @@
  * seat assignment to AI work, whichever key pays for it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, count, eq, gt, sql } from "drizzle-orm";
 
 import { invitation, member, organization } from "@/api/db/auth-schema";
@@ -166,7 +166,8 @@ const memberCapacityBelowMembersError = () =>
 /**
  * The member capacity a usage policy grants at a seat count: the same bound
  * `organization_member_capacity` computes from a stored entitlement. A
- * policy without a member bound bounds nothing, whatever its seats.
+ * per-seat policy is bounded by its seats, a flat policy without a member
+ * bound bounds nothing.
  */
 export const memberCapacityOf = ({
   maxMembers,
@@ -177,10 +178,16 @@ export const memberCapacityOf = ({
   priceBasis: (typeof USAGE_POLICY_PRICE_BASES)[number];
   seats: number;
 }): number | null => {
-  if (maxMembers === null) {
-    return null;
+  switch (priceBasis) {
+    case "per_seat":
+      return maxMembers === null ? seats : Math.min(maxMembers, seats);
+    case "flat":
+      return maxMembers;
+    default: {
+      priceBasis satisfies never;
+      return panic(`Unhandled price basis: ${String(priceBasis)}`);
+    }
   }
-  return priceBasis === "per_seat" ? Math.min(maxMembers, seats) : maxMembers;
 };
 
 /**
@@ -252,7 +259,10 @@ export const memberMayUseAI = async (
     .select({
       accessState: organizationAccessStates.state,
       assignmentId: usageSeatAssignments.id,
-      requiresAssignment: sql<boolean>`${organizationAccessStates.state} <> ${ORGANIZATION_ACCESS_STATE.selfManagedKeys} AND exists (select 1 from organization_effective_policy(${organizationAccessStates.organizationId}) ep where ep.max_members is not null and ep.policy_kind <> 'free')`,
+      // Seats are a paid-plan concept: the free floor bounds the
+      // organization's budget, not who may spend it, so members kept
+      // after a downgrade keep AI access.
+      requiresAssignment: sql<boolean>`${organizationAccessStates.state} <> ${ORGANIZATION_ACCESS_STATE.selfManagedKeys} AND exists (select 1 from organization_effective_policy(${organizationAccessStates.organizationId}) ep where (ep.price_basis = 'per_seat' or ep.max_members is not null) and ep.policy_kind <> 'free')`,
     })
     .from(member)
     .leftJoin(

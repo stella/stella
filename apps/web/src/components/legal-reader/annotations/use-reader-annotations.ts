@@ -48,7 +48,7 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -69,7 +69,7 @@ const uploadGuestAnnotation = async (
       targetId: item.targetId,
       targetType: item.targetType,
     });
-    unwrapEden(response);
+    unwrapApiResponse(response);
   });
 
 type ReaderAnnotations = {
@@ -115,7 +115,7 @@ export const useReaderAnnotations = (
         ...input,
         ...targetKey,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     pendingInput: (input) => input,
     queryKey,
@@ -123,13 +123,13 @@ export const useReaderAnnotations = (
       const response = await api.reader
         .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
         .delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     update: async ({ id, ...change }: UpdateAnnotationInput) => {
       const response = await api.reader
         .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
         .patch(change);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 

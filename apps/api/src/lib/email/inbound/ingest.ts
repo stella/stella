@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import type {
   CorrespondenceAuthenticatedSender,
   CorrespondenceAuthentication,
@@ -56,7 +57,7 @@ export const PARSE_DROP_REASON = {
 >;
 
 const deliveryMetadataSchema = v.strictObject({
-  receivedAt: v.pipe(v.string(), v.isoTimestamp()),
+  receivedAt: apiDateTimeSchema,
   envelope: v.strictObject({
     mailFrom: v.pipe(v.string(), v.maxLength(1024)),
     recipients: v.pipe(

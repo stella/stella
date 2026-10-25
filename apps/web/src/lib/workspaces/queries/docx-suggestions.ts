@@ -8,9 +8,9 @@ import {
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import type { WebApiRoutes } from "@/lib/eden-client";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -75,7 +75,7 @@ export const docxSuggestionsOptions = ({
           query: { status, limit: DOCX_SUGGESTIONS_PAGE_SIZE_MAX },
           fetch: { signal },
         });
-        const firstData = unwrapEden(firstPage);
+        const firstData = unwrapApiResponse(firstPage);
 
         const items = [...firstData.items];
         let nextCursor = firstData.nextCursor;
@@ -89,7 +89,7 @@ export const docxSuggestionsOptions = ({
             },
             fetch: { signal },
           });
-          const pageData = unwrapEden(page);
+          const pageData = unwrapApiResponse(page);
           items.push(...pageData.items);
           nextCursor = pageData.nextCursor;
         }

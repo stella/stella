@@ -8,8 +8,8 @@
         {
           "path": "apps/api/src/lib/auth.ts",
           "contains": [
-            "export const authMacro",
-            "export const workspaceAccessMacro"
+            "export const authenticateSession",
+            "export const authorizeWorkspace"
           ]
         },
         {
@@ -121,9 +121,8 @@
       "policy": "docs/policies/change-management.md",
       "evidence": [
         {
-          "path": ".github/workflows/db-migrations.yml",
+          "path": ".github/workflows/ci.yml",
           "contains": [
-            "name: Database Migrations",
             "Apply all migrations to fresh Postgres",
             "Verify schema parity with schema.ts"
           ]

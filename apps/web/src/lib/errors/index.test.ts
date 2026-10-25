@@ -14,7 +14,7 @@ import {
   internalToolErrorMessage,
   shouldRetryAPIRequest,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "./api";
 import {
   AuthClientError,
@@ -332,27 +332,27 @@ describe("toAPIError", () => {
   });
 });
 
-describe("unwrapEden", () => {
+describe("unwrapApiResponse", () => {
   test("returns the payload when there is no error", () => {
     const payload = { id: "abc", value: 1 };
 
-    expect(unwrapEden({ data: payload, error: null })).toBe(payload);
+    expect(unwrapApiResponse({ data: payload, error: null })).toBe(payload);
   });
 
   test("preserves a nullable success payload", () => {
-    expect(unwrapEden({ data: null, error: null })).toBeNull();
+    expect(unwrapApiResponse({ data: null, error: null })).toBeNull();
   });
 
   test("throws a localized APIError when the response carries an error", () => {
     expect(() =>
-      unwrapEden({
+      unwrapApiResponse({
         data: null,
         error: { status: 403, value: { code: "forbidden", message: "no" } },
       }),
     ).toThrow(APIError);
 
     try {
-      unwrapEden({
+      unwrapApiResponse({
         data: null,
         error: { status: 403, value: { code: "forbidden", message: "no" } },
       });
@@ -366,7 +366,7 @@ describe("unwrapEden", () => {
 
   test("normalizes an untyped transport error at the client boundary", () => {
     expect(() =>
-      unwrapEden({
+      unwrapApiResponse({
         data: null,
         error: { status: 401, value: { private: "discard me" } },
       }),

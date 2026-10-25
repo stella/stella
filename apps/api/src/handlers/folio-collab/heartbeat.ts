@@ -1,27 +1,31 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { touchFolioCollabRoom } from "@/api/lib/folio-collab-rooms";
-import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabCredentials } from "./room-credentials";
+import {
+  folioCollabRoomCredentialsSchema,
+  verifyFolioCollabRoomCaller,
+} from "./room-credentials";
 
 const config = {
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({
-    keys: ["roomId", "token"],
-    passthroughKeys: ["includeCanEdit"],
+  body: v.object({
+    ...folioCollabRoomCredentialsSchema.entries,
+    includeCanEdit: v.optional(v.boolean()),
   }),
 } satisfies TokenHandlerConfig;
 
 const heartbeatFolioCollabRoom = createSafeTokenHandler(
   config,
-  async function* ({ body }) {
-    const { room } = yield* Result.await(authorizeFolioCollabCredentials(body));
+  verifyFolioCollabRoomCaller,
+  async function* ({ body, caller }) {
+    const { room } = yield* Result.ok(caller);
     const heartbeat = await touchFolioCollabRoom(room);
     if (heartbeat.status === "room-missing") {
       return Result.err(
@@ -54,7 +58,7 @@ const heartbeatFolioCollabRoom = createSafeTokenHandler(
     // server that asks for it. Once no such server runs, `canEdit` can be
     // returned unconditionally and the request flag removed.
     return Result.ok(
-      body?.includeCanEdit === true
+      body.includeCanEdit === true
         ? { activeAt, canEdit: room.canEdit }
         : { activeAt },
     );

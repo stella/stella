@@ -10,7 +10,6 @@
     "apps/api/scripts/chat-mutation-matrix.ts",
     "apps/api/scripts/content-delivery-guard.ts",
     "apps/api/scripts/deployment-feature-guard.ts",
-    "apps/api/scripts/exact-mirror-guard.ts",
     "apps/api/scripts/export-capability-catalog.ts",
     "apps/api/scripts/mcp-coverage-guard.ts",
     "apps/api/scripts/mcp-surface-baseline.ts",
