@@ -198,7 +198,7 @@ export const consentAndExchange = async ({
   client,
   codeVerifier,
   consentPage,
-  redirectUri,
+  redirectUri = REDIRECT_URI,
 }: ConsentAndExchangeOptions): Promise<OAuthGrant> => {
   const auth = getAuth();
   if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {

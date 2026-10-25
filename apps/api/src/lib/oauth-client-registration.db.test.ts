@@ -555,7 +555,7 @@ describe("OAuth client interoperability", () => {
     expect(grant.scope.split(" ").toSorted()).toEqual(
       open.filter(
         (scope) =>
-          resourceScopes.includes(scope) ||
+          resourceScopes.some((allowed) => allowed === scope) ||
           MCP_OAUTH_PROTOCOL_SCOPES.some((protocol) => protocol === scope),
       ),
     );
