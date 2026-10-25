@@ -380,12 +380,7 @@ test("timeline selection, adjacent comparison and paging work in the fixture hos
   expect(recorded.failures).toEqual([]);
   expect(recorded.calls).toContainEqual({
     name: "read_provision_history",
-    arguments: {
-      ...INPUT,
-      eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
-      limit: 20,
-      cursor: "timeline-page-2",
-    },
+    arguments: { ...INPUT, cursor: "timeline-page-2" },
   });
   expect(recorded.openedUrls).toEqual([VERSION_2020.url, VERSION_WITHHELD.url]);
   expect(
