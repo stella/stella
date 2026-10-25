@@ -714,12 +714,6 @@
     "reason": "pg_try_advisory_xact_lock( in apps/api/src/handlers/case-law/citation-graph-transaction.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts",
-    "fingerprint": "04e8b4fea43bb82c26d59933af9a640f2dc2e003d38cacfb26bc787b5a96b331",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "06c37b46640fba54e095bbff4e60a8194da3ffb0181f4305ac471d2cd8a76f98",
     "count": 1,
@@ -733,31 +727,13 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "65a2cced9688f11f5c2752acff32f311a49db2827d0a458a7ba0faab0bde5589",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "83c58d06a833095cc8f8c28201cd36c35ed7c7a7a469cbc43bb8dcf45962d57d",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "8558042689f21c038ea0a6008447ccea2038cf76a81c833056a7f4c3a046cf81",
-    "count": 4,
+    "count": 1,
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "d2005604aaa7aafece1889a54d720d50244381c4f4227cf00c720dd03a3bc14c",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
-    "fingerprint": "e9d48912e72f8b0b3523c3bc0a65998ebabc7852816a7b9c2a42de12e995ca37",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

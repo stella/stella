@@ -8,6 +8,9 @@ import {
   getTableName,
   inArray,
   is,
+  isNotNull,
+  isNull,
+  lte,
   or,
   SQL,
   sql,
@@ -32,6 +35,7 @@ import type { Transaction } from "@/api/db/root";
 import type { InvoiceStatus } from "@/api/db/schema";
 import {
   billingArrangements,
+  caseLawReplayBatches,
   entities,
   entityVersions,
   fields,
@@ -2217,8 +2221,8 @@ export const lockCaseLawRepublication = async ({
   });
 };
 
-/** Lock every retained copy before a case-law erasure mutates any of them. */
-export const lockCaseLawDecisionErasureRows = async ({
+/** Lock decision rows in stable order before reading mutation preconditions. */
+export const lockCaseLawDecisionRows = async ({
   tx,
   decisionIds,
 }: {
@@ -2238,6 +2242,89 @@ export const lockCaseLawDecisionErasureRows = async ({
     FOR UPDATE
   `);
 };
+
+/** Acquire one replay reservation after its checkpoint and before its decision. */
+export const lockCaseLawReplayBatch = async ({
+  tx,
+  id,
+  predicate,
+}: {
+  tx: Transaction;
+  id: string;
+  predicate: SQL | undefined;
+}) =>
+  (
+    await tx
+      .select()
+      .from(caseLawReplayBatches)
+      .where(and(eq(caseLawReplayBatches.id, id), predicate))
+      .for("update")
+      .limit(1)
+  ).at(0);
+
+type ReplayPendingBatchLockOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+  cursor: string | null;
+};
+
+/** Select one due batch while retaining the checkpoint's deterministic order. */
+export const lockCaseLawReplayPendingBatch = async ({
+  tx,
+  sourceId,
+  now,
+  cursor,
+}: ReplayPendingBatchLockOptions) =>
+  (
+    await tx
+      .select()
+      .from(caseLawReplayBatches)
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, sourceId),
+          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
+          or(
+            isNull(caseLawReplayBatches.retryAt),
+            lte(caseLawReplayBatches.retryAt, sql`${now}::timestamptz`),
+          ),
+        ),
+      )
+      .orderBy(
+        ...(cursor === null
+          ? []
+          : [
+              sql`CASE WHEN ${caseLawReplayBatches.firstDecisionId} > ${cursor}::uuid THEN 0 ELSE 1 END`,
+            ]),
+        asc(caseLawReplayBatches.firstDecisionId),
+        asc(caseLawReplayBatches.id),
+      )
+      .for("update")
+      .limit(1)
+  ).at(0);
+
+type ReplayCompactionQueryOptions = { cutoff: Date; limit: number };
+export const buildCaseLawReplayCompactionQuery = (
+  tx: Transaction,
+  { cutoff, limit }: ReplayCompactionQueryOptions,
+) =>
+  tx
+    .select({
+      id: caseLawReplayBatches.id,
+    })
+    .from(caseLawReplayBatches)
+    .where(
+      and(
+        isNotNull(caseLawReplayBatches.supersededAt),
+        lte(caseLawReplayBatches.supersededAt, sql`${cutoff}::timestamptz`),
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayBatches.supersededAt),
+      asc(caseLawReplayBatches.id),
+    )
+    .limit(limit)
+    .for("update");
 
 /**
  * The citing decisions a reviewed-label run admits: the unredacted ones among

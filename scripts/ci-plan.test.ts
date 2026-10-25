@@ -358,6 +358,10 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  // These moved jobs retain the exact least-privilege grants from their
+  // standalone workflows, so neither can cancel a merge-group run.
+  "dependency-audit",
+  "dependency-review",
   // Runs only for pull requests, so it never has a merge group to cancel.
   "pr-heavy-gate",
   "query-perf",
@@ -2473,6 +2477,7 @@ test("every bounded-install implementation and fixture selects Windows", () => {
   }
 });
 
+// timeout: Executes the complete selected-job matrix in real Bash processes.
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];
@@ -2523,7 +2528,7 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     });
   }
   expectResultGates(gates);
-});
+}, 30_000);
 
 const MatrixJob = v.object({
   strategy: v.object({
