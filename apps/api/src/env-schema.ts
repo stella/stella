@@ -9,7 +9,6 @@ import {
 } from "@stll/runtime-mode";
 
 import { featureFlagSchema } from "@/api/env-base-schema";
-import { emailAddressSchema } from "@/api/lib/auth/normalized-email";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -25,6 +24,7 @@ import {
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
+import { emailAddressSchema } from "@/api/lib/normalized-email";
 import {
   caseLawCanariesEnvSchema,
   caseLawDailyBandsEnvSchema,

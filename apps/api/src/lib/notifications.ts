@@ -14,10 +14,10 @@ import { member as organizationMember, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
 

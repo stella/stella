@@ -35,13 +35,13 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
-import type { NormalizedEmail } from "@/api/lib/auth/normalized-email";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { normalizeEmail } from "@/api/lib/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/normalized-email";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";

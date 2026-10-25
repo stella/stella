@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 
 import type { McpOAuthScope } from "@stll/api-contract";
 
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 
 /**
  * The restricted review account: one configured identity that signs in with

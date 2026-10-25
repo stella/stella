@@ -26,10 +26,6 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import {
-  emailColumnMatches,
-  normalizeEmail,
-} from "@/api/lib/auth/normalized-email";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
@@ -39,6 +35,7 @@ import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { emailColumnMatches, normalizeEmail } from "@/api/lib/normalized-email";
 import { recordOrganizationStorageTeardown } from "@/api/lib/organization-storage-teardown";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";

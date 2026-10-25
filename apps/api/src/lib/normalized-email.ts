@@ -7,8 +7,9 @@
  * to `user.email` and uses for its own lookups and one-time-code identifiers.
  * Better Auth's address validator accepts only ASCII addresses without
  * surrounding whitespace, so on every address an account can hold the trim
- * changes nothing and the lowercase is the same in JavaScript and in
- * PostgreSQL `lower()` under any ctype. `toLowerCase()` ignores the host
+ * changes nothing. JavaScript lowercase must agree with PostgreSQL `lower()`
+ * under the configured supported collation; database parity tests verify
+ * that requirement. `toLowerCase()` ignores the host
  * locale, so a Turkish locale never turns `I` into dotless `ı`; `ı` and the
  * long `ſ` are already lowercase and stay distinct from `i` and `s`.
  *

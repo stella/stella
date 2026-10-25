@@ -7,10 +7,7 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import {
-  emailAddressSchema,
-  normalizeEmail,
-} from "@/api/lib/auth/normalized-email";
+import { emailAddressSchema, normalizeEmail } from "@/api/lib/normalized-email";
 
 // Characters whose case mapping differs between folds or runtimes: Turkish
 // dotted and dotless i, the long s, the Kelvin sign, Greek sigma in its
@@ -225,8 +222,8 @@ describe("Better Auth parity", () => {
           }
           const key = normalizeEmail(raw);
           expect(sent).toEqual([key]);
-          // Every address Better Auth accepts folds to ASCII, where
-          // JavaScript and PostgreSQL lowercase identically under any ctype.
+          // Accepted addresses fold to ASCII; database parity separately
+          // verifies case mapping under the configured supported collation.
           expect(key).toMatch(/^[\u0021-\u007e]+$/u);
           const verification =
             await context.internalAdapter.findVerificationValue(

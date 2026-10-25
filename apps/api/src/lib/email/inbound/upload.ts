@@ -13,7 +13,6 @@ import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
 import { correspondenceAttachments, entities } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication";
@@ -24,6 +23,7 @@ import {
   parseEmailFile,
 } from "@/api/lib/email/inbound/message";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";

@@ -1,5 +1,5 @@
 // Email addresses compare equal through one owner,
-// apps/api/src/lib/auth/normalized-email.ts. A hand-written fold elsewhere
+// apps/api/src/lib/normalized-email.ts. A hand-written fold elsewhere
 // can disagree with it (trim or not, JavaScript or SQL case mapping), and a
 // gate that folds one way admits an address the account lookup resolves
 // another way. Syntax only: a value counts as an address when the binding or
@@ -24,15 +24,17 @@ const SQL_TAGS = new Set(["sql", "sql.raw"]);
 // A case fold opened right before an interpolation: `lower(${user.email})`.
 const SQL_FOLD_OPENING = /\b(?:lower|upper)\s*\(\s*$/iu;
 
-const calledMethod = (node: AstNode): string | null => {
-  const callee = unwrapExpression(node.callee);
+const calledMethod = (node: unknown): string | null => {
+  const call = unwrapExpression(node);
+  const callee = unwrapExpression(call?.callee);
   return callee?.type === "MemberExpression"
     ? memberPropertyName(callee)
     : null;
 };
 
-const calledReceiver = (node: AstNode): AstNode | null => {
-  const callee = unwrapExpression(node.callee);
+const calledReceiver = (node: unknown): AstNode | null => {
+  const call = unwrapExpression(node);
+  const callee = unwrapExpression(call?.callee);
   return callee?.type === "MemberExpression"
     ? unwrapExpression(callee.object)
     : null;
@@ -108,10 +110,10 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
-          fold: "Fold an email address with normalizeEmail() from @/api/lib/auth/normalized-email so every comparison, key and lookup uses one rule.",
+          fold: "Fold an email address with normalizeEmail() from @/api/lib/normalized-email so every comparison, key and lookup uses one rule.",
           schema:
-            "Validate an email address with emailAddressSchema from @/api/lib/auth/normalized-email instead of a lowercase action in the pipe.",
-          sql: "Compare a stored email column with emailColumnMatches() from @/api/lib/auth/normalized-email instead of folding it in SQL by hand.",
+            "Validate an email address with emailAddressSchema from @/api/lib/normalized-email instead of a lowercase action in the pipe.",
+          sql: "Compare a stored email column with emailColumnMatches() from @/api/lib/normalized-email instead of folding it in SQL by hand.",
         },
       },
       createOnce(context) {

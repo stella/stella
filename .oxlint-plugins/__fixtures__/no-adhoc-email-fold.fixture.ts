@@ -5,7 +5,7 @@ import {
   emailAddressSchema,
   emailColumnMatches,
   normalizeEmail,
-} from "../../apps/api/src/lib/auth/normalized-email";
+} from "../../apps/api/src/lib/normalized-email";
 
 declare const email: string;
 declare const user: { email: string; name: string; id: string };

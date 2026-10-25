@@ -10,8 +10,8 @@ import {
   organizationAccessStates,
 } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import {
   bindReviewAccountOrganizationStore,

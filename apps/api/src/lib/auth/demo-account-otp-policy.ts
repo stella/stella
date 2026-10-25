@@ -1,4 +1,4 @@
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 
 export const DEMO_ACCOUNT_OTP_WARNING_EVENT =
   "auth.demo_credential_override_skipped";

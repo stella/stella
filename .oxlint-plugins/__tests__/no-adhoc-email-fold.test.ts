@@ -5,7 +5,7 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-adhoc-email-fold";
 const RULE_ID = `${RULE}/${RULE}`;
-const OWNER = "apps/api/src/lib/auth/normalized-email.ts";
+const OWNER = "apps/api/src/lib/normalized-email.ts";
 
 test("rejects every hand-written fold of an email-named value", async () => {
   const source = [
@@ -66,7 +66,7 @@ test("accepts the owner's calls and folds of values not named like an address", 
 });
 
 const ruleOverride = () => {
-  const overrides = oxlintConfig.overrides ?? [];
+  const overrides = oxlintConfig.overrides;
   const matching = overrides.filter(
     (override) => override.rules?.[RULE_ID] !== undefined,
   );
@@ -78,5 +78,9 @@ test("covers the whole API outside the owner and the test files", () => {
   const override = ruleOverride();
   expect(override?.rules?.[RULE_ID]).toBe("error");
   expect(override?.files).toContain("apps/api/**/*.ts");
-  expect(override?.excludeFiles).toEqual([OWNER, "apps/api/**/*.test.ts"]);
+  expect(
+    override !== undefined && "excludeFiles" in override
+      ? override.excludeFiles
+      : undefined,
+  ).toEqual([OWNER, "apps/api/**/*.test.ts"]);
 });

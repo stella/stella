@@ -1,7 +1,7 @@
 import type { MicrosoftEntraIDProfile } from "@better-auth/core/social-providers";
 import type { BetterAuthOptions } from "better-auth";
 
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 
 const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 

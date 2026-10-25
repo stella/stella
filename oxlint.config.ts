@@ -2679,7 +2679,7 @@ const config = defineConfig({
       },
     },
     {
-      // Email addresses fold through apps/api/src/lib/auth/normalized-email.ts,
+      // Email addresses fold through apps/api/src/lib/normalized-email.ts,
       // the form Better Auth stores and looks accounts up by. The API is where
       // identity is decided; the web app lowercases only for local substring
       // search and the API normalizes whatever it receives. Tests compute
@@ -2689,7 +2689,7 @@ const config = defineConfig({
         ".oxlint-plugins/__fixtures__/no-adhoc-email-fold.fixture.ts",
       ],
       excludeFiles: [
-        "apps/api/src/lib/auth/normalized-email.ts",
+        "apps/api/src/lib/normalized-email.ts",
         "apps/api/**/*.test.ts",
       ],
       rules: {

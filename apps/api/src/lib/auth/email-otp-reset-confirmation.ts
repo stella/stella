@@ -6,7 +6,7 @@ import { timingSafeEqual } from "node:crypto";
 import { AUTH_ACCESS_RESET_ERROR_CODE } from "@stll/auth-model";
 import { sha256Bytes } from "@stll/sha256/node";
 
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const EMAIL_OTP_ALLOWED_ATTEMPTS = 3;

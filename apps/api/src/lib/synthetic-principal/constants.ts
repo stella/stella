@@ -1,4 +1,4 @@
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 
 export const SYNTHETIC_PRINCIPAL = {
   user: {
@@ -31,7 +31,8 @@ export const isSyntheticPrincipal = ({
 }: SyntheticPrincipalIdentity): boolean =>
   userId === SYNTHETIC_PRINCIPAL.user.id ||
   organizationId === SYNTHETIC_PRINCIPAL.org.id ||
-  (email !== undefined && normalizeEmail(email) === SYNTHETIC_PRINCIPAL_EMAIL);
+  (typeof email === "string" &&
+    normalizeEmail(email) === SYNTHETIC_PRINCIPAL_EMAIL);
 
 export const SYNTHETIC_SESSION_PREFIX = "synthetic-session-";
 export const SYNTHETIC_SESSION_LIFETIME_MS = 30 * 60 * 1000;

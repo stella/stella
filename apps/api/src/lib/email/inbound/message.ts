@@ -14,7 +14,6 @@ import type {
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import {
   type ParsedEmail,
   renderEmailBodyHtml,
@@ -24,6 +23,7 @@ import {
   type OutlookMsgRecipient,
   parseOutlookMsg,
 } from "@/api/lib/files/outlook-msg";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 import {
   type SanitizedFileName,
   sanitizeFilename,

@@ -10,8 +10,8 @@ import { panic, Result } from "better-result";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
-import type { NormalizedEmail } from "@/api/lib/auth/normalized-email";
+import { normalizeEmail } from "@/api/lib/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/normalized-email";
 import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import {
   type BudgetName,

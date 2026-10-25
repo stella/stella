@@ -2,8 +2,8 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { Result } from "better-result";
 
-import { normalizeEmail } from "@/api/lib/auth/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { normalizeEmail } from "@/api/lib/normalized-email";
 
 export type DemoAccountConfig = {
   email: string | undefined;
