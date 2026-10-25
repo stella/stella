@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { apiPipeline } from "@/api/api-pipeline";
@@ -199,7 +200,7 @@ describe("composed API cache policy", () => {
       expect(response.headers.get("Cache-Control")).toEqual(
         PUBLIC_CACHE_HEADERS.get(
           "GET /v1/public/knowledge/playbook-starters" satisfies ApiRouteKey,
-        ),
+        ) ?? panic("Public playbook starters must declare their cache header"),
       );
     } finally {
       env.FEATURE_PUBLIC_KNOWLEDGE = previous;
