@@ -189,10 +189,10 @@ export const createInvoicePdfExport = (
                 invoice: {
                   ...loaded.invoice,
                   lines: amounts.lines.map((line, index) => {
+                    // Stored lines come first; a legacy invoice follows them
+                    // with lines for its attached entries, which belong to the
+                    // invoice's own matter.
                     const stored = loaded.invoice.lines.at(index);
-                    if (loaded.invoice.lines.length > 0 && !stored) {
-                      return panic("A document line has no stored source");
-                    }
                     const matter = stored
                       ? (stored.workspace ??
                         panic("Invoice line matter is missing"))
