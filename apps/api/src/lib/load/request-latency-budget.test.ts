@@ -114,7 +114,7 @@ describe("request budget expiry", () => {
         expect(expiry).toBeInstanceOf(TimeoutError);
         expect(expiry).toMatchObject({
           label: "read_statute",
-          timeoutMs: 0,
+          timeoutMs: 0, // timeout under test
           cause: ended,
         });
         expect(readFailureBrand(expiry)).toEqual({

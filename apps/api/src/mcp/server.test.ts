@@ -2227,6 +2227,14 @@ describe("MCP transport conformance", () => {
     actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
+    // A shuffled run can start here right after a scope-admission case; a
+    // scope hint it left behind would refuse this suite's tool calls.
+    getMcpToolDefinitionMock.mockReset();
+    getMcpToolRequiredScopesHintMock.mockReset();
+    getMcpToolRequiredScopesHintMock.mockImplementation(
+      (_toolName: string): readonly ToolScope[] | undefined => undefined,
+    );
+    handleMcpToolCallMock.mockReset();
     listMcpToolsMock.mockReset();
     listMcpToolsMock.mockImplementation(async () => []);
     resolveMcpSessionContextMock.mockReset();
