@@ -14,13 +14,13 @@ import { panic } from "better-result";
 import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/db/oauth-scope-policy";
+import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
-import {
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-  OPEN_REGISTRATION_SCOPES,
-} from "@/api/lib/oauth-scope-policy";
 import {
   type AuthRequestBudgetFrameworkApi,
   isAuthRequestBudgetPath,

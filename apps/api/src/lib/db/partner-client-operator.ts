@@ -4,16 +4,14 @@ import { and, eq } from "drizzle-orm";
 import { oauthClient, oauthClientResource } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { createSafeId } from "@/api/lib/branded-types";
+import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/db/oauth-scope-policy";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
-import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/oauth-scope-policy";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export class PartnerClientOperatorError extends TaggedError(
   "PartnerClientOperatorError",
 )<{ message: string }> {}
-
-const PARTNER_CLIENT_AUDIT_ACTOR = "system:partner-client-operator";
 
 export type CreatePartnerOAuthClientOptions = {
   name: string;
@@ -56,7 +54,7 @@ export const createPartnerOAuthClientInTransaction = async ({
     clientId,
     resourceId: mcpResourceUrl,
   });
-  await recordSystemAudit(tx, PARTNER_CLIENT_AUDIT_ACTOR, {
+  await recordSystemAudit(tx, "system:partner-client-operator", {
     subject: createSafeId<"systemScriptRun">(),
     counts: { created: 1, rotated: 0, disabled: 0 },
   });
@@ -100,7 +98,7 @@ export const changePartnerOAuthClientInTransaction = async ({
       }),
     );
   }
-  await recordSystemAudit(tx, PARTNER_CLIENT_AUDIT_ACTOR, {
+  await recordSystemAudit(tx, "system:partner-client-operator", {
     subject: createSafeId<"systemScriptRun">(),
     counts:
       operation === "rotate"

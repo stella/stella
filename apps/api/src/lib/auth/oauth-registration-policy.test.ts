@@ -13,7 +13,7 @@ import {
 import {
   OAUTH_REGISTRATION_SCOPE_POLICY,
   OPEN_REGISTRATION_SCOPES,
-} from "@/api/lib/oauth-scope-policy";
+} from "@/api/lib/db/oauth-scope-policy";
 import { OAUTH_CLIENT_REGISTRATION_FIXTURES } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 
 const AUTHENTICATION_CONSENT_CASES = {
