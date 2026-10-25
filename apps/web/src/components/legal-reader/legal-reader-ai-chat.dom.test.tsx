@@ -203,61 +203,57 @@ test.each([
 // composer: the reader floats none over the text rather than showing the same
 // draft a second time, and its own returns, draft included, once the tab
 // leaves the screen.
-test(
-  "asking about a passage leaves the docked chat as the only composer",
-  async () => {
-    const inspector = useInspectorTabsStore.getState();
-    const decisionId = "decision-1";
-    const caseNumber = "7 Azs 172/2025";
-    const queryClient = await mountReader({
-      type: "decision",
-      decisionId,
-      caseNumber,
+test("asking about a passage leaves the docked chat as the only composer", async () => {
+  const inspector = useInspectorTabsStore.getState();
+  const decisionId = "decision-1";
+  const caseNumber = "7 Azs 172/2025";
+  const queryClient = await mountReader({
+    type: "decision",
+    decisionId,
+    caseNumber,
+  });
+  await screen.findByRole("textbox", undefined, { timeout: 15_000 });
+  try {
+    await act(async () => {
+      askAboutReaderPassage({
+        prompt: "Explain the passage",
+        quote: "Reader passage",
+        target: {
+          type: "decision",
+          caseNumber,
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country: "CZE",
+          court: "Nejvyšší správní soud",
+          decisionDate: null,
+          decisionType: null,
+          ecli: null,
+          id: decisionId,
+          name: null,
+        },
+      });
     });
-    await screen.findByRole("textbox", undefined, { timeout: 15_000 });
-    try {
-      await act(async () => {
-        askAboutReaderPassage({
-          prompt: "Explain the passage",
-          quote: "Reader passage",
-          target: {
-            type: "decision",
-            caseNumber,
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            country: "CZE",
-            court: "Nejvyšší správní soud",
-            decisionDate: null,
-            decisionType: null,
-            ecli: null,
-            id: decisionId,
-            name: null,
-          },
-        });
-      });
-      await waitFor(() => {
-        expect(screen.queryAllByRole("textbox")).toEqual([]);
-      });
-      expect(screen.getByText(READER_CONTENT)).toBeDefined();
-      // Closing the docked chat hands the conversation back to the reader.
-      await act(async () => {
-        useInspectorTabsStore.setState({ minimized: true });
-      });
-      const composer = await screen.findByRole("textbox", undefined, {
-        timeout: 15_000,
-      });
-      if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
-        panic("Expected the reader overlay's mounted TipTap composer");
-      }
-      const editor = composer.editor;
-      await waitFor(() => {
-        expect(JSON.stringify(editor.getJSON())).toContain("Reader passage");
-      });
-    } finally {
-      useInspectorTabsStore.setState(inspector, true);
-      queryClient.clear();
+    await waitFor(() => {
+      expect(screen.queryAllByRole("textbox")).toEqual([]);
+    });
+    expect(screen.getByText(READER_CONTENT)).toBeDefined();
+    // Closing the docked chat hands the conversation back to the reader.
+    await act(async () => {
+      useInspectorTabsStore.setState({ minimized: true });
+    });
+    const composer = await screen.findByRole("textbox", undefined, {
+      timeout: 15_000,
+    });
+    if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
+      panic("Expected the reader overlay's mounted TipTap composer");
     }
-  },
-  // The overlay host is a lazy chunk; its first load under a busy runner
-  // outlasts the default per-test timeout.
-  30_000,
-);
+    const editor = composer.editor;
+    await waitFor(() => {
+      expect(JSON.stringify(editor.getJSON())).toContain("Reader passage");
+    });
+  } finally {
+    useInspectorTabsStore.setState(inspector, true);
+    queryClient.clear();
+  }
+}, // The overlay host is a lazy chunk; its first load under a busy runner
+// outlasts the default per-test timeout.
+30_000);

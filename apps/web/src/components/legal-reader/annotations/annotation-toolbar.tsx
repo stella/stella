@@ -88,8 +88,7 @@ type AnnotationToolbarProps = {
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
   /** Why Explain cannot take these spans, or `undefined` when it can. */
   explainRefusal?:
-    | ((spans: SelectionAnchor[]) => string | undefined)
-    | undefined;
+    ((spans: SelectionAnchor[]) => string | undefined) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
