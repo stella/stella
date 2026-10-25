@@ -700,6 +700,11 @@ export const withReadableCorpusMember = async <T>({
   return Result.ok(await read());
 };
 
+type PackedMemberRefusal =
+  | PayloadBudgetError
+  | CorpusMemberTombstonedError
+  | CorpusMemberDigestMismatchError;
+
 /**
  * Transfer and integrity failures are returned to the storage boundary.
  * Erasure is enforced by the shared admission gate before the range read.
@@ -712,12 +717,7 @@ const readPackedMember = async ({
   readRange,
   readTombstones,
 }: ReadPackedMemberOptions): Promise<
-  Result<
-    Uint8Array,
-    | PayloadBudgetError
-    | CorpusMemberTombstonedError
-    | CorpusMemberDigestMismatchError
-  >
+  Result<Uint8Array, PackedMemberRefusal>
 > => {
   if (location.length > maxBytes) {
     return Result.err(
@@ -753,6 +753,20 @@ const readPackedMember = async ({
   return admitted.andThen((member) => member);
 };
 
+/**
+ * The packed read path's one failure site, shared by storage reads and cache
+ * hits: a refused member rejects with its typed error unchanged, which is what
+ * every corpus reader handles.
+ */
+export const unwrapPackedMemberRead = <T>(
+  read: Result<T, PackedMemberRefusal>,
+): T => {
+  if (Result.isError(read)) {
+    throw read.error;
+  }
+  return read.value;
+};
+
 export const readCorpusBytesAt = async ({
   location,
   maxBytes,
@@ -779,10 +793,7 @@ export const readCorpusBytesAt = async ({
         readRange,
         readTombstones,
       });
-      if (Result.isError(member)) {
-        throw member.error;
-      }
-      return member.value;
+      return unwrapPackedMemberRead(member);
     }
     default: {
       location satisfies never;

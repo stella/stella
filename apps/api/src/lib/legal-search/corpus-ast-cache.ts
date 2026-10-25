@@ -1,9 +1,12 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
-import { withReadableCorpusMember } from "@/api/lib/legal-search/corpus-storage";
+import {
+  unwrapPackedMemberRead,
+  withReadableCorpusMember,
+} from "@/api/lib/legal-search/corpus-storage";
 import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
@@ -134,10 +137,7 @@ export const createCorpusAstCache = ({
             readTombstones,
             read: async () => await readThrough(storedKey, readTombstones),
           });
-          if (Result.isError(admitted)) {
-            throw admitted.error;
-          }
-          return admitted.value;
+          return unwrapPackedMemberRead(admitted);
         }
         default: {
           location satisfies never;
