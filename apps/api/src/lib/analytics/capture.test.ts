@@ -801,24 +801,26 @@ test("request values cannot change declared or unmatched exception fingerprints"
         { type: "handler", handlerId: "analytics.contextlessRequest" },
       ] as const;
       for (const scope of scopes) {
-        const fingerprint = (id: string) => {
-          captured.length = 0;
-          resetCaptureWindows();
-          const request = new Request(
-            `https://api.test/files/${id}?token=${id}`,
-          );
-          initRequestContext(request);
-          captureRequestError(new Error("fixture failure"), {
-            scope,
-            fingerprintKey: "analytics.requestValueInvariant",
-            request,
+        const fingerprint = (id: string) =>
+          runWithRequestIdScope(() => {
+            captured.length = 0;
+            resetCaptureWindows();
+            const request = new Request(
+              `https://api.test/files/${id}?token=${id}`,
+            );
+            openRequestContext();
+            captureRequestError(new Error("fixture failure"), {
+              scope,
+              fingerprintKey: "analytics.requestValueInvariant",
+              request,
+            });
+            const identity =
+              captured.at(0)?.properties["$exception_fingerprint"];
+            expect(typeof identity).toBe("string");
+            expect(String(identity)).not.toContain(id);
+            expect(String(identity)).not.toContain("token=");
+            return identity;
           });
-          const identity = captured.at(0)?.properties["$exception_fingerprint"];
-          expect(typeof identity).toBe("string");
-          expect(String(identity)).not.toContain(id);
-          expect(String(identity)).not.toContain("token=");
-          return identity;
-        };
         expect(fingerprint(beforeId)).toBe(fingerprint(afterId));
       }
     }),

@@ -115,7 +115,6 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
-    scope,
     channel: legacyChannelOf({
       severity: logged ? failedSeverity : undefined,
       capture: captured,

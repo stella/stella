@@ -99,7 +99,7 @@ const callbackContext = (
   },
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
-    request: scopedRequest(),
+    request: new Request("https://api.example.com/v1/mcp/oauth/callback"),
     route: "/v1/mcp/oauth/callback",
     query: { code: "auth-code", state: "state-token" },
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(

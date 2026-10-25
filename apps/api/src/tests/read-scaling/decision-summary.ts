@@ -108,7 +108,6 @@ export const decisionSummaryScalingScenario = {
         const response = await handler.handler(
           asTestRaw<Parameters<typeof handler.handler>[0]>({
             params: { decisionId: first.id },
-            route: "/v1/case/decisions/:decisionId/summary",
             request: new Request(
               `https://example.test/v1/case/decisions/${first.id}/summary`,
             ),

@@ -412,13 +412,17 @@ describe("the request lifecycle", () => {
       error.stack = `Error: Framework handler failed\n    at sharedOperation (/app/operation.ts:${sourceLine}:9)`;
       throw error;
     };
-    const app = new Elysia()
-      .onRequest(({ request }) => initRequestContext(request))
-      .onError((context) => answerRequestError(context))
-      .get("/first/:id", fail)
-      .get("/second/:id", fail);
+    const app = serve(
+      createHttpApp({
+        middleware: LIFECYCLE,
+        routes: routes({
+          "/first/:id": { GET: defineEndpoint.public({}, fail) },
+          "/second/:id": { GET: defineEndpoint.public({}, fail) },
+        }),
+      }),
+    );
     for (const path of ["/first/private-first", "/second/private-second"]) {
-      const response = await app.handle(
+      const response = await app.fetch(
         new Request(`https://example.test${path}`),
       );
       expect(response.status).toBe(500);
@@ -435,7 +439,7 @@ describe("the request lifecycle", () => {
     );
     sourceLine += 50;
     resetCaptureWindows();
-    await app.handle(new Request("https://example.test/first/private-third"));
+    await app.fetch(new Request("https://example.test/first/private-third"));
     const shifted = analytics.exceptions();
     expect(shifted).toHaveLength(3);
     expect(shifted.at(2)?.properties["$exception_fingerprint"]).toBe(first);
