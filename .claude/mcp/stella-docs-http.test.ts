@@ -34,11 +34,12 @@ const waitForListening = async (
   const announcement = `HTTP server listening on ${baseUrl}/mcp`;
   const listening = Promise.withResolvers<undefined>();
   const drain = async () => {
+    const decoder = new TextDecoder();
     let output = "";
     let announced = false;
-    for await (const chunk of stderr.pipeThrough(new TextDecoderStream())) {
+    for await (const chunk of stderr) {
       if (!announced) {
-        output += chunk;
+        output += decoder.decode(chunk, { stream: true });
         announced = output.includes(announcement);
         if (announced) {
           listening.resolve(undefined);
