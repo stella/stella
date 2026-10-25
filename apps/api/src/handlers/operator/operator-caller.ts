@@ -28,20 +28,16 @@ export const verifyOperatorCaller =
     switch (access.status) {
       case "disabled":
         logger.info(refusedEvent, { "access.status": access.status });
-        return Promise.resolve(
-          Result.err(
-            new HandlerError({ status: 404, message: "Not available" }),
-          ),
+        return Result.err(
+          new HandlerError({ status: 404, message: "Not available" }),
         );
       case "unauthorized":
         logger.info(refusedEvent, { "access.status": access.status });
-        return Promise.resolve(
-          Result.err(
-            new HandlerError({ status: 401, message: "Unauthorized" }),
-          ),
+        return Result.err(
+          new HandlerError({ status: 401, message: "Unauthorized" }),
         );
       case "authorized":
-        return Promise.resolve(Result.ok(undefined));
+        return Result.ok(undefined);
       default:
         access satisfies never;
         return panic("Unhandled operator access status");
