@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { ApiRouteKey } from "@/api/http/api-route-types";
+
 import { HandlerError } from "./errors/tagged-errors";
 import {
   isValibotSchema,
@@ -46,6 +48,10 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/views/update.ts",
   "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
 ] as const;
+
+REPLACE_CONTRACT_DEBT_IDS satisfies readonly (
+  `apps/api/src/handlers/${string}` | ApiRouteKey
+)[];
 
 const REVISION_PRECONDITIONS = {
   billingArrangement: ["revision"],
@@ -109,6 +115,7 @@ export const enforceWritePrecondition = (
  * Routes whose definitions no safe factory built declare their contract here,
  * by the method and path the route table mounts them at.
  */
+// oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- Only raw routes declare contracts here; safe handlers own their contracts.
 export const RAW_WRITE_CONTRACTS = {
   "DELETE /mcp": {
     contract: "patch",
@@ -192,7 +199,7 @@ export const RAW_WRITE_CONTRACTS = {
   "POST /v1/dev/seed-firm-knowledge": {
     contract: "patch",
   },
-} as const satisfies Record<string, WriteContract>;
+} as const satisfies Partial<Record<ApiRouteKey, WriteContract>>;
 
 const contracts = new WeakMap<object, WriteContract>();
 
