@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.7.0
+
+### Minor Changes
+
+- [#6035](https://github.com/stella/stella/pull/6035) [`6f99564`](https://github.com/stella/stella/commit/6f99564f57fdcda47a4a52cfeead821ec1858533) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella capability list` takes `--query <text>` to search capabilities by id, title and description.
+
 ## 5.6.0
 
 ### Minor Changes
