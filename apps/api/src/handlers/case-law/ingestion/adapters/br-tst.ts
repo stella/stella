@@ -1577,13 +1577,18 @@ export const createBrTstSliceLister = ({ now }: BrTstSliceListerOptions) => {
   return {
     listSlicePage: async (
       options: ReconciliationSlicePageOptions,
-    ): Promise<ReconciliationSlicePage> =>
-      await listPage(options).catch(async (error: unknown) => {
+    ): Promise<ReconciliationSlicePage> => {
+      const listed = await Result.tryPromise({
+        try: async () => await listPage(options),
+        catch: adapterCatch(ADAPTER_KEY, options.slice),
+      });
+      if (Result.isError(listed)) {
+        // A failed or cancelled page ends its listing: the next one starts over.
         held.delete(options.slice);
-        return await Promise.reject(
-          adapterCatch(ADAPTER_KEY, options.slice)(error),
-        );
-      }),
+        return await Promise.reject(listed.error);
+      }
+      return listed.value;
+    },
     /** Listings this lister holds, for the bound's test. */
     held: (): number => held.size,
   };
