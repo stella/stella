@@ -5,6 +5,10 @@ import { Result, TaggedError } from "better-result";
  * Persist the returned session and invoice references before continuing. Never
  * resend after an unknown outcome: KSeF deduplicates by seller NIP, invoice
  * type, and invoice number, and reports the original invoice as status 440.
+ *
+ * XAdES fragments are emitted directly in exclusive-canonical form. Keep the
+ * digested fragments and final document byte-identical: this is intentionally
+ * not a general-purpose XML canonicalizer.
  */
 import { X509Certificate } from "node:crypto";
 import * as v from "valibot";
@@ -135,6 +139,8 @@ type RequestOptions = {
   body?: unknown;
   /** The UPO is signed XML; every other KSeF response is JSON. */
   accept?: "application/json" | "application/xml";
+  /** The signed authentication document is XML; other bodies are JSON. */
+  contentType?: "application/json" | "application/xml";
 };
 const request = async ({
   transport,
@@ -144,6 +150,7 @@ const request = async ({
   token,
   body,
   accept = "application/json",
+  contentType = "application/json",
 }: RequestOptions): Promise<KsefResult<Awaited<ReturnType<KsefTransport>>>> => {
   const attempted = await Result.tryPromise({
     try: async () =>
@@ -152,11 +159,13 @@ const request = async ({
         url: `${API_URLS[environment]}${path}`,
         headers: {
           Accept: accept,
-          "Content-Type": "application/json",
+          "Content-Type": contentType,
           "X-Error-Format": "problem-details",
           ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
         },
-        ...(body === undefined ? {} : { body: jsonBytes(body) }),
+        ...(body === undefined
+          ? {}
+          : { body: body instanceof Uint8Array ? body : jsonBytes(body) }),
       }),
     catch: () =>
       error(
@@ -341,6 +350,13 @@ type KsefTokenAuthenticatorOptions = {
   polling?: { maxAttempts: number; delayMilliseconds: number };
   refreshMarginMilliseconds?: number;
 };
+type KsefCertificateAuthenticatorOptions = Omit<
+  KsefTokenAuthenticatorOptions,
+  "ksefToken"
+> & {
+  certificate: Uint8Array;
+  privateKey: CryptoKey;
+};
 const challengeSchema = v.object({
   challenge: v.string(),
   timestamp: v.string(),
@@ -362,7 +378,7 @@ const redeemedTokensSchema = v.object({
 const refreshedTokenSchema = v.object({ accessToken: tokenSchema });
 
 const refreshAccessToken = async (
-  options: KsefTokenAuthenticatorOptions,
+  options: Pick<KsefTokenAuthenticatorOptions, "environment" | "transport">,
   refreshToken: Token,
 ): Promise<KsefResult<Token>> => {
   const response = await request({
@@ -386,8 +402,22 @@ const refreshAccessToken = async (
     : Result.ok(refreshed.value.accessToken);
 };
 
-export const createKsefTokenAuthenticator = (
-  options: KsefTokenAuthenticatorOptions,
+type AuthenticationStart = v.InferOutput<typeof authenticationStartSchema>;
+type SharedAuthenticatorOptions = Pick<
+  KsefTokenAuthenticatorOptions,
+  | "clock"
+  | "environment"
+  | "polling"
+  | "refreshMarginMilliseconds"
+  | "transport"
+>;
+
+const createAuthenticator = (
+  options: SharedAuthenticatorOptions,
+  start: (
+    challenge: v.InferOutput<typeof challengeSchema>,
+    clock: Clock,
+  ) => Promise<KsefResult<AuthenticationStart>>,
 ): Authenticator => {
   const clock = options.clock ?? defaultClock;
   const polling = options.polling ?? {
@@ -418,42 +448,7 @@ export const createKsefTokenAuthenticator = (
     if (challenge.isErr()) {
       return Result.err(challenge.error);
     }
-    const certificate = await certificateFor(
-      options.transport,
-      options.environment,
-      "KsefTokenEncryption",
-      clock.now(),
-    );
-    if (certificate.isErr()) {
-      return Result.err(certificate.error);
-    }
-    const encryptedToken = await rsaEncrypt(
-      certificate.value.certificate,
-      encoder.encode(`${options.ksefToken}|${challenge.value.timestampMs}`),
-    );
-    if (encryptedToken.isErr()) {
-      return Result.err(encryptedToken.error);
-    }
-    const initResponse = await request({
-      transport: options.transport,
-      environment: options.environment,
-      method: "POST",
-      path: "/auth/ksef-token",
-      body: {
-        challenge: challenge.value.challenge,
-        contextIdentifier: { type: "Nip", value: options.nip },
-        encryptedToken: base64(encryptedToken.value),
-        publicKeyId: certificate.value.publicKeyId,
-      },
-    });
-    if (initResponse.isErr()) {
-      return Result.err(initResponse.error);
-    }
-    const init = parseResponse(
-      initResponse.value.body,
-      authenticationStartSchema,
-      "KSeF authentication start omitted required fields; retry authentication.",
-    );
+    const init = await start(challenge.value, clock);
     if (init.isErr()) {
       return Result.err(init.error);
     }
@@ -576,6 +571,192 @@ export const createKsefTokenAuthenticator = (
       return Result.ok(refreshed.value.token);
     },
   };
+};
+
+export const createKsefTokenAuthenticator = (
+  options: KsefTokenAuthenticatorOptions,
+): Authenticator =>
+  createAuthenticator(options, async (challenge, clock) => {
+    const certificate = await certificateFor(
+      options.transport,
+      options.environment,
+      "KsefTokenEncryption",
+      clock.now(),
+    );
+    if (certificate.isErr()) {
+      return Result.err(certificate.error);
+    }
+    const encryptedToken = await rsaEncrypt(
+      certificate.value.certificate,
+      encoder.encode(`${options.ksefToken}|${challenge.timestampMs}`),
+    );
+    if (encryptedToken.isErr()) {
+      return Result.err(encryptedToken.error);
+    }
+    const response = await request({
+      transport: options.transport,
+      environment: options.environment,
+      method: "POST",
+      path: "/auth/ksef-token",
+      body: {
+        challenge: challenge.challenge,
+        contextIdentifier: { type: "Nip", value: options.nip },
+        encryptedToken: base64(encryptedToken.value),
+        publicKeyId: certificate.value.publicKeyId,
+      },
+    });
+    return response.andThen(({ body }) =>
+      parseResponse(
+        body,
+        authenticationStartSchema,
+        "KSeF authentication start omitted required fields; retry authentication.",
+      ),
+    );
+  });
+
+const xmlText = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\r", "&#xD;");
+const digestXml = (value: string) => sha256Base64(encoder.encode(value));
+
+const signedAuthTokenRequest = async (
+  options: KsefCertificateAuthenticatorOptions,
+  challenge: string,
+  now: Date,
+): Promise<KsefResult<Uint8Array>> => {
+  if (!/^\d{10}$/u.test(options.nip)) {
+    return Result.err(
+      error(
+        "invalid_input",
+        "The KSeF NIP must contain exactly 10 digits.",
+        false,
+      ),
+    );
+  }
+  const algorithm = options.privateKey.algorithm.name;
+  if (algorithm !== "ECDSA" && algorithm !== "RSASSA-PKCS1-v1_5") {
+    return Result.err(
+      error(
+        "invalid_input",
+        "The KSeF signing key must be EC P-256 or RSA with at least 2048 bits.",
+        false,
+      ),
+    );
+  }
+  const keyAlgorithm = options.privateKey.algorithm;
+  if (
+    algorithm === "ECDSA" &&
+    (!("namedCurve" in keyAlgorithm) || keyAlgorithm.namedCurve !== "P-256")
+  ) {
+    return Result.err(
+      error("invalid_input", "The KSeF EC signing key must use P-256.", false),
+    );
+  }
+  if (
+    algorithm === "RSASSA-PKCS1-v1_5" &&
+    (!("modulusLength" in keyAlgorithm) ||
+      typeof keyAlgorithm.modulusLength !== "number" ||
+      keyAlgorithm.modulusLength < 2048)
+  ) {
+    return Result.err(
+      error(
+        "invalid_input",
+        "The KSeF RSA signing key must contain at least 2048 bits.",
+        false,
+      ),
+    );
+  }
+  const certificate = Result.try({
+    try: () => new X509Certificate(Buffer.from(options.certificate)),
+    catch: () => invalidResponse("The KSeF signing certificate is invalid."),
+  });
+  if (certificate.isErr()) {
+    return Result.err(certificate.error);
+  }
+  const signatureId = "Signature-1";
+  const propertiesId = "SignedProperties-1";
+  const document = `<AuthTokenRequest xmlns="http://ksef.mf.gov.pl/auth/token/2.0"><Challenge>${xmlText(challenge)}</Challenge><ContextIdentifier><Nip>${xmlText(options.nip)}</Nip></ContextIdentifier><SubjectIdentifierType>certificateSubject</SubjectIdentifierType></AuthTokenRequest>`;
+  const issuer = certificate.value.issuer.replaceAll("\n", ",");
+  const serial = BigInt(`0x${certificate.value.serialNumber}`).toString(10);
+  const properties = `<xades:SignedProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Id="${propertiesId}"><xades:SignedSignatureProperties><xades:SigningTime>${xmlText(now.toISOString())}</xades:SigningTime><xades:SigningCertificate><xades:Cert><xades:CertDigest><ds:DigestMethod xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod><ds:DigestValue xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${sha256Base64(options.certificate)}</ds:DigestValue></xades:CertDigest><xades:IssuerSerial><ds:X509IssuerName xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${xmlText(issuer)}</ds:X509IssuerName><ds:X509SerialNumber xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${serial}</ds:X509SerialNumber></xades:IssuerSerial></xades:Cert></xades:SigningCertificate></xades:SignedSignatureProperties></xades:SignedProperties>`;
+  const signatureMethod =
+    algorithm === "ECDSA"
+      ? "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"
+      : "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+  const signedInfo = `<ds:SignedInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"></ds:CanonicalizationMethod><ds:SignatureMethod Algorithm="${signatureMethod}"></ds:SignatureMethod><ds:Reference URI=""><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></ds:Transform><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"></ds:Transform></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod><ds:DigestValue>${digestXml(document)}</ds:DigestValue></ds:Reference><ds:Reference Type="http://uri.etsi.org/01903#SignedProperties" URI="#${propertiesId}"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"></ds:Transform></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod><ds:DigestValue>${digestXml(properties)}</ds:DigestValue></ds:Reference></ds:SignedInfo>`;
+  const signed = await Result.tryPromise({
+    try: async () =>
+      new Uint8Array(
+        await crypto.subtle.sign(
+          algorithm === "ECDSA"
+            ? { name: "ECDSA", hash: "SHA-256" }
+            : { name: "RSASSA-PKCS1-v1_5" },
+          options.privateKey,
+          encoder.encode(signedInfo),
+        ),
+      ),
+    catch: () =>
+      invalidResponse("The KSeF authentication document could not be signed."),
+  });
+  if (signed.isErr()) {
+    return Result.err(signed.error);
+  }
+  const signature = `<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Id="${signatureId}">${signedInfo}<ds:SignatureValue>${base64(signed.value)}</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>${base64(options.certificate)}</ds:X509Certificate></ds:X509Data></ds:KeyInfo><ds:Object><xades:QualifyingProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Target="#${signatureId}">${properties}</xades:QualifyingProperties></ds:Object></ds:Signature>`;
+  return Result.ok(
+    encoder.encode(
+      document.replace(
+        "</AuthTokenRequest>",
+        () => `${signature}</AuthTokenRequest>`,
+      ),
+    ),
+  );
+};
+
+export const createKsefCertificateAuthenticator = (
+  options: KsefCertificateAuthenticatorOptions,
+): Authenticator => {
+  if (!/^\d{10}$/u.test(options.nip)) {
+    return {
+      getAccessToken: async () =>
+        await Promise.resolve(
+          Result.err(
+            error(
+              "invalid_input",
+              "The KSeF NIP must contain exactly 10 digits.",
+              false,
+            ),
+          ),
+        ),
+    };
+  }
+  return createAuthenticator(options, async (challenge, clock) => {
+    const document = await signedAuthTokenRequest(
+      options,
+      challenge.challenge,
+      clock.now(),
+    );
+    if (document.isErr()) {
+      return Result.err(document.error);
+    }
+    const response = await request({
+      transport: options.transport,
+      environment: options.environment,
+      method: "POST",
+      path: "/auth/xades-signature",
+      body: document.value,
+      contentType: "application/xml",
+    });
+    return response.andThen(({ body }) =>
+      parseResponse(
+        body,
+        authenticationStartSchema,
+        "KSeF authentication start omitted required fields; retry authentication.",
+      ),
+    );
+  });
 };
 
 export type OnlineSession = {

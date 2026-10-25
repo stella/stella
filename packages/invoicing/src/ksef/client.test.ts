@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
+import { X509Certificate } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,6 +8,7 @@ import path from "node:path";
 import { sha256Base64 } from "@stll/sha256/bun";
 
 import {
+  createKsefCertificateAuthenticator,
   createKsefInvoiceVerificationUrl,
   createKsefTokenAuthenticator,
   KsefClient,
@@ -57,6 +59,65 @@ const privateKey = await crypto.subtle.importKey(
   ["decrypt"],
 );
 
+const createSigningFixture = async (kind: "ec" | "rsa") => {
+  const fixtureDirectory = mkdtempSync(path.join(directory, `${kind}-`));
+  const signingKeyPath = path.join(fixtureDirectory, "key.pem");
+  const signingCertificatePath = path.join(fixtureDirectory, "certificate.der");
+  const command =
+    kind === "ec"
+      ? [
+          "openssl",
+          "req",
+          "-x509",
+          "-newkey",
+          "ec",
+          "-pkeyopt",
+          "ec_paramgen_curve:P-256",
+        ]
+      : ["openssl", "req", "-x509", "-newkey", "rsa:2048"];
+  const result = Bun.spawnSync([
+    ...command,
+    "-keyout",
+    signingKeyPath,
+    "-out",
+    signingCertificatePath,
+    "-outform",
+    "DER",
+    "-nodes",
+    "-days",
+    "2",
+    "-subj",
+    `/CN=KSeF ${kind} test`,
+  ]);
+  if (result.exitCode !== 0) {
+    throw new Error(decoder.decode(result.stderr));
+  }
+  const der = readFileSync(signingCertificatePath);
+  const pem = readFileSync(signingKeyPath, "utf-8").replaceAll(
+    /-----[^-]+-----|\s/gu,
+    "",
+  );
+  const algorithm =
+    kind === "ec"
+      ? { name: "ECDSA", namedCurve: "P-256" }
+      : { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
+  return {
+    certificate: new Uint8Array(der),
+    privateKey: await crypto.subtle.importKey(
+      "pkcs8",
+      Buffer.from(pem, "base64"),
+      algorithm,
+      false,
+      ["sign"],
+    ),
+  };
+};
+
+const signingFixtures = {
+  ec: await createSigningFixture("ec"),
+  rsa: await createSigningFixture("rsa"),
+};
+
 const response = (
   status: number,
   value?: unknown,
@@ -83,6 +144,13 @@ const createFake = () => {
   const validTo = new Date(Date.now() + 86_400_000).toISOString();
   const transport: KsefTransport = async ({ method, url, headers, body }) => {
     const requestPath = new URL(url).pathname.replace("/v2", "");
+    if (requestPath === "/auth/xades-signature") {
+      expect(headers["Content-Type"]).toBe("application/xml");
+      return response(202, {
+        referenceNumber: "auth-ref",
+        authenticationToken: { token: "temporary", validUntil: validTo },
+      });
+    }
     const json = body === undefined ? {} : JSON.parse(decoder.decode(body));
     if (requestPath === "/security/public-key-certificates") {
       return response(200, [
@@ -210,6 +278,159 @@ const createFake = () => {
 };
 
 describe("KSeF online session", () => {
+  test.each(["ec", "rsa"] as const)(
+    "produces a verifiable %s XAdES-BES authentication document",
+    async (kind) => {
+      const fixture = signingFixtures[kind];
+      let xml = "";
+      const fake = createFake();
+      const transport: KsefTransport = async (request) => {
+        if (new URL(request.url).pathname.endsWith("/auth/xades-signature")) {
+          xml = decoder.decode(request.body);
+        }
+        return await fake.transport(request);
+      };
+      const authenticator = createKsefCertificateAuthenticator({
+        environment: "test",
+        transport,
+        nip: "1111111111",
+        ...fixture,
+        clock: {
+          now: () => new Date("2026-04-01T00:00:00.000Z"),
+          sleep: async () => {},
+        },
+      });
+      expect((await authenticator.getAccessToken()).isOk()).toBe(true);
+
+      const value = (name: string) => {
+        const match = new RegExp(
+          `<[^>]*${name}[^>]*>([^<]+)</[^>]*${name}>`,
+          "u",
+        ).exec(xml);
+        if (match?.[1] === undefined) {
+          throw new Error(`Missing ${name}`);
+        }
+        return match[1];
+      };
+      const unsigned = xml.replace(
+        /<ds:Signature xmlns:ds=[\s\S]*<\/ds:Signature>/u,
+        "",
+      );
+      const signedProperties =
+        /<xades:SignedProperties[\s\S]*?<\/xades:SignedProperties>/u.exec(
+          xml,
+        )?.[0];
+      const signedInfo = /<ds:SignedInfo[\s\S]*?<\/ds:SignedInfo>/u.exec(
+        xml,
+      )?.[0];
+      if (signedProperties === undefined || signedInfo === undefined) {
+        throw new Error("Missing signed XAdES fragments");
+      }
+      const digestValues = [
+        ...xml.matchAll(/<ds:DigestValue[^>]*>([^<]+)<\/ds:DigestValue>/gu),
+      ].map((match) => match[1]);
+      expect(digestValues.at(0)).toBe(sha256Base64(encoder.encode(unsigned)));
+      expect(digestValues.at(1)).toBe(
+        sha256Base64(encoder.encode(signedProperties)),
+      );
+      expect(digestValues.at(2)).toBe(sha256Base64(fixture.certificate));
+
+      const parsedCertificate = new X509Certificate(fixture.certificate);
+      expect(value("X509IssuerName")).toBe(
+        parsedCertificate.issuer.replaceAll("\n", ","),
+      );
+      expect(value("X509SerialNumber")).toBe(
+        BigInt(`0x${parsedCertificate.serialNumber}`).toString(10),
+      );
+      const publicKey = await crypto.subtle.importKey(
+        "spki",
+        parsedCertificate.publicKey.export({ type: "spki", format: "der" }),
+        kind === "ec"
+          ? { name: "ECDSA", namedCurve: "P-256" }
+          : { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["verify"],
+      );
+      const signature = Buffer.from(value("SignatureValue"), "base64");
+      if (kind === "ec") {
+        expect(signature.byteLength).toBe(64);
+      }
+      expect(
+        await crypto.subtle.verify(
+          kind === "ec"
+            ? { name: "ECDSA", hash: "SHA-256" }
+            : { name: "RSASSA-PKCS1-v1_5" },
+          publicKey,
+          signature,
+          encoder.encode(signedInfo),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("escapes a special-character challenge while preserving a valid signature", async () => {
+    const fixture = signingFixtures.ec;
+    let xml = "";
+    const fake = createFake();
+    const transport: KsefTransport = async (request) => {
+      const requestPath = new URL(request.url).pathname;
+      if (requestPath.endsWith("/auth/challenge")) {
+        return response(200, {
+          challenge: "<&>\r",
+          timestamp: "2026-04-01T00:00:00.000Z",
+          timestampMs: 1_775_001_600_000,
+        });
+      }
+      if (requestPath.endsWith("/auth/xades-signature")) {
+        xml = decoder.decode(request.body);
+      }
+      return await fake.transport(request);
+    };
+    const authenticator = createKsefCertificateAuthenticator({
+      environment: "test",
+      transport,
+      nip: "1111111111",
+      ...fixture,
+    });
+    expect((await authenticator.getAccessToken()).isOk()).toBe(true);
+    expect(xml).toContain("<Challenge>&lt;&amp;&gt;&#xD;</Challenge>");
+  });
+
+  test("uses certificate authentication through an encrypted online send", async () => {
+    const fake = createFake();
+    const authenticator = createKsefCertificateAuthenticator({
+      environment: "test",
+      transport: fake.transport,
+      nip: "1111111111",
+      ...signingFixtures.rsa,
+      refreshMarginMilliseconds: 1000,
+    });
+    const client = new KsefClient({
+      environment: "test",
+      transport: fake.transport,
+      authenticator,
+    });
+    const session = (await client.openOnlineSession()).unwrap();
+    await client.sendInvoice(session, "<Faktura>certyfikat</Faktura>");
+    expect(fake.received()).toBe("<Faktura>certyfikat</Faktura>");
+  });
+
+  test("rejects an invalid certificate NIP before transport", async () => {
+    let calls = 0;
+    const authenticator = createKsefCertificateAuthenticator({
+      environment: "test",
+      transport: async () => {
+        calls += 1;
+        return response(500);
+      },
+      nip: "123",
+      ...signingFixtures.ec,
+    });
+    const result = await authenticator.getAccessToken();
+    expect(result.isErr() && result.error.kind).toBe("invalid_input");
+    expect(calls).toBe(0);
+  });
+
   test("logs in, refreshes, encrypts and resumes an accepted invoice through UPO", async () => {
     const fake = createFake();
     const authenticator = createKsefTokenAuthenticator({
