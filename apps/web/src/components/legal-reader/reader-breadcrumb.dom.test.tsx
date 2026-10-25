@@ -505,7 +505,7 @@ for (const jump of ["contents", "ancestor"]) {
             );
           }
           jest.useFakeTimers();
-          await act(() => {
+          await act(async () => {
             fireEvent.click(screen.getByRole("button", { name: target.title }));
             jest.advanceTimersByTime(220);
           });
@@ -691,7 +691,7 @@ test("the breadcrumb rebinds when the reader DOM is replaced", async () => {
       heading.getBoundingClientRect = () =>
         new DOMRect(0, 200 + index * 200 - viewport.scrollTop, 200, 24);
     }
-    await act(() => {
+    await act(async () => {
       viewport.scrollTop = scrollTop;
       viewport.dispatchEvent(new Event("scroll"));
       jest.advanceTimersByTime(220);
@@ -706,7 +706,7 @@ test("the breadcrumb rebinds when the reader DOM is replaced", async () => {
   expect(oldViewport.isConnected).toBe(false);
   expect(nextViewport).not.toBe(oldViewport);
   expect(screen.getByRole("button", { name: "Contents: Last" })).toBeTruthy();
-  await act(() => {
+  await act(async () => {
     oldViewport.dispatchEvent(new Event("scroll"));
     jest.advanceTimersByTime(220);
   });
@@ -726,7 +726,7 @@ test("Contents consumes Escape and restores focus to its trigger", async () => {
     const trigger = screen.getByRole("button", { name: /^Contents:/u });
     await act(async () => fireEvent.click(trigger));
     const popup = screen.getByRole("dialog");
-    await act(() => {
+    await act(async () => {
       popup.focus();
       fireEvent.keyDown(popup, { key: "Escape" });
     });
