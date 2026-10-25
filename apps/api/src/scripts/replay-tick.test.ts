@@ -22,7 +22,7 @@ import {
   readReplayGate,
   replayTickMetricRecord,
   runReplayTickScript,
-} from "@/api/scripts/replay-tick";
+} from "@/api/scripts/replay-tick-command";
 
 const enabledEnvironment = {
   CASE_LAW_REPLAY_ENABLED: true,

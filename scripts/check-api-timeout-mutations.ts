@@ -28,7 +28,7 @@ const MIGRATION_OWNERS = new Set([
 const STANDALONE_CONNECTION_OWNERS = new Set([
   `${API_SOURCE}scripts/better-auth-17-backfill.ts`,
   `${API_SOURCE}scripts/better-auth-microsoft-identity-map.ts`,
-  `${API_SOURCE}scripts/better-auth-migration-audit.ts`,
+  `${API_SOURCE}scripts/better-auth-migration-audit-command.ts`,
   `${API_SOURCE}scripts/database-census.ts`,
   `${API_SOURCE}scripts/seed-migration-rehearsal.ts`,
 ]);

@@ -8,7 +8,7 @@ import {
   persistBetterAuthAuditBaseline,
   readBetterAuthAuditBaseline,
   readBetterAuthTrustedIdentityMap,
-} from "@/api/scripts/better-auth-migration-audit";
+} from "@/api/scripts/better-auth-migration-audit-command";
 import {
   AUTH_BASELINE_MODEL_NAMES,
   AUTH_TABLE_AUDIT_POLICY,

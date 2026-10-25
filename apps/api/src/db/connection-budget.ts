@@ -227,7 +227,7 @@ const DATABASE_POOLS = [
     admission: "pooled",
   },
   {
-    file: "src/scripts/better-auth-migration-audit.ts",
+    file: "src/scripts/better-auth-migration-audit-command.ts",
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["authAudit"],
