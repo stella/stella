@@ -3,6 +3,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 export const IGNORED_EVENT_DISPOSITIONS = {
   expected: "expected",
   needs_operator: "needs_operator",
+  // The dispatch step that produced the reason raised its own alert.
+  reported_at_source: "reported_at_source",
 } as const;
 
 export type IgnoredEventDisposition =
@@ -28,7 +30,7 @@ export const IGNORED_EVENT_REASONS = {
   },
   unrecognized_status: {
     receiptText: "unrecognized_status",
-    disposition: "needs_operator",
+    disposition: "reported_at_source",
   },
   missing_organization_metadata: {
     receiptText: "missing metadata.organization_id",

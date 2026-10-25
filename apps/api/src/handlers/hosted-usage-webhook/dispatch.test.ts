@@ -27,7 +27,10 @@ import {
   IGNORED_EVENT_REASONS,
   renderIgnoredEventReason,
 } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
-import type { IgnoredEventReason } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
+import type {
+  IgnoredEventDisposition,
+  IgnoredEventReason,
+} from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
   HostedUsageAllocationPayload,
   HostedUsageWebhookEvent,
@@ -71,7 +74,7 @@ const ignoredReasonCases = {
     "needs_operator",
   ],
   provider_migration: ["provider_migration", "expected"],
-  unrecognized_status: ["unrecognized_status", "needs_operator"],
+  unrecognized_status: ["unrecognized_status", "reported_at_source"],
   missing_organization_metadata: [
     "missing metadata.organization_id",
     "needs_operator",
@@ -131,7 +134,7 @@ const ignoredReasonCases = {
   zero_addon_units: ["policy grants zero add-on units", "needs_operator"],
 } as const satisfies Record<
   IgnoredEventReason,
-  readonly [receiptText: string, disposition: "expected" | "needs_operator"]
+  readonly [receiptText: string, disposition: IgnoredEventDisposition]
 >;
 
 test("ignored reason codes preserve receipt text and disposition", () => {
