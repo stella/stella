@@ -133,6 +133,12 @@ schema_file_has_migration_relevant_diff() {
         }
       });
       let erased = source;
+      // Keep offsets stable while removing comments Bun would otherwise preserve.
+      for (const { start, end } of parsed.comments.toReversed()) {
+        erased = erased.slice(0, start)
+          + source.slice(start, end).replace(/[^\r\n]/g, " ")
+          + erased.slice(end);
+      }
       for (const { start, end } of edits.toSorted((a, b) => b.start - a.start)) {
         erased = erased.slice(0, start) + erased.slice(end);
       }
