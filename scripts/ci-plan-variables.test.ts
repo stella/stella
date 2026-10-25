@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import fc from "fast-check";
 import { readFileSync } from "node:fs";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   planVariablesExpression,
@@ -268,5 +271,40 @@ test("generated mirrors reach a fixed point and cannot retain a removed variable
   expect(regenerated).not.toContain("vars.REMOVED");
   expect(withPlanVariablesOutput(regenerated, census(regenerated))).toBe(
     regenerated,
+  );
+});
+
+const EXPRESSION_CENSUS_PROPERTY =
+  "workflow expression census ignores arbitrary quoted literals and rejects truncation";
+
+test(EXPRESSION_CENSUS_PROPERTY, () => {
+  assertProperty(
+    EXPRESSION_CENSUS_PROPERTY,
+    fc.property(
+      fc.array(
+        fc.array(fc.constantFrom("'", "}}", "${{", "vars.IGNORED", "x", " "), {
+          maxLength: 20,
+        }),
+        { minLength: 1, maxLength: 12 },
+      ),
+      (literals) => {
+        const source = literals
+          .map(
+            (parts, index) =>
+              `echo \${{ format('${parts.join("").replaceAll("'", "''")}', vars.FLAG_${index}) }}`,
+          )
+          .join("; ");
+        const census = (run: string) =>
+          planVariablesExpression(() => ({
+            jobs: { gate: { steps: [{ run }] } },
+          }));
+        expect(predicateVariables(census(source))).toEqual(
+          literals.map((_, index) => `FLAG_${index}`).toSorted(),
+        );
+        expect(() => census(source.slice(0, -2))).toThrow(
+          "Unterminated GitHub expression",
+        );
+      },
+    ),
   );
 });

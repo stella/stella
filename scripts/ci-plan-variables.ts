@@ -49,6 +49,40 @@ export const predicateVariables = (predicate: string): string[] => {
   return names;
 };
 
+// Each character belongs to one scan; malformed input cannot restart a search
+// from every opening delimiter and cause quadratic backtracking.
+const workflowExpressions = (source: string): string[] => {
+  const expressions: string[] = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const start = source.indexOf("${{", cursor);
+    if (start === -1) {
+      break;
+    }
+    let end = start + 3;
+    let state: "expression" | "string" = "expression";
+    for (; end < source.length; end++) {
+      if (source[end] === "'") {
+        if (state === "string" && source[end + 1] === "'") {
+          end++;
+          continue;
+        }
+        state = state === "string" ? "expression" : "string";
+        continue;
+      }
+      if (state === "expression" && source.startsWith("}}", end)) {
+        break;
+      }
+    }
+    if (end === source.length) {
+      throw new CiPlanVariablesError("Unterminated GitHub expression");
+    }
+    expressions.push(source.slice(start + 3, end));
+    cursor = end + 2;
+  }
+  return expressions;
+};
+
 export const planVariablesExpression = (
   readWorkflow: (file: string) => unknown,
 ): string => {
@@ -77,11 +111,7 @@ export const planVariablesExpression = (
         const expressions =
           keys.at(-1) === "if" && !value.includes("${{")
             ? [value]
-            : [
-                ...value.matchAll(
-                  /\$\{\{(?:'(?:[^']|'')*'|(?!\}\})[^'])*\}\}/gu,
-                ),
-              ].map((match) => match[0].slice(3, -2));
+            : workflowExpressions(value);
         for (const expression of expressions) {
           for (const name of predicateVariables(expression)) {
             names.add(name);
