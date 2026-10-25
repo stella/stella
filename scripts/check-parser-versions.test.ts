@@ -1011,11 +1011,10 @@ test("a blobless clone fetches every missing source blob in one round trip", () 
         ],
         { cwd, stdout: "pipe", stderr: "pipe" },
       );
-      // The stderr is in the comparison so a failing step names its cause.
-      expect({ args, exitCode: result.exitCode }).toEqual({
-        args,
-        exitCode: result.exitCode === 0 ? 0 : result.stderr.toString(),
-      });
+      expect(
+        result.exitCode,
+        `${args.join(" ")}: ${result.stderr.toString()}`,
+      ).toBe(0);
       return result.stdout.toString().trim();
     };
     const source = path.join(root, "source");
@@ -1060,7 +1059,7 @@ test("a blobless clone fetches every missing source blob in one round trip", () 
       }).exitCode,
     ).not.toBe(0);
 
-    const tree = readGitTree(base, clone);
+    const tree = readGitTree(base, { repository: clone });
 
     expect(tree.type).toBe("ok");
     const read = tree.type === "ok" ? tree.files : new Map<string, string>();
@@ -1070,5 +1069,47 @@ test("a blobless clone fetches every missing source blob in one round trip", () 
     expect(readFileSync(log, "utf-8").trim().split("\n")).toEqual(["fetch"]);
   } finally {
     rmSync(root, { force: true, recursive: true });
+  }
+});
+
+test("trees without decoded source retain empty and non-code identities", () => {
+  const repository = mkdtempSync(path.join(tmpdir(), "parser-guard-empty-"));
+  try {
+    const run = (...args: string[]) => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=guard",
+          "-c",
+          "user.email=guard@example.com",
+          ...args,
+        ],
+        { cwd: repository, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    run("init", "-q");
+    run("commit", "-q", "--allow-empty", "-m", "empty");
+    const empty = readGitTree("HEAD", { repository });
+    expect(empty.type).toBe("ok");
+    if (empty.type === "ok") {
+      expect([...empty.files]).toEqual([]);
+    }
+
+    const file = "apps/api/src/fixture.wasm";
+    mkdirSync(path.join(repository, "apps/api/src"), { recursive: true });
+    writeFileSync(path.join(repository, file), "opaque fixture");
+    run("add", file);
+    run("commit", "-q", "-m", "non-code");
+    const identity = `git-blob:${run("rev-parse", `HEAD:${file}`)}`;
+    const nonCode = readGitTree("HEAD", { repository });
+    expect(nonCode.type).toBe("ok");
+    if (nonCode.type === "ok") {
+      expect([...nonCode.files]).toEqual([[file, identity]]);
+    }
+  } finally {
+    rmSync(repository, { force: true, recursive: true });
   }
 });

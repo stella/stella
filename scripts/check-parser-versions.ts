@@ -870,10 +870,14 @@ const fetchMissingObjects = (
 type ReadGitTreeResult =
   { type: "ok"; files: SourceTree } | { type: "failed"; detail: string };
 
+type ReadGitTreeOptions = {
+  repository?: string;
+};
+
 // Read immutable git objects in one batch, without checking out either tree.
 export const readGitTree = (
   ref: string,
-  repository = REPOSITORY_ROOT,
+  { repository = REPOSITORY_ROOT }: ReadGitTreeOptions = {},
 ): ReadGitTreeResult => {
   const runGit = gitIn(repository);
   const listing = runGit([
@@ -903,6 +907,9 @@ export const readGitTree = (
     if (/\.[cm]?[jt]sx?$/u.test(file) || file.endsWith("/package.json")) {
       sources.push({ file, object });
     }
+  }
+  if (sources.length === 0) {
+    return { type: "ok", files };
   }
   const wanted = sources.map(({ object }) => object);
   const fetched = fetchMissingObjects(wanted, runGit);
