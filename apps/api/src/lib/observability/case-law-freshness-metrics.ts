@@ -142,6 +142,7 @@ const readServedBacklog = async (
   const backlogs = await Promise.all(
     generations.map(async (generation): Promise<GenerationBacklog> => {
       const row = executedRows(
+        // db-await-in-loop: one bounded walk per served generation; a family has the serving generation plus a handful of flipped ones
         await tx.execute(
           caseLawFreshnessPendingStatesQuery({
             family: "case_law",
