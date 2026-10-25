@@ -34,6 +34,28 @@ export const getOauthHashFragment = (query: string): string => {
   return fragment.toString();
 };
 
+/**
+ * Where switching accounts on an OAuth step leads once the current account is
+ * signed out: sign-in carrying the same signed OAuth request, or, for a page
+ * reached without one, back to that page after sign-in.
+ */
+export const getOauthAccountSwitchHref = ({
+  hash,
+  pathname,
+  search,
+}: {
+  hash: string;
+  pathname: string;
+  search: string;
+}): string => {
+  const bridgedQuery = getSignedOauthQueryFromHash(hash);
+  if (bridgedQuery) {
+    return `/auth#${getOauthHashFragment(bridgedQuery)}`;
+  }
+
+  return `/auth?${new URLSearchParams({ redirectTo: pathname + search })}`;
+};
+
 export const getOauthClientDisplayName = (value: unknown): string | null => {
   if (typeof value !== "object" || value === null) {
     return null;

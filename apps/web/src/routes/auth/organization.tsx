@@ -33,6 +33,11 @@ import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import {
+  OAuthAccountList,
+  OAuthAccountRow,
+  useOAuthAccountSwitch,
+} from "@/components/oauth-consent/oauth-account";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -210,6 +215,42 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   );
 };
 
+/**
+ * Who the organizations below belong to, with the same switch the consent step
+ * offers: signing in as someone else resumes the same authorization request.
+ */
+const SignedInAccount = ({ disabled }: { disabled: boolean }) => {
+  const t = useTranslations();
+  const email = Route.useRouteContext({ select: (ctx) => ctx.user?.email });
+  const switchAccount = useOAuthAccountSwitch();
+  const { isPending, mutate } = useMutation({
+    mutationFn: switchAccount,
+    onSuccess: (outcome) => {
+      if (outcome.isErr()) {
+        notifyUserError(outcome.error, t("errors.actionFailed"));
+      }
+    },
+  });
+
+  if (!email) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3">
+      <OAuthAccountList>
+        <OAuthAccountRow
+          disabled={disabled || isPending}
+          email={email}
+          onAccountSwitch={() => {
+            mutate();
+          }}
+        />
+      </OAuthAccountList>
+    </div>
+  );
+};
+
 type OrganizationListProps = {
   isOauthPostLogin: boolean;
   organizations: { id: string; name: string; slug: string }[];
@@ -319,6 +360,7 @@ const OrganizationList = ({
       <FrameHeader>
         <FrameTitle>{t("auth.selectOrganization")}</FrameTitle>
         <FrameDescription>{t("auth.chooseOrganization")}</FrameDescription>
+        <SignedInAccount disabled={isSelectPending} />
       </FrameHeader>
       <FramePanel className="flex flex-col gap-2">
         {organizations.map((org) => (
@@ -424,6 +466,7 @@ const CreateOrganizationForm = ({
       <FrameHeader>
         <FrameTitle>{t("auth.createOrganization")}</FrameTitle>
         <FrameDescription>{t("auth.createFirstOrganization")}</FrameDescription>
+        <SignedInAccount disabled={false} />
       </FrameHeader>
       <FramePanel>
         <Form
