@@ -1,9 +1,9 @@
 {
   "apps/api": {
-    "count": 127,
+    "count": 125,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
-      "apps/api/src/handlers/case-law/citation-kind.ts": 2,
+      "apps/api/src/handlers/case-law/citation-kind.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 2,
       "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts": 6,
       "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts": 2,
@@ -45,7 +45,6 @@
       "apps/api/src/lib/scouts/document-deadlines.logic.ts": 5,
       "apps/api/src/lib/tanstack-ai-generate.ts": 1,
       "apps/api/src/lib/template-binding/binding-sources.ts": 1,
-      "apps/api/src/lib/uploads/entity-create.ts": 1,
       "apps/api/src/lib/usage/organization-access.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 3,
@@ -76,7 +75,7 @@
       "apps/web/src/components/workspaces/property-helpers.tsx": 2,
       "apps/web/src/features/statutes/components/statute-table.tsx": 1,
       "apps/web/src/lib/api-contract.ts": 1,
-      "apps/web/src/lib/eden-client.ts": 1,
+      "apps/web/src/lib/api.ts": 1,
       "apps/web/src/lib/workspaces/format-duration.ts": 1,
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3,
       "apps/web/src/lib/workspaces/queries/billing-codes.ts": 1,

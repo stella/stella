@@ -6,7 +6,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   getRequestId,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -51,15 +52,9 @@ const queuedSafeDb = (results: unknown[]): CallbackCtx["safeDb"] =>
     return Result.ok(next);
   });
 
-const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/sharepoint/oauth/callback");
-  initRequestContext(request);
-  return request;
-};
-
 const failingLookupContext = (
   error: Error,
-  request: Request = scopedRequest(),
+  request: Request = new Request("https://api.test/sharepoint/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
     query: { code: "auth-code", state: "state-token" },
@@ -119,20 +114,23 @@ describe("sharepointOAuthCallback", () => {
   });
 
   test("logs the failure with the request id", async () => {
-    const request = scopedRequest();
-    await sharepointOAuthCallback.handler(
-      failingLookupContext(
-        new HandlerError({ status: 500, message: "db down" }),
-        request,
-      ),
-    );
+    await runWithRequestIdScope(async () => {
+      openRequestContext();
+      await sharepointOAuthCallback.handler(
+        failingLookupContext(
+          new HandlerError({ status: 500, message: "db down" }),
+        ),
+      );
 
-    expect(failureRecords().map((record) => record.attributes)).toMatchObject([
-      {
-        "request.id": getRequestId(request),
-        operation: "sharepoint_oauth_callback",
-      },
-    ]);
+      expect(failureRecords().map((record) => record.attributes)).toMatchObject(
+        [
+          {
+            "request.id": getRequestId(),
+            operation: "sharepoint_oauth_callback",
+          },
+        ],
+      );
+    });
   });
 
   test("logs a transient network failure as a warning without reporting it", async () => {

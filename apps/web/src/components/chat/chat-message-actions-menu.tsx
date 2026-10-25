@@ -41,7 +41,7 @@ import {
   resolveChatContextMatterIds,
   toChatThreadId,
 } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatContextualTimestamp } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -116,7 +116,7 @@ export const ChatMessageActionsMenu = ({
               : {},
           },
         );
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: (destination) => {
       if (destination === "inspector") {

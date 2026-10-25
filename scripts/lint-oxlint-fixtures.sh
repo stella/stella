@@ -55,7 +55,6 @@ bun --bun oxlint -c oxlint.config.ts \
   "${plugin_sources[@]}"
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
-bun test ./scripts/oxlint-typebox-unsafe.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
 bun test ./scripts/check-oxlint-plugin-registry.test.ts
 bun test ./scripts/check-oxlint-fixture-counts.test.ts

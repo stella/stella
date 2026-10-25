@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -121,9 +121,7 @@ const config = {
     reason: "workflow_orchestration",
     consumesServices: true,
   },
-  body: t.Object({
-    includeContent: t.Boolean(),
-  }),
+  body: v.object({ includeContent: v.boolean() }),
 } satisfies WorkspaceHandlerConfig;
 
 const FILE_COPY_CONCURRENCY = 4;

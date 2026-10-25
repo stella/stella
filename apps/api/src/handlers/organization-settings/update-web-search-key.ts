@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -18,9 +18,9 @@ import {
 } from "@/api/lib/web-search/keys";
 import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
-const updateWebSearchKeyBody = t.Object({
-  kind: t.UnionEnum(WEB_SEARCH_KEY_KINDS),
-  apiKey: t.String({ minLength: 1, maxLength: 256 }),
+const updateWebSearchKeyBody = v.object({
+  kind: v.picklist(WEB_SEARCH_KEY_KINDS),
+  apiKey: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
 const WEB_SEARCH_KEY_ERROR_CODE = {

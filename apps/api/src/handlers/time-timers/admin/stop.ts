@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { timeTimerConfirmations, timeTimers } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -26,8 +26,8 @@ const stopMemberTimer = createSafeRootHandler(
       consumesServices: false,
     },
     params: timerParams,
-    body: t.Object({
-      narrative: t.Optional(t.String({ maxLength: 10_000 })),
+    body: v.object({
+      narrative: v.optional(v.pipe(v.string(), v.maxLength(10_000))),
     }),
   },
   async function* ({

@@ -1,31 +1,31 @@
 // Records every file-system question a TypeScript program asks while it is
-// built (file reads, existence probes, real paths, directory listings) and
+// built (file reads, existence probes, real paths, directory entries) and
 // replays them later. When every answer is unchanged, the program would load
 // exactly the same files with exactly the same bytes, so anything derived only
 // from it is still current. Replaying costs some thousands of stat calls and
 // file hashes instead of a full parse and type check.
 import { Result } from "better-result";
-import { readFileSync, realpathSync, type Stats, statSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  type Stats,
+  statSync,
+} from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript6";
+import type { FileSystem, FileSystemEntries } from "typescript/unstable/fs";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
 const pathListSchema = v.array(v.string());
-// JSON has no undefined: an omitted readDirectory argument is stored as null.
-const readDirectorySchema = v.tuple([
-  v.tuple([
-    v.string(),
-    v.nullable(pathListSchema),
-    v.nullable(pathListSchema),
-    v.nullable(pathListSchema),
-    v.nullable(v.number()),
-  ]),
-  pathListSchema,
-]);
+// A directory's file and subdirectory names, as the compiler lists them.
+const entriesSchema = v.strictObject({
+  files: pathListSchema,
+  directories: pathListSchema,
+});
 const existenceSchema = v.strictObject({
   present: pathListSchema,
   absent: pathListSchema,
@@ -41,8 +41,7 @@ export const compilerInputStampSchema = v.strictObject({
   files: existenceSchema,
   directories: existenceSchema,
   realpaths: v.record(v.string(), v.string()),
-  subdirectories: v.record(v.string(), pathListSchema),
-  listings: v.array(readDirectorySchema),
+  entries: v.record(v.string(), entriesSchema),
 });
 
 export type CompilerInputStamp = v.InferOutput<typeof compilerInputStampSchema>;
@@ -64,8 +63,8 @@ const installedFingerprint = (
     ? null
     : `${stats.size}:${stats.mtimeMs}`;
 
-// Matches ts.sys.readFile: a byte order mark selects the encoding and is not
-// part of the text.
+// As the compiler reads a file: a byte order mark selects the encoding and is
+// not part of the text.
 const decodeSource = (bytes: Buffer): string => {
   if (bytes[0] === 0xfe && bytes[1] === 0xff) {
     const swapped = Buffer.from(bytes.subarray(2));
@@ -81,21 +80,52 @@ const decodeSource = (bytes: Buffer): string => {
   return bytes.toString("utf-8");
 };
 
-// Both the config-file host and the compiler host satisfy this: the listing
-// and read signatures follow ParseConfigFileHost, whose readonly results the
-// compiler host's mutable ones also fit.
-type QueryHost = Partial<
-  Pick<ts.ParseConfigFileHost, "readFile" | "fileExists" | "readDirectory">
-> &
-  Partial<
-    Pick<ts.CompilerHost, "directoryExists" | "realpath" | "getDirectories">
-  >;
+const EMPTY_ENTRIES: FileSystemEntries = { files: [], directories: [] };
 
-type ReadDirectoryArgs = Parameters<ts.ParseConfigFileHost["readDirectory"]>;
+/**
+ * A directory's entries as the compiler sees them: names only, a symbolic link
+ * counted as what it points at, sorted. Unreadable directories have none.
+ */
+const accessibleEntries = (directory: string): FileSystemEntries => {
+  const listed = Result.try(() =>
+    readdirSync(directory, { withFileTypes: true }),
+  );
+  if (listed.isErr()) {
+    return EMPTY_ENTRIES;
+  }
+  const files: string[] = [];
+  const directories: string[] = [];
+  for (const entry of listed.value) {
+    const target = entry.isSymbolicLink()
+      ? Result.try(() =>
+          statSync(path.join(directory, entry.name), { throwIfNoEntry: false }),
+        ).unwrapOr(undefined)
+      : entry;
+    if (target?.isFile() === true) {
+      files.push(entry.name);
+    } else if (target?.isDirectory() === true) {
+      directories.push(entry.name);
+    }
+  }
+  return { files: files.toSorted(), directories: directories.toSorted() };
+};
+
+const isFileOnDisk = (fileName: string) =>
+  statSync(fileName, { throwIfNoEntry: false })?.isFile() === true;
+
+const isDirectoryOnDisk = (directory: string) =>
+  statSync(directory, { throwIfNoEntry: false })?.isDirectory() === true;
+
+const realpathOnDisk = (fileName: string) =>
+  Result.try(() => realpathSync(fileName)).unwrapOr(fileName);
 
 export type CompilerInputRecorder = {
-  /** Routes the host's file-system questions through the recorder. */
-  wrap: <Host extends QueryHost>(host: Host) => Host;
+  /**
+   * The file system a TypeScript 7 program is built on: every question is
+   * answered from disk and recorded, except for `virtualFiles`, which are
+   * served from memory and never recorded.
+   */
+  fileSystem: (virtualFiles?: ReadonlyMap<string, string>) => FileSystem;
   /** Records a file the caller reads outside the compiler. */
   readFile: (fileName: string) => string | undefined;
   stamp: (context: string) => CompilerInputStamp;
@@ -126,8 +156,8 @@ const isAncestorWalkProbe = (fromAncestor: string) =>
   fromAncestor.startsWith("node_modules/");
 
 const toPortablePath = (value: string, base: string, token: string) => {
-  // Directory child names and readDirectory globs are relative answers, not
-  // paths to resolve against the generator's current working directory.
+  // A relative name is an answer, not a path to resolve against the
+  // generator's current working directory.
   if (!path.isAbsolute(value)) {
     return value;
   }
@@ -181,19 +211,8 @@ const relocateStamp = (
       absent: moveList(stamp.directories.absent),
     },
     realpaths: moveKeys(stamp.realpaths, move),
-    subdirectories: moveKeys(stamp.subdirectories, moveList),
-    listings: stamp.listings.map(
-      ([[directory, extensions, excludes, includes, depth], found]) => [
-        [
-          move(directory),
-          extensions,
-          excludes === null ? null : moveList(excludes),
-          includes === null ? null : moveList(includes),
-          depth,
-        ],
-        moveList(found),
-      ],
-    ),
+    // Entry names are relative to their directory and stay as they are.
+    entries: moveKeys(stamp.entries, keep),
   };
 };
 
@@ -249,8 +268,7 @@ const localizeStampOrThrow = (stamp: CompilerInputStamp, root: string) => {
     ...localized.directories.present,
     ...localized.directories.absent,
     ...Object.keys(localized.realpaths),
-    ...Object.keys(localized.subdirectories),
-    ...localized.listings.map(([[directory]]) => directory),
+    ...Object.keys(localized.entries),
   ]) {
     record(value);
   }
@@ -312,6 +330,72 @@ const existence = (answers: Map<string, boolean>) => {
   return { present: present.toSorted(), absent: absent.toSorted() };
 };
 
+// Every directory that holds a virtual file, so resolution can reach it.
+const virtualDirectoriesOf = (virtualFiles: ReadonlyMap<string, string>) => {
+  const directories = new Map<string, FileSystemEntries>();
+  const entriesOf = (directory: string) => {
+    const known = directories.get(directory);
+    if (known !== undefined) {
+      return known;
+    }
+    const created: FileSystemEntries = { files: [], directories: [] };
+    directories.set(directory, created);
+    return created;
+  };
+  for (const fileName of virtualFiles.keys()) {
+    entriesOf(path.dirname(fileName)).files.push(path.basename(fileName));
+    for (
+      let directory = path.dirname(fileName);
+      path.dirname(directory) !== directory;
+      directory = path.dirname(directory)
+    ) {
+      const siblings = entriesOf(path.dirname(directory)).directories;
+      const name = path.basename(directory);
+      if (siblings.includes(name)) {
+        break;
+      }
+      siblings.push(name);
+    }
+  }
+  return directories;
+};
+
+const mergeEntries = (
+  real: FileSystemEntries,
+  virtual: FileSystemEntries | undefined,
+): FileSystemEntries =>
+  virtual === undefined
+    ? real
+    : {
+        files: [...new Set([...real.files, ...virtual.files])].toSorted(),
+        directories: [
+          ...new Set([...real.directories, ...virtual.directories]),
+        ].toSorted(),
+      };
+
+/**
+ * The file system for a program built without recording: `virtualFiles` from
+ * memory, everything else read by the compiler itself.
+ */
+export const serveVirtualFiles = (
+  virtualFiles: ReadonlyMap<string, string>,
+): FileSystem => {
+  const virtualDirectories = virtualDirectoriesOf(virtualFiles);
+  return {
+    readFile: (fileName) => virtualFiles.get(fileName),
+    fileExists: (fileName) => (virtualFiles.has(fileName) ? true : undefined),
+    directoryExists: (directory) =>
+      virtualDirectories.has(directory) ? true : undefined,
+    realpath: (fileName) => (virtualFiles.has(fileName) ? fileName : undefined),
+    getAccessibleEntries: (directory) => {
+      const virtual = virtualDirectories.get(directory);
+      return virtual === undefined
+        ? undefined
+        : mergeEntries(accessibleEntries(directory), virtual);
+    },
+  };
+};
+
 export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   const contents = new Map<string, string | null>();
   const installed = new Map<string, string | null>();
@@ -319,10 +403,10 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   const files = new Map<string, boolean>();
   const directories = new Map<string, boolean>();
   const realpaths = new Map<string, string>();
-  const subdirectories = new Map<string, string[]>();
-  const listings = new Map<string, v.InferOutput<typeof readDirectorySchema>>();
-  // Reads the bytes once, so the recorded hash is of the bytes the compiler
-  // parsed even if the file changes while the program is built.
+  const entries = new Map<string, FileSystemEntries>();
+  // Reads the bytes once and hands the compiler that text, so the recorded
+  // hash is of the bytes it parsed even if the file changes while the program
+  // is built.
   const recordRead = (fileName: string) => {
     const bytes = readBytes(fileName);
     if (fileName.includes(NODE_MODULES)) {
@@ -338,61 +422,43 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     }
     return bytes === undefined ? undefined : decodeSource(bytes);
   };
-  // Mutations go through the concrete query type, so each replacement is
-  // checked against it; `wrap` hands the same object back with its own type.
-  const record = (host: QueryHost): void => {
-    const { fileExists, directoryExists, getDirectories, readDirectory } = host;
-    const resolveRealpath = host.realpath;
-    if (host.readFile !== undefined) {
-      host.readFile = recordRead;
-    }
-    if (fileExists !== undefined) {
-      host.fileExists = (fileName) => {
-        const exists = fileExists.call(host, fileName);
+  const fileSystem = (
+    virtualFiles: ReadonlyMap<string, string> = new Map(),
+  ): FileSystem => {
+    const virtualDirectories = virtualDirectoriesOf(virtualFiles);
+    return {
+      readFile: (fileName) =>
+        virtualFiles.get(fileName) ?? recordRead(fileName) ?? null,
+      fileExists: (fileName) => {
+        if (virtualFiles.has(fileName)) {
+          return true;
+        }
+        const exists = isFileOnDisk(fileName);
         files.set(fileName, exists);
         return exists;
-      };
-    }
-    if (directoryExists !== undefined) {
-      host.directoryExists = (directory) => {
-        const exists = directoryExists.call(host, directory);
+      },
+      directoryExists: (directory) => {
+        if (virtualDirectories.has(directory)) {
+          return true;
+        }
+        const exists = isDirectoryOnDisk(directory);
         directories.set(directory, exists);
         return exists;
-      };
-    }
-    if (resolveRealpath !== undefined) {
-      host.realpath = (fileName) => {
-        const real = resolveRealpath.call(host, fileName);
+      },
+      realpath: (fileName) => {
+        if (virtualFiles.has(fileName)) {
+          return fileName;
+        }
+        const real = realpathOnDisk(fileName);
         realpaths.set(fileName, real);
         return real;
-      };
-    }
-    if (getDirectories !== undefined) {
-      host.getDirectories = (directory) => {
-        const found = getDirectories.call(host, directory);
-        subdirectories.set(directory, [...found]);
-        return found;
-      };
-    }
-    if (readDirectory !== undefined) {
-      host.readDirectory = (...args: ReadDirectoryArgs) => {
-        const found = readDirectory.call(host, ...args);
-        const [directory, extensions, excludes, includes, depth] = args;
-        const key: v.InferOutput<typeof readDirectorySchema>[0] = [
-          directory,
-          [...extensions],
-          excludes === undefined ? null : [...excludes],
-          [...includes],
-          depth ?? null,
-        ];
-        listings.set(JSON.stringify(key), [key, [...found]]);
-        return found;
-      };
-    }
-  };
-  const wrap = <Host extends QueryHost>(host: Host): Host => {
-    record(host);
-    return host;
+      },
+      getAccessibleEntries: (directory) => {
+        const found = accessibleEntries(directory);
+        entries.set(directory, found);
+        return mergeEntries(found, virtualDirectories.get(directory));
+      },
+    };
   };
   const stamp = (
     context: string,
@@ -405,13 +471,17 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     files: existence(files),
     directories: existence(directories),
     realpaths: sortedRecord(realpaths),
-    subdirectories: sortedRecord(subdirectories),
-    listings: [...listings]
-      .toSorted(([left], [right]) => compareKeys(left, right))
-      .map(([, listing]) => listing),
+    entries: sortedRecord(
+      new Map(
+        [...entries].map(([directory, found]) => [
+          directory,
+          { files: [...found.files], directories: [...found.directories] },
+        ]),
+      ),
+    ),
   });
   return {
-    wrap,
+    fileSystem,
     readFile: recordRead,
     stamp: (context) => stamp(context, contents, installed),
     portableStamp: (context, root) =>
@@ -434,8 +504,9 @@ const statOrUndefined = (fileName: string) =>
 
 type Check = () => boolean | Promise<boolean>;
 
-// The same answers ts.sys gives. Reads and real paths are asked concurrently
-// so the file system can overlap the I/O; stat calls are cheap enough inline.
+// The same answers the recording file system gave. Reads and real paths are
+// asked concurrently so the file system can overlap the I/O; stat calls are
+// cheap enough inline.
 function* checks(stamp: CompilerInputStamp): Generator<Check> {
   for (const [fileName, hash] of Object.entries(stamp.contents)) {
     yield async () => {
@@ -473,24 +544,14 @@ function* checks(stamp: CompilerInputStamp): Generator<Check> {
       return (resolved.isOk() ? resolved.value : fileName) === real;
     };
   }
-  for (const [directory, found] of Object.entries(stamp.subdirectories)) {
-    yield () => sameStrings(ts.sys.getDirectories(directory), found);
-  }
-  for (const [
-    [directory, extensions, excludes, includes, depth],
-    found,
-  ] of stamp.listings) {
-    yield () =>
-      sameStrings(
-        ts.sys.readDirectory(
-          directory,
-          extensions ?? undefined,
-          excludes ?? undefined,
-          includes ?? undefined,
-          depth ?? undefined,
-        ),
-        found,
+  for (const [directory, found] of Object.entries(stamp.entries)) {
+    yield () => {
+      const current = accessibleEntries(directory);
+      return (
+        sameStrings(current.files, found.files) &&
+        sameStrings(current.directories, found.directories)
       );
+    };
   }
 }
 
@@ -523,7 +584,12 @@ export const isCompilerInputStampCurrent = async (
   return current;
 };
 
-/** Hashes the relative and workspace import closure of a script. */
+const scriptImports = new Bun.Transpiler({ loader: "ts" });
+
+/**
+ * Hashes the relative and workspace import closure of a script: the modules
+ * it runs, so a type-only import, which runs nothing, is not part of it.
+ */
 export const scriptSourceHash = (entry: string): string => {
   const hash = createSha256();
   // Names relative to the entry: checkouts at other paths hash alike. Real
@@ -542,10 +608,9 @@ export const scriptSourceHash = (entry: string): string => {
     hash.update(
       JSON.stringify([repoRelativePath(base, file), sha256Hex(source)]),
     );
-    for (const { fileName } of ts.preProcessFile(source, true, true)
-      .importedFiles) {
-      if (fileName.startsWith(".") || fileName.startsWith("@stll/")) {
-        pending.push(Bun.resolveSync(fileName, path.dirname(file)));
+    for (const { path: specifier } of scriptImports.scanImports(source)) {
+      if (specifier.startsWith(".") || specifier.startsWith("@stll/")) {
+        pending.push(Bun.resolveSync(specifier, path.dirname(file)));
       }
     }
   }

@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   CHAT_THREAD_ORIGIN,
   type ChatThreadOrigin,
 } from "@stll/api-contract/chat";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { classifyFailure } from "@stll/errors";
 
 import {
@@ -32,7 +33,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -124,15 +128,21 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-    workspaceId: t.Optional(tSafeId("workspace")),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.chatThreadListPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    search: v.optional(
+      v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+    ),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.chatThreadListPageSizeMax),
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;

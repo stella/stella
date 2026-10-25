@@ -30,9 +30,6 @@
   "apps/api/src/lib/chat/ai-data-policy.contract.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/lib/elysia-optional-union-coercion.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/lib/mcp-upstream/connections.test.ts": [
     "local-export-collision:createMcpClientForConnection",
     "local-export-collision:proxyMcpToolCall"

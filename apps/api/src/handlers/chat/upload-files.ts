@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -70,7 +71,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
-import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { LIMITS } from "@/api/lib/limits";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -1189,7 +1190,7 @@ const parseMessageFileDataUrl = ({ part }: ParseMessageFileDataUrlProps) => {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: `Chat attachment exceeds the ${FILE_SIZE_LIMITS.chatContextFile} size limit`,
+          message: `Chat attachment exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB size limit`,
           cause: parseResult.error,
         }),
       );

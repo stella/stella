@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -26,10 +26,10 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
-const requestQuery = t.Object({
-  code: t.Optional(t.String()),
-  state: t.Optional(t.String()),
-  error: t.Optional(t.String()),
+const requestQuery = v.object({
+  code: v.optional(v.string()),
+  state: v.optional(v.string()),
+  error: v.optional(v.string()),
 });
 
 const config = {

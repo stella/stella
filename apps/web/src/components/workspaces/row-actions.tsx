@@ -132,7 +132,7 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -742,7 +742,7 @@ export const RowActions = ({
 
     if (desktopEditLockState === "locked-by-me") {
       const requested = await Result.tryPromise(async () =>
-        unwrapEden(
+        unwrapApiResponse(
           await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             ["desktop-edit-sessions"].release.post({
@@ -884,7 +884,7 @@ export const RowActions = ({
               }),
               targetEntityId: toSafeId<"entity">(targetEntityId),
             });
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         });
         if (Result.isError(result)) {
           failedCount++;

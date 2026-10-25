@@ -37,7 +37,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
@@ -213,7 +213,7 @@ const ExportReportDialogBody = ({
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports.templates.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -260,7 +260,7 @@ const ExportReportDialogBody = ({
       if (response.error) {
         return { status: "error" as const, error: response.error };
       }
-      return { status: "success" as const, data: unwrapEden(response) };
+      return { status: "success" as const, data: unwrapApiResponse(response) };
     });
     if (!isCurrentStorageOwner(owner)) {
       return;

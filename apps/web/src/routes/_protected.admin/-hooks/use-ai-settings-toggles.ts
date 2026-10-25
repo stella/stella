@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   organizationSettingsKeys,
@@ -49,19 +49,19 @@ const useToggleSection = (section: ToggleSection) => {
     mutationFn: async (next: boolean) => {
       switch (section) {
         case "promptCaching":
-          return unwrapEden(
+          return unwrapApiResponse(
             await api["organization-settings"].post({
               promptCachingEnabled: next,
             }),
           );
         case "documentProcessing":
-          return unwrapEden(
+          return unwrapApiResponse(
             await api["organization-settings"].post({
               documentProcessingMode: next ? SEARCHABLE_TEXT : PROCESSING_OFF,
             }),
           );
         case "memoryExtraction":
-          return unwrapEden(
+          return unwrapApiResponse(
             await api["organization-settings"].post({
               memoryExtractionEnabled: next,
             }),

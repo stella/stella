@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -16,8 +15,9 @@ test.each([
   { year: Number.NaN, accepted: false },
   { year: Number.POSITIVE_INFINITY, accepted: false },
 ])("API and web accept the same integer year: $year", ({ year, accepted }) => {
-  expect(Value.Check(listStatutesQuerySchema, { country: "CZE", year })).toBe(
-    accepted,
-  );
+  // The query string carries the year as text, exactly as a browser sends it.
+  expect(
+    v.is(listStatutesQuerySchema, { country: "CZE", year: String(year) }),
+  ).toBe(accepted);
   expect(v.safeParse(lawYearSearchSchema, year).success).toBe(accepted);
 });

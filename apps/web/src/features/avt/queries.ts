@@ -9,7 +9,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { VerificationRunStatus } from "@/features/avt/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -135,7 +135,7 @@ export const verificationRunOptions = (workspaceId: string, runId: string) =>
         .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .verifications({ runId: toSafeId<"legalListVerificationRun">(runId) })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     // Kept polling while the tab is hidden, so a reviewer who starts a run
     // and switches away comes back to the claims that landed meanwhile.
@@ -154,7 +154,7 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
       const chunks = chunkItems(key.documents, LATEST_READ_CHUNK);
       const pages = await Promise.all(
         chunks.map(async (documents) =>
-          unwrapEden(
+          unwrapApiResponse(
             await api
               .lists({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
               .verifications.latest.post(
@@ -216,7 +216,7 @@ export const verificationHistoryOptions = ({
           },
           fetch: { signal },
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor,

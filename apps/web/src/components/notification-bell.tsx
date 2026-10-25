@@ -32,7 +32,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -104,7 +104,7 @@ export const NotificationBell = () => {
       return;
     }
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .notifications({
             notificationId: toSafeId<"notification">(notification.id),
@@ -125,7 +125,7 @@ export const NotificationBell = () => {
 
   const markAllRead = async () => {
     const requested = await Result.tryPromise(async () =>
-      unwrapEden(await api.notifications["read-all"].post()),
+      unwrapApiResponse(await api.notifications["read-all"].post()),
     );
     if (Result.isError(requested)) {
       reportFailure(requested.error);

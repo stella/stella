@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import type { authenticateLegalResolveToken } from "@/api/handlers/legal-resolve/authentication";
 import {
@@ -9,6 +8,8 @@ import {
 } from "@/api/handlers/legal-resolve/authorization";
 import { createLegalResolveRoute } from "@/api/handlers/legal-resolve/routes";
 import { hasLawReadScope } from "@/api/handlers/legal-resolve/scope";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
@@ -17,6 +18,7 @@ import {
   McpOrganizationAccessError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const authorizationHeader = { authorization: "Bearer token" };
 const session = {
@@ -40,19 +42,28 @@ const limit = (scope: string): RateLimitOptions => ({
   max: 1,
 });
 
-const routeApp = (authenticate: typeof authenticateLegalResolveToken) =>
-  new Elysia().use(
-    createLegalResolveRoute({
-      authenticate,
-      recordAudit: async () => undefined,
-      publicLawEnabled: () => true,
-      resolveSessionContext,
-      decisionRateLimit: limit("decision"),
-      lawRateLimit: limit("law"),
-      resolveDecision: async () => ({ status: "country_unavailable" }),
-      resolveLaw: async () => ({ status: "country_unavailable" }),
+/** The legal resolve routes behind the error boundary, on a real server. */
+const serveLegalResolve = (
+  dependencies: Parameters<typeof createLegalResolveRoute>[0],
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: createLegalResolveRoute(dependencies),
+      middleware: [errorBoundary],
     }),
   );
+
+const routeApp = (authenticate: typeof authenticateLegalResolveToken) =>
+  serveLegalResolve({
+    authenticate,
+    recordAudit: async () => undefined,
+    publicLawEnabled: () => true,
+    resolveSessionContext,
+    decisionRateLimit: limit("decision"),
+    lawRateLimit: limit("law"),
+    resolveDecision: async () => ({ status: "country_unavailable" }),
+    resolveLaw: async () => ({ status: "country_unavailable" }),
+  });
 
 test("one request is authorized once, whoever asks first", async () => {
   const seen: Request[] = [];
@@ -253,22 +264,20 @@ test("legal resolve refuses access while the public-law deployment is off", asyn
 
 test("a legal resolve request authenticates its token once", async () => {
   let authenticationCount = 0;
-  const app = new Elysia().use(
-    createLegalResolveRoute({
-      authenticate: async () => {
-        authenticationCount += 1;
-        return Result.ok(session);
-      },
-      recordAudit: async () => undefined,
-      publicLawEnabled: () => true,
-      resolveSessionContext,
-      decisionRateLimit: limit("one-read-decision"),
-      lawRateLimit: limit("one-read-law"),
-      resolveDecision: async () => ({ status: "country_unavailable" }),
-    }),
-  );
+  await using app = serveLegalResolve({
+    authenticate: async () => {
+      authenticationCount += 1;
+      return Result.ok(session);
+    },
+    recordAudit: async () => undefined,
+    publicLawEnabled: () => true,
+    resolveSessionContext,
+    decisionRateLimit: limit("one-read-decision"),
+    lawRateLimit: limit("one-read-law"),
+    resolveDecision: async () => ({ status: "country_unavailable" }),
+  });
 
-  const response = await app.handle(
+  const response = await app.fetch(
     new Request(
       "http://localhost/case/CZE/decisions/resolve?identifier=decision",
       { headers: authorizationHeader },
@@ -280,9 +289,9 @@ test("a legal resolve request authenticates its token once", async () => {
 });
 
 test("decision and law routes consume separate rate-limit budgets", async () => {
-  const app = routeApp(async () => Result.ok(session));
+  await using app = routeApp(async () => Result.ok(session));
   const request = async (path: string) =>
-    await app.handle(
+    await app.fetch(
       new Request(`http://localhost${path}`, { headers: authorizationHeader }),
     );
 
@@ -325,10 +334,10 @@ test("legal resolve captures live user-session outages and retains the audit pri
 test.each([undefined, "Bearer rejected"])(
   "unauthenticated routes return a token challenge for %s",
   async (authorization) => {
-    const app = routeApp(async () =>
+    await using app = routeApp(async () =>
       Result.err(new McpAuthenticationError({ message: "Rejected" })),
     );
-    const response = await app.handle(
+    const response = await app.fetch(
       new Request(
         "http://localhost/case/CZE/decisions/resolve?identifier=decision",
         { headers: authorization === undefined ? {} : { authorization } },

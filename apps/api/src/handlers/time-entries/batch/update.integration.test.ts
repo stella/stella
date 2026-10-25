@@ -7,7 +7,6 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -17,6 +16,7 @@ import {
   timeTimers,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -216,8 +216,8 @@ test("approval refuses its actor's direct and projected running timers without a
       { ids: [readyId, runningId], action: "approve" },
       events,
     );
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
+    expect(result).toBeInstanceOf(HttpStatusResponse);
+    if (result instanceof HttpStatusResponse) {
       expect(result.code).toBe(400);
       expect(result.response).toMatchObject({
         message: "Stop running timers before approval",

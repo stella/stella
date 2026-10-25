@@ -1,28 +1,34 @@
-import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
+import { afterAll, describe, expect, test } from "bun:test";
 
+import { authMetadataRoute } from "@/api/handlers/auth/routes";
+import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
+import { createHttpApp } from "@/api/http/app";
+import { PRIVATE_CACHE_CONTROL, responseCachePolicy } from "@/api/http/cache";
+import type { CachePolicy } from "@/api/http/cache";
+import { appendSetCookieHeaders } from "@/api/http/context";
+import { routes } from "@/api/http/route";
+import type {
+  Middleware,
+  RouteDefinition,
+  RouteRequest,
+} from "@/api/http/route";
 import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
-  applyDiscoveryMetadataCachePolicy,
-  DISCOVERY_METADATA_PATHS,
-} from "@/api/lib/auth/discovery-metadata-cache";
-import {
-  applyResponseCachePolicy,
-  finalizeResponseCachePolicy,
-  PRIVATE_CACHE_CONTROL,
+  API_SECURITY_HEADERS,
+  DISCOVERY_METADATA_CACHE_POLICY,
   RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-  setSecurityHeaders,
+  securityHeaders,
 } from "@/api/lib/security-headers";
 import {
   MCP_RESOURCE_MODE_CONFIG,
   ROOT_MCP_DISCOVERY_PATH,
 } from "@/api/mcp/resource-policy-contract";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const DISCOVERY_CACHE_CONTROL =
   "public, max-age=300, stale-while-revalidate=3600";
@@ -37,58 +43,116 @@ const advertisedDiscoveryPaths = new Set([
   ),
 ]);
 
-const discoveryPolicyApp = new Elysia()
-  .mapResponse(({ responseValue, set }) =>
-    finalizeResponseCachePolicy({ response: responseValue, set }),
-  )
-  .onRequest(({ request, set }) => {
-    setSecurityHeaders(set);
-    applyDiscoveryMetadataCachePolicy({ request, set });
-  })
-  .all("/*", ({ request, set }) => {
-    if (request.headers.has("x-force-error")) {
-      set.status = 404;
-      return { error: "not found" };
-    }
-    return { ok: true };
-  });
+const definition = (
+  answer: (request: RouteRequest) => unknown,
+  cache?: CachePolicy,
+): RouteDefinition => ({
+  access: "public",
+  config: {},
+  ...(cache === undefined ? {} : { cache }),
+  run: async (request) => await answer(request),
+});
+
+/** Turns any answer into a 500 after the handler ran, as a late failure would. */
+const lateFailure: Middleware = async (ctx, inner) => {
+  const response = await inner();
+  return ctx.request.headers.has("x-late-failure")
+    ? new Response("failed", { status: 500, headers: response.headers })
+    : response;
+};
+
+const servers: { stop: () => Promise<void> }[] = [];
+afterAll(async () => {
+  await Promise.all(servers.map(async (server) => await server.stop()));
+});
+
+const serve = (app: ReturnType<typeof createHttpApp>) => {
+  const server = serveForTest(app);
+  servers.push(server);
+  return server;
+};
+
+// The production order: the error boundary sits inside the security headers,
+// so a refusal it answers (an unrouted path) leaves through them too.
+const discoveryPolicyServer = serve(
+  createHttpApp({
+    middleware: [responseCachePolicy, securityHeaders, errorBoundary],
+    routes: routes({
+      "/discovery": {
+        GET: definition(({ ctx }) => {
+          if (ctx.request.headers.has("x-force-error")) {
+            ctx.set.status = 404;
+            return { error: "not found" };
+          }
+          return { ok: true };
+        }, DISCOVERY_METADATA_CACHE_POLICY),
+      },
+      "/private": { GET: definition(() => ({ ok: true })) },
+    }),
+  }),
+);
 
 describe("discovery metadata cache policy", () => {
-  test("covers every advertised discovery path", async () => {
-    expect(DISCOVERY_METADATA_PATHS).toEqual(advertisedDiscoveryPaths);
+  test("every advertised discovery path is served with the discovery cache policy", () => {
+    const mounted = [
+      ...authMetadataRoute,
+      ...createMcpRoute({
+        handleMcpHttpRequest: async () =>
+          await Promise.resolve(new Response("Unexpected MCP transport")),
+      }),
+    ];
+    const discoveryPaths = new Set(
+      mounted
+        .filter(
+          (entry) =>
+            entry.method === "GET" &&
+            entry.definition.cache === DISCOVERY_METADATA_CACHE_POLICY,
+        )
+        .map((entry) => entry.path),
+    );
+    expect(discoveryPaths).toEqual(advertisedDiscoveryPaths);
+  });
 
-    for (const path of advertisedDiscoveryPaths) {
-      for (const method of ["GET", "HEAD"]) {
-        const response = await discoveryPolicyApp.handle(
-          new Request(`http://localhost${path}`, { method }),
-        );
-        expect(response.status).toBe(200);
-        expect(response.headers.get("cache-control")).toBe(
-          DISCOVERY_CACHE_CONTROL,
-        );
-      }
+  test("a discovery answer is publicly cacheable for GET and HEAD", async () => {
+    for (const method of ["GET", "HEAD"]) {
+      const response = await discoveryPolicyServer.fetch(
+        new Request("http://localhost/discovery", { method }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe(
+        DISCOVERY_CACHE_CONTROL,
+      );
     }
   });
 
   test("keeps discovery errors and non-discovery responses private", async () => {
-    const discoveryError = await discoveryPolicyApp.handle(
-      new Request(
-        `http://localhost${ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH}`,
-        { headers: { "x-force-error": "true" } },
-      ),
+    const discoveryError = await discoveryPolicyServer.fetch(
+      new Request("http://localhost/discovery", {
+        headers: { "x-force-error": "true" },
+      }),
     );
     expect(discoveryError.status).toBe(404);
     expect(discoveryError.headers.get("cache-control")).toBe(
       PRIVATE_CACHE_CONTROL,
     );
 
-    const privateResponse = await discoveryPolicyApp.handle(
+    const privateResponse = await discoveryPolicyServer.fetch(
       new Request("http://localhost/private"),
     );
     expect(privateResponse.status).toBe(200);
     expect(privateResponse.headers.get("cache-control")).toBe(
       PRIVATE_CACHE_CONTROL,
     );
+  });
+
+  test("every answer carries the API security headers", async () => {
+    const response = await discoveryPolicyServer.fetch(
+      new Request("http://localhost/nowhere"),
+    );
+    expect(response.status).toBe(404);
+    for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
+      expect(response.headers.get(name)).toBe(value);
+    }
   });
 });
 
@@ -102,60 +166,90 @@ describe("raw document response security", () => {
   });
 });
 
-test("private icon caching survives finalization while late errors remain uncacheable", () => {
-  const set = { headers: {}, status: 200 };
-  const response = new Blob([new Uint8Array([1])], { type: "image/png" });
-  applyResponseCachePolicy({
-    cache: { kind: "private", maxAge: 3600 },
-    response,
-    set,
-  });
-  finalizeResponseCachePolicy({ response, set });
-  expect(new Headers(set.headers).get("cache-control")).toBe(
-    "private, max-age=3600",
+test("private icon caching survives finalization while late errors remain uncacheable", async () => {
+  const server = serve(
+    createHttpApp({
+      middleware: [responseCachePolicy, lateFailure],
+      routes: routes({
+        "/icon": {
+          GET: definition(
+            () => new Blob([new Uint8Array([1])], { type: "image/png" }),
+            { kind: "private", maxAge: 3600 },
+          ),
+        },
+      }),
+    }),
   );
-  set.status = 500;
-  finalizeResponseCachePolicy({ response, set });
-  expect(new Headers(set.headers).get("cache-control")).toBe(
-    "private, no-store",
+  const icon = await server.fetch(new Request("http://localhost/icon"));
+  expect(icon.status).toBe(200);
+  expect(icon.headers.get("cache-control")).toBe("private, max-age=3600");
+
+  const failed = await server.fetch(
+    new Request("http://localhost/icon", {
+      headers: { "x-late-failure": "true" },
+    }),
   );
+  expect(failed.status).toBe(500);
+  expect(failed.headers.get("cache-control")).toBe("private, no-store");
 });
 
 describe("response cookies prevent public caching", () => {
-  test.each(["pending", "response", "cookie"] as const)(
+  const RENEWED_COOKIE = "session=renewed; HttpOnly; Path=/";
+  const publicCache: CachePolicy = { kind: "public", maxAge: 300 };
+
+  const cookieServer = serve(
+    createHttpApp({
+      middleware: [responseCachePolicy],
+      routes: routes({
+        "/pending": {
+          GET: definition(({ ctx }) => {
+            ctx.set.headers["set-cookie"] = RENEWED_COOKIE;
+            return new Response("public representation");
+          }, publicCache),
+        },
+        "/response": {
+          GET: definition(
+            () =>
+              new Response("public representation", {
+                headers: { "set-cookie": RENEWED_COOKIE },
+              }),
+            publicCache,
+          ),
+        },
+        // A Better Auth answer that refreshed the session hands its cookies
+        // to the request being answered.
+        "/auth-answer": {
+          GET: definition(({ ctx }) => {
+            appendSetCookieHeaders(
+              ctx.set.headers,
+              new Headers({ "set-cookie": RENEWED_COOKIE }),
+            );
+            return new Response("public representation");
+          }, publicCache),
+        },
+        "/public": {
+          GET: definition(
+            () => new Response("public representation"),
+            publicCache,
+          ),
+        },
+      }),
+    }),
+  );
+
+  test("an answer without a cookie keeps its public policy", async () => {
+    const response = await cookieServer.fetch(
+      new Request("http://localhost/public"),
+    );
+    expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+  });
+
+  test.each(["pending", "response", "auth-answer"] as const)(
     "keeps an otherwise public response private when a late cookie comes from %s",
     async (source) => {
-      const app = new Elysia()
-        .use(createAuthResponseCookiesPlugin())
-        .onAfterHandle(({ set, responseValue, cookie }) => {
-          if (source === "pending") {
-            set.headers["set-cookie"] = "session=renewed; HttpOnly; Path=/";
-          } else if (source === "cookie") {
-            const sessionCookie =
-              cookie["session"] ?? panic("Session cookie fixture is missing");
-            sessionCookie.value = "renewed";
-          } else if (responseValue instanceof Response) {
-            responseValue.headers.append(
-              "set-cookie",
-              "session=renewed; HttpOnly; Path=/",
-            );
-          }
-        })
-        .mapResponse(({ responseValue, set }) =>
-          finalizeResponseCachePolicy({ response: responseValue, set }),
-        )
-        .get("/", ({ set }) => {
-          const response = new Response("public representation");
-          expect(
-            applyResponseCachePolicy({
-              cache: { kind: "public", maxAge: 300 },
-              response,
-              set,
-            }),
-          ).toBe("public, max-age=300");
-          return response;
-        });
-      const response = await app.handle(new Request("http://localhost/"));
+      const response = await cookieServer.fetch(
+        new Request(`http://localhost/${source}`),
+      );
       expect(response.status).toBe(200);
       expect(response.headers.getSetCookie()).toHaveLength(1);
       expect(response.headers.getSetCookie().at(0)).toContain(
@@ -165,20 +259,26 @@ describe("response cookies prevent public caching", () => {
     },
   );
 
-  test("checks pending cookie headers without depending on header casing or raw responses", () => {
+  test("checks pending cookie headers without depending on header casing", async () => {
     for (const name of ["set-cookie", "Set-Cookie", "SET-COOKIE"]) {
-      const set = { headers: { [name]: "session=renewed; Path=/" } };
-      expect(
-        applyResponseCachePolicy({
-          cache: { kind: "public", maxAge: 300 },
-          response: { ok: true },
-          set,
+      const server = serve(
+        createHttpApp({
+          middleware: [responseCachePolicy],
+          routes: routes({
+            "/": {
+              GET: definition(({ ctx }) => {
+                ctx.set.headers[name] = "session=renewed; Path=/";
+                return { ok: true };
+              }, publicCache),
+            },
+          }),
         }),
-      ).toBe("private, no-store");
-      finalizeResponseCachePolicy({ response: { ok: true }, set });
-      expect(new Headers(set.headers).get("cache-control")).toBe(
-        "private, no-store",
       );
+      const response = await server.fetch(new Request("http://localhost/"));
+      expect(response.headers.getSetCookie()).toEqual([
+        "session=renewed; Path=/",
+      ]);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
     }
   });
 });
