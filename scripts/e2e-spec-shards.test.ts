@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import { e2eRunnerInputs } from "./e2e-runner-inputs";
 import {
   listE2eSpecs,
   selectE2eSpecs,
@@ -221,9 +222,10 @@ test.each(["globalSetup", "globalTeardown"] as const)(
         hook === "globalSetup" ? "global-setup.ts" : "global-teardown.ts";
       write(
         "apps/web/e2e/playwright.config.ts",
-        `export default { testDir: "./specs", ${hook}: "./${hookFile}" };\n`,
+        `export const hook = "./${hookFile}"; export default { testDir: "./specs", ${hook}: hook };\n`,
       );
       write(`apps/web/e2e/${hookFile}`, 'import "./helpers/only-a";\n');
+      expect(e2eRunnerInputs(root)).toContain(`apps/web/e2e/${hookFile}`);
       expect(selectedE2ePlan(["apps/web/e2e/helpers/only-a.ts"], root)).toEqual(
         {
           status: "full",

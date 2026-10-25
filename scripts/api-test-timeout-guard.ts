@@ -1,5 +1,12 @@
 import { readFile } from "node:fs/promises";
-import ts from "typescript6";
+
+import {
+  type Expression,
+  type Node,
+  parseSource,
+  type Program,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const TEST_GLOB = "apps/api/**/*.test.ts";
 const SHORT_TIMEOUT_MAX_MS = 2000;
@@ -9,30 +16,26 @@ const SHORT_TIMEOUT_MAX_MS = 2000;
 const TIMEOUT_MARKER = /\/\/ timeout(?: under test|: \S)/u;
 const SHARED_DEADLINE = "HAPPY_PATH_TIMEOUT_MS";
 
-const unwrap = (expression: ts.Expression): ts.Expression =>
-  ts.isParenthesizedExpression(expression) ||
-  ts.isAsExpression(expression) ||
-  ts.isSatisfiesExpression(expression) ||
-  ts.isTypeAssertionExpression(expression)
+const unwrap = (expression: Expression): Expression =>
+  expression.type === "ParenthesizedExpression" ||
+  expression.type === "TSAsExpression" ||
+  expression.type === "TSSatisfiesExpression" ||
+  expression.type === "TSTypeAssertion"
     ? unwrap(expression.expression)
     : expression;
 
-const constLiterals = (file: ts.SourceFile) => {
-  const bindings = new Map<string, ts.Expression>();
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclarationList(node) &&
-      node.getFirstToken(file)?.kind === ts.SyntaxKind.ConstKeyword
-    ) {
-      for (const declaration of node.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-          bindings.set(declaration.name.text, declaration.initializer);
-        }
+const constLiterals = (file: Program) => {
+  const bindings = new Map<string, Expression>();
+  walk(file, (node) => {
+    if (node.type !== "VariableDeclaration" || node.kind !== "const") {
+      return;
+    }
+    for (const declaration of node.declarations) {
+      if (declaration.id.type === "Identifier" && declaration.init) {
+        bindings.set(declaration.id.name, declaration.init);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return bindings;
 };
 
@@ -42,34 +45,34 @@ const constLiterals = (file: ts.SourceFile) => {
  * (arithmetic, ternaries, imports, members, `let`, parameters) is unproven.
  */
 const provenMilliseconds = (
-  expression: ts.Expression,
-  bindings: ReadonlyMap<string, ts.Expression>,
+  expression: Expression,
+  bindings: ReadonlyMap<string, Expression>,
   seen = new Set<string>(),
 ): number | null => {
   const value = unwrap(expression);
-  if (ts.isNumericLiteral(value)) {
-    return Number(value.text);
+  if (value.type === "Literal" && typeof value.value === "number") {
+    return value.value;
   }
-  if (ts.isIdentifier(value) && !seen.has(value.text)) {
-    const bound = bindings.get(value.text);
+  if (value.type === "Identifier" && !seen.has(value.name)) {
+    const bound = bindings.get(value.name);
     return bound === undefined
       ? null
-      : provenMilliseconds(bound, bindings, new Set([...seen, value.text]));
+      : provenMilliseconds(bound, bindings, new Set([...seen, value.name]));
   }
   return null;
 };
 
 /** The value an object literal gives `timeoutMs`; shorthand reads the binding. */
-const timeoutValue = (node: ts.Node): ts.Expression | undefined => {
-  if (ts.isShorthandPropertyAssignment(node)) {
-    return node.name.text === "timeoutMs" ? node.name : undefined;
-  }
+const timeoutValue = (node: Node): Expression | undefined => {
   if (
-    ts.isPropertyAssignment(node) &&
-    (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-    node.name.text === "timeoutMs"
+    node.type === "Property" &&
+    !node.computed &&
+    node.kind === "init" &&
+    !node.method &&
+    ((node.key.type === "Identifier" && node.key.name === "timeoutMs") ||
+      (node.key.type === "Literal" && node.key.value === "timeoutMs"))
   ) {
-    return node.initializer;
+    return node.value;
   }
   return undefined;
 };
@@ -84,34 +87,29 @@ export const findApiTestTimeoutViolations = (
   source: string,
   path = "fixture.test.ts",
 ) => {
-  const file = ts.createSourceFile(
-    path,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const bindings = constLiterals(file);
+  const parsed = parseSource(path, source);
+  const bindings = constLiterals(parsed.program);
   const lines = source.split("\n");
   const violations: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(parsed.program, (node, ancestors) => {
+    if (ancestors.at(-1)?.type !== "ObjectExpression") {
+      return;
+    }
     const value = timeoutValue(node);
     if (value !== undefined) {
-      const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
+      const { line } = parsed.locate(node.start);
       const unwrapped = unwrap(value);
       const shared =
-        ts.isIdentifier(unwrapped) && unwrapped.text === SHARED_DEADLINE;
+        unwrapped.type === "Identifier" && unwrapped.name === SHARED_DEADLINE;
       const proven = provenMilliseconds(value, bindings);
       const long = proven !== null && proven > SHORT_TIMEOUT_MAX_MS;
-      if (!shared && !long && !TIMEOUT_MARKER.test(lines[line] ?? "")) {
+      if (!shared && !long && !TIMEOUT_MARKER.test(lines[line - 1] ?? "")) {
         violations.push(
-          `${path}:${line + 1}: use ${SHARED_DEADLINE}, a deadline provably over ${SHORT_TIMEOUT_MAX_MS} ms, or mark the line "// timeout under test" or "// timeout: <reason>"`,
+          `${path}:${line}: use ${SHARED_DEADLINE}, a deadline provably over ${SHORT_TIMEOUT_MAX_MS} ms, or mark the line "// timeout under test" or "// timeout: <reason>"`,
         );
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return violations;
 };
 
