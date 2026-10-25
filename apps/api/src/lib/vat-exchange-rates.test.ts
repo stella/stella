@@ -29,14 +29,19 @@ const valueOf = <T, E>(result: Result<T, E>) => {
 
 describe("official VAT exchange rates", () => {
   test("normalizes the recorded ČNB množství column", async () => {
+    const seen: string[] = [];
     const rate = valueOf(
       await fetchVatExchangeRate({
         country: "CZ",
         currency: "JPY",
         referenceDate: "2026-10-24",
-        fetcher: fixtureFetch(await fixture("cnb-2026-10-24.txt")),
+        fetcher: fixtureFetch(await fixture("cnb-2026-10-24.txt"), seen),
       }),
     );
+    // ČNB's published daily-rate file for the reference date.
+    expect(seen).toEqual([
+      "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=24.10.2026",
+    ]);
     expect(rate).toEqual({
       rate: "0.1425",
       source: "CNB",
