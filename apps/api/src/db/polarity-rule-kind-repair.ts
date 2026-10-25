@@ -142,7 +142,7 @@ const correctUntilEmpty = async (
   }
 };
 
-export const createPolarityRuleKindRepair = (
+const createPolarityRuleKindRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
   name: POLARITY_RULE_KIND_REPAIR_NAME,

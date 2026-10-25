@@ -718,6 +718,30 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
   },
   {
+    migration: "20261016100500_case_law_polarity_kind_evidence",
+    form: "add-column",
+    reason:
+      "The kind and cited_part columns use non-volatile literal defaults on PostgreSQL's fast-default catalog path; the four provenance columns are nullable and default-free. No existing rows are rewritten, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_case_law_polarity_kind_evidence",
+    form: "add-constraint",
+    reason:
+      "The six CHECKs are added NOT VALID without scanning existing polarity rules or citations, under 1s lock_timeout and 5s statement_timeout; the registered online-DDL owner validates them after the schema lock is released.",
+  },
+  {
+    migration: "20261016100700_case_law_review_text_revision",
+    form: "add-column",
+    reason:
+      "The stance and doctrine text-revision columns are nullable and default-free, catalog-only additions without rewriting review rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100700_case_law_review_text_revision",
+    form: "add-constraint",
+    reason:
+      "The two SHA-256 revision CHECKs are added NOT VALID without scanning existing stance or doctrine reviews, under 1s lock_timeout and 5s statement_timeout; the registered online-DDL owner validates them after the schema lock is released.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:
