@@ -238,29 +238,26 @@ export const OAUTH_CLIENT_REGISTRATION_FIXTURES = {
   },
   cursorDesktop: {
     /**
-     * Published by a Cursor user for Cursor 3.14.27 (forum.cursor.com, "Cursor
-     * MCP DCR still omits application_type ...", 2026-08-06; confirmed by
-     * Cursor staff). One public client for three callbacks: a private-use
-     * scheme with a naming authority, a hosted https callback and a fixed
-     * loopback port, and no `application_type`. It registers as native, and
-     * its private-use callback is an entry in NATIVE_REDIRECT_URI_EXCEPTIONS.
+     * Cursor 3.14 registers one public client for three callbacks: a
+     * private-use scheme with a naming authority, a hosted https callback
+     * and a fixed loopback port, with no `application_type`. It registers as
+     * native, and its private-use callback is an entry in
+     * NATIVE_REDIRECT_URI_EXCEPTIONS.
      */
     client: "Cursor desktop MCP client",
     origin: "documented",
     body: CURSOR_DESKTOP_BODY,
   },
   cursorAgentLegacyScope: {
-    // cursor-agent 2025.09.12 asks for `mcp:tools`, which this server does not
-    // offer (observed 2026-10-25 as "cannot request scope mcp:tools"). The
-    // scope is dropped and the default capability set applies.
+    // A scope this server does not offer (`mcp:tools`) is dropped, and the
+    // default capability set applies.
     client: "cursor-agent requesting mcp:tools",
     origin: "synthetic",
     body: { ...CURSOR_DESKTOP_BODY, scope: "mcp:tools" },
   },
   identityScopeClient: {
-    // Grok has been reported requesting identity scopes such as `name` and
-    // `picture` (community.auth0.com, "Auth0 + Grok MCP: invalid OAuth
-    // scopes"). Unoffered scopes are dropped, never granted.
+    // Identity scopes this server does not offer (`name`, `picture`) are
+    // dropped, never granted.
     client: "client requesting unoffered identity scopes",
     origin: "synthetic",
     body: {
