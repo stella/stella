@@ -486,6 +486,12 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming partner-oauth-client.js apps/api/src/scripts/partner-oauth-client.ts",
+    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+  },
+  {
+    file: "apps/api/Dockerfile",
+    command:
       "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming ocr-local-worker.js apps/api/src/lib/ocr-local/ocr-local-worker.ts",
     bootCheck: {
       type: "none",

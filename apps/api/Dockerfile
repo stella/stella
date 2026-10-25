@@ -192,6 +192,18 @@ RUN bun build \
     --public-path /app/ \
     --entry-naming review-account.js \
     apps/api/src/scripts/review-account.ts
+# Partner OAuth client commands (a hosted assistant without dynamic client
+# registration); `create` and `rotate` print the secret once on a terminal.
+#   ["bun", "/app/partner-oauth-client.js", "create", "--name", "...", "--redirect-uri", "https://..."]
+#   ["bun", "/app/partner-oauth-client.js", "rotate", "--client-id", "..."]
+#   ["bun", "/app/partner-oauth-client.js", "disable", "--client-id", "..."]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outdir /app/bundles \
+    --public-path /app/ \
+    --entry-naming partner-oauth-client.js \
+    apps/api/src/scripts/partner-oauth-client.ts
 # One bounded, load-aware background replay tick; enrolment is reviewed in code.
 RUN bun build \
     --define __STELLA_RELEASE__=true \

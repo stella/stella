@@ -332,16 +332,24 @@ const resolveNativeAuthorizationClient = async (
   return null;
 };
 
+/** The one resource a partner client's authorizations target. */
+type PartnerResource = {
+  url: string;
+  isPartnerClient: (clientId: string) => Promise<boolean>;
+};
+
 type OAuthPolicyMiddlewareOptions = {
   policy: OAuthScopePolicyContext;
   discoveries: readonly ClientDiscovery[];
   noInteractionRequests: WeakSet<Request>;
+  partnerResource: PartnerResource;
 };
 
 const createOAuthPolicyMiddleware = ({
   policy,
   discoveries,
   noInteractionRequests,
+  partnerResource,
 }: OAuthPolicyMiddlewareOptions) =>
   createAuthMiddleware(async (ctx) => {
     if (ctx.path === OAUTH_CLIENT_REGISTRATION_PATH) {
@@ -389,6 +397,17 @@ const createOAuthPolicyMiddleware = ({
       model: "oauthClient",
       where: [{ field: "clientId", value: clientId }],
     });
+    // A partner's generic OAuth connector sends no `resource` (RFC 8707);
+    // without one the token carries no audience and the MCP endpoint refuses
+    // it. A partner client is linked to this one resource only. The client
+    // kind is not part of the provider's model, so it is read separately,
+    // and only for requests that name no resource.
+    const targetResource =
+      stored !== null &&
+      parameters["resource"] === undefined &&
+      (await partnerResource.isPartnerClient(clientId))
+        ? { resource: partnerResource.url }
+        : {};
     const resolved = await resolveNativeAuthorizationClient(ctx, {
       stored,
       clientId,
@@ -414,12 +433,17 @@ const createOAuthPolicyMiddleware = ({
     if (consentPrompt === "none" && ctx.request) {
       noInteractionRequests.add(ctx.request);
     }
-    if (grantable === scope && consentPrompt === undefined) {
+    if (
+      grantable === scope &&
+      consentPrompt === undefined &&
+      !("resource" in targetResource)
+    ) {
       return UNCHANGED;
     }
     const authorizationPolicy = {
       scope: grantable,
       ...(consentPrompt === undefined ? {} : { prompt: consentPrompt }),
+      ...targetResource,
     };
     return fromBody
       ? { context: { body: authorizationPolicy } }
@@ -485,9 +509,11 @@ export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
   {
     verifiedOrigins,
+    partnerResource,
     requestBudget,
   }: {
     verifiedOrigins: readonly string[];
+    partnerResource: PartnerResource;
     requestBudget: {
       storage: ReturnType<typeof createAuthRateLimitStorage>;
       enabled: boolean;
@@ -571,6 +597,7 @@ export const createStellaOAuthProvider = (
             policy,
             discoveries,
             noInteractionRequests,
+            partnerResource,
           }),
         },
       ],
