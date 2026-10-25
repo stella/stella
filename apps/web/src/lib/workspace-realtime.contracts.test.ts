@@ -347,8 +347,8 @@ test("organization mutations invalidate organization readers without touching wo
   );
   try {
     await Promise.all([
-      queryClient.fetchQuery(organizationReader),
-      queryClient.fetchQuery(workspaceReader),
+      queryClient.query(organizationReader),
+      queryClient.query(workspaceReader),
     ]);
     const update = resourceMutation({
       mutation: "updateNativeTool",
@@ -670,7 +670,7 @@ test("every mutation resource declaration agrees with its registered backend rou
       }
       registeredWriteCount += 1;
       expect(handlers).toHaveLength(1);
-      const handlerPath = handlers?.at(0);
+      const handlerPath = handlers.at(0);
       if (!handlerPath) {
         throw new TypeError(
           `Mutation route has no unique backend handler: ${write.route}`,
