@@ -91,6 +91,7 @@ const DEFAULT_CHANGED_FILE_OUTPUTS = {
   collaboration_suite_required: "false",
   comparison_base: "",
   corpus_suites_required: "false",
+  database_migrations_required: "false",
   dependency_changes_required: "false",
   dependency_malware_required: "false",
   desktop_browser_required: "false",
