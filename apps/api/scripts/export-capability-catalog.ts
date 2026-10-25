@@ -609,8 +609,7 @@ const readDescription = (
 };
 
 type EntryScopeResult =
-  | { status: "resolved"; scope: string }
-  | { status: "error"; message: string };
+  { status: "resolved"; scope: string } | { status: "error"; message: string };
 
 /**
  * Final scope for a `tool`/`covered` entry: the entry must never advertise a
@@ -815,8 +814,7 @@ type BuildCatalogEntryOptions = {
   exposure: ParsedExposure;
   feature: string | undefined;
   featureAccess:
-    | { featureId: string; type: "required" | "conditional" }
-    | undefined;
+    { featureId: string; type: "required" | "conditional" } | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
 };

@@ -70,14 +70,11 @@ import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 
 type SaveState =
-  | { type: "idle" }
-  | { type: "saving" }
-  | { message: string; type: "error" };
+  { type: "idle" } | { type: "saving" } | { message: string; type: "error" };
 
 /** The inline "New group…" panel: closed, or holding the group being created. */
 type GroupDraftState =
-  | { type: "closed" }
-  | (ClipboardGroupDraft & { type: "open" });
+  { type: "closed" } | (ClipboardGroupDraft & { type: "open" });
 
 /** Picking it in the group select opens the draft instead of choosing a group. */
 const NEW_GROUP_OPTION_VALUE = "new-group";

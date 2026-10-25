@@ -1195,8 +1195,7 @@ const createIndexRecorder = ({
 }) => {
   const scan: IndexScanTiming = { durationMs: 0, candidateCount: 0, rounds: 0 };
   let rejectionAttribution:
-    | { type: "page_read" }
-    | { type: "ranking_callback" } = {
+    { type: "page_read" } | { type: "ranking_callback" } = {
     type: "page_read",
   };
   let openedAt: number | undefined = now();

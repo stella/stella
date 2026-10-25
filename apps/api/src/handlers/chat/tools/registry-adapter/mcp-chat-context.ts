@@ -33,8 +33,7 @@ export type ChatRegistryContextDeps = {
    * cleanup after operations such as removing the caller's own membership.
    */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   /**
@@ -61,8 +60,7 @@ export type ChatRegistryContextDeps = {
    * supply real statuses without reshaping this adapter.
    */
   workspaceStatusById?:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 // oxlint-disable-next-line typescript/promise-function-async -- read tools never record audit events; this returns a resolved promise directly, and `async` would only add a redundant wrapper with nothing to await (which `require-await` then rejects)

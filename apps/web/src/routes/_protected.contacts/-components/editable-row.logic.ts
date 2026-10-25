@@ -75,8 +75,7 @@ export const getEditableFieldInputAttributes = (field: EditableField) => {
 type NumericContactPayload = { paymentTermDays: number | null };
 
 type NumericContactPayloadResult =
-  | { status: "valid"; payload: NumericContactPayload }
-  | { status: "invalid" };
+  { status: "valid"; payload: NumericContactPayload } | { status: "invalid" };
 
 const NUMERIC_PAYLOAD_BUILDERS = {
   paymentTermDays: (value) => ({ paymentTermDays: value }),

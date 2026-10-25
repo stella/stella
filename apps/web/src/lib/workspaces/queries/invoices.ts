@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { RESOURCE_TYPE, type InvoiceStatus } from "@stll/api-contract";
+import { type InvoiceStatus, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";

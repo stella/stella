@@ -54,8 +54,7 @@ import {
 } from "@/lib/workspaces/queries/workspace.logic";
 
 type ResourceQueryScopeIdentity =
-  | { type: "workspace"; workspaceId: string }
-  | { type: "organization" };
+  { type: "workspace"; workspaceId: string } | { type: "organization" };
 
 type ResourceReads =
   | {

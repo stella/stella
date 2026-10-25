@@ -712,8 +712,7 @@ const retryFinaldocRead = async (
  * publisher's document path, which is never requested.
  */
 type CzRegionalFinaldocRead =
-  | ReadOutcome<CzRegionalDocumentPayload>
-  | { readonly type: "link-rejected" };
+  ReadOutcome<CzRegionalDocumentPayload> | { readonly type: "link-rejected" };
 
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.

@@ -1,9 +1,9 @@
 import { useState } from "react";
 
 import {
+  type QueryClient,
   useMutation,
   useQueryClient,
-  type QueryClient,
 } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";

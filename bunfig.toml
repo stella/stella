@@ -140,31 +140,15 @@ customGroups = [
     "react-dom",
     "react-dom/**",
   ] },
-  { groupName = "stella", elementNamePattern = [
-    "@stll/**",
-  ] },
-  { groupName = "aliases", elementNamePattern = [
-    "@/**",
-  ] },
+  { groupName = "stella", elementNamePattern = ["@stll/**"] },
+  { groupName = "aliases", elementNamePattern = ["@/**"] },
 ]
 groups = [
   "react",
-  [
-    "builtin",
-    "external",
-    "type-builtin",
-    "type-external",
-  ],
+  ["builtin", "external", "type-builtin", "type-external"],
   "stella",
   "aliases",
-  [
-    "parent",
-    "sibling",
-    "index",
-    "type-parent",
-    "type-sibling",
-    "type-index",
-  ],
+  ["parent", "sibling", "index", "type-parent", "type-sibling", "type-index"],
 ]
 newlinesBetween = true
 

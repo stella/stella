@@ -234,9 +234,7 @@ export const createReviewAccountDatabaseHooks = (
     account: { userId: string; providerId: string },
     // Absent outside a request (the operator command), where it is allowed.
     context:
-      | { context: Pick<AuthContext, "internalAdapter"> }
-      | null
-      | undefined,
+      { context: Pick<AuthContext, "internalAdapter"> } | null | undefined,
   ): Promise<undefined> => {
     if (
       config.email === undefined ||

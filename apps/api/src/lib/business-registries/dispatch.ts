@@ -164,8 +164,7 @@ export type { BusinessRegistrySlug } from "@stll/api-contract";
 
 const EU_PSEUDO_JURISDICTION = "EU" as const;
 export type RegistryJurisdictionCode =
-  | CountryCode
-  | typeof EU_PSEUDO_JURISDICTION;
+  CountryCode | typeof EU_PSEUDO_JURISDICTION;
 
 // ---------------------------------------------------------------------------
 // Normalised cross-registry shapes

@@ -13,11 +13,11 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
+  applyResourceQueryActions,
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
-  applyResourceQueryActions,
 } from "@/lib/workspace-realtime";
 import {
   connectWorkspaceStream,
