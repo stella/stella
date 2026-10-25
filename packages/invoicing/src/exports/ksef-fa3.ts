@@ -26,6 +26,13 @@ import { el, text, XML_DECLARATION } from "./xml";
 
 const NAMESPACE = "http://crd.gov.pl/wzor/2025/06/25/13775/";
 
+/** Canonical form code shared by the FA(3) serializer and KSeF transport. */
+export const KSEF_FA3_FORM_CODE = {
+  systemCode: "FA (3)",
+  schemaVersion: "1-0E",
+  value: "FA",
+} as const;
+
 /** The pattern the schema's TNrNIP adds on top of the NIP checksum. */
 const NIP_PATTERN = /^[1-9](?:\d[1-9]|[1-9]\d)\d{7}$/u;
 const SWIFT_PATTERN = /^[A-Z]{6}[A-Z\d]{2}(?:[A-Z\d]{3})?$/u;
