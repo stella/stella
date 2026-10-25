@@ -392,6 +392,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
   ]),
+  fixtureRuleOverride("no-hand-built-step-marker.fixture.tsx", [
+    "no-hand-built-step-marker/no-hand-built-step-marker",
+  ]),
   fixtureRuleOverride("no-decorative-heading-accent.fixture.tsx", [
     "no-decorative-heading-accent/no-decorative-heading-accent",
   ]),
@@ -1549,6 +1552,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -3347,6 +3351,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item": "error",
+      },
+    },
+    {
+      // Only a semantic ordered list may own a procedure, timeline, or
+      // ranking number. Decorative labels imply an order that is not there.
+      files: [
+        "apps/landing/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-hand-built-step-marker.fixture.tsx",
+      ],
+      rules: {
+        "no-hand-built-step-marker/no-hand-built-step-marker": "error",
       },
     },
     {

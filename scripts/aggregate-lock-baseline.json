@@ -1225,13 +1225,13 @@
   },
   {
     "file": "apps/api/src/handlers/entities/move.ts",
-    "fingerprint": "15adc31669d35eb6f4358962c8f5e147984c436751e69b909300bec7573e9780",
+    "fingerprint": "2840d044d2c47f5aca5f6491b869b3c0ca5870020f8a268bbf45046681116720",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/entities/move.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/entities/move.ts",
-    "fingerprint": "59b4cd3ee950ced84c9e2d1cc0bcc44422620aad97734fe8cefaec266305c23c",
+    "fingerprint": "c998924749f3b9f8d0e0d3807192086a3adeb6d71ad61d1b245fa6e7072d6e07",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/entities/move.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
