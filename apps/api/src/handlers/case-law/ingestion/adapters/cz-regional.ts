@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-regional] rows earlier parsers stored keep their identity, fields and raw; they gain only sourceDocumentIdRepairAliases, which adopt nothing on replay because the source held no quarantine rows.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -41,6 +42,7 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
@@ -1064,11 +1066,14 @@ export const documentIdFromLink = (
 
 /**
  * A listing value the publisher states: a string with something in it. A
- * blank docket or court states nothing, so it can neither key a row nor
- * tell two rows apart.
+ * blank value states nothing, so it cannot tell two rows apart.
  */
 const statedText = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
+/** An identity half as earlier parsers read it: any non-empty string. */
+const nonEmptyText = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0 ? value : undefined;
 
 /**
  * A listed string array as one stable value. Sorted, because the publisher
@@ -1203,11 +1208,14 @@ const czRegionalRowIdentity = (raw: unknown): CzRegionalRowIdentity => {
   if (!isRecord(raw)) {
     return { type: "no-stable-field" };
   }
-  const court = statedText(raw["soud"]);
+  // Any non-empty string states the half, blank or not: earlier parsers keyed
+  // a row on exactly that, so a row they stored with a whitespace court or
+  // docket keeps its key rather than moving to a quarantine id on replay.
+  const court = nonEmptyText(raw["soud"]);
   if (court?.trim() === COURT_NOT_STATED) {
     return { type: "not-a-court-decision" };
   }
-  const listedDocket = statedText(raw["jednaciCislo"]);
+  const listedDocket = nonEmptyText(raw["jednaciCislo"]);
   const docketIdentity =
     listedDocket === undefined
       ? undefined
@@ -2157,34 +2165,33 @@ const listCzRegionalSlicePage = async ({
     page,
     ...(signal === undefined ? {} : { signal }),
   });
+  const listed: ReconciliationListingItem[] = [];
+  let withoutStableFields = 0;
+  for (const item of items) {
+    const identity = czRegionalListingIdentity(item);
+    switch (identity.type) {
+      case "document":
+      case "case-number":
+        listed.push({ identity, payload: item });
+        break;
+      // Outside what this source stores, so neither a record the slice
+      // reports nor a gap in it: counting it would hold the slice short of a
+      // row the corpus is never meant to have.
+      case "not-a-court-decision":
+        break;
+      // Nothing to key or fingerprint the row by, so no identity is invented
+      // for it; counted, so the walk shows the record as a coverage gap.
+      case "no-stable-field":
+        withoutStableFields += 1;
+        break;
+      default:
+        identity satisfies never;
+        panic("Unhandled regional listing identity");
+    }
+  }
   return {
-    items: items.flatMap((item) => {
-      const listed = czRegionalListingIdentity(item);
-      switch (listed.type) {
-        case "document":
-        case "case-number":
-          return [{ identity: listed, payload: item }];
-        // Outside what this source stores, so not a record the slice
-        // reports: counting it would hold the slice short of a row the
-        // corpus is never meant to have.
-        case "not-a-court-decision":
-          return [];
-        case "no-stable-field":
-          // Nothing to key or fingerprint the row by, so no identity is
-          // invented for it; named, so a publisher shape that starts
-          // producing such rows is seen.
-          logger.warn("case_law.ingestion.listing_row_unidentifiable", {
-            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-            slice,
-            page,
-            reason: listed.type,
-          });
-          return [];
-        default:
-          listed satisfies never;
-          return panic("Unhandled regional listing identity");
-      }
-    }),
+    items: listed,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages,
   };
 };

@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-courts] only adds sourceDocumentIdRepairAliases to guid-keyed rows; no stored row had a quarantine row to adopt.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -651,14 +652,13 @@ const statedSkCourtsString = (value: unknown): string | undefined =>
 /**
  * Stated display text in its canonical form. A markup-only label reaches the
  * required-label boundary with its evidence intact: an empty canonical form
- * is not source absence.
+ * is not source absence. Only an empty string states nothing here, so a
+ * label stored before this rule existed is rebuilt byte for byte.
  */
-const statedSkCourtsLabel = (value: unknown): string | undefined => {
-  const stated = statedSkCourtsString(value);
-  return stated === undefined
-    ? undefined
-    : canonicalSkCourtText(stated) || stated;
-};
+const statedSkCourtsLabel = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0
+    ? canonicalSkCourtText(value) || value
+    : undefined;
 
 /**
  * The fingerprint a record is quarantined under, read off any record the
@@ -1847,22 +1847,27 @@ const listSkCourtsSlicePage = async ({
     pageSize: LISTING_PAGE_SIZE,
     signal,
   });
+  const items = listed.flatMap((item, index) => {
+    const identity = skCourtsListingIdentity(item);
+    if (identity === null) {
+      // Not a record anything can key or store, so not an item; the page
+      // counts it below. The walk reports the count per slice, and this
+      // names where in the listing the record sits, which the count cannot.
+      logger.warn("case_law.ingestion.unkeyable_listing_record", {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        slice,
+        resultIndex: page * LISTING_PAGE_SIZE + index,
+        reason: UNKEYABLE_LISTING_RECORD_REASON,
+      });
+      return [];
+    }
+    return [{ identity, payload: item }];
+  });
+  // Every listed record left out above states no stable field.
+  const withoutStableFields = listed.length - items.length;
   return {
-    items: listed.flatMap((item, index) => {
-      const identity = skCourtsListingIdentity(item);
-      if (identity === null) {
-        // Not a record anything can key or store, so not one the slice can
-        // be short of; reported so the gap is never silent.
-        logger.warn("case_law.ingestion.unkeyable_listing_record", {
-          adapterKey: ADAPTER_KEYS.SK_COURTS,
-          slice,
-          resultIndex: page * LISTING_PAGE_SIZE + index,
-          reason: UNKEYABLE_LISTING_RECORD_REASON,
-        });
-        return [];
-      }
-      return [{ identity, payload: item }];
-    }),
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
   };
 };
@@ -2386,10 +2391,16 @@ const reparseStoredRaw = (
   // A quarantined row is rebuilt from its listing alone, whatever the
   // listing's shape: that is all it was ever built from.
   if (listed.type === "quarantined") {
-    return reparsedSkCourtsDecision(
-      stored,
-      quarantinedSkCourtsDecision(listed),
-    );
+    // Only a row already stored under that quarantine identity is rebuilt
+    // from it. A row an earlier version stored under another key keeps it:
+    // replay never moves a stored row's identity.
+    return stored.sourceDocumentId === listed.quarantine.sourceDocumentId
+      ? reparsedSkCourtsDecision(stored, quarantinedSkCourtsDecision(listed))
+      : {
+          type: "rejected",
+          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+          detail: `the stored listing row for ${stored.caseNumber} is quarantined under ${listed.quarantine.sourceDocumentId}`,
+        };
   }
   const item = storedPart(parts?.["listing"], isSkApiItem);
   if (item === null) {

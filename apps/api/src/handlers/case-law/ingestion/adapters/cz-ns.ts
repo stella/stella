@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-ns] rows a previous version stored only gain sourceDocumentIdRepairAliases; placeholder-docket and quarantined rows are records the previous parser dropped.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -82,7 +83,6 @@ import {
   quarantineIdentity,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1447,22 +1447,18 @@ const listCzNsSlicePage = async ({
     });
   }
 
+  // `LISTING_ROW_PATTERN` only matches an anchor addressed by a universal id,
+  // so every row here keys; one that does not is counted, not dropped. An
+  // anchor with no universal id is not parsed at all, and the stated counts
+  // above refuse the page for it instead.
+  const items = rows.flatMap((row) => {
+    const identity = czNsListingIdentity(row);
+    return identity === null ? [] : [{ identity, payload: row }];
+  });
+  const withoutStableFields = rows.length - items.length;
   return {
-    // `LISTING_ROW_PATTERN` only matches an anchor addressed by a universal
-    // id, so every row here keys; the warning names the case if the pattern
-    // ever loosens.
-    items: rows.flatMap((row) => {
-      const identity = czNsListingIdentity(row);
-      if (identity === null) {
-        logger.warn("case_law.ingestion.listing_row_without_stable_field", {
-          adapterKey: ADAPTER_KEYS.CZ_NS,
-          slice,
-          reason: "no-universal-id-and-no-docket",
-        });
-        return [];
-      }
-      return [{ identity, payload: row }];
-    }),
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: 1,
   };
 };

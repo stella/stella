@@ -1225,6 +1225,7 @@ describe("a listed record is never dropped silently", () => {
     expect(page.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: expectedId },
     ]);
+    expect(page.withoutStableFields).toBeUndefined();
     const built = await plUodoAdapter.reconciliation.buildDecision(
       page.items[0]?.payload,
     );
@@ -1246,12 +1247,23 @@ describe("a listed record is never dropped silently", () => {
     expect(classifyPlUodoRow(normalizePlUodoRow(listing)).type).toBe(
       "authority-decision",
     );
-    servePortal({ records: [listing], bodies: new Map(), requests: [] });
+    // A record out of scope is tallied by reason, not counted here.
+    const legislation = {
+      ...listing,
+      id: "PublicDocument-20230102-000000-000-00000000000000000000000000000001",
+      publicator: { type: "pro" },
+    };
+    servePortal({
+      records: [listing, legislation],
+      bodies: new Map(),
+      requests: [],
+    });
     const page = await plUodoAdapter.reconciliation.listSlicePage({
       slice: "2023",
       page: 0,
     });
     expect(page.items).toEqual([]);
+    expect(page.withoutStableFields).toBe(1);
   });
 
   test("the record, once the portal states its URN, can adopt the quarantined row", async () => {

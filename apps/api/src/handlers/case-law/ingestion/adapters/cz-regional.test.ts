@@ -507,7 +507,8 @@ describe("a court's record with no usable identity is quarantined", () => {
     for (const overrides of [
       { jednaciCislo: null },
       { jednaciCislo: "" },
-      { jednaciCislo: "   " },
+      // Trims to no docket, and there is no link to key on instead.
+      { jednaciCislo: "   ", odkaz: null },
       { jednaciCislo: null, odkaz: null },
       { jednaciCislo: OVERLONG_DOCKET, odkaz: null },
       { jednaciCislo: OVERLONG_DOCKET, odkaz: OVERLONG_LINK },
@@ -702,35 +703,110 @@ describe("a court's record with no usable identity is quarantined", () => {
     ).toBeUndefined();
   });
 
-  test("a row stating nothing to fingerprint is left out, and named", async () => {
+  test("a row stating nothing to fingerprint is left out, and counted", async () => {
     const bare = { soud: "Okresní soud v Hradci Králové", ecli: null };
     expect(czRegionalListingIdentity(bare)).toEqual({
       type: "no-stable-field",
     });
     expect((await buildCzRegionalDecision(bare)).type).toBe("unkeyable");
 
+    const item = await district();
+    const quarantined = { ...item, jednaciCislo: null };
+    const ministry = await itemByDocket(MINISTRY_LISTING, MINISTRY_DOCKET);
     globalThis.fetch = asFetchMock(
       async () =>
-        new Response(JSON.stringify({ items: [bare], totalPages: 1 })),
+        new Response(
+          JSON.stringify({
+            items: [bare, ministry, item, quarantined],
+            totalPages: 1,
+          }),
+        ),
     );
-    const logs = installRecordingLogger();
-    try {
-      const slice = await czRegionalAdapter.reconciliation.listSlicePage({
-        slice: "2025-06-11",
-        page: 0,
+    const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+      slice: "2025-06-11",
+      page: 0,
+    });
+    expect(slice.items.map(({ payload }) => payload)).toEqual([
+      item,
+      quarantined,
+    ]);
+    // The bare row is a listed record coverage has to show as a gap; the
+    // ministry's record is outside the source and is no gap in it.
+    expect(slice.withoutStableFields).toBe(1);
+
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(
+          JSON.stringify({ items: [ministry, item], totalPages: 1 }),
+        ),
+    );
+    const clean = await czRegionalAdapter.reconciliation.listSlicePage({
+      slice: "2025-06-11",
+      page: 0,
+    });
+    expect(clean.withoutStableFields).toBeUndefined();
+  });
+});
+
+/**
+ * Earlier parser versions stored rows the quarantine must not move: a replay
+ * or a later crawl that re-keyed one would orphan it or insert beside it.
+ */
+describe("a row an earlier parser stored keeps its key", () => {
+  test("a whitespace court or docket keys as earlier parsers keyed it", async () => {
+    const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    for (const overrides of [
+      { soud: "  " },
+      { jednaciCislo: "  " },
+    ] satisfies Partial<CzRegionalApiItem>[]) {
+      expect(czRegionalListingIdentity({ ...item, ...overrides })).toEqual({
+        type: "document",
+        sourceDocumentId: "e21716f9-8855-4a85-a7e6-9af23622661b",
       });
-      expect(slice.items).toEqual([]);
-      expect(
-        logs
-          .at("WARN")
-          .filter(
-            ({ message }) =>
-              message === "case_law.ingestion.listing_row_unidentifiable",
-          ),
-      ).toHaveLength(1);
-    } finally {
-      logs.restore();
     }
+    expect(
+      czRegionalListingIdentity({ ...item, soud: "  ", odkaz: null }),
+    ).toEqual({
+      type: "case-number",
+      caseNumber: "18 C 130/2024",
+      language: "cs",
+    });
+  });
+
+  test("a stored docket-keyed row re-parses under its docket, with no id", async () => {
+    const item = {
+      ...(await itemByDocket(LISTING, DISTRICT_DOCKET)),
+      odkaz: null,
+    };
+    const built = assembleCzRegionalDecision({
+      item,
+      document: null,
+      chain: null,
+    });
+    const stored =
+      built.type === "built" ? built.decision : panic("docket row unbuilt");
+    expect(stored.sourceDocumentId).toBeUndefined();
+
+    const replayed = await czRegionalAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(stored.sourceRaw ?? ""),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      sourceDocumentId: null,
+      caseNumber: stored.caseNumber,
+      language: stored.language,
+      court: stored.court,
+      ecli: stored.ecli ?? null,
+      decisionDate: stored.decisionDate ?? null,
+      decisionType: stored.decisionType ?? null,
+      sourceUrl: stored.sourceUrl ?? null,
+      documentUrl: stored.documentUrl ?? null,
+      metadata: stored.metadata,
+    });
+    expect(replayed?.type).toBe("parsed");
+    const result = replayed?.type === "parsed" ? replayed.result : undefined;
+    expect(result?.sourceDocumentId).toBeUndefined();
+    expect<string | undefined>(result?.caseNumber).toBe("18 C 130/2024");
+    expect(result?.sourceDocumentIdRepairAliases).toBeUndefined();
+    expect(result?.isListingOnly).toBeUndefined();
   });
 });
 

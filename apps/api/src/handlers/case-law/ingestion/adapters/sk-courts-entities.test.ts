@@ -180,6 +180,34 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       sourceDocumentId:
         decision.sourceDocumentId ?? panic("the decision has no id"),
     });
+
+    const replay =
+      skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
+    const input = {
+      raw: new TextEncoder().encode(
+        decision.sourceRaw ?? panic("quarantined row stores no raw"),
+      ),
+      contentType: decision.sourceRawContentType ?? "",
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: "sk",
+      court: decision.court,
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    };
+    expect(replay(input)).toMatchObject({
+      type: "parsed",
+      result: { sourceDocumentId: decision.sourceDocumentId },
+    });
+    // A row an earlier version stored under its own fallback key keeps that
+    // key: replay never moves a stored row's identity.
+    expect(
+      replay({ ...input, sourceDocumentId: "plaintext-quarantine:earlier" }),
+    ).toMatchObject({ type: "rejected", rejection: "identity-mismatch" });
   });
 
   test("stored raw replay preserves the same decoded fields", () => {

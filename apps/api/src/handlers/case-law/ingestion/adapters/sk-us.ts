@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-us] only adds sourceDocumentIdRepairAliases to keyed rows; no stored row had a quarantine row to adopt.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
@@ -2308,10 +2309,10 @@ const sliceDateRange = (slice: string): SearchDateRange => {
  * the offset, so there is no record to key or store and nothing that could
  * be invented: an identity guessed from the offset would name a row the
  * ingest can never write, and would move whenever an earlier record is
- * added. Such a result is therefore no item of the page; it stays out of
- * `reported` and `collected`, which is what lets the month settle on the
- * records that do exist instead of standing one short of a number no walk can
- * reach, and this warning is what keeps it from being a silent gap.
+ * added. Such a result is therefore no item of the page but one of its
+ * `withoutStableFields`, which the walk counts into the slice's coverage. Kept
+ * beside that count because it names the offset: one request for it alone is
+ * how an operator confirms the refusal is still the record's.
  */
 const warnUnservedListingRecord = (slice: string, offset: number): void => {
   logger.warn("case_law.ingestion.unserved_listing_record", {
@@ -2414,8 +2415,9 @@ const listedWindow = (data: SearchResponse): ListedWindow => ({
  *
  * So a refused window is halved until the refusal is one record wide. What
  * surrounds it lists normally, the record itself is reported unserved, and
- * the month settles honestly: 277 reported, 277 collected, one unserved
- * record warned about. The halving terminates at a window of one record, costs up to
+ * the month settles honestly: 277 reported, 277 collected, one counted
+ * without stable fields. The halving terminates at a window of one record,
+ * costs up to
  * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} plus the one confirming request
  * below per such record, and each of those requests waits the same pause as
  * every other request here.
@@ -2526,31 +2528,40 @@ const listSkUsSlicePage = async ({
     throw unservedWindowError(slice, `offset ${page * LISTING_PAGE_SIZE}`);
   }
 
-  return {
-    items: items.flatMap((item) => {
-      switch (item.type) {
-        case "served": {
-          const identity = skUsListingIdentity(item.document);
-          if (identity === null) {
-            // No record anything can key or store, so not one the slice can
-            // be short of; reported so the gap is never silent.
-            logger.warn("case_law.ingestion.unkeyable_listing_record", {
-              adapterKey: ADAPTER_KEYS.SK_US,
-              slice,
-              reason: UNKEYABLE_LISTING_RECORD_REASON,
-            });
-            return [];
-          }
-          return [{ identity, payload: item.document }];
-        }
-        case "unserved":
-          warnUnservedListingRecord(slice, item.offset);
+  // The window lists every result in offset order, an unserved one in its
+  // own slot, so a position is the publisher's offset.
+  const firstOffset = page * LISTING_PAGE_SIZE;
+  const listed = items.flatMap((item, index) => {
+    switch (item.type) {
+      case "served": {
+        const identity = skUsListingIdentity(item.document);
+        if (identity === null) {
+          // Not a record anything can key or store, so not an item; the page
+          // counts it below. The walk reports the count per slice, and this
+          // names the offset, which the count cannot.
+          logger.warn("case_law.ingestion.unkeyable_listing_record", {
+            adapterKey: ADAPTER_KEYS.SK_US,
+            slice,
+            resultIndex: firstOffset + index,
+            reason: UNKEYABLE_LISTING_RECORD_REASON,
+          });
           return [];
-        default:
-          item satisfies never;
-          return panic("Unhandled SK ÚS listing result");
+        }
+        return [{ identity, payload: item.document }];
       }
-    }),
+      case "unserved":
+        warnUnservedListingRecord(slice, item.offset);
+        return [];
+      default:
+        item satisfies never;
+        return panic("Unhandled SK ÚS listing result");
+    }
+  });
+  // Every result left out above, served or not, states no stable field.
+  const withoutStableFields = items.length - listed.length;
+  return {
+    items: listed,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     // Still the publisher's count, unserved records included: it sizes the
     // walk, and the walk's offsets are the publisher's.
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
@@ -3014,9 +3025,14 @@ const reparseStoredRaw = (
     case "document":
       break;
     // Rebuilt from its search row alone: that is all it was ever built from.
+    // Only a row already stored under that quarantine identity: a row an
+    // earlier version stored under another key (a docket-keyed row from
+    // before the DMS id was the identity) keeps it, since replay never moves
+    // a stored row's identity.
     case "quarantined": {
       const quarantined = quarantinedSkUsDecision(listing, identity.quarantine);
-      return quarantined.caseNumber === stored.caseNumber
+      return stored.sourceDocumentId === identity.quarantine.sourceDocumentId &&
+        quarantined.caseNumber === stored.caseNumber
         ? { type: "parsed", result: quarantined }
         : {
             type: "rejected",

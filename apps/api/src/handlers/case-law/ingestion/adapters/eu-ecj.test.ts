@@ -1437,15 +1437,75 @@ describe("a variant listed under a CELEX no store can hold", () => {
     expect(replayed.result.rawHash).toBe(stored.rawHash);
   });
 
-  test("an unusable CELEX with a blank ECLI is left out of both walks", async () => {
+  test("an unusable CELEX with a blank ECLI is stored by neither walk, but counted by the slice", async () => {
+    const unnamed = {
+      ...enBinding,
+      celex: { ...enBinding.celex, value: malformedEn.celex.value },
+      ecli: { ...enBinding.ecli, value: "" },
+    };
+    const republished = withManifestation(unnamed, {
+      cellarLanguage: "ENG",
+      manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05",
+    });
     installSparqlMock({
-      bindings: [{ ...malformedEn, ecli: { type: "literal", value: "" } }],
+      bindings: [unnamed, republished, enBinding],
+      served: [EN_MANIFESTATION_ID],
     });
 
-    expect(await crawl()).toEqual([]);
     expect(
-      (await reconciliation.listSlicePage({ slice: "2024", page: 0 })).items,
-    ).toEqual([]);
+      (await crawl()).map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["62021CJ0128:en"]);
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+    expect(
+      page.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual(["document:62021CJ0128:en"]);
+    // One variant, however many manifestations name it, as the crawl groups
+    // it: the walker adds it to the slice's unstored records.
+    expect(page.withoutStableFields).toBe(1);
+  });
+
+  test("a slice listing only nameable variants reports no unstored records", async () => {
+    installSparqlMock({ bindings: [malformedEn, enBinding] });
+
+    const page = await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+
+    expect(page.items).toHaveLength(2);
+    expect(page.withoutStableFields).toBeUndefined();
+  });
+
+  test("it keeps the label the crawl filed it under before it was quarantined", async () => {
+    // The previous crawl fetched such a variant and stored it under no id,
+    // keyed on `celexToCaseNumber` of the CELEX as listed. The same label,
+    // language and ECLI let the pipeline's legacy null-id adoption re-key
+    // that row to the quarantine identity instead of inserting a second one.
+    const docketPrefixed = {
+      ...malformedEn,
+      celex: { type: "literal", value: "62021CJ0128 R" },
+      language: {
+        type: "uri",
+        value: `${LANGUAGE_PREFIX}FRA`,
+      },
+    };
+    const overLong = {
+      ...malformedEn,
+      ecli: { type: "literal", value: "ECLI:EU:C:2024:61" },
+      celex: { type: "literal", value: "6".repeat(300) },
+    };
+    installSparqlMock({ bindings: [malformedEn, docketPrefixed, overLong] });
+
+    const labels = (await crawl()).map((decision) => ({
+      caseNumber: String(decision.caseNumber),
+      placeholder: decision.caseNumberIsPlaceholder,
+    }));
+
+    expect(labels).toEqual([
+      { caseNumber: celexToCaseNumber("not a celex"), placeholder: true },
+      { caseNumber: "C-128/21", placeholder: false },
+      {
+        caseNumber: expect.stringMatching(/^CJEU listing [0-9a-f]{64}$/u),
+        placeholder: true,
+      },
+    ]);
   });
 });
 

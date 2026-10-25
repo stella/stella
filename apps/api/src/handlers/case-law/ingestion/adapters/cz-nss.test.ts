@@ -37,6 +37,7 @@ import {
   czNssListingIdentity,
   czNssTotalPages,
   parseCzNssDetailMetadata,
+  parseResultPage,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -655,27 +656,34 @@ describe("cz-nss listing rows", () => {
     ).not.toEqual(first);
   });
 
-  test("a row with neither an id nor a reference is dropped with a warning", () => {
-    const recording = installRecordingLogger();
-    try {
-      expect(
-        parseResultRows(
-          rowBlock({
-            ...MUNICIPAL_ROW,
-            documentId: "",
-            displayedCaseNumber: "",
-          }),
-        ),
-      ).toEqual([]);
-      expect(
-        recording.records.filter(
-          ({ message }) =>
-            message === "case_law.ingestion.listing_row_without_stable_field",
-        ),
-      ).toHaveLength(1);
-    } finally {
-      recording.restore();
-    }
+  test("a row with neither an id nor a reference is counted, not kept", () => {
+    const unkeyable = rowBlock({
+      ...MUNICIPAL_ROW,
+      documentId: "",
+      displayedCaseNumber: "",
+    });
+    expect(parseResultPage(unkeyable)).toEqual({
+      rows: [],
+      withoutStableFields: 1,
+    });
+    // A block that is no result row at all is not counted.
+    expect(
+      parseResultPage(`<tbody><tr><td>1</td></tr></tbody>${unkeyable}`)
+        .withoutStableFields,
+    ).toBe(1);
+  });
+
+  test("a row stating a malformed detail link besides its numeric one keeps the numeric id", () => {
+    // A malformed link before the real one must not quarantine a row the
+    // portal keys: that would move an already stored row to a new identity.
+    const row = rowBlock(MUNICIPAL_ROW).replace(
+      "<td> 10.06.2026 </td>",
+      '<td> 10.06.2026 <a href="/DokumentDetail/Index/x"></a></td>',
+    );
+    expect(row).toContain("/DokumentDetail/Index/x");
+    expect(parseResultRows(row).at(0)?.documentId).toBe(
+      MUNICIPAL_ROW.documentId,
+    );
   });
 
   test("keeps a visible docket with no sheet number", () => {
@@ -863,6 +871,48 @@ describe("cz-nss listSlicePage", () => {
       { type: "document", sourceDocumentId: MUNICIPAL_ROW.documentId },
       { type: "document", sourceDocumentId: REGIONAL_ROW.documentId },
     ]);
+  });
+
+  test("counts a listed row with no stable field rather than refusing the page", async () => {
+    const UNKEYABLE = {
+      ...REGIONAL_ROW,
+      documentId: "",
+      displayedCaseNumber: "",
+    } as const;
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW, UNKEYABLE] }),
+        ),
+      ],
+    });
+
+    const listed = await reconciliation.listSlicePage({
+      slice: SLICE,
+      page: 0,
+    });
+
+    // The stated count is met by both rows; only one can be keyed, and the
+    // other is reported so coverage shows it.
+    expect(listed.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: MUNICIPAL_ROW.documentId },
+    ]);
+    expect(listed.withoutStableFields).toBe(1);
+  });
+
+  test("a page whose every row keys reports no rows without stable fields", async () => {
+    installStub({
+      search: [
+        htmlResponse(searchPage({ statedCount: 1, rows: [MUNICIPAL_ROW] })),
+      ],
+    });
+
+    const listed = await reconciliation.listSlicePage({
+      slice: SLICE,
+      page: 0,
+    });
+
+    expect(listed.withoutStableFields).toBeUndefined();
   });
 
   test("establishes its own session when it holds none", async () => {

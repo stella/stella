@@ -1,3 +1,4 @@
+// parser-output-unchanged: [hu-bhgy] keyed rows gain only a repair alias; rows without a usable IndexId were never stored, so replay changes no stored row.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -864,14 +865,15 @@ export const huBhgyListingIdentity = (
     : { type: "document", sourceDocumentId };
 };
 
-/** The structured warning for a row nothing can store, at either walk. */
-const warnNoStableField = (
-  where: { slice: string } | { cursor: string },
-  row: HuBhgyRow,
-): void => {
+/**
+ * The structured warning for a row the crawl cannot store. The slice walk
+ * counts such rows in `withoutStableFields` instead, which the shared walker
+ * reports once per slice.
+ */
+const warnNoStableField = (cursor: string, row: HuBhgyRow): void => {
   logger.warn("case_law.ingestion.listed_row_without_stable_fields", {
     adapterKey: ADAPTER_KEYS.HU_BHGY,
-    ...where,
+    cursor,
     reason: quarantineReasonOf(row),
   });
 };
@@ -1690,18 +1692,23 @@ const listHuBhgySlicePage = async ({
     );
   }
 
-  const items = rows.flatMap((row): ReconciliationSlicePage["items"] => {
-    const normalized = normalizeHuBhgyRow(row);
-    const identity = huBhgyListingIdentity(normalized);
-    if (identity !== undefined) {
-      return [{ identity, payload: row }];
+  const items: ReconciliationSlicePage["items"] = [];
+  let withoutStableFields = 0;
+  for (const row of rows) {
+    const identity = huBhgyListingIdentity(normalizeHuBhgyRow(row));
+    if (identity === undefined) {
+      // Nothing the row states could name it again, so it is not invented an
+      // identity; it is counted, so coverage shows the record it lists.
+      withoutStableFields += 1;
+    } else {
+      items.push({ identity, payload: row });
     }
-    // Nothing the row states could name it again, so it is not invented an
-    // identity; the warning is what records that the slice lists it.
-    warnNoStableField({ slice }, normalized);
-    return [];
-  });
-  return { items, totalPages: Math.ceil(count / MAX_PAGE_SIZE) };
+  }
+  return {
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
+    totalPages: Math.ceil(count / MAX_PAGE_SIZE),
+  };
 };
 
 const buildHuBhgyFromPayload = async (
@@ -2010,7 +2017,7 @@ const collectDecisions = async ({
       case "unkeyable": {
         const normalized = normalizeHuBhgyRow(row);
         if (huBhgyListingIdentity(normalized) === undefined) {
-          warnNoStableField({ cursor }, normalized);
+          warnNoStableField(cursor, normalized);
         }
         break;
       }

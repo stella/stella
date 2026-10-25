@@ -280,6 +280,21 @@ describe("pl-courts listing identity", () => {
     );
   });
 
+  test("a docket the row stores short enough keeps its case-number identity", () => {
+    // Over the column as listed, under it once the pipeline strips the
+    // zero-width spaces: an earlier parser stored this row by its docket.
+    const stored = `II Co ${"1".repeat(240)}/15`;
+    const listed = `${stored}${"\u200B".repeat(40)}`;
+    expect(Array.from(listed).length).toBeGreaterThan(256);
+    expect(
+      plCourtsListingIdentity({ courtCases: [{ caseNumber: listed }] }),
+    ).toEqual({
+      type: "case-number",
+      caseNumber: stored,
+      language: PL_COURTS_LANGUAGE,
+    });
+  });
+
   test("a docket too long to key quarantines the item, apart from its docket-less form", () => {
     const docket = `II Co ${"1".repeat(300)}/15`;
     const overlong = quarantineIdOf({
@@ -759,6 +774,36 @@ describe("pl-courts buildDecision", () => {
 });
 
 describe("pl-courts quarantined items", () => {
+  test("a listed record stating nothing is counted, not listed", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: SEARCH_PATTERN,
+        body: searchBody([COMMON_COURT_ITEM, {}, UNKEYED_SEARCH_ITEM], 3),
+      },
+    ]);
+
+    const page = await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
+
+    expect(page.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: String(COMMON_COURT_ITEM.id) },
+      {
+        type: "document",
+        sourceDocumentId: quarantineIdOf(UNKEYED_SEARCH_ITEM),
+      },
+    ]);
+    expect(page.withoutStableFields).toBe(1);
+  });
+
+  test("a page whose every record is keyed states no uncounted record", async () => {
+    mockFetchWithBodies([
+      { pattern: SEARCH_PATTERN, body: searchBody([COMMON_COURT_ITEM], 1) },
+    ]);
+
+    const page = await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
+
+    expect(page.withoutStableFields).toBeUndefined();
+  });
+
   test("a listed item with no id and no docket is built listing-only under its listed identity", async () => {
     mockFetchWithBodies([
       {

@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-sn] stored rows (persistable id and docket) gain only sourceDocumentIdRepairAliases; quarantine and placeholder rows are new records the old parser dropped.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -939,7 +940,9 @@ export const assemblePlSnDecision = async ({
   // Annotated because the union of the two payloads hides the detail-only
   // fields below; a listing row simply states none of them.
   const record: PlSnDetail = detail ?? item;
-  const docket = record.sygnatura_sprawy ?? docketOf(item);
+  // The docket as stated, blank or not: rows already stored under an id were
+  // labelled this way, and a replay must label them the same.
+  const docket = record.sygnatura_sprawy ?? item.sygnatura_sprawy;
   // A listed id with no docket is still the court's document: it is stored
   // under its id, labelled by it and marked as a placeholder.
   const caseNumber = docket ?? id;
@@ -1405,26 +1408,22 @@ const listPlSnSlicePage = async ({
   }
   const { rows } = listed.value;
 
+  // A row with no id and no docket is left out rather than keyed on a guess:
+  // a date and a form name no one decision. It is counted, not dropped, so
+  // the walk reports what the court listed and nothing could store.
   const items = rows.flatMap((row) => {
     const identity = plSnListingIdentity(normalizePlSnListingItem(row));
-    if (identity === undefined) {
-      // No id and no docket: a date and a form name no one decision, so the
-      // row is left out rather than keyed on a guess, as the crawl leaves it.
-      logger.warn("case_law.ingestion.record_unidentifiable", {
-        adapterKey: ADAPTER_KEYS.PL_SN,
-        slice,
-        reason: "no-stable-field",
-      });
-      return [];
-    }
-    return [{ identity, payload: row }];
+    return identity === undefined ? [] : [{ identity, payload: row }];
   });
+  const withoutStableFields = rows.length - items.length;
+  const unstored = withoutStableFields === 0 ? {} : { withoutStableFields };
 
   if (rows.length === 0) {
     return { items, totalPages: page };
   }
   return {
     items,
+    ...unstored,
     totalPages: rows.length < LISTING_PAGE_SIZE ? page + 1 : page + 2,
   };
 };

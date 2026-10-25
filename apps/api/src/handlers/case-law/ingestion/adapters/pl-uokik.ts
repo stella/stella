@@ -2647,22 +2647,18 @@ const listPlUokikSlicePage = async ({
       ),
     );
   }
+  // A row with no UNID and no column states nothing but a view position,
+  // which is not an identity: it is left out rather than keyed on a guess,
+  // and counted so the walk reports what the register listed and nothing
+  // could store.
+  const items = inside.flatMap(({ entry, row }) => {
+    const identity = plUokikListingIdentity(row);
+    return identity === undefined ? [] : [{ identity, payload: entry }];
+  });
+  const withoutStableFields = inside.length - items.length;
   return {
-    items: inside.flatMap(({ entry, row }) => {
-      const identity = plUokikListingIdentity(row);
-      if (identity === undefined) {
-        // No UNID and no column: nothing but a view position, which is not
-        // an identity. Left out rather than keyed on a guess; the crawl
-        // reports the same row as unidentifiable.
-        logger.warn("case_law.ingestion.record_unidentifiable", {
-          adapterKey: ADAPTER_KEYS.PL_UOKIK,
-          slice,
-          reason: "no-stable-field",
-        });
-        return [];
-      }
-      return [{ identity, payload: entry }];
-    }),
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages,
   };
 };

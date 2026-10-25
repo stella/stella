@@ -464,6 +464,8 @@ describe("cz-ns listSlicePage", () => {
       { type: "document", sourceDocumentId: UNID.FIRST },
       { type: "document", sourceDocumentId: UNID.SECOND },
     ]);
+    // Every anchor the listing parses names a universal id.
+    expect(listed.withoutStableFields).toBeUndefined();
 
     const url = requestedUrls.at(0) ?? "";
     const query = new URL(url).searchParams.get("Query") ?? "";

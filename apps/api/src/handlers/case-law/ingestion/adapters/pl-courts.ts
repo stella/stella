@@ -1,3 +1,5 @@
+// parser-output-unchanged: [pl-ncourt] pl-ncourt imports only the ruling decision-type constants from this module, which are unchanged.
+// parser-output-unchanged: [pl-courts] only adds sourceDocumentIdRepairAliases to SAOS-id rows; id-less rows an earlier version stored keep their docket identity and output.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -43,6 +45,7 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
@@ -84,6 +87,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { isKeyableListingIdentity } from "@/api/lib/legal-search/ingestion-types";
@@ -1356,14 +1360,28 @@ const plCourtsQuarantineId = (
       }).sourceDocumentId;
 };
 
-/** A docket the case-number column and the ledger's identity key both hold. */
-const isKeyableDocket = (docket: string): boolean =>
-  fitsCitationStorageField("caseNumber", docket) &&
-  isKeyableListingIdentity({
-    type: "case-number",
-    caseNumber: docket,
-    language: PL_COURTS_LANGUAGE,
-  });
+/**
+ * The docket an id-less item is keyed on, as the row stores it, or
+ * `undefined` where the case-number column cannot hold it.
+ *
+ * Judged on the stored form (`storedCaseNumberOf`: dangerous characters
+ * removed, nothing trimmed for a row with no publisher id), not the listed
+ * one. Every docket an earlier parser could store by case number therefore
+ * keeps that identity instead of moving to a quarantine id, and the listing
+ * names the value the held check finds in the column.
+ */
+const keyableDocketOf = (docket: string): string | undefined => {
+  const stored = docket.replace(DANGEROUS_CHARS, "");
+  return stored.length > 0 &&
+    fitsCitationStorageField("caseNumber", stored) &&
+    isKeyableListingIdentity({
+      type: "case-number",
+      caseNumber: stored,
+      language: PL_COURTS_LANGUAGE,
+    })
+    ? stored
+    : undefined;
+};
 
 /**
  * The identity a listed item is stored under: its SAOS id, its docket where
@@ -1379,8 +1397,9 @@ const plCourtsItemIdentity = (item: SaosItem): PlCourtsItemIdentity => {
     return { type: "document", sourceDocumentId };
   }
   const docket = primaryCaseNumber({ preferred: item });
-  if (docket !== undefined && isKeyableDocket(docket)) {
-    return { type: "case-number", caseNumber: docket };
+  const keyed = docket === undefined ? undefined : keyableDocketOf(docket);
+  if (keyed !== undefined) {
+    return { type: "case-number", caseNumber: keyed };
   }
   const quarantined = plCourtsQuarantineId(item, docket);
   if (quarantined === undefined) {
@@ -2222,20 +2241,21 @@ const listPlCourtsSlicePage = async ({
     page,
     ...(signal === undefined ? {} : { signal }),
   });
+  const items: ReconciliationListingItem[] = [];
+  // Listed, but with no stable field to name or store it by (case-law
+  // AGENTS.md rule 20): counted, so the walk reports the gap.
+  let withoutStableFields = 0;
+  for (const record of records) {
+    const identity = plCourtsListingIdentity(normalizeSaosDumpItem(record));
+    if (identity === undefined) {
+      withoutStableFields += 1;
+    } else {
+      items.push({ identity, payload: record });
+    }
+  }
   return {
-    items: records.flatMap((record) => {
-      const identity = plCourtsListingIdentity(normalizeSaosDumpItem(record));
-      if (identity === undefined) {
-        // No stable field to name it by (case-law AGENTS.md rule 20).
-        logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
-          adapterKey: ADAPTER_KEYS.PL_COURTS,
-          slice,
-          page,
-        });
-        return [];
-      }
-      return [{ identity, payload: record }];
-    }),
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages,
   };
 };

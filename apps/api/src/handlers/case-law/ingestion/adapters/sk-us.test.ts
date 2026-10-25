@@ -819,7 +819,8 @@ describe("sk-us listSlicePage", () => {
             sourceDocumentId: documentAt(index).documentId,
           })),
       );
-      // Reported, never a silent gap.
+      // Counted, so coverage shows the gap, and named by its offset.
+      expect(page.withoutStableFields).toBe(1);
       expect(
         logs
           .at("WARN")
@@ -840,6 +841,32 @@ describe("sk-us listSlicePage", () => {
     }
     expect(stub.calls()).toBe(SPLIT_REQUEST_BOUND);
   }, 30_000);
+
+  test("a served row stating nothing that names it is counted, not keyed", async () => {
+    mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: [
+            PLENARY_OPINION,
+            { mkDocumentType: "Rozhodnutie - Nález", index: 1 },
+          ],
+          numFound: 2,
+        },
+      ],
+    });
+
+    const page = await reconciliation.listSlicePage({
+      slice: "2020-03",
+      page: 0,
+    });
+
+    expect(page.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: PLENARY_OPINION.documentId },
+    ]);
+    expect(page.withoutStableFields).toBe(1);
+    expect(page.totalPages).toBe(1);
+  });
 
   test("a page of a poisoned month that carries no refused record costs one request", async () => {
     const stub = mockFetch({ search: [], searchFor: poisonedDms });
@@ -886,6 +913,7 @@ describe("sk-us listSlicePage", () => {
     // listed decision like any other and nothing is left out.
     expect(singletonCalls).toBe(2);
     expect(page.items).toHaveLength(100);
+    expect(page.withoutStableFields).toBeUndefined();
     expect(page.items.at(UNSERVED_INDEX - 100)?.identity).toEqual({
       type: "document",
       sourceDocumentId: documentAt(UNSERVED_INDEX).documentId,
@@ -1899,6 +1927,41 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
         },
       },
     });
+  });
+
+  test("stored-raw replay rebuilds a quarantined row but never re-keys a row stored under another identity", async () => {
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+    const input = {
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({ listing: JSON.stringify(withoutId) }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: PLENARY_OPINION.mkRSAPNumberOfFile,
+      sourceDocumentId: quarantineIdOf(withoutId),
+      language: "sk",
+      court: "Ústavný súd SR",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    };
+
+    expect(await skUsAdapter.reparseStoredRaw?.(input)).toMatchObject({
+      type: "parsed",
+      result: {
+        sourceDocumentId: quarantineIdOf(withoutId),
+        isListingOnly: true,
+      },
+    });
+    // A docket-keyed row from before the DMS id was the identity.
+    expect(
+      await skUsAdapter.reparseStoredRaw?.({
+        ...input,
+        sourceDocumentId: null,
+      }),
+    ).toMatchObject({ type: "rejected", rejection: "identity-mismatch" });
   });
 
   test("builds nothing for a document whose download fails and reports the download", async () => {

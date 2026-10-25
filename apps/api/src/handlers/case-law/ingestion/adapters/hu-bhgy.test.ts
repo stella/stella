@@ -1259,6 +1259,51 @@ describe("a listed decision with no usable publisher key", () => {
     ]);
   });
 
+  test("the slice walk counts a row stating no key, no docket and no summary", async () => {
+    // Court and year name thousands of decisions, so the row is no item; the
+    // count is what lets the walker show the record it lists as unstored.
+    const unnamed = {
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+      IndexelesIdeje: "2026-09-19T13:00:00+02:00",
+    };
+    const stub = stubPublisher(() =>
+      searchResponse(
+        [keyless, unnamed, rowAt(6, "2026-09-19T12:00:00+02:00")],
+        3,
+      ),
+    );
+    try {
+      const page = await reconciliation.listSlicePage({
+        slice: "2025-b-gazd",
+        page: 0,
+      });
+      expect(page.items.map(({ identity }) => storedIdOf(identity))).toEqual([
+        storedIdOf(huBhgyListingIdentity(normalizeHuBhgyRow(keyless))),
+        "id-6",
+      ]);
+      expect(page.withoutStableFields).toBe(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  test("a slice of nameable rows reports no unstored records", async () => {
+    const stub = stubPublisher(() =>
+      searchResponse([keyless, rowAt(6, "2026-09-19T12:00:00+02:00")], 2),
+    );
+    try {
+      const page = await reconciliation.listSlicePage({
+        slice: "2025-b-gazd",
+        page: 0,
+      });
+      expect(page.items).toHaveLength(2);
+      expect(page.withoutStableFields).toBeUndefined();
+    } finally {
+      stub.restore();
+    }
+  });
+
   test("a docket-less quarantined row carries a placeholder label", async () => {
     const summarised = {
       MeghozoBirosag: "Kúria",

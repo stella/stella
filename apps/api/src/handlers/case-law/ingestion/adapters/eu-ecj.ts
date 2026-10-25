@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] keyed rows gain only a repair alias; legacy null-id rows replay under the same identity.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -26,6 +27,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -733,14 +735,15 @@ const listedVariantOf = (
     : { celex: binding.celex.value, ecli: binding.ecli.value, language };
 };
 
-/** The structured warning for a listed variant nothing can name. */
-const warnNoStableField = (
-  where: { slice: string } | { cursor: string },
-  binding: SparqlResult,
-): void => {
+/**
+ * The structured warning for a listed variant the crawl cannot name. The
+ * slice walk counts such variants in `withoutStableFields` instead, which the
+ * shared walker reports once per slice.
+ */
+const warnNoStableField = (cursor: string, binding: SparqlResult): void => {
   logger.warn("case_law.ingestion.listed_row_without_stable_fields", {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
-    ...where,
+    cursor,
     reason: "unpersistable-celex-and-blank-ecli",
     language: binding.language.value,
   });
@@ -1783,8 +1786,16 @@ const ECJ_QUARANTINE_REASON = "unpersistable-celex";
  *
  * Nothing is fetched: the notice is addressed by the CELEX, and a document
  * filed under a docket derived from a malformed CELEX would publish a
- * decision under a number nobody cites. The label is a placeholder for the
- * same reason.
+ * decision under a number nobody cites.
+ *
+ * The label is the one the crawl filed this variant under before it was
+ * quarantined, `celexToCaseNumber` of the CELEX as listed, because that crawl
+ * did fetch and store such a variant, under no id and keyed on that label.
+ * Keeping it lets the pipeline's legacy null-id adoption (same label and
+ * language, proved by the ECLI) re-key that stored row to the quarantine
+ * identity, its document intact, instead of inserting a second row beside it.
+ * A label the CELEX does not parse into a docket is marked a placeholder; one
+ * no column can hold falls back to the fingerprint.
  */
 const quarantinedEcjDecision = ({
   binding,
@@ -1799,10 +1810,17 @@ const quarantinedEcjDecision = ({
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: JSON.stringify(binding),
   });
+  const celex = binding.celex.value;
+  const legacyLabel = celexToCaseNumber(celex);
+  const labelFits =
+    legacyLabel.trim() !== "" &&
+    legacyLabel.length <= SOURCE_DOCUMENT_ID_MAX_LENGTH;
   return plainTextIngestionResult(
     {
-      caseNumber: `CJEU listing ${identity.fingerprint}`,
-      caseNumberIsPlaceholder: true,
+      caseNumber: labelFits
+        ? legacyLabel
+        : `CJEU listing ${identity.fingerprint}`,
+      caseNumberIsPlaceholder: !labelFits || legacyLabel === celex,
       isListingOnly: true,
       sourceDocumentId: identity.sourceDocumentId,
       ecli,
@@ -2592,14 +2610,15 @@ const isEcjQuarantinedPayload = (
 /**
  * One item per variant a set of bindings names, keyed as the crawl stores
  * it: the re-published manifestations of one variant are one item, and a
- * language this adapter does not publish is none.
+ * language this adapter does not publish is none. A variant nothing names is
+ * counted once rather than listed.
  */
 const listedEcjItems = (
   bindings: readonly SparqlResult[],
-  slice: string,
-): ReconciliationSlicePage["items"] => {
+): Pick<ReconciliationSlicePage, "items" | "withoutStableFields"> => {
   const items: ReconciliationSlicePage["items"] = [];
   const seen = new Set<string>();
+  const unnamed = new Set<string>();
   for (const binding of bindings) {
     const variant = listedVariantOf(binding);
     if (variant === undefined) {
@@ -2632,15 +2651,19 @@ const listedEcjItems = (
       }
       case "no-stable-field":
         // Nothing the binding states could name the variant again, so it is
-        // not invented an identity; the warning records the listing.
-        warnNoStableField({ slice }, binding);
+        // not invented an identity; it is counted, once per variant as the
+        // crawl groups it, so coverage shows the record it lists.
+        unnamed.add(`${variant.celex}:${variant.language}`);
         break;
       default:
         identity satisfies never;
         panic(`Unhandled eu-ecj identity: ${JSON.stringify(identity)}`);
     }
   }
-  return items;
+  return {
+    items,
+    ...(unnamed.size === 0 ? {} : { withoutStableFields: unnamed.size }),
+  };
 };
 
 /**
@@ -2670,7 +2693,7 @@ const listEcjSlicePage = async ({
     signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
   return {
-    items: listedEcjItems(bindings, slice),
+    ...listedEcjItems(bindings),
     // Structural, not reported: the publisher answers a date range, so the
     // months of the year are the pages whether or not it decided anything in
     // them.
@@ -3555,7 +3578,7 @@ export const euEcjAdapter = defineSourceAdapter({
           ) {
             // Nothing the binding states could name the variant again, so it
             // is not invented an identity; the warning records the listing.
-            warnNoStableField({ cursor: dateFrom }, first);
+            warnNoStableField(dateFrom, first);
             continue;
           }
 

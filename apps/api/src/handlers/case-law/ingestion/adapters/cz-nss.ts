@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-nss] rows a previous version stored only gain sourceDocumentIdRepairAliases; id-less, reference-less and placeholder rows are records the previous parser dropped.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -628,9 +629,17 @@ const statedDecisionType = (value: string | undefined): string | undefined =>
  * Exported so the crawl, the listing walk and their tests read one parser:
  * a second copy of these patterns would certify itself rather than the
  * adapter.
+ *
+ * `withoutStableFields` counts the rows the page lists with neither an id nor
+ * a reference. Nothing about them can be keyed or stored, but the portal
+ * counted them, so each caller reports them: the crawl as a listing gap, the
+ * reconciliation walk as `ReconciliationSlicePage.withoutStableFields`.
  */
-export const parseResultRows = (html: string): ParsedRow[] => {
+export const parseResultPage = (
+  html: string,
+): { rows: ParsedRow[]; withoutStableFields: number } => {
   const rows: ParsedRow[] = [];
+  let withoutStableFields = 0;
 
   const tbodyPattern = /<tbody>(?<block>[\s\S]*?)<\/tbody>/giu;
   let tbodyMatch: RegExpExecArray | null;
@@ -645,17 +654,23 @@ export const parseResultRows = (html: string): ParsedRow[] => {
     // the `ZobrazeneVysledky[n].ID` form field; a block with neither is page
     // furniture, not a row. A row whose link states no usable id is still a
     // listed document (rule 20), kept under its quarantine identity.
-    const detailMatch =
-      /href="\/DokumentDetail\/Index\/(?<documentId>[^"]*)"/u.exec(block);
-    if (detailMatch === null && !block.includes("ZobrazeneVysledky[")) {
+    // The numeric link is looked for first, anywhere in the block, so a row
+    // that also carries some malformed detail link keys on the same id it
+    // always did rather than being quarantined.
+    const numericDocumentId =
+      /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block)
+        ?.groups?.["documentId"];
+    if (
+      numericDocumentId === undefined &&
+      !/href="\/DokumentDetail\/Index\//u.test(block) &&
+      !block.includes("ZobrazeneVysledky[")
+    ) {
       continue;
     }
-    const statedDocumentId = detailMatch?.groups?.["documentId"];
     const documentId =
-      statedDocumentId !== undefined &&
-      /^\d+$/u.test(statedDocumentId) &&
-      isPersistableSourceDocumentId(statedDocumentId)
-        ? statedDocumentId
+      numericDocumentId !== undefined &&
+      isPersistableSourceDocumentId(numericDocumentId)
+        ? numericDocumentId
         : undefined;
 
     const cells: string[] = [];
@@ -687,13 +702,9 @@ export const parseResultRows = (html: string): ParsedRow[] => {
     if (documentId === undefined && publishedCaseNumber === undefined) {
       // Neither an id nor a reference: what is left is the row's position and
       // a date and type a whole day's decisions share, so there is nothing
-      // stable to keep it under. The crawl counts the row as a listing gap and
-      // the reconciliation walk refuses the short page.
-      logger.warn("case_law.ingestion.listing_row_without_stable_field", {
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        reason: "no-document-id-and-no-reference",
-      });
-      continue;
+      // stable to keep it under.
+      withoutStableFields += 1;
+      continue; // unsignalled-skip-allow: counted in withoutStableFields, which the reconciliation walk reports per slice and the crawl warns on per page
     }
     // An empty docket is the row the portal lists with an id and no usable
     // reference; `rowToResult` labels it with the id, marked as a stand-in.
@@ -728,8 +739,12 @@ export const parseResultRows = (html: string): ParsedRow[] => {
     });
   }
 
-  return rows;
+  return { rows, withoutStableFields };
 };
+
+/** The rows of a results page that can be keyed; see {@link parseResultPage}. */
+export const parseResultRows = (html: string): ParsedRow[] =>
+  parseResultPage(html).rows;
 
 type DecisionContent = {
   fulltext: string | undefined;
@@ -2711,13 +2726,14 @@ const listCzNssSlicePage = async ({
     await executeSearch(session, slice, effectiveSignal),
   );
 
-  const firstPageRows = parseResultRows(search.html);
+  const firstPage = parseResultPage(search.html);
+  const firstPageListed = firstPage.rows.length + firstPage.withoutStableFields;
   if (search.type === "absent") {
-    if (firstPageRows.length > 0) {
+    if (firstPageListed > 0) {
       // The page contradicts itself, so neither number can be trusted for a
       // ledger row. Refused rather than resolved in either direction.
       throw new AdapterFetchError({
-        message: `NSS stated no records for ${slice} while rendering ${firstPageRows.length}`,
+        message: `NSS stated no records for ${slice} while rendering ${firstPageListed}`,
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         cursor: slice,
       });
@@ -2744,8 +2760,11 @@ const listCzNssSlicePage = async ({
     const { error } = continued;
     throw error;
   }
-  const rows =
-    continued === null ? firstPageRows : parseResultRows(continued.value);
+  const parsed =
+    continued === null ? firstPage : parseResultPage(continued.value);
+  // A row with nothing to key on is still a row the portal listed, so it
+  // counts towards what the page carries and is reported, not refused.
+  const listed = parsed.rows.length + parsed.withoutStableFields;
 
   // How many rows this page must carry, from the count the portal stated for
   // the whole day. A short page is refused rather than returned, because the
@@ -2760,29 +2779,25 @@ const listCzNssSlicePage = async ({
     page,
     statedCount: search.statedCount,
   });
-  if (rows.length < expectedRows) {
+  if (listed < expectedRows) {
     throw new AdapterFetchError({
-      message: `NSS page ${page} of ${slice} carried ${rows.length} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
+      message: `NSS page ${page} of ${slice} carried ${listed} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: slice,
     });
   }
 
+  // `parseResultPage` already leaves out a row with nothing to key on, so
+  // every row here keys; one that does not is counted with them.
+  const items = parsed.rows.flatMap((row) => {
+    const identity = czNssListingIdentity(row);
+    return identity === null ? [] : [{ identity, payload: row }];
+  });
+  const withoutStableFields =
+    parsed.withoutStableFields + (parsed.rows.length - items.length);
   return {
-    // `parseResultRows` drops a row with nothing to key on, so every row here
-    // keys; the warning names the case if that ever changes.
-    items: rows.flatMap((row) => {
-      const identity = czNssListingIdentity(row);
-      if (identity === null) {
-        logger.warn("case_law.ingestion.listing_row_without_stable_field", {
-          adapterKey: ADAPTER_KEYS.CZ_NSS,
-          slice,
-          reason: "no-document-id-and-no-reference",
-        });
-        return [];
-      }
-      return [{ identity, payload: row }];
-    }),
+    items,
+    ...(withoutStableFields === 0 ? {} : { withoutStableFields }),
     totalPages: czNssTotalPages(search.statedCount),
   };
 };
@@ -3184,9 +3199,19 @@ export const czNssAdapter = defineSourceAdapter({
           throw error;
         }
 
-        const rows = parseResultRows(
+        const { rows, withoutStableFields } = parseResultPage(
           continued === null ? searchResult.html : continued.value,
         );
+        if (withoutStableFields > 0) {
+          // Counted in the listing gap below as well; this names why.
+          logger.warn("case_law.ingestion.listing_row_without_stable_field", {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            date,
+            page,
+            count: withoutStableFields,
+            reason: "no-document-id-and-no-reference",
+          });
+        }
         const expectedRows = czNssExpectedRows({
           page,
           statedCount: searchResult.statedCount,

@@ -1377,6 +1377,7 @@ describe("a listed row is never dropped silently", () => {
     expect(listed.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: expectedId },
     ]);
+    expect(listed.withoutStableFields).toBeUndefined();
     const built = await plUokikAdapter.reconciliation.buildDecision(
       listed.items[0]?.payload,
     );
@@ -1396,6 +1397,7 @@ describe("a listed row is never dropped silently", () => {
       page: 0,
     });
     expect(listed.items).toEqual([]);
+    expect(listed.withoutStableFields).toBe(1);
   });
 });
 

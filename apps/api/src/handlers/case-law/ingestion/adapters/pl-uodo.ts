@@ -2282,28 +2282,25 @@ const listPlUodoSlicePage = async ({
     `slice ${slice} page ${page}`,
     tallyPlUodoSkips(rows.map(({ row }) => row)),
   );
-  const items = rows.flatMap(({ payload, row }) => {
-    if (classifyPlUodoRow(row).type === "skipped") {
-      return [];
-    }
+  const inScope = rows.filter(
+    ({ row }) => classifyPlUodoRow(row).type !== "skipped",
+  );
+  // An in-scope record with no URN and nothing to fingerprint (see
+  // `plUodoQuarantineId`) is left out rather than keyed on a guess, and
+  // counted so the walk reports what the portal listed and nothing could
+  // store. Out-of-scope records are tallied above, by reason.
+  const items = inScope.flatMap(({ payload, row }) => {
     const identity = plUodoListingIdentity(row);
-    if (identity === undefined) {
-      // No URN and nothing to fingerprint (see `plUodoQuarantineId`): left
-      // out rather than keyed on a guess, as the crawl leaves it out.
-      logger.warn("case_law.ingestion.record_unidentifiable", {
-        adapterKey: ADAPTER_KEYS.PL_UODO,
-        slice,
-        reason: "no-stable-field",
-      });
-      return [];
-    }
-    return [{ identity, payload }];
+    return identity === undefined ? [] : [{ identity, payload }];
   });
+  const withoutStableFields = inScope.length - items.length;
+  const unstored = withoutStableFields === 0 ? {} : { withoutStableFields };
   if (served === 0) {
     return { items, totalPages: page };
   }
   return {
     items,
+    ...unstored,
     totalPages: served < LISTING_PAGE_SIZE ? page + 1 : page + 2,
   };
 };

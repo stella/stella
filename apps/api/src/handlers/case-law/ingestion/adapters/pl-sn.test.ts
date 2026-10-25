@@ -341,6 +341,7 @@ describe("listing one decision date", () => {
     expect(page.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: quarantineIdOf(IDLESS_ROW) },
     ]);
+    expect(page.withoutStableFields).toBeUndefined();
 
     const built = await plSnAdapter.reconciliation.buildDecision(
       page.items[0]?.payload,
@@ -370,6 +371,7 @@ describe("listing one decision date", () => {
     });
 
     expect(page.items).toHaveLength(99);
+    expect(page.withoutStableFields).toBe(1);
     // The publisher served a full page, so there is more to ask for.
     expect(page.totalPages).toBe(2);
   });

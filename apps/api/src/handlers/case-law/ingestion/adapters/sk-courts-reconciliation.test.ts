@@ -419,6 +419,7 @@ describe("sk-courts listSlicePage", () => {
       { type: "document", sourceDocumentId: GALANTA_ITEM.guid },
       { type: "document", sourceDocumentId: BARDEJOV_ITEM.guid },
     ]);
+    expect(page.withoutStableFields).toBeUndefined();
     // The loop parks a payload as JSON and replays it days later, so what a
     // page hands back has to survive that round trip unchanged.
     const serialized = JSON.stringify(page.items.map(({ payload }) => payload));
@@ -455,6 +456,8 @@ describe("sk-courts listSlicePage", () => {
         panic("the malformed record has no listing identity"),
     ]);
     expect(page.items.at(1)?.payload).toEqual(malformed);
+    // Listed but nothing to store: counted, so coverage shows the gap.
+    expect(page.withoutStableFields).toBe(1);
   });
 
   test("a payload without a count is refused, not read as an empty date", async () => {
