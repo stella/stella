@@ -584,7 +584,16 @@ async fn observe_editor(original: &Path, current: &Path) -> EditorState {
   match tokio::fs::symlink_metadata(current).await {
     Ok(metadata) if metadata.is_file() => {}
     Ok(_) => return EditorState::Unknown,
-    Err(error) if error.kind() == ErrorKind::NotFound => return EditorState::Unknown,
+    Err(error) if error.kind() == ErrorKind::NotFound => {
+      return match tokio::fs::symlink_metadata(original).await {
+        Err(error) if error.kind() == ErrorKind::NotFound => EditorState::Missing,
+        Ok(_) => EditorState::Unknown,
+        Err(error) => {
+          tracing::warn!(error = %error, "document editor observation is unavailable");
+          EditorState::Unknown
+        }
+      };
+    }
     Err(error) => {
       tracing::warn!(error = %error, "document editor observation is unavailable");
       return EditorState::Unknown;
@@ -787,7 +796,17 @@ impl SessionManager {
         _ => None,
       };
       if let Some((original, current)) = paths {
-        record.editor_state = observe_editor(&original, &current).await;
+        let observed = observe_editor(&original, &current).await;
+        // A rename-save may briefly hide both paths. Only consecutive durable
+        // missing observations can authorize the existing NotFound retirement.
+        record.editor_state = match (record.editor_state, observed, &record.copy) {
+          (
+            EditorState::Missing,
+            EditorState::Missing,
+            CopyRetirement::Pending { .. },
+          ) => EditorState::Closed,
+          (_, observed, _) => observed,
+        };
       }
       if record.finished() && record.editor_state != EditorState::Closed {
         self.retired_sessions[index] = record;
@@ -2883,7 +2902,7 @@ where
     return OpenProbeSchedule::Stopped;
   }
   session.editor_state = editor_state;
-  if editor_state == EditorState::Unknown {
+  if matches!(editor_state, EditorState::Unknown | EditorState::Missing) {
     session.closed_recheck_count = 0;
     return OpenProbeSchedule::Watching;
   }
@@ -3342,9 +3361,138 @@ mod tests {
     crate::local_store::remove_private(&recovery).unwrap();
     assert_eq!(
       observe_editor(&original, &recovery).await,
-      EditorState::Unknown
+      EditorState::Missing
     );
     std::fs::remove_dir_all(sandbox).unwrap();
+  }
+
+  fn missing_copy_manager() -> (SessionManager, PathBuf, PathBuf) {
+    crate::i18n::init_en();
+    let sandbox = std::env::temp_dir()
+      .join(format!("desktop-missing-copy-{}", uuid::Uuid::new_v4()));
+    let mut manager = test_manager();
+    manager.store_path = sandbox.join("sessions.json");
+    manager.edit_root = sandbox.join("editing");
+    let mut stored = persisted_session_for_test("missing");
+    let source = manager.edit_root.join("missing/document.docx");
+    stored.file_path = source.to_string_lossy().into_owned();
+    let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
+    record.token = document_sessions::TokenRetirement::Deleted;
+    let CopyRetirement::Pending { destination, .. } = &record.copy else {
+      unreachable!();
+    };
+    let destination = destination.clone();
+    for path in [&source, &destination] {
+      crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
+    }
+    manager.retired_sessions.push(record);
+    (manager, source, destination)
+  }
+
+  #[tokio::test]
+  async fn missing_copy_requires_two_durable_observations() {
+    let (mut manager, _, _) = missing_copy_manager();
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Pending { .. }
+    ));
+    assert_eq!(
+      manager.retired_sessions[0].editor_state,
+      EditorState::Missing
+    );
+    assert!(manager.get_snapshot().document_recovery.pending);
+    let loaded = session_store::load_session_store(&manager.store_path).await;
+    assert_eq!(
+      loaded.retired_sessions[0].editor_state,
+      EditorState::Missing
+    );
+    manager.retired_sessions = loaded.retired_sessions;
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(manager.retired_sessions.is_empty());
+    let recovery = manager.get_snapshot().document_recovery;
+    assert!(!recovery.pending);
+    assert!(recovery.edits.is_empty());
+    std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+  }
+
+  #[tokio::test]
+  async fn missing_copy_keeps_a_returning_rename_save() {
+    let (mut manager, source, destination) = missing_copy_manager();
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Pending { .. }
+    ));
+    crate::local_store::write_private_atomic(&source, b"saved edits").unwrap();
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(matches!(
+      manager.retired_sessions[0].copy,
+      CopyRetirement::Quarantined { .. }
+    ));
+    assert_eq!(std::fs::read(&destination).unwrap(), b"saved edits");
+    assert!(!manager.get_snapshot().document_recovery.pending);
+    std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+  }
+
+  #[tokio::test]
+  async fn missing_copy_lock_hints_reset_consecutive_observations() {
+    for lock_in_source in [true, false] {
+      let (mut manager, source, destination) = missing_copy_manager();
+      manager
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+        .unwrap();
+      let hint = if lock_in_source {
+        &source
+      } else {
+        &destination
+      }
+      .with_file_name("~$document.docx");
+      crate::local_store::write_private_atomic(&hint, b"editor").unwrap();
+      for _ in 0..3 {
+        manager
+          .retry_retired_sessions(RetirementPass::ObserveEditors)
+          .await
+          .unwrap();
+        assert_eq!(
+          manager.retired_sessions[0].editor_state,
+          EditorState::Attached
+        );
+        assert!(matches!(
+          manager.retired_sessions[0].copy,
+          CopyRetirement::Pending { .. }
+        ));
+        assert!(manager.get_snapshot().document_recovery.pending);
+      }
+      crate::local_store::remove_private(&hint).unwrap();
+      manager
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+        .unwrap();
+      assert!(matches!(
+        manager.retired_sessions[0].copy,
+        CopyRetirement::Pending { .. }
+      ));
+      manager
+        .retry_retired_sessions(RetirementPass::ObserveEditors)
+        .await
+        .unwrap();
+      assert!(manager.retired_sessions.is_empty());
+      std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+    }
   }
 
   #[tokio::test]

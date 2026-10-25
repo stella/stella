@@ -77,6 +77,7 @@ pub fn partition_sessions(
 pub enum EditorState {
   #[default]
   Unknown,
+  Missing,
   Attached,
   Closed,
 }

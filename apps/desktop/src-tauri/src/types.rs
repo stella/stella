@@ -283,7 +283,7 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 23;
+pub const BRIDGE_VERSION: u32 = 24;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
@@ -899,6 +899,8 @@ mod fixture_tests {
   #[test]
   fn app_snapshot_fixture_roundtrips() {
     assert_roundtrip::<AppSnapshot>(APP_SNAPSHOT);
+    let snapshot: AppSnapshot = serde_json::from_str(APP_SNAPSHOT).unwrap();
+    assert_eq!(snapshot.bridge_version, BRIDGE_VERSION);
   }
 
   #[test]
