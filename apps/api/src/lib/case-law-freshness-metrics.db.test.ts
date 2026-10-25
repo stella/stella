@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -28,15 +29,25 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const GENERATION = "case_law_v5";
 const OTHER_GENERATION = "case_law_v6";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const OLDEST_PENDING_ID = "0198e331-e578-7000-b000-000000000001";
 const INDEX_ID = "case_law_v5_cs_sk";
 const NOW = new Date();
 const OLD = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
 const ONE_HOUR_OLD = new Date(NOW.getTime() - 60 * 60 * 1000);
+const MONTH_OLD = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000);
 const ids = Array.from(
   { length: 8 },
   (_, index) =>
     `0198e331-e578-7000-8000-${String(index + 401).padStart(12, "0")}`,
 );
+
+const measuredSeconds = (
+  report: Awaited<ReturnType<typeof readCaseLawFreshnessReportTx>>,
+): number =>
+  report.oldestUnpublishedAge.type === "measured"
+    ? report.oldestUnpublishedAge.seconds
+    : panic(`Expected a measured age, got ${report.oldestUnpublishedAge.type}`);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -188,9 +199,13 @@ test("counts the serving generation's pending projections and reports only enabl
   // counted on its own: an in-flight one is counted through its state.
   expect(report.backlogItems).toBe(2);
   expect(report.backlogCapped).toBe(false);
-  expect(report.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(3500);
-  expect(report.oldestUnpublishedAgeSeconds).toBeLessThan(7100);
-  expect(report.oldestUnpublishedAgeSource).toBe("desired_at");
+  expect(report.oldestUnpublishedAge).toEqual({
+    type: "measured",
+    seconds: expect.any(Number),
+    source: "desired_at",
+  });
+  expect(measuredSeconds(report)).toBeGreaterThanOrEqual(3500);
+  expect(measuredSeconds(report)).toBeLessThan(7100);
 
   await db
     .update(corpusIndexProjectionStates)
@@ -200,12 +215,10 @@ test("counts the serving generation's pending projections and reports only enabl
     async (tx) =>
       await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
   );
-  expect(fallbackReport.oldestUnpublishedAgeSeconds).toBeGreaterThanOrEqual(
-    7100,
-  );
-  expect(fallbackReport.oldestUnpublishedAgeSource).toBe(
-    "state_created_at_fallback",
-  );
+  expect(measuredSeconds(fallbackReport)).toBeGreaterThanOrEqual(7100);
+  expect(fallbackReport.oldestUnpublishedAge).toMatchObject({
+    source: "state_created_at_fallback",
+  });
   expect(report.sourceAges.map(({ source }) => source).toSorted()).toEqual(
     [ADAPTER_KEYS.CZ_NS, ADAPTER_KEYS.CZ_NSS].toSorted(),
   );
@@ -217,6 +230,28 @@ test("counts the serving generation's pending projections and reports only enabl
     report.sourceAges.find(({ source }) => source === ADAPTER_KEYS.CZ_NSS)
       ?.ageSeconds,
   ).toBeGreaterThan(1_000_000_000);
+});
+
+test("the oldest pending state counts wherever its retry puts it in the queue", async () => {
+  // Pending for a month, but retried later than every other state, so it is
+  // the last row in queue order.
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: GENERATION,
+    entityId: OLDEST_PENDING_ID,
+    desiredAction: "erase",
+    desiredEpoch: 1n,
+    workStatus: "retry_scheduled",
+    retryNotBefore: new Date(NOW.getTime() + DAY_MS),
+    createdAt: MONTH_OLD,
+    desiredAt: MONTH_OLD,
+  });
+  const report = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+
+  expect(measuredSeconds(report)).toBeGreaterThanOrEqual((29 * DAY_MS) / 1000);
 });
 
 test("a queue past the scan cap reports the cap and says so", async () => {
@@ -234,4 +269,7 @@ test("a queue past the scan cap reports the cap and says so", async () => {
 
   expect(report.backlogItems).toBe(CASE_LAW_FRESHNESS_SCAN_CAP);
   expect(report.backlogCapped).toBe(true);
+  // The month-old state is now beyond the window the report reads: the age
+  // is reported as unknown, never as the window's younger oldest.
+  expect(report.oldestUnpublishedAge).toEqual({ type: "incomplete" });
 });

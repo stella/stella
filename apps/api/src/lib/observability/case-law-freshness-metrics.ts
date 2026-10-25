@@ -22,14 +22,29 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const SCHEDULED_SOURCE_KEYS = Object.values(ADAPTER_KEYS);
 
+type PendingSinceSource = "desired_at" | "state_created_at_fallback";
+
+/**
+ * How long the oldest unpublished state has waited.
+ *
+ * `incomplete` when the queue is longer than the report reads: the window is
+ * the first rows in queue order (retry or update time), and the state pending
+ * longest can sit beyond it after a later retry, so the window's oldest is not
+ * the queue's. No index orders the queue by when work became pending, and a
+ * gauge is not worth another index on the projection table's hottest write
+ * path; the report says it cannot tell rather than publishing a younger age.
+ */
+export type CaseLawOldestUnpublishedAge =
+  | { type: "measured"; seconds: number; source: PendingSinceSource }
+  | { type: "no-backlog" }
+  | { type: "incomplete" };
+
 type CaseLawFreshnessReport = {
   /** Capped at `CASE_LAW_FRESHNESS_SCAN_CAP`. */
   backlogItems: number;
   /** Whether the queue held more rows than the report reads. */
   backlogCapped: boolean;
-  oldestUnpublishedAgeSeconds: number;
-  oldestUnpublishedAgeSource:
-    "desired_at" | "state_created_at_fallback" | "none";
+  oldestUnpublishedAge: CaseLawOldestUnpublishedAge;
   sourceAges: readonly { source: string; ageSeconds: number }[];
   convergence: string | null;
 };
@@ -43,7 +58,7 @@ const requiredNumber = (row: unknown, key: string): number => {
 const requiredAgeSource = (
   row: unknown,
   key: string,
-): CaseLawFreshnessReport["oldestUnpublishedAgeSource"] => {
+): PendingSinceSource | "none" => {
   if (!isRecord(row)) {
     return panic(`Malformed case-law freshness query result: ${key}`);
   }
@@ -129,6 +144,18 @@ const readServingBacklog = async (
   };
 };
 
+const oldestUnpublishedAgeOf = (
+  backlog: { age: number; ageSource: PendingSinceSource | "none" },
+  capped: boolean,
+): CaseLawOldestUnpublishedAge => {
+  if (capped) {
+    return { type: "incomplete" };
+  }
+  return backlog.ageSource === "none"
+    ? { type: "no-backlog" }
+    : { type: "measured", seconds: backlog.age, source: backlog.ageSource };
+};
+
 export const readCaseLawFreshnessReportTx = async (
   tx: Transaction,
 ): Promise<CaseLawFreshnessReport> => {
@@ -153,11 +180,11 @@ export const readCaseLawFreshnessReportTx = async (
     servingTarget === null
       ? null
       : await readCorpusIndexProjectionConvergenceTx(tx, servingTarget);
+  const backlogCapped = backlog.count > CASE_LAW_FRESHNESS_SCAN_CAP;
   return {
     backlogItems: Math.min(backlog.count, CASE_LAW_FRESHNESS_SCAN_CAP),
-    backlogCapped: backlog.count > CASE_LAW_FRESHNESS_SCAN_CAP,
-    oldestUnpublishedAgeSeconds: backlog.age,
-    oldestUnpublishedAgeSource: backlog.ageSource,
+    backlogCapped,
+    oldestUnpublishedAge: oldestUnpublishedAgeOf(backlog, backlogCapped),
     sourceAges: sourceRows,
     convergence,
   };
@@ -167,9 +194,26 @@ export const emitCaseLawFreshnessReport = (
   report: CaseLawFreshnessReport,
 ): void => {
   writeMetricLine(buildCaseLawProjectionBacklogMetric(report.backlogItems));
-  writeMetricLine(
-    buildCaseLawOldestUnpublishedAgeMetric(report.oldestUnpublishedAgeSeconds),
-  );
+  // An incomplete age emits nothing: a lower bound under the same metric
+  // would read as the backlog's true age. The backlog metric at the cap
+  // already says the queue is long.
+  switch (report.oldestUnpublishedAge.type) {
+    case "measured":
+      writeMetricLine(
+        buildCaseLawOldestUnpublishedAgeMetric(
+          report.oldestUnpublishedAge.seconds,
+        ),
+      );
+      break;
+    case "no-backlog":
+      writeMetricLine(buildCaseLawOldestUnpublishedAgeMetric(0));
+      break;
+    case "incomplete":
+      break;
+    default:
+      report.oldestUnpublishedAge satisfies never;
+      panic("Unhandled oldest unpublished age");
+  }
   for (const source of report.sourceAges) {
     writeMetricLine(
       buildCaseLawSourceSyncAgeMetric(source.source, source.ageSeconds),
