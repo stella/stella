@@ -972,11 +972,17 @@ describe("provider request policy", () => {
             const model = scenario.strict
               ? "google/gemini-3.8-flash"
               : "google/gemini-3.8-flash:online";
-            const adapter = createTanStackTextAdapterFactory({
-              provider: "openrouter",
-              managedOpenRouterCredential: MANAGED_CREDENTIAL,
-              ...scenario.options,
-            })(model);
+            // A customer key serves its own request; managed requests carry
+            // the tier's credential.
+            const adapter = createTanStackTextAdapterFactory(
+              "apiKey" in scenario.options
+                ? { provider: "openrouter", ...scenario.options }
+                : {
+                    provider: "openrouter",
+                    managedOpenRouterCredential: MANAGED_CREDENTIAL,
+                    ...scenario.options,
+                  },
+            )(model);
             const chatOptions = {
               model,
               logger: resolveDebugOption(false),
