@@ -242,25 +242,76 @@ describe("OAuth organization picker", () => {
 
     // The browser still holds the first session when the other account
     // signs in on that page.
-    const { browser: second, redirect: picker } =
+    const { browser: second, redirect: resumed } =
       await signInHumanFromOAuthPage({
         email: `picker-${Bun.randomUUIDv7()}@stella.dev`,
         oauthQuery: readSignedQuery(signIn),
         prior: first,
       });
     expect(second.userId).not.toBe(first.userId);
-    expect(picker.pathname).toBe(OAUTH_ORGANIZATION_PAGE_PATH);
-    expect(signedPrompts(picker)).not.toContain("login");
+    // The authorization resumes without a code or another sign-in prompt.
+    expect(resumed.pathname).not.toBe(OAUTH_LOGIN_PAGE_PATH);
+    expect(resumed.searchParams.has("code")).toBe(false);
+    expect(signedPrompts(resumed)).not.toContain("login");
 
+    // After sign-in the web page opens the organization step with the
+    // request it resumed, wherever the provider pointed; the new account
+    // creates its organization there.
     const secondOrganization = await createOrganization(second, "Second");
     await second.setActiveOrganization(secondOrganization.id);
     const consentPage = await continueAfterPicking({
       browser: second,
-      picker,
+      picker: resumed,
       status: "created",
     });
     expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
 
+    const grant = await consentAndExchange({
+      browser: second,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    const claims = decodeJwt(grant.accessToken);
+    expect(claims.sub).toBe(second.userId);
+    expect(claims["org_id"]).toBe(secondOrganization.id);
+  });
+
+  test("the organization step after a fresh sign-in continues instead of asking to sign in again", async () => {
+    const first = await signInHuman(`picker-${Bun.randomUUIDv7()}@stella.dev`);
+    const firstOrganization = await createOrganization(first, "First");
+    await first.setActiveOrganization(firstOrganization.id);
+    const client = await registerOAuthClient();
+
+    const { codeVerifier, redirect: signIn } = await authorizeOAuthClient(
+      first,
+      client,
+      undefined,
+      "login",
+    );
+    expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+
+    // The email code page posts its sign-in without the request; the web
+    // then opens the organization step with the request it was sent, login
+    // prompt included, and continues from there with the new session.
+    const second = await signInHuman(`picker-${Bun.randomUUIDv7()}@stella.dev`);
+    const secondOrganization = await createOrganization(second, "Second");
+    await second.setActiveOrganization(secondOrganization.id);
+    for (const status of ["selected", "created"] as const) {
+      const consentPage = await continueAfterPicking({
+        browser: second,
+        picker: signIn,
+        status,
+      });
+      expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+      expect(signedPrompts(consentPage)).not.toContain("login");
+    }
+
+    const consentPage = await continueAfterPicking({
+      browser: second,
+      picker: signIn,
+      status: "selected",
+    });
     const grant = await consentAndExchange({
       browser: second,
       client,
