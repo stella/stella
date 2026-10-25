@@ -26,9 +26,9 @@ import {
   readBilingualDocx,
 } from "@stll/folio-core/server";
 
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 /**

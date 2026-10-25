@@ -4,6 +4,7 @@ export const SHARED_LEDGER_PATHS = [
   ".oxlint-plugins/no-hand-rolled-concurrency-exceptions.json",
   ".oxlint-plugins/require-audit-on-mutation-ledger.json",
   "apps/api/capability-description-ledger.json",
+  "apps/api/src/lib/files/windowed-read-exceptions.json",
   "apps/api/src/mcp/write-tool-authority-ledger.json",
   "apps/api/src/tests/export-dropping-mock-ledger.json",
   "apps/api/src/tests/read-scaling/api-scaling-ledger.json",

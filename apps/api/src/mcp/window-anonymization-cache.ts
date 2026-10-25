@@ -2,9 +2,9 @@ import { Result } from "better-result";
 
 import { createSha256 } from "@stll/sha256/bun";
 
-import { recordReadWork } from "@/api/lib/db-query-counter";
+import { createWindowReadCache } from "@/api/lib/files/window-read-cache";
 import { LIMITS } from "@/api/lib/limits";
-import { createWindowReadCache } from "@/api/lib/window-read-cache";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 // Only emitted fields are retained; the reversible redaction map is never kept.

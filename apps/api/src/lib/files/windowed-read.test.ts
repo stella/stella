@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-import { caseLawWindowFixture } from "@/api/lib/case-law/windowed-read.fixture";
-import type { CaseLawWindowProfile } from "@/api/lib/windowed-read-surface";
+import type { CaseLawWindowProfile } from "@/api/lib/files/windowed-read-surface";
 import {
   WINDOWED_READ_DELEGATES,
   WINDOWED_READ_SURFACE,
-} from "@/api/lib/windowed-read-surface";
+} from "@/api/lib/files/windowed-read-surface";
+import { caseLawWindowFixture } from "@/api/tests/helpers/case-law-windowed-read.fixture";
 
 import exceptions from "./windowed-read-exceptions.json";
 
-const sourceRoot = fileURLToPath(new URL("../", import.meta.url));
+const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
 const profiles = {
   "case-law-reader": caseLawWindowFixture,
   "citation-passages": caseLawWindowFixture,
@@ -107,8 +107,8 @@ test("every registered document window has a live owner and executable budget gu
 });
 
 test("document window exceptions only shrink from the merge base", () => {
-  const cwd = fileURLToPath(new URL("../../../../", import.meta.url));
-  const ledger = "apps/api/src/lib/windowed-read-exceptions.json";
+  const cwd = fileURLToPath(new URL("../../../../../", import.meta.url));
+  const ledger = "apps/api/src/lib/files/windowed-read-exceptions.json";
   const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
     cwd,
   });

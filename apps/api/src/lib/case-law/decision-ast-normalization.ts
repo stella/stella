@@ -1,8 +1,8 @@
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 const normalized = new WeakMap<object, DocumentAst | null>();
 

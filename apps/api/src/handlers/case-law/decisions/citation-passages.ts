@@ -47,11 +47,11 @@ import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-ca
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { errorTag } from "@/api/lib/errors/utils";
+import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-import { defineWindowedRead } from "@/api/lib/windowed-read-surface";
 
 /** The paragraph an agent is given per citation, and its deep-link anchor. */
 export type CitationPassage = {

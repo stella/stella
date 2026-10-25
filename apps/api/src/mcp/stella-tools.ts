@@ -109,7 +109,6 @@ import {
   SEARCH_CASE_LAW_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   type ExtractedContentSourceProvenance,
@@ -126,6 +125,7 @@ import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   createCursorPage,
   decodePaginationCursor,

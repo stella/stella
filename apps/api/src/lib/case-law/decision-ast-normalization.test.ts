@@ -4,10 +4,8 @@ import { fileURLToPath } from "node:url";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 
 const astFor = (text: string): DocumentAst => ({
   version: 1,

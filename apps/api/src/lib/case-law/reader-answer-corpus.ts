@@ -11,7 +11,7 @@ import {
   listOutgoingDecisionCitations,
 } from "@/api/lib/case-law/decision-citations";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { defineWindowedRead } from "@/api/lib/windowed-read-surface";
+import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 
 export const READER_ANSWER_RELATED_LIMITS = {
   decisions: 8,

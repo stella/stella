@@ -1,11 +1,11 @@
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { recordReadWork } from "@/api/lib/db-query-counter";
+import { createWindowReadCache } from "@/api/lib/files/window-read-cache";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
-import { createWindowReadCache } from "@/api/lib/window-read-cache";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 type SectionIndex = Omit<DecisionSection, "text"> & { blockIndices: number[] };
 

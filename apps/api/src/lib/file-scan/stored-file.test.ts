@@ -3,10 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { envBase } from "@/api/env-base";
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";

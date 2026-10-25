@@ -1,6 +1,7 @@
 import { panic, TaggedError } from "better-result";
 import type { SQL } from "bun";
 import type { Logger } from "drizzle-orm";
+
 // Per-request database query counter.
 //
 // An AsyncLocalStorage-backed counter that lets the HTTP layer report how many
@@ -8,47 +9,22 @@ import type { Logger } from "drizzle-orm";
 // route (an e2e guard asserts per-route budgets from the `x-db-queries`
 // response header this feeds).
 //
-// The module is deliberately side-effect free and framework-agnostic: it only
-// creates an ALS instance and pure helpers. Nothing here reads env or touches
-// the database, so it is safe to import from shared modules (see the
-// "Module Side Effects" rules in AGENTS.md). Callers decide when to activate a
-// store; the Drizzle logger is a no-op whenever no store is active (background
+// The shared request-work owner holds the ALS store; parsers and storage
+// adapters import its pure payload counters without SQL fingerprinting's
+// callsite paths. Nothing here reads env or opens a database. Callers decide
+// when to activate a store; the Drizzle logger is a no-op outside it (background
 // jobs, boot-time queries), so wiring it in costs nothing beyond an ALS lookup
 // on those paths. Deployed environments wire no logger at all.
-import { AsyncLocalStorage } from "node:async_hooks";
-import { TransformStream } from "node:stream/web";
+import {
+  currentRequestWork,
+  emptyReadWork,
+  withRequestWork,
+} from "@/api/lib/observability/request-work";
+import type { QueryCounter } from "@/api/lib/observability/request-work";
 
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
 export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
-
-export type ReadWork = {
-  storageReadBytes: number;
-  decryptedBytes: number;
-  astParses: number;
-  documentConversions: number;
-  dbResultBytes: number;
-  cacheHits: number;
-};
-
-type QueryCounter = ReadWork & {
-  count: number;
-  transactions: number;
-  fingerprints: Map<string, number>;
-  detectRepeatedQueries: boolean;
-  countTransactions: boolean;
-};
-
-const emptyReadWork = (): ReadWork => ({
-  storageReadBytes: 0,
-  decryptedBytes: 0,
-  astParses: 0,
-  documentConversions: 0,
-  dbResultBytes: 0,
-  cacheHits: 0,
-});
-
-const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 
 /**
  * Run `fn` inside a fresh counter store. Every query logged through
@@ -83,7 +59,7 @@ export const runWithQueryCounter = <TResult>(
     detectRepeatedQueries,
     countTransactions,
   };
-  return queryCounterStore.run(counter, () => fn(counter));
+  return withRequestWork(counter, () => fn(counter));
 };
 
 export class RepeatedQueryFingerprintError extends TaggedError(
@@ -120,13 +96,13 @@ export const runWithMeasuredQueryCounter = async <TResult>(
 
 /** Current active store's query count, or `undefined` when no store is active. */
 export const currentQueryCount = (): number | undefined =>
-  queryCounterStore.getStore()?.count;
+  currentRequestWork()?.count;
 
 export const currentTransactionCount = (): number | undefined =>
-  queryCounterStore.getStore()?.transactions;
+  currentRequestWork()?.transactions;
 
 const recordTransactionRoundTrip = (): void => {
-  const counter = queryCounterStore.getStore();
+  const counter = currentRequestWork();
   if (counter?.countTransactions) {
     counter.transactions += 1;
   }
@@ -170,7 +146,7 @@ export const instrumentSqlTransactionCounts = (client: SQL): SQL => {
 };
 
 export const currentRepeatedQueryFingerprints = (): readonly string[] => {
-  const counter = queryCounterStore.getStore();
+  const counter = currentRequestWork();
   if (!counter) {
     return [];
   }
@@ -211,7 +187,7 @@ const isSessionConfigurationQuery = (query: string): boolean =>
  */
 export const queryCountLogger: Logger = {
   logQuery: (query): void => {
-    const counter = queryCounterStore.getStore();
+    const counter = currentRequestWork();
     if (!counter) {
       return;
     }
@@ -230,72 +206,4 @@ export const queryCountLogger: Logger = {
       (counter.fingerprints.get(fingerprint) ?? 0) + 1,
     );
   },
-};
-
-/** Record work at the owning I/O or transformation boundary, never at callers. */
-export const recordReadWork = (metric: keyof ReadWork, amount = 1): void => {
-  const counter = queryCounterStore.getStore();
-  if (counter === undefined) {
-    return;
-  }
-  counter[metric] += amount;
-};
-
-/** Detached snapshot: later work cannot alter a captured page's measurements. */
-export const currentReadWork = (): Readonly<ReadWork> | undefined => {
-  const counter = queryCounterStore.getStore();
-  if (counter === undefined) {
-    return undefined;
-  }
-  const {
-    storageReadBytes,
-    decryptedBytes,
-    astParses,
-    documentConversions,
-    dbResultBytes,
-    cacheHits,
-  } = counter;
-  return Object.freeze({
-    storageReadBytes,
-    decryptedBytes,
-    astParses,
-    documentConversions,
-    dbResultBytes,
-    cacheHits,
-  });
-};
-
-/** Meter transferred bodies once, below stored-file and corpus adapters. */
-export const meterStorageRead = <T extends { byteLength: number }>(
-  bytes: T,
-): T => {
-  recordReadWork("storageReadBytes", bytes.byteLength);
-  return bytes;
-};
-
-/** UTF-8 JSON payload bytes, excluding driver metadata and protocol framing. */
-export const recordDbResult = (rows: unknown): void => {
-  if (queryCounterStore.getStore() === undefined) {
-    return;
-  }
-  const serialized = JSON.stringify(rows, (_key, value: unknown) =>
-    typeof value === "bigint" ? value.toString() : value,
-  );
-  recordReadWork("dbResultBytes", Buffer.byteLength(serialized ?? ""));
-};
-
-/** Count streamed chunks in the request that opened the object. */
-export const meterStorageReadStream = (stream: ReadableStream<Uint8Array>) => {
-  if (queryCounterStore.getStore() === undefined) {
-    return stream;
-  }
-  const runInCaller = AsyncLocalStorage.snapshot();
-  return stream.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform: (chunk, controller) => {
-        runInCaller(meterStorageRead, chunk);
-        controller.enqueue(chunk);
-      },
-    }),
-  );
 };

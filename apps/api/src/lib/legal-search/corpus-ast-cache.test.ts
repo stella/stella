@@ -5,14 +5,12 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { CorpusMemberTombstonedError } from "@/api/lib/errors/tagged-errors";
 import { createCorpusAstCache } from "@/api/lib/legal-search/corpus-ast-cache";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 
 const astFor = (storedKey: string): DocumentAst => ({
   version: 1,

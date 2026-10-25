@@ -12,15 +12,15 @@ import { analysisInputOf } from "@/api/lib/case-law/analysis-prompt";
 import { createDecisionRowAstCache } from "@/api/lib/case-law/decision-row-ast-cache";
 import { createDecisionSectionCache } from "@/api/lib/case-law/decision-section-cache";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import type { WINDOWED_READ_SURFACE } from "@/api/lib/files/windowed-read-surface";
+import { createCorpusAstCache } from "@/api/lib/legal-search/corpus-ast-cache";
 import {
   currentReadWork,
   meterStorageRead,
   recordDbResult,
   recordReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
-import { createCorpusAstCache } from "@/api/lib/legal-search/corpus-ast-cache";
-import type { WINDOWED_READ_SURFACE } from "@/api/lib/windowed-read-surface";
+} from "@/api/lib/observability/request-work";
 
 type CaseLawWindowProfile = {
   [
@@ -76,7 +76,10 @@ export const caseLawWindowFixture = async (
     read: async () => {
       meterStorageRead(Buffer.from(serialized));
       recordReadWork("astParses");
-      return { ast: document, decodedLength: serialized.length };
+      return await Promise.resolve({
+        ast: document,
+        decodedLength: serialized.length,
+      });
     },
   });
   const readRow = createDecisionRowAstCache({ maxBytes: 32 * 1024 * 1024 });
@@ -94,7 +97,7 @@ export const caseLawWindowFixture = async (
           key: "decision-id/updated-at/version-1",
           read: async () => {
             recordDbResult([{ documentAst: document }]);
-            return document;
+            return await Promise.resolve(document);
           },
         }),
     });
@@ -115,7 +118,7 @@ export const caseLawWindowFixture = async (
               { index: 0, title: null, type: "ruling" as const, text },
             ];
             recordDbResult(rows);
-            return rows;
+            return await Promise.resolve(rows);
           },
         });
         const passage = citationPassageIn({
@@ -132,29 +135,30 @@ export const caseLawWindowFixture = async (
       }
       case "reader-answer": {
         const answer = await readReaderAnswerDecision(decisionId, {
-          readDecision: async () => ({
-            status: "read",
-            textAccess: "readable",
-            ast,
-            decision: {
-              id: decisionId,
-              caseNumberType: "case-number",
-              caseNumber: "1 Test",
-              courtAbbreviation: null,
-              courtTier: "other",
-              court: "Court",
-              country: "CZE",
-              decisionDate: null,
-              ecli: null,
-              language: "cs",
-              languageAlternates: [],
-              slug: null,
-            },
-            citationAnchors: [],
-            provisionAnchors: [],
-            provisionStatus: null,
-            referenceNextCursor: null,
-          }),
+          readDecision: async () =>
+            await Promise.resolve({
+              status: "read",
+              textAccess: "readable",
+              ast,
+              decision: {
+                id: decisionId,
+                caseNumberType: "case-number",
+                caseNumber: "1 Test",
+                courtAbbreviation: null,
+                courtTier: "other",
+                court: "Court",
+                country: "CZE",
+                decisionDate: null,
+                ecli: null,
+                language: "cs",
+                languageAlternates: [],
+                slug: null,
+              },
+              citationAnchors: [],
+              provisionAnchors: [],
+              provisionStatus: null,
+              referenceNextCursor: null,
+            }),
         });
         expect(
           answer.isOk() && answer.value?.paragraphs.at(0)?.paragraphId,

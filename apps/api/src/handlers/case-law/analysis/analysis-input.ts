@@ -30,8 +30,8 @@ import {
   readDecisionAnalysisAstColumn,
 } from "@/api/lib/case-law/decision-analysis";
 import { readCachedDecisionRowAst } from "@/api/lib/case-law/decision-row-ast-cache";
+import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
-import { defineWindowedRead } from "@/api/lib/windowed-read-surface";
 
 import { getSystemPrompt } from "./prompts/prompt-registry";
 

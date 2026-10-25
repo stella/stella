@@ -1,8 +1,8 @@
-import { recordReadWork } from "@/api/lib/db-query-counter";
+import { createWindowReadCache } from "@/api/lib/files/window-read-cache";
 import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import { LIMITS } from "@/api/lib/limits";
-import { createWindowReadCache } from "@/api/lib/window-read-cache";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 type DecisionRowAst = ReturnType<typeof parsePersistedCorpusAst>;
 type ReadDecisionRowAstOptions = {
@@ -37,7 +37,9 @@ export const createDecisionRowAstCache = ({
       const ast = deepFreeze(parsePersistedCorpusAst(await read()));
       cache.set(key, ast);
       return ast;
-    })().finally(() => inFlight.delete(key));
+    })().finally(() => {
+      inFlight.delete(key);
+    });
     inFlight.set(key, loading);
     return await loading;
   };

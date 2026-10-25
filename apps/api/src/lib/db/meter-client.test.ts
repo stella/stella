@@ -1,28 +1,32 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { meterSqlClient } from "@/api/lib/db/meter-client";
 import {
   currentReadWork,
   meterStorageRead,
   meterStorageReadStream,
+  recordDbResult,
   recordReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
-import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
-import { meterSqlClient } from "@/api/lib/db/meter-client";
+} from "@/api/lib/observability/request-work";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const createClient = (rows: unknown) => {
-  const query = () => {
-    const pending = Object.assign(Promise.resolve(rows), {
-      values: () => pending,
-    });
-    return pending;
-  };
+  const query = async () => await Promise.resolve(rows);
   return Object.assign(query, { unsafe: query });
 };
 
 describe("request read work", () => {
+  test("an absent raw driver result records no JSON payload bytes", () => {
+    runWithQueryCounter(() => {
+      recordDbResult(undefined);
+      expect(currentReadWork()?.dbResultBytes).toBe(0);
+    });
+  });
   test("reusing an instrumented client retains one meter and one result count", async () => {
     const client = meterSqlClient(createClient([{ content: "text" }]));
     const reused = meterSqlClient(client);
@@ -71,6 +75,25 @@ describe("request read work", () => {
     expect(new Uint8Array(bytes)).toEqual(new Uint8Array([1, 2, 3]));
     expect(opened.counter.storageReadBytes).toBe(3);
   });
+  test("unmeasured streams retain their identity and measured streams reject non-byte chunks", async () => {
+    const untouched = new ReadableStream<Uint8Array>();
+    expect(meterStorageReadStream(untouched)).toBe(untouched);
+    const invalid = runWithQueryCounter(() =>
+      meterStorageReadStream(
+        new ReadableStream({
+          start: (controller) => {
+            controller.enqueue("not bytes");
+            controller.close();
+          },
+        }),
+      ),
+    );
+    expect(
+      await rejectionOf(new Response(invalid).arrayBuffer()),
+    ).toMatchObject({
+      message: "Storage read stream yielded a non-byte chunk",
+    });
+  });
   test("transaction and savepoint queries share the caller meter", async () => {
     await withGatedTestClients("sqlite://:memory:", async ({ openClient }) => {
       const client = runTransactionsInCallerContext(openClient().sql);
@@ -102,7 +125,7 @@ describe("request read work", () => {
     const rows = [["žluťoučký", { text: "x".repeat(8000) }]];
     const client = meterSqlClient(createClient(rows));
     await runWithQueryCounter(async () => {
-      const result = await client.unsafe().values();
+      const result = await client.unsafe();
       expect(result).toEqual(rows);
       expect(currentReadWork()?.dbResultBytes).toBe(
         Buffer.byteLength(JSON.stringify(rows)),

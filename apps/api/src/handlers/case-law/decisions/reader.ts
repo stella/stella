@@ -14,6 +14,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { appReaderTextForSource } from "@/api/lib/case-law/app-reader-text";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { defineWindowedRead } from "@/api/lib/files/windowed-read-surface";
 import {
   APP_READER_TEXT,
   type AppReaderText,
@@ -22,7 +23,6 @@ import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { defineWindowedRead } from "@/api/lib/windowed-read-surface";
 
 import { listOutgoingDecisionCitationRoutes } from "./citations";
 import { readDecisionHandler } from "./get";

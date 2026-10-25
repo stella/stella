@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { createWindowReadCache } from "@/api/lib/window-read-cache";
+import { createWindowReadCache } from "@/api/lib/files/window-read-cache";
 
 test("window sources stay within their byte budget and evict least recently read values", () => {
   const cache = createWindowReadCache<string>({

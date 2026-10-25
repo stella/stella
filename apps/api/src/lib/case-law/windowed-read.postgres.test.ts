@@ -21,13 +21,11 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { readReaderAnswerRelated } from "@/api/lib/case-law/reader-answer-corpus";
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import type { CaseLawWindowProfile } from "@/api/lib/files/windowed-read-surface";
+import { WINDOWED_READ_SURFACE } from "@/api/lib/files/windowed-read-surface";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type { CaseLawWindowProfile } from "@/api/lib/windowed-read-surface";
-import { WINDOWED_READ_SURFACE } from "@/api/lib/windowed-read-surface";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -155,7 +153,7 @@ const productionReads = {
       surface: "search",
     });
     if (read?.status !== "read" || read.ast === null) {
-      return panic("Window fixture must reach the admitted production reader");
+      panic("Window fixture must reach the admitted production reader");
     }
     const paragraph = read.ast.blocks.at(0);
     expect(paragraph?.type).toBe("paragraph");
@@ -171,7 +169,7 @@ const productionReads = {
       surface: "search",
     });
     if (read?.type !== "page") {
-      return panic("Window fixture must reach the production citation page");
+      panic("Window fixture must reach the production citation page");
     }
     expect(read.page.items).toHaveLength(1);
     expect(read.page.items.at(0)?.passage?.text).toContain(CITATION_TEXT);
@@ -187,7 +185,7 @@ const productionReads = {
       { caseLawDb: fixture.caseLawDb },
     );
     if (read.isErr()) {
-      return panic("Window fixture must reach the production reader answer");
+      panic("Window fixture must reach the production reader answer");
     }
     expect(read.value).toHaveLength(1);
     expect(read.value.at(0)?.decisionId).toBe(fixture.targetId);
@@ -201,7 +199,7 @@ const productionReads = {
       scopedDb: fixture.scopedDb,
     });
     if (read.kind !== "resolved") {
-      return panic("Window fixture must reach the production analysis input");
+      panic("Window fixture must reach the production analysis input");
     }
     expect(read.anchorIds).toContain(PARAGRAPH_ID);
     expect(read.input.userMessage).toContain(fixture.text);
@@ -247,10 +245,7 @@ const expectRedacted = async (profile: string, fixture: WindowFixture) => {
       );
       expect(read.isOk()).toBe(true);
       if (read.isErr()) {
-        return panic(
-          "Redaction must not turn into a reader failure",
-          read.error,
-        );
+        panic("Redaction must not turn into a reader failure", read.error);
       }
       expect(read.value).toEqual([]);
       return;
@@ -267,7 +262,7 @@ const expectRedacted = async (profile: string, fixture: WindowFixture) => {
       ).toBeNull();
       return;
     default:
-      return panic("Unregistered native window measurement");
+      panic("Unregistered native window measurement");
   }
 };
 

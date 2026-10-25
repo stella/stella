@@ -13,10 +13,8 @@ import {
   transientDecisionAstProjection,
 } from "@/api/handlers/case-law/decisions/served-ast";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 
 const ast = (text: string): DecisionDocumentAst => ({

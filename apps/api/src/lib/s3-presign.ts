@@ -38,8 +38,8 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   isMissingS3ObjectError,
   resolveS3Credentials,

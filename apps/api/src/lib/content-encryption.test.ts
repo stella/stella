@@ -10,10 +10,8 @@ import {
   encryptContent,
   keyedContentLookupKey,
 } from "@/api/lib/content-encryption";
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 
 /**
  * Behavioural coverage for the real AES-256-GCM envelope. `CONTENT_ENCRYPTION_KEY`

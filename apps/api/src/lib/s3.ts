@@ -21,13 +21,13 @@ import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 import {
   meterStorageRead,
   meterStorageReadStream,
   recordReadWork,
-} from "@/api/lib/db-query-counter";
-import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
-import { logger } from "@/api/lib/observability/logger";
+} from "@/api/lib/observability/request-work";
 import {
   createS3CredentialGuard,
   type S3CredentialGuard,

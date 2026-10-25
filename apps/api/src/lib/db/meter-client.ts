@@ -1,8 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { currentQueryCount, recordDbResult } from "@/api/lib/db-query-counter";
+import { currentQueryCount } from "@/api/lib/db-query-counter";
+import { recordDbResult } from "@/api/lib/observability/request-work";
 
-const isCallable = (value: unknown): value is (...args: never[]) => unknown =>
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
   typeof value === "function";
 
 /**
@@ -27,18 +28,20 @@ const meterPendingQuery = (value: unknown): unknown => {
         return member;
       }
       if (property === "catch") {
-        return (rejected: unknown) =>
-          Promise.resolve(query).catch(
-            typeof rejected === "function"
+        return async (rejected: unknown) =>
+          await Promise.resolve(query).catch(
+            isCallable(rejected)
               ? (error: unknown) => Reflect.apply(rejected, undefined, [error])
               : undefined,
           );
       }
       if (property === "finally") {
-        return (settled: unknown) =>
-          Promise.resolve(query).finally(
-            typeof settled === "function"
-              ? () => Reflect.apply(settled, undefined, [])
+        return async (settled: unknown) =>
+          await Promise.resolve(query).finally(
+            isCallable(settled)
+              ? async () => {
+                  await Reflect.apply(settled, undefined, []);
+                }
               : undefined,
           );
       }
@@ -50,7 +53,7 @@ const meterPendingQuery = (value: unknown): unknown => {
                 observed = true;
                 runInCaller(recordDbResult, rows);
               }
-              return typeof fulfilled === "function"
+              return isCallable(fulfilled)
                 ? Reflect.apply(fulfilled, undefined, [rows])
                 : rows;
             },

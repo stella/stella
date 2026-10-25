@@ -4,11 +4,11 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createDecisionRowAstCache } from "@/api/lib/case-law/decision-row-ast-cache";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import {
   currentReadWork,
   recordDbResult,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+} from "@/api/lib/observability/request-work";
 
 const astFor = (text: string): DocumentAst => ({
   version: 1,

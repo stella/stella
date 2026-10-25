@@ -19,7 +19,6 @@ import {
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
@@ -56,6 +55,7 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -684,16 +684,20 @@ export const withReadableCorpusMember = async <T>({
   location,
   readTombstones,
   read,
-}: ReadableCorpusMemberOptions<T>): Promise<T> => {
+}: ReadableCorpusMemberOptions<T>): Promise<
+  Result<T, CorpusMemberTombstonedError>
+> => {
   const address = formatCorpusLocation(location);
   const tombstoned = await readTombstones([address]);
   if (tombstoned.has(address)) {
-    throw new CorpusMemberTombstonedError({
-      message: `Corpus member is erased and is no longer served: ${address}`,
-      location: address,
-    });
+    return Result.err(
+      new CorpusMemberTombstonedError({
+        message: `Corpus member is erased and is no longer served: ${address}`,
+        location: address,
+      }),
+    );
   }
-  return await read();
+  return Result.ok(await read());
 };
 
 /**
@@ -708,7 +712,12 @@ const readPackedMember = async ({
   readRange,
   readTombstones,
 }: ReadPackedMemberOptions): Promise<
-  Result<Uint8Array, PayloadBudgetError | CorpusMemberDigestMismatchError>
+  Result<
+    Uint8Array,
+    | PayloadBudgetError
+    | CorpusMemberTombstonedError
+    | CorpusMemberDigestMismatchError
+  >
 > => {
   if (location.length > maxBytes) {
     return Result.err(
@@ -718,7 +727,7 @@ const readPackedMember = async ({
     );
   }
   const address = formatCorpusLocation(location);
-  return await withReadableCorpusMember({
+  const admitted = await withReadableCorpusMember({
     location,
     readTombstones,
     read: async () => {
@@ -741,6 +750,7 @@ const readPackedMember = async ({
           );
     },
   });
+  return admitted.andThen((member) => member);
 };
 
 export const readCorpusBytesAt = async ({

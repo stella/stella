@@ -7,12 +7,12 @@ import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import {
   parsePersistedCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 type DecisionAstSource = "store" | "row";
 

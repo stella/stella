@@ -1,5 +1,5 @@
+import { createWindowReadCache } from "@/api/lib/files/window-read-cache";
 import { LIMITS } from "@/api/lib/limits";
-import { createWindowReadCache } from "@/api/lib/window-read-cache";
 
 export const docxWindowTextCache = createWindowReadCache<string>({
   maxBytes: LIMITS.mcpWindowTextCacheMaxBytes,

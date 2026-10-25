@@ -11,14 +11,12 @@ import {
 } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  currentReadWork,
-  runWithQueryCounter,
-} from "@/api/lib/db-query-counter";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";

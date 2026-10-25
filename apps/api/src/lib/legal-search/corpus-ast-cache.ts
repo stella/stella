@@ -1,14 +1,14 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { withReadableCorpusMember } from "@/api/lib/legal-search/corpus-storage";
 import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 /**
  * Heap bytes one character of decoded AST JSON costs once parsed. Measured on
@@ -129,11 +129,15 @@ export const createCorpusAstCache = ({
           if (readTombstones === undefined) {
             return (await read(storedKey)).ast;
           }
-          return await withReadableCorpusMember({
+          const admitted = await withReadableCorpusMember({
             location,
             readTombstones,
             read: async () => await readThrough(storedKey, readTombstones),
           });
+          if (Result.isError(admitted)) {
+            throw admitted.error;
+          }
+          return admitted.value;
         }
         default: {
           location satisfies never;

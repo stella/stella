@@ -9,7 +9,7 @@ import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
-import type { WindowedReadSurface } from "@/api/lib/windowed-read-surface";
+import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";
 import type {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,

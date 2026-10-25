@@ -17,8 +17,8 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
-import { recordReadWork } from "@/api/lib/db-query-counter";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 const AES_KEY_BYTES = 32;
 const IV_BYTES = 12;
