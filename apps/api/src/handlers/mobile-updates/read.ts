@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   MOBILE_RUNTIME_VERSION_PATTERN,
@@ -33,10 +33,10 @@ const config = {
   cache: { kind: "private", maxAge: 0 },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
-  params: t.Object({ variant: t.UnionEnum(MOBILE_UPDATE_VARIANTS) }),
+  params: v.object({ variant: v.picklist(MOBILE_UPDATE_VARIANTS) }),
   // The multipart answer, bounded by what the relay reads from the CDN.
   response: safePublicHandlerResponseSchemasWithStatusText(
-    t.String({ maxLength: MOBILE_UPDATE_ANSWER_MAX_LENGTH }),
+    v.pipe(v.string(), v.maxLength(MOBILE_UPDATE_ANSWER_MAX_LENGTH)),
   ),
 } satisfies PublicHandlerConfig;
 

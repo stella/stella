@@ -26,7 +26,7 @@ const UPDATE_ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
  */
 export const mobileUpdateScalingScenario = {
   name: "mobile update relay",
-  handler: readMobileUpdate.handler,
+  definition: readMobileUpdate,
   measure: async (otherBuilds: number) => {
     const objects = new Map<string, string>([
       [mobileUpdatePointerKey(TARGET), JSON.stringify({ updateId: UPDATE_ID })],
@@ -67,6 +67,7 @@ export const mobileUpdateScalingScenario = {
               },
             },
           ),
+          route: "/v1/mobile/updates/:variant",
           set: { headers: {} },
         }),
       );
