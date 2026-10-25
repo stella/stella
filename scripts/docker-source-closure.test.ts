@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
 
 import {
@@ -1690,7 +1690,7 @@ describe("Docker source closure", () => {
     ).toEqual([`${entry} imports ~/value, unavailable in Docker stage`]);
   });
 
-  test("every tracked tsconfig alias and custom alias requires its stage source", () => {
+  test("every tracked tsconfig alias and custom alias requires its stage source", async () => {
     const repositoryRoot = path.resolve(import.meta.dir, "..");
     const listed = Bun.spawnSync(
       ["git", "ls-files", "-z", "--", "*tsconfig*.json"],
@@ -1701,10 +1701,16 @@ describe("Docker source closure", () => {
     expect(configurations.length).toBeGreaterThan(0);
     const patterns = new Set<string>();
     for (const configuration of configurations) {
-      const parsed = ts.parseConfigFileTextToJson(
-        configuration,
-        readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
-      );
+      const api = new API({ cwd: repositoryRoot });
+      const parsed = await (async () => {
+        try {
+          return await api.readConfigFile(
+            path.join(repositoryRoot, configuration),
+          );
+        } finally {
+          await api.close();
+        }
+      })();
       expect(parsed.error, configuration).toBeUndefined();
       const config = v.parse(
         v.looseObject({
