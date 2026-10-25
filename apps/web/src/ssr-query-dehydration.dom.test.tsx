@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { AnyRoute } from "@tanstack/react-router";
 import { afterAll, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -85,9 +86,7 @@ const createTree = (queryClient: AppQueryClient) => {
 
 const createAppRouter = (
   isServer: boolean,
-  tree: (
-    queryClient: AppQueryClient,
-  ) => ReturnType<typeof createTree> = createTree,
+  tree: (queryClient: AppQueryClient) => AnyRoute = createTree,
   path = "/cases",
 ) => {
   const queryClient = createAppQueryClient();
