@@ -1,0 +1,3842 @@
+diff --git a/src/connection-adapters.ts b/src/connection-adapters.ts
+index 424ab275ccf..af22dff7337 100644
+--- a/src/connection-adapters.ts
++++ b/src/connection-adapters.ts
+@@ -30,6 +30,12 @@ import { normalizeMessagesDates } from './message-date-normalizer'
+  * otherwise-runless chunks to their originating request.
+  */
+ const chunkRunIds = new WeakMap<StreamChunk, string>()
++const chunkRequestSignals = new WeakMap<StreamChunk, AbortSignal>()
++
++/** Request ownership stays with a buffered chunk after a later send starts. */
++export function getChunkRequestSignal(chunk: StreamChunk): AbortSignal | undefined {
++  return chunkRequestSignals.get(chunk)
++}
+ 
+ /**
+  * Resolve a chunk's run id, preferring the value on the chunk itself
+@@ -1118,10 +1124,18 @@ export function normalizeConnectionAdapter(
+   let activeWaiters: Array<(chunk: StreamChunk | null) => void> = []
+   let activeSubscriber: typeof activeWaiters | undefined
+ 
+-  function push(chunk: StreamChunk, runId?: string): void {
++  function push(
++    chunk: StreamChunk,
++    runId?: string,
++    requestSignal?: AbortSignal,
++  ): void {
++    if (requestSignal?.aborted) return
++    // A caller may reuse a chunk object across sends; each delivery owns its signal.
++    chunk = { ...chunk }
+     if (runId) {
+       chunkRunIds.set(chunk, runId)
+     }
++    if (requestSignal) chunkRequestSignals.set(chunk, requestSignal)
+     const waiter = activeWaiters.shift()
+     if (waiter) {
+       waiter(chunk)
+@@ -1177,7 +1191,9 @@ export function normalizeConnectionAdapter(
+                 abortSignal?.addEventListener('abort', onAbort, { once: true })
+               })
+             }
+-            if (chunk !== null) yield chunk
++            if (chunk !== null && !getChunkRequestSignal(chunk)?.aborted) {
++              yield chunk
++            }
+           }
+         } finally {
+           if (activeSubscriber === myWaiters) activeSubscriber = undefined
+@@ -1196,6 +1212,7 @@ export function normalizeConnectionAdapter(
+           runContext,
+         )
+         for await (const chunk of stream) {
++          if (abortSignal?.aborted) break
+           if ('threadId' in chunk && typeof chunk.threadId === 'string') {
+             upstreamThreadId = chunk.threadId
+           }
+@@ -1205,7 +1222,7 @@ export function normalizeConnectionAdapter(
+           if (chunk.type === 'RUN_FINISHED' || chunk.type === 'RUN_ERROR') {
+             hasTerminalEvent = true
+           }
+-          push(chunk, runContext?.runId)
++          push(chunk, runContext?.runId, abortSignal)
+         }
+ 
+         // If the connect stream ended cleanly without a terminal event,
+@@ -1231,6 +1248,7 @@ export function normalizeConnectionAdapter(
+               { finishReason: 'stop', model: 'connect-wrapper' },
+             ) as StreamChunk,
+             runContext?.runId,
++            abortSignal,
+           )
+         }
+       } catch (err) {
+@@ -1255,7 +1273,7 @@ export function normalizeConnectionAdapter(
+               timestamp: Date.now(),
+               message,
+             }
+-            push(synthetic, runContext?.runId)
++            push(synthetic, runContext?.runId, abortSignal)
+           } catch {
+             // fall through to rethrow the original error
+           }
+diff --git a/src/chat-client.ts b/src/chat-client.ts
+index a94a3d3b0e8..c03be03a983 100644
+--- a/src/chat-client.ts
++++ b/src/chat-client.ts
+@@ -25,6 +25,7 @@ import { createNoOpChatDevtoolsBridge } from './devtools-noop'
+ import {
+   fetcherToConnectionAdapter,
+   getChunkRunId,
++  getChunkRequestSignal,
+   normalizeConnectionAdapter,
+ } from './connection-adapters'
+ import { ChatPersistor } from './client-persistor'
+@@ -398,6 +399,21 @@ function readSubagentRunId(chunk: StreamChunk) {
+ // Cap parent-chain walks so a cyclic replayed parentRunId cannot loop.
+ const MAX_RUN_LINEAGE_DEPTH = 64
+ 
++const PROCESSOR_CALLBACK_CANCELLED = Symbol('processor-callback-cancelled')
++
++type ProcessorMutationResult<Value> =
++  | { type: 'applied'; value: Value }
++  | { type: 'cancelled' }
++
++type ProcessorMutationOptions<Value> = {
++  isCurrent: () => boolean
++  mutate: () => Value
++}
++
++const assertProcessorCallbackOwnership = (isCurrent: () => boolean): void => {
++  if (!isCurrent()) throw PROCESSOR_CALLBACK_CANCELLED
++}
++
+ /**
+  * A deep copy of plain data. Dates stay Dates. Function-valued properties are
+  * dropped.
+@@ -471,12 +487,12 @@ export class ChatClient<
+   private queueConfig: NormalizedQueueConfig
+   private messageQueue: Array<InternalQueuedMessage> = []
+   /**
+-   * True from the moment `sendMessage` claims the client until its
++   * Identity held from the moment `sendMessage` claims the client until its
+    * `streamResponse` settles. Closes the race where concurrent callers both
+    * see `isLoading === false`, both append a user message, and only one stream
+    * actually runs (leaving stranded user messages with no reply).
+    */
+-  private sendInFlight = false
++  private sendInFlight: symbol | null = null
+   /**
+    * True while `drainQueue` is delivering queued messages. Concurrent
+    * `sendMessage` calls during a drain are treated as busy and follow
+@@ -492,7 +508,7 @@ export class ChatClient<
+    * Sync claim held for the duration of `deliverMessage` so concurrent
+    * deliverers cannot both append a user message before only one stream runs.
+    */
+-  private deliverClaim = false
++  private deliverClaim: symbol | null = null
+   private isLoading = false
+   private isSubscribed = false
+   private error: Error | undefined = undefined
+@@ -519,6 +535,7 @@ export class ChatClient<
+   // Flag to deduplicate continuation checks during action draining
+   private continuationPending = false
+   private subscriptionAbortController: AbortController | null = null
++  private subscriptionGeneration = 0
+   private processingResolve: (() => void) | null = null
+   /**
+    * `connect()` adapters push the full HTTP body into the subscribe queue, then
+@@ -633,7 +650,14 @@ export class ChatClient<
+       this.persistor = new ChatPersistor(
+         options.persistence,
+         options.threadId,
+-        (messages) => this.processor.setMessages(messages),
++        (messages) => {
++          const applied = this.runProcessorMutation({
++            isCurrent: this.captureOperationOwnership(),
++            mutate: () => this.processor.setMessages(messages),
++          })
++          // Abort the existing best-effort hydration transaction before applyResume.
++          if (applied.type === 'cancelled') throw PROCESSOR_CALLBACK_CANCELLED
++        },
+         (snapshot) => this.applyPersistedResume(snapshot),
+       )
+       this.historyPageSize = undefined
+@@ -762,18 +786,27 @@ export class ChatClient<
+       ...(initialMessages ? { initialMessages } : {}),
+       events: {
+         onMessagesChange: (messages) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Restored or replaced messages bring their own cards. Give each one
+           // its live handle before anyone reads the messages.
+           this.syncSubagentHandles()
++          assertProcessorCallbackOwnership(ownsCallback)
+           this.persistor?.notifyMessagesChanged(messages)
++          assertProcessorCallbackOwnership(ownsCallback)
+           this.callbacksRef.current.onMessagesChange(messages)
++          assertProcessorCallbackOwnership(ownsCallback)
+           // The bridge only snapshots on status changes, and the panel draws a
+           // child card from the snapshot, so without this the card would update
+           // only when the parent run ends.
+           this.queueDevtoolsSnapshot()
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onStreamStart: () => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           this.setStatus('streaming')
++          assertProcessorCallbackOwnership(ownsCallback)
+           const assistantMessageId =
+             this.processor.getCurrentAssistantMessageId()
+           if (!assistantMessageId) {
+@@ -790,23 +823,37 @@ export class ChatClient<
+               this.currentStreamId || undefined,
+             )
+           }
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onStreamEnd: (message: UIMessage) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           this.callbacksRef.current.onFinish(message)
++          assertProcessorCallbackOwnership(ownsCallback)
+           this.setStatus('ready')
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Resolve the processing-complete promise so streamResponse can continue
+           this.resolveProcessing()
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onError: (error: Error) => {
+-          this.reportStreamError(error)
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
++          this.reportStreamError(error, ownsCallback)
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onTextUpdate: (messageId: string, content: string) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Emit text update to devtools
+           if (this.currentStreamId) {
+             this.events.textUpdated(this.currentStreamId, messageId, content)
+           }
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onThinkingUpdate: (messageId: string, content: string) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Emit thinking update to devtools
+           if (this.currentStreamId) {
+             this.events.thinkingUpdated(
+@@ -816,8 +863,11 @@ export class ChatClient<
+               undefined,
+             )
+           }
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onStructuredOutputChange: (args) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           const streamId = this.devtoolsBridge.resolveStreamId()
+           const eventName =
+             args.phase === 'start'
+@@ -847,6 +897,7 @@ export class ChatClient<
+               ...(args.delta !== undefined ? { delta: args.delta } : {}),
+             },
+           )
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onToolCallStateChange: (
+           messageId: string,
+@@ -854,6 +905,8 @@ export class ChatClient<
+           state: string,
+           args: string,
+         ) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Get the tool name from the messages
+           const messages = this.processor.getMessages()
+           const message = messages.find((m: UIMessage) => m.id === messageId)
+@@ -874,12 +927,15 @@ export class ChatClient<
+               args,
+             )
+           }
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onToolCall: (args: {
+           toolCallId: string
+           toolName: string
+           input: any
+         }) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Handle client-side tool execution automatically
+           const clientTools =
+             this.activeClientTools ?? this.clientToolsRef.current
+@@ -898,6 +954,9 @@ export class ChatClient<
+           }
+           if (executeFunc) {
+             const continuationGeneration = this.continuationGeneration
++            const executionSignal = this.abortController?.signal
++            const ownsContinuation = () => continuationGeneration === this.continuationGeneration &&
++              !executionSignal?.aborted && !this.disposed
+             // Capture the run context at execution-start so a tool whose
+             // result lands AFTER the originating run finishes still reports
+             // back against the originating run, not whatever run is
+@@ -926,6 +985,7 @@ export class ChatClient<
+                   clientTool,
+                   continuationGeneration,
+                   runEventContext,
++                  ownsContinuation,
+                 )
+               } catch (error: any) {
+                 await this.addToolResultForClientTool(
+@@ -939,16 +999,21 @@ export class ChatClient<
+                   clientTool,
+                   continuationGeneration,
+                   runEventContext,
++                  ownsContinuation,
+                 )
+               } finally {
+                 // Remove from pending when complete
+-                this.pendingToolExecutions.delete(args.toolCallId)
++                if (this.pendingToolExecutions.get(args.toolCallId) === executionPromise) {
++                  this.pendingToolExecutions.delete(args.toolCallId)
++                }
+               }
+             })()
+ 
+             // Track the pending execution
++            assertProcessorCallbackOwnership(ownsCallback)
+             this.pendingToolExecutions.set(args.toolCallId, executionPromise)
+           }
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onApprovalRequest: (args: {
+           toolCallId: string
+@@ -956,6 +1021,8 @@ export class ChatClient<
+           input: any
+           approvalId: string
+         }) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           const streamId = this.devtoolsBridge.resolveStreamId()
+           const messageIdForApproval =
+             this.findMessageIdForToolCall(args.toolCallId) ??
+@@ -970,18 +1037,22 @@ export class ChatClient<
+             args.input,
+             args.approvalId,
+           )
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+         onCustomEvent: (
+           eventType: string,
+           data: unknown,
+           context: { toolCallId?: string },
+         ) => {
++          const ownsCallback = this.captureOperationOwnership()
++          assertProcessorCallbackOwnership(ownsCallback)
+           // Server-side memory middleware transports its state as a `memory:state`
+           // CUSTOM event (its own event bus never reaches this browser runtime).
+           // Route it to the devtools bridge here — the designated custom-event
+           // path — then still forward to the app's callback.
+           if (eventType === 'memory:state') {
+             this.devtoolsBridge.recordMemoryState(data)
++            assertProcessorCallbackOwnership(ownsCallback)
+           }
+           if (
+             eventType === 'compaction:started' ||
+@@ -989,11 +1060,14 @@ export class ChatClient<
+             eventType === 'compaction:ended'
+           ) {
+             this.devtoolsBridge.recordCompactionEvent(eventType, data)
++            assertProcessorCallbackOwnership(ownsCallback)
+           }
+           if (eventType === 'skills:state') {
+             this.devtoolsBridge.recordSkillsState(data)
++            assertProcessorCallbackOwnership(ownsCallback)
+           }
+           this.callbacksRef.current.onCustomEvent(eventType, data, context)
++          assertProcessorCallbackOwnership(ownsCallback)
+         },
+       },
+     })
+@@ -1133,7 +1207,9 @@ export class ChatClient<
+    * (`indexedDBPersistence`) would otherwise never rejoin a mid-stream run.
+    */
+   private applyPersistedResume(snapshot: ChatResumeSnapshot): void {
++    const ownsHydration = this.captureOperationOwnership()
+     this.applyResumeSnapshot(snapshot)
++    if (!ownsHydration()) return
+     const hasInterrupts =
+       Array.isArray(snapshot.pendingInterrupts) &&
+       snapshot.pendingInterrupts.length > 0
+@@ -1218,6 +1294,7 @@ export class ChatClient<
+         }
+       }
+       if (!current) return
++      const ownsHydration = this.captureOperationOwnership()
+       // NO VIEW IS WATCHING ANY MORE (it unmounted while this fetch was in
+       // flight). Applying anything now is pointless, and one thing is actively
+       // harmful: the branch below calls `maybeRejoinInFlight`, which opens a TAIL.
+@@ -1234,13 +1311,18 @@ export class ChatClient<
+       // error something else set since.
+       if (this.hydrationError && this.error === this.hydrationError) {
+         this.setError(undefined)
++        if (!ownsHydration()) return
+         this.setStatus('ready')
++        if (!ownsHydration()) return
+       }
+       this.hydrationError = undefined
+       this.applyHydrationPage(result.page)
+       if (result.messages.length > 0) {
+         const windowMessages = normalizeMessagesDates(result.messages)
+-        this.processor.setMessages(windowMessages)
++        if (this.runProcessorMutation({
++          isCurrent: ownsHydration,
++          mutate: () => this.processor.setMessages(windowMessages),
++        }).type === 'cancelled') return
+         this.rememberServerMessageIds(windowMessages)
+       }
+       if (
+@@ -1289,18 +1371,23 @@ export class ChatClient<
+   private failHydration(cause: unknown): void {
+     if (this.disposed || !this.tailing) return
+     if (this.isLoading || this.abortController) return
++    const ownsFailure = this.captureOperationOwnership()
+     const error = cause instanceof Error ? cause : new Error(String(cause))
+     // Mirror the send path: a BYOK key that is missing / locked must still
+     // trigger the key-request flow on thread load, not just be reported.
+     if (error instanceof ByokMissingError) {
+       this.byok?.request(error.provider, 'missing')
++      if (!ownsFailure()) return
+     }
+     if (error instanceof ByokBlockedError && error.reason === 'locked') {
+       this.byok?.request(error.provider, 'locked')
++      if (!ownsFailure()) return
+     }
+     this.hydrationError = error
+     this.setStatus('error')
++    if (!ownsFailure()) return
+     this.setError(error)
++    if (!ownsFailure()) return
+     this.callbacksRef.current.onError(error)
+   }
+ 
+@@ -1327,22 +1414,24 @@ export class ChatClient<
+    * still tracking. The persistor owns the cleared-run bookkeeping; the client
+    * owns the active-run / session / processing state.
+    */
+-  private drainIgnoredRunlessChunk(chunk: StreamChunk): void {
++  private drainIgnoredRunlessChunk(chunk: StreamChunk, isCurrent: () => boolean): void {
+     if (chunk.type !== 'RUN_ERROR') return
+     const runId = this.clearedStreamTracker.takeRunlessRunId()
+     if (!runId) return
+     this.activeRunIds.delete(runId)
+     this.setSessionGenerating(this.activeRunIds.size > 0)
++    if (!isCurrent()) return
+     this.resolveProcessing()
+   }
+ 
+-  private retireIgnoredClearedTerminalChunk(chunk: StreamChunk): void {
++  private retireIgnoredClearedTerminalChunk(chunk: StreamChunk, isCurrent: () => boolean): void {
+     if (chunk.type !== 'RUN_FINISHED' && chunk.type !== 'RUN_ERROR') return
+     const runId =
+       getChunkRunId(chunk) ?? this.clearedStreamTracker.takeRunlessRunId()
+     if (!runId) return
+     this.activeRunIds.delete(runId)
+     this.setSessionGenerating(this.activeRunIds.size > 0)
++    if (!isCurrent()) return
+     if (!getChunkRunId(chunk)) {
+       this.resolveProcessing()
+     }
+@@ -1350,8 +1439,9 @@ export class ChatClient<
+ 
+   private updateRunLifecycle(
+     chunk: StreamChunk,
+-    options?: { resolveProcessing?: boolean },
++    options: { isCurrent: () => boolean; resolveProcessing?: boolean },
+   ): void {
++    if (!options.isCurrent()) return
+     if (chunk.type === 'RUN_STARTED') {
+       const chunkRunId = getChunkRunId(chunk) ?? chunk.runId
+       const parentRunId =
+@@ -1377,6 +1467,7 @@ export class ChatClient<
+         this.activeRunIds.add(chunkRunId)
+         this.clearedStreamTracker.onRunStarted(chunkRunId)
+         this.setSessionGenerating(true)
++        if (!options.isCurrent()) return
+       }
+       // Persist a live-run resume snapshot so a full page reload can rejoin this
+       // in-flight run via joinRun. Only a persistor writes it, and a persistor
+@@ -1395,6 +1486,7 @@ export class ChatClient<
+           threadId: this.activeResumeThreadId ?? this.threadId,
+           runId: chunkRunId,
+         })
++        if (!options.isCurrent()) return
+       }
+       if (
+         this.lastResume &&
+@@ -1402,6 +1494,7 @@ export class ChatClient<
+       ) {
+         this.lastResume = null
+         this.persistor?.persistResumeSnapshot(null)
++        if (!options.isCurrent()) return
+         this.interruptManager.reset()
+       }
+       return
+@@ -1421,9 +1514,10 @@ export class ChatClient<
+       this.clearedStreamTracker.onSessionRunError()
+     }
+     this.setSessionGenerating(this.activeRunIds.size > 0)
++    if (!options.isCurrent()) return
+     const skipProcessingResolve =
+       chunk.type === 'RUN_FINISHED' && isIntermediateToolTurn(chunk)
+-    if (options?.resolveProcessing !== false && !skipProcessingResolve) {
++    if (options.resolveProcessing !== false && !skipProcessingResolve) {
+       this.resolveProcessing()
+     }
+   }
+@@ -1434,7 +1528,8 @@ export class ChatClient<
+    * resume; any other terminal event for the tracked/current run clears that
+    * state. This is interrupt (state) resume — there is no delivery cursor.
+    */
+-  private observeInterruptState(chunk: StreamChunk): void {
++  private observeInterruptState(chunk: StreamChunk, isCurrent: () => boolean): void {
++    if (!isCurrent()) return
+     if (chunk.type !== 'RUN_FINISHED' && chunk.type !== 'RUN_ERROR') {
+       return
+     }
+@@ -1534,6 +1629,7 @@ export class ChatClient<
+       // Run settled without an interrupt: drop the durable resume snapshot so a
+       // later reload does not try to rejoin a finished run.
+       this.persistor?.persistResumeSnapshot(null)
++      if (!isCurrent()) return
+       this.interruptManager.reset()
+       return
+     }
+@@ -1687,6 +1783,7 @@ export class ChatClient<
+     submission: InterruptManagerSubmission,
+   ): Promise<void> {
+     const continuationGeneration = this.continuationGeneration
++    const ownsApprovalUpdate = this.captureOperationOwnership()
+     this.activeInterruptSubmission = submission
+     this.interruptSubmissionFailure = undefined
+     // Reflect approval decisions in the local message tree immediately so a
+@@ -1696,8 +1793,12 @@ export class ChatClient<
+       const approved = readApprovalApproved(resolution.payload)
+       if (approved === undefined) continue
+       const approvalId = resolution.interruptId
+-      this.processor.addToolApprovalResponse(approvalId, approved)
++      if (this.runProcessorMutation({
++        isCurrent: ownsApprovalUpdate,
++        mutate: () => this.processor.addToolApprovalResponse(approvalId, approved),
++      }).type === 'cancelled') return
+     }
++    if (!ownsApprovalUpdate()) return
+     const resumed = await this.resumeInterruptsUnsafeForGeneration(
+       [...submission.resolutions],
+       {
+@@ -1767,9 +1868,12 @@ export class ChatClient<
+   }
+ 
+   private setIsLoading(isLoading: boolean): void {
++    const ownsSetter = this.captureEpochOwnership()
+     this.isLoading = isLoading
+     this.callbacksRef.current.onLoadingChange(isLoading)
++    if (!ownsSetter()) return
+     this.events.loadingChanged(isLoading)
++    if (!ownsSetter()) return
+     if (isLoading) this.supersedeHydration()
+   }
+ 
+@@ -1785,20 +1889,26 @@ export class ChatClient<
+   }
+ 
+   private setStatus(status: ChatClientState): void {
++    const ownsSetter = this.captureEpochOwnership()
+     this.status = status
+     this.callbacksRef.current.onStatusChange(status)
++    if (!ownsSetter()) return
+     this.devtoolsBridge.emitSnapshot()
+   }
+ 
+   private setIsSubscribed(isSubscribed: boolean): void {
++    const ownsSetter = this.captureEpochOwnership()
+     this.isSubscribed = isSubscribed
+     this.callbacksRef.current.onSubscriptionChange(isSubscribed)
++    if (!ownsSetter()) return
+     this.devtoolsBridge.emitSnapshot()
+   }
+ 
+   private setConnectionStatus(status: ConnectionStatus): void {
++    const ownsSetter = this.captureEpochOwnership()
+     this.connectionStatus = status
+     this.callbacksRef.current.onConnectionStatusChange(status)
++    if (!ownsSetter()) return
+     this.devtoolsBridge.emitSnapshot()
+   }
+ 
+@@ -1811,13 +1921,16 @@ export class ChatClient<
+   }
+ 
+   private setSessionGenerating(isGenerating: boolean): void {
++    const ownsSetter = this.captureEpochOwnership()
+     if (this.sessionGenerating === isGenerating) return
+     this.sessionGenerating = isGenerating
+     this.callbacksRef.current.onSessionGeneratingChange(isGenerating)
++    if (!ownsSetter()) return
+     this.devtoolsBridge.emitSnapshot()
+   }
+ 
+   private notifyResumeStateChange(source: InterruptManagerChangeSource): void {
++    const ownsNotice = this.captureOperationOwnership()
+     const resumeState = this.getResumeState()
+     // Capture state before invoking callbacks so a synchronous nested change
+     // cannot pair this publication's source with a later manager snapshot.
+@@ -1826,10 +1939,12 @@ export class ChatClient<
+     // rehydrate pending interrupts and rejoin the run. Folded into the same
+     // persistence adapter that stores messages (one record per chat).
+     this.persistResumeSnapshot(resumeState)
++    if (!ownsNotice()) return
+     this.callbacksRef.current.onResumeStateChange(
+       resumeState,
+       interruptState.interrupts,
+     )
++    if (!ownsNotice()) return
+     this.callbacksRef.current.onInterruptStateChange(interruptState, { source })
+   }
+ 
+@@ -1863,8 +1978,10 @@ export class ChatClient<
+   }
+ 
+   private setError(error: Error | undefined): void {
++    const ownsSetter = this.captureEpochOwnership()
+     this.error = error
+     this.callbacksRef.current.onErrorChange(error)
++    if (!ownsSetter()) return
+     this.events.errorChanged(error?.message || null)
+   }
+ 
+@@ -1892,10 +2009,16 @@ export class ChatClient<
+       getTools: () => this.clientToolsRef.current.values(),
+       getMessages: () => this.processor.getMessages(),
+       setMessages: (messages: Array<UIMessage>) => {
+-        this.processor.setMessages(messages)
++        if (this.runProcessorMutation({
++          isCurrent: this.captureOperationOwnership(),
++          mutate: () => this.processor.setMessages(messages),
++        }).type === 'cancelled') return
+       },
+       addToolResult: (toolCallId, output, errorText) => {
+-        this.processor.addToolResult(toolCallId, output, errorText)
++        if (this.runProcessorMutation({
++          isCurrent: this.captureOperationOwnership(),
++          mutate: () => this.processor.addToolResult(toolCallId, output, errorText),
++        }).type === 'cancelled') return
+       },
+       generateId: (prefix) => this.generateUniqueId(prefix),
+     }
+@@ -1930,8 +2053,9 @@ export class ChatClient<
+   }
+ 
+   private abortSubscriptionLoop(): void {
+-    this.subscriptionAbortController?.abort()
+-    this.subscriptionAbortController = null
++    const controller = this.subscriptionAbortController
++    controller?.abort()
++    if (this.subscriptionAbortController === controller) this.subscriptionAbortController = null
+   }
+ 
+   private resolveProcessing(): void {
+@@ -1943,25 +2067,34 @@ export class ChatClient<
+     setReadyStatus?: boolean
+     abortSubscription?: boolean
+   }): void {
+-    this.abortController?.abort()
+-    this.abortController = null
++    const ownsCancellation = this.captureEpochOwnership()
++    const controller = this.abortController
++    controller?.abort()
++    if (!ownsCancellation()) return
++    if (this.abortController === controller) this.abortController = null
+     if (options?.abortSubscription) {
+       this.abortSubscriptionLoop()
++      if (!ownsCancellation()) return
+     }
+     this.resolveProcessing()
+     this.setIsLoading(false)
++    if (!ownsCancellation()) return
+     // Release deliver claim so an interrupting `deliverMessage` can append
+     // after abort (the superseded deliver's finally also clears the claim).
+-    this.deliverClaim = false
++    this.deliverClaim = null
+     if (options?.setReadyStatus) {
+       this.setStatus('ready')
+     }
+   }
+ 
+-  private reportStreamError(error: Error): void {
++  private reportStreamError(error: Error, isCurrent: () => boolean): void {
++    const ownsReport = this.captureOperationOwnership()
++    const ownsFailure = () => isCurrent() && ownsReport()
++    if (!ownsFailure()) return
+     const alreadyReported =
+       this.errorReportedGeneration === this.streamGeneration
+     this.setError(error)
++    if (!ownsFailure()) return
+     // Preserve request-level error semantics even if a RUN_ERROR arrives
+     // slightly after loading flips false during stream teardown.
+     if (
+@@ -1970,6 +2103,7 @@ export class ChatClient<
+       this.status === 'streaming'
+     ) {
+       this.setStatus('error')
++      if (!ownsFailure()) return
+     }
+     if (!alreadyReported) {
+       this.errorReportedGeneration = this.streamGeneration
+@@ -1980,30 +2114,38 @@ export class ChatClient<
+   /**
+    * Start the background subscription loop.
+    */
+-  private startSubscription(): void {
+-    this.subscriptionAbortController = new AbortController()
+-    const signal = this.subscriptionAbortController.signal
++  private startSubscription(controller: AbortController, generation: number): void {
++    const signal = controller.signal
++    const ownsSubscription = () =>
++      generation === this.subscriptionGeneration && !signal.aborted
+ 
+-    this.consumeSubscription(signal)
++    this.consumeSubscription(signal, ownsSubscription)
+       .catch((err) => {
++        const ownsOperation = this.captureOperationOwnership()
++        const ownsFailure = () => ownsSubscription() && ownsOperation()
++        if (!ownsFailure()) return
+         if (err instanceof Error && err.name !== 'AbortError') {
+           this.setConnectionStatus('error')
++          if (!ownsFailure()) return
+           this.resetSessionGenerating()
++          if (!ownsFailure()) return
+           this.setIsSubscribed(false)
+-          this.reportStreamError(err)
++          if (!ownsFailure()) return
++          this.reportStreamError(err, ownsFailure)
++          if (!ownsFailure()) return
+         }
+         // Resolve pending processing so streamResponse doesn't hang
+         this.resolveProcessing()
+       })
+       .finally(() => {
+         // Ignore stale loops that were superseded by a restart.
+-        if (this.subscriptionAbortController?.signal !== signal) {
++        if (generation !== this.subscriptionGeneration) {
+           return
+         }
+         this.subscriptionAbortController = null
+         if (!signal.aborted && this.isSubscribed) {
+           this.setIsSubscribed(false)
+-          if (this.connectionStatus !== 'error') {
++          if (generation === this.subscriptionGeneration && this.connectionStatus !== 'error') {
+             this.setConnectionStatus('disconnected')
+           }
+         }
+@@ -2014,13 +2156,20 @@ export class ChatClient<
+    * Consume chunks from the connection subscription. Chunks are processed in
+    * order; the loop yields to the host after each processing budget.
+    */
+-  private async consumeSubscription(signal: AbortSignal): Promise<void> {
++  private async consumeSubscription(
++    signal: AbortSignal,
++    ownsSubscription: () => boolean,
++  ): Promise<void> {
+     const stream = this.connection.subscribe(signal)
+     let chunkProcessingTime = 0
+     for await (const chunk of stream) {
+-      if (signal.aborted) break
++      if (!ownsSubscription()) break
++      const requestSignal = getChunkRequestSignal(chunk)
++      const ownsChunk = () => ownsSubscription() && !requestSignal?.aborted
++      if (!ownsChunk()) continue
+       const startedAt = performance.now()
+-      this.processIncomingChunk(chunk)
++      this.processIncomingChunk(chunk, ownsChunk)
++      if (!ownsSubscription()) break
+       chunkProcessingTime += performance.now() - startedAt
+       if (chunkProcessingTime < STREAM_PROCESSING_BUDGET_MS) continue
+       chunkProcessingTime = 0
+@@ -2028,6 +2177,7 @@ export class ChatClient<
+       // and that wait paces stream pull.
+       if (typeof document !== 'undefined' && document.hidden) continue
+       await yieldToHost()
++      if (!ownsSubscription()) break
+     }
+   }
+ 
+@@ -2058,18 +2208,12 @@ export class ChatClient<
+     const joinRun = this.connection.joinRun
+     if (!joinRun) return
+     const controller = new AbortController()
++    const generation = ++this.streamGeneration
++    const continuationGeneration = this.continuationGeneration
++    const ownsJoin = () => generation === this.streamGeneration &&
++      continuationGeneration === this.continuationGeneration
++    const ownsRequest = () => ownsJoin() && !controller.signal.aborted
+     this.abortController = controller
+-    this.setCurrentRunId(runId)
+-    // Record the resume state in-memory BEFORE replaying. Otherwise the
+-    // replayed `RUN_STARTED` (which carries the PROVIDER run id, not the
+-    // client/durability-log run id the pointer is keyed by) trips the
+-    // `!this.lastResume` guard in `updateRunLifecycle` and rewrites the
+-    // persisted pointer with the provider id — so a SECOND reload would
+-    // `joinRun` an id the log isn't keyed by and never re-attach.
+-    this.lastResume = { threadId: this.threadId, runId }
+-    this.streamContinuationGeneration = this.continuationGeneration
+-    this.setIsLoading(true)
+-    this.setStatus('streaming')
+     void (async () => {
+       let rebuilt = false
+       let attached = false
+@@ -2081,8 +2225,22 @@ export class ChatClient<
+         if (!attached) controller.abort()
+       }, REJOIN_CONNECT_DEADLINE_MS)
+       try {
++        this.setCurrentRunId(runId)
++        if (!ownsRequest()) return
++        // Record the resume state in-memory BEFORE replaying. Otherwise the
++        // replayed `RUN_STARTED` (which carries the PROVIDER run id, not the
++        // client/durability-log run id the pointer is keyed by) trips the
++        // `!this.lastResume` guard in `updateRunLifecycle` and rewrites the
++        // persisted pointer with the provider id — so a SECOND reload would
++        // `joinRun` an id the log isn't keyed by and never re-attach.
++        this.lastResume = { threadId: this.threadId, runId }
++        this.streamContinuationGeneration = continuationGeneration
++        this.setIsLoading(true)
++        if (!ownsRequest()) return
++        this.setStatus('streaming')
++        if (!ownsRequest()) return
+         for await (const chunk of joinRun(runId, controller.signal)) {
+-          if (controller.signal.aborted) break
++          if (!ownsRequest()) break
+           if (!attached) {
+             attached = true
+             clearTimeout(connectTimer)
+@@ -2090,13 +2248,14 @@ export class ChatClient<
+           if (!rebuilt && rebuildsAssistantMessage(chunk)) {
+             rebuilt = true
+             this.dropTrailingInFlightAssistant()
++            if (!ownsRequest()) break
+           }
+-          this.processIncomingChunk(chunk)
++          this.processIncomingChunk(chunk, ownsRequest)
+         }
+         // Same contract as `streamResponse`: client tools may finish (and
+         // queue a resume) while `isLoading` is still true. Wait for them
+         // before teardown so `drainPostStreamActions` below sees the queue.
+-        if (this.pendingToolExecutions.size > 0) {
++        if (ownsRequest() && this.pendingToolExecutions.size > 0) {
+           await Promise.all(this.pendingToolExecutions.values())
+         }
+       } catch (error) {
+@@ -2107,15 +2266,16 @@ export class ChatClient<
+         const isAbort =
+           error instanceof Error &&
+           (error.name === 'AbortError' || error.name === 'TimeoutError')
+-        if (!attached && !isAbort) refused = true
+-        if (attached && !isAbort) {
++        if (ownsRequest() && !attached && !isAbort) refused = true
++        if (ownsRequest() && attached && !isAbort) {
+           this.reportStreamError(
+             error instanceof Error ? error : new Error(String(error)),
++            ownsRequest,
+           )
+         }
+       } finally {
+         clearTimeout(connectTimer)
+-        if (!attached && refused && this.tailing && !this.disposed) {
++        if (ownsRequest() && !attached && refused && this.tailing && !this.disposed) {
+           // The server REFUSED the join (unknown / evicted run): the pointer is
+           // dead. Clear it so it does not retry and re-pin the UI on the next
+           // load. The server's persisted transcript is still loaded.
+@@ -2136,11 +2296,12 @@ export class ChatClient<
+           this.lastResume = null
+           this.persistor?.persistResumeSnapshot(null)
+         }
+-        if (this.abortController === controller) {
++        // The connect deadline aborts this signal without replacing the join.
++        if (ownsJoin() && this.abortController === controller) {
+           this.abortController = null
+           this.setIsLoading(false)
+-          if (this.status === 'streaming') this.setStatus('ready')
+-          await this.drainPostStreamActions()
++          if (ownsJoin() && this.status === 'streaming') this.setStatus('ready')
++          if (ownsJoin()) await this.drainPostStreamActions()
+         }
+       }
+     })()
+@@ -2156,11 +2317,44 @@ export class ChatClient<
+     const messages = this.processor.getMessages()
+     const last = messages[messages.length - 1]
+     if (last && last.role === 'assistant') {
+-      this.processor.setMessages(messages.slice(0, -1))
++      if (this.runProcessorMutation({
++        isCurrent: this.captureOperationOwnership(),
++        mutate: () => this.processor.setMessages(messages.slice(0, -1)),
++      }).type === 'cancelled') return
++    }
++  }
++
++  private captureEpochOwnership() {
++    const generation = this.streamGeneration
++    const continuationGeneration = this.continuationGeneration
++    return () => generation === this.streamGeneration &&
++      continuationGeneration === this.continuationGeneration
++  }
++
++  private captureOperationOwnership() {
++    const ownsEpoch = this.captureEpochOwnership()
++    const historyGeneration = this.historyGeneration
++    const signal = this.abortController?.signal
++    return () => ownsEpoch() && historyGeneration === this.historyGeneration &&
++      !signal?.aborted && !this.disposed
++  }
++
++  private runProcessorMutation<Value>({
++    isCurrent,
++    mutate,
++  }: ProcessorMutationOptions<Value>): ProcessorMutationResult<Value> {
++    if (!isCurrent()) return { type: 'cancelled' }
++    try {
++      const value = mutate()
++      return isCurrent() ? { type: 'applied', value } : { type: 'cancelled' }
++    } catch (error) {
++      if (error !== PROCESSOR_CALLBACK_CANCELLED) throw error
++      return { type: 'cancelled' }
+     }
+   }
+ 
+-  private processIncomingChunk(chunk: StreamChunk): void {
++  private processIncomingChunk(chunk: StreamChunk, ownsChunk: () => boolean): void {
++    if (!ownsChunk()) return
+     chunk = restoreInboundChunk(chunk)
+     if (
+       chunk.type === 'RUN_ERROR' &&
+@@ -2174,41 +2368,54 @@ export class ChatClient<
+     if (this.connectionStatus === 'connecting') {
+       this.setConnectionStatus('connected')
+     }
++    if (!ownsChunk()) return
+     const shouldIgnore = this.clearedStreamTracker.shouldIgnoreChunk(chunk)
+     if (shouldIgnore) {
+       if (chunk.type === 'RUN_FINISHED' || chunk.type === 'RUN_ERROR') {
+         if (getChunkRunId(chunk)) {
+-          this.updateRunLifecycle(chunk, { resolveProcessing: false })
++          this.updateRunLifecycle(chunk, { isCurrent: ownsChunk, resolveProcessing: false })
+         } else {
+-          this.drainIgnoredRunlessChunk(chunk)
++          this.drainIgnoredRunlessChunk(chunk, ownsChunk)
+         }
+-        this.retireIgnoredClearedTerminalChunk(chunk)
++        if (!ownsChunk()) return
++        this.retireIgnoredClearedTerminalChunk(chunk, ownsChunk)
++        if (!ownsChunk()) return
+         this.resolveJoinedRun(chunk)
+       }
+       return
+     }
+     this.callbacksRef.current.onChunk(chunk)
++    if (!ownsChunk()) return
+     this.devtoolsBridge.observeChunk(chunk)
++    if (!ownsChunk()) return
+     const attributedId = readSubagentRunId(chunk)
+     // A resumed child starts again under the same id, so its start lifts the stop.
+     if (attributedId && chunk.type === EventType.SUBAGENT_STARTED) {
+       this.stoppedSubagentIds.delete(attributedId)
+     }
+     if (attributedId && this.stoppedSubagentIds.has(attributedId)) {
+-      this.updateRunLifecycle(chunk)
++      this.updateRunLifecycle(chunk, { isCurrent: ownsChunk })
++      if (!ownsChunk()) return
+       this.resolveJoinedRun(chunk)
+       return
+     }
+     this.handingOverPendingToolCalls =
+       chunk.type === 'RUN_FINISHED' && chunk.outcome?.type !== 'interrupt'
+     try {
+-      this.processor.processChunk(chunk)
++      if (this.runProcessorMutation({
++        isCurrent: ownsChunk,
++        mutate: () => this.processor.processChunk(chunk),
++      }).type === 'cancelled') return
+     } finally {
+       this.handingOverPendingToolCalls = false
+     }
++    if (!ownsChunk()) return
+     this.syncSubagentHandles()
+-    this.updateRunLifecycle(chunk)
+-    this.observeInterruptState(chunk)
++    if (!ownsChunk()) return
++    this.updateRunLifecycle(chunk, { isCurrent: ownsChunk })
++    if (!ownsChunk()) return
++    this.observeInterruptState(chunk, ownsChunk)
++    if (!ownsChunk()) return
+     this.resolveJoinedRun(chunk)
+   }
+ 
+@@ -2341,7 +2548,9 @@ export class ChatClient<
+     body?: Record<string, any>,
+     sendOptions?: SendMessageOptions,
+   ): Promise<void> {
++    const ownsSend = this.captureEpochOwnership()
+     this.mountDevtools()
++    if (!ownsSend()) return
+     const emptyMessage = typeof content === 'string' && !content.trim()
+     if (emptyMessage) {
+       return
+@@ -2353,33 +2562,32 @@ export class ChatClient<
+     }
+ 
+     const resolvedBody = { ...body, ...sendOptions?.body }
+-
+-    if (this.isSendBusy()) {
+-      const { action, id } = this.decideWhenBusy(content, sendOptions)
+-      if (action === 'drop') {
+-        return
+-      }
+-      if (action === 'queue') {
+-        this.enqueueMessage(content, resolvedBody, id)
+-        return
+-      }
+-      // 'interrupt': abort the current stream, then send now.
+-      // Unlike stop(), does not flush already-queued messages — they drain
+-      // after this interrupting send settles successfully.
+-      // Claim sendInFlight *before* cancelling so a concurrent send cannot
+-      // slip in between cancel and the deliver below.
+-      this.stopMessageQueueDrain = true
+-      this.sendInFlight = true
+-      this.cancelInFlightStream({ setReadyStatus: true })
+-      this.resetSessionGenerating()
+-    } else {
+-      this.sendInFlight = true
++    const decision = this.isSendBusy()
++      ? this.decideWhenBusy(content, sendOptions)
++      : null
++    if (!ownsSend()) return
++    if (decision?.action === 'drop') return
++    if (decision?.action === 'queue') {
++      this.enqueueMessage(content, resolvedBody, decision.id)
++      return
+     }
+ 
++    // Claim before cancellation callbacks; a superseded send cannot release
++    // a replacement's claim when its own asynchronous work finally settles.
++    const claim = Symbol('send')
++    this.sendInFlight = claim
+     try {
++      if (decision?.action === 'interrupt') {
++        // Preserve queued messages for the successful interrupting send.
++        this.stopMessageQueueDrain = true
++        this.cancelInFlightStream({ setReadyStatus: true })
++        if (!ownsSend()) return
++        this.resetSessionGenerating()
++        if (!ownsSend()) return
++      }
+       await this.deliverMessage(content, resolvedBody)
+     } finally {
+-      this.sendInFlight = false
++      if (this.sendInFlight === claim) this.sendInFlight = null
+     }
+   }
+ 
+@@ -2390,7 +2598,7 @@ export class ChatClient<
+ 
+   /** True while a stream is active, a send is claiming the client, or the queue is draining. */
+   private isSendBusy(): boolean {
+-    return this.isLoading || this.sendInFlight || this.messageQueueDraining
++    return this.isLoading || this.sendInFlight !== null || this.messageQueueDraining
+   }
+ 
+   private resolveBusyReason(): QueueBusyReason {
+@@ -2410,22 +2618,30 @@ export class ChatClient<
+     content: string | MultimodalContent,
+     body?: Record<string, any>,
+   ): Promise<boolean> {
+-    if (this.isLoading || this.deliverClaim) {
++    if (this.isLoading || this.deliverClaim !== null) {
+       return false
+     }
+-    this.deliverClaim = true
++    const claim = Symbol('delivery')
++    this.deliverClaim = claim
++    const ownsDelivery = this.captureOperationOwnership()
+     try {
+       const normalizedContent = this.normalizeMessageInput(content)
+       this.pendingMessageBody = body
+-      const userMessage = this.processor.addUserMessage(
++      const appended = this.runProcessorMutation({
++        isCurrent: ownsDelivery,
++        mutate: () => this.processor.addUserMessage(
+         normalizedContent.content,
+         normalizedContent.id,
+         normalizedContent.metadata,
+-      )
++      ),
++      })
++      if (appended.type === 'cancelled') return false
++      const userMessage = appended.value
+       this.events.messageSent(userMessage.id, normalizedContent.content)
++      if (!ownsDelivery()) return false
+       return await this.streamResponse()
+     } finally {
+-      this.deliverClaim = false
++      if (this.deliverClaim === claim) this.deliverClaim = null
+     }
+   }
+ 
+@@ -2502,7 +2718,9 @@ export class ChatClient<
+    * Append a message and stream the response
+    */
+   async append(message: UIMessage | ModelMessage): Promise<void> {
++    const ownsAppend = this.captureOperationOwnership()
+     this.mountDevtools()
++    if (!ownsAppend()) return
+     if (this.hasPendingInterrupts()) {
+       throw new Error(
+         'ChatClient: cannot append normal input while pending interrupts exist. Use resumeInterrupts() instead.',
+@@ -2520,9 +2738,14 @@ export class ChatClient<
+     if (normalizedMessage.role === 'activity') {
+       const uiMessage = normalizedMessage as UIMessage
+       this.events.messageAppended(uiMessage)
++      if (!ownsAppend()) return
+       const messages = this.processor.getMessages()
+-      this.processor.setMessages([...messages, uiMessage])
++      if (this.runProcessorMutation({
++        isCurrent: ownsAppend,
++        mutate: () => this.processor.setMessages([...messages, uiMessage]),
++      }).type === 'cancelled') return
+       this.devtoolsBridge.emitSnapshot()
++      if (!ownsAppend()) return
+       return
+     }
+ 
+@@ -2530,11 +2753,16 @@ export class ChatClient<
+ 
+     // Emit message appended event
+     this.events.messageAppended(uiMessage)
++    if (!ownsAppend()) return
+ 
+     // Add to messages
+     const messages = this.processor.getMessages()
+-    this.processor.setMessages([...messages, uiMessage])
++    if (this.runProcessorMutation({
++      isCurrent: ownsAppend,
++      mutate: () => this.processor.setMessages([...messages, uiMessage]),
++    }).type === 'cancelled') return
+     this.devtoolsBridge.emitSnapshot()
++    if (!ownsAppend()) return
+ 
+     // If stream is in progress, queue the response for after it ends
+     if (this.isLoading) {
+@@ -2559,40 +2787,46 @@ export class ChatClient<
+ 
+     // Track generation so a superseded stream's cleanup doesn't clobber the new one
+     const generation = ++this.streamGeneration
+-    this.streamContinuationGeneration = this.continuationGeneration
+-    // Native interrupt continuation is a fresh child run. The interrupted run
+-    // is carried as parentRunId and the complete resolution batch as resume.
+-    const resumeThreadId = this.pendingResumeThreadId
+-    const resumeParentRunId = this.pendingResumeParentRunId
+-    const resumeItems = this.pendingResumeItems
+-    this.pendingResumeThreadId = null
+-    this.pendingResumeParentRunId = null
+-    this.pendingResumeItems = null
+-    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+-    this.setCurrentRunId(runId)
+-    this.activeResumeThreadId = resumeThreadId ?? this.threadId
+-    this.activeResumeRunId = runId
+-
+-    this.setIsLoading(true)
+-    // Hand off from deliverClaim to isLoading so nested drain can call
+-    // deliverMessage after this stream settles (while the outer deliver
+-    // is still on the stack).
+-    this.deliverClaim = false
+-    this.setStatus('submitted')
+-    this.setError(undefined)
+-    this.errorReportedGeneration = null
+-    this.abortController = new AbortController()
+-    // Capture the signal immediately so that a concurrent stop() or
+-    // sendMessage() that reassigns this.abortController cannot cause
+-    // connect() to receive a stale or null signal.
+-    const signal = this.abortController.signal
+-    // Reset pending tool executions for the new stream
+-    this.pendingToolExecutions.clear()
++    const continuationGeneration = this.continuationGeneration
++    const ownsTurn = () =>
++      generation === this.streamGeneration && continuationGeneration === this.continuationGeneration
++    const controller = new AbortController()
++    const signal = controller.signal
++    const ownsRequest = () => ownsTurn() && !signal.aborted
+     let streamCompletedSuccessfully = false
+     let activeDevtoolsRunId: string | null = null
+     let runTerminalEventEmitted = false
+ 
+     try {
++      this.abortController = controller
++      this.streamContinuationGeneration = continuationGeneration
++      // Native interrupt continuation is a fresh child run. The interrupted run
++      // is carried as parentRunId and the complete resolution batch as resume.
++      const resumeThreadId = this.pendingResumeThreadId
++      const resumeParentRunId = this.pendingResumeParentRunId
++      const resumeItems = this.pendingResumeItems
++      this.pendingResumeThreadId = null
++      this.pendingResumeParentRunId = null
++      this.pendingResumeItems = null
++      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
++      this.setCurrentRunId(runId)
++      if (!ownsRequest()) return false
++      this.activeResumeThreadId = resumeThreadId ?? this.threadId
++      this.activeResumeRunId = runId
++
++      this.setIsLoading(true)
++      if (!ownsRequest()) return false
++      // Hand off from deliverClaim to isLoading so nested drain can call
++      // deliverMessage after this stream settles (while the outer deliver
++      // is still on the stack).
++      this.deliverClaim = null
++      this.setStatus('submitted')
++      if (!ownsRequest()) return false
++      this.setError(undefined)
++      if (!ownsRequest()) return false
++      this.errorReportedGeneration = null
++      // Reset pending tool executions for the new stream
++      this.pendingToolExecutions.clear()
+       // Get UIMessages with parts (preserves approval state and client tool results).
+       // Activity is frontend-only — never send it as model input.
+       const messages = this.messagesForSend(this.processor.getMessages())
+@@ -2607,7 +2841,7 @@ export class ChatClient<
+       // bail out before allocating waitForProcessing() — otherwise the
+       // resolveProcessing() that ran during cancellation is a no-op and the
+       // await processingComplete below would deadlock.
+-      if (signal.aborted) {
++      if (!ownsRequest()) {
+         return false
+       }
+ 
+@@ -2632,6 +2866,7 @@ export class ChatClient<
+       // Generate stream ID — assistant message will be created by stream events
+       this.currentStreamId = this.generateUniqueId('stream')
+       this.devtoolsBridge.setCurrentStreamId(this.currentStreamId)
++      if (!ownsRequest()) return false
+       this.currentMessageId = null
+       this.activeClientTools = clientTools
+       this.activeContext = runtimeContext
+@@ -2643,6 +2878,7 @@ export class ChatClient<
+ 
+       // Ensure subscription loop is running
+       this.ensureSubscription()
++      if (!ownsRequest()) return false
+ 
+       // Set up promise that resolves when onStreamEnd fires
+       const processingComplete = this.waitForProcessing()
+@@ -2665,6 +2901,8 @@ export class ChatClient<
+         byokHeaders = await prepareResolvedByokHeaders(this.byok, provider)
+       }
+ 
++      if (!ownsRequest()) return false
++
+       const runContext = {
+         threadId: resumeThreadId ?? this.threadId,
+         runId,
+@@ -2683,24 +2921,29 @@ export class ChatClient<
+         ...(byokHeaders ? { headers: byokHeaders } : {}),
+       }
+       this.devtoolsBridge.beginRun(runContext.runId, runContext.threadId)
++      if (!ownsRequest()) return false
+       activeDevtoolsRunId = runContext.runId
+       this.devtoolsBridge.emitRunLifecycle(
+         'run:created',
+         runContext.runId,
+         'created',
+       )
++      if (!ownsRequest()) return false
+       this.devtoolsBridge.emitRunLifecycle(
+         'run:started',
+         runContext.runId,
+         'started',
+       )
++      if (!ownsRequest()) return false
+       this.devtoolsBridge.emitSnapshot()
+ 
++      if (!ownsRequest()) return false
++
+       // Send through normalized connection (pushes chunks to subscription queue)
+       await this.connection.send(messages, mergedBody, signal, runContext)
+ 
+       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated asynchronously during await
+-      if (generation !== this.streamGeneration || signal.aborted) {
++      if (!ownsRequest()) {
+         return false
+       }
+ 
+@@ -2717,7 +2960,7 @@ export class ChatClient<
+ 
+       // If this stream was superseded (e.g. by reload()), bail out —
+       // the new stream owns the processor and processingResolve now.
+-      if (generation !== this.streamGeneration) {
++      if (!ownsRequest()) {
+         return false
+       }
+ 
+@@ -2741,10 +2984,16 @@ export class ChatClient<
+         await Promise.all(this.pendingToolExecutions.values())
+       }
+ 
++      if (!ownsRequest()) return false
++
+       // Finalize (idempotent — may already be done by RUN_FINISHED handler)
+-      this.processor.finalizeStream()
+-      streamCompletedSuccessfully = true
++      if (this.runProcessorMutation({
++        isCurrent: ownsRequest,
++        mutate: () => this.processor.finalizeStream(),
++      }).type === 'cancelled') return false
++      streamCompletedSuccessfully = ownsRequest()
+     } catch (err: unknown) {
++      if (!ownsRequest()) return false
+       const error = err instanceof Error ? err : new Error(String(err))
+       if (error.name === 'AbortError') {
+         if (activeDevtoolsRunId) {
+@@ -2763,8 +3012,9 @@ export class ChatClient<
+       if (error instanceof ByokBlockedError && error.reason === 'locked') {
+         this.byok?.request(error.provider, 'locked')
+       }
+-      if (generation === this.streamGeneration) {
+-        this.reportStreamError(error)
++      if (ownsRequest()) {
++        this.reportStreamError(error, ownsRequest)
++        if (!ownsRequest()) return false
+         if (activeDevtoolsRunId) {
+           this.devtoolsBridge.emitRunLifecycle(
+             'run:errored',
+@@ -2776,7 +3026,7 @@ export class ChatClient<
+         }
+       }
+       if (
+-        generation === this.streamGeneration &&
++        ownsRequest() &&
+         (error instanceof ByokMissingError ||
+           error instanceof ByokBlockedError ||
+           error instanceof ByokUnresolvedProviderError)
+@@ -2789,16 +3039,16 @@ export class ChatClient<
+       // clobber the new stream's abortController or isLoading state.
+       if (generation === this.streamGeneration) {
+         this.currentStreamId = null
+-        this.devtoolsBridge.setCurrentStreamId(null)
+         this.currentMessageId = null
+-        this.setCurrentRunId(null)
+         this.activeClientTools = null
+         this.activeContext = undefined
+         this.abortController = null
+-        this.setIsLoading(false)
+-        this.pendingMessageBody = undefined // Ensure it's cleared even on error
++        this.pendingMessageBody = undefined
++        this.devtoolsBridge.setCurrentStreamId(null)
++        if (generation === this.streamGeneration) this.setCurrentRunId(null)
++        if (generation === this.streamGeneration) this.setIsLoading(false)
+ 
+-        if (activeDevtoolsRunId && !runTerminalEventEmitted) {
++        if (generation === this.streamGeneration && activeDevtoolsRunId && !runTerminalEventEmitted) {
+           if (streamCompletedSuccessfully) {
+             this.devtoolsBridge.emitRunLifecycle(
+               'run:completed',
+@@ -2815,9 +3065,9 @@ export class ChatClient<
+         }
+ 
+         // Drain any actions that were queued while the stream was in progress
+-        await this.drainPostStreamActions()
++        if (ownsRequest()) await this.drainPostStreamActions()
+ 
+-        if (streamCompletedSuccessfully) {
++        if (ownsRequest() && streamCompletedSuccessfully) {
+           this.rememberProcessorMessageIds()
+           if (this.status !== 'ready') {
+             // Terminal run, but onStreamEnd never fired: the processor had
+@@ -2828,10 +3078,10 @@ export class ChatClient<
+           }
+           // Auto-send queued messages once the run fully settles. Skip if a
+           // drain loop is already walking the queue (avoids nested re-entry).
+-          if (!this.messageQueueDraining) {
++          if (ownsRequest() && !this.messageQueueDraining) {
+             await this.drainQueue()
+           }
+-        } else {
++        } else if (ownsRequest()) {
+           // Error/abort settle for the active generation: don't strand or
+           // later mis-order queued messages. A failed turn flushes the queue
+           // (consistent with stop()); it must NOT auto-drain into a likely
+@@ -2841,7 +3091,9 @@ export class ChatClient<
+       }
+     }
+ 
+-    return streamCompletedSuccessfully
++    // A completed request may legitimately hand off to a child in the same turn.
++    return streamCompletedSuccessfully &&
++      continuationGeneration === this.continuationGeneration && !signal.aborted
+   }
+ 
+   /**
+@@ -2858,9 +3110,16 @@ export class ChatClient<
+       this.abortSubscriptionLoop()
+     }
+ 
++    const controller = new AbortController()
++    const generation = ++this.subscriptionGeneration
++    this.subscriptionAbortController = controller
++    const ownsSubscription = () =>
++      generation === this.subscriptionGeneration && !controller.signal.aborted
+     this.setIsSubscribed(true)
++    if (!ownsSubscription()) return
+     this.setConnectionStatus('connecting')
+-    this.startSubscription()
++    if (!ownsSubscription()) return
++    this.startSubscription(controller, generation)
+   }
+ 
+   /**
+@@ -2868,13 +3127,19 @@ export class ChatClient<
+    * This aborts an in-flight request and the subscription loop.
+    */
+   unsubscribe(): void {
++    const ownsUnsubscribe = this.captureEpochOwnership()
++    const subscriptionGeneration = this.subscriptionGeneration
+     this.cancelInFlightStream({
+       setReadyStatus: true,
+       abortSubscription: true,
+     })
++    if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration) return
+     this.discardPendingSends()
++    if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration) return
+     this.resetSessionGenerating()
++    if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration) return
+     this.setIsSubscribed(false)
++    if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration) return
+     this.setConnectionStatus('disconnected')
+   }
+ 
+@@ -2882,6 +3147,7 @@ export class ChatClient<
+    * Reload the last assistant message
+    */
+   async reload(): Promise<void> {
++    const ownsReload = this.captureEpochOwnership()
+     const messages = this.processor.getMessages()
+     if (messages.length === 0) return
+ 
+@@ -2895,16 +3161,24 @@ export class ChatClient<
+     // Cancel any active stream before reloading
+     if (this.isLoading) {
+       this.cancelInFlightStream()
++      if (!ownsReload()) return
+     }
+     // Discard pending follow-ups so "regenerate last answer" does not also
+     // auto-send messages that were typed during the previous stream.
+     this.discardPendingSends()
++    if (!ownsReload()) return
+ 
+     this.events.reloaded(lastUserMessageIndex)
+ 
++    if (!ownsReload()) return
++
+     // Remove all messages after the last user message
+-    this.processor.removeMessagesAfter(lastUserMessageIndex)
++    if (this.runProcessorMutation({
++      isCurrent: ownsReload,
++      mutate: () => this.processor.removeMessagesAfter(lastUserMessageIndex),
++    }).type === 'cancelled') return
+     this.devtoolsBridge.emitSnapshot()
++    if (!ownsReload()) return
+ 
+     // Resend
+     await this.streamResponse()
+@@ -2917,14 +3191,19 @@ export class ChatClient<
+     // Invalidate deferred work from the stopped continuation.
+     // This aborts the local request. A durable server run keeps going.
+     this.continuationGeneration++
++    const ownsStop = this.captureEpochOwnership()
+     const hadLocalStream = this.abortController !== null
+     this.cancelInFlightStream({ setReadyStatus: true })
++    if (!ownsStop()) return
+     this.discardPendingSends()
++    if (!ownsStop()) return
+     this.lastResume = null
+     this.activeInterruptSubmission = undefined
+     this.interruptManager.reset()
++    if (!ownsStop()) return
+     if (hadLocalStream) {
+       this.resetSessionGenerating()
++      if (!ownsStop()) return
+     }
+     this.events.stopped()
+   }
+@@ -2933,6 +3212,7 @@ export class ChatClient<
+    * Clear all messages
+    */
+   clear(): void {
++    const ownsClear = this.captureEpochOwnership()
+     const hadLocalStream = this.abortController !== null
+     this.clearedStreamTracker.snapshotClear({
+       messages: this.processor.getMessages(),
+@@ -2942,25 +3222,36 @@ export class ChatClient<
+     // Always cancel in-flight work so clear works without message persistence.
+     if (this.isLoading || hadLocalStream) {
+       this.cancelInFlightStream({ setReadyStatus: true })
++      if (!ownsClear()) return
+       this.resetSessionGenerating({ preserveClearedStreamTracking: true })
++      if (!ownsClear()) return
+     } else if (this.activeRunIds.size > 0) {
+       this.resetSessionGenerating({ preserveClearedStreamTracking: true })
++      if (!ownsClear()) return
+     }
+     // Suppress persisting the empty snapshot that clearMessages emits, then
+     // remove the stored conversation outright.
+     this.persistor?.beginClear()
+-    this.processor.clearMessages()
++    if (this.runProcessorMutation({
++      isCurrent: ownsClear,
++      mutate: () => this.processor.clearMessages(),
++    }).type === 'cancelled') return
+     this.resetHistoryPaging()
+     this.supersedeHydration()
++    if (!ownsClear()) return
+     this.discardPendingSends()
++    if (!ownsClear()) return
+     this.persistor?.remove()
++    if (!ownsClear()) return
+     this.stoppedSubagentIds.clear()
+     this.lastResume = null
+     this.interruptManager.reset()
++    if (!ownsClear()) return
+     this.pendingResumeThreadId = null
+     this.pendingResumeParentRunId = null
+     this.pendingResumeItems = null
+     this.setError(undefined)
++    if (!ownsClear()) return
+     this.events.messagesCleared()
+   }
+ 
+@@ -2968,11 +3259,17 @@ export class ChatClient<
+    * Add the result of a client-side tool execution
+    */
+   async addToolResult(result: ClientToolResult): Promise<void> {
++    const continuationGeneration = this.streamContinuationGeneration
++    const signal = this.abortController?.signal
++    const ownsContinuation = () => continuationGeneration === this.continuationGeneration &&
++      !signal?.aborted && !this.disposed
+     const clientTool = this.clientToolsRef.current.get(result.tool)
+     await this.addToolResultForClientTool(
+       result,
+       clientTool,
+-      this.streamContinuationGeneration,
++      continuationGeneration,
++      undefined,
++      ownsContinuation,
+     )
+   }
+ 
+@@ -2980,7 +3277,8 @@ export class ChatClient<
+     result: ClientToolResult,
+     clientTool: AnyClientTool | undefined,
+     continuationGeneration: number,
+-    context?: ChatClientRunEventContext,
++    context: ChatClientRunEventContext | undefined,
++    ownsContinuation: () => boolean,
+   ): Promise<void> {
+     if (result.state !== 'output-error') {
+       try {
+@@ -3008,6 +3306,7 @@ export class ChatClient<
+       }
+     }
+ 
++    if (!ownsContinuation()) return
+     this.events.toolResultAdded(
+       result.toolCallId,
+       result.tool,
+@@ -3016,18 +3315,22 @@ export class ChatClient<
+       context,
+     )
+ 
+-    if (continuationGeneration !== this.continuationGeneration) return
++    if (!ownsContinuation()) return
+ 
+     // Always update local message state so the tool-call part is terminal in
+     // the UI even when the AG-UI interrupt path owns server continuation.
+-    this.processor.addToolResult(
++    if (this.runProcessorMutation({
++      isCurrent: ownsContinuation,
++      mutate: () => this.processor.addToolResult(
+       result.toolCallId,
+       result.output,
+       result.state === 'output-error'
+         ? result.errorText || 'Tool execution failed'
+         : undefined,
+-    )
++    ),
++    }).type === 'cancelled') return
+     this.devtoolsBridge.emitSnapshot()
++    if (!ownsContinuation()) return
+ 
+     const resolvedViaInterrupt =
+       result.state === 'output-error'
+@@ -3039,6 +3342,7 @@ export class ChatClient<
+             result.toolCallId,
+             result.output,
+           )
++    if (!ownsContinuation()) return
+     if (resolvedViaInterrupt) {
+       // Interrupt manager stages/submits the resume batch (deferred until the
+       // parent stream settles when still loading). Skip legacy continuation.
+@@ -3081,21 +3385,23 @@ export class ChatClient<
+     id: string // approval.id, not toolCallId
+     approved: boolean
+   }): Promise<void> {
++    const ownsApproval = this.captureOperationOwnership()
+     // Reflect the decision on the tool-call part so approval UIs that render
+     // from `part.state` (the deprecated pre-interrupt pattern) clear the prompt
+     // and show the response. The bound interrupt resolution below drives the
+     // actual continuation; this keeps the legacy message-state surface in sync.
+-    this.processor.addToolApprovalResponse(response.id, response.approved)
++    if (this.runProcessorMutation({
++      isCurrent: ownsApproval,
++      mutate: () => this.processor.addToolApprovalResponse(response.id, response.approved),
++    }).type === 'cancelled') return
+     this.devtoolsBridge.emitSnapshot()
++    if (!ownsApproval()) return
+ 
+-    if (
+-      this.interruptManager.resolveToolApprovalDecision(
+-        response.id,
+-        response.approved,
+-      )
+-    ) {
+-      return
+-    }
++    const resolvedApproval = this.interruptManager.resolveToolApprovalDecision(
++      response.id,
++      response.approved,
++    )
++    if (!ownsApproval() || resolvedApproval) return
+     // Find the tool call ID from the approval ID
+     const messages = this.processor.getMessages()
+     let foundToolCallId: string | undefined
+@@ -3117,11 +3423,16 @@ export class ChatClient<
+         foundToolCallId,
+         response.approved,
+       )
++      if (!ownsApproval()) return
+     }
+ 
+     // Add response via processor
+-    this.processor.addToolApprovalResponse(response.id, response.approved)
++    if (this.runProcessorMutation({
++      isCurrent: ownsApproval,
++      mutate: () => this.processor.addToolApprovalResponse(response.id, response.approved),
++    }).type === 'cancelled') return
+     this.devtoolsBridge.emitSnapshot()
++    if (!ownsApproval()) return
+ 
+     // If stream is in progress, queue continuation check for after it ends
+     if (this.isLoading) {
+@@ -3288,12 +3599,15 @@ export class ChatClient<
+     const handle = this.subagentHandles.get(id)
+     if (!handle || handle.status !== 'running') return
+     this.stoppedSubagentIds.add(id)
+-    this.processor.processChunk({
++    if (this.runProcessorMutation({
++      isCurrent: this.captureOperationOwnership(),
++      mutate: () => this.processor.processChunk({
+       type: EventType.SUBAGENT_ERROR,
+       subagentRunId: id,
+       message: 'Stopped',
+       timestamp: Date.now(),
+-    })
++    }),
++    }).type === 'cancelled') return
+     this.syncSubagentHandles()
+     handle.status = 'error'
+     handle.error = { message: 'Stopped' }
+@@ -3339,7 +3653,10 @@ export class ChatClient<
+         throw new Error('Older page was empty')
+       }
+       this.applyHydrationPage(result.page)
+-      this.processor.prependMessages(olderMessages)
++      if (this.runProcessorMutation({
++        isCurrent: this.captureOperationOwnership(),
++        mutate: () => this.processor.prependMessages(olderMessages),
++      }).type === 'cancelled') return
+       this.rememberServerMessageIds(olderMessages)
+     } finally {
+       this.loadOlderMessagesInFlight = false
+@@ -3434,23 +3751,26 @@ export class ChatClient<
+       return
+     }
+ 
++    const continuationGeneration = this.continuationGeneration
++    const ownsDrain = () => continuationGeneration === this.continuationGeneration
+     this.messageQueueDraining = true
+     this.stopMessageQueueDrain = false
+     try {
+       if (this.queueConfig.drain === 'batch') {
+         while (this.messageQueue.length > 0) {
+-          if (this.shouldAbortMessageQueueDrain()) {
++          if (!ownsDrain() || this.shouldAbortMessageQueueDrain()) {
+             return
+           }
+           const items = this.messageQueue.splice(0)
+           this.emitQueueChange()
++          if (!ownsDrain() || this.shouldAbortMessageQueueDrain()) return
+           const merged = mergeQueuedMessages(items)
+           const completed = await this.deliverMessage(
+             merged.content,
+             merged.body,
+           )
+           // Failed/aborted deliver flushes the rest of the queue in streamResponse.
+-          if (!completed || this.shouldAbortMessageQueueDrain()) {
++          if (!ownsDrain() || !completed || this.shouldAbortMessageQueueDrain()) {
+             return
+           }
+         }
+@@ -3460,7 +3780,7 @@ export class ChatClient<
+       while (this.messageQueue.length > 0) {
+         // Interrupt (or a new direct send) claimed the client — stop draining;
+         // remaining items stay queued and will drain after that send settles.
+-        if (this.shouldAbortMessageQueueDrain()) {
++        if (!ownsDrain() || this.shouldAbortMessageQueueDrain()) {
+           return
+         }
+         const next = this.messageQueue.shift()
+@@ -3468,9 +3788,10 @@ export class ChatClient<
+           return
+         }
+         this.emitQueueChange()
++        if (!ownsDrain() || this.shouldAbortMessageQueueDrain()) return
+         const completed = await this.deliverMessage(next.content, next.body)
+         // Failed/aborted deliver flushes the rest of the queue in streamResponse.
+-        if (!completed || this.shouldAbortMessageQueueDrain()) {
++        if (!ownsDrain() || !completed || this.shouldAbortMessageQueueDrain()) {
+           return
+         }
+       }
+@@ -3485,7 +3806,7 @@ export class ChatClient<
+    * (stop / error / clear / unsubscribe / reload).
+    */
+   private discardPendingSends(): void {
+-    this.sendInFlight = false
++    this.sendInFlight = null
+     this.flushQueue()
+   }
+ 
+@@ -3501,7 +3822,9 @@ export class ChatClient<
+   }
+ 
+   private emitQueueChange(): void {
++    const ownsNotice = this.captureEpochOwnership()
+     this.callbacksRef.current.onQueueChange(this.getQueue())
++    if (!ownsNotice()) return
+     this.devtoolsBridge.emitSnapshot()
+   }
+ 
+@@ -3585,7 +3908,10 @@ export class ChatClient<
+    * Manually set messages
+    */
+   setMessagesManually(messages: Array<UIMessage<TTools>>): void {
+-    this.processor.setMessages(messages)
++    if (this.runProcessorMutation({
++      isCurrent: this.captureOperationOwnership(),
++      mutate: () => this.processor.setMessages(messages),
++    }).type === 'cancelled') return
+     this.devtoolsBridge.emitSnapshot()
+   }
+ 
+diff --git a/dist/esm/connection-adapters.js b/dist/esm/connection-adapters.js
+index 50d7119146b..9be22e7dd46 100644
+--- a/dist/esm/connection-adapters.js
++++ b/dist/esm/connection-adapters.js
+@@ -12,6 +12,10 @@ import { ByokMissingError, isByokMissingBody } from "@tanstack/ai/byok";
+ * otherwise-runless chunks to their originating request.
+ */
+ var chunkRunIds = /* @__PURE__ */ new WeakMap();
++var chunkRequestSignals = /* @__PURE__ */ new WeakMap();
++function getChunkRequestSignal(chunk) {
++	return chunkRequestSignals.get(chunk);
++}
+ /**
+ * Resolve a chunk's run id, preferring the value on the chunk itself
+ * (RUN_STARTED / RUN_FINISHED / RUN_ERROR carry one) and falling back to the
+@@ -497,7 +501,10 @@ function normalizeConnectionAdapter(connection) {
+ 	let activeBuffer = [];
+ 	let activeWaiters = [];
+ 	let activeSubscriber;
+-	function push(chunk, runId) {
++	function push(chunk, runId, requestSignal) {
++		if (requestSignal?.aborted) return;
++		chunk = { ...chunk };
++		if (requestSignal) chunkRequestSignals.set(chunk, requestSignal);
+ 		if (runId) chunkRunIds.set(chunk, runId);
+ 		const waiter = activeWaiters.shift();
+ 		if (waiter) waiter(chunk);
+@@ -535,7 +542,7 @@ function normalizeConnectionAdapter(connection) {
+ 							});
+ 							abortSignal?.addEventListener("abort", onAbort, { once: true });
+ 						});
+-						if (chunk !== null) yield chunk;
++						if (chunk !== null && !getChunkRequestSignal(chunk)?.aborted) yield chunk;
+ 					}
+ 				} finally {
+ 					if (activeSubscriber === myWaiters) activeSubscriber = void 0;
+@@ -549,10 +556,11 @@ function normalizeConnectionAdapter(connection) {
+ 			try {
+ 				const stream = connection.connect(messages, data, abortSignal, runContext);
+ 				for await (const chunk of stream) {
++					if (abortSignal?.aborted) break;
+ 					if ("threadId" in chunk && typeof chunk.threadId === "string") upstreamThreadId = chunk.threadId;
+ 					if ("runId" in chunk && typeof chunk.runId === "string") upstreamRunId = chunk.runId;
+ 					if (chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR") hasTerminalEvent = true;
+-					push(chunk, runContext?.runId);
++					push(chunk, runContext?.runId, abortSignal);
+ 				}
+ 				if (!abortSignal?.aborted && !hasTerminalEvent) push(withTanstackMetadata({
+ 					type: EventType.RUN_FINISHED,
+@@ -562,7 +570,7 @@ function normalizeConnectionAdapter(connection) {
+ 				}, {
+ 					finishReason: "stop",
+ 					model: "connect-wrapper"
+-				}), runContext?.runId);
++				}), runContext?.runId, abortSignal);
+ 			} catch (err) {
+ 				if (!abortSignal?.aborted && !hasTerminalEvent) try {
+ 					const message = err instanceof Error ? err.message : "Unknown error in connect()";
+@@ -572,7 +580,7 @@ function normalizeConnectionAdapter(connection) {
+ 						runId: requireSyntheticId(upstreamRunId ?? runContext?.runId, "runId"),
+ 						timestamp: Date.now(),
+ 						message
+-					}, runContext?.runId);
++					}, runContext?.runId, abortSignal);
+ 				} catch {}
+ 				throw err;
+ 			}
+@@ -1344,6 +1352,6 @@ function rpcStream(rpcCall, handlers) {
+ 	};
+ }
+ //#endregion
+-export { DurableStreamIncompleteError, StreamReconnectLimitError, StreamTruncatedError, createReconnectTracker, fetchHttpStream, fetchServerSentEvents, fetcherToConnectionAdapter, getChunkRunId$1 as getChunkRunId, normalizeConnectionAdapter, rpcStream, stream, webSocket, xhrHttpStream, xhrServerSentEvents };
++export { DurableStreamIncompleteError, StreamReconnectLimitError, StreamTruncatedError, createReconnectTracker, fetchHttpStream, fetchServerSentEvents, fetcherToConnectionAdapter, getChunkRunId$1 as getChunkRunId, getChunkRequestSignal, normalizeConnectionAdapter, rpcStream, stream, webSocket, xhrHttpStream, xhrServerSentEvents };
+ 
+ //# sourceMappingURL=connection-adapters.js.map
+\ No newline at end of file
+diff --git a/dist/esm/chat-client.js b/dist/esm/chat-client.js
+index bae9ddd81ae..37b862ee4d4 100644
+--- a/dist/esm/chat-client.js
++++ b/dist/esm/chat-client.js
+@@ -2,13 +2,19 @@ import { byokFallbackProviderId } from "./byok/client.js";
+ import { prepareResolvedByokHeaders, resolveByokProviderId } from "./byok/resolve.js";
+ import { createNoOpChatDevtoolsBridge } from "./devtools-noop.js";
+ import { normalizeMessagesDates } from "./message-date-normalizer.js";
+-import { fetcherToConnectionAdapter, getChunkRunId as getChunkRunId$1, normalizeConnectionAdapter } from "./connection-adapters.js";
++import { fetcherToConnectionAdapter, getChunkRunId as getChunkRunId$1, getChunkRequestSignal, normalizeConnectionAdapter } from "./connection-adapters.js";
+ import { ChatPersistor } from "./client-persistor.js";
+ import { ClearedStreamTracker } from "./cleared-stream-tracker.js";
+ import { InterruptManager } from "./interrupt-manager.js";
+ import { EventType, StreamProcessor, cloneAndDeepFreezeJson, convertSchemaToJsonSchema, generateMessageId, isStandardSchema, mergeMetadata, normalizeToUIMessage, restoreInboundChunk, tanstackMetadata, validateWithStandardSchema } from "@tanstack/ai/client";
+ import { ByokBlockedError, ByokMissingError, ByokUnresolvedProviderError } from "@tanstack/ai/byok";
+ //#region src/chat-client.ts
++const PROCESSOR_CALLBACK_CANCELLED = Symbol("processor-callback-cancelled");
++const assertProcessorCallbackOwnership = (isCurrent) => {
++  if (!isCurrent())
++    throw PROCESSOR_CALLBACK_CANCELLED;
++};
++
+ var STREAM_PROCESSING_BUDGET_MS = 8;
+ function yieldToHost() {
+ 	const { scheduler } = globalThis;
+@@ -216,7 +222,7 @@ var ChatClient = class {
+ 	* see `isLoading === false`, both append a user message, and only one stream
+ 	* actually runs (leaving stranded user messages with no reply).
+ 	*/
+-	sendInFlight = false;
++	sendInFlight = null;
+ 	/**
+ 	* True while `drainQueue` is delivering queued messages. Concurrent
+ 	* `sendMessage` calls during a drain are treated as busy and follow
+@@ -232,7 +238,7 @@ var ChatClient = class {
+ 	* Sync claim held for the duration of `deliverMessage` so concurrent
+ 	* deliverers cannot both append a user message before only one stream runs.
+ 	*/
+-	deliverClaim = false;
++	deliverClaim = null;
+ 	isLoading = false;
+ 	isSubscribed = false;
+ 	error = void 0;
+@@ -257,6 +263,7 @@ var ChatClient = class {
+ 	activeContext = void 0;
+ 	continuationPending = false;
+ 	subscriptionAbortController = null;
++	subscriptionGeneration = 0;
+ 	processingResolve = null;
+ 	/**
+ 	* `connect()` adapters push the full HTTP body into the subscribe queue, then
+@@ -305,14 +312,27 @@ var ChatClient = class {
+ 		this.uniqueId = this.threadId;
+ 		let cachesMessages = true;
+ 		if (options.persistence === true) {
+-			if (!options.threadId) throw new Error("[TanStack AI] persistence needs a stable `threadId` to key on. Pass a threadId from your app (for example support-42).");
++			if (!options.threadId) {
++				throw new Error("[TanStack AI] persistence needs a stable `threadId` to key on. Pass a threadId from your app (for example support-42).");
++			}
+ 			cachesMessages = false;
+ 			this.historyPageSize = options.history?.pageSize;
+ 		} else if (options.persistence) {
+-			if (!options.threadId) throw new Error("[TanStack AI] persistence needs a stable `threadId` to key on. Pass a threadId from your app (for example support-42).");
+-			this.persistor = new ChatPersistor(options.persistence, options.threadId, (messages) => this.processor.setMessages(messages), (snapshot) => this.applyPersistedResume(snapshot));
+-			this.historyPageSize = void 0;
+-		} else this.historyPageSize = void 0;
++			if (!options.threadId) {
++				throw new Error("[TanStack AI] persistence needs a stable `threadId` to key on. Pass a threadId from your app (for example support-42).");
++			}
++			this.persistor = new ChatPersistor(options.persistence, options.threadId, (messages) => {
++				const applied = this.runProcessorMutation({
++					isCurrent: this.captureOperationOwnership(),
++					mutate: () => this.processor.setMessages(messages)
++				});
++				if (applied.type === "cancelled")
++					throw PROCESSOR_CALLBACK_CANCELLED;
++			}, (snapshot) => this.applyPersistedResume(snapshot));
++			this.historyPageSize = undefined;
++		} else {
++			this.historyPageSize = undefined;
++		}
+ 		this.bodyOption = options.body || {};
+ 		this.forwardedPropsOption = options.forwardedProps || {};
+ 		this.byok = options.byok;
+@@ -322,103 +342,163 @@ var ChatClient = class {
+ 		const transport = resolveTransport(options);
+ 		this.connectionDrainsOnSend = connectionDrainsOnSend(transport);
+ 		this.connection = normalizeConnectionAdapter(transport);
+-		this.clientToolsRef = { current: /* @__PURE__ */ new Map() };
+-		if (options.tools) for (const tool of options.tools) this.clientToolsRef.current.set(tool.name, tool);
++		this.clientToolsRef = { current: new Map };
++		if (options.tools) {
++			for (const tool of options.tools) {
++				this.clientToolsRef.current.set(tool.name, tool);
++			}
++		}
+ 		this.devtoolsBridge = (options.devtoolsBridgeFactory ?? createNoOpChatDevtoolsBridge)(this.buildDevtoolsBridgeOptions(options.devtools));
+ 		this.events = this.devtoolsBridge.events;
+-		this.callbacksRef = { current: {
+-			onResponse: options.onResponse || (() => {}),
+-			onChunk: options.onChunk || (() => {}),
+-			onFinish: options.onFinish || (() => {}),
+-			onError: options.onError || (() => {}),
+-			onMessagesChange: options.onMessagesChange || (() => {}),
+-			onLoadingChange: options.onLoadingChange || (() => {}),
+-			onErrorChange: options.onErrorChange || (() => {}),
+-			onStatusChange: options.onStatusChange || (() => {}),
+-			onSubscriptionChange: options.onSubscriptionChange || (() => {}),
+-			onConnectionStatusChange: options.onConnectionStatusChange || (() => {}),
+-			onSessionGeneratingChange: options.onSessionGeneratingChange || (() => {}),
+-			onHydratingChange: options.onHydratingChange || (() => {}),
+-			onQueueChange: options.onQueueChange || (() => {}),
+-			onResumeStateChange: options.onResumeStateChange || (() => {}),
+-			onRunIdChange: options.onRunIdChange || (() => {}),
+-			onInterruptStateChange: options.onInterruptStateChange || (() => {}),
+-			onCustomEvent: options.onCustomEvent || (() => {})
+-		} };
++		this.callbacksRef = {
++			current: {
++				onResponse: options.onResponse || (() => {}),
++				onChunk: options.onChunk || (() => {}),
++				onFinish: options.onFinish || (() => {}),
++				onError: options.onError || (() => {}),
++				onMessagesChange: options.onMessagesChange || (() => {}),
++				onLoadingChange: options.onLoadingChange || (() => {}),
++				onErrorChange: options.onErrorChange || (() => {}),
++				onStatusChange: options.onStatusChange || (() => {}),
++				onSubscriptionChange: options.onSubscriptionChange || (() => {}),
++				onConnectionStatusChange: options.onConnectionStatusChange || (() => {}),
++				onSessionGeneratingChange: options.onSessionGeneratingChange || (() => {}),
++				onHydratingChange: options.onHydratingChange || (() => {}),
++				onQueueChange: options.onQueueChange || (() => {}),
++				onResumeStateChange: options.onResumeStateChange || (() => {}),
++				onRunIdChange: options.onRunIdChange || (() => {}),
++				onInterruptStateChange: options.onInterruptStateChange || (() => {}),
++				onCustomEvent: options.onCustomEvent || (() => {})
++			}
++		};
+ 		this.interruptManager = new InterruptManager({
+-			...options.tools !== void 0 ? { tools: options.tools } : {},
+-			...options.interrupts !== void 0 ? { interrupts: options.interrupts } : {},
++			...options.tools !== undefined ? { tools: options.tools } : {},
++			...options.interrupts !== undefined ? { interrupts: options.interrupts } : {},
+ 			submit: (submission) => this.submitInterruptBatch(submission),
+ 			onChange: (source) => this.notifyResumeStateChange(source)
+ 		});
+-		if (options.initialResumeSnapshot) this.applyResumeSnapshot(options.initialResumeSnapshot);
++		if (options.initialResumeSnapshot) {
++			this.applyResumeSnapshot(options.initialResumeSnapshot);
++		}
+ 		const persistedState = this.persistor?.readInitial();
+-		const syncPersistedState = persistedState instanceof Promise ? void 0 : persistedState;
++		const syncPersistedState = persistedState instanceof Promise ? undefined : persistedState;
+ 		const initialMessages = syncPersistedState ? syncPersistedState.messages : options.initialMessages;
+ 		let rejoinRunId = null;
+ 		if (syncPersistedState?.resume) {
+ 			const snapshot = syncPersistedState.resume;
+-			if (Array.isArray(snapshot.pendingInterrupts) && snapshot.pendingInterrupts.length > 0) this.applyResumeSnapshot(snapshot);
+-			else if (snapshot.resumeState.runId) rejoinRunId = snapshot.resumeState.runId;
++			const hasPendingInterrupts = Array.isArray(snapshot.pendingInterrupts) && snapshot.pendingInterrupts.length > 0;
++			if (hasPendingInterrupts) {
++				this.applyResumeSnapshot(snapshot);
++			} else if (snapshot.resumeState.runId) {
++				rejoinRunId = snapshot.resumeState.runId;
++			}
+ 		}
+ 		if (!rejoinRunId && options.initialResumeSnapshot) {
+ 			const snapshot = options.initialResumeSnapshot;
+-			if (!(Array.isArray(snapshot.pendingInterrupts) && snapshot.pendingInterrupts.length > 0) && snapshot.resumeState.runId) rejoinRunId = snapshot.resumeState.runId;
++			const hasPendingInterrupts = Array.isArray(snapshot.pendingInterrupts) && snapshot.pendingInterrupts.length > 0;
++			if (!hasPendingInterrupts && snapshot.resumeState.runId) {
++				rejoinRunId = snapshot.resumeState.runId;
++			}
+ 		}
+ 		this.processor = new StreamProcessor({
+ 			...options.streamProcessor?.chunkStrategy ? { chunkStrategy: options.streamProcessor.chunkStrategy } : {},
+ 			...initialMessages ? { initialMessages } : {},
+ 			events: {
+ 				onMessagesChange: (messages) => {
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.syncSubagentHandles();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.persistor?.notifyMessagesChanged(messages);
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.callbacksRef.current.onMessagesChange(messages);
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.queueDevtoolsSnapshot();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onStreamStart: () => {
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.setStatus("streaming");
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					const assistantMessageId = this.processor.getCurrentAssistantMessageId();
+-					if (!assistantMessageId) return;
+-					const assistantMessage = this.processor.getMessages().find((m) => m.id === assistantMessageId);
++					if (!assistantMessageId) {
++						return;
++					}
++					const messages = this.processor.getMessages();
++					const assistantMessage = messages.find((m) => m.id === assistantMessageId);
+ 					if (assistantMessage) {
+ 						this.currentMessageId = assistantMessage.id;
+-						this.events.messageAppended(assistantMessage, this.currentStreamId || void 0);
++						this.events.messageAppended(assistantMessage, this.currentStreamId || undefined);
+ 					}
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onStreamEnd: (message) => {
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.callbacksRef.current.onFinish(message);
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.setStatus("ready");
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					this.resolveProcessing();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onError: (error) => {
+-					this.reportStreamError(error);
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
++					this.reportStreamError(error, ownsCallback);
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onTextUpdate: (messageId, content) => {
+-					if (this.currentStreamId) this.events.textUpdated(this.currentStreamId, messageId, content);
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
++					if (this.currentStreamId) {
++						this.events.textUpdated(this.currentStreamId, messageId, content);
++					}
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onThinkingUpdate: (messageId, content) => {
+-					if (this.currentStreamId) this.events.thinkingUpdated(this.currentStreamId, messageId, content, void 0);
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
++					if (this.currentStreamId) {
++						this.events.thinkingUpdated(this.currentStreamId, messageId, content, undefined);
++					}
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onStructuredOutputChange: (args) => {
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					const streamId = this.devtoolsBridge.resolveStreamId();
+ 					const eventName = args.phase === "start" ? "structured-output:started" : args.phase === "complete" ? "structured-output:completed" : args.phase === "error" ? "structured-output:errored" : "structured-output:updated";
+ 					this.currentMessageId = args.messageId;
+ 					this.events.structuredOutputChanged(eventName, streamId, args.messageId, {
+ 						status: args.status,
+ 						raw: args.raw,
+-						...args.partial !== void 0 ? { partial: args.partial } : {},
+-						...args.data !== void 0 ? { data: args.data } : {},
+-						...args.reasoning !== void 0 ? { reasoning: args.reasoning } : {},
+-						...args.errorMessage !== void 0 ? { errorMessage: args.errorMessage } : {},
+-						...args.delta !== void 0 ? { delta: args.delta } : {}
++						...args.partial !== undefined ? { partial: args.partial } : {},
++						...args.data !== undefined ? { data: args.data } : {},
++						...args.reasoning !== undefined ? { reasoning: args.reasoning } : {},
++						...args.errorMessage !== undefined ? { errorMessage: args.errorMessage } : {},
++						...args.delta !== undefined ? { delta: args.delta } : {}
+ 					});
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onToolCallStateChange: (messageId, toolCallId, state, args) => {
+-					const toolName = (this.processor.getMessages().find((m) => m.id === messageId)?.parts.find((p) => p.type === "tool-call" && p.id === toolCallId))?.name || "unknown";
+-					if (this.currentStreamId) this.events.toolCallStateChanged(this.currentStreamId, messageId, toolCallId, toolName, state, args);
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
++					const messages = this.processor.getMessages();
++					const message = messages.find((m) => m.id === messageId);
++					const toolCallPart = message?.parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
++					const toolName = toolCallPart?.name || "unknown";
++					if (this.currentStreamId) {
++						this.events.toolCallStateChanged(this.currentStreamId, messageId, toolCallId, toolName, state, args);
++					}
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onToolCall: (args) => {
+-					const clientTool = (this.activeClientTools ?? this.clientToolsRef.current).get(args.toolName);
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
++					const clientTools = this.activeClientTools ?? this.clientToolsRef.current;
++					const clientTool = clientTools.get(args.toolName);
+ 					const executeFunc = clientTool?.execute;
+ 					if (this.handingOverPendingToolCalls && clientTool?.needsApproval === true) {
+ 						console.warn(`[ChatClient] Did not run tool call ${args.toolCallId}: ${args.toolName} needs approval, and the server did not ask for it`);
+@@ -426,6 +506,8 @@ var ChatClient = class {
+ 					}
+ 					if (executeFunc) {
+ 						const continuationGeneration = this.continuationGeneration;
++						const executionSignal = this.abortController?.signal;
++						const ownsContinuation = () => continuationGeneration === this.continuationGeneration && !executionSignal?.aborted && !this.disposed;
+ 						const runEventContext = this.devtoolsBridge.getCurrentRunEventContext();
+ 						const executionPromise = (async () => {
+ 							try {
+@@ -440,7 +522,7 @@ var ChatClient = class {
+ 									tool: args.toolName,
+ 									output,
+ 									state: "output-available"
+-								}, clientTool, continuationGeneration, runEventContext);
++								}, clientTool, continuationGeneration, runEventContext, ownsContinuation);
+ 							} catch (error) {
+ 								await this.addToolResultForClientTool({
+ 									toolCallId: args.toolCallId,
+@@ -448,24 +530,43 @@ var ChatClient = class {
+ 									output: null,
+ 									state: "output-error",
+ 									errorText: error.message
+-								}, clientTool, continuationGeneration, runEventContext);
++								}, clientTool, continuationGeneration, runEventContext, ownsContinuation);
+ 							} finally {
+-								this.pendingToolExecutions.delete(args.toolCallId);
++								if (this.pendingToolExecutions.get(args.toolCallId) === executionPromise) {
++									this.pendingToolExecutions.delete(args.toolCallId);
++								}
+ 							}
+ 						})();
++						assertProcessorCallbackOwnership(ownsCallback);
+ 						this.pendingToolExecutions.set(args.toolCallId, executionPromise);
+ 					}
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onApprovalRequest: (args) => {
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
+ 					const streamId = this.devtoolsBridge.resolveStreamId();
+ 					const messageIdForApproval = this.findMessageIdForToolCall(args.toolCallId) ?? this.currentMessageId ?? "";
+ 					this.events.approvalRequested(streamId, messageIdForApproval, args.toolCallId, args.toolName, args.input, args.approvalId);
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				},
+ 				onCustomEvent: (eventType, data, context) => {
+-					if (eventType === "memory:state") this.devtoolsBridge.recordMemoryState(data);
+-					if (eventType === "compaction:started" || eventType === "compaction:state" || eventType === "compaction:ended") this.devtoolsBridge.recordCompactionEvent(eventType, data);
+-					if (eventType === "skills:state") this.devtoolsBridge.recordSkillsState(data);
++					const ownsCallback = this.captureOperationOwnership();
++					assertProcessorCallbackOwnership(ownsCallback);
++					if (eventType === "memory:state") {
++						this.devtoolsBridge.recordMemoryState(data);
++						assertProcessorCallbackOwnership(ownsCallback);
++					}
++					if (eventType === "compaction:started" || eventType === "compaction:state" || eventType === "compaction:ended") {
++						this.devtoolsBridge.recordCompactionEvent(eventType, data);
++						assertProcessorCallbackOwnership(ownsCallback);
++					}
++					if (eventType === "skills:state") {
++						this.devtoolsBridge.recordSkillsState(data);
++						assertProcessorCallbackOwnership(ownsCallback);
++					}
+ 					this.callbacksRef.current.onCustomEvent(eventType, data, context);
++					assertProcessorCallbackOwnership(ownsCallback);
+ 				}
+ 			}
+ 		});
+@@ -554,10 +655,15 @@ var ChatClient = class {
+ 	* (`indexedDBPersistence`) would otherwise never rejoin a mid-stream run.
+ 	*/
+ 	applyPersistedResume(snapshot) {
++		const ownsHydration = this.captureOperationOwnership();
+ 		this.applyResumeSnapshot(snapshot);
++		if (!ownsHydration())
++			return;
+ 		const hasInterrupts = Array.isArray(snapshot.pendingInterrupts) && snapshot.pendingInterrupts.length > 0;
+ 		const runId = snapshot.resumeState?.runId;
+-		if (!hasInterrupts && runId) this.maybeRejoinInFlight(runId);
++		if (!hasInterrupts && runId) {
++			this.maybeRejoinInFlight(runId);
++		}
+ 	}
+ 	/**
+ 	* Rejoin a persisted in-flight run, guarded so it fires at most once and never
+@@ -587,9 +693,10 @@ var ChatClient = class {
+ 			this.syncIsHydrating();
+ 			return;
+ 		}
+-		if (this.hydrationInFlight === this.historyGeneration) return;
++		if (this.hydrationInFlight === this.historyGeneration)
++			return;
+ 		const pageSize = this.historyPageSize;
+-		const hydrateOptions = pageSize === void 0 ? void 0 : { limit: pageSize };
++		const hydrateOptions = pageSize === undefined ? undefined : { limit: pageSize };
+ 		(async () => {
+ 			let result;
+ 			const generation = this.historyGeneration;
+@@ -600,34 +707,52 @@ var ChatClient = class {
+ 			try {
+ 				result = await hydrate(this.threadId, hydrateOptions);
+ 			} catch (cause) {
+-				if (isCurrent()) this.failHydration(cause);
++				if (isCurrent())
++					this.failHydration(cause);
+ 				return;
+ 			} finally {
+ 				current = isCurrent();
+-				if (this.hydrationInFlight === generation) this.hydrationInFlight = void 0;
++				if (this.hydrationInFlight === generation) {
++					this.hydrationInFlight = undefined;
++				}
+ 			}
+-			if (!current) return;
+-			if (this.disposed || !this.tailing) return;
+-			if (this.isLoading || this.abortController) return;
++			if (!current)
++				return;
++			const ownsHydration = this.captureOperationOwnership();
++			if (this.disposed || !this.tailing)
++				return;
++			if (this.isLoading || this.abortController)
++				return;
+ 			if (this.hydrationError && this.error === this.hydrationError) {
+-				this.setError(void 0);
++				this.setError(undefined);
++				if (!ownsHydration())
++					return;
+ 				this.setStatus("ready");
++				if (!ownsHydration())
++					return;
+ 			}
+-			this.hydrationError = void 0;
++			this.hydrationError = undefined;
+ 			this.applyHydrationPage(result.page);
+ 			if (result.messages.length > 0) {
+ 				const windowMessages = normalizeMessagesDates(result.messages);
+-				this.processor.setMessages(windowMessages);
++				if (this.runProcessorMutation({
++					isCurrent: ownsHydration,
++					mutate: () => this.processor.setMessages(windowMessages)
++				}).type === "cancelled")
++					return;
+ 				this.rememberServerMessageIds(windowMessages);
+ 			}
+-			if (result.interrupts && result.interrupts.pending.length > 0 && (!result.activeRun?.runId || result.activeRun.runId === result.interrupts.runId)) this.applyResumeSnapshot({
+-				resumeState: {
+-					threadId: this.threadId,
+-					runId: result.interrupts.runId
+-				},
+-				pendingInterrupts: result.interrupts.pending
+-			});
+-			else if (result.activeRun?.runId) this.maybeRejoinInFlight(result.activeRun.runId);
++			if (result.interrupts && result.interrupts.pending.length > 0 && (!result.activeRun?.runId || result.activeRun.runId === result.interrupts.runId)) {
++				this.applyResumeSnapshot({
++					resumeState: {
++						threadId: this.threadId,
++						runId: result.interrupts.runId
++					},
++					pendingInterrupts: result.interrupts.pending
++				});
++			} else if (result.activeRun?.runId) {
++				this.maybeRejoinInFlight(result.activeRun.runId);
++			}
+ 		})().finally(() => this.syncIsHydrating());
+ 	}
+ 	/**
+@@ -643,14 +768,29 @@ var ChatClient = class {
+ 	* wins over a stale mount-time failure — same guard as the success path above.
+ 	*/
+ 	failHydration(cause) {
+-		if (this.disposed || !this.tailing) return;
+-		if (this.isLoading || this.abortController) return;
++		if (this.disposed || !this.tailing)
++			return;
++		if (this.isLoading || this.abortController)
++			return;
++		const ownsFailure = this.captureOperationOwnership();
+ 		const error = cause instanceof Error ? cause : new Error(String(cause));
+-		if (error instanceof ByokMissingError) this.byok?.request(error.provider, "missing");
+-		if (error instanceof ByokBlockedError && error.reason === "locked") this.byok?.request(error.provider, "locked");
++		if (error instanceof ByokMissingError) {
++			this.byok?.request(error.provider, "missing");
++			if (!ownsFailure())
++				return;
++		}
++		if (error instanceof ByokBlockedError && error.reason === "locked") {
++			this.byok?.request(error.provider, "locked");
++			if (!ownsFailure())
++				return;
++		}
+ 		this.hydrationError = error;
+ 		this.setStatus("error");
++		if (!ownsFailure())
++			return;
+ 		this.setError(error);
++		if (!ownsFailure())
++			return;
+ 		this.callbacksRef.current.onError(error);
+ 	}
+ 	mountDevtools() {
+@@ -669,29 +809,43 @@ var ChatClient = class {
+ 	* still tracking. The persistor owns the cleared-run bookkeeping; the client
+ 	* owns the active-run / session / processing state.
+ 	*/
+-	drainIgnoredRunlessChunk(chunk) {
+-		if (chunk.type !== "RUN_ERROR") return;
++	drainIgnoredRunlessChunk(chunk, isCurrent) {
++		if (chunk.type !== "RUN_ERROR")
++			return;
+ 		const runId = this.clearedStreamTracker.takeRunlessRunId();
+-		if (!runId) return;
++		if (!runId)
++			return;
+ 		this.activeRunIds.delete(runId);
+ 		this.setSessionGenerating(this.activeRunIds.size > 0);
++		if (!isCurrent())
++			return;
+ 		this.resolveProcessing();
+ 	}
+-	retireIgnoredClearedTerminalChunk(chunk) {
+-		if (chunk.type !== "RUN_FINISHED" && chunk.type !== "RUN_ERROR") return;
++	retireIgnoredClearedTerminalChunk(chunk, isCurrent) {
++		if (chunk.type !== "RUN_FINISHED" && chunk.type !== "RUN_ERROR")
++			return;
+ 		const runId = getChunkRunId$1(chunk) ?? this.clearedStreamTracker.takeRunlessRunId();
+-		if (!runId) return;
++		if (!runId)
++			return;
+ 		this.activeRunIds.delete(runId);
+ 		this.setSessionGenerating(this.activeRunIds.size > 0);
+-		if (!getChunkRunId$1(chunk)) this.resolveProcessing();
++		if (!isCurrent())
++			return;
++		if (!getChunkRunId$1(chunk)) {
++			this.resolveProcessing();
++		}
+ 	}
+ 	updateRunLifecycle(chunk, options) {
++		if (!options.isCurrent())
++			return;
+ 		if (chunk.type === "RUN_STARTED") {
+ 			const chunkRunId = getChunkRunId$1(chunk) ?? chunk.runId;
+-			const parentRunId = "parentRunId" in chunk && typeof chunk.parentRunId === "string" ? chunk.parentRunId : void 0;
++			const parentRunId = "parentRunId" in chunk && typeof chunk.parentRunId === "string" ? chunk.parentRunId : undefined;
+ 			if (parentRunId) {
+ 				this.runParents.set(chunkRunId, parentRunId);
+-				if (this.supersededInterruptRunIds.has(chunkRunId)) this.markLineageAnswered(parentRunId);
++				if (this.supersededInterruptRunIds.has(chunkRunId)) {
++					this.markLineageAnswered(parentRunId);
++				}
+ 			}
+ 			this.activeResumeThreadId = "threadId" in chunk && typeof chunk.threadId === "string" ? chunk.threadId : this.activeResumeThreadId;
+ 			this.activeResumeRunId = chunkRunId;
+@@ -700,19 +854,29 @@ var ChatClient = class {
+ 				this.activeRunIds.add(chunkRunId);
+ 				this.clearedStreamTracker.onRunStarted(chunkRunId);
+ 				this.setSessionGenerating(true);
++				if (!options.isCurrent())
++					return;
++			}
++			if (this.persistor && this.connection.joinRun && !this.lastResume && !isAnsweredReplayStart) {
++				this.persistResumeSnapshot({
++					threadId: this.activeResumeThreadId ?? this.threadId,
++					runId: chunkRunId
++				});
++				if (!options.isCurrent())
++					return;
+ 			}
+-			if (this.persistor && this.connection.joinRun && !this.lastResume && !isAnsweredReplayStart) this.persistResumeSnapshot({
+-				threadId: this.activeResumeThreadId ?? this.threadId,
+-				runId: chunkRunId
+-			});
+ 			if (this.lastResume && this.supersededInterruptRunIds.has(this.lastResume.runId)) {
+ 				this.lastResume = null;
+ 				this.persistor?.persistResumeSnapshot(null);
++				if (!options.isCurrent())
++					return;
+ 				this.interruptManager.reset();
+ 			}
+ 			return;
+ 		}
+-		if (chunk.type !== "RUN_FINISHED" && chunk.type !== "RUN_ERROR") return;
++		if (chunk.type !== "RUN_FINISHED" && chunk.type !== "RUN_ERROR") {
++			return;
++		}
+ 		const runId = getChunkRunId$1(chunk);
+ 		if (runId) {
+ 			this.activeRunIds.delete(runId);
+@@ -722,8 +886,12 @@ var ChatClient = class {
+ 			this.clearedStreamTracker.onSessionRunError();
+ 		}
+ 		this.setSessionGenerating(this.activeRunIds.size > 0);
++		if (!options.isCurrent())
++			return;
+ 		const skipProcessingResolve = chunk.type === "RUN_FINISHED" && isIntermediateToolTurn(chunk);
+-		if (options?.resolveProcessing !== false && !skipProcessingResolve) this.resolveProcessing();
++		if (options.resolveProcessing !== false && !skipProcessingResolve) {
++			this.resolveProcessing();
++		}
+ 	}
+ 	/**
+ 	* Track interrupt state off the stream's terminal events. A RUN_FINISHED with
+@@ -731,15 +899,25 @@ var ChatClient = class {
+ 	* resume; any other terminal event for the tracked/current run clears that
+ 	* state. This is interrupt (state) resume — there is no delivery cursor.
+ 	*/
+-	observeInterruptState(chunk) {
+-		if (chunk.type !== "RUN_FINISHED" && chunk.type !== "RUN_ERROR") return;
+-		if (this.activeInterruptSubmission && chunk.type === "RUN_ERROR") return;
++	observeInterruptState(chunk, isCurrent) {
++		if (!isCurrent())
++			return;
++		if (chunk.type !== "RUN_FINISHED" && chunk.type !== "RUN_ERROR") {
++			return;
++		}
++		if (this.activeInterruptSubmission && chunk.type === "RUN_ERROR") {
++			return;
++		}
+ 		const runId = getChunkRunId$1(chunk);
+ 		const threadId = "threadId" in chunk && typeof chunk.threadId === "string" ? chunk.threadId : this.activeResumeThreadId;
+-		if (runId && !isIntermediateToolTurn(chunk) && (chunk.type === "RUN_ERROR" || chunk.type === "RUN_FINISHED" && chunk.outcome?.type !== "interrupt")) this.markLineageAnswered(runId);
++		if (runId && !isIntermediateToolTurn(chunk) && (chunk.type === "RUN_ERROR" || chunk.type === "RUN_FINISHED" && chunk.outcome?.type !== "interrupt")) {
++			this.markLineageAnswered(runId);
++		}
+ 		if (chunk.type === "RUN_FINISHED" && chunk.outcome?.type === "interrupt") {
+ 			const interruptedRunId = this.currentRunId ?? runId ?? this.activeResumeRunId ?? "";
+-			if (interruptedRunId && this.supersededInterruptRunIds.has(interruptedRunId)) return;
++			if (interruptedRunId && this.supersededInterruptRunIds.has(interruptedRunId)) {
++				return;
++			}
+ 			this.lastResume = {
+ 				threadId: threadId ?? this.threadId,
+ 				runId: interruptedRunId
+@@ -762,6 +940,8 @@ var ChatClient = class {
+ 		if (isRunlessSessionError || isTrackedRunTerminal || isCurrentRunTerminal || isActiveStreamRunTerminal || isCurrentStreamTerminal || isActiveInterruptSubmissionTerminal || isLineageDescendantTerminal) {
+ 			this.lastResume = null;
+ 			this.persistor?.persistResumeSnapshot(null);
++			if (!isCurrent())
++				return;
+ 			this.interruptManager.reset();
+ 			return;
+ 		}
+@@ -852,24 +1032,39 @@ var ChatClient = class {
+ 	}
+ 	async submitInterruptBatch(submission) {
+ 		const continuationGeneration = this.continuationGeneration;
++		const ownsApprovalUpdate = this.captureOperationOwnership();
+ 		this.activeInterruptSubmission = submission;
+-		this.interruptSubmissionFailure = void 0;
++		this.interruptSubmissionFailure = undefined;
+ 		for (const resolution of submission.resolutions) {
+ 			const approved = readApprovalApproved(resolution.payload);
+-			if (approved === void 0) continue;
++			if (approved === undefined)
++				continue;
+ 			const approvalId = resolution.interruptId;
+-			this.processor.addToolApprovalResponse(approvalId, approved);
++			if (this.runProcessorMutation({
++				isCurrent: ownsApprovalUpdate,
++				mutate: () => this.processor.addToolApprovalResponse(approvalId, approved)
++			}).type === "cancelled")
++				return;
+ 		}
++		if (!ownsApprovalUpdate())
++			return;
+ 		const resumed = await this.resumeInterruptsUnsafeForGeneration([...submission.resolutions], {
+ 			threadId: submission.threadId,
+ 			runId: submission.interruptedRunId
+ 		}, continuationGeneration).finally(() => {
+-			if (this.activeInterruptSubmission === submission) this.activeInterruptSubmission = void 0;
++			if (this.activeInterruptSubmission === submission) {
++				this.activeInterruptSubmission = undefined;
++			}
+ 		});
+-		if (continuationGeneration !== this.continuationGeneration) return;
++		if (continuationGeneration !== this.continuationGeneration)
++			return;
+ 		const failure = this.takeInterruptSubmissionFailure();
+-		if (failure !== void 0) throw { errors: failure.errors };
+-		if (!resumed) throw new Error("Interrupt continuation could not be started.");
++		if (failure !== undefined) {
++			throw { errors: failure.errors };
++		}
++		if (!resumed) {
++			throw new Error("Interrupt continuation could not be started.");
++		}
+ 		if (this.lastResume?.runId === submission.interruptedRunId) {
+ 			this.lastResume = null;
+ 			this.interruptManager.reset();
+@@ -894,10 +1089,16 @@ var ChatClient = class {
+ 		return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+ 	}
+ 	setIsLoading(isLoading) {
++		const ownsSetter = this.captureEpochOwnership();
+ 		this.isLoading = isLoading;
+ 		this.callbacksRef.current.onLoadingChange(isLoading);
++		if (!ownsSetter())
++			return;
+ 		this.events.loadingChanged(isLoading);
+-		if (isLoading) this.supersedeHydration();
++		if (!ownsSetter())
++			return;
++		if (isLoading)
++			this.supersedeHydration();
+ 	}
+ 	/**
+ 	* A send or a clear now owns the transcript. A load that is still pending can
+@@ -910,18 +1111,27 @@ var ChatClient = class {
+ 		this.syncIsHydrating();
+ 	}
+ 	setStatus(status) {
++		const ownsSetter = this.captureEpochOwnership();
+ 		this.status = status;
+ 		this.callbacksRef.current.onStatusChange(status);
++		if (!ownsSetter())
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+ 	}
+ 	setIsSubscribed(isSubscribed) {
++		const ownsSetter = this.captureEpochOwnership();
+ 		this.isSubscribed = isSubscribed;
+ 		this.callbacksRef.current.onSubscriptionChange(isSubscribed);
++		if (!ownsSetter())
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+ 	}
+ 	setConnectionStatus(status) {
++		const ownsSetter = this.captureEpochOwnership();
+ 		this.connectionStatus = status;
+ 		this.callbacksRef.current.onConnectionStatusChange(status);
++		if (!ownsSetter())
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+ 	}
+ 	syncIsHydrating() {
+@@ -931,16 +1141,25 @@ var ChatClient = class {
+ 		this.callbacksRef.current.onHydratingChange(isHydrating);
+ 	}
+ 	setSessionGenerating(isGenerating) {
+-		if (this.sessionGenerating === isGenerating) return;
++		const ownsSetter = this.captureEpochOwnership();
++		if (this.sessionGenerating === isGenerating)
++			return;
+ 		this.sessionGenerating = isGenerating;
+ 		this.callbacksRef.current.onSessionGeneratingChange(isGenerating);
++		if (!ownsSetter())
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+ 	}
+ 	notifyResumeStateChange(source) {
++		const ownsNotice = this.captureOperationOwnership();
+ 		const resumeState = this.getResumeState();
+ 		const interruptState = this.interruptManager.getState();
+ 		this.persistResumeSnapshot(resumeState);
++		if (!ownsNotice())
++			return;
+ 		this.callbacksRef.current.onResumeStateChange(resumeState, interruptState.interrupts);
++		if (!ownsNotice())
++			return;
+ 		this.callbacksRef.current.onInterruptStateChange(interruptState, { source });
+ 	}
+ 	/**
+@@ -965,8 +1184,11 @@ var ChatClient = class {
+ 		this.setSessionGenerating(false);
+ 	}
+ 	setError(error) {
++		const ownsSetter = this.captureEpochOwnership();
+ 		this.error = error;
+ 		this.callbacksRef.current.onErrorChange(error);
++		if (!ownsSetter())
++			return;
+ 		this.events.errorChanged(error?.message || null);
+ 	}
+ 	buildDevtoolsBridgeOptions(devtools) {
+@@ -991,10 +1213,18 @@ var ChatClient = class {
+ 			getTools: () => this.clientToolsRef.current.values(),
+ 			getMessages: () => this.processor.getMessages(),
+ 			setMessages: (messages) => {
+-				this.processor.setMessages(messages);
++				if (this.runProcessorMutation({
++					isCurrent: this.captureOperationOwnership(),
++					mutate: () => this.processor.setMessages(messages)
++				}).type === "cancelled")
++					return;
+ 			},
+ 			addToolResult: (toolCallId, output, errorText) => {
+-				this.processor.addToolResult(toolCallId, output, errorText);
++				if (this.runProcessorMutation({
++					isCurrent: this.captureOperationOwnership(),
++					mutate: () => this.processor.addToolResult(toolCallId, output, errorText)
++				}).type === "cancelled")
++					return;
+ 			},
+ 			generateId: (prefix) => this.generateUniqueId(prefix)
+ 		};
+@@ -1017,26 +1247,51 @@ var ChatClient = class {
+ 		for (const message of messages) if (message.parts.find((part) => part.type === "tool-call" && part.id === toolCallId)) return message.id;
+ 	}
+ 	abortSubscriptionLoop() {
+-		this.subscriptionAbortController?.abort();
+-		this.subscriptionAbortController = null;
++		const controller = this.subscriptionAbortController;
++		controller?.abort();
++		if (this.subscriptionAbortController === controller)
++			this.subscriptionAbortController = null;
+ 	}
+ 	resolveProcessing() {
+ 		this.processingResolve?.();
+ 		this.processingResolve = null;
+ 	}
+ 	cancelInFlightStream(options) {
+-		this.abortController?.abort();
+-		this.abortController = null;
+-		if (options?.abortSubscription) this.abortSubscriptionLoop();
++		const ownsCancellation = this.captureEpochOwnership();
++		const controller = this.abortController;
++		controller?.abort();
++		if (!ownsCancellation())
++			return;
++		if (this.abortController === controller)
++			this.abortController = null;
++		if (options?.abortSubscription) {
++			this.abortSubscriptionLoop();
++			if (!ownsCancellation())
++				return;
++		}
+ 		this.resolveProcessing();
+ 		this.setIsLoading(false);
+-		this.deliverClaim = false;
+-		if (options?.setReadyStatus) this.setStatus("ready");
++		if (!ownsCancellation())
++			return;
++		this.deliverClaim = null;
++		if (options?.setReadyStatus) {
++			this.setStatus("ready");
++		}
+ 	}
+-	reportStreamError(error) {
++	reportStreamError(error, isCurrent) {
++		const ownsReport = this.captureOperationOwnership();
++		const ownsFailure = () => isCurrent() && ownsReport();
++		if (!ownsFailure())
++			return;
+ 		const alreadyReported = this.errorReportedGeneration === this.streamGeneration;
+ 		this.setError(error);
+-		if (this.isLoading || this.status === "submitted" || this.status === "streaming") this.setStatus("error");
++		if (!ownsFailure())
++			return;
++		if (this.isLoading || this.status === "submitted" || this.status === "streaming") {
++			this.setStatus("error");
++			if (!ownsFailure())
++				return;
++		}
+ 		if (!alreadyReported) {
+ 			this.errorReportedGeneration = this.streamGeneration;
+ 			this.callbacksRef.current.onError(error);
+@@ -1045,23 +1300,39 @@ var ChatClient = class {
+ 	/**
+ 	* Start the background subscription loop.
+ 	*/
+-	startSubscription() {
+-		this.subscriptionAbortController = new AbortController();
+-		const signal = this.subscriptionAbortController.signal;
+-		this.consumeSubscription(signal).catch((err) => {
++	startSubscription(controller, generation) {
++		const signal = controller.signal;
++		const ownsSubscription = () => generation === this.subscriptionGeneration && !signal.aborted;
++		this.consumeSubscription(signal, ownsSubscription).catch((err) => {
++			const ownsOperation = this.captureOperationOwnership();
++			const ownsFailure = () => ownsSubscription() && ownsOperation();
++			if (!ownsFailure())
++				return;
+ 			if (err instanceof Error && err.name !== "AbortError") {
+ 				this.setConnectionStatus("error");
++				if (!ownsFailure())
++					return;
+ 				this.resetSessionGenerating();
++				if (!ownsFailure())
++					return;
+ 				this.setIsSubscribed(false);
+-				this.reportStreamError(err);
++				if (!ownsFailure())
++					return;
++				this.reportStreamError(err, ownsFailure);
++				if (!ownsFailure())
++					return;
+ 			}
+ 			this.resolveProcessing();
+ 		}).finally(() => {
+-			if (this.subscriptionAbortController?.signal !== signal) return;
++			if (generation !== this.subscriptionGeneration) {
++				return;
++			}
+ 			this.subscriptionAbortController = null;
+ 			if (!signal.aborted && this.isSubscribed) {
+ 				this.setIsSubscribed(false);
+-				if (this.connectionStatus !== "error") this.setConnectionStatus("disconnected");
++				if (generation === this.subscriptionGeneration && this.connectionStatus !== "error") {
++					this.setConnectionStatus("disconnected");
++				}
+ 			}
+ 		});
+ 	}
+@@ -1069,18 +1340,23 @@ var ChatClient = class {
+ 	* Consume chunks from the connection subscription. Chunks are processed in
+ 	* order; the loop yields to the host after each processing budget.
+ 	*/
+-	async consumeSubscription(signal) {
++	async consumeSubscription(signal, ownsSubscription) {
+ 		const stream = this.connection.subscribe(signal);
+ 		let chunkProcessingTime = 0;
+ 		for await (const chunk of stream) {
+-			if (signal.aborted) break;
++			if (!ownsSubscription()) break;
++			const requestSignal = getChunkRequestSignal(chunk);
++			const ownsChunk = () => ownsSubscription() && !requestSignal?.aborted;
++			if (!ownsChunk()) continue;
+ 			const startedAt = performance.now();
+-			this.processIncomingChunk(chunk);
++			this.processIncomingChunk(chunk, ownsChunk);
++			if (!ownsSubscription()) break;
+ 			chunkProcessingTime += performance.now() - startedAt;
+ 			if (chunkProcessingTime < STREAM_PROCESSING_BUDGET_MS) continue;
+ 			chunkProcessingTime = 0;
+ 			if (typeof document !== "undefined" && document.hidden) continue;
+ 			await yieldToHost();
++			if (!ownsSubscription()) break;
+ 		}
+ 	}
+ 	/**
+@@ -1108,27 +1384,37 @@ var ChatClient = class {
+ 	*/
+ 	resumeInFlightRun(runId) {
+ 		const joinRun = this.connection.joinRun;
+-		if (!joinRun) return;
+-		const controller = new AbortController();
++		if (!joinRun)
++			return;
++		const controller = new AbortController;
++		const generation = ++this.streamGeneration;
++		const continuationGeneration = this.continuationGeneration;
++		const ownsJoin = () => generation === this.streamGeneration && continuationGeneration === this.continuationGeneration;
++		const ownsRequest = () => ownsJoin() && !controller.signal.aborted;
+ 		this.abortController = controller;
+-		this.setCurrentRunId(runId);
+-		this.lastResume = {
+-			threadId: this.threadId,
+-			runId
+-		};
+-		this.streamContinuationGeneration = this.continuationGeneration;
+-		this.setIsLoading(true);
+-		this.setStatus("streaming");
+ 		(async () => {
+ 			let rebuilt = false;
+ 			let attached = false;
+ 			let refused = false;
+ 			const connectTimer = setTimeout(() => {
+-				if (!attached) controller.abort();
++				if (!attached)
++					controller.abort();
+ 			}, REJOIN_CONNECT_DEADLINE_MS);
+ 			try {
++				this.setCurrentRunId(runId);
++				if (!ownsRequest())
++					return;
++				this.lastResume = { threadId: this.threadId, runId };
++				this.streamContinuationGeneration = continuationGeneration;
++				this.setIsLoading(true);
++				if (!ownsRequest())
++					return;
++				this.setStatus("streaming");
++				if (!ownsRequest())
++					return;
+ 				for await (const chunk of joinRun(runId, controller.signal)) {
+-					if (controller.signal.aborted) break;
++					if (!ownsRequest())
++						break;
+ 					if (!attached) {
+ 						attached = true;
+ 						clearTimeout(connectTimer);
+@@ -1136,25 +1422,34 @@ var ChatClient = class {
+ 					if (!rebuilt && rebuildsAssistantMessage(chunk)) {
+ 						rebuilt = true;
+ 						this.dropTrailingInFlightAssistant();
++						if (!ownsRequest())
++							break;
+ 					}
+-					this.processIncomingChunk(chunk);
++					this.processIncomingChunk(chunk, ownsRequest);
++				}
++				if (ownsRequest() && this.pendingToolExecutions.size > 0) {
++					await Promise.all(this.pendingToolExecutions.values());
+ 				}
+-				if (this.pendingToolExecutions.size > 0) await Promise.all(this.pendingToolExecutions.values());
+ 			} catch (error) {
+ 				const isAbort = error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+-				if (!attached && !isAbort) refused = true;
+-				if (attached && !isAbort) this.reportStreamError(error instanceof Error ? error : new Error(String(error)));
++				if (ownsRequest() && !attached && !isAbort)
++					refused = true;
++				if (ownsRequest() && attached && !isAbort) {
++					this.reportStreamError(error instanceof Error ? error : new Error(String(error)), ownsRequest);
++				}
+ 			} finally {
+ 				clearTimeout(connectTimer);
+-				if (!attached && refused && this.tailing && !this.disposed) {
++				if (ownsRequest() && !attached && refused && this.tailing && !this.disposed) {
+ 					this.lastResume = null;
+ 					this.persistor?.persistResumeSnapshot(null);
+ 				}
+-				if (this.abortController === controller) {
++				if (ownsJoin() && this.abortController === controller) {
+ 					this.abortController = null;
+ 					this.setIsLoading(false);
+-					if (this.status === "streaming") this.setStatus("ready");
+-					await this.drainPostStreamActions();
++					if (ownsJoin() && this.status === "streaming")
++						this.setStatus("ready");
++					if (ownsJoin())
++						await this.drainPostStreamActions();
+ 				}
+ 			}
+ 		})();
+@@ -1168,42 +1463,110 @@ var ChatClient = class {
+ 	dropTrailingInFlightAssistant() {
+ 		const messages = this.processor.getMessages();
+ 		const last = messages[messages.length - 1];
+-		if (last && last.role === "assistant") this.processor.setMessages(messages.slice(0, -1));
++		if (last && last.role === "assistant") {
++			if (this.runProcessorMutation({
++				isCurrent: this.captureOperationOwnership(),
++				mutate: () => this.processor.setMessages(messages.slice(0, -1))
++			}).type === "cancelled")
++				return;
++		}
++	}
++	captureEpochOwnership() {
++		const generation = this.streamGeneration;
++		const continuationGeneration = this.continuationGeneration;
++		return () => generation === this.streamGeneration && continuationGeneration === this.continuationGeneration;
++	}
++	captureOperationOwnership() {
++		const ownsEpoch = this.captureEpochOwnership();
++		const historyGeneration = this.historyGeneration;
++		const signal = this.abortController?.signal;
++		return () => ownsEpoch() && historyGeneration === this.historyGeneration && !signal?.aborted && !this.disposed;
++	}
++	runProcessorMutation({
++		isCurrent,
++		mutate
++	}) {
++		if (!isCurrent())
++			return { type: "cancelled" };
++		try {
++			const value = mutate();
++			return isCurrent() ? { type: "applied", value } : { type: "cancelled" };
++		} catch (error) {
++			if (error !== PROCESSOR_CALLBACK_CANCELLED)
++				throw error;
++			return { type: "cancelled" };
++		}
+ 	}
+-	processIncomingChunk(chunk) {
++	processIncomingChunk(chunk, ownsChunk) {
++		if (!ownsChunk())
++			return;
+ 		chunk = restoreInboundChunk(chunk);
+ 		if (chunk.type === "RUN_ERROR" && this.isActiveInterruptSubmissionFailure(chunk)) {
+ 			const interruptErrors = tanstackMetadata(chunk)?.interruptErrors;
+-			this.interruptSubmissionFailure = { errors: Array.isArray(interruptErrors) ? interruptErrors : [] };
++			this.interruptSubmissionFailure = {
++				errors: Array.isArray(interruptErrors) ? interruptErrors : []
++			};
+ 		}
+-		if (this.connectionStatus === "connecting") this.setConnectionStatus("connected");
+-		if (this.clearedStreamTracker.shouldIgnoreChunk(chunk)) {
++		if (this.connectionStatus === "connecting") {
++			this.setConnectionStatus("connected");
++		}
++		if (!ownsChunk())
++			return;
++		const shouldIgnore = this.clearedStreamTracker.shouldIgnoreChunk(chunk);
++		if (shouldIgnore) {
+ 			if (chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR") {
+-				if (getChunkRunId$1(chunk)) this.updateRunLifecycle(chunk, { resolveProcessing: false });
+-				else this.drainIgnoredRunlessChunk(chunk);
+-				this.retireIgnoredClearedTerminalChunk(chunk);
++				if (getChunkRunId$1(chunk)) {
++					this.updateRunLifecycle(chunk, { isCurrent: ownsChunk, resolveProcessing: false });
++				} else {
++					this.drainIgnoredRunlessChunk(chunk, ownsChunk);
++				}
++				if (!ownsChunk())
++					return;
++				this.retireIgnoredClearedTerminalChunk(chunk, ownsChunk);
++				if (!ownsChunk())
++					return;
+ 				this.resolveJoinedRun(chunk);
+ 			}
+ 			return;
+ 		}
+ 		this.callbacksRef.current.onChunk(chunk);
++		if (!ownsChunk())
++			return;
+ 		this.devtoolsBridge.observeChunk(chunk);
++		if (!ownsChunk())
++			return;
+ 		const attributedId = readSubagentRunId(chunk);
+-		if (attributedId && chunk.type === EventType.SUBAGENT_STARTED) this.stoppedSubagentIds.delete(attributedId);
++		if (attributedId && chunk.type === EventType.SUBAGENT_STARTED) {
++			this.stoppedSubagentIds.delete(attributedId);
++		}
+ 		if (attributedId && this.stoppedSubagentIds.has(attributedId)) {
+-			this.updateRunLifecycle(chunk);
++			this.updateRunLifecycle(chunk, { isCurrent: ownsChunk });
++			if (!ownsChunk())
++				return;
+ 			this.resolveJoinedRun(chunk);
+ 			return;
+ 		}
+ 		this.handingOverPendingToolCalls = chunk.type === "RUN_FINISHED" && chunk.outcome?.type !== "interrupt";
+ 		try {
+-			this.processor.processChunk(chunk);
++			if (this.runProcessorMutation({
++				isCurrent: ownsChunk,
++				mutate: () => this.processor.processChunk(chunk)
++			}).type === "cancelled")
++				return;
+ 		} finally {
+ 			this.handingOverPendingToolCalls = false;
+ 		}
++		if (!ownsChunk())
++			return;
+ 		this.syncSubagentHandles();
+-		this.updateRunLifecycle(chunk);
+-		this.observeInterruptState(chunk);
++		if (!ownsChunk())
++			return;
++		this.updateRunLifecycle(chunk, { isCurrent: ownsChunk });
++		if (!ownsChunk())
++			return;
++		this.observeInterruptState(chunk, ownsChunk);
++		if (!ownsChunk())
++			return;
+ 		this.resolveJoinedRun(chunk);
+ 	}
+ 	isActiveInterruptSubmissionFailure(chunk) {
+@@ -1300,29 +1663,43 @@ var ChatClient = class {
+ 	* ```
+ 	*/
+ 	async sendMessage(content, body, sendOptions) {
++		const ownsSend = this.captureEpochOwnership();
+ 		this.mountDevtools();
+-		if (typeof content === "string" && !content.trim()) return;
+-		if (this.hasPendingInterrupts()) throw new Error("ChatClient: cannot send normal input while pending interrupts exist. Use resumeInterrupts() instead.");
+-		const resolvedBody = {
+-			...body,
+-			...sendOptions?.body
+-		};
+-		if (this.isSendBusy()) {
+-			const { action, id } = this.decideWhenBusy(content, sendOptions);
+-			if (action === "drop") return;
+-			if (action === "queue") {
+-				this.enqueueMessage(content, resolvedBody, id);
+-				return;
+-			}
+-			this.stopMessageQueueDrain = true;
+-			this.sendInFlight = true;
+-			this.cancelInFlightStream({ setReadyStatus: true });
+-			this.resetSessionGenerating();
+-		} else this.sendInFlight = true;
++		if (!ownsSend())
++			return;
++		const emptyMessage = typeof content === "string" && !content.trim();
++		if (emptyMessage) {
++			return;
++		}
++		if (this.hasPendingInterrupts()) {
++			throw new Error("ChatClient: cannot send normal input while pending interrupts exist. Use resumeInterrupts() instead.");
++		}
++		const resolvedBody = { ...body, ...sendOptions?.body };
++		const decision = this.isSendBusy() ? this.decideWhenBusy(content, sendOptions) : null;
++		if (!ownsSend())
++			return;
++		if (decision?.action === "drop")
++			return;
++		if (decision?.action === "queue") {
++			this.enqueueMessage(content, resolvedBody, decision.id);
++			return;
++		}
++		const claim = Symbol("send");
++		this.sendInFlight = claim;
+ 		try {
++			if (decision?.action === "interrupt") {
++				this.stopMessageQueueDrain = true;
++				this.cancelInFlightStream({ setReadyStatus: true });
++				if (!ownsSend())
++					return;
++				this.resetSessionGenerating();
++				if (!ownsSend())
++					return;
++			}
+ 			await this.deliverMessage(content, resolvedBody);
+ 		} finally {
+-			this.sendInFlight = false;
++			if (this.sendInFlight === claim)
++				this.sendInFlight = null;
+ 		}
+ 	}
+ 	/** True while interrupt descriptors still own continuation. */
+@@ -1331,7 +1708,7 @@ var ChatClient = class {
+ 	}
+ 	/** True while a stream is active, a send is claiming the client, or the queue is draining. */
+ 	isSendBusy() {
+-		return this.isLoading || this.sendInFlight || this.messageQueueDraining;
++		return this.isLoading || this.sendInFlight !== null || this.messageQueueDraining;
+ 	}
+ 	resolveBusyReason() {
+ 		if (this.isLoading) return "streaming";
+@@ -1346,16 +1723,29 @@ var ChatClient = class {
+ 	* cannot both add a user message when only one stream can run.
+ 	*/
+ 	async deliverMessage(content, body) {
+-		if (this.isLoading || this.deliverClaim) return false;
+-		this.deliverClaim = true;
++		if (this.isLoading || this.deliverClaim !== null) {
++			return false;
++		}
++		const claim = Symbol("delivery");
++		this.deliverClaim = claim;
++		const ownsDelivery = this.captureOperationOwnership();
+ 		try {
+ 			const normalizedContent = this.normalizeMessageInput(content);
+ 			this.pendingMessageBody = body;
+-			const userMessage = this.processor.addUserMessage(normalizedContent.content, normalizedContent.id, normalizedContent.metadata);
++			const appended = this.runProcessorMutation({
++				isCurrent: ownsDelivery,
++				mutate: () => this.processor.addUserMessage(normalizedContent.content, normalizedContent.id, normalizedContent.metadata)
++			});
++			if (appended.type === "cancelled")
++				return false;
++			const userMessage = appended.value;
+ 			this.events.messageSent(userMessage.id, normalizedContent.content);
++			if (!ownsDelivery())
++				return false;
+ 			return await this.streamResponse();
+ 		} finally {
+-			this.deliverClaim = false;
++			if (this.deliverClaim === claim)
++				this.deliverClaim = null;
+ 		}
+ 	}
+ 	/**
+@@ -1419,23 +1809,46 @@ var ChatClient = class {
+ 	* Append a message and stream the response
+ 	*/
+ 	async append(message) {
++		const ownsAppend = this.captureOperationOwnership();
+ 		this.mountDevtools();
+-		if (this.hasPendingInterrupts()) throw new Error("ChatClient: cannot append normal input while pending interrupts exist. Use resumeInterrupts() instead.");
++		if (!ownsAppend())
++			return;
++		if (this.hasPendingInterrupts()) {
++			throw new Error("ChatClient: cannot append normal input while pending interrupts exist. Use resumeInterrupts() instead.");
++		}
+ 		const normalizedMessage = normalizeToUIMessage(message, generateMessageId);
+-		if (normalizedMessage.role === "system") return;
++		if (normalizedMessage.role === "system") {
++			return;
++		}
+ 		if (normalizedMessage.role === "activity") {
+ 			const uiMessage = normalizedMessage;
+ 			this.events.messageAppended(uiMessage);
++			if (!ownsAppend())
++				return;
+ 			const messages = this.processor.getMessages();
+-			this.processor.setMessages([...messages, uiMessage]);
++			if (this.runProcessorMutation({
++				isCurrent: ownsAppend,
++				mutate: () => this.processor.setMessages([...messages, uiMessage])
++			}).type === "cancelled")
++				return;
+ 			this.devtoolsBridge.emitSnapshot();
++			if (!ownsAppend())
++				return;
+ 			return;
+ 		}
+ 		const uiMessage = normalizedMessage;
+ 		this.events.messageAppended(uiMessage);
++		if (!ownsAppend())
++			return;
+ 		const messages = this.processor.getMessages();
+-		this.processor.setMessages([...messages, uiMessage]);
++		if (this.runProcessorMutation({
++			isCurrent: ownsAppend,
++			mutate: () => this.processor.setMessages([...messages, uiMessage])
++		}).type === "cancelled")
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
++		if (!ownsAppend())
++			return;
+ 		if (this.isLoading) {
+ 			this.queuePostStreamAction(async () => {
+ 				await this.streamResponse();
+@@ -1449,55 +1862,77 @@ var ChatClient = class {
+ 	* Returns true if the stream completed successfully, false on abort or error.
+ 	*/
+ 	async streamResponse() {
+-		if (this.isLoading) return false;
++		if (this.isLoading) {
++			return false;
++		}
+ 		const generation = ++this.streamGeneration;
+-		this.streamContinuationGeneration = this.continuationGeneration;
+-		const resumeThreadId = this.pendingResumeThreadId;
+-		const resumeParentRunId = this.pendingResumeParentRunId;
+-		const resumeItems = this.pendingResumeItems;
+-		this.pendingResumeThreadId = null;
+-		this.pendingResumeParentRunId = null;
+-		this.pendingResumeItems = null;
+-		const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+-		this.setCurrentRunId(runId);
+-		this.activeResumeThreadId = resumeThreadId ?? this.threadId;
+-		this.activeResumeRunId = runId;
+-		this.setIsLoading(true);
+-		this.deliverClaim = false;
+-		this.setStatus("submitted");
+-		this.setError(void 0);
+-		this.errorReportedGeneration = null;
+-		this.abortController = new AbortController();
+-		const signal = this.abortController.signal;
+-		this.pendingToolExecutions.clear();
++		const continuationGeneration = this.continuationGeneration;
++		const ownsTurn = () => generation === this.streamGeneration && continuationGeneration === this.continuationGeneration;
++		const controller = new AbortController;
++		const signal = controller.signal;
++		const ownsRequest = () => ownsTurn() && !signal.aborted;
+ 		let streamCompletedSuccessfully = false;
+ 		let activeDevtoolsRunId = null;
+ 		let runTerminalEventEmitted = false;
+ 		try {
++			this.abortController = controller;
++			this.streamContinuationGeneration = continuationGeneration;
++			const resumeThreadId = this.pendingResumeThreadId;
++			const resumeParentRunId = this.pendingResumeParentRunId;
++			const resumeItems = this.pendingResumeItems;
++			this.pendingResumeThreadId = null;
++			this.pendingResumeParentRunId = null;
++			this.pendingResumeItems = null;
++			const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
++			this.setCurrentRunId(runId);
++			if (!ownsRequest())
++				return false;
++			this.activeResumeThreadId = resumeThreadId ?? this.threadId;
++			this.activeResumeRunId = runId;
++			this.setIsLoading(true);
++			if (!ownsRequest())
++				return false;
++			this.deliverClaim = null;
++			this.setStatus("submitted");
++			if (!ownsRequest())
++				return false;
++			this.setError(undefined);
++			if (!ownsRequest())
++				return false;
++			this.errorReportedGeneration = null;
++			this.pendingToolExecutions.clear();
+ 			const messages = this.messagesForSend(this.processor.getMessages());
+ 			const clientTools = new Map(this.clientToolsRef.current);
+ 			const runtimeContext = this.context;
+ 			await this.callbacksRef.current.onResponse();
+-			if (signal.aborted) return false;
++			if (!ownsRequest()) {
++				return false;
++			}
+ 			const mergedBody = {
+ 				...this.bodyOption,
+ 				...this.forwardedPropsOption,
+ 				...this.pendingMessageBody
+ 			};
+-			this.pendingMessageBody = void 0;
++			this.pendingMessageBody = undefined;
+ 			this.currentStreamId = this.generateUniqueId("stream");
+ 			this.devtoolsBridge.setCurrentStreamId(this.currentStreamId);
++			if (!ownsRequest())
++				return false;
+ 			this.currentMessageId = null;
+ 			this.activeClientTools = clientTools;
+ 			this.activeContext = runtimeContext;
+ 			this.processor.prepareAssistantMessage();
+ 			this.ensureSubscription();
++			if (!ownsRequest())
++				return false;
+ 			const processingComplete = this.waitForProcessing();
+ 			let byokHeaders;
+ 			if (this.byok) {
+ 				const provider = resolveByokProviderId(this.byokProvider, mergedBody.provider, byokFallbackProviderId(this.byok));
+ 				byokHeaders = await prepareResolvedByokHeaders(this.byok, provider);
+ 			}
++			if (!ownsRequest())
++				return false;
+ 			const runContext = {
+ 				threadId: resumeThreadId ?? this.threadId,
+ 				runId,
+@@ -1512,15 +1947,29 @@ var ChatClient = class {
+ 				...byokHeaders ? { headers: byokHeaders } : {}
+ 			};
+ 			this.devtoolsBridge.beginRun(runContext.runId, runContext.threadId);
++			if (!ownsRequest())
++				return false;
+ 			activeDevtoolsRunId = runContext.runId;
+ 			this.devtoolsBridge.emitRunLifecycle("run:created", runContext.runId, "created");
++			if (!ownsRequest())
++				return false;
+ 			this.devtoolsBridge.emitRunLifecycle("run:started", runContext.runId, "started");
++			if (!ownsRequest())
++				return false;
+ 			this.devtoolsBridge.emitSnapshot();
++			if (!ownsRequest())
++				return false;
+ 			await this.connection.send(messages, mergedBody, signal, runContext);
+-			if (generation !== this.streamGeneration || signal.aborted) return false;
+-			if (this.connectionDrainsOnSend) this.resolveProcessing();
++			if (!ownsRequest()) {
++				return false;
++			}
++			if (this.connectionDrainsOnSend) {
++				this.resolveProcessing();
++			}
+ 			await processingComplete;
+-			if (generation !== this.streamGeneration) return false;
++			if (!ownsRequest()) {
++				return false;
++			}
+ 			if (this.status === "error") {
+ 				if (activeDevtoolsRunId) {
+ 					this.devtoolsBridge.emitRunLifecycle("run:errored", activeDevtoolsRunId, "errored", this.error ? { error: this.error.message } : {});
+@@ -1528,10 +1977,20 @@ var ChatClient = class {
+ 				}
+ 				return false;
+ 			}
+-			if (this.pendingToolExecutions.size > 0) await Promise.all(this.pendingToolExecutions.values());
+-			this.processor.finalizeStream();
+-			streamCompletedSuccessfully = true;
++			if (this.pendingToolExecutions.size > 0) {
++				await Promise.all(this.pendingToolExecutions.values());
++			}
++			if (!ownsRequest())
++				return false;
++			if (this.runProcessorMutation({
++				isCurrent: ownsRequest,
++				mutate: () => this.processor.finalizeStream()
++			}).type === "cancelled")
++				return false;
++			streamCompletedSuccessfully = ownsRequest();
+ 		} catch (err) {
++			if (!ownsRequest())
++				return false;
+ 			const error = err instanceof Error ? err : new Error(String(err));
+ 			if (error.name === "AbortError") {
+ 				if (activeDevtoolsRunId) {
+@@ -1540,40 +1999,60 @@ var ChatClient = class {
+ 				}
+ 				return false;
+ 			}
+-			if (error instanceof ByokMissingError) this.byok?.request(error.provider, "missing");
+-			if (error instanceof ByokBlockedError && error.reason === "locked") this.byok?.request(error.provider, "locked");
+-			if (generation === this.streamGeneration) {
+-				this.reportStreamError(error);
++			if (error instanceof ByokMissingError) {
++				this.byok?.request(error.provider, "missing");
++			}
++			if (error instanceof ByokBlockedError && error.reason === "locked") {
++				this.byok?.request(error.provider, "locked");
++			}
++			if (ownsRequest()) {
++				this.reportStreamError(error, ownsRequest);
++				if (!ownsRequest())
++					return false;
+ 				if (activeDevtoolsRunId) {
+ 					this.devtoolsBridge.emitRunLifecycle("run:errored", activeDevtoolsRunId, "errored", { error: error.message });
+ 					runTerminalEventEmitted = true;
+ 				}
+ 			}
+-			if (generation === this.streamGeneration && (error instanceof ByokMissingError || error instanceof ByokBlockedError || error instanceof ByokUnresolvedProviderError)) throw error;
++			if (ownsRequest() && (error instanceof ByokMissingError || error instanceof ByokBlockedError || error instanceof ByokUnresolvedProviderError)) {
++				throw error;
++			}
+ 		} finally {
+ 			if (generation === this.streamGeneration) {
+ 				this.currentStreamId = null;
+-				this.devtoolsBridge.setCurrentStreamId(null);
+ 				this.currentMessageId = null;
+-				this.setCurrentRunId(null);
+ 				this.activeClientTools = null;
+-				this.activeContext = void 0;
++				this.activeContext = undefined;
+ 				this.abortController = null;
+-				this.setIsLoading(false);
+-				this.pendingMessageBody = void 0;
+-				if (activeDevtoolsRunId && !runTerminalEventEmitted) {
+-					if (streamCompletedSuccessfully) this.devtoolsBridge.emitRunLifecycle("run:completed", activeDevtoolsRunId, "completed");
+-					else if (signal.aborted) this.devtoolsBridge.emitRunLifecycle("run:cancelled", activeDevtoolsRunId, "cancelled");
++				this.pendingMessageBody = undefined;
++				this.devtoolsBridge.setCurrentStreamId(null);
++				if (generation === this.streamGeneration)
++					this.setCurrentRunId(null);
++				if (generation === this.streamGeneration)
++					this.setIsLoading(false);
++				if (generation === this.streamGeneration && activeDevtoolsRunId && !runTerminalEventEmitted) {
++					if (streamCompletedSuccessfully) {
++						this.devtoolsBridge.emitRunLifecycle("run:completed", activeDevtoolsRunId, "completed");
++					} else if (signal.aborted) {
++						this.devtoolsBridge.emitRunLifecycle("run:cancelled", activeDevtoolsRunId, "cancelled");
++					}
+ 				}
+-				await this.drainPostStreamActions();
+-				if (streamCompletedSuccessfully) {
++				if (ownsRequest())
++					await this.drainPostStreamActions();
++				if (ownsRequest() && streamCompletedSuccessfully) {
+ 					this.rememberProcessorMessageIds();
+-					if (this.status !== "ready") this.setStatus("ready");
+-					if (!this.messageQueueDraining) await this.drainQueue();
+-				} else this.flushQueue();
++					if (this.status !== "ready") {
++						this.setStatus("ready");
++					}
++					if (ownsRequest() && !this.messageQueueDraining) {
++						await this.drainQueue();
++					}
++				} else if (ownsRequest()) {
++					this.flushQueue();
++				}
+ 			}
+ 		}
+-		return streamCompletedSuccessfully;
++		return streamCompletedSuccessfully && continuationGeneration === this.continuationGeneration && !signal.aborted;
+ 	}
+ 	/**
+ 	* Start the client subscription loop.
+@@ -1581,39 +2060,78 @@ var ChatClient = class {
+ 	*/
+ 	subscribe(options) {
+ 		const restart = options?.restart === true;
+-		if (this.isSubscribed && !restart) return;
+-		if (this.isSubscribed && restart) this.abortSubscriptionLoop();
++		if (this.isSubscribed && !restart) {
++			return;
++		}
++		if (this.isSubscribed && restart) {
++			this.abortSubscriptionLoop();
++		}
++		const controller = new AbortController;
++		const generation = ++this.subscriptionGeneration;
++		this.subscriptionAbortController = controller;
++		const ownsSubscription = () => generation === this.subscriptionGeneration && !controller.signal.aborted;
+ 		this.setIsSubscribed(true);
++		if (!ownsSubscription())
++			return;
+ 		this.setConnectionStatus("connecting");
+-		this.startSubscription();
++		if (!ownsSubscription())
++			return;
++		this.startSubscription(controller, generation);
+ 	}
+ 	/**
+ 	* Unsubscribe and fully tear down live behavior.
+ 	* This aborts an in-flight request and the subscription loop.
+ 	*/
+ 	unsubscribe() {
++		const ownsUnsubscribe = this.captureEpochOwnership();
++		const subscriptionGeneration = this.subscriptionGeneration;
+ 		this.cancelInFlightStream({
+ 			setReadyStatus: true,
+ 			abortSubscription: true
+ 		});
++		if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration)
++			return;
+ 		this.discardPendingSends();
++		if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration)
++			return;
+ 		this.resetSessionGenerating();
++		if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration)
++			return;
+ 		this.setIsSubscribed(false);
++		if (!ownsUnsubscribe() || subscriptionGeneration !== this.subscriptionGeneration)
++			return;
+ 		this.setConnectionStatus("disconnected");
+ 	}
+ 	/**
+ 	* Reload the last assistant message
+ 	*/
+ 	async reload() {
++		const ownsReload = this.captureEpochOwnership();
+ 		const messages = this.processor.getMessages();
+-		if (messages.length === 0) return;
++		if (messages.length === 0)
++			return;
+ 		const lastUserMessageIndex = messages.findLastIndex((m) => m.role === "user");
+-		if (lastUserMessageIndex === -1) return;
+-		if (this.isLoading) this.cancelInFlightStream();
++		if (lastUserMessageIndex === -1)
++			return;
++		if (this.isLoading) {
++			this.cancelInFlightStream();
++			if (!ownsReload())
++				return;
++		}
+ 		this.discardPendingSends();
++		if (!ownsReload())
++			return;
+ 		this.events.reloaded(lastUserMessageIndex);
+-		this.processor.removeMessagesAfter(lastUserMessageIndex);
++		if (!ownsReload())
++			return;
++		if (this.runProcessorMutation({
++			isCurrent: ownsReload,
++			mutate: () => this.processor.removeMessagesAfter(lastUserMessageIndex)
++		}).type === "cancelled")
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
++		if (!ownsReload())
++			return;
+ 		await this.streamResponse();
+ 	}
+ 	/**
+@@ -1621,19 +2139,31 @@ var ChatClient = class {
+ 	*/
+ 	stop() {
+ 		this.continuationGeneration++;
++		const ownsStop = this.captureEpochOwnership();
+ 		const hadLocalStream = this.abortController !== null;
+ 		this.cancelInFlightStream({ setReadyStatus: true });
++		if (!ownsStop())
++			return;
+ 		this.discardPendingSends();
++		if (!ownsStop())
++			return;
+ 		this.lastResume = null;
+-		this.activeInterruptSubmission = void 0;
++		this.activeInterruptSubmission = undefined;
+ 		this.interruptManager.reset();
+-		if (hadLocalStream) this.resetSessionGenerating();
++		if (!ownsStop())
++			return;
++		if (hadLocalStream) {
++			this.resetSessionGenerating();
++			if (!ownsStop())
++				return;
++		}
+ 		this.events.stopped();
+ 	}
+ 	/**
+ 	* Clear all messages
+ 	*/
+ 	clear() {
++		const ownsClear = this.captureEpochOwnership();
+ 		const hadLocalStream = this.abortController !== null;
+ 		this.clearedStreamTracker.snapshotClear({
+ 			messages: this.processor.getMessages(),
+@@ -1642,51 +2172,91 @@ var ChatClient = class {
+ 		});
+ 		if (this.isLoading || hadLocalStream) {
+ 			this.cancelInFlightStream({ setReadyStatus: true });
++			if (!ownsClear())
++				return;
++			this.resetSessionGenerating({ preserveClearedStreamTracking: true });
++			if (!ownsClear())
++				return;
++		} else if (this.activeRunIds.size > 0) {
+ 			this.resetSessionGenerating({ preserveClearedStreamTracking: true });
+-		} else if (this.activeRunIds.size > 0) this.resetSessionGenerating({ preserveClearedStreamTracking: true });
++			if (!ownsClear())
++				return;
++		}
+ 		this.persistor?.beginClear();
+-		this.processor.clearMessages();
++		if (this.runProcessorMutation({
++			isCurrent: ownsClear,
++			mutate: () => this.processor.clearMessages()
++		}).type === "cancelled")
++			return;
+ 		this.resetHistoryPaging();
+ 		this.supersedeHydration();
++		if (!ownsClear())
++			return;
+ 		this.discardPendingSends();
++		if (!ownsClear())
++			return;
+ 		this.persistor?.remove();
++		if (!ownsClear())
++			return;
+ 		this.stoppedSubagentIds.clear();
+ 		this.lastResume = null;
+ 		this.interruptManager.reset();
++		if (!ownsClear())
++			return;
+ 		this.pendingResumeThreadId = null;
+ 		this.pendingResumeParentRunId = null;
+ 		this.pendingResumeItems = null;
+-		this.setError(void 0);
++		this.setError(undefined);
++		if (!ownsClear())
++			return;
+ 		this.events.messagesCleared();
+ 	}
+ 	/**
+ 	* Add the result of a client-side tool execution
+ 	*/
+ 	async addToolResult(result) {
++		const continuationGeneration = this.streamContinuationGeneration;
++		const signal = this.abortController?.signal;
++		const ownsContinuation = () => continuationGeneration === this.continuationGeneration && !signal?.aborted && !this.disposed;
+ 		const clientTool = this.clientToolsRef.current.get(result.tool);
+-		await this.addToolResultForClientTool(result, clientTool, this.streamContinuationGeneration);
+-	}
+-	async addToolResultForClientTool(result, clientTool, continuationGeneration, context) {
+-		if (result.state !== "output-error") try {
+-			let output = clientTool?.outputSchema && isStandardSchema(clientTool.outputSchema) ? await this.validateClientToolOutput(clientTool, result.output) : result.output;
+-			if (this.interruptManager.getDescriptors().some((interrupt) => interrupt.toolCallId === result.toolCallId)) output = cloneAndDeepFreezeJson(output);
+-			result = {
+-				...result,
+-				output
+-			};
+-		} catch (error) {
+-			result = {
+-				...result,
+-				output: null,
+-				state: "output-error",
+-				errorText: error.message
+-			};
++		await this.addToolResultForClientTool(result, clientTool, continuationGeneration, undefined, ownsContinuation);
++	}
++	async addToolResultForClientTool(result, clientTool, continuationGeneration, context, ownsContinuation) {
++		if (result.state !== "output-error") {
++			try {
++				let output = clientTool?.outputSchema && isStandardSchema(clientTool.outputSchema) ? await this.validateClientToolOutput(clientTool, result.output) : result.output;
++				if (this.interruptManager.getDescriptors().some((interrupt) => interrupt.toolCallId === result.toolCallId)) {
++					output = cloneAndDeepFreezeJson(output);
++				}
++				result = { ...result, output };
++			} catch (error) {
++				result = {
++					...result,
++					output: null,
++					state: "output-error",
++					errorText: error.message
++				};
++			}
+ 		}
++		if (!ownsContinuation())
++			return;
+ 		this.events.toolResultAdded(result.toolCallId, result.tool, result.output, result.state || "output-available", context);
+-		if (continuationGeneration !== this.continuationGeneration) return;
+-		this.processor.addToolResult(result.toolCallId, result.output, result.state === "output-error" ? result.errorText || "Tool execution failed" : void 0);
++		if (!ownsContinuation())
++			return;
++		if (this.runProcessorMutation({
++			isCurrent: ownsContinuation,
++			mutate: () => this.processor.addToolResult(result.toolCallId, result.output, result.state === "output-error" ? result.errorText || "Tool execution failed" : undefined)
++		}).type === "cancelled")
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+-		if (result.state === "output-error" ? this.interruptManager.resolveClientToolError(result.toolCallId, result.errorText || "Tool execution failed") : this.interruptManager.resolveClientToolOutput(result.toolCallId, result.output)) return;
++		if (!ownsContinuation())
++			return;
++		const resolvedViaInterrupt = result.state === "output-error" ? this.interruptManager.resolveClientToolError(result.toolCallId, result.errorText || "Tool execution failed") : this.interruptManager.resolveClientToolOutput(result.toolCallId, result.output);
++		if (!ownsContinuation())
++			return;
++		if (resolvedViaInterrupt) {
++			return;
++		}
+ 		if (this.isLoading) {
+ 			this.queuePostStreamAction(() => continuationGeneration === this.continuationGeneration ? this.checkForContinuation() : Promise.resolve());
+ 			return;
+@@ -1702,9 +2272,18 @@ var ChatClient = class {
+ 	* Respond to a tool approval request
+ 	*/
+ 	async addToolApprovalResponse(response) {
+-		this.processor.addToolApprovalResponse(response.id, response.approved);
++		const ownsApproval = this.captureOperationOwnership();
++		if (this.runProcessorMutation({
++			isCurrent: ownsApproval,
++			mutate: () => this.processor.addToolApprovalResponse(response.id, response.approved)
++		}).type === "cancelled")
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+-		if (this.interruptManager.resolveToolApprovalDecision(response.id, response.approved)) return;
++		if (!ownsApproval())
++			return;
++		const resolvedApproval = this.interruptManager.resolveToolApprovalDecision(response.id, response.approved);
++		if (!ownsApproval() || resolvedApproval)
++			return;
+ 		const messages = this.processor.getMessages();
+ 		let foundToolCallId;
+ 		for (const msg of messages) {
+@@ -1714,9 +2293,19 @@ var ChatClient = class {
+ 				break;
+ 			}
+ 		}
+-		if (foundToolCallId) this.events.toolApprovalResponded(response.id, foundToolCallId, response.approved);
+-		this.processor.addToolApprovalResponse(response.id, response.approved);
++		if (foundToolCallId) {
++			this.events.toolApprovalResponded(response.id, foundToolCallId, response.approved);
++			if (!ownsApproval())
++				return;
++		}
++		if (this.runProcessorMutation({
++			isCurrent: ownsApproval,
++			mutate: () => this.processor.addToolApprovalResponse(response.id, response.approved)
++		}).type === "cancelled")
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
++		if (!ownsApproval())
++			return;
+ 		if (this.isLoading) {
+ 			this.queuePostStreamAction(() => this.checkForContinuation());
+ 			return;
+@@ -1831,14 +2420,19 @@ var ChatClient = class {
+ 	}
+ 	stopSubagent(id) {
+ 		const handle = this.subagentHandles.get(id);
+-		if (!handle || handle.status !== "running") return;
++		if (!handle || handle.status !== "running")
++			return;
+ 		this.stoppedSubagentIds.add(id);
+-		this.processor.processChunk({
+-			type: EventType.SUBAGENT_ERROR,
+-			subagentRunId: id,
+-			message: "Stopped",
+-			timestamp: Date.now()
+-		});
++		if (this.runProcessorMutation({
++			isCurrent: this.captureOperationOwnership(),
++			mutate: () => this.processor.processChunk({
++				type: EventType.SUBAGENT_ERROR,
++				subagentRunId: id,
++				message: "Stopped",
++				timestamp: Date.now()
++			})
++		}).type === "cancelled")
++			return;
+ 		this.syncSubagentHandles();
+ 		handle.status = "error";
+ 		handle.error = { message: "Stopped" };
+@@ -1859,24 +2453,39 @@ var ChatClient = class {
+ 	*/
+ 	async loadOlderMessages() {
+ 		const hydrate = this.connection.hydrate;
+-		if (hydrate === void 0) return;
+-		if (this.disposed) return;
+-		if (!this.hasOlderMessages) return;
++		if (hydrate === undefined)
++			return;
++		if (this.disposed)
++			return;
++		if (!this.hasOlderMessages)
++			return;
+ 		const cursor = this.olderMessagesCursor;
+-		if (cursor === void 0) return;
+-		if (this.loadOlderMessagesInFlight) return;
++		if (cursor === undefined)
++			return;
++		if (this.loadOlderMessagesInFlight)
++			return;
+ 		const hydrateOptions = { before: cursor };
+-		if (this.historyPageSize !== void 0) hydrateOptions.limit = this.historyPageSize;
++		if (this.historyPageSize !== undefined) {
++			hydrateOptions.limit = this.historyPageSize;
++		}
+ 		this.loadOlderMessagesInFlight = true;
+ 		const generation = this.historyGeneration;
+ 		try {
+ 			const result = await hydrate(this.threadId, hydrateOptions);
+-			if (this.disposed) return;
+-			if (generation !== this.historyGeneration) return;
++			if (this.disposed)
++				return;
++			if (generation !== this.historyGeneration)
++				return;
+ 			const olderMessages = normalizeMessagesDates(result.messages);
+-			if (olderMessages.length === 0) throw new Error("Older page was empty");
++			if (olderMessages.length === 0) {
++				throw new Error("Older page was empty");
++			}
+ 			this.applyHydrationPage(result.page);
+-			this.processor.prependMessages(olderMessages);
++			if (this.runProcessorMutation({
++				isCurrent: this.captureOperationOwnership(),
++				mutate: () => this.processor.prependMessages(olderMessages)
++			}).type === "cancelled")
++				return;
+ 			this.rememberServerMessageIds(olderMessages);
+ 		} finally {
+ 			this.loadOlderMessagesInFlight = false;
+@@ -1937,26 +2546,46 @@ var ChatClient = class {
+ 	* busy/queue policy (which would re-queue items and strand the rest).
+ 	*/
+ 	async drainQueue() {
+-		if (this.messageQueueDraining || this.isLoading || this.messageQueue.length === 0) return;
++		if (this.messageQueueDraining || this.isLoading || this.messageQueue.length === 0) {
++			return;
++		}
++		const continuationGeneration = this.continuationGeneration;
++		const ownsDrain = () => continuationGeneration === this.continuationGeneration;
+ 		this.messageQueueDraining = true;
+ 		this.stopMessageQueueDrain = false;
+ 		try {
+ 			if (this.queueConfig.drain === "batch") {
+ 				while (this.messageQueue.length > 0) {
+-					if (this.shouldAbortMessageQueueDrain()) return;
++					if (!ownsDrain() || this.shouldAbortMessageQueueDrain()) {
++						return;
++					}
+ 					const items = this.messageQueue.splice(0);
+ 					this.emitQueueChange();
++					if (!ownsDrain() || this.shouldAbortMessageQueueDrain())
++						return;
+ 					const merged = mergeQueuedMessages(items);
+-					if (!await this.deliverMessage(merged.content, merged.body) || this.shouldAbortMessageQueueDrain()) return;
++					const completed = await this.deliverMessage(merged.content, merged.body);
++					if (!ownsDrain() || !completed || this.shouldAbortMessageQueueDrain()) {
++						return;
++					}
+ 				}
+ 				return;
+ 			}
+ 			while (this.messageQueue.length > 0) {
+-				if (this.shouldAbortMessageQueueDrain()) return;
++				if (!ownsDrain() || this.shouldAbortMessageQueueDrain()) {
++					return;
++				}
+ 				const next = this.messageQueue.shift();
+-				if (next === void 0) return;
++				if (next === undefined) {
++					return;
++				}
+ 				this.emitQueueChange();
+-				if (!await this.deliverMessage(next.content, next.body) || this.shouldAbortMessageQueueDrain()) return;
++				if (!ownsDrain() || this.shouldAbortMessageQueueDrain())
++					return;
++				const completed = await this.deliverMessage(next.content, next.body);
++				if (!ownsDrain() || !completed || this.shouldAbortMessageQueueDrain()) {
++					return;
++				}
+ 			}
+ 		} finally {
+ 			this.messageQueueDraining = false;
+@@ -1968,7 +2597,7 @@ var ChatClient = class {
+ 	* (stop / error / clear / unsubscribe / reload).
+ 	*/
+ 	discardPendingSends() {
+-		this.sendInFlight = false;
++		this.sendInFlight = null;
+ 		this.flushQueue();
+ 	}
+ 	/**
+@@ -1982,7 +2611,10 @@ var ChatClient = class {
+ 		}));
+ 	}
+ 	emitQueueChange() {
++		const ownsNotice = this.captureEpochOwnership();
+ 		this.callbacksRef.current.onQueueChange(this.getQueue());
++		if (!ownsNotice())
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+ 	}
+ 	/**
+@@ -2056,7 +2688,11 @@ var ChatClient = class {
+ 	* Manually set messages
+ 	*/
+ 	setMessagesManually(messages) {
+-		this.processor.setMessages(messages);
++		if (this.runProcessorMutation({
++			isCurrent: this.captureOperationOwnership(),
++			mutate: () => this.processor.setMessages(messages)
++		}).type === "cancelled")
++			return;
+ 		this.devtoolsBridge.emitSnapshot();
+ 	}
+ 	updateOptions(options) {
+diff --git a/dist/esm/connection-adapters.d.ts b/dist/esm/connection-adapters.d.ts
+index a4074e08e53..0cd46281b67 100644
+--- a/dist/esm/connection-adapters.d.ts
++++ b/dist/esm/connection-adapters.d.ts
+@@ -6,6 +6,7 @@ import { ChatFetcher, ChatPendingInterrupt } from './types.js';
+  * run the connect wrapper stamped it with.
+  */
+ export declare function getChunkRunId(chunk: StreamChunk): string | undefined;
++export declare function getChunkRequestSignal(chunk: StreamChunk): AbortSignal | undefined;
+ /**
+  * Thrown when an SSE/HTTP stream ends with a non-empty unterminated buffer.
+  * Indicates the connection was cut mid-line (server crash, dropped TCP, proxy
+diff --git a/dist/esm/chat-client.d.ts b/dist/esm/chat-client.d.ts
+index 7917fa1d0c7..7ce98122496 100644
+--- a/dist/esm/chat-client.d.ts
++++ b/dist/esm/chat-client.d.ts
+@@ -128,6 +128,7 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
+     private activeContext;
+     private continuationPending;
+     private subscriptionAbortController;
++    private subscriptionGeneration;
+     private processingResolve;
+     /**
+      * `connect()` adapters push the full HTTP body into the subscribe queue, then
+@@ -360,6 +361,9 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
+      * never produced, or already settled) is left untouched.
+      */
+     private dropTrailingInFlightAssistant;
++    private captureEpochOwnership;
++    private captureOperationOwnership;
++    private runProcessorMutation;
+     private processIncomingChunk;
+     private isActiveInterruptSubmissionFailure;
+     private resolveJoinedRun;

@@ -694,7 +694,11 @@ describe("streamed chunks keep what they do not change", () => {
               !STREAMED_IDS.has(message.id) &&
               !REBUILDS_MESSAGES.has(cause.type)
             ) {
-              expect(message).toBe(shown);
+              expect({
+                chunk: cause.type,
+                message: message.id,
+                sameObject: message === shown,
+              }).toMatchObject({ sameObject: true });
             }
             if (cause.type === EventType.MESSAGES_SNAPSHOT) {
               continue;
