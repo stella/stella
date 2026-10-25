@@ -13,10 +13,10 @@ defaults:
 # publishes, builds or holds a secret. Release Mobile iOS and Publish Mobile
 # Update stay manual and reviewed.
 #
-# Each fingerprint is computed at its own commit with that commit's installed
-# packages, under its own variant (a variant's name and identifier are part
-# of it), on Linux; the pull request check proves Linux and the macOS
-# TestFlight build agree on iOS.
+# Each fingerprint is computed at its own commit with that commit's packages,
+# installed cold as in the release jobs, under its own variant (a variant's
+# name and identifier are part of it), on Linux; the pull request check proves
+# Linux and the macOS TestFlight build agree on iOS.
 on:
   push:
     branches: [main]
@@ -101,9 +101,8 @@ jobs:
 
       - name: Install the preview build's mobile dependencies
         if: env.PREVIEW_SHA != ''
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Fingerprint the preview build
         if: env.PREVIEW_SHA != ''
@@ -125,9 +124,8 @@ jobs:
 
       - name: Install the production build's mobile dependencies
         if: env.PRODUCTION_SHA != ''
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Fingerprint the production build
         if: env.PRODUCTION_SHA != ''
@@ -147,9 +145,8 @@ jobs:
         run: git checkout --quiet "$GITHUB_SHA"
 
       - name: Install this commit's mobile dependencies
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Plan
         working-directory: apps/mobile
