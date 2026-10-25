@@ -106,6 +106,7 @@ import {
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import { runWithinRequestLatencyBudget } from "@/api/lib/request-latency-budget";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
@@ -5942,6 +5943,35 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(
         searchWarnings(result).filter(({ code }) => code === "filter_dropped"),
       ).toHaveLength(1);
+    });
+
+    test("a court list that misses the search's budget runs the filter as sent and says so", async () => {
+      const baseContext = createContext();
+      const startedAt = performance.now();
+      // The tool's request scope bounds the list read, so a list that never
+      // arrives costs the search its sub-budget, not the caller's patience.
+      const result = await runWithinRequestLatencyBudget(
+        { label: "search_case_law", budgetMs: 50 },
+        async () =>
+          await handleMcpToolCall({
+            args: { queries: ["náhrada škody"], country: "CZE", court: "NS" },
+            context: {
+              ...baseContext,
+              testDependencies: {
+                ...baseContext.testDependencies,
+                readCaseLawCourtNames: async () =>
+                  await Promise.withResolvers<readonly string[]>().promise,
+              },
+            },
+            toolName: "search_case_law",
+          }),
+      );
+
+      expect(performance.now() - startedAt).toBeLessThan(1000);
+      expect(searchedBody()["court"]).toBe("NS");
+      expect(searchWarnings(result)).toContainEqual(
+        expect.objectContaining({ code: "filter_unread" }),
+      );
     });
 
     test("a court stored under two spellings filters by both", async () => {

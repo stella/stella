@@ -25,6 +25,7 @@ import type {
   PublicLawColumnGrantsByRelation,
   PublicLawColumnPair,
 } from "@/api/lib/public-law-relations";
+import { requestBoundedTimeoutMs } from "@/api/lib/request-latency-budget";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -394,10 +395,12 @@ export const configureReadTransaction = async (
   }
   const requestTimeoutMs = getPublicReadStatementTimeoutMs();
   await setSharedReadTransactionGuards(tx, {
-    statementTimeoutMs:
+    // A statement never outlives the request latency budget it serves.
+    statementTimeoutMs: requestBoundedTimeoutMs(
       requestTimeoutMs === undefined
         ? statementTimeoutMs
         : Math.min(statementTimeoutMs, requestTimeoutMs),
+    ),
     ...(lockTimeoutMs === undefined ? {} : { lockTimeoutMs }),
     ...(idleInTransactionTimeoutMs === undefined
       ? {}

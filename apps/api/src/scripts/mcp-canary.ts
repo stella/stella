@@ -34,6 +34,7 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
+import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
@@ -262,6 +263,8 @@ const PROBE_NAMES = {
   stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
   toolsList: `POST ${MCP_HTTP_PATH} (modern tools/list)`,
   toolCall: `POST ${MCP_HTTP_PATH} (search_case_law)`,
+  legislationSearch: `POST ${MCP_HTTP_PATH} (search_legislation)`,
+  caseLawCoverage: `POST ${MCP_HTTP_PATH} (case_law_coverage)`,
   unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
 } as const;
 
@@ -696,10 +699,13 @@ export const describeToolCallFailure = ({
     : line;
 };
 
-export const evaluateToolCall = ({
-  status,
-  body,
-}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+export const evaluateToolCall = (
+  { status, body }: Pick<ProbeResponse, "body" | "status">,
+  {
+    name = PROBE_NAMES.toolCall,
+    answered = "read-only case-law search returned content",
+  }: { name?: string; answered?: string } = {},
+): ProbeResult => {
   const result = jsonRpcResult(body);
   if (
     status !== 200 ||
@@ -711,15 +717,111 @@ export const evaluateToolCall = ({
     )
   ) {
     return failed(
-      PROBE_NAMES.toolCall,
+      name,
       `expected a non-error JSON-RPC tool result with content (${describeToolCallFailure({ status, body })})`,
     );
   }
-  return passed(
-    PROBE_NAMES.toolCall,
-    "read-only case-law search returned content",
-  );
+  return passed(name, answered);
 };
+
+/**
+ * Why a tool call failed its latency budget, or undefined within it. The
+ * budget is the API's own table (`mcp/tool-latency-budgets.ts`), the one the
+ * slow-tool alarm counts by, so a slow tool fails the canary, and with it the
+ * release proof, before it ships.
+ */
+export const describeToolLatencyOverBudget = ({
+  toolName,
+  elapsedMs,
+}: {
+  toolName: string;
+  elapsedMs: number;
+}): string | undefined => {
+  const { budgetMs, overBudget } = judgeMcpToolLatency({
+    toolName,
+    elapsedMs,
+  });
+  return overBudget
+    ? `${toolName} answered in ${String(Math.round(elapsedMs))} ms, over its ${String(budgetMs)} ms latency budget`
+    : undefined;
+};
+
+/** A tool call's correctness result, failed as well when it ran over budget. */
+export const judgeToolCallProbe = (
+  result: ProbeResult,
+  { toolName, elapsedMs }: { toolName: string; elapsedMs: number },
+): ProbeResult => {
+  const overBudget = describeToolLatencyOverBudget({ toolName, elapsedMs });
+  if (overBudget === undefined) {
+    return result.status === PROBE_STATUS.passed
+      ? {
+          ...result,
+          detail: `${result.detail} in ${String(Math.round(elapsedMs))} ms`,
+        }
+      : result;
+  }
+  return result.status === PROBE_STATUS.failed
+    ? { ...result, detail: `${result.detail}; ${overBudget}` }
+    : failed(result.name, overBudget);
+};
+
+type ToolCallProbe = {
+  name: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  /** The pass line: what a correct answer showed. */
+  answered: string;
+};
+
+/**
+ * The read-only tools a credentialed run calls, each judged for content and
+ * for latency. Public-corpus reads: they need no tenant data, so the same
+ * calls hold for the release proof and the deployed canary.
+ */
+export const TOOL_CALL_PROBES = [
+  {
+    name: PROBE_NAMES.toolCall,
+    toolName: "search_case_law",
+    arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+    answered: "read-only case-law search returned content",
+  },
+  {
+    name: PROBE_NAMES.legislationSearch,
+    toolName: "search_legislation",
+    arguments: { query: "zákoník práce", country: "CZ", limit: 1 },
+    answered: "read-only legislation search returned content",
+  },
+  {
+    name: PROBE_NAMES.caseLawCoverage,
+    toolName: "case_law_coverage",
+    arguments: { country: "CZ" },
+    answered: "case-law coverage returned content",
+  },
+] as const satisfies readonly ToolCallProbe[];
+
+const runToolCallProbe =
+  ({ name, toolName, arguments: args, answered }: ToolCallProbe) =>
+  async (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): Promise<ProbeResult> => {
+    const startedAt = performance.now();
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      },
+      fetcher,
+    );
+    return judgeToolCallProbe(evaluateToolCall(response, { name, answered }), {
+      toolName,
+      elapsedMs: performance.now() - startedAt,
+    });
+  };
 
 type AuthenticatedProbe = {
   name: string;
@@ -731,26 +833,10 @@ type AuthenticatedProbe = {
  * skip report both read it, so neither can describe a probe the other lacks.
  */
 export const AUTHENTICATED_PROBES = [
-  {
-    name: PROBE_NAMES.toolCall,
-    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
-      evaluateToolCall(
-        await postJsonRpc(
-          {
-            baseUrl,
-            token,
-            era: "modern",
-            id: 3,
-            method: "tools/call",
-            params: {
-              name: "search_case_law",
-              arguments: { queries: ["contract"], country: "CZ", limit: 1 },
-            },
-          },
-          fetcher,
-        ),
-      ),
-  },
+  ...TOOL_CALL_PROBES.map((probe) => ({
+    name: probe.name,
+    run: runToolCallProbe(probe),
+  })),
   {
     name: PROBE_NAMES.stream,
     run: runAuthenticatedStreamProbe,
@@ -1824,7 +1910,18 @@ const createReviewJourneyContext = (
   };
   const rpc = async (call: JsonRpcCall) => {
     state.lastResponse = undefined;
+    const startedAt = performance.now();
     state.lastResponse = await postJsonRpc(call, targetFetch);
+    const overBudget =
+      call.method === "tools/call"
+        ? describeToolLatencyOverBudget({
+            toolName: call.params.name,
+            elapsedMs: performance.now() - startedAt,
+          })
+        : undefined;
+    if (overBudget !== undefined) {
+      reject(overBudget);
+    }
     const result = jsonRpcResult(state.lastResponse.body);
     if (
       state.lastResponse.status !== 200 ||

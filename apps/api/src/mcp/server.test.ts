@@ -76,6 +76,7 @@ import {
   LAW_MCP_TOOL_DEFINITIONS,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -381,6 +382,10 @@ describe("handleMcpHttpRequest", () => {
       expect(phaseRecord).toMatchObject({
         method: "tools/call",
         toolName: metricToolName,
+        // The slow-tool alarm counts `overBudget`, judged by the same table
+        // the canary reads.
+        budget: mcpToolLatencyBudgetMs(metricToolName),
+        overBudget: false,
       });
       if (toolName !== metricToolName) {
         expect(JSON.stringify(phaseRecord)).not.toContain(toolName);

@@ -12,6 +12,7 @@ import {
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
   corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexDeleteSettlementRead,
   CorpusIndexError,
@@ -38,6 +39,7 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { runWithinRequestLatencyBudget } from "@/api/lib/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
@@ -2028,6 +2030,47 @@ test("a search aborts within the remaining shared-request budget", async () => {
   if (result.isErr()) {
     expect(result.error.reach).toBe("unreachable");
     expect(result.error.message).toContain("within its 20ms budget");
+  }
+});
+
+test("a search inside a tool call gives up at the tool's budget, not its own", async () => {
+  const stub = async (
+    _input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> => {
+    const signal = init?.signal ?? panic("Search requires a timeout signal");
+    return await new Promise<Response>((_resolve, reject) => {
+      signal.addEventListener(
+        "abort",
+        () =>
+          reject(new DOMException("Search request timed out", "TimeoutError")),
+        { once: true },
+      );
+    });
+  };
+  globalThis.fetch = Object.assign(stub, {
+    preconnect: originalFetch.preconnect,
+  });
+  const startedAt = performance.now();
+  const result = await runWithinRequestLatencyBudget(
+    { label: "search_legislation", budgetMs: 40 },
+    async () =>
+      await getCorpusIndexClient("q09").search({
+        observer: "unobserved",
+        indexId: "legal_corpus_v1_cze",
+        query: "text:smlouva",
+        maxHits: 1,
+      }),
+  );
+  expect(performance.now() - startedAt).toBeLessThan(
+    CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  );
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.reach).toBe("unreachable");
+    // The failure names the budget that ended it: the tool's, not the 30 s.
+    const named = /within its (\d+)ms budget/u.exec(result.error.message);
+    expect(Number(named?.[1])).toBeLessThanOrEqual(40);
   }
 });
 

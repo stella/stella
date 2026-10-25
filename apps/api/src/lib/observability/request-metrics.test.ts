@@ -79,6 +79,37 @@ test("stage log fields pass the content-key policy", () => {
   }
 });
 
+test("a tools/call phase record says whether the call ran over its budget", () => {
+  const record = (totalMs: number) =>
+    buildMcpRequestMetricRecord({
+      method: "tools/call",
+      mode: "default",
+      overlap: false,
+      path: "modern",
+      toolName: "search_legislation",
+      phases: {
+        auth: 0,
+        context: 0,
+        server_build: 0,
+        tool_projection: 0,
+        dispatch: totalMs,
+      },
+      queryCount: 0,
+      totalMs,
+      latencyBudgetMs: 8000,
+    });
+  expect(record(10_499.2)).toMatchObject({
+    total: 10_500,
+    budget: 8000,
+    overBudget: true,
+  });
+  expect(record(7999.5)).toMatchObject({
+    total: 8000,
+    budget: 8000,
+    overBudget: false,
+  });
+});
+
 test("MCP phase records are integral, non-overlapping, and bounded", () => {
   const freeText = "private caller supplied text";
   const record = buildMcpRequestMetricRecord({

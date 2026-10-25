@@ -48,6 +48,7 @@ import {
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { requestBoundedTimeoutMs } from "@/api/lib/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
@@ -501,7 +502,8 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const deadline =
+    startedAt + requestBoundedTimeoutMs(CORPUS_INDEX_SEARCH_TIMEOUT_MS);
   const search = async (clause: string, maxHits: number) => {
     const remainingMs = deadline - performance.now();
     const result =

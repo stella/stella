@@ -4,6 +4,7 @@ import { currentQueryCount } from "@/api/lib/db-query-counter";
 import { emitMcpRequestMetric } from "@/api/lib/observability/request-metrics";
 import type { McpMode } from "@/api/mcp/constants";
 import { classifyMcpMetricToolName } from "@/api/mcp/observe-tool-call";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 
 const MCP_METHODS = [
   "initialize",
@@ -135,7 +136,14 @@ export const observeMcpRequest = async <T>({
         mode: state.mode,
         path: state.path,
         overlap: state.overlap,
-        ...(state.toolName === undefined ? {} : { toolName: state.toolName }),
+        ...(state.toolName === undefined
+          ? {}
+          : {
+              toolName: state.toolName,
+              ...(state.method === "tools/call"
+                ? { latencyBudgetMs: mcpToolLatencyBudgetMs(state.toolName) }
+                : {}),
+            }),
         phases: state.phases,
         queryCount: Math.max(
           0,

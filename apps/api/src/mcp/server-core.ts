@@ -46,6 +46,7 @@ import {
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
+import { runWithinRequestLatencyBudget } from "@/api/lib/request-latency-budget";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
@@ -99,7 +100,10 @@ import {
   getMcpWwwAuthenticateHeader,
   type McpChallengeError,
 } from "@/api/mcp/metadata";
-import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
+import {
+  classifyMcpMetricToolName,
+  observeMcpToolCall,
+} from "@/api/mcp/observe-tool-call";
 import {
   addMcpPhaseDuration,
   measureMcpPhase,
@@ -111,6 +115,7 @@ import {
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
@@ -995,17 +1000,27 @@ export const createMcpHttpRequestHandler = ({
           toolRequest.params.arguments ?? {},
         )
       : undefined;
+    const metricToolName = classifyMcpMetricToolName(definition.name, mode);
     const run = async (signal?: AbortSignal) => {
       signal?.throwIfAborted();
+      // Everything the tool waits on gives up inside the tool's budget: the
+      // corpus client and public-law statements clamp to what is left of it.
       const result = await measureMcpPhase(
         "dispatch",
         async () =>
-          await handleMcpToolCall({
-            args: toolRequest.params.arguments ?? {},
-            context,
-            mode,
-            toolName,
-          }),
+          await runWithinRequestLatencyBudget(
+            {
+              label: metricToolName,
+              budgetMs: mcpToolLatencyBudgetMs(metricToolName),
+            },
+            async () =>
+              await handleMcpToolCall({
+                args: toolRequest.params.arguments ?? {},
+                context,
+                mode,
+                toolName,
+              }),
+          ),
       );
       const decoratedResult =
         toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"

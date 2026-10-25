@@ -111,22 +111,35 @@ type McpRequestMetricInput = {
   >;
   queryCount: number;
   totalMs: number;
+  /**
+   * The called tool's latency budget (`mcp/tool-latency-budgets.ts`), on a
+   * `tools/call` record only. `overBudget` is what the slow-tool log metric
+   * filter counts, so the alarm and the canary judge by the same table.
+   */
+  latencyBudgetMs?: number;
 };
 
 export const buildMcpRequestMetricRecord = ({
   phases,
   totalMs,
+  latencyBudgetMs,
   ...fields
-}: McpRequestMetricInput) => ({
-  event: "mcp.request.phases",
-  ...fields,
-  auth: Math.floor(phases.auth),
-  context: Math.floor(phases.context),
-  server_build: Math.floor(phases.server_build),
-  tool_projection: Math.floor(phases.tool_projection),
-  dispatch: Math.floor(phases.dispatch),
-  total: Math.ceil(totalMs),
-});
+}: McpRequestMetricInput) => {
+  const total = Math.ceil(totalMs);
+  return {
+    event: "mcp.request.phases",
+    ...fields,
+    auth: Math.floor(phases.auth),
+    context: Math.floor(phases.context),
+    server_build: Math.floor(phases.server_build),
+    tool_projection: Math.floor(phases.tool_projection),
+    dispatch: Math.floor(phases.dispatch),
+    total,
+    ...(latencyBudgetMs === undefined
+      ? {}
+      : { budget: latencyBudgetMs, overBudget: total > latencyBudgetMs }),
+  };
+};
 
 export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
   writeMetricLine(buildMcpRequestMetricRecord(input));
