@@ -1430,12 +1430,16 @@ class CensusAnalyzer {
     if (target && functionNode(target)) {
       return "excluded";
     }
+    // QueryClient requires options; a zero-argument query on an unknown
+    // receiver belongs to another API, such as the browser's LockManager.
+    const unresolvedDisposition =
+      call.arguments.length === 0 ? "excluded" : "ambiguous";
     const expression = unwrap(call.expression);
     if (
       !ts.isPropertyAccessExpression(expression) &&
       !ts.isElementAccessExpression(expression)
     ) {
-      return "ambiguous";
+      return unresolvedDisposition;
     }
     const receiver = this.resolve({
       node: expression.expression,
@@ -1451,7 +1455,7 @@ class CensusAnalyzer {
       !ts.isNewExpression(receiver) ||
       !ts.isIdentifier(receiver.expression)
     ) {
-      return "ambiguous";
+      return unresolvedDisposition;
     }
     const imported = this.moduleFor(receiver)?.imports.get(
       receiver.expression.text,
@@ -1459,7 +1463,7 @@ class CensusAnalyzer {
     return imported?.module.startsWith("@tanstack/") &&
       imported.imported === "QueryClient"
       ? "known"
-      : "ambiguous";
+      : unresolvedDisposition;
   };
   analyze = () => {
     this.collectCalls();

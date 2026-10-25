@@ -151,6 +151,20 @@ test("installed QueryClient read methods retain readers and exclude resolved key
     );
   expect(methods).toContain("query");
   expect(methods).toContain("infiniteQuery");
+  for (const method of client.members.filter(ts.isMethodDeclaration)) {
+    if (!methods.includes(method.name.getText(source))) {
+      continue;
+    }
+    expect(
+      method.parameters.some(
+        (parameter) =>
+          parameter.name.getText(source) !== "this" &&
+          parameter.questionToken === undefined &&
+          parameter.initializer === undefined &&
+          parameter.dotDotDotToken === undefined,
+      ),
+    ).toBe(true);
+  }
   const census = inspectMutationQuerySources([
     {
       file: "apps/web/src/readers.ts",
@@ -186,6 +200,46 @@ test("installed QueryClient read methods retain readers and exclude resolved key
   expect(
     census.readers.some(({ callee }) => callee === "searchKeys.query"),
   ).toBe(false);
+});
+
+test("zero-argument platform queries do not hide real cache readers or their wrappers", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/readers.ts",
+      text: `
+        import { QueryClient, useQueryClient } from "@tanstack/react-query";
+        const client = new QueryClient();
+        const hookClient = useQueryClient();
+        locks.query();
+        unknownClient.infiniteQuery();
+        client.query();
+        hookClient.infiniteQuery();
+        unknownClient.query({ queryKey: ["unknown"], queryFn: externalRead });
+        const read = () => unknownClient.query({ queryKey: ["real"], queryFn: externalRead });
+        read();
+        const shadowedPlatform = (navigator) => navigator.query({ queryKey: ["shadowed"], queryFn: externalRead });
+      `,
+    },
+  ]);
+  expect(census.readers.map(({ callee }) => callee).toSorted()).toEqual([
+    "client.query",
+    "hookClient.infiniteQuery",
+    "navigator.query",
+    "read",
+    "unknownClient.query",
+    "unknownClient.query",
+  ]);
+  expect(census.readers.find(({ callee }) => callee === "read")?.kind).toBe(
+    "wrapper",
+  );
+  expect(
+    census.readers.find(({ callee }) => callee === "navigator.query")
+      ?.unresolved,
+  ).toContainEqual({
+    reason: "unresolved-query-client-receiver",
+    expression: "navigator.query",
+    file: "apps/web/src/readers.ts",
+  });
 });
 
 test("import aliases and transitive wrappers retain every mutation call and bind forwarded options", () => {
