@@ -7,6 +7,7 @@ import {
   publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { classifyFailure } from "@stll/errors";
 
 import {
   caseLawSitemapShards,
@@ -27,9 +28,12 @@ import {
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
 } from "@/api/lib/case-law/sitemap-shard-sql";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";
 const SITEMAP_YEAR_PATTERN = "^(?:\\d{4}|undated)$";
@@ -47,6 +51,28 @@ const SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT =
     MAX_LANGUAGES_PER_ALTERNATE_GROUP +
   1;
 const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
+
+const SITEMAP_CAPACITY_EXCEEDED = failureSink({
+  event: "case_law.sitemap_capacity_exceeded",
+  expected: [],
+});
+
+/**
+ * A sitemap that would outgrow the protocol's bounds is refused rather than
+ * served truncated: the answer could not be built within its own contract.
+ */
+const capacityExceeded = (message: string) =>
+  observedStatus(
+    {
+      sink: SITEMAP_CAPACITY_EXCEEDED,
+      cause: classifyFailure(
+        new HandlerError({ status: 500, message }),
+        "response_invalid",
+      ),
+    },
+    500,
+    { message },
+  );
 
 export const sitemapShardDecisionsQuerySchema = v.object({
   country: v.pipe(
@@ -238,9 +264,9 @@ export const listSitemapShardsHandler = async (
   );
 
   if (shards.length > LIMITS.caseLawSitemapIndexEntryLimit - 1) {
-    return status(500, {
-      message: "Case-law sitemap shard count exceeds sitemap index capacity.",
-    });
+    return capacityExceeded(
+      "Case-law sitemap shard count exceeds sitemap index capacity.",
+    );
   }
 
   return {
@@ -320,9 +346,9 @@ export const listSitemapShardDecisionsHandler = async (
   });
 
   if (queryResult.type === "capacityExceeded") {
-    return status(500, {
-      message: "Case-law sitemap shard exceeds sitemap URL capacity.",
-    });
+    return capacityExceeded(
+      "Case-law sitemap shard exceeds sitemap URL capacity.",
+    );
   }
 
   const { alternateRows, rows } = queryResult;

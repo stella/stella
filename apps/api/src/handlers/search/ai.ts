@@ -8,6 +8,7 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -24,7 +25,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,
@@ -36,11 +37,14 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
@@ -62,6 +66,26 @@ import {
 } from "@/api/lib/search/types";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
+
+const SEARCH_REFINE_FAILED = failureSink({
+  event: "search.refine_failed",
+  expected: [],
+});
+const SEARCH_SUMMARY_FAILED = failureSink({
+  event: "search.summary_failed",
+  expected: [],
+});
+const SEARCH_SUMMARY_CHAT_FAILED = failureSink({
+  event: "search.summary_chat_failed",
+  expected: [],
+});
+
+/** A model answer the search route cannot use, after it parsed. */
+const unusableModelAnswer = (message: string) =>
+  classifyFailure(
+    new HandlerError({ status: 502, message }),
+    "model_output_invalid",
+  );
 
 const SEARCH_SUMMARY_RESULT_LIMIT = 5;
 const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
@@ -402,7 +426,11 @@ export const refineSearchQuery = async ({
     task: "short-text",
   });
   if (gate.isErr()) {
-    return status(gate.error.status, { message: gate.error.message });
+    return observedStatus(
+      { sink: SEARCH_REFINE_FAILED, cause: gate.error },
+      gate.error.status,
+      { message: gate.error.message },
+    );
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -448,7 +476,11 @@ export const refineSearchQuery = async ({
         status: 502,
         message: "Failed to improve search query",
       });
-      return status(mapped.status, mapped.body);
+      return observedStatus(
+        { sink: SEARCH_REFINE_FAILED, cause: result.error },
+        mapped.status,
+        mapped.body,
+      );
     }
 
     const refinedQuery = result.value.query.trim();
@@ -476,7 +508,14 @@ export const refineSearchQuery = async ({
       "PostgreSQL rejected the generated tsquery. Use valid stella syntax with balanced operators and searchable terms.";
   }
 
-  return status(502, { message: "Failed to improve search query" });
+  return observedStatus(
+    {
+      sink: SEARCH_REFINE_FAILED,
+      cause: unusableModelAnswer("No generated search query was valid"),
+    },
+    502,
+    { message: "Failed to improve search query" },
+  );
 };
 
 export const summarizeSearchResults = async ({
@@ -501,7 +540,11 @@ export const summarizeSearchResults = async ({
     task: "short-text",
   });
   if (gate.isErr()) {
-    return status(gate.error.status, { message: gate.error.message });
+    return observedStatus(
+      { sink: SEARCH_SUMMARY_FAILED, cause: gate.error },
+      gate.error.status,
+      { message: gate.error.message },
+    );
   }
 
   const resolved = await resolveSelectedWorkspaceIds({
@@ -586,24 +629,32 @@ export const summarizeSearchResults = async ({
 
   if (result.isErr()) {
     aiAnalytics.captureError(result.error);
-    captureError(
-      result.error,
-      handlerErrorContext("search.summarizeSearchResults.result_error", {
-        feature: "search.summary",
-        organizationId,
-      }),
-    );
     const mapped = aiErrorStatusBody(result.error, {
       status: 502,
       message: "Failed to summarize search results",
     });
-    return status(mapped.status, mapped.body);
+    return observedStatus(
+      {
+        sink: SEARCH_SUMMARY_FAILED,
+        cause: result.error,
+        ctx: { feature: "search.summary", organizationId },
+      },
+      mapped.status,
+      mapped.body,
+    );
   }
 
   const title = result.value.title.trim();
   const summary = result.value.summary.trim();
   if (!title || !summary) {
-    return status(502, { message: "Failed to summarize search results" });
+    return observedStatus(
+      {
+        sink: SEARCH_SUMMARY_FAILED,
+        cause: unusableModelAnswer("The generated summary was empty"),
+      },
+      502,
+      { message: "Failed to summarize search results" },
+    );
   }
 
   return {
@@ -824,17 +875,15 @@ export const createSearchSummaryChatThread = async ({
   });
 
   if (insertResult.isErr()) {
-    captureError(
-      insertResult.error,
-      handlerErrorContext(
-        "search.createSearchSummaryChatThread.insertResult_error",
-        {
-          feature: "search.summary.chat",
-          organizationId,
-        },
-      ),
+    return observedStatus(
+      {
+        sink: SEARCH_SUMMARY_CHAT_FAILED,
+        cause: insertResult.error,
+        ctx: { feature: "search.summary.chat", organizationId },
+      },
+      500,
+      { message: "Failed to create chat thread" },
     );
-    return status(500, { message: "Failed to create chat thread" });
   }
 
   // Index the freshly seeded summary thread so it is findable in

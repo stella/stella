@@ -243,6 +243,7 @@ import {
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { emitRequestStage } from "@/api/lib/observability/request-metrics";
+import { observeServerError } from "@/api/lib/observability/server-error-answer";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
@@ -393,16 +394,26 @@ type StreamChatProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+const CHAT_TURN_REFUSED = failureSink({
+  event: "chat.turn_refused",
+  expected: [],
+});
+
+/**
+ * A pre-stream rejection retains its settlement code alongside its HTTP body.
+ * A 500 is built from its cause, which the request records.
+ */
 export class ChatTurnFailureResponse extends Response {
   readonly failureCode: ChatTurnFailureCode;
   readonly retryable: boolean;
 
   constructor({
+    cause,
     failureCode,
     payload,
     status,
   }: {
+    cause?: unknown;
     failureCode: ChatTurnFailureCode;
     payload: { code?: string; message: string };
     status: 422 | 500;
@@ -411,6 +422,7 @@ export class ChatTurnFailureResponse extends Response {
       headers: { "Content-Type": "application/json" },
       status,
     });
+    observeServerError(status, { sink: CHAT_TURN_REFUSED, cause });
     this.failureCode = failureCode;
     this.retryable = status >= 500;
   }
@@ -1121,6 +1133,7 @@ const thirdPartyBoundaryRefusalResponse = (
   error: AnonymizationRefusal,
 ): ChatTurnFailureResponse =>
   new ChatTurnFailureResponse({
+    cause: error,
     failureCode: error.failureCode,
     payload: createThirdPartyBoundaryRefusalPayload(error.message),
     status: error.status,

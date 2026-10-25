@@ -40,6 +40,11 @@ type LoggerAttributeInput = Record<string, unknown>;
 type RequestLogFailure = {
   readonly grade: FailureGrade;
   readonly reason: FailureReason;
+  /**
+   * `grade`: the record's severity and capture follow the grade, so it is an
+   * owned record. Without it the grade rides along in shadow.
+   */
+  readonly policy?: "grade" | undefined;
 };
 
 type RequestLogOptions = {
@@ -378,7 +383,9 @@ const emitRequest = ({
         : {
             "failure.grade": failure.grade,
             "failure.reason": failure.reason,
-            "failure.shadow": "true",
+            ...(failure.policy === undefined
+              ? { "failure.shadow": "true" }
+              : { "failure.policy": failure.policy }),
           }),
     }),
   });

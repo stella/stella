@@ -282,6 +282,10 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
+  isServerErrorStatus,
+  observedStatus,
+} from "@/api/lib/observability/server-error-answer";
+import {
   decodePaginationCursor,
   encodePaginationCursor,
   isDateOnlyPaginationCursorPart,
@@ -2553,6 +2557,24 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * The answer for a relaxed read that failed. A 5xx is observed on the request
+ * by the answer itself; any other refusal keeps its own record.
+ */
+const relaxedReadRefusal = <const TCode extends number>(error: {
+  readonly status: TCode;
+  readonly message: string;
+}) => {
+  if (!isServerErrorStatus(error.status)) {
+    observeFailure(error, { sink: TERM_COVERAGE_FAILURE_SINK });
+  }
+  return observedStatus(
+    { sink: TERM_COVERAGE_FAILURE_SINK, cause: error },
+    error.status,
+    { message: error.message },
+  );
+};
+
 export const searchCorpusIndexDecisions = async ({
   body,
   caseLawDb,
@@ -3143,8 +3165,7 @@ export const searchCorpusIndexDecisions = async ({
     ? await readRelaxedHits()
     : Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
   if (Result.isError(relaxed)) {
-    observeFailure(relaxed.error, { sink: TERM_COVERAGE_FAILURE_SINK });
-    return status(relaxed.error.status, { message: relaxed.error.message });
+    return relaxedReadRefusal(relaxed.error);
   }
   const relaxedHits = relaxed.value.hits;
   const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));

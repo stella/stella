@@ -13,6 +13,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
@@ -47,11 +49,17 @@ type FillProps = {
   query: { format?: "docx" | "pdf" };
 };
 
+const TEMPLATE_FILL_FAILED = failureSink({
+  event: "templates.fill_failed",
+  expected: [],
+});
+
 /** Serialize a preflight `HandlerError` to the same JSON body the framework
  *  preflight returns (message plus the 402 usage detail), for this route's
  *  raw-Response download path. */
 const usageRejectionResponse = (error: HandlerError): Response =>
-  new Response(
+  observedResponse(
+    { sink: TEMPLATE_FILL_FAILED, cause: error },
     JSON.stringify({
       ...(error.code ? { code: error.code } : {}),
       message: error.message,
@@ -220,10 +228,11 @@ export const fillHandler = async ({
     }
     const pdfResult = await convertToPdf(scannedOutput);
     if (Result.isError(pdfResult)) {
-      return new Response(JSON.stringify({ error: "PDF conversion failed" }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
+      return observedResponse(
+        { sink: TEMPLATE_FILL_FAILED, cause: pdfResult.error },
+        JSON.stringify({ error: "PDF conversion failed" }),
+        { status: 502, headers: { "Content-Type": "application/json" } },
+      );
     }
 
     const pdfName = DOCX_EXT_RE.test(sourceName)

@@ -40,7 +40,14 @@ import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-re
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 import type { SubmitFeedbackDependencies } from "@/api/handlers/feedback/submit";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
+
+const FEEDBACK_INTAKE_FAILED = failureSink({
+  event: "feedback.intake_failed",
+  expected: [],
+});
 
 // Coarse raw-body string cap enforced at the route before JSON parsing: bounds
 // an unauthenticated write independently of the per-field caps below. Sized so
@@ -265,11 +272,16 @@ export const receivePublicFeedback = async ({
     ...(deps?.submitDeps === undefined ? {} : { deps: deps.submitDeps }),
   });
   if (Result.isError(submitted)) {
-    return errorResponse(
-      503,
-      "internal_error",
-      "Could not record the feedback report",
-      "Try again later.",
+    return observedResponse(
+      { sink: FEEDBACK_INTAKE_FAILED, cause: submitted.error },
+      JSON.stringify({
+        error: {
+          code: "internal_error",
+          message: "Could not record the feedback report",
+          hint: "Try again later.",
+        },
+      }),
+      { status: 503, headers: { "content-type": "application/json" } },
     );
   }
 

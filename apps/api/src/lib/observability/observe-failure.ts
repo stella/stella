@@ -85,7 +85,7 @@ export const FAILURE_CONTEXT_KEYS = [
 
 type FailureContextKey = (typeof FAILURE_CONTEXT_KEYS)[number];
 
-type FailureContext = Partial<Record<FailureContextKey, string>>;
+export type FailureContext = Partial<Record<FailureContextKey, string>>;
 
 const MAX_CONTEXT_VALUE_LENGTH = 128;
 
@@ -153,13 +153,21 @@ type ObserveFailureOptions = {
   | { readonly request?: undefined; readonly scope?: ExceptionScope }
 );
 
-const requestFields = (request: Request | undefined): LoggerAttributes => {
-  const requestId =
-    request === undefined ? undefined : getRequestContext()?.requestId;
+const requestFields = (onRequest: boolean): LoggerAttributes => {
+  const requestId = onRequest ? getRequestContext()?.requestId : undefined;
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
-const observe = (error: unknown, options: ObserveFailureOptions): void => {
+/**
+ * `onRequest`: the failure belongs to the request in flight, so its record
+ * carries the request id and the request keeps the observation for its
+ * completion record. A request handle implies it.
+ */
+const observe = (
+  error: unknown,
+  options: ObserveFailureOptions,
+  onRequest: boolean,
+): void => {
   const { sink, ctx, request, escalation } = options;
   const evidence = readEvidence(error);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
@@ -169,7 +177,7 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
   const context = acceptFailureContext(ctx);
   const attributes: LoggerAttributes = {
     ...context.accepted,
-    ...requestFields(request),
+    ...requestFields(onRequest),
     ...errorFields(evidence),
     ...failureFields(grading, sink),
     "failure.policy": sanitizeQueryErrorText(policy.source),
@@ -178,7 +186,7 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
       : {}),
   };
 
-  if (request !== undefined) {
+  if (onRequest) {
     recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
@@ -230,7 +238,28 @@ export const observeFailure = (
   options: ObserveFailureOptions,
 ): void => {
   const observed = Result.try(() => {
-    observe(error, options);
+    observe(error, options, options.request !== undefined);
+  });
+  if (Result.isError(observed)) {
+    reportEmitFailure("observe", observed.error);
+  }
+};
+
+/**
+ * Observe the cause of the answer the request in flight is about to send,
+ * reading the request from its async scope instead of a handle. The record
+ * carries the request id, and the completion record grades the answer by
+ * this observation. Never throws, like {@link observeFailure}.
+ *
+ * Only the answer owner (`server-error-answer.ts`) calls this: the failure
+ * an answer reports is the one it was chosen from.
+ */
+export const observeAnswerFailure = (
+  error: unknown,
+  { sink, ctx }: { readonly sink: FailureSink; readonly ctx?: FailureContext },
+): void => {
+  const observed = Result.try(() => {
+    observe(error, { sink, ctx }, true);
   });
   if (Result.isError(observed)) {
     reportEmitFailure("observe", observed.error);

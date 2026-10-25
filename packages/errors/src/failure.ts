@@ -59,6 +59,8 @@ export const FAILURE_REASON_GRADE = {
   // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
   visual_preview_input_invalid: "anticipated",
   visual_preview_not_configured: "anticipated",
+  // parser-output-unchanged: grades a deployment without hosted usage management; no parser reads it.
+  hosted_usage_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
   publisher_refused: "anticipated",

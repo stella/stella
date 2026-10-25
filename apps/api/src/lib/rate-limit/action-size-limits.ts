@@ -5,8 +5,16 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { env } from "@/api/env";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
+
+/** A deployment whose action size policy is on but not configured. */
+const ACTION_SIZE_UNCONFIGURED = failureSink({
+  event: "action_size.unconfigured",
+  expected: [],
+});
 
 export type ActionSizePolicy = {
   requestBytes: number;
@@ -144,10 +152,14 @@ export const actionSizeErrorResponse = (
     maximum !== undefined && Buffer.byteLength(serialized, "utf-8") > maximum
       ? null
       : serialized;
-  return new Response(body, {
-    status,
-    headers: body === null ? {} : { "content-type": "application/json" },
-  });
+  return observedResponse(
+    { sink: ACTION_SIZE_UNCONFIGURED, cause: error },
+    body,
+    {
+      status,
+      headers: body === null ? {} : { "content-type": "application/json" },
+    },
+  );
 };
 
 type ActionResponseOversizeOptions = {

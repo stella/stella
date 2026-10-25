@@ -289,14 +289,22 @@ const CASES: readonly LifecycleCase[] = [
     metricReasons: ["pg_connection_lifecycle"],
   },
   {
-    name: "a 502 a handler returned itself is counted as unobserved",
+    name: "a 502 a handler built without its cause is enforced as unobserved",
     request: get("/v1/signals/count"),
     status: 502,
     body: '{"message":"Bad gateway"}',
     records: [
-      ["request.completed", "ERROR", shadow("defect", "unobserved_5xx")],
+      [
+        "request.completed",
+        "ERROR",
+        {
+          "failure.grade": "defect",
+          "failure.reason": "unobserved_5xx",
+          "failure.shadow": undefined,
+        },
+      ],
     ],
-    captures: 0,
+    captures: 1,
     metricReasons: [],
   },
   {
@@ -716,7 +724,7 @@ describe("the request lifecycle", () => {
         "log_error_and_capture",
         1,
       ],
-      ["request.completed", "unobserved_5xx", "log_error", 1],
+      ["request.completed", "unobserved_5xx", "log_error_and_capture", 1],
     ]);
   });
 

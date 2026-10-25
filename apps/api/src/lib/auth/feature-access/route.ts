@@ -1,8 +1,7 @@
 import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
-import { status } from "@/api/http/status";
-import { AUTH_REJECTION_BODY, resolveRequestAuth } from "@/api/lib/auth";
+import { authUnavailableAnswer, resolveRequestAuth } from "@/api/lib/auth";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 
@@ -31,7 +30,7 @@ export const featureAccessGate = (
     const authorization = await resolveAuth(ctx);
     if (!authorization.ok) {
       if (authorization.statusCode === 500) {
-        return toResponse(status(500, AUTH_REJECTION_BODY[500]), ctx.set);
+        return toResponse(authUnavailableAnswer(authorization.cause), ctx.set);
       }
       throw new HttpFailureError(HTTP_FAILURE.notFound);
     }
