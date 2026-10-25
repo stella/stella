@@ -15,7 +15,7 @@ import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 
 const info = (overrides: Partial<OAuthConsentInfo>): OAuthConsentInfo => ({
   client_name: "Claude",
-  redirectHosts: ["connector.example"],
+  redirectTargets: ["connector.example"],
   clientIdHost: null,
   unverified: true,
   verifiedBrand: null,

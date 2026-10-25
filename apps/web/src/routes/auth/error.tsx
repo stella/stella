@@ -6,6 +6,7 @@ import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { redirectToSchema } from "@/lib/redirect";
+import { routeSearchSchema } from "@/route-search-params";
 import {
   loadSocialLinkHint,
   NO_SOCIAL_LINK_HINT,
@@ -13,7 +14,7 @@ import {
 import { SocialRecoveryPanel } from "@/routes/auth/-components/social-recovery-panel";
 import { reportOAuthCallbackError } from "@/routes/auth/-error-report";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   error: v.optional(v.string()),
   linkProvider: v.optional(socialProviderSchema),
   redirectTo: redirectToSchema,

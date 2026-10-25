@@ -38,6 +38,7 @@ import { readChatMessageRevisionsOnTx } from "@/api/handlers/chat/messages/revis
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageRevisionChange } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
 import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -859,6 +860,7 @@ if (!databaseUrl || !runPostgres) {
               practiceJurisdictions: [],
               refRegistry: createChatRefRegistry(),
               safeDb: toSafeDbMock(fixture.scoped(db)),
+              skillBindingScope: NO_SKILL_BINDING_SCOPE,
               messages,
               requestedSkillNames: new Set(),
               threadId: fixture.threadId,

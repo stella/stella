@@ -10,6 +10,7 @@ import {
   versionCoversDate,
 } from "@stll/api-contract/statute-version";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
+import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 import {
   Accordion,
   AccordionItem,
@@ -33,7 +34,7 @@ import {
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
-import { formatProvisionReference } from "@/features/case-law/provision-label";
+import { formatProvisionLabel } from "@/features/case-law/provision-label";
 import {
   citedWorkAtDateKey,
   decisionProvisionsInfiniteOptions,
@@ -381,7 +382,14 @@ const WorkReferences = ({
                       }
                 }
                 key={provision.key}
-                label={formatProvisionReference(provision, renderPart)}
+                label={formatProvisionLabel(
+                  group.jurisdiction,
+                  provision,
+                  renderPart,
+                )}
+                anchorSeparator={provisionAnchorSeparatorFor(
+                  group.jurisdiction,
+                )}
                 provision={provision}
                 versionMarker={
                   exceptions.has(provision.key) ? "exception" : "group"

@@ -4,8 +4,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { canEditActiveSkill } from "@/api/lib/agent-skills/access";
 import {
-  canEditActiveSkill,
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
+import {
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
   resolveActiveSkillContext,
@@ -47,6 +51,7 @@ describe("canEditActiveSkill", () => {
   test("requires agent skill update permission for private owned skills", () => {
     expect(
       canEditActiveSkill({
+        ...UNBOUND,
         memberRole: sessionMemberRole("intern"),
         origin: "authored",
         scope: "private",
@@ -57,6 +62,7 @@ describe("canEditActiveSkill", () => {
 
     expect(
       canEditActiveSkill({
+        ...UNBOUND,
         memberRole: sessionMemberRole("member"),
         origin: "authored",
         scope: "private",
@@ -69,6 +75,7 @@ describe("canEditActiveSkill", () => {
   test("keeps team skills limited to owners and admins", () => {
     expect(
       canEditActiveSkill({
+        ...UNBOUND,
         memberRole: sessionMemberRole("member"),
         origin: "authored",
         scope: "team",
@@ -79,6 +86,7 @@ describe("canEditActiveSkill", () => {
 
     expect(
       canEditActiveSkill({
+        ...UNBOUND,
         memberRole: sessionMemberRole("admin"),
         origin: "authored",
         scope: "team",
@@ -252,12 +260,14 @@ describe("available active chat skills", () => {
 
     const activeLoadResult = await loadAvailableChatSkill({
       activeSkillId: activeTeamSkillId,
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skillName: slug,
       userId: ids.userA2,
     });
     const fallbackLoadResult = await loadAvailableChatSkill({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skillName: slug,
@@ -265,6 +275,7 @@ describe("available active chat skills", () => {
     });
     const activeReadResult = await readAvailableChatSkillResource({
       activeSkillId: activeTeamSkillId,
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       path: "references/shared.md",
       safeDb,
@@ -287,6 +298,7 @@ describe("available active chat skills", () => {
     expect(activeReadResult.value).toEqual({
       status: "found",
       content: "team resource",
+      contentHash: "0".repeat(64),
       skill: { source: "installed", id: activeTeamSkillId, origin: "authored" },
     });
   });
