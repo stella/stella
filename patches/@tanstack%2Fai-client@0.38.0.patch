@@ -1,5 +1,5 @@
 diff --git a/src/connection-adapters.ts b/src/connection-adapters.ts
-index 424ab275ccf..af22dff7337 100644
+index 424ab275cc..af22dff733 100644
 --- a/src/connection-adapters.ts
 +++ b/src/connection-adapters.ts
 @@ -30,6 +30,12 @@ import { normalizeMessagesDates } from './message-date-normalizer'
@@ -81,7 +81,7 @@ index 424ab275ccf..af22dff7337 100644
              // fall through to rethrow the original error
            }
 diff --git a/src/chat-client.ts b/src/chat-client.ts
-index a94a3d3b0e8..c03be03a983 100644
+index a94a3d3b0e..74f17a4f36 100644
 --- a/src/chat-client.ts
 +++ b/src/chat-client.ts
 @@ -25,6 +25,7 @@ import { createNoOpChatDevtoolsBridge } from './devtools-noop'
@@ -114,7 +114,7 @@ index a94a3d3b0e8..c03be03a983 100644
  /**
   * A deep copy of plain data. Dates stay Dates. Function-valued properties are
   * dropped.
-@@ -471,12 +487,12 @@ export class ChatClient<
+@@ -471,28 +487,22 @@ export class ChatClient<
    private queueConfig: NormalizedQueueConfig
    private messageQueue: Array<InternalQueuedMessage> = []
    /**
@@ -125,11 +125,22 @@ index a94a3d3b0e8..c03be03a983 100644
     * actually runs (leaving stranded user messages with no reply).
     */
 -  private sendInFlight = false
+-  /**
+-   * True while `drainQueue` is delivering queued messages. Concurrent
+-   * `sendMessage` calls during a drain are treated as busy and follow
+-   * `whenBusy` (default: queue).
+-   */
+-  private messageQueueDraining = false
 +  private sendInFlight: symbol | null = null
    /**
-    * True while `drainQueue` is delivering queued messages. Concurrent
-    * `sendMessage` calls during a drain are treated as busy and follow
-@@ -492,7 +508,7 @@ export class ChatClient<
+-   * Set by `whenBusy: 'interrupt'` so an in-progress FIFO drain loop stops
+-   * before starting the next queued item (the interrupting send owns the client).
++   * Identity held while `drainQueue` delivers queued messages. Cancellation
++   * releases it synchronously, even while an old delivery remains pending.
+    */
+-  private stopMessageQueueDrain = false
++  private messageQueueDrainClaim: symbol | null = null
+   /**
     * Sync claim held for the duration of `deliverMessage` so concurrent
     * deliverers cannot both append a user message before only one stream runs.
     */
@@ -138,7 +149,7 @@ index a94a3d3b0e8..c03be03a983 100644
    private isLoading = false
    private isSubscribed = false
    private error: Error | undefined = undefined
-@@ -519,6 +535,7 @@ export class ChatClient<
+@@ -519,6 +529,7 @@ export class ChatClient<
    // Flag to deduplicate continuation checks during action draining
    private continuationPending = false
    private subscriptionAbortController: AbortController | null = null
@@ -146,7 +157,7 @@ index a94a3d3b0e8..c03be03a983 100644
    private processingResolve: (() => void) | null = null
    /**
     * `connect()` adapters push the full HTTP body into the subscribe queue, then
-@@ -633,7 +650,14 @@ export class ChatClient<
+@@ -633,7 +644,14 @@ export class ChatClient<
        this.persistor = new ChatPersistor(
          options.persistence,
          options.threadId,
@@ -162,7 +173,7 @@ index a94a3d3b0e8..c03be03a983 100644
          (snapshot) => this.applyPersistedResume(snapshot),
        )
        this.historyPageSize = undefined
-@@ -762,18 +786,27 @@ export class ChatClient<
+@@ -762,18 +780,27 @@ export class ChatClient<
        ...(initialMessages ? { initialMessages } : {}),
        events: {
          onMessagesChange: (messages) => {
@@ -190,7 +201,7 @@ index a94a3d3b0e8..c03be03a983 100644
            const assistantMessageId =
              this.processor.getCurrentAssistantMessageId()
            if (!assistantMessageId) {
-@@ -790,23 +823,37 @@ export class ChatClient<
+@@ -790,23 +817,37 @@ export class ChatClient<
                this.currentStreamId || undefined,
              )
            }
@@ -229,7 +240,7 @@ index a94a3d3b0e8..c03be03a983 100644
            // Emit thinking update to devtools
            if (this.currentStreamId) {
              this.events.thinkingUpdated(
-@@ -816,8 +863,11 @@ export class ChatClient<
+@@ -816,8 +857,11 @@ export class ChatClient<
                undefined,
              )
            }
@@ -241,7 +252,7 @@ index a94a3d3b0e8..c03be03a983 100644
            const streamId = this.devtoolsBridge.resolveStreamId()
            const eventName =
              args.phase === 'start'
-@@ -847,6 +897,7 @@ export class ChatClient<
+@@ -847,6 +891,7 @@ export class ChatClient<
                ...(args.delta !== undefined ? { delta: args.delta } : {}),
              },
            )
@@ -249,7 +260,7 @@ index a94a3d3b0e8..c03be03a983 100644
          },
          onToolCallStateChange: (
            messageId: string,
-@@ -854,6 +905,8 @@ export class ChatClient<
+@@ -854,6 +899,8 @@ export class ChatClient<
            state: string,
            args: string,
          ) => {
@@ -258,7 +269,7 @@ index a94a3d3b0e8..c03be03a983 100644
            // Get the tool name from the messages
            const messages = this.processor.getMessages()
            const message = messages.find((m: UIMessage) => m.id === messageId)
-@@ -874,12 +927,15 @@ export class ChatClient<
+@@ -874,12 +921,15 @@ export class ChatClient<
                args,
              )
            }
@@ -274,7 +285,7 @@ index a94a3d3b0e8..c03be03a983 100644
            // Handle client-side tool execution automatically
            const clientTools =
              this.activeClientTools ?? this.clientToolsRef.current
-@@ -898,6 +954,9 @@ export class ChatClient<
+@@ -898,6 +948,9 @@ export class ChatClient<
            }
            if (executeFunc) {
              const continuationGeneration = this.continuationGeneration
@@ -284,7 +295,7 @@ index a94a3d3b0e8..c03be03a983 100644
              // Capture the run context at execution-start so a tool whose
              // result lands AFTER the originating run finishes still reports
              // back against the originating run, not whatever run is
-@@ -926,6 +985,7 @@ export class ChatClient<
+@@ -926,6 +979,7 @@ export class ChatClient<
                    clientTool,
                    continuationGeneration,
                    runEventContext,
@@ -292,7 +303,7 @@ index a94a3d3b0e8..c03be03a983 100644
                  )
                } catch (error: any) {
                  await this.addToolResultForClientTool(
-@@ -939,16 +999,21 @@ export class ChatClient<
+@@ -939,16 +993,21 @@ export class ChatClient<
                    clientTool,
                    continuationGeneration,
                    runEventContext,
@@ -315,7 +326,7 @@ index a94a3d3b0e8..c03be03a983 100644
          },
          onApprovalRequest: (args: {
            toolCallId: string
-@@ -956,6 +1021,8 @@ export class ChatClient<
+@@ -956,6 +1015,8 @@ export class ChatClient<
            input: any
            approvalId: string
          }) => {
@@ -324,7 +335,7 @@ index a94a3d3b0e8..c03be03a983 100644
            const streamId = this.devtoolsBridge.resolveStreamId()
            const messageIdForApproval =
              this.findMessageIdForToolCall(args.toolCallId) ??
-@@ -970,18 +1037,22 @@ export class ChatClient<
+@@ -970,18 +1031,22 @@ export class ChatClient<
              args.input,
              args.approvalId,
            )
@@ -347,7 +358,7 @@ index a94a3d3b0e8..c03be03a983 100644
            }
            if (
              eventType === 'compaction:started' ||
-@@ -989,11 +1060,14 @@ export class ChatClient<
+@@ -989,11 +1054,14 @@ export class ChatClient<
              eventType === 'compaction:ended'
            ) {
              this.devtoolsBridge.recordCompactionEvent(eventType, data)
@@ -362,7 +373,7 @@ index a94a3d3b0e8..c03be03a983 100644
          },
        },
      })
-@@ -1133,7 +1207,9 @@ export class ChatClient<
+@@ -1133,7 +1201,9 @@ export class ChatClient<
     * (`indexedDBPersistence`) would otherwise never rejoin a mid-stream run.
     */
    private applyPersistedResume(snapshot: ChatResumeSnapshot): void {
@@ -372,7 +383,7 @@ index a94a3d3b0e8..c03be03a983 100644
      const hasInterrupts =
        Array.isArray(snapshot.pendingInterrupts) &&
        snapshot.pendingInterrupts.length > 0
-@@ -1218,6 +1294,7 @@ export class ChatClient<
+@@ -1218,6 +1288,7 @@ export class ChatClient<
          }
        }
        if (!current) return
@@ -380,7 +391,7 @@ index a94a3d3b0e8..c03be03a983 100644
        // NO VIEW IS WATCHING ANY MORE (it unmounted while this fetch was in
        // flight). Applying anything now is pointless, and one thing is actively
        // harmful: the branch below calls `maybeRejoinInFlight`, which opens a TAIL.
-@@ -1234,13 +1311,18 @@ export class ChatClient<
+@@ -1234,13 +1305,18 @@ export class ChatClient<
        // error something else set since.
        if (this.hydrationError && this.error === this.hydrationError) {
          this.setError(undefined)
@@ -400,7 +411,7 @@ index a94a3d3b0e8..c03be03a983 100644
          this.rememberServerMessageIds(windowMessages)
        }
        if (
-@@ -1289,18 +1371,23 @@ export class ChatClient<
+@@ -1289,18 +1365,23 @@ export class ChatClient<
    private failHydration(cause: unknown): void {
      if (this.disposed || !this.tailing) return
      if (this.isLoading || this.abortController) return
@@ -424,7 +435,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.callbacksRef.current.onError(error)
    }
  
-@@ -1327,22 +1414,24 @@ export class ChatClient<
+@@ -1327,22 +1408,24 @@ export class ChatClient<
     * still tracking. The persistor owns the cleared-run bookkeeping; the client
     * owns the active-run / session / processing state.
     */
@@ -451,7 +462,7 @@ index a94a3d3b0e8..c03be03a983 100644
      if (!getChunkRunId(chunk)) {
        this.resolveProcessing()
      }
-@@ -1350,8 +1439,9 @@ export class ChatClient<
+@@ -1350,8 +1433,9 @@ export class ChatClient<
  
    private updateRunLifecycle(
      chunk: StreamChunk,
@@ -462,7 +473,7 @@ index a94a3d3b0e8..c03be03a983 100644
      if (chunk.type === 'RUN_STARTED') {
        const chunkRunId = getChunkRunId(chunk) ?? chunk.runId
        const parentRunId =
-@@ -1377,6 +1467,7 @@ export class ChatClient<
+@@ -1377,6 +1461,7 @@ export class ChatClient<
          this.activeRunIds.add(chunkRunId)
          this.clearedStreamTracker.onRunStarted(chunkRunId)
          this.setSessionGenerating(true)
@@ -470,7 +481,7 @@ index a94a3d3b0e8..c03be03a983 100644
        }
        // Persist a live-run resume snapshot so a full page reload can rejoin this
        // in-flight run via joinRun. Only a persistor writes it, and a persistor
-@@ -1395,6 +1486,7 @@ export class ChatClient<
+@@ -1395,6 +1480,7 @@ export class ChatClient<
            threadId: this.activeResumeThreadId ?? this.threadId,
            runId: chunkRunId,
          })
@@ -478,7 +489,7 @@ index a94a3d3b0e8..c03be03a983 100644
        }
        if (
          this.lastResume &&
-@@ -1402,6 +1494,7 @@ export class ChatClient<
+@@ -1402,6 +1488,7 @@ export class ChatClient<
        ) {
          this.lastResume = null
          this.persistor?.persistResumeSnapshot(null)
@@ -486,7 +497,7 @@ index a94a3d3b0e8..c03be03a983 100644
          this.interruptManager.reset()
        }
        return
-@@ -1421,9 +1514,10 @@ export class ChatClient<
+@@ -1421,9 +1508,10 @@ export class ChatClient<
        this.clearedStreamTracker.onSessionRunError()
      }
      this.setSessionGenerating(this.activeRunIds.size > 0)
@@ -498,7 +509,7 @@ index a94a3d3b0e8..c03be03a983 100644
        this.resolveProcessing()
      }
    }
-@@ -1434,7 +1528,8 @@ export class ChatClient<
+@@ -1434,7 +1522,8 @@ export class ChatClient<
     * resume; any other terminal event for the tracked/current run clears that
     * state. This is interrupt (state) resume — there is no delivery cursor.
     */
@@ -508,7 +519,7 @@ index a94a3d3b0e8..c03be03a983 100644
      if (chunk.type !== 'RUN_FINISHED' && chunk.type !== 'RUN_ERROR') {
        return
      }
-@@ -1534,6 +1629,7 @@ export class ChatClient<
+@@ -1534,6 +1623,7 @@ export class ChatClient<
        // Run settled without an interrupt: drop the durable resume snapshot so a
        // later reload does not try to rejoin a finished run.
        this.persistor?.persistResumeSnapshot(null)
@@ -516,7 +527,7 @@ index a94a3d3b0e8..c03be03a983 100644
        this.interruptManager.reset()
        return
      }
-@@ -1687,6 +1783,7 @@ export class ChatClient<
+@@ -1687,6 +1777,7 @@ export class ChatClient<
      submission: InterruptManagerSubmission,
    ): Promise<void> {
      const continuationGeneration = this.continuationGeneration
@@ -524,7 +535,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.activeInterruptSubmission = submission
      this.interruptSubmissionFailure = undefined
      // Reflect approval decisions in the local message tree immediately so a
-@@ -1696,8 +1793,12 @@ export class ChatClient<
+@@ -1696,8 +1787,12 @@ export class ChatClient<
        const approved = readApprovalApproved(resolution.payload)
        if (approved === undefined) continue
        const approvalId = resolution.interruptId
@@ -538,7 +549,7 @@ index a94a3d3b0e8..c03be03a983 100644
      const resumed = await this.resumeInterruptsUnsafeForGeneration(
        [...submission.resolutions],
        {
-@@ -1767,9 +1868,12 @@ export class ChatClient<
+@@ -1767,9 +1862,12 @@ export class ChatClient<
    }
  
    private setIsLoading(isLoading: boolean): void {
@@ -551,7 +562,7 @@ index a94a3d3b0e8..c03be03a983 100644
      if (isLoading) this.supersedeHydration()
    }
  
-@@ -1785,20 +1889,26 @@ export class ChatClient<
+@@ -1785,20 +1883,26 @@ export class ChatClient<
    }
  
    private setStatus(status: ChatClientState): void {
@@ -578,7 +589,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.devtoolsBridge.emitSnapshot()
    }
  
-@@ -1811,13 +1921,16 @@ export class ChatClient<
+@@ -1811,13 +1915,16 @@ export class ChatClient<
    }
  
    private setSessionGenerating(isGenerating: boolean): void {
@@ -595,7 +606,7 @@ index a94a3d3b0e8..c03be03a983 100644
      const resumeState = this.getResumeState()
      // Capture state before invoking callbacks so a synchronous nested change
      // cannot pair this publication's source with a later manager snapshot.
-@@ -1826,10 +1939,12 @@ export class ChatClient<
+@@ -1826,10 +1933,12 @@ export class ChatClient<
      // rehydrate pending interrupts and rejoin the run. Folded into the same
      // persistence adapter that stores messages (one record per chat).
      this.persistResumeSnapshot(resumeState)
@@ -608,7 +619,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.callbacksRef.current.onInterruptStateChange(interruptState, { source })
    }
  
-@@ -1863,8 +1978,10 @@ export class ChatClient<
+@@ -1863,8 +1972,10 @@ export class ChatClient<
    }
  
    private setError(error: Error | undefined): void {
@@ -619,7 +630,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.events.errorChanged(error?.message || null)
    }
  
-@@ -1892,10 +2009,16 @@ export class ChatClient<
+@@ -1892,10 +2003,16 @@ export class ChatClient<
        getTools: () => this.clientToolsRef.current.values(),
        getMessages: () => this.processor.getMessages(),
        setMessages: (messages: Array<UIMessage>) => {
@@ -638,7 +649,7 @@ index a94a3d3b0e8..c03be03a983 100644
        },
        generateId: (prefix) => this.generateUniqueId(prefix),
      }
-@@ -1930,8 +2053,9 @@ export class ChatClient<
+@@ -1930,8 +2047,9 @@ export class ChatClient<
    }
  
    private abortSubscriptionLoop(): void {
@@ -650,7 +661,7 @@ index a94a3d3b0e8..c03be03a983 100644
    }
  
    private resolveProcessing(): void {
-@@ -1943,25 +2067,34 @@ export class ChatClient<
+@@ -1943,25 +2061,35 @@ export class ChatClient<
      setReadyStatus?: boolean
      abortSubscription?: boolean
    }): void {
@@ -660,6 +671,7 @@ index a94a3d3b0e8..c03be03a983 100644
 +    const controller = this.abortController
 +    controller?.abort()
 +    if (!ownsCancellation()) return
++    this.messageQueueDrainClaim = null
 +    if (this.abortController === controller) this.abortController = null
      if (options?.abortSubscription) {
        this.abortSubscriptionLoop()
@@ -689,7 +701,7 @@ index a94a3d3b0e8..c03be03a983 100644
      // Preserve request-level error semantics even if a RUN_ERROR arrives
      // slightly after loading flips false during stream teardown.
      if (
-@@ -1970,6 +2103,7 @@ export class ChatClient<
+@@ -1970,6 +2098,7 @@ export class ChatClient<
        this.status === 'streaming'
      ) {
        this.setStatus('error')
@@ -697,7 +709,7 @@ index a94a3d3b0e8..c03be03a983 100644
      }
      if (!alreadyReported) {
        this.errorReportedGeneration = this.streamGeneration
-@@ -1980,30 +2114,38 @@ export class ChatClient<
+@@ -1980,30 +2109,38 @@ export class ChatClient<
    /**
     * Start the background subscription loop.
     */
@@ -743,7 +755,7 @@ index a94a3d3b0e8..c03be03a983 100644
              this.setConnectionStatus('disconnected')
            }
          }
-@@ -2014,13 +2156,20 @@ export class ChatClient<
+@@ -2014,13 +2151,20 @@ export class ChatClient<
     * Consume chunks from the connection subscription. Chunks are processed in
     * order; the loop yields to the host after each processing budget.
     */
@@ -767,7 +779,7 @@ index a94a3d3b0e8..c03be03a983 100644
        chunkProcessingTime += performance.now() - startedAt
        if (chunkProcessingTime < STREAM_PROCESSING_BUDGET_MS) continue
        chunkProcessingTime = 0
-@@ -2028,6 +2177,7 @@ export class ChatClient<
+@@ -2028,6 +2172,7 @@ export class ChatClient<
        // and that wait paces stream pull.
        if (typeof document !== 'undefined' && document.hidden) continue
        await yieldToHost()
@@ -775,7 +787,7 @@ index a94a3d3b0e8..c03be03a983 100644
      }
    }
  
-@@ -2058,18 +2208,12 @@ export class ChatClient<
+@@ -2058,18 +2203,12 @@ export class ChatClient<
      const joinRun = this.connection.joinRun
      if (!joinRun) return
      const controller = new AbortController()
@@ -799,7 +811,7 @@ index a94a3d3b0e8..c03be03a983 100644
      void (async () => {
        let rebuilt = false
        let attached = false
-@@ -2081,8 +2225,22 @@ export class ChatClient<
+@@ -2081,8 +2220,22 @@ export class ChatClient<
          if (!attached) controller.abort()
        }, REJOIN_CONNECT_DEADLINE_MS)
        try {
@@ -823,7 +835,7 @@ index a94a3d3b0e8..c03be03a983 100644
            if (!attached) {
              attached = true
              clearTimeout(connectTimer)
-@@ -2090,13 +2248,14 @@ export class ChatClient<
+@@ -2090,13 +2243,14 @@ export class ChatClient<
            if (!rebuilt && rebuildsAssistantMessage(chunk)) {
              rebuilt = true
              this.dropTrailingInFlightAssistant()
@@ -840,7 +852,7 @@ index a94a3d3b0e8..c03be03a983 100644
            await Promise.all(this.pendingToolExecutions.values())
          }
        } catch (error) {
-@@ -2107,15 +2266,16 @@ export class ChatClient<
+@@ -2107,15 +2261,16 @@ export class ChatClient<
          const isAbort =
            error instanceof Error &&
            (error.name === 'AbortError' || error.name === 'TimeoutError')
@@ -860,7 +872,7 @@ index a94a3d3b0e8..c03be03a983 100644
            // The server REFUSED the join (unknown / evicted run): the pointer is
            // dead. Clear it so it does not retry and re-pin the UI on the next
            // load. The server's persisted transcript is still loaded.
-@@ -2136,11 +2296,12 @@ export class ChatClient<
+@@ -2136,11 +2291,12 @@ export class ChatClient<
            this.lastResume = null
            this.persistor?.persistResumeSnapshot(null)
          }
@@ -876,7 +888,7 @@ index a94a3d3b0e8..c03be03a983 100644
          }
        }
      })()
-@@ -2156,11 +2317,44 @@ export class ChatClient<
+@@ -2156,11 +2312,44 @@ export class ChatClient<
      const messages = this.processor.getMessages()
      const last = messages[messages.length - 1]
      if (last && last.role === 'assistant') {
@@ -923,7 +935,7 @@ index a94a3d3b0e8..c03be03a983 100644
      chunk = restoreInboundChunk(chunk)
      if (
        chunk.type === 'RUN_ERROR' &&
-@@ -2174,41 +2368,54 @@ export class ChatClient<
+@@ -2174,41 +2363,54 @@ export class ChatClient<
      if (this.connectionStatus === 'connecting') {
        this.setConnectionStatus('connected')
      }
@@ -985,7 +997,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.resolveJoinedRun(chunk)
    }
  
-@@ -2341,7 +2548,9 @@ export class ChatClient<
+@@ -2341,7 +2543,9 @@ export class ChatClient<
      body?: Record<string, any>,
      sendOptions?: SendMessageOptions,
    ): Promise<void> {
@@ -995,7 +1007,7 @@ index a94a3d3b0e8..c03be03a983 100644
      const emptyMessage = typeof content === 'string' && !content.trim()
      if (emptyMessage) {
        return
-@@ -2353,33 +2562,32 @@ export class ChatClient<
+@@ -2353,33 +2557,31 @@ export class ChatClient<
      }
  
      const resolvedBody = { ...body, ...sendOptions?.body }
@@ -1037,7 +1049,6 @@ index a94a3d3b0e8..c03be03a983 100644
      try {
 +      if (decision?.action === 'interrupt') {
 +        // Preserve queued messages for the successful interrupting send.
-+        this.stopMessageQueueDrain = true
 +        this.cancelInFlightStream({ setReadyStatus: true })
 +        if (!ownsSend()) return
 +        this.resetSessionGenerating()
@@ -1050,16 +1061,22 @@ index a94a3d3b0e8..c03be03a983 100644
      }
    }
  
-@@ -2390,7 +2598,7 @@ export class ChatClient<
+@@ -2390,12 +2592,12 @@ export class ChatClient<
  
    /** True while a stream is active, a send is claiming the client, or the queue is draining. */
    private isSendBusy(): boolean {
 -    return this.isLoading || this.sendInFlight || this.messageQueueDraining
-+    return this.isLoading || this.sendInFlight !== null || this.messageQueueDraining
++    return this.isLoading || this.sendInFlight !== null || this.messageQueueDrainClaim !== null
    }
  
    private resolveBusyReason(): QueueBusyReason {
-@@ -2410,22 +2618,30 @@ export class ChatClient<
+     if (this.isLoading) return 'streaming'
+-    if (this.messageQueueDraining) return 'draining'
++    if (this.messageQueueDrainClaim !== null) return 'draining'
+     return 'sendInFlight'
+   }
+ 
+@@ -2410,22 +2612,30 @@ export class ChatClient<
      content: string | MultimodalContent,
      body?: Record<string, any>,
    ): Promise<boolean> {
@@ -1095,7 +1112,7 @@ index a94a3d3b0e8..c03be03a983 100644
      }
    }
  
-@@ -2502,7 +2718,9 @@ export class ChatClient<
+@@ -2502,7 +2712,9 @@ export class ChatClient<
     * Append a message and stream the response
     */
    async append(message: UIMessage | ModelMessage): Promise<void> {
@@ -1105,7 +1122,7 @@ index a94a3d3b0e8..c03be03a983 100644
      if (this.hasPendingInterrupts()) {
        throw new Error(
          'ChatClient: cannot append normal input while pending interrupts exist. Use resumeInterrupts() instead.',
-@@ -2520,9 +2738,14 @@ export class ChatClient<
+@@ -2520,9 +2732,14 @@ export class ChatClient<
      if (normalizedMessage.role === 'activity') {
        const uiMessage = normalizedMessage as UIMessage
        this.events.messageAppended(uiMessage)
@@ -1121,7 +1138,7 @@ index a94a3d3b0e8..c03be03a983 100644
        return
      }
  
-@@ -2530,11 +2753,16 @@ export class ChatClient<
+@@ -2530,11 +2747,16 @@ export class ChatClient<
  
      // Emit message appended event
      this.events.messageAppended(uiMessage)
@@ -1139,7 +1156,7 @@ index a94a3d3b0e8..c03be03a983 100644
  
      // If stream is in progress, queue the response for after it ends
      if (this.isLoading) {
-@@ -2559,40 +2787,46 @@ export class ChatClient<
+@@ -2559,40 +2781,46 @@ export class ChatClient<
  
      // Track generation so a superseded stream's cleanup doesn't clobber the new one
      const generation = ++this.streamGeneration
@@ -1215,7 +1232,7 @@ index a94a3d3b0e8..c03be03a983 100644
        // Get UIMessages with parts (preserves approval state and client tool results).
        // Activity is frontend-only — never send it as model input.
        const messages = this.messagesForSend(this.processor.getMessages())
-@@ -2607,7 +2841,7 @@ export class ChatClient<
+@@ -2607,7 +2835,7 @@ export class ChatClient<
        // bail out before allocating waitForProcessing() — otherwise the
        // resolveProcessing() that ran during cancellation is a no-op and the
        // await processingComplete below would deadlock.
@@ -1224,7 +1241,7 @@ index a94a3d3b0e8..c03be03a983 100644
          return false
        }
  
-@@ -2632,6 +2866,7 @@ export class ChatClient<
+@@ -2632,6 +2860,7 @@ export class ChatClient<
        // Generate stream ID — assistant message will be created by stream events
        this.currentStreamId = this.generateUniqueId('stream')
        this.devtoolsBridge.setCurrentStreamId(this.currentStreamId)
@@ -1232,7 +1249,7 @@ index a94a3d3b0e8..c03be03a983 100644
        this.currentMessageId = null
        this.activeClientTools = clientTools
        this.activeContext = runtimeContext
-@@ -2643,6 +2878,7 @@ export class ChatClient<
+@@ -2643,6 +2872,7 @@ export class ChatClient<
  
        // Ensure subscription loop is running
        this.ensureSubscription()
@@ -1240,7 +1257,7 @@ index a94a3d3b0e8..c03be03a983 100644
  
        // Set up promise that resolves when onStreamEnd fires
        const processingComplete = this.waitForProcessing()
-@@ -2665,6 +2901,8 @@ export class ChatClient<
+@@ -2665,6 +2895,8 @@ export class ChatClient<
          byokHeaders = await prepareResolvedByokHeaders(this.byok, provider)
        }
  
@@ -1249,7 +1266,7 @@ index a94a3d3b0e8..c03be03a983 100644
        const runContext = {
          threadId: resumeThreadId ?? this.threadId,
          runId,
-@@ -2683,24 +2921,29 @@ export class ChatClient<
+@@ -2683,24 +2915,29 @@ export class ChatClient<
          ...(byokHeaders ? { headers: byokHeaders } : {}),
        }
        this.devtoolsBridge.beginRun(runContext.runId, runContext.threadId)
@@ -1280,7 +1297,7 @@ index a94a3d3b0e8..c03be03a983 100644
          return false
        }
  
-@@ -2717,7 +2960,7 @@ export class ChatClient<
+@@ -2717,7 +2954,7 @@ export class ChatClient<
  
        // If this stream was superseded (e.g. by reload()), bail out —
        // the new stream owns the processor and processingResolve now.
@@ -1289,7 +1306,7 @@ index a94a3d3b0e8..c03be03a983 100644
          return false
        }
  
-@@ -2741,10 +2984,16 @@ export class ChatClient<
+@@ -2741,10 +2978,16 @@ export class ChatClient<
          await Promise.all(this.pendingToolExecutions.values())
        }
  
@@ -1308,7 +1325,7 @@ index a94a3d3b0e8..c03be03a983 100644
        const error = err instanceof Error ? err : new Error(String(err))
        if (error.name === 'AbortError') {
          if (activeDevtoolsRunId) {
-@@ -2763,8 +3012,9 @@ export class ChatClient<
+@@ -2763,8 +3006,9 @@ export class ChatClient<
        if (error instanceof ByokBlockedError && error.reason === 'locked') {
          this.byok?.request(error.provider, 'locked')
        }
@@ -1320,7 +1337,7 @@ index a94a3d3b0e8..c03be03a983 100644
          if (activeDevtoolsRunId) {
            this.devtoolsBridge.emitRunLifecycle(
              'run:errored',
-@@ -2776,7 +3026,7 @@ export class ChatClient<
+@@ -2776,7 +3020,7 @@ export class ChatClient<
          }
        }
        if (
@@ -1329,7 +1346,7 @@ index a94a3d3b0e8..c03be03a983 100644
          (error instanceof ByokMissingError ||
            error instanceof ByokBlockedError ||
            error instanceof ByokUnresolvedProviderError)
-@@ -2789,16 +3039,16 @@ export class ChatClient<
+@@ -2789,16 +3033,16 @@ export class ChatClient<
        // clobber the new stream's abortController or isLoading state.
        if (generation === this.streamGeneration) {
          this.currentStreamId = null
@@ -1351,7 +1368,7 @@ index a94a3d3b0e8..c03be03a983 100644
            if (streamCompletedSuccessfully) {
              this.devtoolsBridge.emitRunLifecycle(
                'run:completed',
-@@ -2815,9 +3065,9 @@ export class ChatClient<
+@@ -2815,9 +3059,9 @@ export class ChatClient<
          }
  
          // Drain any actions that were queued while the stream was in progress
@@ -1363,12 +1380,12 @@ index a94a3d3b0e8..c03be03a983 100644
            this.rememberProcessorMessageIds()
            if (this.status !== 'ready') {
              // Terminal run, but onStreamEnd never fired: the processor had
-@@ -2828,10 +3078,10 @@ export class ChatClient<
+@@ -2828,10 +3072,10 @@ export class ChatClient<
            }
            // Auto-send queued messages once the run fully settles. Skip if a
            // drain loop is already walking the queue (avoids nested re-entry).
 -          if (!this.messageQueueDraining) {
-+          if (ownsRequest() && !this.messageQueueDraining) {
++          if (ownsRequest() && this.messageQueueDrainClaim === null) {
              await this.drainQueue()
            }
 -        } else {
@@ -1376,7 +1393,7 @@ index a94a3d3b0e8..c03be03a983 100644
            // Error/abort settle for the active generation: don't strand or
            // later mis-order queued messages. A failed turn flushes the queue
            // (consistent with stop()); it must NOT auto-drain into a likely
-@@ -2841,7 +3091,9 @@ export class ChatClient<
+@@ -2841,7 +3085,9 @@ export class ChatClient<
        }
      }
  
@@ -1387,7 +1404,7 @@ index a94a3d3b0e8..c03be03a983 100644
    }
  
    /**
-@@ -2858,9 +3110,16 @@ export class ChatClient<
+@@ -2858,9 +3104,16 @@ export class ChatClient<
        this.abortSubscriptionLoop()
      }
  
@@ -1405,7 +1422,7 @@ index a94a3d3b0e8..c03be03a983 100644
    }
  
    /**
-@@ -2868,13 +3127,19 @@ export class ChatClient<
+@@ -2868,13 +3121,19 @@ export class ChatClient<
     * This aborts an in-flight request and the subscription loop.
     */
    unsubscribe(): void {
@@ -1425,7 +1442,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.setConnectionStatus('disconnected')
    }
  
-@@ -2882,6 +3147,7 @@ export class ChatClient<
+@@ -2882,6 +3141,7 @@ export class ChatClient<
     * Reload the last assistant message
     */
    async reload(): Promise<void> {
@@ -1433,7 +1450,7 @@ index a94a3d3b0e8..c03be03a983 100644
      const messages = this.processor.getMessages()
      if (messages.length === 0) return
  
-@@ -2895,16 +3161,24 @@ export class ChatClient<
+@@ -2895,16 +3155,24 @@ export class ChatClient<
      // Cancel any active stream before reloading
      if (this.isLoading) {
        this.cancelInFlightStream()
@@ -1459,7 +1476,7 @@ index a94a3d3b0e8..c03be03a983 100644
  
      // Resend
      await this.streamResponse()
-@@ -2917,14 +3191,19 @@ export class ChatClient<
+@@ -2917,14 +3185,19 @@ export class ChatClient<
      // Invalidate deferred work from the stopped continuation.
      // This aborts the local request. A durable server run keeps going.
      this.continuationGeneration++
@@ -1479,7 +1496,7 @@ index a94a3d3b0e8..c03be03a983 100644
      }
      this.events.stopped()
    }
-@@ -2933,6 +3212,7 @@ export class ChatClient<
+@@ -2933,6 +3206,7 @@ export class ChatClient<
     * Clear all messages
     */
    clear(): void {
@@ -1487,7 +1504,7 @@ index a94a3d3b0e8..c03be03a983 100644
      const hadLocalStream = this.abortController !== null
      this.clearedStreamTracker.snapshotClear({
        messages: this.processor.getMessages(),
-@@ -2942,25 +3222,36 @@ export class ChatClient<
+@@ -2942,25 +3216,36 @@ export class ChatClient<
      // Always cancel in-flight work so clear works without message persistence.
      if (this.isLoading || hadLocalStream) {
        this.cancelInFlightStream({ setReadyStatus: true })
@@ -1525,7 +1542,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.events.messagesCleared()
    }
  
-@@ -2968,11 +3259,17 @@ export class ChatClient<
+@@ -2968,11 +3253,17 @@ export class ChatClient<
     * Add the result of a client-side tool execution
     */
    async addToolResult(result: ClientToolResult): Promise<void> {
@@ -1544,7 +1561,7 @@ index a94a3d3b0e8..c03be03a983 100644
      )
    }
  
-@@ -2980,7 +3277,8 @@ export class ChatClient<
+@@ -2980,7 +3271,8 @@ export class ChatClient<
      result: ClientToolResult,
      clientTool: AnyClientTool | undefined,
      continuationGeneration: number,
@@ -1554,7 +1571,7 @@ index a94a3d3b0e8..c03be03a983 100644
    ): Promise<void> {
      if (result.state !== 'output-error') {
        try {
-@@ -3008,6 +3306,7 @@ export class ChatClient<
+@@ -3008,6 +3300,7 @@ export class ChatClient<
        }
      }
  
@@ -1562,7 +1579,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.events.toolResultAdded(
        result.toolCallId,
        result.tool,
-@@ -3016,18 +3315,22 @@ export class ChatClient<
+@@ -3016,18 +3309,22 @@ export class ChatClient<
        context,
      )
  
@@ -1588,7 +1605,7 @@ index a94a3d3b0e8..c03be03a983 100644
  
      const resolvedViaInterrupt =
        result.state === 'output-error'
-@@ -3039,6 +3342,7 @@ export class ChatClient<
+@@ -3039,6 +3336,7 @@ export class ChatClient<
              result.toolCallId,
              result.output,
            )
@@ -1596,7 +1613,7 @@ index a94a3d3b0e8..c03be03a983 100644
      if (resolvedViaInterrupt) {
        // Interrupt manager stages/submits the resume batch (deferred until the
        // parent stream settles when still loading). Skip legacy continuation.
-@@ -3081,21 +3385,23 @@ export class ChatClient<
+@@ -3081,21 +3379,23 @@ export class ChatClient<
      id: string // approval.id, not toolCallId
      approved: boolean
    }): Promise<void> {
@@ -1629,7 +1646,7 @@ index a94a3d3b0e8..c03be03a983 100644
      // Find the tool call ID from the approval ID
      const messages = this.processor.getMessages()
      let foundToolCallId: string | undefined
-@@ -3117,11 +3423,16 @@ export class ChatClient<
+@@ -3117,11 +3417,16 @@ export class ChatClient<
          foundToolCallId,
          response.approved,
        )
@@ -1647,7 +1664,7 @@ index a94a3d3b0e8..c03be03a983 100644
  
      // If stream is in progress, queue continuation check for after it ends
      if (this.isLoading) {
-@@ -3288,12 +3599,15 @@ export class ChatClient<
+@@ -3288,12 +3593,15 @@ export class ChatClient<
      const handle = this.subagentHandles.get(id)
      if (!handle || handle.status !== 'running') return
      this.stoppedSubagentIds.add(id)
@@ -1665,7 +1682,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.syncSubagentHandles()
      handle.status = 'error'
      handle.error = { message: 'Stopped' }
-@@ -3339,7 +3653,10 @@ export class ChatClient<
+@@ -3339,7 +3647,10 @@ export class ChatClient<
          throw new Error('Older page was empty')
        }
        this.applyHydrationPage(result.page)
@@ -1677,14 +1694,35 @@ index a94a3d3b0e8..c03be03a983 100644
        this.rememberServerMessageIds(olderMessages)
      } finally {
        this.loadOlderMessagesInFlight = false
-@@ -3434,23 +3751,26 @@ export class ChatClient<
+@@ -3409,7 +3720,7 @@ export class ChatClient<
+    * by control-flow analysis.
+    */
+   private shouldAbortMessageQueueDrain(): boolean {
+-    return this.isLoading || this.stopMessageQueueDrain
++    return this.isLoading
+   }
+ 
+   /**
+@@ -3427,30 +3738,35 @@ export class ChatClient<
+     // `sendInFlight` while `streamResponse`'s finally invokes drain; blocking
+     // on it would permanently strand the queue.
+     if (
+-      this.messageQueueDraining ||
++      this.messageQueueDrainClaim !== null ||
+       this.isLoading ||
+       this.messageQueue.length === 0
+     ) {
        return
      }
  
+-    this.messageQueueDraining = true
+-    this.stopMessageQueueDrain = false
 +    const continuationGeneration = this.continuationGeneration
-+    const ownsDrain = () => continuationGeneration === this.continuationGeneration
-     this.messageQueueDraining = true
-     this.stopMessageQueueDrain = false
++    const claim = Symbol('messageQueueDrain')
++    this.messageQueueDrainClaim = claim
++    const ownsDrain = () =>
++      this.messageQueueDrainClaim === claim &&
++      continuationGeneration === this.continuationGeneration
      try {
        if (this.queueConfig.drain === 'batch') {
          while (this.messageQueue.length > 0) {
@@ -1706,7 +1744,7 @@ index a94a3d3b0e8..c03be03a983 100644
              return
            }
          }
-@@ -3460,7 +3780,7 @@ export class ChatClient<
+@@ -3460,7 +3776,7 @@ export class ChatClient<
        while (this.messageQueue.length > 0) {
          // Interrupt (or a new direct send) claimed the client — stop draining;
          // remaining items stay queued and will drain after that send settles.
@@ -1715,7 +1753,7 @@ index a94a3d3b0e8..c03be03a983 100644
            return
          }
          const next = this.messageQueue.shift()
-@@ -3468,9 +3788,10 @@ export class ChatClient<
+@@ -3468,15 +3784,15 @@ export class ChatClient<
            return
          }
          this.emitQueueChange()
@@ -1727,16 +1765,24 @@ index a94a3d3b0e8..c03be03a983 100644
            return
          }
        }
-@@ -3485,7 +3806,7 @@ export class ChatClient<
+     } finally {
+-      this.messageQueueDraining = false
+-      this.stopMessageQueueDrain = false
++      if (this.messageQueueDrainClaim === claim) this.messageQueueDrainClaim = null
+     }
+   }
+ 
+@@ -3485,7 +3801,8 @@ export class ChatClient<
     * (stop / error / clear / unsubscribe / reload).
     */
    private discardPendingSends(): void {
 -    this.sendInFlight = false
 +    this.sendInFlight = null
++    this.messageQueueDrainClaim = null
      this.flushQueue()
    }
  
-@@ -3501,7 +3822,9 @@ export class ChatClient<
+@@ -3501,7 +3818,9 @@ export class ChatClient<
    }
  
    private emitQueueChange(): void {
@@ -1746,7 +1792,7 @@ index a94a3d3b0e8..c03be03a983 100644
      this.devtoolsBridge.emitSnapshot()
    }
  
-@@ -3585,7 +3908,10 @@ export class ChatClient<
+@@ -3585,7 +3904,10 @@ export class ChatClient<
     * Manually set messages
     */
    setMessagesManually(messages: Array<UIMessage<TTools>>): void {
@@ -1759,7 +1805,7 @@ index a94a3d3b0e8..c03be03a983 100644
    }
  
 diff --git a/dist/esm/connection-adapters.js b/dist/esm/connection-adapters.js
-index 50d7119146b..9be22e7dd46 100644
+index 50d7119146..9be22e7dd4 100644
 --- a/dist/esm/connection-adapters.js
 +++ b/dist/esm/connection-adapters.js
 @@ -12,6 +12,10 @@ import { ByokMissingError, isByokMissingBody } from "@tanstack/ai/byok";
@@ -1835,7 +1881,7 @@ index 50d7119146b..9be22e7dd46 100644
  //# sourceMappingURL=connection-adapters.js.map
 \ No newline at end of file
 diff --git a/dist/esm/chat-client.js b/dist/esm/chat-client.js
-index bae9ddd81ae..37b862ee4d4 100644
+index bae9ddd81a..c2949ecb3d 100644
 --- a/dist/esm/chat-client.js
 +++ b/dist/esm/chat-client.js
 @@ -2,13 +2,19 @@ import { byokFallbackProviderId } from "./byok/client.js";
@@ -1859,16 +1905,25 @@ index bae9ddd81ae..37b862ee4d4 100644
  var STREAM_PROCESSING_BUDGET_MS = 8;
  function yieldToHost() {
  	const { scheduler } = globalThis;
-@@ -216,7 +222,7 @@ var ChatClient = class {
+@@ -216,23 +222,13 @@ var ChatClient = class {
  	* see `isLoading === false`, both append a user message, and only one stream
  	* actually runs (leaving stranded user messages with no reply).
  	*/
 -	sendInFlight = false;
+-	/**
+-	* True while `drainQueue` is delivering queued messages. Concurrent
+-	* `sendMessage` calls during a drain are treated as busy and follow
+-	* `whenBusy` (default: queue).
+-	*/
+-	messageQueueDraining = false;
+-	/**
+-	* Set by `whenBusy: 'interrupt'` so an in-progress FIFO drain loop stops
+-	* before starting the next queued item (the interrupting send owns the client).
+-	*/
+-	stopMessageQueueDrain = false;
 +	sendInFlight = null;
++	messageQueueDrainClaim = null;
  	/**
- 	* True while `drainQueue` is delivering queued messages. Concurrent
- 	* `sendMessage` calls during a drain are treated as busy and follow
-@@ -232,7 +238,7 @@ var ChatClient = class {
  	* Sync claim held for the duration of `deliverMessage` so concurrent
  	* deliverers cannot both append a user message before only one stream runs.
  	*/
@@ -1877,7 +1932,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	isLoading = false;
  	isSubscribed = false;
  	error = void 0;
-@@ -257,6 +263,7 @@ var ChatClient = class {
+@@ -257,6 +253,7 @@ var ChatClient = class {
  	activeContext = void 0;
  	continuationPending = false;
  	subscriptionAbortController = null;
@@ -1885,7 +1940,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	processingResolve = null;
  	/**
  	* `connect()` adapters push the full HTTP body into the subscribe queue, then
-@@ -305,14 +312,27 @@ var ChatClient = class {
+@@ -305,14 +302,27 @@ var ChatClient = class {
  		this.uniqueId = this.threadId;
  		let cachesMessages = true;
  		if (options.persistence === true) {
@@ -1918,7 +1973,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.bodyOption = options.body || {};
  		this.forwardedPropsOption = options.forwardedProps || {};
  		this.byok = options.byok;
-@@ -322,103 +342,163 @@ var ChatClient = class {
+@@ -322,103 +332,163 @@ var ChatClient = class {
  		const transport = resolveTransport(options);
  		this.connectionDrainsOnSend = connectionDrainsOnSend(transport);
  		this.connection = normalizeConnectionAdapter(transport);
@@ -2124,7 +2179,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  					const executeFunc = clientTool?.execute;
  					if (this.handingOverPendingToolCalls && clientTool?.needsApproval === true) {
  						console.warn(`[ChatClient] Did not run tool call ${args.toolCallId}: ${args.toolName} needs approval, and the server did not ask for it`);
-@@ -426,6 +506,8 @@ var ChatClient = class {
+@@ -426,6 +496,8 @@ var ChatClient = class {
  					}
  					if (executeFunc) {
  						const continuationGeneration = this.continuationGeneration;
@@ -2133,7 +2188,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  						const runEventContext = this.devtoolsBridge.getCurrentRunEventContext();
  						const executionPromise = (async () => {
  							try {
-@@ -440,7 +522,7 @@ var ChatClient = class {
+@@ -440,7 +512,7 @@ var ChatClient = class {
  									tool: args.toolName,
  									output,
  									state: "output-available"
@@ -2142,7 +2197,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  							} catch (error) {
  								await this.addToolResultForClientTool({
  									toolCallId: args.toolCallId,
-@@ -448,24 +530,43 @@ var ChatClient = class {
+@@ -448,24 +520,43 @@ var ChatClient = class {
  									output: null,
  									state: "output-error",
  									errorText: error.message
@@ -2191,7 +2246,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  				}
  			}
  		});
-@@ -554,10 +655,15 @@ var ChatClient = class {
+@@ -554,10 +645,15 @@ var ChatClient = class {
  	* (`indexedDBPersistence`) would otherwise never rejoin a mid-stream run.
  	*/
  	applyPersistedResume(snapshot) {
@@ -2208,7 +2263,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	}
  	/**
  	* Rejoin a persisted in-flight run, guarded so it fires at most once and never
-@@ -587,9 +693,10 @@ var ChatClient = class {
+@@ -587,9 +683,10 @@ var ChatClient = class {
  			this.syncIsHydrating();
  			return;
  		}
@@ -2221,7 +2276,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		(async () => {
  			let result;
  			const generation = this.historyGeneration;
-@@ -600,34 +707,52 @@ var ChatClient = class {
+@@ -600,34 +697,52 @@ var ChatClient = class {
  			try {
  				result = await hydrate(this.threadId, hydrateOptions);
  			} catch (cause) {
@@ -2290,7 +2345,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		})().finally(() => this.syncIsHydrating());
  	}
  	/**
-@@ -643,14 +768,29 @@ var ChatClient = class {
+@@ -643,14 +758,29 @@ var ChatClient = class {
  	* wins over a stale mount-time failure — same guard as the success path above.
  	*/
  	failHydration(cause) {
@@ -2324,7 +2379,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.callbacksRef.current.onError(error);
  	}
  	mountDevtools() {
-@@ -669,29 +809,43 @@ var ChatClient = class {
+@@ -669,29 +799,43 @@ var ChatClient = class {
  	* still tracking. The persistor owns the cleared-run bookkeeping; the client
  	* owns the active-run / session / processing state.
  	*/
@@ -2377,7 +2432,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			}
  			this.activeResumeThreadId = "threadId" in chunk && typeof chunk.threadId === "string" ? chunk.threadId : this.activeResumeThreadId;
  			this.activeResumeRunId = chunkRunId;
-@@ -700,19 +854,29 @@ var ChatClient = class {
+@@ -700,19 +844,29 @@ var ChatClient = class {
  				this.activeRunIds.add(chunkRunId);
  				this.clearedStreamTracker.onRunStarted(chunkRunId);
  				this.setSessionGenerating(true);
@@ -2412,7 +2467,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		const runId = getChunkRunId$1(chunk);
  		if (runId) {
  			this.activeRunIds.delete(runId);
-@@ -722,8 +886,12 @@ var ChatClient = class {
+@@ -722,8 +876,12 @@ var ChatClient = class {
  			this.clearedStreamTracker.onSessionRunError();
  		}
  		this.setSessionGenerating(this.activeRunIds.size > 0);
@@ -2426,7 +2481,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	}
  	/**
  	* Track interrupt state off the stream's terminal events. A RUN_FINISHED with
-@@ -731,15 +899,25 @@ var ChatClient = class {
+@@ -731,15 +889,25 @@ var ChatClient = class {
  	* resume; any other terminal event for the tracked/current run clears that
  	* state. This is interrupt (state) resume — there is no delivery cursor.
  	*/
@@ -2457,7 +2512,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			this.lastResume = {
  				threadId: threadId ?? this.threadId,
  				runId: interruptedRunId
-@@ -762,6 +940,8 @@ var ChatClient = class {
+@@ -762,6 +930,8 @@ var ChatClient = class {
  		if (isRunlessSessionError || isTrackedRunTerminal || isCurrentRunTerminal || isActiveStreamRunTerminal || isCurrentStreamTerminal || isActiveInterruptSubmissionTerminal || isLineageDescendantTerminal) {
  			this.lastResume = null;
  			this.persistor?.persistResumeSnapshot(null);
@@ -2466,7 +2521,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			this.interruptManager.reset();
  			return;
  		}
-@@ -852,24 +1032,39 @@ var ChatClient = class {
+@@ -852,24 +1022,39 @@ var ChatClient = class {
  	}
  	async submitInterruptBatch(submission) {
  		const continuationGeneration = this.continuationGeneration;
@@ -2513,7 +2568,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		if (this.lastResume?.runId === submission.interruptedRunId) {
  			this.lastResume = null;
  			this.interruptManager.reset();
-@@ -894,10 +1089,16 @@ var ChatClient = class {
+@@ -894,10 +1079,16 @@ var ChatClient = class {
  		return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
  	}
  	setIsLoading(isLoading) {
@@ -2531,7 +2586,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	}
  	/**
  	* A send or a clear now owns the transcript. A load that is still pending can
-@@ -910,18 +1111,27 @@ var ChatClient = class {
+@@ -910,18 +1101,27 @@ var ChatClient = class {
  		this.syncIsHydrating();
  	}
  	setStatus(status) {
@@ -2559,7 +2614,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.devtoolsBridge.emitSnapshot();
  	}
  	syncIsHydrating() {
-@@ -931,16 +1141,25 @@ var ChatClient = class {
+@@ -931,16 +1131,25 @@ var ChatClient = class {
  		this.callbacksRef.current.onHydratingChange(isHydrating);
  	}
  	setSessionGenerating(isGenerating) {
@@ -2586,7 +2641,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.callbacksRef.current.onInterruptStateChange(interruptState, { source });
  	}
  	/**
-@@ -965,8 +1184,11 @@ var ChatClient = class {
+@@ -965,8 +1174,11 @@ var ChatClient = class {
  		this.setSessionGenerating(false);
  	}
  	setError(error) {
@@ -2598,7 +2653,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.events.errorChanged(error?.message || null);
  	}
  	buildDevtoolsBridgeOptions(devtools) {
-@@ -991,10 +1213,18 @@ var ChatClient = class {
+@@ -991,10 +1203,18 @@ var ChatClient = class {
  			getTools: () => this.clientToolsRef.current.values(),
  			getMessages: () => this.processor.getMessages(),
  			setMessages: (messages) => {
@@ -2619,7 +2674,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			},
  			generateId: (prefix) => this.generateUniqueId(prefix)
  		};
-@@ -1017,26 +1247,51 @@ var ChatClient = class {
+@@ -1017,26 +1237,52 @@ var ChatClient = class {
  		for (const message of messages) if (message.parts.find((part) => part.type === "tool-call" && part.id === toolCallId)) return message.id;
  	}
  	abortSubscriptionLoop() {
@@ -2643,6 +2698,7 @@ index bae9ddd81ae..37b862ee4d4 100644
 +		controller?.abort();
 +		if (!ownsCancellation())
 +			return;
++		this.messageQueueDrainClaim = null;
 +		if (this.abortController === controller)
 +			this.abortController = null;
 +		if (options?.abortSubscription) {
@@ -2680,7 +2736,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		if (!alreadyReported) {
  			this.errorReportedGeneration = this.streamGeneration;
  			this.callbacksRef.current.onError(error);
-@@ -1045,23 +1300,39 @@ var ChatClient = class {
+@@ -1045,23 +1291,39 @@ var ChatClient = class {
  	/**
  	* Start the background subscription loop.
  	*/
@@ -2727,7 +2783,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			}
  		});
  	}
-@@ -1069,18 +1340,23 @@ var ChatClient = class {
+@@ -1069,18 +1331,23 @@ var ChatClient = class {
  	* Consume chunks from the connection subscription. Chunks are processed in
  	* order; the loop yields to the host after each processing budget.
  	*/
@@ -2754,7 +2810,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		}
  	}
  	/**
-@@ -1108,27 +1384,37 @@ var ChatClient = class {
+@@ -1108,27 +1375,37 @@ var ChatClient = class {
  	*/
  	resumeInFlightRun(runId) {
  		const joinRun = this.connection.joinRun;
@@ -2804,7 +2860,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  					if (!attached) {
  						attached = true;
  						clearTimeout(connectTimer);
-@@ -1136,25 +1422,34 @@ var ChatClient = class {
+@@ -1136,25 +1413,34 @@ var ChatClient = class {
  					if (!rebuilt && rebuildsAssistantMessage(chunk)) {
  						rebuilt = true;
  						this.dropTrailingInFlightAssistant();
@@ -2847,7 +2903,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  				}
  			}
  		})();
-@@ -1168,42 +1463,110 @@ var ChatClient = class {
+@@ -1168,42 +1454,110 @@ var ChatClient = class {
  	dropTrailingInFlightAssistant() {
  		const messages = this.processor.getMessages();
  		const last = messages[messages.length - 1];
@@ -2971,7 +3027,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.resolveJoinedRun(chunk);
  	}
  	isActiveInterruptSubmissionFailure(chunk) {
-@@ -1300,29 +1663,43 @@ var ChatClient = class {
+@@ -1300,29 +1654,42 @@ var ChatClient = class {
  	* ```
  	*/
  	async sendMessage(content, body, sendOptions) {
@@ -3018,7 +3074,6 @@ index bae9ddd81ae..37b862ee4d4 100644
 +		this.sendInFlight = claim;
  		try {
 +			if (decision?.action === "interrupt") {
-+				this.stopMessageQueueDrain = true;
 +				this.cancelInFlightStream({ setReadyStatus: true });
 +				if (!ownsSend())
 +					return;
@@ -3034,16 +3089,24 @@ index bae9ddd81ae..37b862ee4d4 100644
  		}
  	}
  	/** True while interrupt descriptors still own continuation. */
-@@ -1331,7 +1708,7 @@ var ChatClient = class {
+@@ -1331,11 +1698,13 @@ var ChatClient = class {
  	}
  	/** True while a stream is active, a send is claiming the client, or the queue is draining. */
  	isSendBusy() {
 -		return this.isLoading || this.sendInFlight || this.messageQueueDraining;
-+		return this.isLoading || this.sendInFlight !== null || this.messageQueueDraining;
++		return this.isLoading || this.sendInFlight !== null || this.messageQueueDrainClaim !== null;
  	}
  	resolveBusyReason() {
- 		if (this.isLoading) return "streaming";
-@@ -1346,16 +1723,29 @@ var ChatClient = class {
+-		if (this.isLoading) return "streaming";
+-		if (this.messageQueueDraining) return "draining";
++		if (this.isLoading)
++			return "streaming";
++		if (this.messageQueueDrainClaim !== null)
++			return "draining";
+ 		return "sendInFlight";
+ 	}
+ 	/**
+@@ -1346,16 +1715,29 @@ var ChatClient = class {
  	* cannot both add a user message when only one stream can run.
  	*/
  	async deliverMessage(content, body) {
@@ -3077,7 +3140,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		}
  	}
  	/**
-@@ -1419,23 +1809,46 @@ var ChatClient = class {
+@@ -1419,23 +1801,46 @@ var ChatClient = class {
  	* Append a message and stream the response
  	*/
  	async append(message) {
@@ -3128,7 +3191,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		if (this.isLoading) {
  			this.queuePostStreamAction(async () => {
  				await this.streamResponse();
-@@ -1449,55 +1862,77 @@ var ChatClient = class {
+@@ -1449,55 +1854,77 @@ var ChatClient = class {
  	* Returns true if the stream completed successfully, false on abort or error.
  	*/
  	async streamResponse() {
@@ -3228,7 +3291,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			const runContext = {
  				threadId: resumeThreadId ?? this.threadId,
  				runId,
-@@ -1512,15 +1947,29 @@ var ChatClient = class {
+@@ -1512,15 +1939,29 @@ var ChatClient = class {
  				...byokHeaders ? { headers: byokHeaders } : {}
  			};
  			this.devtoolsBridge.beginRun(runContext.runId, runContext.threadId);
@@ -3261,7 +3324,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			if (this.status === "error") {
  				if (activeDevtoolsRunId) {
  					this.devtoolsBridge.emitRunLifecycle("run:errored", activeDevtoolsRunId, "errored", this.error ? { error: this.error.message } : {});
-@@ -1528,10 +1977,20 @@ var ChatClient = class {
+@@ -1528,10 +1969,20 @@ var ChatClient = class {
  				}
  				return false;
  			}
@@ -3285,7 +3348,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  			const error = err instanceof Error ? err : new Error(String(err));
  			if (error.name === "AbortError") {
  				if (activeDevtoolsRunId) {
-@@ -1540,40 +1999,60 @@ var ChatClient = class {
+@@ -1540,40 +1991,60 @@ var ChatClient = class {
  				}
  				return false;
  			}
@@ -3352,7 +3415,7 @@ index bae9ddd81ae..37b862ee4d4 100644
 +					if (this.status !== "ready") {
 +						this.setStatus("ready");
 +					}
-+					if (ownsRequest() && !this.messageQueueDraining) {
++					if (ownsRequest() && this.messageQueueDrainClaim === null) {
 +						await this.drainQueue();
 +					}
 +				} else if (ownsRequest()) {
@@ -3365,7 +3428,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	}
  	/**
  	* Start the client subscription loop.
-@@ -1581,39 +2060,78 @@ var ChatClient = class {
+@@ -1581,39 +2052,78 @@ var ChatClient = class {
  	*/
  	subscribe(options) {
  		const restart = options?.restart === true;
@@ -3451,7 +3514,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		await this.streamResponse();
  	}
  	/**
-@@ -1621,19 +2139,31 @@ var ChatClient = class {
+@@ -1621,19 +2131,31 @@ var ChatClient = class {
  	*/
  	stop() {
  		this.continuationGeneration++;
@@ -3485,7 +3548,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		const hadLocalStream = this.abortController !== null;
  		this.clearedStreamTracker.snapshotClear({
  			messages: this.processor.getMessages(),
-@@ -1642,51 +2172,91 @@ var ChatClient = class {
+@@ -1642,51 +2164,91 @@ var ChatClient = class {
  		});
  		if (this.isLoading || hadLocalStream) {
  			this.cancelInFlightStream({ setReadyStatus: true });
@@ -3600,7 +3663,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		if (this.isLoading) {
  			this.queuePostStreamAction(() => continuationGeneration === this.continuationGeneration ? this.checkForContinuation() : Promise.resolve());
  			return;
-@@ -1702,9 +2272,18 @@ var ChatClient = class {
+@@ -1702,9 +2264,18 @@ var ChatClient = class {
  	* Respond to a tool approval request
  	*/
  	async addToolApprovalResponse(response) {
@@ -3621,7 +3684,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		const messages = this.processor.getMessages();
  		let foundToolCallId;
  		for (const msg of messages) {
-@@ -1714,9 +2293,19 @@ var ChatClient = class {
+@@ -1714,9 +2285,19 @@ var ChatClient = class {
  				break;
  			}
  		}
@@ -3643,7 +3706,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		if (this.isLoading) {
  			this.queuePostStreamAction(() => this.checkForContinuation());
  			return;
-@@ -1831,14 +2420,19 @@ var ChatClient = class {
+@@ -1831,14 +2412,19 @@ var ChatClient = class {
  	}
  	stopSubagent(id) {
  		const handle = this.subagentHandles.get(id);
@@ -3670,7 +3733,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.syncSubagentHandles();
  		handle.status = "error";
  		handle.error = { message: "Stopped" };
-@@ -1859,24 +2453,39 @@ var ChatClient = class {
+@@ -1859,24 +2445,39 @@ var ChatClient = class {
  	*/
  	async loadOlderMessages() {
  		const hydrate = this.connection.hydrate;
@@ -3720,18 +3783,29 @@ index bae9ddd81ae..37b862ee4d4 100644
  			this.rememberServerMessageIds(olderMessages);
  		} finally {
  			this.loadOlderMessagesInFlight = false;
-@@ -1937,26 +2546,46 @@ var ChatClient = class {
+@@ -1924,7 +2525,7 @@ var ChatClient = class {
+ 	* by control-flow analysis.
+ 	*/
+ 	shouldAbortMessageQueueDrain() {
+-		return this.isLoading || this.stopMessageQueueDrain;
++		return this.isLoading;
+ 	}
+ 	/**
+ 	* Deliver queued messages after a successful settle.
+@@ -1937,30 +2538,50 @@ var ChatClient = class {
  	* busy/queue policy (which would re-queue items and strand the rest).
  	*/
  	async drainQueue() {
 -		if (this.messageQueueDraining || this.isLoading || this.messageQueue.length === 0) return;
-+		if (this.messageQueueDraining || this.isLoading || this.messageQueue.length === 0) {
+-		this.messageQueueDraining = true;
+-		this.stopMessageQueueDrain = false;
++		if (this.messageQueueDrainClaim !== null || this.isLoading || this.messageQueue.length === 0) {
 +			return;
 +		}
 +		const continuationGeneration = this.continuationGeneration;
-+		const ownsDrain = () => continuationGeneration === this.continuationGeneration;
- 		this.messageQueueDraining = true;
- 		this.stopMessageQueueDrain = false;
++		const claim = Symbol("messageQueueDrain");
++		this.messageQueueDrainClaim = claim;
++		const ownsDrain = () => this.messageQueueDrainClaim === claim && continuationGeneration === this.continuationGeneration;
  		try {
  			if (this.queueConfig.drain === "batch") {
  				while (this.messageQueue.length > 0) {
@@ -3772,17 +3846,24 @@ index bae9ddd81ae..37b862ee4d4 100644
 +				}
  			}
  		} finally {
- 			this.messageQueueDraining = false;
-@@ -1968,7 +2597,7 @@ var ChatClient = class {
+-			this.messageQueueDraining = false;
+-			this.stopMessageQueueDrain = false;
++			if (this.messageQueueDrainClaim === claim)
++				this.messageQueueDrainClaim = null;
+ 		}
+ 	}
+ 	/**
+@@ -1968,7 +2589,8 @@ var ChatClient = class {
  	* (stop / error / clear / unsubscribe / reload).
  	*/
  	discardPendingSends() {
 -		this.sendInFlight = false;
 +		this.sendInFlight = null;
++		this.messageQueueDrainClaim = null;
  		this.flushQueue();
  	}
  	/**
-@@ -1982,7 +2611,10 @@ var ChatClient = class {
+@@ -1982,7 +2604,10 @@ var ChatClient = class {
  		}));
  	}
  	emitQueueChange() {
@@ -3793,7 +3874,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  		this.devtoolsBridge.emitSnapshot();
  	}
  	/**
-@@ -2056,7 +2688,11 @@ var ChatClient = class {
+@@ -2056,7 +2681,11 @@ var ChatClient = class {
  	* Manually set messages
  	*/
  	setMessagesManually(messages) {
@@ -3807,7 +3888,7 @@ index bae9ddd81ae..37b862ee4d4 100644
  	}
  	updateOptions(options) {
 diff --git a/dist/esm/connection-adapters.d.ts b/dist/esm/connection-adapters.d.ts
-index a4074e08e53..0cd46281b67 100644
+index a4074e08e5..0cd46281b6 100644
 --- a/dist/esm/connection-adapters.d.ts
 +++ b/dist/esm/connection-adapters.d.ts
 @@ -6,6 +6,7 @@ import { ChatFetcher, ChatPendingInterrupt } from './types.js';
@@ -3819,10 +3900,30 @@ index a4074e08e53..0cd46281b67 100644
   * Thrown when an SSE/HTTP stream ends with a non-empty unterminated buffer.
   * Indicates the connection was cut mid-line (server crash, dropped TCP, proxy
 diff --git a/dist/esm/chat-client.d.ts b/dist/esm/chat-client.d.ts
-index 7917fa1d0c7..7ce98122496 100644
+index 7917fa1d0c..90e3f199e1 100644
 --- a/dist/esm/chat-client.d.ts
 +++ b/dist/esm/chat-client.d.ts
-@@ -128,6 +128,7 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
+@@ -89,16 +89,10 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
+      */
+     private sendInFlight;
+     /**
+-     * True while `drainQueue` is delivering queued messages. Concurrent
+-     * `sendMessage` calls during a drain are treated as busy and follow
+-     * `whenBusy` (default: queue).
++     * Identity held while `drainQueue` delivers queued messages. Cancellation
++     * releases it synchronously, even while an old delivery remains pending.
+      */
+-    private messageQueueDraining;
+-    /**
+-     * Set by `whenBusy: 'interrupt'` so an in-progress FIFO drain loop stops
+-     * before starting the next queued item (the interrupting send owns the client).
+-     */
+-    private stopMessageQueueDrain;
++    private messageQueueDrainClaim;
+     /**
+      * Sync claim held for the duration of `deliverMessage` so concurrent
+      * deliverers cannot both append a user message before only one stream runs.
+@@ -128,6 +122,7 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
      private activeContext;
      private continuationPending;
      private subscriptionAbortController;
@@ -3830,7 +3931,7 @@ index 7917fa1d0c7..7ce98122496 100644
      private processingResolve;
      /**
       * `connect()` adapters push the full HTTP body into the subscribe queue, then
-@@ -360,6 +361,9 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
+@@ -360,6 +355,9 @@ export declare class ChatClient<TTools extends ReadonlyArray<AnyClientTool> = an
       * never produced, or already settled) is left untouched.
       */
      private dropTrailingInFlightAssistant;
