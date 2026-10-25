@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.6.0
+
+### Minor Changes
+
+- [#6834](https://github.com/stella/stella/pull/6834) [`dd7e7eb`](https://github.com/stella/stella/commit/dd7e7eb5379b3f95f2806cb6fcd1ebaeedb87da0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice export offers a Peppol BIS Billing 3.0 format for Slovak sellers.
+
 ## 5.5.0
 
 ### Minor Changes
