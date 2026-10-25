@@ -198,7 +198,9 @@ if (!databaseUrl || !runPostgres) {
       organizationId: SafeId<"organization">;
       userId: SafeId<"user">;
       sessionId: string;
-      database: Parameters<typeof createPersonalApiKey>[0]["database"];
+      database: NonNullable<
+        Parameters<typeof createPersonalApiKey>[0]["database"]
+      >;
     };
     const racingAuditRecorder = ({ organizationId, userId }: RacingMint) =>
       createBackgroundAuditRecorder({

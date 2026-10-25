@@ -346,12 +346,12 @@ export const issueMachineApiKey = async ({
   database,
   ...options
 }: IssueMachineApiKeyOptions) =>
-  mutatePersonalKeys(
+  mutatePersonalKeys<MintedMachineApiKey>(
     {
       organizationId: options.organizationId,
       userId: options.userId,
       recordAuditEvent,
-      database,
+      ...(database === undefined ? {} : { database }),
       authority: { type: "issue", sessionId },
     },
     async ({ fence, memberRole }) => {
