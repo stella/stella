@@ -1,8 +1,10 @@
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
 
@@ -21,7 +23,8 @@ import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopbac
  */
 
 const PUBLIC_URL = "https://stella-api.example.com";
-process.env["PUBLIC_URL"] = PUBLIC_URL;
+const testState = createTestState({ file: import.meta.path, config: {} });
+testState.setEnv("PUBLIC_URL", PUBLIC_URL);
 
 const { env } = await import("@/api/env");
 const { getAuth } = await import("@/api/lib/auth");
@@ -214,7 +217,7 @@ const signInWithOrganization = async (email: string) => {
 
 const fetchSpy = spyOn(globalThis, "fetch");
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await initAgentAuthTestDb();
   fetchSpy.mockImplementation(
     Object.assign(serveInProcess, { preconnect: fetch.preconnect }),
