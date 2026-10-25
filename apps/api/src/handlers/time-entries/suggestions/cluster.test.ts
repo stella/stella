@@ -39,6 +39,13 @@ const signalArbitrary = fc
   .map(({ minute, second, ordinal, evidence }): ActivitySignal => ({
     at: new Date(DAY_START_MS + minute * MS_PER_MINUTE + second * 1000),
     key: `signal:${ordinal}:${minute}:${second}`,
+    identity: {
+      source: "audit_log",
+      resourceId: `signal-${ordinal}`,
+      timestamp: new Date(
+        DAY_START_MS + minute * MS_PER_MINUTE + second * 1000,
+      ).toISOString(),
+    },
     evidence,
   }));
 
@@ -65,6 +72,11 @@ const signalAt = (
 ): ActivitySignal => ({
   at: new Date(DAY_START_MS + minutes * MS_PER_MINUTE),
   key,
+  identity: {
+    source: "audit_log",
+    resourceId: key,
+    timestamp: new Date(DAY_START_MS + minutes * MS_PER_MINUTE).toISOString(),
+  },
   evidence: evidence ?? DRAFTING_THREAD,
 });
 
@@ -355,6 +367,23 @@ describe("clusterActivitySignals", () => {
         resourceType: "entity",
         name: "Lease",
         actions: ["update", "download"],
+        signals: [
+          {
+            source: "audit_log",
+            resourceId: "a",
+            timestamp: "2026-09-18T00:00:00.000Z",
+          },
+          {
+            source: "audit_log",
+            resourceId: "b",
+            timestamp: "2026-09-18T00:01:00.000Z",
+          },
+          {
+            source: "audit_log",
+            resourceId: "c",
+            timestamp: "2026-09-18T00:02:00.000Z",
+          },
+        ],
       },
     ]);
   });

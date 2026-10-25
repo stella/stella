@@ -283,6 +283,7 @@ const isListResponse = (
   items: {
     fingerprint: string;
     durationMinutes: number;
+    engagedMinutes: number;
     signalCount: number;
     evidence: unknown[];
   }[];
@@ -420,6 +421,20 @@ describe("time entry suggestions integration", () => {
     expect(stored?.timeEntryId).toBe(timeEntryId);
     expect(stored?.evidence).toEqual(first.evidence);
 
+    const extensionId = createSafeId<"chatMessage">();
+    messageIds.push(extensionId);
+    await testDb.insert(chatMessages).values({
+      id: extensionId,
+      threadId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "follow-up" }],
+      }),
+      createdAt: at("09:20:00"),
+    });
+
     const relisted = await listFor(ids.userA1);
     if (!isListResponse(relisted)) {
       throw new Error(`unexpected list response: ${JSON.stringify(relisted)}`);
@@ -427,6 +442,16 @@ describe("time entry suggestions integration", () => {
     expect(relisted.items.map((item) => item.fingerprint)).not.toContain(
       first.fingerprint,
     );
+    expect(relisted.items.at(0)).toMatchObject({
+      engagedMinutes: 5,
+      signalCount: 1,
+      evidence: [
+        {
+          type: "chat_thread",
+          signals: [{ resourceId: extensionId }],
+        },
+      ],
+    });
 
     const again = await decide(first.fingerprint, {
       type: "accept",
@@ -434,7 +459,7 @@ describe("time entry suggestions integration", () => {
       narrative: "duplicate",
       billable: false,
     });
-    expect(again).toMatchObject({ code: 409 });
+    expect(again).toEqual(accepted);
 
     // A dismiss after an accept reports the decision that already stands.
     const dismissAfterAccept = await decide(first.fingerprint, {
@@ -492,12 +517,34 @@ describe("time entry suggestions integration", () => {
       dismissed,
     );
 
+    const extensionId = createSafeId<"chatMessage">();
+    messageIds.push(extensionId);
+    await testDb.insert(chatMessages).values({
+      id: extensionId,
+      threadId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "after dismissal" }],
+      }),
+      createdAt: at("09:25:00"),
+    });
+
     const relisted = await listFor(ids.userA1);
     if (!isListResponse(relisted)) {
       throw new Error(`unexpected list response: ${JSON.stringify(relisted)}`);
     }
-    expect(relisted.items).toHaveLength(0);
-    expect(relisted.activeMinutes).toBe(0);
+    expect(relisted.items.at(0)).toMatchObject({
+      engagedMinutes: 5,
+      signalCount: 1,
+      evidence: [
+        {
+          type: "chat_thread",
+          signals: [{ resourceId: extensionId }],
+        },
+      ],
+    });
   });
 
   test("a fingerprint the day never produced cannot be dismissed", async () => {

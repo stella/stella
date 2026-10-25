@@ -349,6 +349,28 @@ const parseTimeEntrySuggestionEvidence = (
   if (!isRecord(input) || typeof input.id !== "string") {
     return null;
   }
+  if (!Array.isArray(input["signals"])) {
+    return null;
+  }
+  const signals: TimeEntrySuggestionEvidence["signals"] = [];
+  for (const signal of input["signals"]) {
+    if (!isRecord(signal)) {
+      return null;
+    }
+    const { source } = signal;
+    if (
+      (source !== "chat_message" && source !== "audit_log") ||
+      typeof signal["resourceId"] !== "string" ||
+      typeof signal["timestamp"] !== "string"
+    ) {
+      return null;
+    }
+    signals.push({
+      source,
+      resourceId: signal["resourceId"],
+      timestamp: signal["timestamp"],
+    });
+  }
   if (input.type === "chat_thread") {
     return typeof input.title === "string" && isInteger(input.messageCount)
       ? {
@@ -356,6 +378,7 @@ const parseTimeEntrySuggestionEvidence = (
           id: input.id,
           title: input.title,
           messageCount: input.messageCount,
+          signals,
         }
       : null;
   }
@@ -369,6 +392,7 @@ const parseTimeEntrySuggestionEvidence = (
           resourceType: input.resourceType,
           name: input.name,
           actions: input.actions,
+          signals,
         }
       : null;
   }

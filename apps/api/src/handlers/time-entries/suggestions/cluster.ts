@@ -8,6 +8,11 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 export type ActivitySignal = {
   at: Date;
   key: string;
+  identity: {
+    source: "chat_message" | "audit_log";
+    resourceId: string;
+    timestamp: string;
+  };
   evidence:
     | { type: "chat_thread"; id: string; title: string }
     | {
@@ -40,9 +45,9 @@ const MS_PER_MINUTE = 60_000;
 
 /**
  * Identity of a cluster for its day. Only the earliest signal takes part, so a
- * cluster keeps its fingerprint while later signals extend it, and a decision
- * recorded against it stays attached. Two clusters that merge keep the
- * earlier one's identity; the later one's fingerprint stops being produced.
+ * cluster keeps its fingerprint while later signals extend it. Decisions use
+ * that identity for idempotent writes, while their evidence owns the exact
+ * signals they cover. Two clusters that merge keep the earlier identity.
  */
 export const suggestionFingerprint = (date: string, firstKey: string) =>
   hashSha256Hex(`${date}\n${firstKey}`);
@@ -65,12 +70,13 @@ const aggregateEvidence = (
   signals: readonly ActivitySignal[],
 ): TimeEntrySuggestionEvidence[] => {
   const byKey = new Map<string, TimeEntrySuggestionEvidence>();
-  for (const { evidence } of signals) {
+  for (const { evidence, identity } of signals) {
     const key = evidenceKey(evidence);
     const existing = byKey.get(key);
     if (evidence.type === "chat_thread") {
       if (existing?.type === "chat_thread") {
         existing.messageCount += 1;
+        existing.signals.push(identity);
         continue;
       }
       byKey.set(key, {
@@ -78,6 +84,7 @@ const aggregateEvidence = (
         id: evidence.id,
         title: evidence.title,
         messageCount: 1,
+        signals: [identity],
       });
       continue;
     }
@@ -85,6 +92,7 @@ const aggregateEvidence = (
       if (!existing.actions.includes(evidence.action)) {
         existing.actions.push(evidence.action);
       }
+      existing.signals.push(identity);
       if (existing.name === null && evidence.name !== null) {
         existing.name = evidence.name;
       }
@@ -96,6 +104,7 @@ const aggregateEvidence = (
       resourceType: evidence.resourceType,
       name: evidence.name,
       actions: [evidence.action],
+      signals: [identity],
     });
   }
   return [...byKey.values()];

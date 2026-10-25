@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
+import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -124,6 +125,23 @@ type LoadedTimeSuggestions = {
   loggedMinutes: number;
 };
 
+const signalIdentityKey = (identity: ActivitySignal["identity"]) =>
+  `${identity.source}\n${identity.resourceId}\n${identity.timestamp}`;
+
+const excludeDecidedSignals = (
+  signals: readonly ActivitySignal[],
+  decidedEvidence: readonly (TimeEntrySuggestionEvidence[] | null)[],
+) => {
+  const coveredSignalKeys = new Set(
+    decidedEvidence.flatMap((evidence) =>
+      (evidence ?? []).flatMap((item) => item.signals.map(signalIdentityKey)),
+    ),
+  );
+  return signals.filter(
+    ({ identity }) => !coveredSignalKeys.has(signalIdentityKey(identity)),
+  );
+};
+
 // Recomputes the day's suggested entries from the timekeeper's own signals in
 // this matter: the chat messages they sent and the audit rows their actions
 // wrote. Nothing here is visible to anyone but the signal's author, and the
@@ -232,7 +250,7 @@ export const loadTimeSuggestions = async function* ({
           : [];
 
       const decidedRows = await tx
-        .select({ fingerprint: timeEntrySuggestions.fingerprint })
+        .select({ evidence: timeEntrySuggestions.evidence })
         .from(timeEntrySuggestions)
         .where(
           and(
@@ -281,6 +299,11 @@ export const loadTimeSuggestions = async function* ({
     signals.push({
       at: row.createdAt,
       key: `chat:${row.id}`,
+      identity: {
+        source: "chat_message",
+        resourceId: row.id,
+        timestamp: row.createdAt.toISOString(),
+      },
       evidence: { type: "chat_thread", id: row.threadId, title: row.title },
     });
   }
@@ -289,6 +312,11 @@ export const loadTimeSuggestions = async function* ({
     signals.push({
       at: row.createdAt,
       key: `audit:${row.id}`,
+      identity: {
+        source: "audit_log",
+        resourceId: row.id,
+        timestamp: row.createdAt.toISOString(),
+      },
       evidence: entityId
         ? {
             type: "resource",
@@ -307,19 +335,22 @@ export const loadTimeSuggestions = async function* ({
     });
   }
 
+  const uncoveredSignals = excludeDecidedSignals(
+    signals,
+    decidedRows.map(({ evidence }) => evidence),
+  );
   const clusters = clusterActivitySignals({
     date,
-    signals,
+    signals: uncoveredSignals,
     mergeGapMinutes: LIMITS.timeSuggestionMergeGapMinutes,
     tailMinutes: LIMITS.timeSuggestionTailMinutes,
   });
 
-  const decided = new Set(decidedRows.map((row) => row.fingerprint));
   const uncovered = subtractRecordedTime(clusters, recordedRows);
 
   const loaded: LoadedTimeSuggestions = {
     date,
-    pending: uncovered.filter((cluster) => !decided.has(cluster.fingerprint)),
+    pending: uncovered,
     loggedMinutes: recordedRows.reduce(
       (sum, entry) => sum + entry.durationMinutes,
       0,

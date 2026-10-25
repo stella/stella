@@ -70,6 +70,7 @@ export type TimeEntrySuggestionEvidence =
       id: string;
       title: string;
       messageCount: number;
+      signals: TimeEntrySuggestionSignalIdentity[];
     }
   | {
       type: "resource";
@@ -77,7 +78,14 @@ export type TimeEntrySuggestionEvidence =
       resourceType: string;
       name: string | null;
       actions: string[];
+      signals: TimeEntrySuggestionSignalIdentity[];
     };
+
+export type TimeEntrySuggestionSignalIdentity = {
+  source: "chat_message" | "audit_log";
+  resourceId: string;
+  timestamp: string;
+};
 
 export type TimeEntrySuggestion = {
   /** Stable identity of the cluster for the day: survives later signals extending it. */
