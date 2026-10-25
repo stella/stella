@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 5.8.0
+
+### Minor Changes
+
+- [#5889](https://github.com/stella/stella/pull/5889) [`d37bee5`](https://github.com/stella/stella/commit/d37bee5c2641eb1d2dc32f05da7d1dca52d6474a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills update` accept `invocation` (`auto` or `manual`), and `skills get` and `skills list` report it: a `manual` skill runs only when the user invokes it.
+
+- [#5889](https://github.com/stella/stella/pull/5889) [`d37bee5`](https://github.com/stella/stella/commit/d37bee5c2641eb1d2dc32f05da7d1dca52d6474a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills from-blueprint create` accept `boundWorkspaceId` or `boundClientId` to make a skill available only in one matter or for one client, and `skills get` and `skills list` report the binding.
+
+### Patch Changes
+
+- [#6838](https://github.com/stella/stella/pull/6838) [`b817801`](https://github.com/stella/stella/commit/b8178018739a464c0933f209992226505c06dc60) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Cursor can connect to the stella MCP server: a public client that registers a private-use callback without stating an application type registers as a native app, and scopes stella does not offer are left out of registrations and authorizations instead of failing them. The consent screen shows the app callback a code returns to.
+
 ## 5.7.1
 
 ### Patch Changes
