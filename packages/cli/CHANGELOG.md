@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.7.1
+
+### Patch Changes
+
+- [#6710](https://github.com/stella/stella/pull/6710) [`212eb0a`](https://github.com/stella/stella/commit/212eb0a8bbccd3e3405ee69e2bc1d3051786672b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read capability input schemas in their standard JSON Schema form: string literal unions stay enum flags whether or not each value states its type, file inputs state their size cap as `x-maxBytes`, and inputs list only the defaults the API applies.
+
 ## 5.7.0
 
 ### Minor Changes
