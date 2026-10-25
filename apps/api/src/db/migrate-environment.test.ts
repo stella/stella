@@ -1,7 +1,9 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
 import nodeOs from "node:os";
 import nodePath from "node:path";
+
+import { stageMigrateEntrypoint } from "./migrate-entrypoint.test-helpers";
 
 /**
  * The migrate entrypoint runs with a database-only environment.
@@ -91,31 +93,16 @@ const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   const directory = await mkdtemp(
     nodePath.join(nodeOs.tmpdir(), "migrate-env-"),
   );
-  await mkdir(nodePath.join(directory, "src/db"), { recursive: true });
-  await mkdir(nodePath.join(directory, "scripts"));
-  const entrypoint = nodePath.join(directory, "src/db/migrate.ts");
-  await copyFile(nodePath.join(API_ROOT, "src/db/migrate.ts"), entrypoint);
-  await Bun.write(
-    nodePath.join(directory, ".env.test"),
-    "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
-  );
-  for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
-    await symlink(
-      nodePath.join(API_ROOT, "src", dependency),
-      nodePath.join(directory, "src", dependency),
-    );
-  }
-  for (const module of ["migration-runner.ts", "sql-client.ts"]) {
-    await symlink(
-      nodePath.join(API_ROOT, "src/db", module),
-      nodePath.join(directory, "src/db", module),
-    );
-  }
-  await symlink(
-    nodePath.join(API_ROOT, "../../node_modules"),
-    nodePath.join(directory, "node_modules"),
-  );
   try {
+    const entrypoint = await stageMigrateEntrypoint(directory);
+    await Bun.write(
+      nodePath.join(directory, ".env.test"),
+      "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
+    );
+    await symlink(
+      nodePath.join(API_ROOT, "../../node_modules"),
+      nodePath.join(directory, "node_modules"),
+    );
     const migrate = Bun.spawn({
       cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, entrypoint],
       env: {

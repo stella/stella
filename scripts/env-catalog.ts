@@ -1642,9 +1642,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_BASE_DATABASE_URL",
   "REHEARSAL_BASE_IMAGE_REPOSITORY",
   "REHEARSAL_BASE_REF",
+  "REHEARSAL_CI_TOOLING",
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  // Disposable subprocess state and failure selection in rehearsal tests.
+  "REHEARSAL_TEST_STATE",
+  "REHEARSAL_TEST_FAILURE",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",

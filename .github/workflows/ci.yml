@@ -4210,7 +4210,7 @@ jobs:
     runs-on: ubuntu-24.04
     # The rehearsal step's budget plus the setup before it (checkout, install,
     # image pulls); scripts/rehearse-migration-upgrade.test.ts derives both.
-    timeout-minutes: 42
+    timeout-minutes: 52
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -4227,6 +4227,16 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: ${{ needs.ci-plan.outputs.redis }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -4268,7 +4278,12 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
+          sparse-checkout: |
+            scripts/retry.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
           sparse-checkout-cone-mode: false
 
       - name: Login to GitHub Container Registry
@@ -4284,7 +4299,6 @@ jobs:
           BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
         run: |
           bash .workflow-tooling/scripts/retry.sh docker pull --quiet "$BASE_IMAGE"
-          rm -rf .workflow-tooling
 
       - name: Drop the registry credential
         if: always()
@@ -4294,12 +4308,18 @@ jobs:
       # fixed-point rerun, each bounded by REHEARSAL_MIGRATE_BUDGET_SECONDS.
       # This cap only catches a hang outside them.
       - name: Rehearse the upgrade from the promoted release at scale
-        timeout-minutes: 38
+        timeout-minutes: 48
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
+          REHEARSAL_CI_TOOLING: ${{ github.workspace }}/.workflow-tooling
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: bash scripts/rehearse-migration-upgrade.sh
+
+      - name: Remove workflow tooling
+        if: always()
+        run: rm -rf .workflow-tooling
 
       - *merge_group_cancel
 
