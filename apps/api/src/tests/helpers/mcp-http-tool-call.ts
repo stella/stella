@@ -64,7 +64,7 @@ export const callMcpToolOverHttp = async ({
     getMcpToolDefinition,
     getMcpToolRequiredScopesHint,
     handleMcpToolCall,
-    listMcpResources: async () => [],
+    listMcpResources: async () => await Promise.resolve([]),
     // The static offer only: the dynamic families read the database.
     listMcpTools: async (listContext, listMode = "default") =>
       await Promise.resolve(
