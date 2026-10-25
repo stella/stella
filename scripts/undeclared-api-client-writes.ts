@@ -37,7 +37,7 @@ const clientImports = (source: ts.SourceFile, file: string): Set<string> => {
     }
     const bindings = statement.importClause?.namedBindings;
     if (
-      statement.importClause?.isTypeOnly === true ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
       bindings === undefined ||
       !ts.isNamedImports(bindings)
     ) {
