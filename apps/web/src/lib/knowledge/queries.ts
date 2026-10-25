@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -27,6 +28,7 @@ import {
 } from "@/lib/resource-query-roots.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 // ── Key factory ─────────────────────────────────────
 
@@ -1002,14 +1004,20 @@ export const skillCommentsOptions = (
 // ── MCP queries ─────────────────────────────────────
 
 export const mcpConnectorsOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: knowledgeKeys.mcp.connectors(organizationId),
-    queryFn: async ({ signal }) => {
-      const response = await api.mcp.connectors.get({ fetch: { signal } });
-      return unwrapEden(response);
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.mcp.connectors(organizationId),
+      queryFn: async ({ signal }) => {
+        const response = await api.mcp.connectors.get({ fetch: { signal } });
+        return unwrapEden(response);
+      },
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.MCP_CONNECTOR],
+      scope: { type: "organization" },
     },
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 export type McpConnectorsResponse = Awaited<
   ReturnType<NonNullable<ReturnType<typeof mcpConnectorsOptions>["queryFn"]>>

@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
@@ -13,13 +13,12 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
+  applyResourceQueryActions,
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
   parseWorkspaceRealtimeMessage,
-  WORKSPACE_REALTIME_QUERY_ACTION,
 } from "@/lib/workspace-realtime";
-import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
 import {
   connectWorkspaceStream,
   WORKSPACE_STREAM_ACCESS,
@@ -86,35 +85,26 @@ export const useWorkspaceSSE = (
   const navigate = useNavigate();
   const t = useTranslations();
 
-  const applyQueryActions = (actions: WorkspaceRealtimeQueryAction[]) => {
-    for (const action of actions) {
-      switch (action.type) {
-        case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
-          detached(
-            queryClient.invalidateQueries({ queryKey: action.queryKey }),
-            "sse.invalidate",
-          );
-          break;
-        case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
-          queryClient.removeQueries({
-            queryKey: action.queryKey,
-            exact: false,
-          });
-          break;
-        default:
-          action satisfies never;
-          panic(`Unhandled action: ${String(action)}`);
-      }
-    }
-  };
   const handleParsedEvent = useLatestCallback(
     (event: WorkspaceRealtimeEvent) => {
       options.onEvent?.(event);
-      applyQueryActions(getWorkspaceRealtimeQueryActions(event, workspaceId));
+      detached(
+        applyResourceQueryActions(
+          queryClient,
+          getWorkspaceRealtimeQueryActions(event, { workspaceId, queryClient }),
+        ),
+        "sse.invalidate",
+      );
     },
   );
   const refreshAfterReconnect = useLatestCallback(() => {
-    applyQueryActions(getWorkspaceReconnectQueryActions(workspaceId));
+    detached(
+      applyResourceQueryActions(
+        queryClient,
+        getWorkspaceReconnectQueryActions({ workspaceId, queryClient }),
+      ),
+      "sse.reconnect",
+    );
   });
   const captureConnectionOutage = useLatestCallback(() => {
     analytics.captureError(

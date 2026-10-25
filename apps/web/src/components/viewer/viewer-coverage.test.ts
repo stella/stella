@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
 
 // Every module that reads a file to display it must sit under
 // RecoverableViewerBoundary, so no viewer can dead-end on a failed load.
@@ -11,8 +12,51 @@ const SRC = path.resolve(import.meta.dir, "../..");
 const BOUNDARY_MODULE = "@/components/viewer/recoverable-viewer-boundary";
 
 /** Query options that fetch file bytes or a file's rendered content. */
-const VIEWER_DATA_QUERY =
-  /use(?:Suspense)?Query\(\s*(?:\{\s*\.\.\.)?\s*(?:fileOptions|emailHtmlPreviewOptions|emailAttachmentPreviewOptions|externalReferencePreviewOptions|textFileOptions)\(/u;
+const VIEWER_DATA_OPTIONS = new Set([
+  "fileOptions",
+  "emailHtmlPreviewOptions",
+  "emailAttachmentPreviewOptions",
+  "externalReferencePreviewOptions",
+  "textFileOptions",
+]);
+
+const readsViewerData = (source: string): boolean => {
+  const file = ts.createSourceFile(
+    "viewer.tsx",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const isViewerOptions = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    VIEWER_DATA_OPTIONS.has(node.expression.text);
+  const visit = (node: ts.Node): boolean => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      (node.expression.text === "useQuery" ||
+        node.expression.text === "useSuspenseQuery")
+    ) {
+      const options = node.arguments.at(0);
+      if (
+        options &&
+        (isViewerOptions(options) ||
+          (ts.isObjectLiteralExpression(options) &&
+            options.properties.some(
+              (property) =>
+                ts.isSpreadAssignment(property) &&
+                isViewerOptions(property.expression),
+            )))
+      ) {
+        return true;
+      }
+    }
+    return ts.forEachChild(node, visit) ?? false;
+  };
+  return visit(file);
+};
 
 type ViewerCoverage =
   /** Rendered only under the boundary, which `owner` mounts. */
@@ -97,7 +141,7 @@ const read = (file: string): string =>
 
 describe("viewer error coverage", () => {
   const readers = listSourceFiles()
-    .filter((file) => VIEWER_DATA_QUERY.test(read(file)))
+    .filter((file) => readsViewerData(read(file)))
     .toSorted();
 
   test("every module that reads a file for display is listed", () => {
@@ -130,19 +174,26 @@ describe("viewer error coverage", () => {
     expect(pending.length).toBeLessThanOrEqual(MAX_PENDING_READERS);
   });
 
-  test("the scan recognises a reader it has not seen", () => {
-    expect(
-      VIEWER_DATA_QUERY.test(
-        "const { data } = useSuspenseQuery(fileOptions({ workspaceId, fieldId }));",
-      ),
-    ).toBe(true);
-    expect(
-      VIEWER_DATA_QUERY.test(
-        "useQuery({\n  ...emailHtmlPreviewOptions({ workspaceId, fieldId }),",
-      ),
-    ).toBe(true);
-    expect(
-      VIEWER_DATA_QUERY.test("queryClient.prefetchQuery(fileOptions(x))"),
-    ).toBe(false);
+  test("the scan recognises readers across query option layouts", () => {
+    for (const hook of ["useQuery", "useSuspenseQuery"]) {
+      for (const factory of VIEWER_DATA_OPTIONS) {
+        for (const options of [
+          `${factory}({ workspaceId, fieldId })`,
+          `{ ...${factory}({ workspaceId, fieldId }), enabled: true }`,
+          `{ /* cached bytes */ initialData: () => cached, ...${factory}({ workspaceId, fieldId }) }`,
+          `{ // cached bytes\n initialData: () => ({ value: cached }), ...${factory}({ workspaceId, fieldId }), placeholderData: previous }`,
+        ]) {
+          expect(readsViewerData(`${hook}(${options});`)).toBe(true);
+        }
+      }
+    }
+    for (const source of [
+      "queryClient.prefetchQuery(fileOptions(x))",
+      "useQuery({ queryFn: () => fileOptions(x) })",
+      "// useQuery(fileOptions(x))",
+      'const example = "useQuery(fileOptions(x))";',
+    ]) {
+      expect(readsViewerData(source)).toBe(false);
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -12,6 +12,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type OrganizationDangerZoneProps = {
   organizationId: string;
@@ -32,6 +33,7 @@ export const OrganizationDangerZone = ({
 }: OrganizationDangerZoneProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [outcome, setOutcome] = useState<
     | { status: "active" }
@@ -39,23 +41,28 @@ export const OrganizationDangerZone = ({
     | { status: "completed"; action: "leave" | "delete" }
   >({ status: "active" });
   const mutation = useMutation({
-    mutationFn: async (action: "leave" | "delete") => {
-      setOutcome({ status: "active" });
-      const result =
-        action === "delete"
-          ? await authClient.organization.delete({ organizationId })
-          : await authClient.organization.leave({ organizationId });
-      if (result.error) {
-        // A refusal is an outcome the section shows, not a thrown failure.
-        analytics.captureError(toAuthClientError(result.error));
-        setOutcome({ status: "refused", code: result.error.code });
-        return "refused" as const;
-      }
-      setOutcome({ status: "completed", action });
-      setDeleteOpen(false);
-      await onSuccess();
-      return "completed" as const;
-    },
+    mutationFn: resourceMutation({
+      mutation: "deleteOrganization",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (action: "leave" | "delete") => {
+        setOutcome({ status: "active" });
+        const result =
+          action === "delete"
+            ? await authClient.organization.delete({ organizationId })
+            : await authClient.organization.leave({ organizationId });
+        if (result.error) {
+          // A refusal is an outcome the section shows, not a thrown failure.
+          analytics.captureError(toAuthClientError(result.error));
+          setOutcome({ status: "refused", code: result.error.code });
+          return "refused" as const;
+        }
+        setOutcome({ status: "completed", action });
+        setDeleteOpen(false);
+        await onSuccess();
+        return "completed" as const;
+      },
+    }),
     onError: (error) => {
       analytics.captureError(error);
       notifyUserError(error, t("errors.actionFailed"));

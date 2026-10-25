@@ -10,7 +10,6 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { ensureRouteQueryData } from "@/lib/react-query";
 import { invoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
 import { InvoiceComposer } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer";
 
@@ -18,7 +17,7 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices/new",
 )({
   beforeLoad: async ({ context, params }) => {
-    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const role = await context.queryClient.query(roleOptions);
     if (
       !authClient.organization.checkRolePermission({
         role,
@@ -33,10 +32,7 @@ export const Route = createFileRoute(
     }
   },
   loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      invoicePrefillOptions(params.workspaceId),
-    );
+    await context.queryClient.query(invoicePrefillOptions(params.workspaceId));
   },
   pendingComponent: NewInvoicePending,
   component: NewInvoicePage,

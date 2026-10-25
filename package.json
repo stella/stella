@@ -140,6 +140,7 @@
     "generate": "turbo run generate:route-tree generate:messages generate:api-types generate:capability-runtime --filter=@stll/web --filter=@stll/api"
   },
   "devDependencies": {
+    "@better-auth/core": "catalog:",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@gdp-ts/core": "0.1.0",

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { INVOICE_DUE_DAY_PRESETS, INVOICE_LANGUAGES } from "@stll/api-contract";
@@ -56,6 +57,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   invoiceByIdOptions,
   invoicesKeys,
@@ -82,7 +84,6 @@ import {
   includedMinutes,
   lastIncludedWorkDate,
   parseHoursInput,
-  submitComposedInvoice,
   vatOnSupplyDate,
 } from "./invoice-composer.logic";
 import type {
@@ -255,6 +256,7 @@ export const InvoiceComposer = ({
 
   const send = (issue: boolean) =>
     submit.mutate({
+      workspaceId,
       issue,
       body: {
         invoiceDate,
@@ -368,57 +370,71 @@ const useComposerSubmit = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      issue,
-      body,
-    }: {
-      issue: boolean;
-      body: CreateInvoiceBody;
-    }): Promise<IssuedInvoice> => {
-      const invoices = api.invoices({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      });
-      return await submitComposedInvoice({
-        issue,
-        create: async () => unwrapEden(await invoices.put(body)),
-        finalize: async (id) => {
-          const finalized = await invoices({
-            invoiceId: toSafeId<"invoice">(id),
-          }).transition.post({ action: "finalize" });
+  const createInvoiceRequest = async ({
+    workspaceId: mutationWorkspaceId,
+    issue,
+    body,
+  }: {
+    workspaceId: string;
+    issue: boolean;
+    body: CreateInvoiceBody;
+  }): Promise<IssuedInvoice> => {
+    const created = unwrapEden(
+      await api
+        .invoices({
+          workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+        })
+        .put(body),
+    );
+    const result = await Result.tryPromise({
+      try: async (): Promise<IssuedInvoice> => {
+        if (issue) {
+          const finalized = await api
+            .invoices({
+              workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+            })({ invoiceId: toSafeId<"invoice">(created.id) })
+            .transition.post({ action: "finalize" });
           if (finalized.error) {
             notifyUserError(
               finalized.error,
               t("billing.invoiceComposer.issueFailed"),
             );
           }
-        },
-        read: async (id): Promise<IssuedInvoice> => {
-          const invoice = await queryClient.query(
-            invoiceByIdOptions(workspaceId, id),
-          );
-          return {
-            id: invoice.id,
-            invoiceNumber: invoice.invoiceNumber,
-            issued: invoice.status !== "draft",
-            totalAmount: invoice.totalAmount,
-            currency: invoice.currency,
-            dueDate: invoice.dueDate,
-          };
-        },
-        savedDraft: (created, error) => {
-          notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
-          return {
-            id: created.id,
-            invoiceNumber: null,
-            issued: false,
-            totalAmount: created.totalAmount,
-            currency: body.currency,
-            dueDate: body.dueDate ?? null,
-          };
-        },
-      });
-    },
+        }
+        const invoice = await queryClient.query(
+          invoiceByIdOptions(mutationWorkspaceId, created.id),
+        );
+        return {
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          issued: invoice.status !== "draft",
+          totalAmount: invoice.totalAmount,
+          currency: invoice.currency,
+          dueDate: invoice.dueDate,
+        };
+      },
+      catch: (cause) => cause,
+    });
+    if (!Result.isError(result)) {
+      return result.value;
+    }
+    notifyUserError(result.error, t("billing.invoiceComposer.issueFailed"));
+    return {
+      id: created.id,
+      invoiceNumber: null,
+      issued: false,
+      totalAmount: created.totalAmount,
+      currency: body.currency,
+      dueDate: body.dueDate ?? null,
+    };
+  };
+  const createInvoiceMutation = resourceMutation({
+    mutation: "createInvoice",
+    queryClient,
+    mutationFn: createInvoiceRequest,
+  });
+  return useMutation({
+    mutationFn: createInvoiceMutation,
     onSuccess: (invoice) => {
       for (const queryKey of [
         invoicesKeys.all(workspaceId),

@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "TanStack Query Register requires interface declaration merging to type resource reader metadata. One consistent-type-definitions exception preserves the library augmentation contract; ordinary local metadata uses a type alias."
+}

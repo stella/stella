@@ -326,7 +326,7 @@ test("tree row completions clear each pending rename independently of refetch", 
   };
   const view = await mount(Rows);
   const refresh = Promise.withResolvers<undefined>();
-  const invalidate = spyOn(view.client, "invalidateQueries").mockReturnValue(
+  const refetch = spyOn(view.client, "refetchQueries").mockReturnValue(
     refresh.promise,
   );
   try {
@@ -350,7 +350,7 @@ test("tree row completions clear each pending rename independently of refetch", 
     );
   } finally {
     refresh.resolve(undefined);
-    invalidate.mockRestore();
+    refetch.mockRestore();
   }
 });
 
@@ -361,7 +361,7 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     </ol>
   ));
   const refresh = Promise.withResolvers<undefined>();
-  const invalidate = spyOn(view.client, "invalidateQueries").mockReturnValue(
+  const refetch = spyOn(view.client, "refetchQueries").mockReturnValue(
     refresh.promise,
   );
   try {
@@ -403,10 +403,10 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );
-    expect(invalidate).toHaveBeenCalledTimes(4);
+    expect(refetch).toHaveBeenCalledTimes(1);
   } finally {
     refresh.resolve(undefined);
-    invalidate.mockRestore();
+    refetch.mockRestore();
   }
 });
 

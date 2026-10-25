@@ -1,12 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type OrganizationAIConfigKey = {
   organizationId: string;
@@ -61,16 +63,22 @@ export const aiDefaultsPreviewOptions = ({
   organizationId,
   providers,
 }: AIDefaultsPreviewOptionsInput) =>
-  queryOptions({
-    queryKey: aiConfigKeys.defaultsPreview({ organizationId, providers }),
-    queryFn: async ({ signal }) =>
-      unwrapEden(
-        await api["organization-settings"]["ai-config"][
-          "defaults-preview"
-        ].post({ providers: [...providers] }, { fetch: { signal } }),
-      ),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: aiConfigKeys.defaultsPreview({ organizationId, providers }),
+      queryFn: async ({ signal }) =>
+        unwrapEden(
+          await api["organization-settings"]["ai-config"][
+            "defaults-preview"
+          ].post({ providers: [...providers] }, { fetch: { signal } }),
+        ),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
+    },
+  );
 
 /**
  * AI availability for any org member, regardless of admin
@@ -80,19 +88,25 @@ export const aiDefaultsPreviewOptions = ({
 export const aiAvailabilityOptions = ({
   organizationId,
 }: AIAvailabilityOptionsInput) =>
-  queryOptions({
-    queryKey: aiConfigKeys.availability({ organizationId }),
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"][
-        "ai-availability"
-      ].get({
-        fetch: { signal },
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: aiConfigKeys.availability({ organizationId }),
+      queryFn: async ({ signal }) => {
+        const response = await api["organization-settings"][
+          "ai-availability"
+        ].get({
+          fetch: { signal },
+        });
 
-      return unwrapEden(response);
+        return unwrapEden(response);
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization" },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
 
 type UpdateCachedAIAvailabilityOptions = {
   current: OrganizationAIAvailability | undefined;
