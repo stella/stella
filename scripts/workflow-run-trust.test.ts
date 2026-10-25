@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
-import { definitelyFalse } from "./github-expression";
+import { definitelyFalse, evaluate } from "./github-expression";
 import {
   MAIN_ONLY_BUN_CACHE_SAVE,
   usesDefaultCacheScope,
@@ -397,13 +397,52 @@ describe("workflow_run trust", () => {
       return workflow["on"]["workflow_run"];
     };
     expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
-      branches: ["main"],
+      branches: ["main", "release/v*", "gh-readonly-queue/main/**"],
       types: ["completed"],
     });
     expect(trigger("bot-refresh-auto-merge.yml")).toMatchObject({
       branches: ["chore/provenance-update", "bot/model-catalog-refresh"],
       types: ["completed"],
     });
+  });
+
+  test("failed release/staging-proof recording runs alert; other pull request runs do not", () => {
+    const alerting = allWorkflows().find(
+      ({ file }) => file === "scheduled-run-alerts.yml",
+    )?.workflow;
+    if (
+      !isRecord(alerting) ||
+      !isRecord(alerting["jobs"]) ||
+      !isRecord(alerting["jobs"]["notify"])
+    ) {
+      expect.unreachable("scheduled run alerts require a notify job");
+    }
+    const condition = conditionOf(alerting["jobs"]["notify"]);
+    const notifies = (file: string, event: string, branch: string) =>
+      evaluate(condition, {
+        values: {
+          "github.event_name": "workflow_run",
+          "github.repository": "owner/repo",
+          "github.event.workflow_run.conclusion": "failure",
+          "github.event.workflow_run.event": event,
+          "github.event.workflow_run.head_branch": branch,
+          "github.event.workflow_run.head_repository.full_name": "owner/repo",
+          "github.event.workflow_run.path": `.github/workflows/${file}`,
+        },
+      });
+    const queue = `gh-readonly-queue/main/pr-7-${"a".repeat(40)}`;
+    expect(
+      notifies("release-proof.yml", "pull_request_target", "release/v1.2.3"),
+    ).toBe(true);
+    expect(notifies("release-proof.yml", "merge_group", queue)).toBe(true);
+    expect(notifies("release-proof.yml", "push", "main")).toBe(true);
+    // The widened branch filter pages nothing new for other workflows.
+    expect(
+      notifies("codeql.yml", "pull_request_target", "release/v1.2.3"),
+    ).toBe(false);
+    expect(notifies("codeql.yml", "merge_group", queue)).toBe(false);
+    expect(notifies("main-heavy.yml", "push", "release/v1.2.3")).toBe(false);
+    expect(notifies("main-heavy.yml", "push", "main")).toBe(true);
   });
 
   test("every release-chain workflow is covered by failed-run alerts", () => {
