@@ -158,6 +158,7 @@ export const authorizeOAuthClient = async (
   client: RegisteredOAuthClient,
   // `null` sends no `scope` parameter at all.
   scope: string | null = GRANTED_SCOPES.join(" "),
+  prompt?: string,
 ): Promise<AuthorizationStart> => {
   const codeVerifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
@@ -169,6 +170,7 @@ export const authorizeOAuthClient = async (
     resource: getMcpResourceUrl(),
     response_type: "code",
     ...(scope === null ? {} : { scope }),
+    ...(prompt === undefined ? {} : { prompt }),
     state: Bun.randomUUIDv7(),
   }).toString();
 

@@ -128,6 +128,44 @@ describe("OAuth organization picker", () => {
     expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
   });
 
+  test("a client asking for account selection gets the organization step even for one organization", async () => {
+    const browser = await signInHuman(
+      `picker-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const only = await createOrganization(browser, "Only");
+    await browser.setActiveOrganization(only.id);
+    const client = await registerOAuthClient();
+
+    const { codeVerifier, redirect: picker } = await authorizeOAuthClient(
+      browser,
+      client,
+      undefined,
+      "select_account",
+    );
+    expect(picker.pathname).toBe(OAUTH_ORGANIZATION_PAGE_PATH);
+    expect(new URLSearchParams(readSignedQuery(picker)).get("prompt")).toBe(
+      "select_account",
+    );
+
+    const consentPage = await continueAfterPicking({
+      browser,
+      picker,
+      status: "selected",
+    });
+    expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+    expect(
+      new URLSearchParams(readSignedQuery(consentPage)).get("prompt") ?? "",
+    ).not.toContain("select_account");
+
+    const grant = await consentAndExchange({
+      browser,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    expect(decodeJwt(grant.accessToken)["org_id"]).toBe(only.id);
+  });
+
   test("authorizing again without the continue step still asks for the organization", async () => {
     const browser = await signInHuman(
       `picker-${Bun.randomUUIDv7()}@stella.dev`,

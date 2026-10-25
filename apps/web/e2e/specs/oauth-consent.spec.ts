@@ -64,6 +64,7 @@ const registerClient = async ({
 type AuthorizeUrlOptions = {
   clientId: string;
   id: string;
+  prompt?: "login" | "select_account";
   redirectUri: string;
   scopes?: string;
 };
@@ -71,6 +72,7 @@ type AuthorizeUrlOptions = {
 const authorizeUrlFor = ({
   clientId,
   id,
+  prompt,
   redirectUri,
   scopes = CONSENT_SCOPES,
 }: AuthorizeUrlOptions) => {
@@ -84,6 +86,9 @@ const authorizeUrlFor = ({
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("scope", scopes);
   authorizeUrl.searchParams.set("state", `state-${id}`);
+  if (prompt !== undefined) {
+    authorizeUrl.searchParams.set("prompt", prompt);
+  }
   return authorizeUrl.toString();
 };
 
@@ -411,6 +416,96 @@ test("organization picker names the signed-in account and switches it without lo
         ).json(),
     )
     .toBeNull();
+});
+
+test("a client asking for a fresh sign-in gets the sign-in form despite a session", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  const id = token();
+  const redirectUri = loopbackRedirectUriFor(id);
+  const clientId = await registerClient({
+    request: context.request,
+    id,
+    redirectUri,
+  });
+
+  await page.goto(
+    authorizeUrlFor({ clientId, id, prompt: "login", redirectUri }),
+    {
+      waitUntil: "commit",
+    },
+  );
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+  await expect(page).toHaveURL((url) => {
+    const signedQuery = new URLSearchParams(url.hash.slice(1)).get(
+      "oauth_query",
+    );
+    return (
+      url.pathname === "/auth" &&
+      signedQuery !== null &&
+      new URLSearchParams(signedQuery).get("prompt") === "login"
+    );
+  });
+  // Nothing is signed out until someone signs in.
+  expect(
+    await (await context.request.get(`${AUTH_BASE_URL}/get-session`)).json(),
+  ).not.toBeNull();
+});
+
+test("a client asking for account selection gets the organization step with the account switch", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  const id = token();
+  const redirectUri = loopbackRedirectUriFor(id);
+  const clientId = await registerClient({
+    request: context.request,
+    id,
+    redirectUri,
+  });
+  const organizationsResponse = await context.request.get(
+    `${AUTH_BASE_URL}/organization/list`,
+  );
+  const organizations: unknown = await organizationsResponse.json();
+  const [organization] = Array.isArray(organizations) ? organizations : [];
+  const organizationName =
+    typeof organization === "object" &&
+    organization !== null &&
+    "name" in organization &&
+    typeof organization.name === "string"
+      ? organization.name
+      : null;
+  expect(organizationName).not.toBeNull();
+
+  // The fixture's single organization would be picked on its own without
+  // the prompt; with it, the step stays on screen.
+  await page.goto(
+    authorizeUrlFor({ clientId, id, prompt: "select_account", redirectUri }),
+    { waitUntil: "commit" },
+  );
+  await expect(
+    page.getByText("Select an organization", { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL((url) => url.pathname === "/auth/organization");
+  await expect(
+    page.getByRole("term").filter({ hasText: "Account" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Use another account" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: organizationName ?? "" }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: `Connect Consent browser test ${id} to stella`,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
 });
 
 test("consent discloses permissions on demand and brands only verified locations", async ({
