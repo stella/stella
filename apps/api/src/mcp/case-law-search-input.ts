@@ -165,13 +165,15 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       source_id: v.optional(uuidInputSchema("Filter by source ID")),
       date_from: v.optional(
         v.pipe(
-                  v.maxLength(LIMITS.mcpIsoDateMaxChars),
+          vApiDate,
+          v.maxLength(LIMITS.mcpIsoDateMaxChars),
           v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
         ),
       ),
       date_to: v.optional(
         v.pipe(
-                  v.maxLength(LIMITS.mcpIsoDateMaxChars),
+          vApiDate,
+          v.maxLength(LIMITS.mcpIsoDateMaxChars),
           v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
         ),
       ),
