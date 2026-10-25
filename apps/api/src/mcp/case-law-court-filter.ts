@@ -6,6 +6,7 @@ import {
   apexCourtAbbreviations,
   courtAbbreviation,
 } from "@stll/api-contract/case-law-court-abbreviations";
+import { createTtlFlightCache } from "@stll/concurrency/ttl-flight-cache";
 import { Temporal } from "@stll/time";
 
 import { readCourtNames } from "@/api/handlers/case-law/decisions/shelf-courts";
@@ -17,7 +18,6 @@ import {
 } from "@/api/lib/case-law/search-warnings";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { createTtlFlightCache } from "@/api/lib/ttl-flight-cache";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 

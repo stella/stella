@@ -7,6 +7,10 @@ import {
 } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { compareCodeUnit } from "@stll/collation";
+import {
+  createTtlFlightCache,
+  type TtlFlightCache,
+} from "@stll/concurrency/ttl-flight-cache";
 import { Temporal } from "@stll/time";
 
 import {
@@ -68,10 +72,6 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
-import {
-  createTtlFlightCache,
-  type TtlFlightCache,
-} from "@/api/lib/ttl-flight-cache";
 
 /**
  * How much case law the corpus holds, per country and per source, and whether

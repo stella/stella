@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createTtlFlightCache } from "@/api/lib/ttl-flight-cache";
+import { createTtlFlightCache } from "./ttl-flight-cache";
 
 type Deferred<Value> = ReturnType<typeof Promise.withResolvers<Value>>;
 
