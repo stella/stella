@@ -33,3 +33,15 @@ export const createStellaEdenClient = <TApi extends AnyElysia>(
     parseDate: false,
   });
 };
+
+/** Eden represents only a rejected fetch with an error and no HTTP response.
+ * Request hooks and body parsers reject outside that catch; response hooks keep
+ * their Response. Keep this distinction before translating an HTTP error. */
+export const readEdenTransportFailure = ({
+  error,
+  response,
+}: {
+  error: { value: unknown } | null;
+  response: Response | undefined;
+}) =>
+  error !== null && response === undefined ? { cause: error.value } : null;

@@ -1,0 +1,1 @@
+{"border-warning/30":{"valid":true,"declarations":[["","border-color","color-mix(in oklab, var(--warning) 30%, transparent)"]],"values":{"color-mix(in oklab, var(--warning) 30%, transparent)":{"p":["--warning"],"f":[],"u":false}}}}

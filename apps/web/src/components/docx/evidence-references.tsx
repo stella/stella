@@ -20,6 +20,7 @@ import { Link2Icon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import { openSourceBoundEntityFile } from "@/components/chat/entity-open";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -320,17 +321,20 @@ const EvidenceFilePicker = ({
         </p>
       )}
       {query.isError && (
-        <div role="alert">
-          <p>{t("errors.actionFailed")}</p>
-          <Button
-            onClick={() => {
-              detached(query.refetch(), "evidence-reference.retry");
-            }}
-            variant="ghost"
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+        <RecoverableErrorStatus
+          className=""
+          message={t("errors.actionFailed")}
+          actions={
+            <Button
+              onClick={() => {
+                detached(query.refetch(), "evidence-reference.retry");
+              }}
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          }
+        />
       )}
       <ul className="flex flex-col gap-1">
         {files?.map((file) => (

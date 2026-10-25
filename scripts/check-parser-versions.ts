@@ -852,9 +852,12 @@ const fetchMissingObjects = (
       detail: `${String(missing.length)} source objects are missing and no promisor remote can supply them`,
     };
   }
-  // The arguments git's own lazy fetch passes, with every object at once.
+  // Match Git's lazy fetch: object IDs may be blobs, so commit negotiation
+  // must not interpret them as revision tips.
   return runGit(
     [
+      "-c",
+      "fetch.negotiationAlgorithm=noop",
       "fetch",
       "--no-tags",
       "--no-write-fetch-head",

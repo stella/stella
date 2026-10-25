@@ -709,6 +709,7 @@
         "@elysia/eden": "^1.4.10",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "elysia": "catalog:",
