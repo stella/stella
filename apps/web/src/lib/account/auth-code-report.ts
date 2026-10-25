@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import type { ScopedResponse } from "@stll/api-client";
+
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 
@@ -50,7 +52,7 @@ export const reportUnhandledAuthClientError = (
 const ME_API_PATH = /^\/v1\/me(?:\/|$)/u;
 
 export const reportUnhandledMeResponse = async (
-  response: Response,
+  response: ScopedResponse,
   report: UserVisibleReporter,
 ): Promise<void> => {
   if (

@@ -105,7 +105,10 @@ export const MemoryCreateForm = (props: MemoryCreateFormProps) => {
       stellaToast.add({ title: t(toastKey), type: "success" });
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryCreateForm:failure",
+        scope: { type: "handler", handlerId: "MemoryCreateForm:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });

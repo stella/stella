@@ -85,6 +85,8 @@ describe("DOCX suggestion creation", () => {
       }),
     );
     const context = asTestRaw<CreateDocxSuggestionsContext>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/workspaces/:workspaceId/docx-suggestions",
       body: {
         originThreadId: THREAD_ID,
         suggestions: [
@@ -133,6 +135,8 @@ describe("DOCX suggestion creation", () => {
       }),
     );
     const context = asTestRaw<CreateDocxSuggestionsContext>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/workspaces/:workspaceId/docx-suggestions",
       body: {
         suggestions: [
           {

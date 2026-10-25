@@ -38,6 +38,7 @@ import {
   getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { requestClassAtCompletion } from "@/api/lib/observability/route-latency-class";
@@ -105,6 +106,12 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const captured = statusCode >= 500;
   const routeName = getRouteName(ctx.route);
   const failedSeverity = captured ? "ERROR" : "WARN";
+  const scope = {
+    type: "request",
+    method: ctx.request.method,
+    routeTemplate: routeName,
+  } as const;
+  recordRequestExceptionScope(ctx.request, scope);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
@@ -161,6 +168,8 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
 
   if (captured) {
     captureObservedError(error, {
+      scope,
+      fingerprintKey: "observability.answerRequestError",
       request: ctx.request,
       context: {
         route: routeName,

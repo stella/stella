@@ -295,7 +295,7 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const sessionView = useQueryView(useQuery(sessionOptions));
-  useQueryViewError(sessionView);
+  useQueryViewError(sessionView, "useLawHistory:query");
   const session = sessionView.type === "items" ? sessionView.items : null;
   const userId = session?.user.id;
   const organizationId = session?.session.activeOrganizationId;
@@ -306,7 +306,7 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
     localLawHistoryImportOptions(keyScope, queryClient),
   );
   const importView = useQueryView(importQuery);
-  useQueryViewError(importView);
+  useQueryViewError(importView, "useLawHistory:query-2");
   const query = useQuery({
     queryKey: lawHistoryKeys.list({ scope: scope ?? keyScope, filter }),
     enabled,
@@ -376,7 +376,7 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
     },
   });
   const view = useQueryView(query);
-  useQueryViewError(view);
+  useQueryViewError(view, "useLawHistory:query-3");
   const onError = (error: unknown) => {
     notifyUserError(error, t("lawHome.recentUpdateFailed"));
   };

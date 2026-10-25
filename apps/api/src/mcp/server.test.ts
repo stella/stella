@@ -106,7 +106,7 @@ const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
   authenticateMcpRequest: authenticateMcpRequestMock,
-  captureError: (error, context) => {
+  captureError: (error, { context }) => {
     captureErrorMock(error, context);
   },
   observeTransportFailure: (error, context) => {

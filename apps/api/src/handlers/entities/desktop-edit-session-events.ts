@@ -19,6 +19,7 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { registerSessionDelivery, sseResponse } from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
@@ -213,7 +214,12 @@ export const desktopEditSessionEventsHandler = async (
 
   const refreshLivenessInBackground = () => {
     refreshLiveness().catch((error: unknown) => {
-      captureError(error, { sessionId });
+      captureError(
+        error,
+        handlerErrorContext("entities.refreshLivenessInBackground", {
+          sessionId,
+        }),
+      );
     });
   };
 

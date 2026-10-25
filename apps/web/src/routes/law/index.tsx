@@ -311,7 +311,7 @@ function LawHome() {
     enabled: statuteCountry !== null,
   });
   const shelfView = useQueryView(shelfQuery);
-  useQueryViewError(shelfView);
+  useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
   /**
