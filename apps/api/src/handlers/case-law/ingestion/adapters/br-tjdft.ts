@@ -37,8 +37,11 @@
  * listing row flagged secret is not detail-read, and a detail answer flagged
  * secret is not built. The crawl counts either against the window's total as
  * excluded, and reconciliation leaves it out of what a slice is measured
- * against. A record stored while public that is later flagged is not taken
- * down by this adapter.
+ * against.
+ *
+ * Blind spot: a decision that becomes secret after it was stored is not
+ * withdrawn yet. The pipeline has no ingestion withdrawal path, so its stored
+ * text, raw payload and projections stay as they were.
  */
 
 import { panic, Result } from "better-result";
