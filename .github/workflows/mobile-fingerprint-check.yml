@@ -16,6 +16,8 @@ defaults:
 # reaching phones until that build ships. The label job only calls the API;
 # the job that installs and runs pull request code has no write token.
 #
+# Installs are cold, as in the release jobs the fingerprint must agree with.
+#
 # The TestFlight build stamps its fingerprint on macOS and updates are
 # published on Linux. A macOS job checks that both agree on iOS: if they did
 # not, no update would ever reach a build.
@@ -62,9 +64,8 @@ jobs:
           no-cache: true
 
       - name: Install the merge result's mobile dependencies
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Fingerprint the merge result
         working-directory: apps/mobile
@@ -80,9 +81,8 @@ jobs:
       # A dependency change must not be fingerprinted against the merge
       # result's installed packages.
       - name: Install the base's mobile dependencies
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Fingerprint the base
         working-directory: apps/mobile
@@ -148,9 +148,8 @@ jobs:
           no-cache: true
 
       - name: Install the merge result's mobile dependencies
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Compare with the Linux fingerprint
         working-directory: apps/mobile
