@@ -50,14 +50,25 @@ const preflight = (createHeaders: () => Headers) =>
 const transportPreflight = preflight(createMcpPreflightHeaders);
 const discoveryPreflight = preflight(createMcpDiscoveryPreflightHeaders);
 
+const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
+  MCP_HTTP_PATH,
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ANONYMIZED_HTTP_PATH,
+  MCP_DOCUMENTS_HTTP_PATH,
+  MCP_LAW_HTTP_PATH,
+]);
+
 /**
- * The one 405 for a method the transport is never handed, in the envelope and
- * with the `Allow` value the transport answers a refused `DELETE` with.
+ * The one 405 for a method a transport path does not serve, in the envelope
+ * and with the `Allow` value the transport answers a refused `DELETE` with.
+ * It sits outside CORS: the transports answer their own, without credentials.
  */
-const transportMethodNotAllowed = defineEndpoint.public(
-  { bodyMode: "none", cors: "own" },
-  () => mcpMethodNotAllowedResponse(),
-);
+export const mcpTransportMethodRefusal: Middleware = async (ctx, inner) =>
+  ctx.routeEntry === undefined &&
+  ctx.route !== undefined &&
+  MCP_TRANSPORT_PATHS.has(ctx.route)
+    ? mcpMethodNotAllowedResponse()
+    : await inner();
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,
@@ -109,8 +120,6 @@ export const createMcpRoute = ({
       GET: definition,
       POST: definition,
       DELETE: definition,
-      PUT: transportMethodNotAllowed,
-      PATCH: transportMethodNotAllowed,
     };
   };
 

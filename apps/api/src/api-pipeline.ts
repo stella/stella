@@ -3,6 +3,7 @@ import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 
 import { env } from "@/api/env";
+import { mcpTransportMethodRefusal } from "@/api/handlers/mcp/routes-core";
 import { responseCachePolicy } from "@/api/http/cache";
 import { cors } from "@/api/http/cors";
 import { setResponseHeaders } from "@/api/http/headers";
@@ -145,6 +146,7 @@ export const apiPipeline: readonly Middleware[] = [
   requestCompletion,
   responseCachePolicy,
   securityHeaders,
+  mcpTransportMethodRefusal,
   cors({
     isAllowedOrigin: (origin) =>
       isAllowedBrowserOrigin(origin, ALLOWED_BROWSER_ORIGINS),

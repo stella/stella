@@ -3,7 +3,10 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { apiPipeline } from "@/api/api-pipeline";
 import { env } from "@/api/env";
-import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
+import {
+  createMcpRoute,
+  mcpTransportMethodRefusal,
+} from "@/api/handlers/mcp/routes-core";
 import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
 import { createHttpApp } from "@/api/http/app";
 import { responseCachePolicy } from "@/api/http/cache";
@@ -43,7 +46,11 @@ const serveMcpRoute = (handleMcpHttpRequest: HandleMcpHttpRequest) =>
   serveForTest(
     createHttpApp({
       routes: createMcpRoute({ handleMcpHttpRequest }),
-      middleware: [responseCachePolicy, errorBoundary],
+      middleware: [
+        responseCachePolicy,
+        mcpTransportMethodRefusal,
+        errorBoundary,
+      ],
     }),
   );
 

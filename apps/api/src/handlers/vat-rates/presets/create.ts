@@ -76,7 +76,7 @@ const applyVatRatePreset = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(applyVatRatePreset.handler, {
+declareAggregateMutation(applyVatRatePreset, {
   type: "independent",
   reason:
     "Adds one organization's statutory VAT rate periods under that organization's VAT rate advisory lock; no aggregate state spans organizations.",
