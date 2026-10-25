@@ -102,7 +102,9 @@ const exporterFor = (
   const failures: OtlpLogExportFailure[] = [];
   const exporter = createOtlpLogExporter({
     headers: { Authorization: "Bearer otlp-test-token" },
-    onFailure: (failure) => failures.push(failure),
+    onFailure: (failure) => {
+      failures.push(failure);
+    },
     resource: { "service.name": "stella-api", "service.version": "1.2.3" },
     scopeName: "stella.api",
     url,
