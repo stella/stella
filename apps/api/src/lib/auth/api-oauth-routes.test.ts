@@ -25,6 +25,7 @@ const handlerConfigOf = (module: unknown) => {
   return {
     endpoint,
     accountAccess: isRecord(config) ? config["accountAccess"] : undefined,
+    access: isRecord(config) ? config["access"] : undefined,
   };
 };
 
@@ -52,7 +53,8 @@ describe("the routes an API access token opens", () => {
         access: capability?.["access"],
         scope: capability?.["scope"],
       }).toEqual({
-        access: method === "GET" ? "read" : "write",
+        // A POST that only reads (a query with a body) declares it.
+        access: endpoint.access ?? (method === "GET" ? "read" : "write"),
         scope,
       });
     },
