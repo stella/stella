@@ -198,6 +198,7 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             if (
               allowed ||
+              !isAstNode(node) ||
               !isAstNode(node.callee) ||
               node.callee.type !== "Identifier" ||
               node.callee.name !== "t"
