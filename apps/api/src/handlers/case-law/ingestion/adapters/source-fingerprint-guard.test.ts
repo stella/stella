@@ -17,7 +17,9 @@ import { sha256Hex as hashContent } from "@stll/sha256/node";
 import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import { SOURCE_FINGERPRINT_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
+import { plCourtsSearchFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   FINGERPRINT_FINDING_REASONS,
   fingerprintFinding,
@@ -61,13 +63,45 @@ test("every registration's rawHash is the fingerprint of what it stores, or a li
       : [{ key, reason: FINGERPRINT_FINDING_REASONS[finding.type] }],
   );
   if (CENSUS_OUT !== undefined) {
-    writeFileSync(CENSUS_OUT, JSON.stringify(misses));
+    const fingerprints = rows.map(
+      ({ key, fingerprint, storedInputIdentity }) => {
+        const source = key.split("::", 1)[0];
+        const version = Object.entries(SOURCE_FINGERPRINT_VERSIONS).find(
+          ([candidate]) => candidate === source,
+        )?.[1];
+        if (version === undefined) {
+          panic(`No source fingerprint version configured for ${key}`);
+        }
+        return { key, fingerprint, storedInputIdentity, version };
+      },
+    );
+    writeFileSync(CENSUS_OUT, JSON.stringify({ fingerprints, misses }));
     return;
   }
   expect(
     misses.map(({ key }) => key),
     "New misses fail; a conforming row must leave the baseline (--write)",
   ).toEqual(await recordedDrivers());
+}, 120_000);
+
+test("the census records the emitted hash for an allowlisted partial-hash adapter", async () => {
+  const decision = await plCourtsSearchFixture().buildDecision();
+  const row = (await sourceFingerprintCensus()).find(
+    ({ key }) => key === "pl-courts::search",
+  );
+  const { sourceRaw } = decision;
+
+  expect(row?.fingerprint).toBe(decision.rawHash);
+  expect(sourceRaw).toBeDefined();
+  if (sourceRaw === undefined) {
+    return;
+  }
+  expect(row?.fingerprint).not.toBe(
+    sourceFingerprint({
+      sourceRaw,
+      sourceRawObjects: decision.sourceRawObjects,
+    }),
+  );
 }, 120_000);
 
 // ── self-test: the check rejects identity hashes ──────────────────────────

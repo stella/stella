@@ -4,9 +4,13 @@ import { TauriEvent } from "@tauri-apps/api/event";
 
 import { DEFAULT_CLIPBOARD_GROUP_COLOR } from "../../src/clipboard/clipboard-style";
 import { isClipboardSnapshot } from "../../src/clipboard/clipboard-types";
-import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
+import type {
+  ClipboardCaptureUpdate,
+  ClipboardSnapshot,
+} from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
 
 const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
   const item = {
@@ -36,6 +40,7 @@ const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
 }) satisfies ClipboardSnapshot["items"];
 
 const SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   groupLimit: 24,
   groups: [{ color: DEFAULT_CLIPBOARD_GROUP_COLOR, id: "work", name: "Work" }],
@@ -64,20 +69,59 @@ const installNativeBoundary = async (
   }: NativeBoundaryOptions,
 ) => {
   expect(isClipboardSnapshot(SNAPSHOT)).toBe(true);
-  await page.addInitScript(
-    ({
-      clipboardSnapshot,
-      nativeLanguage,
-      nativeBlurEvent,
-      nativeCopyLifecycle,
-    }) => {
-      const callbacks = new Map<number, (data: unknown) => unknown>();
-      const invocations: {
-        args: Record<string, unknown>;
-        command: string;
-      }[] = [];
-      let nextCallbackId = 1;
+  await installTauriIpc(page, {
+    windowLabel: "clipboard",
+    unhandled: "resolveUndefined",
+    arg: {
+      clipboardSnapshot: { ...SNAPSHOT, groups },
+      nativeLanguage: language,
+      nativeBlurEvent: TauriEvent.WINDOW_BLUR,
+      nativeCopyLifecycle: copyLifecycle,
+    },
+    handlers: (
+      {
+        clipboardSnapshot,
+        nativeLanguage,
+        nativeBlurEvent,
+        nativeCopyLifecycle,
+      },
+      { emit, invocations },
+    ) => {
       let session = 1;
+      let latestCapture: ClipboardCaptureUpdate | null = null;
+      Reflect.set(
+        window,
+        "__STELLA_TEST_CAPTURE_CLIPBOARD__",
+        (texts: string[]) => {
+          const notifications = [];
+          for (const text of texts) {
+            clipboardSnapshot.revision += 1;
+            const original = clipboardSnapshot.items.at(0);
+            if (!original) {
+              throw new TypeError(
+                "Capture fixture requires an existing text item",
+              );
+            }
+            const item = {
+              ...original,
+              id: `captured-${clipboardSnapshot.revision}`,
+              name: text,
+              plainText: text,
+            };
+            clipboardSnapshot.items.unshift(item);
+            latestCapture = {
+              revision: clipboardSnapshot.revision,
+              item,
+              removedItemIds: [],
+              sourceAppVisuals: [],
+            };
+            const payload = { revision: clipboardSnapshot.revision };
+            notifications.push(payload);
+            emit("clipboard-history-changed", payload);
+          }
+          return notifications;
+        },
+      );
       Reflect.set(window, "__STELLA_TEST_REOPEN_CLIPBOARD__", () => {
         if (!document.documentElement.hidden) {
           throw new TypeError("Clipboard must be hidden before a new session");
@@ -87,171 +131,117 @@ const installNativeBoundary = async (
         session += 1;
         return session;
       });
-
-      Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
       Reflect.set(window, "__STELLA_TEST_NATIVE_BLUR__", () => {
         const subscription = invocations.findLast(
           ({ args, command }) =>
             command === "plugin:event|listen" &&
             args["event"] === nativeBlurEvent,
         );
-        const id = subscription?.args["handler"];
-        if (typeof id !== "number") {
-          throw new TypeError("Native window blur listener is not installed");
-        }
-        callbacks.get(id)?.({ event: nativeBlurEvent, id, payload: null });
+        emit(nativeBlurEvent, null);
         return subscription?.args["target"];
       });
-      Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
-        unregisterListener: () => undefined,
-      });
-      Reflect.set(window, "__TAURI_INTERNALS__", {
-        callbacks,
-        convertFileSrc: (path: string) => path,
-        invoke: async (command: string, args: Record<string, unknown> = {}) => {
-          invocations.push({ args, command });
-          if (
-            (command === "clipboard_copy_item" ||
-              command === "clipboard_copy_items" ||
-              command === "clipboard_hide") &&
-            nativeCopyLifecycle === "hideUntilReopened"
-          ) {
-            document.documentElement.hidden = true;
-            window.dispatchEvent(new FocusEvent("blur"));
-            return undefined;
-          }
-          if (command === "clipboard_delete_item") {
-            return {
-              ...clipboardSnapshot,
-              items: clipboardSnapshot.items.filter(
-                (item) => item.id !== args["id"],
-              ),
-            };
-          }
-          if (command === "clipboard_get_snapshot") {
-            return clipboardSnapshot;
-          }
-          if (command === "clipboard_create_group") {
-            const groupId = "created-group";
-            const itemId = args["itemId"];
-            const name = args["name"];
-            return {
-              ...clipboardSnapshot,
-              groups: [
-                ...clipboardSnapshot.groups,
-                {
+      const copy = () => {
+        if (nativeCopyLifecycle === "hideUntilReopened") {
+          document.documentElement.hidden = true;
+          window.dispatchEvent(new FocusEvent("blur"));
+        }
+        return undefined;
+      };
+      return {
+        clipboard_copy_item: copy,
+        clipboard_copy_items: copy,
+        clipboard_hide: copy,
+        clipboard_delete_item: (args) => ({
+          ...clipboardSnapshot,
+          items: clipboardSnapshot.items.filter(
+            (item) => item.id !== args["id"],
+          ),
+        }),
+        clipboard_get_capture_update: async (args) => {
+          // A burst can replace the retained delta before a request is served.
+          await Promise.resolve();
+          return latestCapture?.revision === args["revision"]
+            ? latestCapture
+            : null;
+        },
+        clipboard_get_snapshot: () => structuredClone(clipboardSnapshot),
+        clipboard_create_group: (args) => {
+          const groupId = "created-group";
+          const itemId = args["itemId"];
+          const name = args["name"];
+          return {
+            ...clipboardSnapshot,
+            groups: [
+              ...clipboardSnapshot.groups,
+              {
+                color:
+                  typeof args["color"] === "string"
+                    ? args["color"]
+                    : clipboardSnapshot.groups[0]?.color,
+                id: groupId,
+                name: typeof name === "string" ? name : "Created group",
+              },
+            ],
+            items: clipboardSnapshot.items.map((item) =>
+              item.id === itemId
+                ? {
+                    ...item,
+                    groupId,
+                    groupedAt: "2026-09-08T06:00:00.000Z",
+                  }
+                : item,
+            ),
+          };
+        },
+        clipboard_update_group: (args) => ({
+          ...clipboardSnapshot,
+          groups: clipboardSnapshot.groups.map((group) =>
+            group.id === args["id"]
+              ? {
+                  ...group,
                   color:
                     typeof args["color"] === "string"
                       ? args["color"]
-                      : clipboardSnapshot.groups[0]?.color,
-                  id: groupId,
-                  name: typeof name === "string" ? name : "Created group",
-                },
-              ],
-              items: clipboardSnapshot.items.map((item) =>
-                item.id === itemId
-                  ? {
-                      ...item,
-                      groupId,
-                      groupedAt: "2026-09-08T06:00:00.000Z",
-                    }
-                  : item,
-              ),
-            };
-          }
-          if (command === "clipboard_update_group") {
-            return {
-              ...clipboardSnapshot,
-              groups: clipboardSnapshot.groups.map((group) =>
-                group.id === args["id"]
-                  ? {
-                      ...group,
-                      color:
-                        typeof args["color"] === "string"
-                          ? args["color"]
-                          : group.color,
-                      name:
-                        typeof args["name"] === "string"
-                          ? args["name"]
-                          : group.name,
-                    }
-                  : group,
-              ),
-            };
-          }
-          if (command === "clipboard_set_screen_capture") {
-            return {
-              ...clipboardSnapshot,
-              screenCapture:
-                args["capture"] === "visible" ? "visible" : "hidden",
-            };
-          }
-          if (command === "clipboard_exclude_item_source_app") {
-            const item = clipboardSnapshot.items.find(
-              ({ id }) => id === args["id"],
-            );
-            const sourceApp = item?.sourceApp;
-            return sourceApp?.identifier
-              ? {
-                  ...clipboardSnapshot,
-                  sourceAppExclusions: [
-                    {
-                      identifier: sourceApp.identifier.toLowerCase(),
-                      name: sourceApp.name,
-                    },
-                  ],
+                      : group.color,
+                  name:
+                    typeof args["name"] === "string"
+                      ? args["name"]
+                      : group.name,
                 }
-              : clipboardSnapshot;
-          }
-          if (command === "clipboard_remove_source_app_exclusion") {
-            return { ...clipboardSnapshot, sourceAppExclusions: [] };
-          }
-          if (command === "get_desktop_language") {
-            return nativeLanguage;
-          }
-          if (command === "registry_get_state") {
-            return { status: "disconnected" };
-          }
-          if (command === "is_autostart_enabled") {
-            return false;
-          }
-          if (command === "plugin:event|listen") {
-            return args["handler"];
-          }
-          return undefined;
+              : group,
+          ),
+        }),
+        clipboard_set_screen_capture: (args) => ({
+          ...clipboardSnapshot,
+          screenCapture: args["capture"] === "visible" ? "visible" : "hidden",
+        }),
+        clipboard_exclude_item_source_app: (args) => {
+          const item = clipboardSnapshot.items.find(
+            ({ id }) => id === args["id"],
+          );
+          const sourceApp = item?.sourceApp;
+          return sourceApp?.identifier
+            ? {
+                ...clipboardSnapshot,
+                sourceAppExclusions: [
+                  {
+                    identifier: sourceApp.identifier.toLowerCase(),
+                    name: sourceApp.name,
+                  },
+                ],
+              }
+            : clipboardSnapshot;
         },
-        metadata: {
-          currentWebview: {
-            label: "clipboard",
-            windowLabel: "clipboard",
-          },
-          currentWindow: { label: "clipboard" },
-        },
-        runCallback: (id: number, data: unknown) => callbacks.get(id)?.(data),
-        transformCallback: (
-          callback: ((data: unknown) => unknown) | undefined,
-          once = false,
-        ) => {
-          const id = nextCallbackId;
-          nextCallbackId += 1;
-          callbacks.set(id, (data) => {
-            if (once) {
-              callbacks.delete(id);
-            }
-            return callback?.(data);
-          });
-          return id;
-        },
-        unregisterCallback: (id: number) => callbacks.delete(id),
-      });
+        clipboard_remove_source_app_exclusion: () => ({
+          ...clipboardSnapshot,
+          sourceAppExclusions: [],
+        }),
+        get_desktop_language: () => nativeLanguage,
+        registry_get_state: () => ({ status: "disconnected" }),
+        is_autostart_enabled: () => false,
+      };
     },
-    {
-      clipboardSnapshot: { ...SNAPSHOT, groups },
-      nativeLanguage: language,
-      nativeBlurEvent: TauriEvent.WINDOW_BLUR,
-      nativeCopyLifecycle: copyLifecycle,
-    },
-  );
+  });
 };
 
 const openClipboard = async (page: Page, language: "ar" | "en") => {
@@ -312,48 +302,14 @@ const readFocusIndicator = async (
   });
 
 const invocationCount = async (page: Page, command: string) =>
-  page.evaluate((expectedCommand) => {
-    const invocations: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_INVOCATIONS__",
-    );
-    if (!Array.isArray(invocations)) {
-      return 0;
-    }
-    return invocations.filter(
-      (invocation) =>
-        typeof invocation === "object" &&
-        invocation !== null &&
-        "command" in invocation &&
-        invocation.command === expectedCommand,
-    ).length;
-  }, command);
+  (await tauriInvocations(page)).filter(
+    (invocation) => invocation.command === command,
+  ).length;
 
 const lastInvocationArgs = async (page: Page, command: string) =>
-  page.evaluate((expectedCommand) => {
-    const invocations: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_INVOCATIONS__",
-    );
-    if (!Array.isArray(invocations)) {
-      return null;
-    }
-    const invocation: unknown = invocations.findLast(
-      (candidate) =>
-        typeof candidate === "object" &&
-        candidate !== null &&
-        "command" in candidate &&
-        candidate.command === expectedCommand,
-    );
-    if (
-      typeof invocation !== "object" ||
-      invocation === null ||
-      !("args" in invocation)
-    ) {
-      return null;
-    }
-    return invocation.args;
-  }, command);
+  (await tauriInvocations(page)).findLast(
+    (invocation) => invocation.command === command,
+  )?.args ?? null;
 
 /**
  * Resolves once a tooltip popup is on screen, or once the open delay has
@@ -373,6 +329,54 @@ const waitForTooltip = async (page: Page) =>
     }
     return false;
   });
+
+test("captures use a caller-scoped delta and recover a burst revision gap", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+  const capture = async (texts: string[]) =>
+    page.evaluate((values): unknown => {
+      const emit: unknown = Reflect.get(
+        window,
+        "__STELLA_TEST_CAPTURE_CLIPBOARD__",
+      );
+      if (typeof emit !== "function") {
+        throw new TypeError("Native capture boundary is missing");
+      }
+      return emit(values);
+    }, texts);
+  expect(await capture(["First new capture"])).toEqual([{ revision: 1 }]);
+  await expect(
+    page.getByText("First new capture", { exact: true }).first(),
+  ).toBeVisible();
+  expect(
+    await lastInvocationArgs(page, "clipboard_get_capture_update"),
+  ).toEqual({ revision: 1 });
+  const snapshotsBeforeBurst = (await tauriInvocations(page)).filter(
+    ({ command }) => command === "clipboard_get_snapshot",
+  ).length;
+  expect(await capture(["Second new capture", "Third new capture"])).toEqual([
+    { revision: 2 },
+    { revision: 3 },
+  ]);
+  await expect(
+    page.getByText("Third new capture", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Second new capture", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("First new capture", { exact: true }).first(),
+  ).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (await tauriInvocations(page)).filter(
+          ({ command }) => command === "clipboard_get_snapshot",
+        ).length,
+    )
+    .toBe(snapshotsBeforeBurst + 1);
+});
 
 const DIRECTIONS = [
   {
@@ -1297,36 +1301,11 @@ test("creates a group from a clip with inline preset and custom colors", async (
   await expect(
     page.getByRole("button", { name: "Client intake" }),
   ).toBeVisible();
-  const createGroupArgs = await page.evaluate(() => {
-    const invocations: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_INVOCATIONS__",
-    );
-    if (!Array.isArray(invocations)) {
-      return null;
-    }
-    for (const invocation of invocations) {
-      if (
-        typeof invocation !== "object" ||
-        invocation === null ||
-        !("command" in invocation) ||
-        invocation.command !== "clipboard_create_group" ||
-        !("args" in invocation) ||
-        typeof invocation.args !== "object" ||
-        invocation.args === null
-      ) {
-        continue;
-      }
-      return {
-        color: "color" in invocation.args ? invocation.args.color : undefined,
-        itemId:
-          "itemId" in invocation.args ? invocation.args.itemId : undefined,
-        name: "name" in invocation.args ? invocation.args.name : undefined,
-      };
-    }
-    return null;
-  });
-  expect(createGroupArgs).toEqual({
+  const createGroupArgs =
+    (await tauriInvocations(page)).find(
+      ({ command }) => command === "clipboard_create_group",
+    )?.args ?? null;
+  expect(createGroupArgs).toMatchObject({
     color: "#112233",
     itemId: "clip-1",
     name: "Client intake",
@@ -1346,32 +1325,10 @@ test("creates a group from a clip with inline preset and custom colors", async (
   );
   await editDialog.getByRole("textbox").fill("Client intake renamed");
   await editDialog.getByRole("button", { name: "Edit group" }).click();
-  const updateGroupArgs = await page.evaluate(() => {
-    const invocations: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_INVOCATIONS__",
-    );
-    if (!Array.isArray(invocations)) {
-      return null;
-    }
-    const invocation = invocations.findLast(
-      (candidate) =>
-        typeof candidate === "object" &&
-        candidate !== null &&
-        "command" in candidate &&
-        candidate.command === "clipboard_update_group",
-    );
-    if (
-      typeof invocation !== "object" ||
-      invocation === null ||
-      !("args" in invocation) ||
-      typeof invocation.args !== "object" ||
-      invocation.args === null
-    ) {
-      return null;
-    }
-    return invocation.args;
-  });
+  const updateGroupArgs = await lastInvocationArgs(
+    page,
+    "clipboard_update_group",
+  );
   expect(updateGroupArgs).toEqual({
     color: "#112233",
     id: "created-group",

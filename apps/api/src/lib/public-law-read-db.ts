@@ -11,7 +11,10 @@ import { parsePostgresTimeoutMs } from "@/api/db/shared-pool-timeout-policy";
 import { setSharedReadTransactionGuards } from "@/api/db/shared-pool-timeouts";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import { queryCountLogger } from "@/api/lib/db-query-counter";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
@@ -466,14 +469,16 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
 
   if (externalPublicLawDatabase === null) {
     const client = runTransactionsInCallerContext(
-      createSqlClient({
-        url,
-        connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
-        max: envBase.PUBLIC_LAW_DATABASE_POOL_MAX,
-        maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
-        idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
-        ...sharedPoolConnectionSettings("public_law"),
-      }),
+      instrumentSqlTransactionCounts(
+        createSqlClient({
+          url,
+          connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
+          max: envBase.PUBLIC_LAW_DATABASE_POOL_MAX,
+          maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
+          idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+          ...sharedPoolConnectionSettings("public_law"),
+        }),
+      ),
     );
     const database = createDatabase({
       client,

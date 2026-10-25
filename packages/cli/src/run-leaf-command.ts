@@ -490,11 +490,13 @@ export const confirmDestructive = async ({
   flags,
   writers,
   label,
+  operation = "destructive",
 }: {
   context: Context;
   flags: LeafFlags;
   writers: Writers;
   label: string;
+  operation?: "destructive" | "approval";
 }): Promise<"proceed" | "aborted"> => {
   if (flags[RESERVED_FLAG_KEYS.yes] === true) {
     return "proceed";
@@ -508,7 +510,9 @@ export const confirmDestructive = async ({
     return "aborted";
   }
   if (!context.process.stdin.isTTY) {
-    writers.stderr("refusing destructive op without --yes on non-TTY\n");
+    writers.stderr(
+      `refusing ${operation === "destructive" ? "destructive op" : "operation requiring approval"} without --yes on non-TTY\n`,
+    );
     return "aborted";
   }
   // A TTY confirmation must read a single line: `readAllStdin` waits for EOF,
@@ -518,7 +522,7 @@ export const confirmDestructive = async ({
     output: context.process.stdout,
   });
   const rawAnswer = await rl.question(
-    `Run destructive command '${label}'? [y/N] `,
+    `Run ${operation === "destructive" ? "destructive command" : "command requiring approval"} '${label}'? [y/N] `,
   );
   rl.close();
   const answer = rawAnswer.trim().toLowerCase();

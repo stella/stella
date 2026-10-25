@@ -25,6 +25,7 @@ import { createEbsSignalReader } from "../lib/db/ebs-signal-reader";
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
+import type { MigrationLockTelemetry } from "./migration-lock-observation";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
@@ -53,6 +54,7 @@ export type OnlineIndexEbsSource =
   ConfiguredEbsConfiguration | { type: "reader"; read: () => Promise<Signal> };
 
 export type OnlineIndexGateOptions = {
+  lockTelemetry?: MigrationLockTelemetry;
   ebs: OnlineIndexEbsSource;
   config?: OnlineIndexConfig;
   hold?: OnlineIndexHoldRef;
@@ -291,6 +293,18 @@ const runObservedIndexWork = async ({
     ) {
       return { type: "retry" as const, history };
     }
+    // The gate lifts the session's lock budget, so only a statement that sets
+    // its own (an ACCESS EXCLUSIVE one, which must not queue the table's
+    // readers behind a long wait) runs out of one: the table is busy.
+    if (getPgErrorCode(outcome.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      emit({
+        decision: "cancel",
+        reason: "Statement lock budget exhausted",
+        verdict: combine(history.length ? history : initialVerdict.signals),
+        config: config.health,
+      });
+      return { type: "retry" as const, history };
+    }
     throw outcome.error;
   }
   return { type: "done" as const, history };
@@ -346,6 +360,115 @@ const readIndexStartVerdict = async ({
       kind: "index_build",
     }),
   ]);
+};
+
+// Relation-level locks only: a row lock wait between two writers is theirs,
+// not a queue the step would join. Autovacuum is read by its own signal.
+const TABLE_LOCK_HOLDERS_SQL = `SELECT a.pid AS pid, a.state AS state,
+  COALESCE(EXTRACT(EPOCH FROM (clock_timestamp() - a.xact_start)) * 1000, 0)::double precision AS "xactAgeMs",
+  COALESCE(EXTRACT(EPOCH FROM (clock_timestamp() - a.state_change)) * 1000, 0)::double precision AS "stateAgeMs",
+  bool_or(NOT l.granted) AS waiting
+FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+WHERE l.locktype = 'relation'
+  AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+  AND l.relation = to_regclass($1::text)
+  AND a.pid <> pg_backend_pid() AND a.pid <> $2::integer
+  AND a.backend_type IS DISTINCT FROM 'autovacuum worker'
+GROUP BY a.pid, a.state, a.xact_start, a.state_change`;
+
+export type TableLockHolder = {
+  pid: number;
+  state: string | null;
+  xactAgeMs: number;
+  stateAgeMs: number;
+  waiting: boolean;
+};
+
+export type TableLockBlocker = TableLockHolder & {
+  kind: "queued" | "idle_in_transaction" | "long_transaction";
+};
+
+const parseTableLockHolder = (row: unknown): TableLockHolder => {
+  if (
+    !isRecord(row) ||
+    typeof row["pid"] !== "number" ||
+    (row["state"] !== null && typeof row["state"] !== "string") ||
+    typeof row["xactAgeMs"] !== "number" ||
+    typeof row["stateAgeMs"] !== "number" ||
+    typeof row["waiting"] !== "boolean"
+  ) {
+    return panic("Invalid online index table lock holder response");
+  }
+  return {
+    pid: row["pid"],
+    state: row["state"],
+    xactAgeMs: row["xactAgeMs"],
+    stateAgeMs: row["stateAgeMs"],
+    waiting: row["waiting"],
+  };
+};
+
+/**
+ * The sessions the step would queue behind for long: one already waiting
+ * for a lock on the table (a queue exists), one idle in its transaction past
+ * `idleHolderMs`, or one whose transaction is older than `longHolderMs`.
+ * Short holders are left to the lock wait and its watchdog.
+ */
+export const tableLockBlockers = (
+  holders: readonly TableLockHolder[],
+  {
+    idleHolderMs,
+    longHolderMs,
+  }: Pick<OnlineIndexConfig, "idleHolderMs" | "longHolderMs">,
+): TableLockBlocker[] =>
+  holders.flatMap((holder): TableLockBlocker[] => {
+    if (holder.waiting) {
+      return [{ ...holder, kind: "queued" }];
+    }
+    if (
+      holder.state?.startsWith("idle in transaction") === true &&
+      holder.stateAgeMs >= idleHolderMs
+    ) {
+      return [{ ...holder, kind: "idle_in_transaction" }];
+    }
+    if (holder.xactAgeMs >= longHolderMs) {
+      return [{ ...holder, kind: "long_transaction" }];
+    }
+    return [];
+  });
+
+/** The work session's pid, once the observer is proven a separate session. */
+const readWorkSessionPid = async (
+  connection: OnlineMigrationConnection,
+  observer: OnlineMigrationConnection,
+): Promise<number> => {
+  const row = (
+    await connection.query(
+      "SELECT pg_backend_pid() AS pid, current_database() AS database",
+    )
+  ).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["pid"] !== "number" ||
+    typeof row["database"] !== "string"
+  ) {
+    return panic("Invalid online index backend pid response");
+  }
+  const observerPid = (
+    await observer.query(
+      "SELECT pg_backend_pid() AS pid, current_database() AS database",
+    )
+  ).at(0);
+  if (
+    !isRecord(observerPid) ||
+    observerPid["pid"] === row["pid"] ||
+    observerPid["database"] !== row["database"]
+  ) {
+    return panic(
+      "Online index observer must use a separate physical session in the same database",
+    );
+  }
+  return row["pid"];
 };
 
 type CreateOnlineIndexGateOptions = OnlineIndexGateOptions & {
@@ -473,32 +596,21 @@ export const createOnlineIndexGate = ({
     }
     hold.current = { type: "clear" };
     try {
-      const row = (
-        await connection.query(
-          "SELECT pg_backend_pid() AS pid, current_database() AS database",
-        )
-      ).at(0);
-      if (
-        !isRecord(row) ||
-        typeof row["pid"] !== "number" ||
-        typeof row["database"] !== "string"
-      ) {
-        return panic("Invalid online index backend pid response");
-      }
-      const pid = row["pid"];
-      const observerPid = (
-        await observer.query(
-          "SELECT pg_backend_pid() AS pid, current_database() AS database",
-        )
-      ).at(0);
-      if (
-        !isRecord(observerPid) ||
-        observerPid["pid"] === pid ||
-        observerPid["database"] !== row["database"]
-      ) {
-        return panic(
-          "Online index observer must use a separate physical session in the same database",
-        );
+      const pid = await readWorkSessionPid(connection, observer);
+      const blockers = tableLockBlockers(
+        (await observer.query(TABLE_LOCK_HOLDERS_SQL, [tableName, pid])).map(
+          parseTableLockHolder,
+        ),
+        config,
+      );
+      if (blockers.length > 0) {
+        markHeld({
+          ...start,
+          decision: "wait",
+          reason: "Table lock holders",
+          blockers,
+        });
+        return "wait";
       }
       await connection.execute("SET lock_timeout = '0'");
       await connection.execute("SET statement_timeout = '0'");

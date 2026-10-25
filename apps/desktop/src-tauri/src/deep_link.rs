@@ -1070,7 +1070,7 @@ async fn redeem_and_open_desktop_edit(
       .open_file(crate::session_manager::OpenDocument {
         account: &account,
         request,
-        prefetched_buffer: Some(prefetched_buffer),
+        prefetched_buffer,
       })
       .await
   }?;
