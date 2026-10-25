@@ -168,6 +168,23 @@ export const decryptContent = async (
 ): Promise<string> =>
   await decryptScopedContent(organizationId, ciphertext, iv);
 
+/** Encrypt organization content in a purpose-bound envelope. */
+export const encryptOrganizationSecret = async (
+  organizationId: SafeId<"organization">,
+  purpose: string,
+  plaintext: string,
+): Promise<EncryptedContent> =>
+  await encryptScopedContent(`${organizationId}:${purpose}`, plaintext);
+
+/** Decrypt organization content from its purpose-bound envelope. */
+export const decryptOrganizationSecret = async (
+  organizationId: SafeId<"organization">,
+  purpose: string,
+  ciphertext: Buffer,
+  iv: Buffer,
+): Promise<string> =>
+  await decryptScopedContent(`${organizationId}:${purpose}`, ciphertext, iv);
+
 const LOOKUP_KEY_SCOPE = "stella:content-lookup:v1:";
 
 /**

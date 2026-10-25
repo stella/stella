@@ -284,6 +284,30 @@ export const organizationSettings = p.pgTable(
     webSearchApiKeyEncrypted: bytea("web_search_api_key_encrypted"),
     /** AES-GCM initialization vector for webSearchApiKeyEncrypted. */
     webSearchApiKeyIv: bytea("web_search_api_key_iv"),
+    /** Encrypted KSeF login JSON, bound to the ksef_login envelope purpose. */
+    ksefLoginEncrypted: bytea("ksef_login_encrypted"),
+    /** AES-GCM initialization vector for ksefLoginEncrypted. */
+    ksefLoginIv: bytea("ksef_login_iv"),
+    /** KSeF authentication mechanism. */
+    ksefLoginKind: p.text("ksef_login_kind", {
+      enum: ["token", "certificate"],
+    }),
+    /** KSeF service environment selected by the organization. */
+    ksefLoginTarget: p.text("ksef_login_target", {
+      enum: ["test", "demo", "production"],
+    }),
+    /** Polish taxpayer identifier used for KSeF authentication. */
+    ksefLoginNip: p.text("ksef_login_nip"),
+    /** Certificate subject, present only for certificate authentication. */
+    ksefCertificateSubject: p.text("ksef_certificate_subject"),
+    /** Certificate validity start, present only for certificate authentication. */
+    ksefCertificateValidFrom: timestamptz("ksef_certificate_valid_from"),
+    /** Certificate validity end, present only for certificate authentication. */
+    ksefCertificateValidTo: timestamptz("ksef_certificate_valid_to"),
+    /** Time at which the KSeF login was last replaced. */
+    ksefLoginSetAt: timestamptz("ksef_login_set_at"),
+    /** User who last replaced the KSeF login. */
+    ksefLoginSetBy: p.text("ksef_login_set_by"),
     /** Encrypted url-fetch provider (Jina) BYOK key, AES-256-GCM. */
     urlFetchApiKeyEncrypted: bytea("url_fetch_api_key_encrypted"),
     /** AES-GCM initialization vector for urlFetchApiKeyEncrypted. */

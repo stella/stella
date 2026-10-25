@@ -22,6 +22,11 @@ import enrolFeature from "@/api/handlers/organization-settings/feature-enrolment
 import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-enrolments/get";
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
+import {
+  deleteKsefLogin,
+  readKsefLogin,
+  saveKsefLogin,
+} from "@/api/handlers/organization-settings/ksef-login";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
@@ -78,6 +83,11 @@ export const organizationSettingsRoute = routes(
     "/deepl-config": { GET: readDeepLConfig },
     "/web-search-config": { GET: readWebSearchConfig },
     "/web-search-key": { POST: updateWebSearchKey, DELETE: deleteWebSearchKey },
+    "/ksef-login": {
+      GET: readKsefLogin,
+      PUT: saveKsefLogin,
+      DELETE: deleteKsefLogin,
+    },
     "/anonymization-blacklist": {
       GET: readAnonymizationBlacklist,
       PUT: updateAnonymizationBlacklist,
