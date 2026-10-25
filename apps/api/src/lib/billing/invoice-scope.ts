@@ -30,7 +30,11 @@ export const invoiceInMatter = (
 ) =>
   sql`(${invoiceTouchesMatter(table, workspaceId)} OR (${table.workspaceId} IS NULL AND EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${table.organizationId} AND invoice_matter.client_id = ${table.clientId})))`;
 
-/** Credential scope covers this invoice and every matter of its linked original. */
+/**
+ * Tool matter scope covers this invoice and every matter of its linked
+ * original. RLS already binds an explicit credential matter set (lines outside
+ * it are invisible here); this binds a tool scope narrower than membership.
+ */
 export const invoiceWithinMatterAllowlist = (
   table: Pick<InvoiceScopeColumns, "id" | "workspaceId"> & {
     originalInvoiceId: SQLWrapper;

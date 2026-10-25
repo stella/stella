@@ -21,13 +21,18 @@ import {
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
+  createSafeDb,
+  createScopedDb,
   markRlsDatabase,
 } from "@/api/db/scoped";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import createInvoice from "@/api/handlers/invoices/create";
+import { loadInvoiceExport } from "@/api/handlers/invoices/export-records";
+import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
+import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import {
   insertInvoiceLines,
@@ -2034,6 +2039,187 @@ if (!databaseUrl || !runPostgres) {
           },
         });
       }
+    });
+
+    test("a credential's explicit matter set binds owners and admins on every invoice read", async () => {
+      const scenario = await seedScenario();
+      // Issued, so the accounting export includes it.
+      await db
+        .update(invoices)
+        .set({
+          status: INVOICE_STATUS.FINALIZED,
+          finalizedAt: new Date("2026-10-15T12:00:00Z"),
+        })
+        .where(eq(invoices.id, scenario.invoiceId));
+      const params = {
+        workspaceId: scenario.firstMatterId,
+        invoiceId: scenario.invoiceId,
+      };
+      // An MCP credential restricted to some matters carries exactly that set
+      // into RLS explicit mode; the REST handlers it invokes read through it.
+      const readThrough = async (
+        actor: "owner" | "admin",
+        matterIds: SafeId<"workspace">[],
+      ) => {
+        const userId = scenario.actors[actor];
+        const safeDb = createSafeDb(
+          markRlsDatabase(db),
+          matterIds,
+          scenario.orgId,
+          userId,
+        );
+        const scopedDb = createScopedDb(
+          markRlsDatabase(db),
+          matterIds,
+          scenario.orgId,
+          userId,
+        );
+        const handlerContext = <TContext>() =>
+          createTestHandlerContext<TContext>({
+            safeDb,
+            scopedDb,
+            audit: async () => {},
+            memberRole: sessionMemberRole(actor),
+            session: { activeOrganizationId: scenario.orgId },
+            user: { id: userId },
+            workspaceId: scenario.firstMatterId,
+            params,
+            getActiveWorkspaceIds: async () => matterIds,
+            getAccessibleWorkspaces: async () =>
+              matterIds.map((id) => ({ id, status: "active" })),
+            getWorkspaceAccess: async (id: SafeId<"workspace">) =>
+              matterIds.includes(id) ? { id, status: "active" } : null,
+            pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
+              matterIds.includes(id),
+          });
+        const renderedMatters: SafeId<"workspace">[][] = [];
+        const pdfExport = createInvoicePdfExport(
+          async () => panic("This test stops the export before storing it"),
+          async ({ invoice }) => {
+            renderedMatters.push(
+              invoice.invoice.lines.map((line) => line.workspaceId),
+            );
+            return Result.ok({
+              status: "rejected" as const,
+              reason: "timeout" as const,
+              diagnostics: [],
+            });
+          },
+        );
+        return {
+          row: await scopedDb(
+            async (tx) =>
+              await tx.query.invoices.findFirst({
+                where: { id: { eq: scenario.invoiceId } },
+                columns: { id: true },
+              }),
+          ),
+          detail:
+            await readInvoiceById.handler(
+              handlerContext<Parameters<typeof readInvoiceById.handler>[0]>(),
+            ),
+          pdf: await pdfExport.handler(
+            handlerContext<Parameters<typeof pdfExport.handler>[0]>(),
+          ),
+          renderedMatters,
+          accounting: await scopedDb(async (tx) =>
+            (
+              await loadInvoiceExport(tx, {
+                organizationId: scenario.orgId,
+                workspaceId: scenario.firstMatterId,
+                invoiceIds: [scenario.invoiceId],
+              })
+            ).invoices.map((invoice) => invoice.id),
+          ),
+          mcp: await BILLING_TOOL_HANDLERS.list_invoices({
+            args: { invoice_id: scenario.invoiceId },
+            context: authorizedMcpContextForTest(
+              buildMcpContextFromChat({
+                organizationId: scenario.orgId,
+                userId,
+                userEmail: "invoice-reader@example.test",
+                memberRole: sessionMemberRole(actor),
+                featureAccessSnapshot: enrolledTimeBillingSnapshot({
+                  organizationId: scenario.orgId,
+                  userId,
+                }),
+                safeDb,
+                scopedDb,
+                toolWorkspaceIds: resolveToolWorkspaceIds({
+                  accessibleWorkspaceIds: matterIds,
+                  pinnedIds: [],
+                }),
+              }),
+            ),
+          }),
+        };
+      };
+      for (const actor of ["owner", "admin"] as const) {
+        // The invoice also bills the second matter, so a credential limited
+        // to the first one reads it through no path, not even partially.
+        const restricted = await readThrough(actor, [scenario.firstMatterId]);
+        expect(restricted.row).toBeUndefined();
+        expect(restricted.detail).toMatchObject({ code: 404 });
+        expect(restricted.pdf).toMatchObject({ code: 404 });
+        expect(restricted.renderedMatters).toEqual([]);
+        expect(restricted.accounting).toEqual([]);
+        expect(restricted.mcp).toMatchObject({
+          status: "error",
+          error: { code: "not_found" },
+        });
+
+        const complete = await readThrough(actor, [
+          scenario.firstMatterId,
+          scenario.secondMatterId,
+        ]);
+        expect(complete.row).toEqual({ id: scenario.invoiceId });
+        expect(complete.detail).toMatchObject({
+          id: scenario.invoiceId,
+          lines: [
+            { workspaceId: scenario.firstMatterId },
+            { workspaceId: scenario.secondMatterId },
+          ],
+        });
+        expect(complete.renderedMatters).toEqual([
+          [scenario.firstMatterId, scenario.secondMatterId],
+        ]);
+        expect(complete.accounting).toEqual([scenario.invoiceId]);
+        expect(complete.mcp).toMatchObject({
+          egress: "structured",
+          payload: { invoice: { id: scenario.invoiceId } },
+        });
+      }
+
+      // An empty client invoice is reachable under a matter set only through
+      // a matter of its own client.
+      const emptyId = createSafeId<"invoice">();
+      await db.insert(invoices).values({
+        id: emptyId,
+        organizationId: scenario.orgId,
+        workspaceId: null,
+        clientId: scenario.clientId,
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+      });
+      const emptyThrough = async (matterIds: SafeId<"workspace">[]) =>
+        await createScopedDb(
+          markRlsDatabase(db),
+          matterIds,
+          scenario.orgId,
+          scenario.actors.owner,
+        )(
+          async (tx) =>
+            await tx.query.invoices.findFirst({
+              where: { id: { eq: emptyId } },
+              columns: { id: true },
+            }),
+        );
+      expect(
+        await emptyThrough([scenario.otherClientMatterId]),
+      ).toBeUndefined();
+      expect(await emptyThrough([scenario.firstMatterId])).toEqual({
+        id: emptyId,
+      });
     });
 
     test("MCP detail retains empty client invoices through an authorized matter of their client", async () => {

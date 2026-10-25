@@ -35,12 +35,19 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalo
  SELECT org_id = current_setting('app.organization_id', true)
  AND EXISTS (SELECT 1 FROM public.member m WHERE m.organization_id = org_id
    AND m.user_id = current_setting('app.user_id', true)
-   AND (m.role IN ('owner', 'admin') OR (
+   -- Owners and admins skip the matter checks only under membership access. An
+   -- explicit matter set (a credential restricted to some matters) binds them
+   -- like any member, so it never reads an invoice billing a matter outside it.
+   AND ((m.role IN ('owner', 'admin') AND current_setting('app.workspace_access_mode', true) = 'membership') OR (
      -- Empty client invoices stay admin-only, except credit drafts whose whole
-     -- original is authorized. Credit notes retain that original scope after
-     -- adding lines; they never expose a hidden original through a subset.
+     -- original is authorized; under a matter set, only for a client with a
+     -- matter in it. Credit notes retain that original scope after adding
+     -- lines; they never expose a hidden original through a subset.
      (CASE WHEN matter_id IS NULL
-       THEN EXISTS (SELECT 1 FROM public.invoice_lines any_line WHERE any_line.invoice_id = stella_invoice_access.invoice_id)
+       THEN (m.role IN ('owner', 'admin') AND EXISTS (SELECT 1 FROM public.workspaces client_matter
+           WHERE client_matter.organization_id = org_id AND client_matter.client_id = stella_invoice_access.client_id
+             AND client_matter.id IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces)))
+         OR EXISTS (SELECT 1 FROM public.invoice_lines any_line WHERE any_line.invoice_id = stella_invoice_access.invoice_id)
          OR EXISTS (SELECT 1 FROM authorized_original)
        ELSE matter_id IN (SELECT authorized_workspace_id FROM public.stella_authorized_workspaces) END)
      AND NOT EXISTS (SELECT 1 FROM public.invoice_lines l WHERE l.invoice_id = stella_invoice_access.invoice_id

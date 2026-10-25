@@ -667,6 +667,7 @@ describe("policy coverage", () => {
       "org_id = current_setting('app.organization_id'",
       "m.organization_id = org_id",
       "m.user_id = current_setting('app.user_id'",
+      "current_setting('app.workspace_access_mode', true) = 'membership'",
       "l.workspace_id NOT IN",
       "original.id = source_original_id",
       "original.client_id IS NOT DISTINCT FROM",
