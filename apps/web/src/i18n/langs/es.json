@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Un cliente",
+      "availabilityClientBadgeHelp": "Disponible solo en los asuntos de un cliente.",
+      "availabilityClientHelp": "Solo se puede usar en los asuntos de este cliente. No se puede cambiar después.",
+      "availabilityFixedHelp": "Se fijó al crear la habilidad. No se puede cambiar.",
+      "availabilityLabel": "Disponible en",
+      "availabilityMatter": "Un asunto",
+      "availabilityMatterBadgeHelp": "Disponible solo en un asunto.",
+      "availabilityMatterHelp": "Solo se puede usar en este asunto. No se puede cambiar después.",
+      "availabilityOrganization": "Toda la organización",
+      "availabilityTeamNeedsMatter": "Para compartir una habilidad con el equipo, elija el asunto al que está destinada. No se puede cambiar después.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Crea un playbook de revisión de contratos posición por posición, a partir de tus contratos firmados anteriormente, una breve entrevista y los estándares habituales del mercado.",

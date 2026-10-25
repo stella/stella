@@ -153,6 +153,7 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
@@ -228,6 +229,8 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
+import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -2198,6 +2201,17 @@ const readOwnedTurnThreadNames = async ({
   return read;
 };
 
+const settleInternalPreflight = async <T, E>(
+  pending: Promise<Result<T, E>>,
+  lifecycle: ChatSendLifecycle,
+): Promise<Result<T, E>> => {
+  const result = await pending;
+  if (Result.isError(result)) {
+    await lifecycle.failCurrentTurn("internal", true);
+  }
+  return result;
+};
+
 const currentMembershipReader = (
   dependencies: SendMessageDependencies,
 ): ResolveCredentialMemberAuthorization =>
@@ -2648,6 +2662,20 @@ export const createSendMessage = (
           turnExecution,
         } = acceptedTurnResult.value;
 
+        const skillBindingScope = yield* Result.await(
+          settleInternalPreflight(
+            resolveSkillBindingScope({
+              homeWorkspaceId: workspaceId,
+              otherWorkspaceIds: [
+                ...effectiveContextMatterIds,
+                ...dataScopeAfterIncomingMessage,
+              ],
+              safeDb,
+            }),
+            lifecycle,
+          ),
+        );
+
         const runIdTaken = yield* Result.await(
           isChatTurnRunIdTaken({
             execution: turnExecution,
@@ -2719,8 +2747,20 @@ export const createSendMessage = (
           messages: latestMessagePlan.messages,
           resumedMessageId: owningAssistantMessage?.id,
         });
+        const authorizedHistory = yield* Result.await(
+          settleInternalPreflight(
+            enforceLoadedSkillHistoryBindings({
+              messages: engineHistory,
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              scope: skillBindingScope,
+              userId: user.id,
+            }),
+            lifecycle,
+          ),
+        );
         const messagesForContextInput = await selectMessagesForContextInput({
-          messages: engineHistory,
+          messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
           threadId: body.threadId,
@@ -2923,6 +2963,7 @@ export const createSendMessage = (
           activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
+          skillBindingScope,
           hasReachableMatter: toolWorkspaceIds.length > 0,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
@@ -3026,6 +3067,7 @@ export const createSendMessage = (
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
             skillMetadata: chatContext.skillMetadata,
+            skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
           }),
         });
@@ -3055,6 +3097,7 @@ export const createSendMessage = (
 
         const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
           activeSkillContext: chatContext.activeSkillContext,
+          bindingScope: chatContext.skillBindingScope,
           catalog: chatContext.skillMetadata,
           messages: chatContext.hydratedMessages,
           organizationId: session.activeOrganizationId,
@@ -3521,6 +3564,7 @@ type PrepareChatContextProps = {
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
+  skillBindingScope: SkillBindingScope;
   hasReachableMatter: boolean;
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
@@ -3554,6 +3598,12 @@ type PrepareChatContextResult = Result<
      */
     systemUntrusted: ChatUntrustedPromptSuffix;
     skillMetadata: ModelOfferedSkills<SkillMetadata>;
+    /**
+     * Where this turn may use a bound skill: the thread's matter, and only
+     * while every pinned and embedded matter is that matter (or shares its
+     * client). The prompt, the skill tools and requested skills all use it.
+     */
+    skillBindingScope: SkillBindingScope;
     activeSkillContext: ActiveChatSkillContext | null;
     /** Court numbers the turn stamps onto the answer's passage citations. */
     decisionPassageNumbers: DecisionPassageNumbers;
@@ -3572,6 +3622,7 @@ const prepareChatContext = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  skillBindingScope,
   hasReachableMatter,
   latestMentions,
   latestUserMessageId,
@@ -3620,6 +3671,7 @@ const prepareChatContext = async ({
         safeDb,
         messages: messageWindow,
         requestedSkillNames: requestedSkillNames(messageWindow),
+        skillBindingScope,
         threadId,
         toolAvailability,
         userContext,
@@ -3673,6 +3725,7 @@ const prepareChatContext = async ({
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
+      skillBindingScope,
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
       hydratedMessages: messagesWithMentionKinds,
