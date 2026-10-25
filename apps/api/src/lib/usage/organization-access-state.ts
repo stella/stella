@@ -23,7 +23,7 @@ import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
-  createBackgroundAuditRecorder,
+  recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -243,28 +243,34 @@ export const moveKeylessOrganizationsToFree = async (
     )
     .returning({ organizationId: organizationAccessStates.organizationId });
 
-  for (const { organizationId } of moved) {
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      organizationId,
-      workspaceId: null,
-      userId: actor,
-      execution: {
-        performer: { type: "service", id: actor, name: actor },
-        trigger: { type: "system", source: KEYLESS_MOVE_AUDIT_SOURCE },
-      },
-    });
-    await recordAuditEvent(db, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
-      resourceId: organizationId,
-      changes: {
-        state: {
-          old: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-          new: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+  // One audit group per organization, written in one batched insert.
+  await recordAuditGroups({
+    tx: db,
+    groups: moved.map((row) => ({
+      bindings: {
+        organizationId: row.organizationId,
+        workspaceId: null,
+        userId: actor,
+        execution: {
+          performer: { type: "service", id: actor, name: actor },
+          trigger: { type: "system", source: KEYLESS_MOVE_AUDIT_SOURCE },
         },
       },
-    });
-  }
+      events: [
+        {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+          resourceId: row.organizationId,
+          changes: {
+            state: {
+              old: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+              new: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+            },
+          },
+        },
+      ],
+    })),
+  });
   return moved.map((row) => row.organizationId);
 };
 

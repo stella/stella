@@ -311,7 +311,10 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.MCP_CONNECTION]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE]: {
-    default: { type: "deployment-feature", feature: "FEATURE_USAGE" },
+    default: {
+      type: "deployment-feature",
+      feature: "FEATURE_ORG_ACCESS_STATE",
+    },
     operations: {},
   },
   [AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS]: UNGATED_AUDIT_DETAILS,

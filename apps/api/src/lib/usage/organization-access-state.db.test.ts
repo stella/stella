@@ -231,82 +231,89 @@ describe("moving keyless organizations to the free floor", () => {
       },
     ]);
 
-    const beforeEvaluating = await readState(accessIds.evaluating);
-    const beforeEnded = await readState(accessIds.ended);
-    const moved = await moveKeylessOrganizationsToFree(ownerDb(), {
-      now,
-      actor: "operator:test",
-    });
     const expectedMoved = [
       accessIds.keyless,
       accessIds.personalKey,
       accessIds.entitled,
     ];
-    const unrelatedMoved = moved.filter(
-      (organizationId) => !expectedMoved.includes(organizationId),
-    );
-
-    expect(new Set(moved.filter((id) => expectedMoved.includes(id)))).toEqual(
-      new Set(expectedMoved),
-    );
-    expect(await readState(accessIds.ownKey)).toMatchObject({
-      state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-      evaluationEndedAt: null,
-    });
-    for (const organizationId of expectedMoved) {
-      expect(await readState(organizationId)).toMatchObject({
-        state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
-        evaluationStartedAt: null,
-        evaluationEndsAt: null,
-        evaluationEndedAt: now,
+    let moved: SafeId<"organization">[] = [];
+    try {
+      const beforeEvaluating = await readState(accessIds.evaluating);
+      const beforeEnded = await readState(accessIds.ended);
+      moved = await moveKeylessOrganizationsToFree(ownerDb(), {
+        now,
+        actor: "operator:test",
       });
-    }
-    expect(await readState(accessIds.evaluating)).toEqual(beforeEvaluating);
-    expect(await readState(accessIds.ended)).toEqual(beforeEnded);
-    expect(
-      await testDb
-        .select({ id: usageEntitlements.id })
-        .from(usageEntitlements)
-        .where(eq(usageEntitlements.id, entitlementId)),
-    ).toEqual([{ id: entitlementId }]);
-    const movedAgain = await moveKeylessOrganizationsToFree(ownerDb(), {
-      now: new Date(now.getTime() + DAY_IN_MS),
-      actor: "operator:test",
-    });
-    expect(movedAgain).toEqual([]);
-    // One audit event per moved organization, none for a re-run or a kept one.
-    for (const organizationId of [...expectedMoved, accessIds.ownKey]) {
-      const audits = await testDb
-        .select({ resourceId: auditLogs.resourceId })
-        .from(auditLogs)
-        .where(
-          and(
-            eq(auditLogs.organizationId, organizationId),
-            eq(
-              auditLogs.resourceType,
-              AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
-            ),
-          ),
-        );
-      expect(audits).toHaveLength(organizationId === accessIds.ownKey ? 0 : 1);
-    }
-    if (unrelatedMoved.length > 0) {
-      await testDb
-        .update(organizationAccessStates)
-        .set({
-          state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-          evaluationEndedAt: null,
-        })
-        .where(
-          inArray(organizationAccessStates.organizationId, unrelatedMoved),
-        );
-    }
 
-    await testDb.delete(apikey).where(eq(apikey.id, personalKeyId));
-    await testDb
-      .delete(organization)
-      .where(inArray(organization.id, organizationIds));
-    await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
+      expect(new Set(moved.filter((id) => expectedMoved.includes(id)))).toEqual(
+        new Set(expectedMoved),
+      );
+      expect(await readState(accessIds.ownKey)).toMatchObject({
+        state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+        evaluationEndedAt: null,
+      });
+      for (const organizationId of expectedMoved) {
+        expect(await readState(organizationId)).toMatchObject({
+          state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+          evaluationStartedAt: null,
+          evaluationEndsAt: null,
+          evaluationEndedAt: now,
+        });
+      }
+      expect(await readState(accessIds.evaluating)).toEqual(beforeEvaluating);
+      expect(await readState(accessIds.ended)).toEqual(beforeEnded);
+      expect(
+        await testDb
+          .select({ id: usageEntitlements.id })
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.id, entitlementId)),
+      ).toEqual([{ id: entitlementId }]);
+      const movedAgain = await moveKeylessOrganizationsToFree(ownerDb(), {
+        now: new Date(now.getTime() + DAY_IN_MS),
+        actor: "operator:test",
+      });
+      expect(movedAgain).toEqual([]);
+      // One audit event per moved organization, none for a re-run or a kept one.
+      for (const organizationId of [...expectedMoved, accessIds.ownKey]) {
+        const audits = await testDb
+          .select({ resourceId: auditLogs.resourceId })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.organizationId, organizationId),
+              eq(
+                auditLogs.resourceType,
+                AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+              ),
+            ),
+          );
+        expect(audits).toHaveLength(
+          organizationId === accessIds.ownKey ? 0 : 1,
+        );
+      }
+    } finally {
+      // Runs even when an assertion fails: the suite shares one database.
+      const unrelatedMoved = moved.filter(
+        (organizationId) => !expectedMoved.includes(organizationId),
+      );
+      if (unrelatedMoved.length > 0) {
+        await testDb
+          .update(organizationAccessStates)
+          .set({
+            state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+            evaluationEndedAt: null,
+          })
+          .where(
+            inArray(organizationAccessStates.organizationId, unrelatedMoved),
+          );
+      }
+
+      await testDb.delete(apikey).where(eq(apikey.id, personalKeyId));
+      await testDb
+        .delete(organization)
+        .where(inArray(organization.id, organizationIds));
+      await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
+    }
   });
 });
 
