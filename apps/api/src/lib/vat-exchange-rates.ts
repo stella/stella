@@ -34,7 +34,8 @@ export type VatExchangeRate = {
 
 /** The shared outbound transport, bound to an injected fetcher in tests. */
 type Send = (url: string, init: FetchWithTimeoutInit) => Promise<Response>;
-const HEADERS_TIMEOUT_MS = 10_000;
+const IDLE_TIMEOUT_MS = 10_000;
+const DEADLINE_MS = 30_000;
 const daysBefore = (date: string, days: number) =>
   Temporal.PlainDate.from(date).subtract({ days }).toString();
 
@@ -58,7 +59,10 @@ const request = async ({
   const requested = await Result.tryPromise({
     try: async () =>
       await send(url, {
-        timeout: { type: "headers", ms: HEADERS_TIMEOUT_MS },
+        // Idle bounds every body read as well as the headers; the deadline
+        // bounds a source that keeps trickling data.
+        timeout: { type: "idle", ms: IDLE_TIMEOUT_MS },
+        signal: AbortSignal.timeout(DEADLINE_MS),
         headers: { accept: "application/json, text/plain" },
       }),
     catch: (error) =>

@@ -29,7 +29,7 @@ const valueOf = <T, E>(result: Result<T, E>) => {
 };
 
 describe("official VAT exchange rates", () => {
-  test("normalizes the recorded ČNB množství column", async () => {
+  test("a Saturday tax point takes the Friday ČNB file, per 100 JPY", async () => {
     const seen: string[] = [];
     const rate = valueOf(
       await fetchVatExchangeRate({
@@ -37,17 +37,18 @@ describe("official VAT exchange rates", () => {
         currency: "JPY",
         referenceDate: "2026-10-24",
         today: "2026-12-31",
-        fetcher: fixtureFetch(await fixture("cnb-2026-10-24.txt"), seen),
+        fetcher: fixtureFetch(await fixture("cnb-2026-10-23.txt"), seen),
       }),
     );
     // ČNB's published daily-rate file for the reference date.
     expect(seen).toEqual([
       "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=24.10.2026",
     ]);
+    // Recorded response: 13,862 CZK per 100 JPY, announced 23 October.
     expect(rate).toEqual({
-      rate: "0.1425",
+      rate: "0.13862",
       source: "CNB",
-      effectiveDate: "2026-10-24",
+      effectiveDate: "2026-10-23",
       sourceReference: null,
     });
   });
