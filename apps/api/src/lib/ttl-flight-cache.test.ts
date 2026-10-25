@@ -163,7 +163,7 @@ describe("createTtlFlightCache", () => {
     const cache = cacheOf<string>(clock());
     let calls = 0;
     const failure = new TypeError("thrown at once");
-    const failing = (): Promise<string> => {
+    const failing = async (): Promise<string> => {
       calls += 1;
       throw failure;
     };
