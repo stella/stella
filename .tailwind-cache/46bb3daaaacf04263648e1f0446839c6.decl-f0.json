@@ -1,0 +1,1 @@
+{"w-[calc(100%-(--spacing(12)))]":{"valid":true,"declarations":[["","width","calc(100% - (calc(var(--spacing) * 12)))"]],"values":{"calc(100% - (calc(var(--spacing) * 12)))":{"p":["--spacing"],"f":[],"u":false}}}}

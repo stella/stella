@@ -39,6 +39,7 @@ import {
   runtimeOcrPdfFontPath,
   runtimeWorkerDir,
 } from "@/api/lib/runtime-worker-path";
+import { RTF_MIME_TYPE } from "@/api/mime-types";
 import { checkBundledSanctionsMatcher } from "@/api/scripts/image-smoke-sanctions";
 import { checkBundledPublicTemplates } from "@/api/scripts/image-smoke-template-packs";
 
@@ -201,6 +202,88 @@ await probe("model ingress script bundle", async () => {
   }
   if (stdout.trim() !== "image-smoke ok: model ingress guard") {
     panic("model ingress script did not finish its native matcher probe");
+  }
+});
+
+// Error fingerprints group by source positions, so the long-running bundles
+// must map their frames through the shipped, content-stripped source maps.
+// Started without configuration, each fails environment validation; its stack
+// must name a source file rather than a bundle offset.
+// The case-law runner maps relative to its own package, so its frames read
+// /api/src/... rather than /apps/api/src/....
+const SOURCE_FRAME = /\/api\/src\/\S+\.ts:\d+:\d+/u;
+const LONG_RUNNING_BUNDLES = [
+  ["/app/server.js"],
+  ["/app/document-processing-worker.js"],
+  ["/app/legal-atlas.js", "run", "case-law-ingest", "__smoke__"],
+] as const;
+for (const [bundle, ...args] of LONG_RUNNING_BUNDLES) {
+  await probe(`${bundle} frames map to source`, async () => {
+    const subprocess = Bun.spawn(["bun", "--no-env-file", bundle, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+      env: { PATH: process.env["PATH"] ?? "", HOME: "/tmp" },
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    const output = `${stdout}\n${stderr}`;
+    if (exitCode === 0 || !output.includes("Invalid environment variables")) {
+      panic(`${bundle} did not stop at environment validation: ${output}`);
+    }
+    if (output.includes("Could not decode sourcemap")) {
+      panic(`${bundle} could not decode its source map: ${output}`);
+    }
+    if (!SOURCE_FRAME.test(output)) {
+      panic(`${bundle} printed no source-mapped frame: ${output}`);
+    }
+  });
+}
+
+// Office formats convert through anydoc's native binding inside the extraction
+// worker bundle; RTF is the smallest document that takes that path.
+await probe("extraction worker anydoc native", async () => {
+  const workerDir =
+    runtimeWorkerDir() ??
+    panic("STELLA_WORKER_DIR must be set for the image smoke");
+  const subprocess = Bun.spawn(
+    [
+      "bun",
+      "--no-env-file",
+      path.join(workerDir, RUNTIME_WORKER_FILES.extraction),
+      RTF_MIME_TYPE,
+    ],
+    {
+      stdin: new Blob(["{\\rtf1\\ansi image smoke anydoc\\par}"]),
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+    },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
+  if (exitCode !== 0 || !stdout.includes("image smoke anydoc")) {
+    panic(`extraction worker did not convert RTF (${exitCode}): ${stderr}`);
+  }
+});
+
+// The image is glibc (Debian); a musl build of a native addon can never load
+// here. napi-rs loaders reference both builds, so the bundler ships both
+// unless the build marks the musl package external.
+await probe("no musl native addons", async () => {
+  const musl = await Array.fromAsync(
+    new Bun.Glob("**/*musl*.node").scan({ cwd: "/app", onlyFiles: true }),
+  );
+  if (musl.length > 0) {
+    panic(
+      `musl native addons ship in the glibc image: ${musl.join(", ")}; mark their packages --external in the bundle build`,
+    );
   }
 });
 
