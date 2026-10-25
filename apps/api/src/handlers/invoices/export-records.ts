@@ -61,6 +61,7 @@ const EXPORT_RELATIONS = {
 
 const PARTY_FIELDS = [
   "registrationNumber",
+  "taxId",
   "vatId",
   "addressLine1",
   "addressLine2",
@@ -137,7 +138,7 @@ export const loadInvoiceExport = async (
             workspaceId: { eq: workspaceId },
             organizationId: { eq: organizationId },
           },
-          columns: { id: true, invoiceNumber: true },
+          columns: { id: true, invoiceNumber: true, invoiceDate: true },
           limit: originalIds.length,
         });
   const userIds = new Set(
@@ -154,7 +155,10 @@ export const loadInvoiceExport = async (
     invoices,
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
-      originals.map((original) => [original.id, original.invoiceNumber]),
+      originals.map((original) => [
+        original.id,
+        { number: original.invoiceNumber, issueDate: original.invoiceDate },
+      ]),
     ),
     timekeepers: new Map(timekeepers.map((u) => [u.id, u.name])),
     timeZone: await readOrganizationTimeZone(tx, organizationId),
@@ -171,6 +175,7 @@ type DocumentAmounts = {
     unitPrice: CentsAmount | null;
     timeEntryId: SafeId<"timeEntry"> | null;
     expenseId: SafeId<"expense"> | null;
+    exemptionReason: string | null;
   })[];
   totals: InvoiceTotals;
 };
@@ -216,6 +221,7 @@ const exportLines = (
       grossAmountMinor: line.grossAmountMinor,
       vatRateBps: line.vatRateBps,
       vatTreatment: line.vatTreatment,
+      exemptionReason: line.exemptionReason,
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
@@ -235,6 +241,7 @@ const exportSellerOf = (
 ): InvoiceExportSeller => ({
   ...partyOf(seller.legalName, {
     registrationNumber: seller.registrationId,
+    taxId: seller.taxId,
     vatId: seller.vatId,
     addressLine1: seller.addressLine1,
     addressLine2: seller.addressLine2,
@@ -335,7 +342,12 @@ export const toExportRecords = (
       originalNumber:
         invoice.originalInvoiceId === null
           ? null
-          : (loaded.originals.get(invoice.originalInvoiceId) ?? null),
+          : (loaded.originals.get(invoice.originalInvoiceId)?.number ?? null),
+      originalIssueDate:
+        invoice.originalInvoiceId === null
+          ? null
+          : (loaded.originals.get(invoice.originalInvoiceId)?.issueDate ??
+            null),
       status: invoice.status,
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
@@ -354,6 +366,7 @@ export const toExportRecords = (
       seller: exportSellerOf(seller),
       buyer: partyOf(invoice.buyerName ?? "", {
         registrationNumber: invoice.buyerRegistrationId,
+        taxId: invoice.buyerTaxId,
         vatId: invoice.buyerVatId,
         addressLine1: invoice.buyerAddressLine1,
         addressLine2: invoice.buyerAddressLine2,
