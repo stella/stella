@@ -1,7 +1,20 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..d2c35e3b6faef66c4d3678927c4af455da574132 100644
+index 6d9820c..71b1fb0 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
+@@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
+ 		const memo = this.declMemo.get(key);
+ 		if (memo) return memo;
+ 		const byClass = this.declIndex?.byClass;
+-		let packed = byClass?.[key];
++		let packed = byClass != null && Object.hasOwn(byClass, key) ? byClass[key] : void 0;
+ 		if (packed === void 0) {
+ 			const { bare, position } = splitImportant(key);
+-			if (position) packed = byClass?.[bare];
++			if (position && byClass != null && Object.hasOwn(byClass, bare)) packed = byClass[bare];
+ 		}
+ 		const decoded = this.decodeDecls?.(packed) ?? EMPTY_DECLARATIONS;
+ 		this.declMemo.set(key, decoded);
 @@ -2480,7 +2480,8 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
@@ -116,11 +129,11 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..d2c35e3b6faef66c4d3678927c4af455
 +			if (typeof entries !== "object" || entries === null || Array.isArray(entries)) entries = {};
 +			byFile.set(file, entries);
 +		}
-+		const declarations = response.decls[cls] ?? [];
++		const declarations = Object.hasOwn(response.decls, cls) ? response.decls[cls] : [];
 +		const values = {};
 +		for (const declaration of declarations) {
 +			const value = declaration[2];
-+			if (value in response.values) values[value] = response.values[value];
++			if (Object.hasOwn(response.values, value)) values[value] = response.values[value];
 +		}
 +		entries[cls] = { valid: !invalid.has(cls), declarations, values };
 +	}
@@ -163,9 +176,22 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..d2c35e3b6faef66c4d3678927c4af455
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..70269ab1ea40779f93f080bc7602ca56f1690820 100644
+index 61c6242..3d720db 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
+@@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
+ 		const memo = this.declMemo.get(key);
+ 		if (memo) return memo;
+ 		const byClass = this.declIndex?.byClass;
+-		let packed = byClass?.[key];
++		let packed = byClass != null && Object.hasOwn(byClass, key) ? byClass[key] : void 0;
+ 		if (packed === void 0) {
+ 			const { bare, position } = splitImportant(key);
+-			if (position) packed = byClass?.[bare];
++			if (position && byClass != null && Object.hasOwn(byClass, bare)) packed = byClass[bare];
+ 		}
+ 		const decoded = this.decodeDecls?.(packed) ?? EMPTY_DECLARATIONS;
+ 		this.declMemo.set(key, decoded);
 @@ -2483,7 +2483,8 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
@@ -280,11 +306,11 @@ index 61c624233238edcc998099f3d496c04caa7ba154..70269ab1ea40779f93f080bc7602ca56
 +			if (typeof entries !== "object" || entries === null || Array.isArray(entries)) entries = {};
 +			byFile.set(file, entries);
 +		}
-+		const declarations = response.decls[cls] ?? [];
++		const declarations = Object.hasOwn(response.decls, cls) ? response.decls[cls] : [];
 +		const values = {};
 +		for (const declaration of declarations) {
 +			const value = declaration[2];
-+			if (value in response.values) values[value] = response.values[value];
++			if (Object.hasOwn(response.values, value)) values[value] = response.values[value];
 +		}
 +		entries[cls] = { valid: !invalid.has(cls), declarations, values };
 +	}

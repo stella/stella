@@ -169,6 +169,49 @@ test("concurrent declaration writers merge answers in the same shard", async () 
   }
 });
 
+test("answers for classes named like object properties persist and reload", async () => {
+  const cache = await mkdtemp(
+    path.join(tmpdir(), "stella-tailwind-prototype-cache-"),
+  );
+  try {
+    await cp(generatedCache, cache, { recursive: true });
+    const source = 'const a = <div className="constructor toString" />;';
+    const generated = await lintFixture({ cache, source, readOnly: false });
+    const reloaded = await lintFixture({ cache, source });
+    for (const result of [generated, reloaded]) {
+      expect(
+        result.diagnostics.filter(
+          ({ message }) =>
+            message.includes("Error running JS plugin") ||
+            message.includes("tailwind design system not loaded"),
+        ),
+      ).toEqual([]);
+    }
+    const answers = new Map<string, unknown>();
+    for (const name of await readdir(cache)) {
+      if (name.includes(".decl-")) {
+        for (const [token, answer] of Object.entries(
+          JSON.parse(await readFile(path.join(cache, name), "utf-8")),
+        )) {
+          answers.set(token, answer);
+        }
+      }
+    }
+    expect(answers.get("constructor")).toEqual({
+      valid: false,
+      declarations: [],
+      values: {},
+    });
+    expect(answers.get("toString")).toEqual({
+      valid: false,
+      declarations: [],
+      values: {},
+    });
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+});
+
 test("oxlint.config.ts makes every lint read the committed cache", () => {
   const cacheEnv = (overrides: Record<string, string>) => {
     const child = Bun.spawnSync(
