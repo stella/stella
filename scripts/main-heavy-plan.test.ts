@@ -644,6 +644,11 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
+  // The pull request quick-check carrier is the only fast-tier route into
+  // the heavy gate; the standalone quick checks keep their queue policy, so
+  // the queue exclusion below still removes them from pull requests.
+  expect(eventPolicies.jobs["ci.yml/pr-heavy-gate"]).toBe("pr-fast");
+  expect(eventPolicies.jobs["ci.yml/ci-quick-checks"]).toBe("queue");
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {
@@ -703,15 +708,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
           }
-          // Pull request quick checks run in the heavy-suite gate, so the gate
-          // runs where the baseline quick checks ran and they skip there.
+          // Pull request quick checks run in the heavy-suite gate, a fast-tier
+          // job: it runs on every ready pull request at every depth and plan,
+          // and on no other event. This is stated absolutely rather than
+          // derived from the baseline, because the baseline is the merge base
+          // and moves once the carrier change lands on main.
           if (job === "pr-heavy-gate") {
-            expected =
-              event === "pull_request" &&
-              selected(
-                original.jobs["ci-quick-checks"]?.if ?? "true",
-                context(event, false, plan),
-              );
+            expected = event === "pull_request";
           }
           if (job === "ci-quick-checks" && event === "pull_request") {
             expected = false;
