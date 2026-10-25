@@ -116,6 +116,50 @@ const snapshot = async (directory: string) => {
   return entries;
 };
 
+const parseAnswers = (bytes: Uint8Array | undefined) =>
+  bytes === undefined
+    ? new Map<string, string>()
+    : new Map(
+        Object.entries(
+          v.parse(
+            v.record(v.string(), v.unknown()),
+            JSON.parse(new TextDecoder().decode(bytes)),
+          ),
+        ).map(([token, answer]) => [token, JSON.stringify(answer)]),
+      );
+
+/** One stale artifact, naming the class tokens whose answers differ. */
+const describeChange = (
+  name: string,
+  committed: Uint8Array | undefined,
+  generated: Uint8Array | undefined,
+) => {
+  let state = "differs";
+  if (committed === undefined) {
+    state = "missing from the commit";
+  } else if (generated === undefined) {
+    state = "no longer generated";
+  }
+  if (!name.includes(".decl-")) {
+    return `- ${name}: design-system snapshot ${state}`;
+  }
+  const before = parseAnswers(committed);
+  const after = parseAnswers(generated);
+  const tokens = [...new Set([...before.keys(), ...after.keys()])]
+    .filter((token) => before.get(token) !== after.get(token))
+    .toSorted()
+    .map((token) => {
+      if (!before.has(token)) {
+        return `${token} (new)`;
+      }
+      if (!after.has(token)) {
+        return `${token} (no longer linted)`;
+      }
+      return `${token} (answer changed: ${before.get(token)} -> ${after.get(token)})`;
+    });
+  return `- ${name}: ${state}; classes: ${tokens.join(", ") || "(byte order only)"}`;
+};
+
 const check = async () => {
   const temporaryRoot = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-cache-"),
@@ -135,9 +179,13 @@ const check = async () => {
       })
       .toSorted();
     if (changed.length > 0) {
-      panic(
-        `Tailwind cache is stale: ${changed.join(", ")}. Run bun scripts/generate-tailwind-classes.ts --write.`,
+      const details = changed.map((name) =>
+        describeChange(name, expected.get(name), actual.get(name)),
       );
+      process.stderr.write(
+        `Tailwind cache is stale:\n${details.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
+      );
+      process.exitCode = 1;
     }
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });

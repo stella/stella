@@ -44,17 +44,12 @@ import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
 } from "./scripts/sql-perf-scope.ts";
+// Defaults every lint to the committed, read-only Tailwind cache.
+import "./scripts/tailwind-lint-cache.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
 // Override paths are therefore relative to the repo root.
-
-// Every lint reads the committed Tailwind cache and never compiles the design
-// system; only scripts/generate-tailwind-classes.ts opts out to fill it. The
-// config loads before any plugin module, so the plugin sees these defaults.
-process.env["OXLINT_TAILWINDCSS_CACHE_DIR"] ??=
-  `${import.meta.dirname}/.tailwind-cache`;
-process.env["OXLINT_TAILWINDCSS_CACHE_READ_ONLY"] ??= "1";
 
 const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   files: [`.oxlint-plugins/__fixtures__/${file}`],
