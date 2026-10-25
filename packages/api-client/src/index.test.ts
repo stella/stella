@@ -129,7 +129,11 @@ describe("Eden transport provenance", () => {
     const api = createStellaEdenClient<typeof testApi>(
       "https://api.example.com",
       {
-        fetcher: testFetcher(async () => Promise.reject(cause)),
+        fetcher: testFetcher(async () => {
+          const rejection = Promise.withResolvers<Response>();
+          rejection.reject(cause);
+          return await rejection.promise;
+        }),
       },
     ).v1;
     const response = await api.health.get();
