@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 
 import { type CanaryFetcher, runReleaseLoadProbe } from "./mcp-canary";
 import {
-  jobsRunSince,
+  jobsRunDuringLoad,
   judgeReleaseLoad,
   nearestRankPercentile,
   RELEASE_LOAD,
@@ -50,9 +52,10 @@ describe("release load", () => {
   test("callers run the four heavy tools in turn until the duration ends", async () => {
     const clock = fakeClock();
     const called: ReleaseLoadCall[] = [];
-    const samples = await runReleaseLoad({
+    const { samples, window } = await runReleaseLoad({
       decisionIds: ["a", "b"],
       now: clock.now,
+      wallNow: () => 1_000_000 + clock.now(),
       durationMs: 10_000,
       concurrency: 2,
       call: async (call) => {
@@ -62,6 +65,9 @@ describe("release load", () => {
       },
     });
     expect(samples.length).toBe(called.length);
+    // The window is the calls' own span, from the first start to the last end.
+    expect(window?.startMs).toBe(1_000_000);
+    expect(window?.endMs).toBe(1_000_000 + clock.now());
     expect(called.length).toBeGreaterThanOrEqual(10_000 / 250);
     expect(new Set(called.map(({ toolName }) => toolName))).toEqual(
       new Set([
@@ -136,11 +142,24 @@ describe("release load", () => {
     ]);
   });
 
-  test("the probe brings the jobs forward, loads, and requires a job inside the window", async () => {
+  test("the probe requires a job run that overlaps the load itself", async () => {
     const dueAt = "2026-10-25T20:00:00.000Z";
+    // The load's calls span 20:00:10 to 20:01:10.
+    const window = {
+      startMs: Temporal.Instant.from("2026-10-25T20:00:10.000Z")
+        .epochMilliseconds,
+      endMs: Temporal.Instant.from("2026-10-25T20:01:10.000Z")
+        .epochMilliseconds,
+    };
     const seen: string[] = [];
     const fetcherFor =
-      (lastRunAt: string | null): CanaryFetcher =>
+      (
+        runs: readonly {
+          jobId: string;
+          startedAt: string;
+          finishedAt: string | null;
+        }[],
+      ): CanaryFetcher =>
       async (input, init) => {
         const url = new URL(
           input instanceof Request ? input.url : input.toString(),
@@ -151,30 +170,29 @@ describe("release load", () => {
           return Response.json({ dueAt, jobs: [] });
         }
         if (url.pathname === "/smoke/scheduled-jobs") {
-          return Response.json({
-            jobs: [
-              {
-                id: "caseLaw.reportFreshness.fiveMinute",
-                lastRunAt,
-                lockedAt: null,
-              },
-            ],
-          });
+          return Response.json({ runs });
         }
         return Response.json({ hits: [{ decisionId: "d1" }] });
       };
     const load: typeof runReleaseLoad = async ({ decisionIds }) => {
       expect(decisionIds).toEqual(["d1"]);
-      return everyTool(100);
+      return { samples: everyTool(100), window };
     };
     const target = {
       baseUrl: "https://api.example",
       token: "canary-token",
       smokeSecret: "smoke",
     };
+    const freshness = "caseLaw.reportFreshness.fiveMinute";
     const overlapping = await runReleaseLoadProbe(
       target,
-      fetcherFor("2026-10-25T20:00:30.000Z"),
+      fetcherFor([
+        {
+          jobId: freshness,
+          startedAt: "2026-10-25T20:00:40.000Z",
+          finishedAt: "2026-10-25T20:00:55.000Z",
+        },
+      ]),
       load,
     );
     expect(overlapping.status).toBe("passed");
@@ -183,37 +201,63 @@ describe("release load", () => {
       "POST /v1/case/decisions/search",
       "GET /smoke/scheduled-jobs",
     ]);
-    const missed = await runReleaseLoadProbe(
+    // Brought forward, run and finished while the probe was still finding
+    // decisions to read: after the due time, but before the first call.
+    const finishedBeforeLoad = await runReleaseLoadProbe(
       target,
-      fetcherFor("2026-10-25T19:00:00.000Z"),
+      fetcherFor([
+        {
+          jobId: freshness,
+          startedAt: "2026-10-25T20:00:01.000Z",
+          finishedAt: "2026-10-25T20:00:05.000Z",
+        },
+      ]),
       load,
     );
-    expect(missed.status).toBe("failed");
-    expect(missed.detail).toContain(
+    expect(finishedBeforeLoad.status).toBe("failed");
+    expect(finishedBeforeLoad.detail).toContain(
       "no scheduled corpus job ran during the load",
     );
   });
 
-  test("only jobs that started at or after the due time count as overlapping", () => {
-    const dueAt = "2026-10-25T20:00:00.000Z";
+  test("a run overlaps the load when it starts before the load ends and finishes after it starts", () => {
+    const window = {
+      startMs: Temporal.Instant.from("2026-10-25T20:00:10.000Z")
+        .epochMilliseconds,
+      endMs: Temporal.Instant.from("2026-10-25T20:01:10.000Z")
+        .epochMilliseconds,
+    };
     expect(
-      jobsRunSince(
+      jobsRunDuringLoad(
         [
-          { id: "ran", lastRunAt: "2026-10-25T20:00:20.000Z", lockedAt: null },
           {
-            id: "running",
-            lastRunAt: "2026-10-25T19:00:00.000Z",
-            lockedAt: "2026-10-25T20:00:40.000Z",
+            jobId: "inside",
+            startedAt: "2026-10-25T20:00:20.000Z",
+            finishedAt: "2026-10-25T20:00:30.000Z",
           },
           {
-            id: "earlier",
-            lastRunAt: "2026-10-25T19:59:00.000Z",
-            lockedAt: null,
+            jobId: "spanning",
+            startedAt: "2026-10-25T20:00:00.000Z",
+            finishedAt: "2026-10-25T20:02:00.000Z",
           },
-          { id: "never", lastRunAt: null, lockedAt: null },
+          {
+            jobId: "running",
+            startedAt: "2026-10-25T20:01:00.000Z",
+            finishedAt: null,
+          },
+          {
+            jobId: "before",
+            startedAt: "2026-10-25T20:00:01.000Z",
+            finishedAt: "2026-10-25T20:00:09.000Z",
+          },
+          {
+            jobId: "after",
+            startedAt: "2026-10-25T20:01:11.000Z",
+            finishedAt: null,
+          },
         ],
-        dueAt,
+        window,
       ),
-    ).toEqual(["ran", "running"]);
+    ).toEqual(["inside", "spanning", "running"]);
   });
 });

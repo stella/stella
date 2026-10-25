@@ -39,7 +39,7 @@ import {
   bringReleaseLoadJobsForward,
   mintSmokeSession,
   parseSmokePrincipal,
-  readReleaseLoadJobs,
+  readReleaseLoadJobRuns,
 } from "@/api/lib/smoke-session/store";
 
 const notAvailable = () => new Response("Not available", { status: 404 });
@@ -97,7 +97,7 @@ const readScheduledLoadJobs = defineEndpoint.public(
     if (!isAuthorizedReleaseLoadCaller(request)) {
       return notAvailable();
     }
-    return { jobs: await readReleaseLoadJobs() };
+    return { runs: await readReleaseLoadJobRuns() };
   },
 );
 

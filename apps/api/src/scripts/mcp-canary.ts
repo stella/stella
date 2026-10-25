@@ -40,7 +40,7 @@ import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 import {
   describeReleaseLoad,
-  jobsRunSince,
+  jobsRunDuringLoad,
   judgeReleaseLoad,
   runReleaseLoad,
 } from "./mcp-canary-release-load";
@@ -1524,12 +1524,12 @@ export const runDesktopProbe = async (
 
 const RELEASE_LOAD_PROBE = "release load during scheduled jobs";
 
-const scheduledLoadJobsSchema = v.object({
-  jobs: v.array(
+const scheduledLoadRunsSchema = v.object({
+  runs: v.array(
     v.object({
-      id: v.string(),
-      lastRunAt: v.nullable(v.string()),
-      lockedAt: v.nullable(v.string()),
+      jobId: v.string(),
+      startedAt: v.string(),
+      finishedAt: v.nullable(v.string()),
     }),
   ),
 });
@@ -1566,7 +1566,6 @@ export const runReleaseLoadProbe = async (
         "could not bring the scheduled corpus jobs forward",
       );
     }
-    const { dueAt } = forward.body;
     const search = await readProbeResponse(
       await fetcher(new URL("/v1/case/decisions/search", baseUrl), {
         method: "POST",
@@ -1585,7 +1584,7 @@ export const runReleaseLoadProbe = async (
       return failed(RELEASE_LOAD_PROBE, "no case-law decision to read");
     }
     let id = 100;
-    const samples = await load({
+    const { samples, window } = await load({
       decisionIds,
       call: async ({ toolName, arguments: args }) => {
         id += 1;
@@ -1616,9 +1615,10 @@ export const runReleaseLoadProbe = async (
         timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
       }),
     );
-    const ran = v.is(scheduledLoadJobsSchema, after.body)
-      ? jobsRunSince(after.body.jobs, dueAt)
-      : [];
+    const ran =
+      window !== null && v.is(scheduledLoadRunsSchema, after.body)
+        ? jobsRunDuringLoad(after.body.runs, window)
+        : [];
     if (ran.length === 0) {
       failures.push("no scheduled corpus job ran during the load");
     }

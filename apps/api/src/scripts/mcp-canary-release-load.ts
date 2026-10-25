@@ -98,23 +98,36 @@ type RunReleaseLoadOptions = {
   call: (call: ReleaseLoadCall) => Promise<ReleaseLoadOutcome>;
   decisionIds: readonly string[];
   now?: () => number;
+  /** Wall-clock milliseconds, for the window compared with job runs. */
+  wallNow?: () => number;
   durationMs?: number;
   concurrency?: number;
 };
 
+/** Wall-clock span from the first call's start to the last call's end. */
+export type ReleaseLoadWindow = { startMs: number; endMs: number };
+
 /**
  * Runs the mix from `concurrency` callers until the duration has passed.
- * Calls started before the end finish and count; none starts after it.
+ * Calls started before the end finish and count; none starts after it. The
+ * window is what the calls actually spanned, so overlap with a job is judged
+ * against the load itself, not against when the jobs were brought forward.
  */
 export const runReleaseLoad = async ({
   call,
   decisionIds,
   now = () => performance.now(),
+  wallNow = () => Temporal.Now.instant().epochMilliseconds,
   durationMs = RELEASE_LOAD.durationMs,
   concurrency = RELEASE_LOAD.concurrency,
-}: RunReleaseLoadOptions): Promise<ReleaseLoadSample[]> => {
+}: RunReleaseLoadOptions): Promise<{
+  samples: ReleaseLoadSample[];
+  window: ReleaseLoadWindow | null;
+}> => {
   const endsAt = now() + durationMs;
   const samples: ReleaseLoadSample[] = [];
+  let firstStartMs: number | undefined;
+  let lastEndMs: number | undefined;
   let next = 0;
   const nextCall = (): ReleaseLoadCall | undefined => {
     const index = next;
@@ -129,8 +142,10 @@ export const runReleaseLoad = async ({
         return;
       }
       const startedAt = now();
+      firstStartMs ??= wallNow();
       // Each caller runs one call at a time; the concurrency is the callers.
       const outcome = await call(planned);
+      lastEndMs = Math.max(lastEndMs ?? 0, wallNow());
       samples.push({
         toolName: planned.toolName,
         elapsedMs: now() - startedAt,
@@ -139,7 +154,13 @@ export const runReleaseLoad = async ({
     }
   };
   await Promise.all(Array.from({ length: concurrency }, caller));
-  return samples;
+  return {
+    samples,
+    window:
+      firstStartMs === undefined || lastEndMs === undefined
+        ? null
+        : { startMs: firstStartMs, endMs: lastEndMs },
+  };
 };
 
 /** Nearest-rank percentile of nonempty samples. */
@@ -218,25 +239,34 @@ export const describeReleaseLoad = (verdicts: readonly ReleaseLoadVerdict[]) =>
     )
     .join("; ");
 
-type ScheduledLoadJob = {
-  id: string;
-  lastRunAt: string | null;
-  lockedAt: string | null;
+type ScheduledJobRun = {
+  jobId: string;
+  startedAt: string;
+  /** Null while the run is still going. */
+  finishedAt: string | null;
 };
 
-/** The listed jobs that started at or after `dueAt`, finished or still running. */
-export const jobsRunSince = (
-  jobs: readonly ScheduledLoadJob[],
-  dueAt: string,
+/**
+ * The jobs with a run, from the scheduler's own records, whose execution
+ * overlaps the load window: it started before the load ended and finished
+ * after the load started, or has not finished. A run that ended before the
+ * first call, while the probe was still preparing, does not count.
+ */
+export const jobsRunDuringLoad = (
+  runs: readonly ScheduledJobRun[],
+  window: ReleaseLoadWindow,
 ): string[] => {
   const at = (instant: string) =>
     Temporal.Instant.from(instant).epochMilliseconds;
-  const due = at(dueAt);
-  return jobs
-    .filter(
-      ({ lastRunAt, lockedAt }) =>
-        (lastRunAt !== null && at(lastRunAt) >= due) ||
-        (lockedAt !== null && at(lockedAt) >= due),
-    )
-    .map(({ id }) => id);
+  return [
+    ...new Set(
+      runs
+        .filter(
+          ({ startedAt, finishedAt }) =>
+            at(startedAt) <= window.endMs &&
+            (finishedAt === null || at(finishedAt) >= window.startMs),
+        )
+        .map(({ jobId }) => jobId),
+    ),
+  ];
 };

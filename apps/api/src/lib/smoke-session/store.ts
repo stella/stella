@@ -20,7 +20,7 @@ import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import { schedulerJobs } from "@/api/db/schema";
+import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
@@ -238,20 +238,43 @@ const releaseLoadJobColumns = {
 
 const releaseLoadJobListed = inArray(schedulerJobs.id, RELEASE_LOAD_JOB_IDS);
 
-/** When each release-load job last ran, is running, and runs next. */
-export const readReleaseLoadJobs = async () => {
+/**
+ * The recurring runs within this window are a handful per job (the listed
+ * jobs run hourly at most, plus one brought forward), so the cap only guards
+ * against a misconfigured schedule.
+ */
+
+const RELEASE_LOAD_RUN_CAP = 20 * RELEASE_LOAD_JOB_IDS.length;
+
+/**
+ * The scheduler's own records of the release-load jobs' runs that started in
+ * the last half hour: when each started and, once it has, finished.
+ */
+export const readReleaseLoadJobRuns = async () => {
   const read = await readBounded(
     rootDb
-      .select(releaseLoadJobColumns)
-      .from(schedulerJobs)
-      .where(releaseLoadJobListed)
-      .orderBy(schedulerJobs.id),
-    RELEASE_LOAD_JOB_IDS.length,
+      .select({
+        jobId: schedulerJobRuns.jobId,
+        status: schedulerJobRuns.status,
+        startedAt: schedulerJobRuns.startedAt,
+        finishedAt: schedulerJobRuns.finishedAt,
+      })
+      .from(schedulerJobRuns)
+      .where(
+        and(
+          inArray(schedulerJobRuns.jobId, RELEASE_LOAD_JOB_IDS),
+          // The cutoff is the database's own clock, at the column's precision.
+          sql`${schedulerJobRuns.startedAt} >= now() - interval '30 minutes'`,
+        ),
+      )
+      .orderBy(schedulerJobRuns.startedAt, schedulerJobRuns.jobId),
+    RELEASE_LOAD_RUN_CAP,
   );
-  // The ids are the primary key, so at most one row each can match.
   return read.type === "complete"
     ? read.rows
-    : panic("More scheduler rows than release-load job ids", { cap: read.cap });
+    : panic("More release-load job runs than their schedules allow", {
+        cap: read.cap,
+      });
 };
 
 /**

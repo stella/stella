@@ -111,7 +111,7 @@ const RAW_ROUTES = {
   "GET /smoke/scheduled-jobs": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason:
-      "Authorized by a shared secret and refused outside the staging deployment. Reads when fixed corpus jobs last ran.",
+      "Authorized by a shared secret and refused outside the staging deployment. Reads the scheduler's recent run records of fixed corpus jobs.",
   },
   "GET /started": {
     access: RAW_ROUTE_ACCESS.sessionless,
