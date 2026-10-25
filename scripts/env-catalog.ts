@@ -1644,6 +1644,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
+  "RELEASE_CANDIDATE_CHECKER",
+  "RELEASE_CANDIDATE_TREE_VERIFIER",
   "RELEASE_GATE_DIR",
   // Release pull request refresh: open release numbers, the release to update,
   // its branch, whether main merges in, and the versioned staging tip.
