@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Jeden klient",
+      "availabilityClientBadgeHelp": "Dostępna tylko w sprawach jednego klienta.",
+      "availabilityClientHelp": "Można jej używać tylko w sprawach tego klienta. Później nie da się tego zmienić.",
+      "availabilityFixedHelp": "Ustawione przy tworzeniu umiejętności. Nie da się tego zmienić.",
+      "availabilityLabel": "Dostępna w",
+      "availabilityMatter": "Jedna sprawa",
+      "availabilityMatterBadgeHelp": "Dostępna tylko w jednej sprawie.",
+      "availabilityMatterHelp": "Można jej używać tylko w tej sprawie. Później nie da się tego zmienić.",
+      "availabilityOrganization": "Cała organizacja",
+      "availabilityTeamNeedsMatter": "Aby udostępnić umiejętność zespołowi, wybierz sprawę, dla której jest przeznaczona. Później nie da się tego zmienić.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Utwórz playbook do przeglądu umów stanowisko po stanowisku na podstawie wcześniej podpisanych umów, krótkiego wywiadu i standardów rynkowych.",

@@ -65,6 +65,7 @@ import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
+import { SkillAvailabilitySummary } from "./skill-availability-field";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -776,6 +777,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               saving={patchMetadata.isPending}
               value={invocation}
             />
+            {detail.data && (
+              <SkillAvailabilitySummary
+                boundClientId={detail.data.boundClientId}
+                boundWorkspaceId={detail.data.boundWorkspaceId}
+                scope={detail.data.scope}
+              />
+            )}
           </div>
         </div>
       </div>

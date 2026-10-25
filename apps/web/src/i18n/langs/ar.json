@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "عميل واحد",
+      "availabilityClientBadgeHelp": "متاحة فقط في الملفات القانونية لعميل واحد.",
+      "availabilityClientHelp": "لا يمكن استخدامها إلا في الملفات القانونية لهذا العميل. لا يمكن تغيير ذلك لاحقًا.",
+      "availabilityFixedHelp": "حُدِّد عند إنشاء المهارة، ولا يمكن تغييره.",
+      "availabilityLabel": "متاحة في",
+      "availabilityMatter": "ملف قانوني واحد",
+      "availabilityMatterBadgeHelp": "متاحة فقط في ملف قانوني واحد.",
+      "availabilityMatterHelp": "لا يمكن استخدامها إلا في هذا الملف القانوني. لا يمكن تغيير ذلك لاحقًا.",
+      "availabilityOrganization": "المؤسسة بأكملها",
+      "availabilityTeamNeedsMatter": "لمشاركة مهارة مع الفريق، اختر الملف القانوني المخصصة له. لا يمكن تغيير ذلك لاحقًا.",
       "builtIn": {
         "playbookBuilder": {
           "description": "أنشئ دليل مراجعة للعقود موقفًا تلو الآخر، استنادًا إلى عقودك الموقّعة سابقًا ومقابلة قصيرة والمعايير المعتادة في السوق.",
