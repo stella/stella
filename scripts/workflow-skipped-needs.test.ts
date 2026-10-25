@@ -105,11 +105,13 @@ export const skipsAfterTolerantParent = (
       typeof condition === "string" ? topLevelConjuncts(condition) : [];
     return conjuncts.includes(`needs.${need}.result == 'success'`);
   };
-  // The parent runs after a skip along some need it does not require to succeed.
-  const survivesSkip = (parent: string) =>
+  // The parent runs after a skip along some need: one it does not require to
+  // succeed that can skip, or one it requires that itself survives a skip
+  // and so succeeds with a skipped ancestor. Workflow needs form a DAG.
+  const survivesSkip = (parent: string): boolean =>
     conditionMatches(parent, TOLERATES_SKIP) &&
-    needs(parent).some(
-      (need) => maySkip(need) && !requiresSuccess(parent, need),
+    needs(parent).some((need) =>
+      requiresSuccess(parent, need) ? survivesSkip(need) : maySkip(need),
     );
   return Object.keys(jobs)
     .filter(
@@ -176,10 +178,17 @@ test("the check finds the child of a tolerant parent and nothing that skips with
       if: "!cancelled() && (needs.wake.result == 'success' || needs.wake.result == 'skipped')",
     },
     ship: { needs: ["either"] },
+    // A required need that itself survives the skip passes it on.
+    stage: {
+      needs: ["build"],
+      if: "!cancelled() && needs.build.result == 'success'",
+    },
+    release: { needs: ["stage"] },
   };
   expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual([
     "w.yml#promote",
     "w.yml#publish",
     "w.yml#ship",
+    "w.yml#release",
   ]);
 });
