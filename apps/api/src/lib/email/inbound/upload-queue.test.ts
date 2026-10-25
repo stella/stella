@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+} from "@stll/api-contract/email-mime-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -24,9 +27,16 @@ const scope = {
   entityId: toSafeId<"entity">("entity_1"),
 };
 const file = {
+  entityVersionId: toSafeId<"entityVersion">("version_1"),
+  fieldId: toSafeId<"field">("field_1"),
   sourceFileId: "file_1",
+  sourceSha256Hex: "a".repeat(64),
   storageMimeType: EML_MIME_TYPE,
-  mimeType: EML_MIME_TYPE,
+  extractionMimeType: EML_MIME_TYPE,
+};
+const source = {
+  ...scope,
+  ...file,
 };
 const database = asTestRaw<Parameters<typeof fileUploadedMail>[0]["database"]>(
   {},
@@ -80,9 +90,61 @@ describe("uploaded mail hand-off from the extraction run", () => {
     expect([...jobs.values()]).toEqual([
       expect.objectContaining({
         name: "file-uploaded-mail",
-        data: { ...scope, ...file },
+        data: { ...scope, ...file, mimeType: file.extractionMimeType },
       }),
     ]);
+  });
+
+  test("a job this release queues is filed by a previous-release worker", async () => {
+    const { jobs, queue } = fakeQueue();
+    await enqueueUploadedMailFiling({ file, scope, queue });
+    const queued = [...jobs.values()].at(0)?.data;
+
+    // The previous release's job shape and the fields its worker reads,
+    // copied from that release's upload-enqueue.ts and upload-queue.ts.
+    type PreviousUploadedMailJobData = {
+      organizationId: string;
+      workspaceId: string;
+      entityId: string;
+      sourceFileId: string;
+      storageMimeType: string;
+      mimeType: string;
+    };
+    const previousUploadedMailFormats: Record<string, string> = {
+      [EML_MIME_TYPE]: "eml",
+      [MSG_MIME_TYPE]: "msg",
+    };
+    const isPreviousJob = (
+      data: unknown,
+    ): data is PreviousUploadedMailJobData =>
+      typeof data === "object" &&
+      data !== null &&
+      (
+        [
+          "organizationId",
+          "workspaceId",
+          "entityId",
+          "sourceFileId",
+          "storageMimeType",
+          "mimeType",
+        ] as const
+      ).every((field) => typeof Reflect.get(data, field) === "string");
+    if (!isPreviousJob(queued)) {
+      throw new Error("The queued job lacks a field the previous worker reads");
+    }
+    // The previous worker reads the stored object under these, then files
+    // only an uploaded-mail type; anything else is a terminal not_email skip.
+    expect({
+      sourceFileId: queued.sourceFileId,
+      storageMimeType: queued.storageMimeType,
+    }).toEqual({
+      sourceFileId: file.sourceFileId,
+      storageMimeType: file.storageMimeType,
+    });
+    expect(Object.hasOwn(previousUploadedMailFormats, queued.mimeType)).toBe(
+      true,
+    );
+    expect(queued.mimeType).toBe(file.extractionMimeType);
   });
 });
 
@@ -122,8 +184,7 @@ describe("uploaded mail filing job", () => {
       await processUploadedMailJob({ data, database, readFile, fileMail }),
     ).toEqual(FILED);
     expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
-      mimeType: EML_MIME_TYPE,
-      scope,
+      source,
     });
   });
 

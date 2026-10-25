@@ -23,6 +23,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -200,6 +201,7 @@ export const createBilingualEntityHandler = (
       }
 
       const created = await dependencies.createEntityFromBuffer({
+        authority: CALLER_AUTHORIZED,
         scopedDb,
         organizationId: session.activeOrganizationId,
         workspaceId,

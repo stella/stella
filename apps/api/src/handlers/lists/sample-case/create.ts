@@ -47,6 +47,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferResult } from "@/api/lib/entities/create-from-buffer";
 import { createSiblingNamePlan } from "@/api/lib/entities/sibling-name-insert";
@@ -500,6 +501,7 @@ export const loadSampleCase = async ({
     const attempted = await Result.tryPromise(
       async () =>
         await createDocument({
+          authority: CALLER_AUTHORIZED,
           scopedDb,
           workspaceId,
           organizationId,

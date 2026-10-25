@@ -19,6 +19,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { injectStamp, stripStamp } from "@/api/lib/docx-stamp";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import {
@@ -181,6 +182,7 @@ const dependencies = {
   },
 } satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
+  authority: CALLER_AUTHORIZED,
   safeDb,
   organizationId: toSafeId<"organization">("org_1"),
   workspaceId: toSafeId<"workspace">("ws_1"),

@@ -2,9 +2,10 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   documentTranslationRuns,
   documentTranslationUnits,
@@ -49,6 +50,10 @@ import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import { translateDocument, translateTextBatches } from "@/api/lib/deepl/deepl";
 import { translateTaggedSegments } from "@/api/lib/document-translation/ai";
 import { runBilingualTranslationBatches } from "@/api/lib/document-translation/bilingual-batch-runner";
@@ -211,6 +216,36 @@ const enqueueDocumentTranslationRuns = async (
 
 type RunActor = RootRunActor<"documentTranslationRun">;
 
+const DOCUMENT_TRANSLATION_RUN_PERMISSIONS = {
+  entity: ["create"],
+} as const satisfies PermissionInput;
+
+const requireRunAuthority = async (
+  actor: RunActor,
+  tx: Transaction,
+): Promise<void> => {
+  await requireCurrentActiveWorkspaceMemberPermission({
+    db: tx,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: DOCUMENT_TRANSLATION_RUN_PERMISSIONS,
+  });
+};
+
+const authorizedWrite = async <T>(
+  actor: RunActor,
+  write: (tx: Transaction) => T | Promise<T>,
+): Promise<T> =>
+  await actor.writeDb(async (tx) => {
+    await requireRunAuthority(actor, tx);
+    return await write(tx);
+  });
+
+const authorizeModelDispatch = async (actor: RunActor): Promise<void> => {
+  await authorizedWrite(actor, () => undefined);
+};
+
 const brandActor = (data: DocumentTranslationRunJobData): RunActor =>
   createRootRunActor(data, brandPersistedDocumentTranslationRunId);
 
@@ -228,6 +263,8 @@ type ClaimedRun = {
   targetLang: string;
 };
 
+const RUN_AUTHORITY_REVOKED = "authority_revoked" as const;
+
 const translationLanguagesForRun = (
   run: Pick<ClaimedRun, "sourceLang" | "targetLang">,
 ): TranslationLanguages =>
@@ -241,7 +278,9 @@ const translationLanguagesForRun = (
         targetLang: run.targetLang,
       };
 
-const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
+const claimRun = async (
+  actor: RunActor,
+): Promise<ClaimedRun | typeof RUN_AUTHORITY_REVOKED | null> => {
   const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     const rows = await tx
@@ -267,8 +306,25 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
         sourceLang: documentTranslationRuns.sourceLang,
         targetLang: documentTranslationRuns.targetLang,
       });
-    return rows.at(0);
+    const row = rows.at(0);
+    if (!row) {
+      return null;
+    }
+    const authorized = await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+      permissions: DOCUMENT_TRANSLATION_RUN_PERMISSIONS,
+    });
+    if (authorized) {
+      return row;
+    }
+    return RUN_AUTHORITY_REVOKED;
   });
+  if (claimed === RUN_AUTHORITY_REVOKED) {
+    return RUN_AUTHORITY_REVOKED;
+  }
   if (!claimed) {
     return null;
   }
@@ -285,7 +341,7 @@ const transitionStage = async (
   from: ActiveRunStage,
   to: ActiveRunStage,
 ): Promise<boolean> =>
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     const transitioned = await tx
       .update(documentTranslationRuns)
@@ -387,7 +443,8 @@ const createAIContext = async ({
   admission: ModelDispatchAdmission;
   run: ClaimedRun;
 }): Promise<Result<BilingualAIContext, HandlerError>> => {
-  const settings = await actor.writeDb(
+  const settings = await authorizedWrite(
+    actor,
     async (tx) => await loadOrgAISettings(tx, actor),
   );
   if (Result.isError(settings)) {
@@ -416,7 +473,7 @@ const createAIContext = async ({
 };
 
 const setTotal = async (actor: RunActor, total: number): Promise<void> => {
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     // audit: skip — progress bookkeeping on the run audited at create.
     await tx
       .update(documentTranslationRuns)
@@ -432,7 +489,7 @@ const updateTranslatedUnits = async (
   if (updates.length === 0) {
     return;
   }
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     // audit: skip — unit and progress bookkeeping inside the audited run.
     const values = sql.join(
       updates.map((update) => sql`(${update.unitKey}, ${update.targetText})`),
@@ -465,6 +522,7 @@ type TranslationOutput = {
 const loadDeepLApiKey = async (
   actor: RunActor,
 ): Promise<Result<string, "provider_unavailable">> => {
+  await authorizeModelDispatch(actor);
   const settings = await actor.writeSafeDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: actor.organizationId } },
@@ -516,8 +574,9 @@ const translateCommentsWithAI = async (
     }
     const batch = nextBatch.value;
     const response = await Result.tryPromise({
-      try: async () =>
-        await translateTaggedSegments({
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateTaggedSegments({
           segments: batch.map((comment) => ({
             id: `comment:${comment.id}`,
             taggedText: commentTaggedText(comment),
@@ -525,7 +584,8 @@ const translateCommentsWithAI = async (
           preceding: [],
           languages: translationLanguagesForRun(run),
           context,
-        }),
+        });
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(response)) {
@@ -555,14 +615,16 @@ const translateCommentsWithDeepL = async (
 ): Promise<Result<Map<number, string>, DocumentTranslationRunErrorCode>> => {
   const pending = comments.filter((comment) => comment.text !== "");
   const response = await Result.tryPromise({
-    try: async () =>
-      await translateTextBatches({
+    try: async () => {
+      await authorizeModelDispatch(actor);
+      return await translateTextBatches({
         apiKey,
         texts: pending.map((comment) => comment.text),
         targetLang: run.targetLang,
         sourceLang: run.sourceLang === "auto" ? undefined : run.sourceLang,
         formality: "prefer_more",
-      }),
+      });
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(response)) {
@@ -579,8 +641,9 @@ const translateWithDeepL = async (
   apiKey: string,
 ): Promise<Result<TranslationOutput, DocumentTranslationRunErrorCode>> => {
   const translated = await Result.tryPromise({
-    try: async () =>
-      await translateDocument({
+    try: async () => {
+      await authorizeModelDispatch(actor);
+      return await translateDocument({
         apiKey,
         file: new Uint8Array(source),
         fileName: run.sourceFileName,
@@ -588,7 +651,8 @@ const translateWithDeepL = async (
         targetLang: run.targetLang,
         sourceLang: run.sourceLang === "auto" ? undefined : run.sourceLang,
         formality: "prefer_more",
-      }),
+      });
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(translated)) {
@@ -601,7 +665,7 @@ const translateWithDeepL = async (
     targetLang: run.targetLang,
   });
   await setTotal(actor, 1);
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     await tx
       .update(documentTranslationRuns)
       .set({ completed: 1 })
@@ -647,7 +711,7 @@ const translateDocxWithAI = async (
   ) {
     return Result.err("unsupported_format");
   }
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     await tx.insert(documentTranslationUnits).values(
       segments.map((segment, ordinal) => ({
         id: createSafeId<"documentTranslationUnit">(),
@@ -684,8 +748,9 @@ const translateDocxWithAI = async (
       .slice(0, index)
       .slice(-DOCUMENT_TRANSLATION_LIMITS.contextUnits);
     const result = await Result.tryPromise({
-      try: async () =>
-        await translateTaggedSegments({
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateTaggedSegments({
           segments: batch.map((segment) => ({
             id: segment.segmentId,
             taggedText: segment.taggedText,
@@ -696,7 +761,8 @@ const translateDocxWithAI = async (
           })),
           languages: translationLanguagesForRun(run),
           context,
-        }),
+        });
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
@@ -805,12 +871,22 @@ const translateBilingualWithAI = async (
   const prepared = await Result.tryPromise({
     try: async () => {
       const [rows, glossary] = await Promise.all([
-        decideDispositions(formatted.value, languages, documentContext),
-        proposeGlossary(
-          detectGlossaryCandidates(texts),
-          texts,
-          languages,
-          documentContext,
+        authorizeModelDispatch(actor).then(
+          async () =>
+            await decideDispositions(
+              formatted.value,
+              languages,
+              documentContext,
+            ),
+        ),
+        authorizeModelDispatch(actor).then(
+          async () =>
+            await proposeGlossary(
+              detectGlossaryCandidates(texts),
+              texts,
+              languages,
+              documentContext,
+            ),
         ),
       ]);
       return { rows, glossary };
@@ -831,7 +907,7 @@ const translateBilingualWithAI = async (
   if (pending.length === 0) {
     return Result.err("translation_failed");
   }
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     await tx.insert(documentTranslationUnits).values(
       rows.map((row) => ({
         id: createSafeId<"documentTranslationUnit">(),
@@ -889,8 +965,9 @@ const translateBilingualWithAI = async (
       formattedBatch.push(formattedUnit);
     }
     const attempted = await Result.tryPromise({
-      try: async () =>
-        await translateFormattedBatch(
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateFormattedBatch(
           {
             batch: formattedBatch,
             preceding,
@@ -898,7 +975,8 @@ const translateBilingualWithAI = async (
           },
           languages,
           documentContext,
-        ),
+        );
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(attempted)) {
@@ -1190,6 +1268,7 @@ const executeRun = async ({
     return "format_validation_failed";
   }
 
+  await authorizeModelDispatch(actor);
   const created = await createEntityFromBuffer({
     scopedDb: actor.writeDb,
     organizationId: actor.organizationId,
@@ -1220,6 +1299,12 @@ const executeRun = async ({
     mimeType: completedOutput.mimeType,
     encryption,
     scanWarnings: scanned.value.scanWarnings ?? undefined,
+    authority: {
+      type: "current-member",
+      authorize: async (tx) => {
+        await requireRunAuthority(actor, tx);
+      },
+    },
     afterCreate: async (tx, createdOutput) => {
       // audit: skip — lifecycle bookkeeping committed atomically with the
       // audited output entity, preventing a completed file with a stuck run.
@@ -1258,6 +1343,10 @@ export const processDocumentTranslationRun = async (
   admission: ModelDispatchAdmission,
 ): Promise<void> => {
   const run = await claimRun(actor);
+  if (run === RUN_AUTHORITY_REVOKED) {
+    await setRunFailed(actor, "internal");
+    return;
+  }
   if (run === null) {
     if (await failRedeliveredRun(actor)) {
       logger.warn("document_translation.redelivery_failed_run", {

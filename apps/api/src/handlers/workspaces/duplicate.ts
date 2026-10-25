@@ -47,7 +47,12 @@ import {
 import type { EntityVersionValues } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import {
+  abortCopyPublicationTransaction,
+  copyOrganizationFilesForPublication,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import type {
@@ -127,6 +132,8 @@ const config = {
 const FILE_COPY_CONCURRENCY = 4;
 
 export type DuplicateWorkspaceDependencies = {
+  cleanupCopiedS3Keys?: typeof cleanupCopiedS3Keys;
+  copyWorkspaceFiles?: typeof copyWorkspaceFiles;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
   enqueueWorkspaceSearchRepairs: typeof enqueueWorkspaceSearchRepairs;
@@ -375,7 +382,7 @@ const copyWorkspaceFiles = async ({
   targetWorkspaceId: SafeId<"workspace">;
 }): Promise<
   Result<
-    undefined,
+    SafeId<"pendingUpload">[],
     S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
   >
 > => {
@@ -404,8 +411,6 @@ const copyWorkspaceFiles = async ({
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
       source: sourceKey,
-      copy: async (checked: CheckedFileCopy<string>) =>
-        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
@@ -416,18 +421,33 @@ const copyWorkspaceFiles = async ({
   if (Result.isError(inputs)) {
     return Result.err(inputs.error);
   }
-  const copied = await copyOrganizationFiles({
-    inputs: inputs.value,
+  const copied = await copyOrganizationFilesForPublication({
+    inputs: inputs.value.map((input) => ({
+      ...input,
+      // The copy runs only inside the publication ledger's checked operation.
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
+      cleanupScope: {
+        type: "workspaces" as const,
+        workspaces: [
+          { id: targetWorkspaceId, state: "pending-publication" as const },
+        ],
+      },
+    })),
     concurrency: FILE_COPY_CONCURRENCY,
   });
   if (Result.isError(copied)) {
     return Result.err(copied.error);
   }
-  const completed = Result.all(copied.value);
+  const completed = Result.all(copied.value.copies);
   if (Result.isError(completed)) {
     return Result.err(completed.error);
   }
-  return Result.ok(undefined);
+  return Result.ok(
+    copied.value.publicationIntents.flatMap(
+      ({ cleanupIntentIds }) => cleanupIntentIds,
+    ),
+  );
 };
 
 const cleanupCopiedS3Keys = async ({
@@ -660,12 +680,14 @@ export const createDuplicateWorkspace = (
         fileCopies.map((copy) => [copy.sourceFileId, copy.targetFileId]),
       );
       const copiedS3Keys: string[] = [];
+      let copyCleanupIntentIds: SafeId<"pendingUpload">[] = [];
 
       if (includeContent) {
+        const copyFiles = dependencies.copyWorkspaceFiles ?? copyWorkspaceFiles;
         const copyResult = Result.flatten(
           await Result.tryPromise(
             async () =>
-              await copyWorkspaceFiles({
+              await copyFiles({
                 copiedS3Keys,
                 copies: fileCopies,
                 organizationId,
@@ -676,7 +698,7 @@ export const createDuplicateWorkspace = (
         );
 
         if (Result.isError(copyResult)) {
-          await cleanupCopiedS3Keys({
+          await (dependencies.cleanupCopiedS3Keys ?? cleanupCopiedS3Keys)({
             copiedS3Keys,
             targetWorkspaceId,
           });
@@ -690,6 +712,7 @@ export const createDuplicateWorkspace = (
             }),
           );
         }
+        copyCleanupIntentIds = copyResult.value;
       }
 
       // Every rejection below throws rather than returning: returning from a
@@ -697,6 +720,16 @@ export const createDuplicateWorkspace = (
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
       const txResult = await resultTx(safeDb, async (tx) => {
+        abortCopyPublicationTransaction(
+          await lockCopyPublicationIntentsInTransaction({
+            intentIds: copyCleanupIntentIds,
+            organizationId,
+            pendingWorkspaceIds: [targetWorkspaceId],
+            tx,
+            workspaceIds: [targetWorkspaceId],
+            workspaceMode: "update",
+          }),
+        );
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -1091,6 +1124,14 @@ export const createDuplicateWorkspace = (
         await dependencies.enqueueWorkspaceSearchRepairs(tx, [
           targetWorkspaceId,
         ]);
+        abortCopyPublicationTransaction(
+          await retirePublishedCopyIntentsInTransaction({
+            intentIds: copyCleanupIntentIds,
+            organizationId,
+            tx,
+            workspaceIds: [targetWorkspaceId],
+          }),
+        );
 
         return Result.ok({
           workspaceId: targetWorkspaceId,
@@ -1102,7 +1143,7 @@ export const createDuplicateWorkspace = (
       // An aborted duplicate leaves no target matter, so every object copied
       // for it is an orphan and the whole set goes back.
       if (Result.isError(txResult)) {
-        await cleanupCopiedS3Keys({
+        await (dependencies.cleanupCopiedS3Keys ?? cleanupCopiedS3Keys)({
           copiedS3Keys,
           targetWorkspaceId,
         });

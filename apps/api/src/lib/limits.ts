@@ -490,6 +490,9 @@ export const LIMITS = {
    *  working set grows with it, so this bounds both. Larger files keep their
    *  original as the preview and record `failed`/`too-large`. */
   fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
+  /** Maximum PDF bytes a derivative conversion may return or native
+   * extraction may read. Matches the largest accepted document upload. */
+  fileDerivativePdfMaxBytes: 50 * 1024 * 1024,
   /** Derivative jobs one API process runs at once. Each conversion holds a
    *  whole source plus its output and, for images, a decoded surface: the
    *  largest single allocations the process makes. Running them one at a time
@@ -861,6 +864,15 @@ export const LIMITS = {
   workPoolHeavySidecarMaxWaiters: 0,
   workPoolHeavySidecarMaxWaitMs: 0,
   workPoolHeavySidecarDeadlineMs: 120_000,
+  /** CPU-heavy file scans one API process runs at once; other replicas keep
+   *  independent capacity. A single file above the byte budget runs alone. */
+  workPoolFileScanSlots: 1,
+  workPoolFileScanBytes: 150 * 1024 * 1024,
+  /** Scans that may wait for a slot, and how long, before the request fails
+   *  as retryable. */
+  workPoolFileScanMaxWaiters: 32,
+  workPoolFileScanMaxWaitMs: 20_000,
+  workPoolFileScanDeadlineMs: 120_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -9,7 +9,7 @@ import {
   mock,
   test,
 } from "bun:test";
-import { sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
@@ -19,6 +19,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
+  bufferObjectCleanupIntents,
   documentCounters,
   entities,
   entityVersions,
@@ -33,6 +34,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createSiblingNamePlan } from "@/api/lib/entities/sibling-name-insert";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import type {
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -67,16 +72,68 @@ const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
+type FileUsageDb = NonNullable<
+  Parameters<typeof copyFileObject>[0]["fileUsageDb"]
+>;
+const testFileUsageDb = (): FileUsageDb => asTestRaw<FileUsageDb>(fileUsageDb);
+
+const lockedPublicationIntentIds = new WeakMap<
+  object,
+  readonly SafeId<"pendingUpload">[]
+>();
+const lockCopyPublicationIntentsMock = mock(
+  async ({
+    intentIds,
+    tx,
+    workspaceMode,
+  }: Parameters<typeof lockCopyPublicationIntentsInTransaction>[0]) => {
+    expect(intentIds.length).toBeGreaterThan(0);
+    // Entity-cap admission later locks the destination for update.
+    expect(workspaceMode).toBe("update");
+    const reserved = await fileUsageDb
+      .select({ id: bufferObjectCleanupIntents.id })
+      .from(bufferObjectCleanupIntents)
+      .where(inArray(bufferObjectCleanupIntents.id, intentIds));
+    expect(reserved.map(({ id }) => id).toSorted()).toEqual(
+      intentIds.toSorted(),
+    );
+    lockedPublicationIntentIds.set(tx, intentIds);
+    return Result.ok(undefined);
+  },
+);
+const retirePublishedCopyIntentsMock = mock(
+  async ({
+    intentIds,
+    tx,
+  }: Parameters<typeof retirePublishedCopyIntentsInTransaction>[0]) => {
+    const lockedIntentIds = lockedPublicationIntentIds.get(tx);
+    if (!lockedIntentIds) {
+      panic("Copy publication intents were not locked");
+    }
+    expect([...intentIds]).toEqual([...lockedIntentIds]);
+    lockedPublicationIntentIds.delete(tx);
+    return Result.ok(undefined);
+  },
+);
 const duplicateEntity = createDuplicateEntity({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
+  fileUsageDb: {
+    transaction: async (run) => await testFileUsageDb().transaction(run),
+  },
   flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+  lockCopyPublicationIntentsInTransaction: lockCopyPublicationIntentsMock,
   requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+  retirePublishedCopyIntentsInTransaction: retirePublishedCopyIntentsMock,
 });
 
-const workspaceId = toSafeId<"workspace">("workspace_1");
+const workspaceId = toSafeId<"workspace">(
+  "00000000-0000-4000-8000-000000000001",
+);
 const userId = toSafeId<"user">("user_1");
-const organizationId = toSafeId<"organization">("organization_1");
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-4000-8000-000000000002",
+);
 const rootFolderId = toSafeId<"entity">("root_folder");
 const documentId = toSafeId<"entity">("document_child");
 const nestedFolderId = toSafeId<"entity">("nested_folder");
@@ -125,6 +182,36 @@ const secondarySourceKey = createFileKey({
 });
 
 let fake: FakeS3;
+let fileUsageDb: TestDatabase;
+
+beforeAll(
+  async () => {
+    fileUsageDb = await getTestDb();
+    await fileUsageDb.insert(organization).values({
+      createdAt: new Date(),
+      id: organizationId,
+      name: "Duplicate entity tests",
+      slug: `duplicate-entity-${Bun.randomUUIDv7()}`,
+    });
+    await fileUsageDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId,
+      name: "Duplicate entity matter",
+      reference: `duplicate-${Bun.randomUUIDv7()}`,
+    });
+  },
+  { timeout: 30_000 },
+);
+
+afterAll(async () => {
+  await fileUsageDb
+    .delete(bufferObjectCleanupIntents)
+    .where(eq(bufferObjectCleanupIntents.organizationId, organizationId));
+  await fileUsageDb
+    .delete(organization)
+    .where(eq(organization.id, organizationId));
+  await releaseTestDb();
+});
 
 beforeEach(() => {
   fake = startFakeS3();
@@ -141,32 +228,57 @@ afterEach(() => {
   fake.stop();
 });
 
+// timeout: Writes through a real database and the fake object store around an ambiguous copy.
 test("reserves a copy destination before an ambiguous S3 failure", async () => {
   // A rejected copy is ambiguous: the object may still have landed, so the
   // destination has to be reserved before the request goes out.
   fake.failNext({ method: "COPY", code: "AccessDenied", status: 403 });
-  const copiedS3Keys: string[] = [];
-
-  const copied = await copyFileObject({
-    sourceEntityId: documentId,
-    sourceFileId: fileContent.id,
-    sourceKey,
-    mimeType: fileContent.mimeType,
-    organizationId,
-    targetWorkspaceId: workspaceId,
-    copiedS3Keys,
+  const copyDb = fileUsageDb;
+  const copyOrganizationId = mintAuthProviderId<"organization">();
+  const copyWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+  await copyDb.insert(organization).values({
+    createdAt: new Date(),
+    id: copyOrganizationId,
+    name: "Ambiguous copy test",
+    slug: `ambiguous-copy-${Bun.randomUUIDv7()}`,
   });
+  await copyDb.insert(workspaces).values({
+    id: copyWorkspaceId,
+    organizationId: copyOrganizationId,
+    name: "Ambiguous copy matter",
+    reference: `ambiguous-${Bun.randomUUIDv7()}`,
+  });
+  try {
+    const copiedS3Keys: string[] = [];
+    const copied = await copyFileObject({
+      sourceEntityId: documentId,
+      sourceFileId: fileContent.id,
+      sourceKey,
+      mimeType: fileContent.mimeType,
+      organizationId: copyOrganizationId,
+      targetWorkspaceId: copyWorkspaceId,
+      copiedS3Keys,
+      fileUsageDb: testFileUsageDb(),
+    });
 
-  if (!Result.isError(copied)) {
-    throw new TypeError("Expected the ambiguous copy to fail");
+    if (!Result.isError(copied)) {
+      throw new TypeError("Expected the ambiguous copy to fail");
+    }
+    expect(copied.error).toMatchObject({ message: "Failed to copy object" });
+    const attempted = fake.requests.filter(({ method }) => method === "COPY");
+    expect(attempted).toHaveLength(1);
+    // The reserved key is the key the copy actually addressed, not a guess.
+    expect(copiedS3Keys).toEqual(attempted.map(({ key }) => key));
+    expect(attempted.at(0)?.copySourceKey).toBe(sourceKey);
+  } finally {
+    await copyDb
+      .delete(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.organizationId, copyOrganizationId));
+    await copyDb
+      .delete(organization)
+      .where(eq(organization.id, copyOrganizationId));
   }
-  expect(copied.error).toMatchObject({ message: "Failed to copy object" });
-  const attempted = fake.requests.filter(({ method }) => method === "COPY");
-  expect(attempted).toHaveLength(1);
-  // The reserved key is the key the copy actually addressed, not a guess.
-  expect(copiedS3Keys).toEqual(attempted.map(({ key }) => key));
-  expect(attempted.at(0)?.copySourceKey).toBe(sourceKey);
-});
+}, 30_000);
 
 type InsertedEntity = {
   id: SafeId<"entity">;
@@ -244,7 +356,7 @@ const createContext = ({
     server: null,
   };
 
-  return {
+  return asTestRaw<Parameters<typeof duplicateEntity.handler>[0]>({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
@@ -255,13 +367,13 @@ const createContext = ({
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
-  } as Parameters<typeof duplicateEntity.handler>[0];
+  });
 };
 
 describe("duplicate name collisions", () => {
   let nameDb: TestDatabase;
 
+  // timeout: Boot a migrated test database before the collision cases.
   beforeAll(
     async () => {
       nameDb = await getTestDb();

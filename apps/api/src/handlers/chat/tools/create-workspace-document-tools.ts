@@ -22,6 +22,7 @@ import type {
   CreateDocumentOperation,
   DocumentWriteAccess,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -223,6 +224,7 @@ export const createCreateWorkspaceDocumentTools = ({
     }
 
     const created = await createEntity({
+      authority: CALLER_AUTHORIZED,
       scopedDb,
       organizationId,
       workspaceId: authorized.value.operation.workspaceId,

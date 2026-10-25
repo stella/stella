@@ -23,6 +23,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { comparisonVersionId } from "@/api/lib/entity-versions/comparison-version-id";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
@@ -876,6 +877,7 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.createEntityVersionFromBuffer({
+                authority: CALLER_AUTHORIZED,
                 safeDb,
                 organizationId: session.activeOrganizationId,
                 workspaceId,

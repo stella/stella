@@ -40,7 +40,12 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import {
+  abortCopyPublicationTransaction,
+  copyOrganizationFilesForPublication,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   type CheckedFileCopy,
@@ -330,18 +335,58 @@ const prepareUserFileThumbnail = async (
   return { ...copy, thumbnailSource, thumbnailHead };
 };
 
+type CopyCleanupScopeArgs = {
+  newThreadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceIds: SafeId<"workspace">[];
+};
+
+const copyCleanupScope = ({
+  newThreadId,
+  userId,
+  workspaceIds,
+}: CopyCleanupScopeArgs) =>
+  workspaceIds.length === 0
+    ? {
+        type: "organization" as const,
+        chatThreadId: newThreadId,
+        writerUserId: userId,
+      }
+    : {
+        type: "workspaces" as const,
+        chatThreadId: newThreadId,
+        writerUserId: userId,
+        workspaces: workspaceIds.map((id) => ({
+          id,
+          state: "active" as const,
+        })),
+      };
+
+type CopyUserFilesArgs = CopyCleanupScopeArgs & {
+  copiedS3Keys: string[];
+  files: SourceUserFileRow[];
+  fileUsageDb?: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"];
+  organizationId: SafeId<"organization">;
+};
+
+type CopiedUserFiles = {
+  cleanupIntentIds: SafeId<"pendingUpload">[];
+  outcomes: UserFileCopyOutcome[];
+};
+
 const copyUserFiles = async ({
   copiedS3Keys,
   files,
   fileUsageDb,
+  newThreadId,
   organizationId,
-}: {
-  copiedS3Keys: string[];
-  files: SourceUserFileRow[];
-  fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
-  organizationId: SafeId<"organization">;
-}): Promise<Result<UserFileCopyOutcome[], HandlerError<409 | 500 | 503>>> => {
+  userId,
+  workspaceIds,
+}: CopyUserFilesArgs): Promise<
+  Result<CopiedUserFiles, HandlerError<409 | 500 | 503>>
+> => {
   const staged = stageUserFileCopies(files, organizationId);
+  const cleanupIntentIds: SafeId<"pendingUpload">[] = [];
   const prepared: Awaited<ReturnType<typeof prepareUserFileCopy>>[] = [];
   for (const itemBatch of chunkItems(staged, FORK_COPY_CONCURRENCY)) {
     prepared.push(
@@ -368,35 +413,46 @@ const copyUserFiles = async ({
         objectKey: destinationKey,
         sizeBytes,
         source: sourceKey,
-        copy: async (checked: CheckedFileCopy<string>) => {
-          const copied = await copyObject(checked.source, checked.objectKey);
-          return Result.isError(copied)
-            ? Result.err(copied.error)
-            : Result.ok(checked.objectKey);
-        },
         confirmedDestinationAbsentOnCopyError: (
           error: S3ObjectMissingError | S3PresignError,
         ) =>
           S3ObjectMissingError.is(error) || isMissingS3ObjectError(error.cause),
       };
     });
-    const copied = await copyOrganizationFiles({
-      inputs,
+    const cleanupScope = copyCleanupScope({
+      newThreadId,
+      userId,
+      workspaceIds,
+    });
+    const copied = await copyOrganizationFilesForPublication({
+      inputs: inputs.map((input) => ({
+        ...input,
+        cleanupScope,
+        // The copy runs only inside the publication ledger's checked operation.
+        copy: async (checked: CheckedFileCopy<string>) => {
+          const object = await copyObject(checked.source, checked.objectKey);
+          return Result.isError(object)
+            ? Result.err(object.error)
+            : Result.ok(checked.objectKey);
+        },
+      })),
       concurrency: FORK_COPY_CONCURRENCY,
       db: fileUsageDb,
     });
-    return copied.map(
-      (results) =>
-        new Map(
-          inputs.map((input, index) => {
-            const result = results.at(index);
-            if (!result) {
-              panic("Chat attachment copy must have a storage result");
-            }
-            return [input.objectKey, result] as const;
-          }),
-        ),
-    );
+    return copied.map(({ copies, publicationIntents }) => {
+      cleanupIntentIds.push(
+        ...publicationIntents.flatMap(({ cleanupIntentIds: ids }) => ids),
+      );
+      return new Map(
+        inputs.map((input, index) => {
+          const result = copies.at(index);
+          if (!result) {
+            panic("Chat attachment copy must have a storage result");
+          }
+          return [input.objectKey, result] as const;
+        }),
+      );
+    });
   };
   const copyFailure = (
     error: S3ObjectMissingError | S3PresignError | OrganizationFileUsageError,
@@ -517,7 +573,7 @@ const copyUserFiles = async ({
       missingThumbnail,
     });
   }
-  return Result.ok(outcomes);
+  return Result.ok({ cleanupIntentIds, outcomes });
 };
 
 /**
@@ -529,7 +585,9 @@ const copyUserFiles = async ({
  */
 class ChatForkAttachmentRowMissingError extends TaggedError(
   "ChatForkAttachmentRowMissingError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * A `user_files` row of the copied prefix points at a storage object (or a
@@ -548,7 +606,7 @@ class ChatForkAttachmentObjectMissingError extends TaggedError(
  */
 const rollbackCopiedS3Keys = async (
   copiedS3Keys: string[],
-  fileUsageDb: Parameters<typeof copyOrganizationFiles>[0]["db"],
+  fileUsageDb: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"],
 ): Promise<void> => {
   if (copiedS3Keys.length === 0) {
     return;
@@ -582,7 +640,7 @@ export const createForkThread = ({
   fileUsageDb,
   indexChatThread = upsertChatThreadSearchDocument,
 }: {
-  fileUsageDb?: Parameters<typeof copyOrganizationFiles>[0]["db"];
+  fileUsageDb?: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"];
   /** Search-index write, which runs on the root database; supplied by the
    *  focused integration test, whose fixture only stands up a scoped one. */
   indexChatThread?: typeof upsertChatThreadSearchDocument | undefined;
@@ -807,11 +865,21 @@ export const createForkThread = ({
       }
       const forkWorkspaceId = source.workspaceId;
       const copiedS3Keys: string[] = [];
+      const copyWorkspaceIds = [
+        ...new Set(
+          forkWorkspaceId === null
+            ? source.dataWorkspaceIds
+            : [forkWorkspaceId, ...source.dataWorkspaceIds],
+        ),
+      ];
       const copiedFiles = await copyUserFiles({
         copiedS3Keys,
         files: sourceFiles,
         fileUsageDb,
+        newThreadId,
         organizationId: session.activeOrganizationId,
+        userId: user.id,
+        workspaceIds: copyWorkspaceIds,
       });
       if (Result.isError(copiedFiles)) {
         await rollbackCopiedS3Keys(copiedS3Keys, fileUsageDb);
@@ -820,7 +888,7 @@ export const createForkThread = ({
       const copies: UserFileCopy[] = [];
       const missingObjectFileIds: SafeId<"userFile">[] = [];
       const missingThumbnailFileIds: SafeId<"userFile">[] = [];
-      for (const copied of copiedFiles.value) {
+      for (const copied of copiedFiles.value.outcomes) {
         switch (copied.kind) {
           case "copied": {
             copies.push(copied.copy);
@@ -860,6 +928,15 @@ export const createForkThread = ({
       );
 
       const written = await safeDb(async (tx) => {
+        abortCopyPublicationTransaction(
+          await lockCopyPublicationIntentsInTransaction({
+            intentIds: copiedFiles.value.cleanupIntentIds,
+            organizationId: session.activeOrganizationId,
+            tx,
+            workspaceIds: copyWorkspaceIds,
+            workspaceMode: "share",
+          }),
+        );
         await tx.insert(chatThreads).values({
           chatModel: source.chatModel,
           chatReasoningEffort: source.chatReasoningEffort,
@@ -945,6 +1022,14 @@ export const createForkThread = ({
             parentThreadId: params.threadId,
           },
         });
+        abortCopyPublicationTransaction(
+          await retirePublishedCopyIntentsInTransaction({
+            intentIds: copiedFiles.value.cleanupIntentIds,
+            organizationId: session.activeOrganizationId,
+            tx,
+            workspaceIds: copyWorkspaceIds,
+          }),
+        );
       }, defaultDatabaseRetry);
 
       if (Result.isError(written)) {

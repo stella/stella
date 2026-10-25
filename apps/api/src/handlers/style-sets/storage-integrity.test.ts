@@ -5,21 +5,15 @@ const readHandler = (name: string) =>
   readFileSync(new URL(`${name}.ts`, import.meta.url), "utf-8");
 
 describe("style set storage integrity", () => {
-  test("persists a deletion tombstone until stored packages are removed", () => {
+  test("leaves deletion tombstones for the scheduled storage reconciler", () => {
     const source = readHandler("delete");
-    const tombstone = source.indexOf(".set({ deletedAt })");
-    const queuedStorageDelete = source.indexOf(
-      "deleteQueuedStyleSetPackages",
-      tombstone,
-    );
+    const tombstone = source.indexOf(".set({ deletedAt: new Date() })");
     const rowDelete = source.indexOf(".delete(styleSets)");
-    const storageDelete = source.indexOf("getS3().delete(s3Key)");
 
     expect(tombstone).toBeGreaterThan(-1);
-    expect(storageDelete).toBeGreaterThan(tombstone);
-    expect(queuedStorageDelete).toBeGreaterThan(tombstone);
-    expect(rowDelete).toBeGreaterThan(storageDelete);
-    expect(rowDelete).toBeGreaterThan(queuedStorageDelete);
+    expect(rowDelete).toBe(-1);
+    expect(source).not.toContain("deleteQueuedStyleSetPackages");
+    expect(source).not.toContain("getS3().delete");
   });
 
   test("retains replaced packages until their download URLs expire", () => {
@@ -33,7 +27,7 @@ describe("style set storage integrity", () => {
 
     expect(persistCleanupKey).toBeGreaterThan(-1);
     expect(scheduleCleanup).toBeGreaterThan(persistCleanupKey);
-    expect(clearCleanupKey).toBeGreaterThan(scheduleCleanup);
+    expect(clearCleanupKey).toBe(-1);
     expect(source).not.toContain("getS3().delete(replaced.oldS3Key)");
   });
 

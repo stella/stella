@@ -1174,6 +1174,35 @@ export const installPgliteTimeEntryTimerSignals = async (
   }
 };
 
+/** Install the trigger that fills reconciliation columns for every writer. */
+export const installPgliteFileObjectReconciliationFill = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261025090300_file_reservation_reconciliation_state",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE OR REPLACE FUNCTION "organization_file_objects_fill_reconciliation"',
+      ) ||
+      source.startsWith(
+        'CREATE TRIGGER "organization_file_objects_fill_reconciliation"',
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("File object reconciliation fill migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install the trigger that derives a playbook's document type key from scope. */
 export const installPglitePlaybookDocumentTypeKey = async (
   db: PgliteSchemaDb,

@@ -1002,6 +1002,51 @@ export type PresignDownloadOptions = {
 const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
   async () => await Promise.resolve(null);
 
+type PresignInternalDownloadOptions = Pick<
+  PresignDownloadOptions,
+  "expiresIn" | "fileName" | "scope"
+>;
+
+/** Sign a server-internal fetch. The URL must never be returned to a caller. */
+const presignInternalDownloadUrl = async (
+  key: string,
+  { expiresIn, fileName, scope }: PresignInternalDownloadOptions,
+): Promise<string> => {
+  const result = await Result.tryPromise({
+    try: async () => {
+      const client = await getPresignClient({
+        expiresIn,
+        key,
+        scope,
+        actions: ["s3:GetObject"],
+      });
+      return await getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: envBase.S3_BUCKET,
+          Key: key,
+          ResponseCacheControl: PRIVATE_CACHE_CONTROL,
+          ...(fileName
+            ? { ResponseContentDisposition: contentDisposition(fileName) }
+            : {}),
+        }),
+        { expiresIn },
+      );
+    },
+    catch: (cause) =>
+      new S3PresignError({
+        message: "Failed to generate presigned download URL",
+        cause,
+      }),
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+
+  return result.value;
+};
+
 export const presignDownloadUrl = async (
   key: string,
   {
@@ -1031,40 +1076,13 @@ export const presignDownloadUrl = async (
           : refuseBackgroundSessionAuthority,
     },
   );
-  const result = await Result.tryPromise({
-    try: async () => {
-      const client = await getPresignClient({
-        expiresIn: issuedExpiresIn,
-        key,
-        scope,
-        actions: ["s3:GetObject"],
-      });
-      return await getSignedUrl(
-        client,
-        new GetObjectCommand({
-          Bucket: envBase.S3_BUCKET,
-          Key: key,
-          ResponseCacheControl: PRIVATE_CACHE_CONTROL,
-          ...(fileName
-            ? { ResponseContentDisposition: contentDisposition(fileName) }
-            : {}),
-        }),
-        { expiresIn: issuedExpiresIn },
-      );
-    },
-    catch: (cause) =>
-      new S3PresignError({
-        message: "Failed to generate presigned download URL",
-        cause,
-      }),
+  const url = await presignInternalDownloadUrl(key, {
+    expiresIn: issuedExpiresIn,
+    ...(fileName === undefined ? {} : { fileName }),
+    ...(scope === undefined ? {} : { scope }),
   });
-
-  if (Result.isError(result)) {
-    throw result.error;
-  }
-
   markContentDeliveryIntent();
-  return result.value;
+  return url;
 };
 
 export type HeadObjectResult = {

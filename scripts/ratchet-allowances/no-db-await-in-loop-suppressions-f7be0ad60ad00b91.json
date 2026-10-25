@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/file-comparison-sweep.ts",
+  "delta": 1,
+  "reason": "The file comparison sweep processes one bounded page per round and stops at maxBatches or its deadline, so the scheduler run stays bounded and each page commits before the next is read."
+}

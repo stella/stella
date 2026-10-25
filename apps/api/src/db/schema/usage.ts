@@ -901,6 +901,16 @@ export const FILE_USAGE_OBJECT_STATUSES = ["reserved", "committed"] as const;
 const FILE_USAGE_OBJECT_STATUS_SQL_VALUES = FILE_USAGE_OBJECT_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
 );
+export const FILE_USAGE_RECONCILIATION_STATE = {
+  ACTIVE: "active",
+  QUARANTINED: "quarantined",
+} as const;
+const FILE_USAGE_RECONCILIATION_STATES = [
+  FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+  FILE_USAGE_RECONCILIATION_STATE.QUARANTINED,
+] as const;
+const FILE_USAGE_RECONCILIATION_STATE_SQL_VALUES =
+  FILE_USAGE_RECONCILIATION_STATES.map((state) => sql.raw(`'${state}'`));
 const currentUserOwnsOrganizationFileUsage = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_usage'::regclass)`;
 const currentUserOwnsOrganizationFileObjects = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_objects'::regclass)`;
 
@@ -969,6 +979,19 @@ export const organizationFileObjects = p.pgTable(
     writeId: p.text("write_id"),
     expectedSha256Hex: p.text("expected_sha256_hex"),
     reservationStartedAt: timestamptz("reservation_started_at"),
+    /** Active rows are eligible for bounded recovery; quarantined mismatches require operator repair. */
+    reconciliationState: p
+      .text("reconciliation_state", {
+        enum: FILE_USAGE_RECONCILIATION_STATES,
+      })
+      .notNull()
+      .default(FILE_USAGE_RECONCILIATION_STATE.ACTIVE),
+    reconciliationAttemptCount: p
+      .integer("reconciliation_attempt_count")
+      .notNull()
+      .default(0),
+    /** Durable backoff cursor for unresolved writes; null after settlement or quarantine. */
+    reconcileAfter: timestamptz("reconcile_after"),
     status: p.text({ enum: FILE_USAGE_OBJECT_STATUSES }).notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -978,13 +1001,17 @@ export const organizationFileObjects = p.pgTable(
       .index("organization_file_objects_org_key_idx")
       .on(table.organizationId, table.objectKey),
     p
-      .index("organization_file_objects_pending_reconcile_idx")
-      .on(table.updatedAt, table.objectKey)
-      .where(sql`${table.writeId} IS NOT NULL`),
+      .index("organization_file_objects_active_reconcile_idx")
+      .on(table.reconcileAfter, table.objectKey)
+      .where(
+        sql`${table.writeId} IS NOT NULL AND ${table.reconciliationState} = 'active'`,
+      ),
     p
-      .index("organization_file_objects_org_pending_reconcile_idx")
-      .on(table.organizationId, table.updatedAt, table.objectKey)
-      .where(sql`${table.writeId} IS NOT NULL`),
+      .index("organization_file_objects_org_active_reconcile_idx")
+      .on(table.organizationId, table.reconcileAfter, table.objectKey)
+      .where(
+        sql`${table.writeId} IS NOT NULL AND ${table.reconciliationState} = 'active'`,
+      ),
     p.check("organization_file_objects_size_nonneg", sql`size_bytes >= 0`),
     p.check(
       "organization_file_objects_pending_size_nonneg",
@@ -1001,6 +1028,29 @@ export const organizationFileObjects = p.pgTable(
     p.check(
       "organization_file_objects_status_domain",
       sql`status IN (${sql.join(FILE_USAGE_OBJECT_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "organization_file_objects_reconciliation_attempt_nonnegative",
+      sql`${table.reconciliationAttemptCount} >= 0`,
+    ),
+    p.check(
+      "organization_file_objects_reconciliation_state_domain",
+      sql`${table.reconciliationState} IN (${sql.join(FILE_USAGE_RECONCILIATION_STATE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "organization_file_objects_reconciliation_lifecycle",
+      sql`(
+        ${table.writeId} IS NULL
+        AND ${table.reconciliationState} = ${FILE_USAGE_RECONCILIATION_STATE.ACTIVE}
+        AND ${table.reconciliationAttemptCount} = 0
+        AND ${table.reconcileAfter} IS NULL
+      ) OR (
+        ${table.writeId} IS NOT NULL
+        AND (
+          (${table.reconciliationState} = ${FILE_USAGE_RECONCILIATION_STATE.ACTIVE} AND ${table.reconcileAfter} IS NOT NULL)
+          OR (${table.reconciliationState} = ${FILE_USAGE_RECONCILIATION_STATE.QUARANTINED} AND ${table.reconcileAfter} IS NULL)
+        )
+      )`,
     ),
     p.pgPolicy("organization_file_objects_owner_access", {
       for: "all",

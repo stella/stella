@@ -47,7 +47,19 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import {
+  DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_CONSTRAINTS,
+  DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_REPAIRS,
+} from "./document-derivative-run-ownership-repair";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import {
+  FILE_LIFECYCLE_CONSTRAINT_VALIDATIONS,
+  FILE_LIFECYCLE_CONSTRAINTS,
+} from "./file-lifecycle-constraint-validation";
+import {
+  FILE_OBJECT_RECONCILIATION_CONSTRAINTS,
+  FILE_OBJECT_RECONCILIATION_REPAIR,
+} from "./file-object-reconciliation-repair";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
@@ -697,6 +709,46 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  // Reservation admission counts organization and caller retained capacity.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "file_comparison_uploads_org_user_idx" ON public."file_comparison_uploads" USING btree ("organization_id", "user_id")',
+    definitionBody:
+      "ON public.file_comparison_uploads USING btree (organization_id, user_id)",
+    isUnique: false,
+    name: "file_comparison_uploads_org_user_idx",
+    tableName: "file_comparison_uploads",
+  },
+  // The tombstone cleanup walk over deleted style sets in retry order.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "style_sets_deletion_cleanup_idx" ON public."style_sets" USING btree ("deletion_cleanup_attempt_count", "deleted_at", "id") WHERE "deleted_at" IS NOT NULL',
+    definitionBody:
+      "ON public.style_sets USING btree (deletion_cleanup_attempt_count, deleted_at, id) WHERE (deleted_at IS NOT NULL)",
+    isUnique: false,
+    name: "style_sets_deletion_cleanup_idx",
+    tableName: "style_sets",
+  },
+  // Only active write rows enter the reconciliation sweep; quarantined rows
+  // keep their key, write identity and reservation for operator repair.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "organization_file_objects_active_reconcile_idx" ON public."organization_file_objects" USING btree ("reconcile_after", "object_key") WHERE "write_id" IS NOT NULL AND "reconciliation_state" = \'active\'',
+    definitionBody:
+      "ON public.organization_file_objects USING btree (reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
+    isUnique: false,
+    name: "organization_file_objects_active_reconcile_idx",
+    tableName: "organization_file_objects",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "organization_file_objects_org_active_reconcile_idx" ON public."organization_file_objects" USING btree ("organization_id", "reconcile_after", "object_key") WHERE "write_id" IS NOT NULL AND "reconciliation_state" = \'active\'',
+    definitionBody:
+      "ON public.organization_file_objects USING btree (organization_id, reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
+    isUnique: false,
+    name: "organization_file_objects_org_active_reconcile_idx",
+    tableName: "organization_file_objects",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -796,6 +848,16 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     legacyName: "account_issuer_account_id_uidx",
     replacementNames: ["account_provider_account_id_uidx"],
   },
+  // The reconciliation sweep orders write rows by their scheduled retry, not
+  // by their last write, and skips quarantined rows.
+  {
+    legacyName: "organization_file_objects_pending_reconcile_idx",
+    replacementNames: ["organization_file_objects_active_reconcile_idx"],
+  },
+  {
+    legacyName: "organization_file_objects_org_pending_reconcile_idx",
+    replacementNames: ["organization_file_objects_org_active_reconcile_idx"],
+  },
 ];
 
 /**
@@ -837,6 +899,9 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...FILE_LIFECYCLE_CONSTRAINT_VALIDATIONS,
+  FILE_OBJECT_RECONCILIATION_REPAIR,
+  ...DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_REPAIRS,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that
@@ -863,6 +928,9 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...FILE_LIFECYCLE_CONSTRAINTS,
+    ...FILE_OBJECT_RECONCILIATION_CONSTRAINTS,
+    ...DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_CONSTRAINTS,
   ];
 
 type PresentIndexState = {

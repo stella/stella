@@ -43,6 +43,7 @@ import {
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
@@ -870,6 +871,7 @@ const runCreateDocumentStep = async ({
   const created = await Result.tryPromise({
     try: async () =>
       await createEntity({
+        authority: CALLER_AUTHORIZED,
         scopedDb,
         organizationId,
         workspaceId: run.workspaceId,

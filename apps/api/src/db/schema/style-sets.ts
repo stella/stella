@@ -32,6 +32,15 @@ export const styleSets = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
     deletedAt: timestamptz("deleted_at"),
+    // Retry count for storage cleanup after this row becomes a tombstone.
+    deletionCleanupAttemptCount: p
+      .integer("deletion_cleanup_attempt_count")
+      .notNull()
+      .default(0),
+    // Earliest time the tombstone cleanup may run again after a failure.
+    deletionCleanupNextAttemptAt: timestamptz(
+      "deletion_cleanup_next_attempt_at",
+    ),
   },
   (table) => [
     p.index("style_sets_organization_id_idx").on(table.organizationId),
@@ -45,6 +54,16 @@ export const styleSets = p.pgTable(
       .index("style_sets_pending_package_cleanup_idx")
       .on(table.updatedAt, table.id)
       .where(sql`${table.cleanupS3Key} IS NOT NULL`),
+    // A deleted row is the durable receipt for its exact object keys until
+    // the storage reconciler confirms erasure.
+    p
+      .index("style_sets_deletion_cleanup_idx")
+      .on(table.deletionCleanupAttemptCount, table.deletedAt, table.id)
+      .where(sql`${table.deletedAt} IS NOT NULL`),
+    p.check(
+      "style_sets_deletion_cleanup_attempt_count_nonnegative_check",
+      sql`${table.deletionCleanupAttemptCount} >= 0`,
+    ),
     storedFileScanStateCheck("style_sets_scan_state_check", table.scanState),
     p.check(
       "style_sets_s3_key_organization_check",

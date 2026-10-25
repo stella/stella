@@ -25,6 +25,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -313,6 +314,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await createEntityFromBuffer({
+            authority: CALLER_AUTHORIZED,
             scopedDb,
             organizationId,
             workspaceId,

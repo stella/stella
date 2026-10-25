@@ -10,7 +10,12 @@ import { entities, extractedContent } from "@/api/db/schema";
 import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateLock,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -24,6 +29,8 @@ import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
+import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
+import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
@@ -336,12 +343,19 @@ const buildSearchDocument = async (
 // producer funnels through — strip here, not at each producer.
 const stripNulBytes = (text: string): string => text.replaceAll("\u0000", "");
 
+type EntityProjectionPublication =
+  | { type: "direct" }
+  | { type: "repair"; fence: SearchProjectionRepairFence<"entity"> };
+
+const DIRECT_PUBLICATION: EntityProjectionPublication = { type: "direct" };
+
 export const upsertSearchDocument = async (
   entityId: SafeId<"entity">,
   {
     database = rootDb,
     syncActivity = syncWorkspaceSearchActivity,
   }: IndexEntityDependencies = {},
+  publication: EntityProjectionPublication = DIRECT_PUBLICATION,
 ): Promise<void> => {
   const built = await buildSearchDocument(entityId, database);
   if (!built) {
@@ -362,7 +376,8 @@ export const upsertSearchDocument = async (
   const observedSource = doc.extractedContentSource;
   const hasObservedSource = observedSource !== null;
 
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
+    // audit: skip - derived search projection synchronized from authoritative entity state
     const parents = await lockForWrite(tx, {
       organizationIds: [doc.organizationId],
       workspaceIds: [doc.workspaceId],
@@ -375,16 +390,19 @@ export const upsertSearchDocument = async (
     }
     // Version writers serialize on this entity. Take the lock in a separate
     // statement so the following CAS sees commits made while we waited.
-    const locked = await tx.execute<IndexedSearchDocument>(sql`
-      SELECT e.id AS "entityId"
-      FROM entities e
-      INNER JOIN workspaces w ON w.id = e.workspace_id
-      WHERE e.id = ${doc.entityId}
-        AND e.workspace_id = ${doc.workspaceId}
-        AND w.organization_id = ${doc.organizationId}
-      FOR UPDATE OF e
-    `);
-    if (!locked.at(0)) {
+    const locked = await withAggregateLock({
+      aggregate: "entity",
+      id: { id: doc.entityId, workspaceId: doc.workspaceId },
+      mode: "update",
+      tx,
+    });
+    if (locked.status !== "locked") {
+      return;
+    }
+    if (
+      publication.type === "repair" &&
+      !(await lockCurrentSearchProjectionRepair(tx, publication.fence))
+    ) {
       return;
     }
 
@@ -453,7 +471,6 @@ export const upsertSearchDocument = async (
             )
           )
         )
-      FOR UPDATE OF e
       ON CONFLICT (entity_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         workspace_id = EXCLUDED.workspace_id,
@@ -495,6 +512,16 @@ export const upsertSearchDocument = async (
       WHERE entity_id = ${doc.entityId}
     `);
     await syncActivity(doc.workspaceId, tx);
+  });
+};
+
+export const repairSearchDocument = async (
+  fence: SearchProjectionRepairFence<"entity">,
+  dependencies: IndexEntityDependencies = {},
+): Promise<void> => {
+  await upsertSearchDocument(toSafeId<"entity">(fence.sourceId), dependencies, {
+    fence,
+    type: "repair",
   });
 };
 

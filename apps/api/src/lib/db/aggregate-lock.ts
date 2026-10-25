@@ -36,6 +36,7 @@ import {
   entities,
   entityVersions,
   fields,
+  organizationFileUsage,
   pdfSigningSessions,
   workspaceMembers,
   workspaces,
@@ -95,6 +96,7 @@ export const AGGREGATE_LOCKS = {
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
   memory: { rank: 530, kind: "row" },
+  contact: { rank: 535, kind: "row" },
   searchProjectionRepair: { rank: 540, kind: "row" },
   signal: { rank: 600, kind: "row" },
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
@@ -220,6 +222,7 @@ export const AGGREGATE_CHAINS = {
   sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
   memory: ["memory"],
+  contact: ["contact"],
   searchProjectionRepair: ["searchProjectionRepair"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
@@ -366,6 +369,10 @@ type AggregateIdentities = {
   field: { id: SafeId<"field">; workspaceId: SafeId<"workspace"> };
   memory: {
     id: SafeId<"aiMemory">;
+    organizationId: SafeId<"organization">;
+  };
+  contact: {
+    id: SafeId<"contact">;
     organizationId: SafeId<"organization">;
   };
   searchProjectionRepair: {
@@ -891,6 +898,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "contact"
       | "desktopMembership"
       | "memory"
       | "searchProjectionRepair";
@@ -920,6 +928,13 @@ const auxiliaryRowResource = (
     case "memory":
       return byIdWithin(
         "ai_memories",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
+    case "contact":
+      return byIdWithin(
+        "contacts",
         options.id.id,
         "organization_id",
         options.id.organizationId,
@@ -957,6 +972,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "contact":
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
@@ -2659,6 +2675,43 @@ export const lockMemberAccessRow = async ({
       .for(mode)
   ).at(0);
 
+type OrganizationFileCounterLockOptions = {
+  tx: Pick<Transaction, "select">;
+  organizationIds: readonly SafeId<"organization">[];
+};
+
+/**
+ * Lock file accounting counters before their organization rows.
+ *
+ * Rolling-deploy fence: the previous release serializes every file byte and
+ * object transition on these counter rows alone (FOR UPDATE, then a foreign
+ * key share of the organization), so the organization row lock does not
+ * exclude it. Taking the counters first, in that release's order, keeps both
+ * releases on one queue without a lock cycle. Retire this once no deployed
+ * build predates organization-row file accounting. Callers insert missing
+ * counter rows first where they need one; absent rows are not returned.
+ */
+export const lockOrganizationFileCounters = async ({
+  tx,
+  organizationIds,
+}: OrganizationFileCounterLockOptions) => {
+  const ids = [...new Set(organizationIds)];
+  if (ids.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({
+      organizationId: organizationFileUsage.organizationId,
+      committedBytes: organizationFileUsage.committedBytes,
+      reservedBytes: organizationFileUsage.reservedBytes,
+    })
+    .from(organizationFileUsage)
+    .where(inArray(organizationFileUsage.organizationId, ids))
+    .orderBy(asc(organizationFileUsage.organizationId))
+    .limit(ids.length)
+    .for("update");
+};
+
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];
   /** Narrows the locked rows; `and(...)` may yield undefined (no filter). */
@@ -2791,4 +2844,24 @@ export const lockTimerMatterAccessRows = async ({
     default:
       return panic("Invalid timer matter lock scope");
   }
+};
+
+/**
+ * The one-key organization object-intent lock that builds before the
+ * registered fence take alone. Holders of the registered fence take it next,
+ * in the same mode, so writers and teardown from either build exclude each
+ * other during a rolling deploy. Retire it once no running API build predates
+ * the registered fence.
+ */
+export const lockLegacyOrganizationObjectIntentKey = async (
+  tx: ExecuteTransaction,
+  organizationId: SafeId<"organization">,
+  mode: "shared" | "exclusive",
+): Promise<void> => {
+  const key = `buffer-object:${organizationId}`;
+  await tx.execute(
+    mode === "shared"
+      ? sql`SELECT pg_advisory_xact_lock_shared(hashtext(${key}))`
+      : sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`,
+  );
 };

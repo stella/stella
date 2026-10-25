@@ -7,6 +7,7 @@
  * accepted fix text all come out of SQL, so nothing here is provable in memory.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -88,11 +89,19 @@ const seedRun = async (
 ): Promise<SafeId<"documentReviewRun">> => {
   const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
   seededRunIds.push(runId);
+  // Runs belong to a document of their own matter.
+  const entityByWorkspace = new Map([
+    [ids.wsA1, ids.entityA1],
+    [ids.wsA2, ids.entityA2],
+    [ids.wsB1, ids.entityB1],
+  ]);
   await testDb.insert(documentReviewRuns).values({
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId:
+      entityByWorkspace.get(workspaceId) ??
+      panic("Seeded run matter has no fixture document"),
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: CONTENT_SHA256,

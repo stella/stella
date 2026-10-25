@@ -15,6 +15,7 @@ import {
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { fileContentScalingScenario } from "./file-content";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
@@ -38,6 +39,7 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  fileContentScalingScenario,
   ...claimCommentScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes

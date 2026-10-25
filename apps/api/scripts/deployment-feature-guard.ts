@@ -85,6 +85,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Personal search history is available on every deployment",
   ],
   [
+    "/v1/file-content",
+    "Redeems a short-lived file grant that a gated or ungated file route issued; the grant carries the issuing decision",
+  ],
+  [
     "/v1/me/data-exports",
     "A personal data export is available to every account on every deployment",
   ],

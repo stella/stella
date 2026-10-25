@@ -16,6 +16,7 @@ import {
   InboundPersistenceError,
 } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailStore } from "@/api/lib/email/inbound/store";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import {
   FileScanRejectedError,
@@ -220,6 +221,7 @@ const finishInboundAttachments = async ({
       try: async () =>
         // db-await-in-loop: one stored document and ordinal claim per attachment, each in its own transaction so a retry resumes at the missing ordinals; bounded by CORRESPONDENCE_MAX_ATTACHMENTS
         await createDocument({
+          authority: CALLER_AUTHORIZED,
           scopedDb,
           ...scope,
           recordAuditEvent,

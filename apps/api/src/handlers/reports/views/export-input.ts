@@ -1,11 +1,18 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import {
   defaultVarcharSchema,
   resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import type { ValidatedServiceInput } from "@/api/lib/rate-limit/service-classification";
+
+export const REPORT_EXPORT_PERMISSIONS = {
+  workspace: ["read"],
+  entity: ["create"],
+} as const satisfies PermissionInput;
 
 const templateRefSchema = v.union([
   v.object({ type: v.literal("builtin"), key: defaultVarcharSchema }),

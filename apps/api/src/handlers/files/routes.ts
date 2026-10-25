@@ -18,6 +18,7 @@ import {
   readOcrExport,
 } from "@/api/handlers/files/ocr-export";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
+import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
@@ -397,4 +398,10 @@ export const filesRoute = routes(
     },
   },
   { prefix: "/files/:workspaceId" },
+);
+
+// A short-lived grant names the file; no workspace prefix or session applies.
+export const fileContentRoute = routes(
+  { "/:grant": { GET: readFileContentEndpoint } },
+  { prefix: "/file-content" },
 );

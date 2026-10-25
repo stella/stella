@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { PermissionInput } from "@stll/permissions";
@@ -111,6 +111,29 @@ export const hasCurrentActiveWorkspaceMemberPermission = async ({
     isMemberRole(authority.role) &&
     hasCurrentMemberPermission(authority.role, permissions)
   );
+};
+
+class CurrentWorkspaceMemberPermissionError extends TaggedError(
+  "CurrentWorkspaceMemberPermissionError",
+)<{ message: string }> {}
+
+export const requireCurrentActiveWorkspaceMemberPermission = async (
+  options: CurrentWorkspaceMemberPermissionOptions,
+): Promise<void> => {
+  const authorization = (await hasCurrentActiveWorkspaceMemberPermission(
+    options,
+  ))
+    ? Result.ok(undefined)
+    : Result.err(
+        new CurrentWorkspaceMemberPermissionError({
+          message:
+            "The queued action requester is no longer authorized in this matter",
+        }),
+      );
+  if (authorization.isOk()) {
+    return;
+  }
+  abortTransaction(authorization.error);
 };
 
 type CurrentOrganizationMemberPermissionOptions = {

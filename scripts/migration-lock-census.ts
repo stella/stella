@@ -718,6 +718,60 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
   },
   {
+    migration: "20261025090100_style_set_deletion_cleanup",
+    form: "add-column",
+    reason:
+      "The constant integer default and the nullable timestamp use PostgreSQL's fast-default catalog path without rewriting style sets, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261025090100_style_set_deletion_cleanup",
+    form: "add-constraint",
+    reason:
+      "The attempt-count CHECK is added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
+  },
+  {
+    migration: "20261025090200_file_comparison_claims",
+    form: "add-column",
+    reason:
+      "Both claim columns are nullable without a default, a catalog-only change on the short-lived comparison uploads, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261025090200_file_comparison_claims",
+    form: "add-constraint",
+    reason:
+      "The widened status CHECK and the claim CHECK are added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates them.",
+  },
+  {
+    migration: "20261025090300_file_reservation_reconciliation_state",
+    form: "add-column",
+    reason:
+      "The constant defaults and the nullable timestamp use PostgreSQL's fast-default catalog path without rewriting file objects, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261025090300_file_reservation_reconciliation_state",
+    form: "create-trigger",
+    reason:
+      "The fill trigger is a catalog-only creation that reads no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261025090300_file_reservation_reconciliation_state",
+    form: "add-constraint",
+    reason:
+      "The reconciliation CHECKs are added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase schedules existing writes and validates them.",
+  },
+  {
+    migration: "20261025090400_reader_answer_account_erasure",
+    form: "create-policy",
+    reason:
+      "Creating the two owner erasure policies is catalog-only and reads no rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261025090500_document_derivative_entity_ownership",
+    form: "add-foreign-key",
+    reason:
+      "Both document keys are added NOT VALID without scanning runs or entities, under 1s lock_timeout and 5s statement_timeout; the online phase erases runs of deleted documents and validates the keys.",
+  },
+  {
     migration: "20261023151000_mcp_oauth_current_state",
     form: "lock-share-row-exclusive",
     reason:

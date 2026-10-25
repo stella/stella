@@ -41,6 +41,7 @@ import {
   installPgliteDecisionCitationStats,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFileObjectReconciliationFill,
   installPgliteFlowTransitions,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
@@ -843,6 +844,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
+  await installPgliteFileObjectReconciliationFill(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
 

@@ -17,6 +17,7 @@ import {
   pdfDerivativeStateForFile,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   DOCX_MIME_TYPE,
@@ -242,7 +243,9 @@ describe("PDF conversion routes", () => {
       expect(result.error).toBeInstanceOf(ConversionInputError);
       expect(
         result.error instanceof ConversionInputError && result.error.reason,
-      ).toEqual({ kind: "inspection_failed" });
+      ).toEqual({
+        kind: "inspection_failed",
+      });
     }
   });
 
@@ -280,13 +283,87 @@ describe("PDF conversion routes", () => {
     },
   );
 
+  test("refuses a converter response whose declared length exceeds the PDF cap", async () => {
+    const { result, urls } = await withConverterFetch(
+      () =>
+        new Response("", {
+          headers: {
+            "Content-Length": String(LIMITS.fileDerivativePdfMaxBytes + 1),
+          },
+        }),
+      async () =>
+        await convertToPdf(
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
+          {
+            retry: "caller",
+          },
+        ),
+    );
+
+    expect(urls).toHaveLength(1);
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ kind: "response-too-large" });
+    }
+  });
+
+  test("cancels a converter response when streamed bytes cross the PDF cap", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      cancel: () => {
+        cancelled = true;
+      },
+      start: (controller) => {
+        controller.enqueue(new Uint8Array(LIMITS.fileDerivativePdfMaxBytes));
+        controller.enqueue(new Uint8Array([1]));
+      },
+    });
+    const { result } = await withConverterFetch(
+      () => new Response(body),
+      async () =>
+        await convertToPdf(
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
+          {
+            retry: "caller",
+          },
+        ),
+    );
+
+    expect(cancelled).toBe(true);
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ kind: "response-too-large" });
+    }
+  });
+
+  test("accepts a converter response exactly at the PDF cap", async () => {
+    const body = new Uint8Array(LIMITS.fileDerivativePdfMaxBytes);
+    const { result } = await withConverterFetch(
+      () => new Response(body),
+      async () =>
+        await convertToPdf(
+          fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
+          {
+            retry: "caller",
+          },
+        ),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.sizeBytes).toBe(LIMITS.fileDerivativePdfMaxBytes);
+    }
+  });
+
   test("a caller-owned retry makes exactly one converter call per conversion", async () => {
     const { result, urls } = await withConverterFetch(
       () => new Response("busy", { status: 503 }),
       async () =>
         await convertToPdf(
           fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
-          { retry: "caller" },
+          {
+            retry: "caller",
+          },
         ),
     );
 

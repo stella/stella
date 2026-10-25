@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Durable bilingual translation runs.
  *
@@ -14,9 +14,10 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import type { PermissionInput } from "@stll/permissions";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
@@ -46,6 +47,10 @@ import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
@@ -57,6 +62,8 @@ import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryptio
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  MEMBER_RUN_AUTHORITY_REVOKED,
+  processClaimedMemberRun,
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   reconcileQueuedRuns,
@@ -324,6 +331,36 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
 type RunActor = BilingualRunActor;
 
+const BILINGUAL_RUN_PERMISSIONS = {
+  entity: ["create"],
+} as const satisfies PermissionInput;
+
+const requireRunAuthority = async (
+  actor: RunActor,
+  tx: Transaction,
+): Promise<void> => {
+  await requireCurrentActiveWorkspaceMemberPermission({
+    db: tx,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: BILINGUAL_RUN_PERMISSIONS,
+  });
+};
+
+const authorizedWrite = async <T>(
+  actor: RunActor,
+  write: (tx: Transaction) => T | Promise<T>,
+): Promise<T> =>
+  await actor.writeDb(async (tx) => {
+    await requireRunAuthority(actor, tx);
+    return await write(tx);
+  });
+
+const authorizeModelDispatch = async (actor: RunActor): Promise<void> => {
+  await authorizedWrite(actor, () => undefined);
+};
+
 const brandActor = (data: BilingualRunJobData): RunActor =>
   createRootRunActor(data, brandPersistedBilingualTranslationRunId);
 
@@ -337,7 +374,9 @@ type ClaimedRun = {
 };
 
 /** Conditional `queued -> running` claim; a second delivery updates zero rows. */
-const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
+const claimRun = async (
+  actor: RunActor,
+): Promise<ClaimedRun | typeof MEMBER_RUN_AUTHORITY_REVOKED | null> => {
   const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run row audited at create.
     const rows = await tx
@@ -358,7 +397,21 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
         targetLang: bilingualTranslationRuns.targetLang,
         glossary: bilingualTranslationRuns.glossary,
       });
-    return rows.at(0);
+    const row = rows.at(0);
+    if (!row) {
+      return null;
+    }
+    const authorized = await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+      permissions: BILINGUAL_RUN_PERMISSIONS,
+    });
+    if (authorized) {
+      return row;
+    }
+    return MEMBER_RUN_AUTHORITY_REVOKED;
   });
   return claimed ?? null;
 };
@@ -367,25 +420,13 @@ export const processBilingualRun = async (
   actor: RunActor,
   admission: ModelDispatchAdmission,
 ): Promise<void> => {
-  const claimed = await claimRun(actor);
-  if (claimed === null) {
-    return;
-  }
-  const outcome = await Result.tryPromise({
-    try: async () => await executeRun({ actor, admission, run: claimed }),
-    catch: (cause) => cause,
+  await processClaimedMemberRun({
+    actor,
+    claim: claimRun,
+    execute: async (run) => await executeRun({ actor, admission, run }),
+    internalErrorCode: "internal",
+    setFailed: setRunFailed,
   });
-  if (Result.isError(outcome)) {
-    captureError(outcome.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
-    await setRunFailed(actor, "internal");
-    return;
-  }
-  if (outcome.value !== null) {
-    await setRunFailed(actor, outcome.value);
-  }
 };
 
 const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
@@ -443,7 +484,10 @@ const executeRun = async ({
   const config = Result.flatten(
     await Result.tryPromise({
       try: async () =>
-        await actor.writeDb(async (tx) => await loadOrgAISettings(tx, actor)),
+        await authorizedWrite(
+          actor,
+          async (tx) => await loadOrgAISettings(tx, actor),
+        ),
       catch: (cause) => cause,
     }),
   );
@@ -515,12 +559,14 @@ const executeRun = async ({
       }));
 
     const result = await Result.tryPromise({
-      try: async () =>
-        await translateBatch(
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateBatch(
           { batch, preceding, glossary: run.glossary },
           languages,
           context,
-        ),
+        );
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
@@ -553,7 +599,7 @@ const executeRun = async ({
         }),
       };
     });
-    await actor.writeDb(async (tx) => {
+    await authorizedWrite(actor, async (tx) => {
       // audit: skip — row bookkeeping inside a run audited at create.
       // One statement for the whole batch: a VALUES list joined on row_id.
       const values = sql.join(
@@ -631,6 +677,7 @@ const executeRun = async ({
     return "apply_failed";
   }
 
+  await authorizeModelDispatch(actor);
   const written = await createEntityVersionFromBuffer({
     safeDb: actor.writeSafeDb,
     organizationId: actor.organizationId,
@@ -669,6 +716,33 @@ const executeRun = async ({
       replacedFileFieldId: run.fileFieldId,
     },
     scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
+    authority: {
+      type: "current-member",
+      authorize: async (tx) => {
+        await requireRunAuthority(actor, tx);
+      },
+    },
+    afterWrite: async (tx, writtenOutput) => {
+      // audit: skip — completion bookkeeping committed atomically with the
+      // audited version, preventing a completed file with a stuck run.
+      const completed = await tx
+        .update(bilingualTranslationRuns)
+        .set({
+          status: "completed",
+          finishedAt: new Date(),
+          outputEntityVersionId: writtenOutput.entityVersionId,
+        })
+        .where(
+          and(
+            eq(bilingualTranslationRuns.id, actor.runId),
+            eq(bilingualTranslationRuns.status, "running"),
+          ),
+        )
+        .returning({ id: bilingualTranslationRuns.id });
+      if (!completed.at(0)) {
+        panic("Bilingual translation completion returned no run");
+      }
+    },
   });
   if (Result.isError(written)) {
     captureError(written.error, {
@@ -678,17 +752,6 @@ const executeRun = async ({
     return "apply_failed";
   }
 
-  await actor.writeDb(async (tx) => {
-    // audit: skip — completion bookkeeping on the run row audited at create.
-    await tx
-      .update(bilingualTranslationRuns)
-      .set({
-        status: "completed",
-        finishedAt: new Date(),
-        outputEntityVersionId: written.value.entityVersionId,
-      })
-      .where(eq(bilingualTranslationRuns.id, actor.runId));
-  });
   return null;
 };
 

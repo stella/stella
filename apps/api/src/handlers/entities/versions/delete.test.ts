@@ -428,16 +428,36 @@ describe("delete-version chain-of-custody guard", () => {
     ).toBeGreaterThan(restoredCheck);
   });
 
-  test("deleting the current version withdraws and rebuilds its search projection", () => {
+  test("every version tombstone withdraws its search projection before repair", () => {
     const source = readFileSync(
       nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
     const txStart = source.indexOf("safeDb(async (tx) =>");
     const projectionDelete = source.indexOf(".delete(searchDocuments)");
+    const tombstoneWrite = source.indexOf(".update(entityVersions)");
     const txEnd = source.indexOf("if (!txOutcome.ok)");
+    const currentPromotion = source.indexOf("if (isDeletingCurrent) {");
+    const currentPromotionOpen = source.indexOf("{", currentPromotion);
+    let currentPromotionEnd = -1;
+    let braceDepth = 0;
+    for (let index = currentPromotionOpen; index < source.length; index += 1) {
+      if (source[index] === "{") {
+        braceDepth += 1;
+      } else if (source[index] === "}") {
+        braceDepth -= 1;
+        if (braceDepth === 0) {
+          currentPromotionEnd = index;
+          break;
+        }
+      }
+    }
 
+    expect(currentPromotion).toBeGreaterThan(txStart);
+    expect(currentPromotionEnd).toBeGreaterThan(currentPromotion);
     expect(projectionDelete).toBeGreaterThan(txStart);
+    expect(projectionDelete).toBeGreaterThan(currentPromotionEnd);
+    expect(projectionDelete).toBeLessThan(tombstoneWrite);
     expect(projectionDelete).toBeLessThan(txEnd);
     // The promoted version is reprojected after the transaction, through the
     // injected projector whose production default is the extraction owner.

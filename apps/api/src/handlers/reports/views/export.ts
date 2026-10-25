@@ -20,6 +20,7 @@ import { reportExports } from "@/api/db/schema";
 import { isReportRowCountOverCap } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import {
+  REPORT_EXPORT_PERMISSIONS,
   reportExportBodySchema,
   reportExportConsumesServices,
 } from "@/api/handlers/reports/views/export-input";
@@ -50,7 +51,7 @@ const config = {
   featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
-  permissions: { workspace: ["read"], entity: ["create"] },
+  permissions: REPORT_EXPORT_PERMISSIONS,
   mcp: {
     type: "capability",
     reason: "reporting_export",

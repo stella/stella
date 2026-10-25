@@ -175,50 +175,53 @@ usage_seat_assignments.assigned_by_user_id  text                fk,null         
 usage_seat_assignments.created_at           timestamptz         default,not null  usage.ts:856
 ```
 
-## organization_file_usage · `organizationFileUsage` · usage.ts:907 · rls
+## organization_file_usage · `organizationFileUsage` · usage.ts:917 · rls
 
 ```text
-organization_file_usage.organization_id  safeOrganizationId  pk,fk,not null    usage.ts:910
-organization_file_usage.committed_bytes  bigint              default,not null  usage.ts:913
-organization_file_usage.reserved_bytes   bigint              default,not null  usage.ts:917
-organization_file_usage.updated_at       timestamptz         default,not null  usage.ts:921
+organization_file_usage.organization_id  safeOrganizationId  pk,fk,not null    usage.ts:920
+organization_file_usage.committed_bytes  bigint              default,not null  usage.ts:923
+organization_file_usage.reserved_bytes   bigint              default,not null  usage.ts:927
+organization_file_usage.updated_at       timestamptz         default,not null  usage.ts:931
 ```
 
-## organization_file_objects · `organizationFileObjects` · usage.ts:960 · rls
+## organization_file_objects · `organizationFileObjects` · usage.ts:970 · rls
 
 ```text
-organization_file_objects.object_key              text                pk,not null       usage.ts:963
-organization_file_objects.organization_id         safeOrganizationId  fk,not null       usage.ts:964
-organization_file_objects.size_bytes              bigint              not null          usage.ts:967
-organization_file_objects.pending_size_bytes      bigint              null              usage.ts:968
-organization_file_objects.write_id                text                null              usage.ts:969
-organization_file_objects.expected_sha256_hex     text                null              usage.ts:970
-organization_file_objects.reservation_started_at  timestamptz         null              usage.ts:971
-organization_file_objects.status                  text                not null          usage.ts:972
-organization_file_objects.created_at              timestamptz         default,not null  usage.ts:973
-organization_file_objects.updated_at              timestamptz         default,not null  usage.ts:974
+organization_file_objects.object_key                    text                pk,not null       usage.ts:973
+organization_file_objects.organization_id               safeOrganizationId  fk,not null       usage.ts:974
+organization_file_objects.size_bytes                    bigint              not null          usage.ts:977
+organization_file_objects.pending_size_bytes            bigint              null              usage.ts:978
+organization_file_objects.write_id                      text                null              usage.ts:979
+organization_file_objects.expected_sha256_hex           text                null              usage.ts:980
+organization_file_objects.reservation_started_at        timestamptz         null              usage.ts:981
+organization_file_objects.reconciliation_state          text                default,not null  usage.ts:983  Active rows are eligible for bounded recovery; quarantined mismatches require operator repair.
+organization_file_objects.reconciliation_attempt_count  integer             default,not null  usage.ts:989
+organization_file_objects.reconcile_after               timestamptz         null              usage.ts:994  Durable backoff cursor for unresolved writes; null after settlement or quarantine.
+organization_file_objects.status                        text                not null          usage.ts:995
+organization_file_objects.created_at                    timestamptz         default,not null  usage.ts:996
+organization_file_objects.updated_at                    timestamptz         default,not null  usage.ts:997
 ```
 
-## usage_lane_counters · `usageLaneCounters` · usage.ts:1037 · rls
+## usage_lane_counters · `usageLaneCounters` · usage.ts:1087 · rls
 
 ```text
-usage_lane_counters.id               pUuid               pk,not null       usage.ts:1040
-usage_lane_counters.organization_id  safeOrganizationId  fk,not null       usage.ts:1041
-usage_lane_counters.user_id          text                fk,not null       usage.ts:1044
-usage_lane_counters.kind             text                not null          usage.ts:1048
-usage_lane_counters.bucket_start     timestamptz         not null          usage.ts:1049
-usage_lane_counters.micro_units      bigint              default,not null  usage.ts:1050
-usage_lane_counters.updated_at       timestamptz         default,not null  usage.ts:1054
+usage_lane_counters.id               pUuid               pk,not null       usage.ts:1090
+usage_lane_counters.organization_id  safeOrganizationId  fk,not null       usage.ts:1091
+usage_lane_counters.user_id          text                fk,not null       usage.ts:1094
+usage_lane_counters.kind             text                not null          usage.ts:1098
+usage_lane_counters.bucket_start     timestamptz         not null          usage.ts:1099
+usage_lane_counters.micro_units      bigint              default,not null  usage.ts:1100
+usage_lane_counters.updated_at       timestamptz         default,not null  usage.ts:1104
 ```
 
-## usage_provider_webhook_events · `hostedUsageWebhookEvents` · usage.ts:1097 · rls
+## usage_provider_webhook_events · `hostedUsageWebhookEvents` · usage.ts:1147 · rls
 
 ```text
-usage_provider_webhook_events.event_id       text         pk,not null       usage.ts:1102  Provider event ID; making it the PK keeps duplicate deliveries structural no-ops via ON CONFLICT DO NOTHING.
-usage_provider_webhook_events.event_type     text         not null          usage.ts:1103
-usage_provider_webhook_events.payload        jsonb        not null          usage.ts:1104
-usage_provider_webhook_events.processed_at   timestamptz  default,not null  usage.ts:1105
-usage_provider_webhook_events.result         text         not null          usage.ts:1106
-usage_provider_webhook_events.error_message  text         null              usage.ts:1107
-usage_provider_webhook_events.replay_audit   jsonb        null              usage.ts:1109  Ordered replay attempts survive redaction; ignored attempts remain eligible.
+usage_provider_webhook_events.event_id       text         pk,not null       usage.ts:1152  Provider event ID; making it the PK keeps duplicate deliveries structural no-ops via ON CONFLICT DO NOTHING.
+usage_provider_webhook_events.event_type     text         not null          usage.ts:1153
+usage_provider_webhook_events.payload        jsonb        not null          usage.ts:1154
+usage_provider_webhook_events.processed_at   timestamptz  default,not null  usage.ts:1155
+usage_provider_webhook_events.result         text         not null          usage.ts:1156
+usage_provider_webhook_events.error_message  text         null              usage.ts:1157
+usage_provider_webhook_events.replay_audit   jsonb        null              usage.ts:1159  Ordered replay attempts survive redaction; ignored attempts remain eligible.
 ```

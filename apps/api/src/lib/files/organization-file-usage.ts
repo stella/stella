@@ -1,6 +1,7 @@
 import { Panic, panic, Result } from "better-result";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -8,17 +9,31 @@ import type { Transaction } from "@/api/db/root";
 import {
   organizationFileObjects,
   organizationFileUsage,
+  workspaces,
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockOrganizationFileCounters,
+  withAggregateParentBatch,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { reserveOrganizationFileObjectTransitions } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  insertWritingObjectCleanupIntents,
+  lockOrganizationObjectIntentsForWriter,
+  PREPUBLICATION_COPY_INTENT_LEASE_MS,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 import {
   authorizeOperation,
   snapshotOperationInput,
 } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   lockAssignmentCapacities,
@@ -29,6 +44,7 @@ type OrganizationFileUsageErrorProps = {
   message: string;
   reason:
     | "capacity_exceeded"
+    | "destination_unavailable"
     | "key_conflict"
     | "reservation_busy"
     | "storage_unavailable";
@@ -57,6 +73,7 @@ export const organizationFileUsageResponseStatus = (
   switch (reason) {
     case "capacity_exceeded":
       return 413;
+    case "destination_unavailable":
     case "key_conflict":
     case "reservation_busy":
       return 409;
@@ -135,6 +152,28 @@ export type FileUsageInput = {
   contentSha256Hex?: string | undefined;
 };
 
+type PrepublicationWorkspaceScope = {
+  id: SafeId<"workspace">;
+  state: "active" | "pending-publication";
+};
+
+export type PrepublicationCopyCleanupScope =
+  | {
+      type: "organization";
+      chatThreadId?: SafeId<"chatThread"> | undefined;
+      writerUserId?: SafeId<"user"> | undefined;
+    }
+  | {
+      type: "workspaces";
+      chatThreadId?: SafeId<"chatThread"> | undefined;
+      writerUserId?: SafeId<"user"> | undefined;
+      workspaces: readonly PrepublicationWorkspaceScope[];
+    };
+
+type PrepublicationFileUsageInput = FileUsageInput & {
+  cleanupScope: PrepublicationCopyCleanupScope;
+};
+
 export type CheckedFileWrite<Content> = Pick<
   FileUsageInput,
   "objectKey" | "sizeBytes"
@@ -195,6 +234,57 @@ const FILE_RESERVATION_RECOVERY_DELAY_MS = 5 * 60_000;
 export const FILE_RESERVATION_ABANDON_DELAY_MS = 60 * 60_000;
 const S3_LAST_MODIFIED_PRECISION_MS = 1000;
 
+type LockOrganizationFileLedgerOptions = {
+  objectKey: string;
+  organizationId: SafeId<"organization">;
+  tx: Transaction;
+};
+
+/**
+ * Lock the counter, then the organization ledger, before reading one object's
+ * accounting state. The counter lock also excludes the previous release's
+ * writers (see `lockOrganizationFileCounters`).
+ */
+const lockOrganizationFileLedger = async ({
+  objectKey,
+  organizationId,
+  tx,
+}: LockOrganizationFileLedgerOptions) => {
+  // audit: skip - the counter row is itself storage accounting state.
+  await tx
+    .insert(organizationFileUsage)
+    .values({ organizationId })
+    .onConflictDoNothing();
+  const [counter] = await lockOrganizationFileCounters({
+    organizationIds: [organizationId],
+    tx,
+  });
+  if (!counter) {
+    return panic("Organization file counter disappeared after upsert");
+  }
+  const locked = await withAggregateParentBatch({
+    mode: "update",
+    organizationIds: [organizationId],
+    tx,
+  });
+  if (!locked.organizationIds.has(organizationId)) {
+    return panic("Organization disappeared while locking file usage");
+  }
+  const existing = await tx
+    .select({
+      organizationId: organizationFileObjects.organizationId,
+      sizeBytes: organizationFileObjects.sizeBytes,
+      pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+      status: organizationFileObjects.status,
+      writeId: organizationFileObjects.writeId,
+    })
+    .from(organizationFileObjects)
+    .where(eq(organizationFileObjects.objectKey, objectKey))
+    .limit(1)
+    .then((rows) => rows.at(0));
+  return { counter, existing };
+};
+
 /** The organization row is the lock for every object and byte transition. */
 export const reserveOrganizationFileBytes = async (
   { organizationId, objectKey, sizeBytes, contentSha256Hex }: FileUsageInput,
@@ -215,106 +305,98 @@ export const reserveOrganizationFileBytes = async (
   const reservationStartedAt = new Date();
   const reserved = await Result.tryPromise({
     try: async () =>
-      await (db ?? (await fileUsageDb())).transaction(async (tx) => {
-        await lockAssignmentCapacity(tx, organizationId);
-        await tx
-          .insert(organizationFileUsage)
-          .values({ organizationId })
-          .onConflictDoNothing();
-        const counter = await tx
-          .select({
-            committedBytes: organizationFileUsage.committedBytes,
-            reservedBytes: organizationFileUsage.reservedBytes,
-          })
-          .from(organizationFileUsage)
-          .where(eq(organizationFileUsage.organizationId, organizationId))
-          .for("update")
-          .then((rows) => rows.at(0));
-        if (!counter) {
-          return panic("Organization file counter disappeared");
-        }
+      await withAggregateTransaction(
+        db ?? (await fileUsageDb()),
+        async (tx) => {
+          // Serialize with seat designation, which changes the capacity read
+          // below.
+          await lockAssignmentCapacity(tx, organizationId);
+          const { counter, existing } = await lockOrganizationFileLedger({
+            objectKey,
+            organizationId,
+            tx,
+          });
+          if (existing) {
+            if (existing.organizationId !== organizationId) {
+              return { status: "key_conflict" as const };
+            }
+            if (
+              existing.status === "reserved" ||
+              existing.pendingSizeBytes !== null
+            ) {
+              return { status: "reservation_busy" as const };
+            }
+          }
 
-        const existing = await tx
-          .select({
-            organizationId: organizationFileObjects.organizationId,
-            sizeBytes: organizationFileObjects.sizeBytes,
-            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
-            writeId: organizationFileObjects.writeId,
-            status: organizationFileObjects.status,
-          })
-          .from(organizationFileObjects)
-          .where(eq(organizationFileObjects.objectKey, objectKey))
-          .limit(1)
-          .then((rows) => rows.at(0));
-        if (existing) {
-          if (existing.organizationId !== organizationId) {
-            return { status: "key_conflict" as const };
+          const additionalBytes = existing
+            ? positiveDifference(BigInt(sizeBytes), existing.sizeBytes)
+            : BigInt(sizeBytes);
+
+          const cap = await readOrganizationStorageCapacity(tx, organizationId);
+          if (cap !== null) {
+            const nextBytes =
+              counter.committedBytes + counter.reservedBytes + additionalBytes;
+            const doesNotGrowExisting =
+              existing && BigInt(sizeBytes) <= existing.sizeBytes;
+            if (nextBytes > cap && !doesNotGrowExisting) {
+              return { status: "capacity_exceeded" as const };
+            }
           }
           if (
-            existing.status === "reserved" ||
-            existing.pendingSizeBytes !== null
+            existing?.sizeBytes === BigInt(sizeBytes) &&
+            contentSha256Hex === undefined
           ) {
-            return { status: "reservation_busy" as const };
+            return { status: "already_committed" as const };
           }
-        }
 
-        const additionalBytes = existing
-          ? positiveDifference(BigInt(sizeBytes), existing.sizeBytes)
-          : BigInt(sizeBytes);
-
-        const cap = await readOrganizationStorageCapacity(tx, organizationId);
-        if (cap !== null) {
-          const nextBytes =
-            counter.committedBytes + counter.reservedBytes + additionalBytes;
-          const doesNotGrowExisting =
-            existing && BigInt(sizeBytes) <= existing.sizeBytes;
-          if (nextBytes > cap && !doesNotGrowExisting) {
-            return { status: "capacity_exceeded" as const };
-          }
-        }
-        if (
-          existing?.sizeBytes === BigInt(sizeBytes) &&
-          contentSha256Hex === undefined
-        ) {
-          return { status: "already_committed" as const };
-        }
-
-        if (existing) {
-          await tx
-            .update(organizationFileObjects)
-            .set({
-              pendingSizeBytes: BigInt(sizeBytes),
+          if (existing) {
+            await tx
+              .update(organizationFileObjects)
+              .set({
+                pendingSizeBytes: BigInt(sizeBytes),
+                writeId,
+                expectedSha256Hex: contentSha256Hex ?? null,
+                reservationStartedAt,
+                // A committed object without a pending write is active with
+                // no attempts (the lifecycle check), so only the retry time
+                // moves with the new write.
+                reconcileAfter: new Date(
+                  reservationStartedAt.getTime() +
+                    FILE_RESERVATION_ABANDON_DELAY_MS,
+                ),
+                updatedAt: new Date(),
+              })
+              .where(eq(organizationFileObjects.objectKey, objectKey));
+          } else {
+            await tx.insert(organizationFileObjects).values({
+              organizationId,
+              objectKey,
+              sizeBytes: BigInt(sizeBytes),
+              status: "reserved",
               writeId,
               expectedSha256Hex: contentSha256Hex ?? null,
               reservationStartedAt,
+              reconcileAfter: new Date(
+                reservationStartedAt.getTime() +
+                  FILE_RESERVATION_ABANDON_DELAY_MS,
+              ),
+            });
+          }
+          await tx
+            .update(organizationFileUsage)
+            .set({
+              reservedBytes: sql`${organizationFileUsage.reservedBytes} + ${additionalBytes.toString()}::bigint`,
               updatedAt: new Date(),
             })
-            .where(eq(organizationFileObjects.objectKey, objectKey));
-        } else {
-          await tx.insert(organizationFileObjects).values({
+            .where(eq(organizationFileUsage.organizationId, organizationId));
+          return {
+            status: "reserved" as const,
             organizationId,
             objectKey,
-            sizeBytes: BigInt(sizeBytes),
-            status: "reserved",
             writeId,
-            expectedSha256Hex: contentSha256Hex ?? null,
-            reservationStartedAt,
-          });
-        }
-        await tx
-          .update(organizationFileUsage)
-          .set({
-            reservedBytes: counter.reservedBytes + additionalBytes,
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationFileUsage.organizationId, organizationId));
-        return {
-          status: "reserved" as const,
-          organizationId,
-          objectKey,
-          writeId,
-        };
-      }),
+          };
+        },
+      ),
     catch: storageUnavailable,
   });
   if (Result.isError(reserved)) {
@@ -391,6 +473,7 @@ export const removeOrganizationFileBytes = async (
 
 const FILE_WRITE_RESERVED = "FileWriteReserved";
 const FILE_BATCH_RESERVED = "FileBatchReserved";
+const FILE_PREPUBLICATION_BATCH_RESERVED = "FilePrepublicationBatchReserved";
 
 export const authorizeOrganizationFileWrite = async <
   Input extends FileUsageInput,
@@ -423,6 +506,27 @@ export const authorizeOrganizationFileBatch = async <
   }
   return await authorizeOperation({
     kind: FILE_BATCH_RESERVED,
+    input: { operation, reservations: reservations.value, db },
+    check: async () => await Promise.resolve(reservations.map(() => undefined)),
+  });
+};
+
+export const authorizePrepublicationOrganizationFileBatch = async <
+  Input extends readonly PrepublicationFileUsageInput[],
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const operation = snapshotOperationInput(input);
+  const reservations = await reservePrepublicationOrganizationFilesBytes(
+    operation,
+    db,
+  );
+  if (Result.isError(reservations)) {
+    return Result.err(reservations.error);
+  }
+  return await authorizeOperation({
+    kind: FILE_PREPUBLICATION_BATCH_RESERVED,
     input: { operation, reservations: reservations.value, db },
     check: async () => await Promise.resolve(reservations.map(() => undefined)),
   });
@@ -567,86 +671,63 @@ export const reconcileOrganizationFileObject = async (
   }
   const reconciled = await Result.tryPromise({
     try: async () =>
-      await (db ?? (await fileUsageDb())).transaction(async (tx) => {
-        await tx
-          .insert(organizationFileUsage)
-          .values({ organizationId })
-          .onConflictDoNothing();
-        const counter = await tx
-          .select({
-            committedBytes: organizationFileUsage.committedBytes,
-            reservedBytes: organizationFileUsage.reservedBytes,
-          })
-          .from(organizationFileUsage)
-          .where(eq(organizationFileUsage.organizationId, organizationId))
-          .for("update")
-          .then((rows) => rows.at(0));
-        if (!counter) {
-          return panic(
-            "Organization file counter disappeared during reconciliation",
-          );
-        }
-        const existing = await tx
-          .select({
-            organizationId: organizationFileObjects.organizationId,
-            sizeBytes: organizationFileObjects.sizeBytes,
-            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
-            status: organizationFileObjects.status,
-            writeId: organizationFileObjects.writeId,
-          })
-          .from(organizationFileObjects)
-          .where(eq(organizationFileObjects.objectKey, objectKey))
-          .limit(1)
-          .then((rows) => rows.at(0));
-        if (existing && existing.organizationId !== organizationId) {
-          return panic("File object belongs to another organization");
-        }
-        if (existing?.writeId) {
-          return "reservation_busy" as const;
-        }
-        const nextSize = BigInt(sizeBytes);
-        if (!existing) {
-          await tx.insert(organizationFileObjects).values({
-            organizationId,
+      await withAggregateTransaction(
+        db ?? (await fileUsageDb()),
+        async (tx) => {
+          const { existing } = await lockOrganizationFileLedger({
             objectKey,
-            sizeBytes: nextSize,
-            status: "committed",
+            organizationId,
+            tx,
           });
-        } else if (
-          existing.sizeBytes !== nextSize ||
-          existing.status !== "committed" ||
-          existing.pendingSizeBytes !== null
-        ) {
-          await tx
-            .update(organizationFileObjects)
-            .set({
+          if (existing && existing.organizationId !== organizationId) {
+            return panic("File object belongs to another organization");
+          }
+          if (existing?.writeId) {
+            return "reservation_busy" as const;
+          }
+          const nextSize = BigInt(sizeBytes);
+          if (!existing) {
+            await tx.insert(organizationFileObjects).values({
+              organizationId,
+              objectKey,
               sizeBytes: nextSize,
-              pendingSizeBytes: null,
               status: "committed",
-              writeId: null,
-              expectedSha256Hex: null,
-              reservationStartedAt: null,
+            });
+          } else if (
+            existing.sizeBytes !== nextSize ||
+            existing.status !== "committed" ||
+            existing.pendingSizeBytes !== null
+          ) {
+            await tx
+              .update(organizationFileObjects)
+              .set({
+                sizeBytes: nextSize,
+                pendingSizeBytes: null,
+                status: "committed",
+                writeId: null,
+                expectedSha256Hex: null,
+                reservationStartedAt: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(organizationFileObjects.objectKey, objectKey));
+          } else {
+            return undefined;
+          }
+          const committedDelta =
+            nextSize -
+            (existing?.status === "committed" ? existing.sizeBytes : 0n);
+          const reservedDelta = existing ? reservedContribution(existing) : 0n;
+          await tx
+            .update(organizationFileUsage)
+            .set({
+              committedBytes: sql`${organizationFileUsage.committedBytes} + ${committedDelta.toString()}::bigint`,
+              reservedBytes: sql`${organizationFileUsage.reservedBytes} - ${reservedDelta.toString()}::bigint`,
               updatedAt: new Date(),
             })
-            .where(eq(organizationFileObjects.objectKey, objectKey));
-        } else {
+            .where(eq(organizationFileUsage.organizationId, organizationId));
           return undefined;
-        }
-        await tx
-          .update(organizationFileUsage)
-          .set({
-            committedBytes:
-              counter.committedBytes +
-              nextSize -
-              (existing?.status === "committed" ? existing.sizeBytes : 0n),
-            reservedBytes:
-              counter.reservedBytes -
-              (existing ? reservedContribution(existing) : 0n),
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationFileUsage.organizationId, organizationId));
-        return undefined;
-      }),
+        },
+      ),
     catch: storageUnavailable,
   });
   if (Result.isError(reconciled)) {
@@ -688,83 +769,90 @@ export const reconcileOrganizationFileObjects = async (
   let transactionFailure: OrganizationFileUsageError | undefined;
   return await Result.tryPromise({
     try: async () =>
-      await (db ?? (await fileUsageDb())).transaction(async (tx) => {
-        const abortConflict = () => {
-          transactionFailure = batchUsageError("key_conflict");
-          return tx.rollback();
-        };
-        await tx.execute(sql`
+      await withAggregateTransaction(
+        db ?? (await fileUsageDb()),
+        async (tx) => {
+          const abortConflict = () => {
+            transactionFailure = batchUsageError("key_conflict");
+            return tx.rollback();
+          };
+          await tx.execute(sql`
         insert into organization_file_usage (organization_id)
         select value from jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb) as x(value)
         order by value on conflict do nothing
       `);
-        const counters = await tx
-          .select({ organizationId: organizationFileUsage.organizationId })
-          .from(organizationFileUsage)
-          .where(
-            sql`${organizationFileUsage.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          )
-          .orderBy(asc(organizationFileUsage.organizationId))
-          .limit(organizationIds.length)
-          .for("update");
-        if (counters.length !== organizationIds.length) {
-          return panic(
-            "Organization file counter disappeared during batch reconciliation",
-          );
-        }
-        const objects = await tx
-          .select()
-          .from(organizationFileObjects)
-          .where(
-            sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify([...keys])}::text::jsonb))`,
-          )
-          .limit(inputs.length);
-        const objectByKey = new Map(
-          objects.map((object) => [object.objectKey, object]),
-        );
-        const mutations: {
-          organizationId: string;
-          objectKey: string;
-          sizeBytes: string;
-          committedDelta: string;
-          reservedDelta: string;
-        }[] = [];
-        let imported = 0;
-        for (const input of inputs) {
-          const existing = objectByKey.get(input.objectKey);
-          if (existing && existing.organizationId !== input.organizationId) {
-            return abortConflict();
-          }
-          if (existing?.writeId) {
-            continue;
-          }
-          imported++;
-          const size = BigInt(input.sizeBytes);
-          if (
-            existing?.status === "committed" &&
-            existing.sizeBytes === size &&
-            existing.pendingSizeBytes === null
-          ) {
-            continue;
-          }
-          mutations.push({
-            organizationId: input.organizationId,
-            objectKey: input.objectKey,
-            sizeBytes: size.toString(),
-            committedDelta: (
-              size -
-              (existing?.status === "committed" ? existing.sizeBytes : 0n)
-            ).toString(),
-            reservedDelta: (existing
-              ? -reservedContribution(existing)
-              : 0n
-            ).toString(),
+          const counters = await lockOrganizationFileCounters({
+            organizationIds,
+            tx,
           });
-        }
-        if (mutations.length === 0) {
-          return imported;
-        }
-        const changed = await tx.execute(sql`
+          if (counters.length !== organizationIds.length) {
+            return panic(
+              "Organization file counter disappeared during batch reconciliation",
+            );
+          }
+          const locked = await withAggregateParentBatch({
+            mode: "update",
+            organizationIds,
+            tx,
+          });
+          if (locked.organizationIds.size !== organizationIds.length) {
+            return panic(
+              "Organization disappeared during batch file reconciliation",
+            );
+          }
+          const objects = await tx
+            .select()
+            .from(organizationFileObjects)
+            .where(
+              sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify([...keys])}::text::jsonb))`,
+            )
+            .limit(inputs.length);
+          const objectByKey = new Map(
+            objects.map((object) => [object.objectKey, object]),
+          );
+          const mutations: {
+            organizationId: string;
+            objectKey: string;
+            sizeBytes: string;
+            committedDelta: string;
+            reservedDelta: string;
+          }[] = [];
+          let imported = 0;
+          for (const input of inputs) {
+            const existing = objectByKey.get(input.objectKey);
+            if (existing && existing.organizationId !== input.organizationId) {
+              return abortConflict();
+            }
+            if (existing?.writeId) {
+              continue;
+            }
+            imported++;
+            const size = BigInt(input.sizeBytes);
+            if (
+              existing?.status === "committed" &&
+              existing.sizeBytes === size &&
+              existing.pendingSizeBytes === null
+            ) {
+              continue;
+            }
+            mutations.push({
+              organizationId: input.organizationId,
+              objectKey: input.objectKey,
+              sizeBytes: size.toString(),
+              committedDelta: (
+                size -
+                (existing?.status === "committed" ? existing.sizeBytes : 0n)
+              ).toString(),
+              reservedDelta: (existing
+                ? -reservedContribution(existing)
+                : 0n
+              ).toString(),
+            });
+          }
+          if (mutations.length === 0) {
+            return imported;
+          }
+          const changed = await tx.execute(sql`
         with input as (
           select * from jsonb_to_recordset(${JSON.stringify(mutations)}::text::jsonb)
           as x("organizationId" text, "objectKey" text, "sizeBytes" bigint, "committedDelta" bigint, "reservedDelta" bigint)
@@ -789,15 +877,16 @@ export const reconcileOrganizationFileObjects = async (
         from deltas d where u.organization_id = d."organizationId"
         returning (select count(*)::int from changed) as changed_count
       `);
-        const outcome = executedRows(changed).at(0);
-        if (
-          !isRecord(outcome) ||
-          outcome["changed_count"] !== mutations.length
-        ) {
-          return abortConflict();
-        }
-        return imported;
-      }),
+          const outcome = executedRows(changed).at(0);
+          if (
+            !isRecord(outcome) ||
+            outcome["changed_count"] !== mutations.length
+          ) {
+            return abortConflict();
+          }
+          return imported;
+        },
+      ),
     catch: (cause) => transactionFailure ?? storageUnavailable(cause),
   });
 };
@@ -808,15 +897,184 @@ const batchUsageError = (reason: OrganizationFileUsageError["reason"]) =>
     reason,
   });
 
+type PlannedPrepublicationCopyIntent = {
+  chatThreadId: SafeId<"chatThread"> | null;
+  id: SafeId<"pendingUpload">;
+  objectKey: string;
+  organizationId: SafeId<"organization">;
+  workspace: PrepublicationWorkspaceScope | null;
+  writerUserId: SafeId<"user"> | null;
+};
+
+type PrepublicationCopyIntentPlan = {
+  intentIds: SafeId<"pendingUpload">[];
+  intents: PlannedPrepublicationCopyIntent[];
+  objectKey: string;
+};
+
+const planPrepublicationCopyIntents = (
+  inputs: readonly PrepublicationFileUsageInput[],
+): PrepublicationCopyIntentPlan[] => {
+  for (const { cleanupScope } of inputs) {
+    if (
+      cleanupScope.type === "workspaces" &&
+      cleanupScope.workspaces.length === 0
+    ) {
+      return panic("Prepublication workspace cleanup scope must not be empty");
+    }
+  }
+  return inputs.map((input) => {
+    const { cleanupScope, objectKey } = input;
+    const workspacesInScope =
+      cleanupScope.type === "organization"
+        ? [null]
+        : [
+            ...new Map(
+              cleanupScope.workspaces.map((workspace) => [
+                workspace.id,
+                workspace,
+              ]),
+            ).values(),
+          ];
+    const intents = workspacesInScope.map((workspace) => ({
+      chatThreadId: cleanupScope.chatThreadId ?? null,
+      id: createSafeId<"pendingUpload">(),
+      objectKey,
+      organizationId: input.organizationId,
+      workspace,
+      writerUserId: cleanupScope.writerUserId ?? null,
+    }));
+    return {
+      intentIds: intents.map(({ id }) => id),
+      intents,
+      objectKey,
+    };
+  });
+};
+
+const reservePrepublicationCopyIntentsInTransaction = async (
+  tx: Transaction,
+  plans: readonly PrepublicationCopyIntentPlan[],
+): Promise<Result<void, OrganizationFileUsageError>> => {
+  const intents = plans.flatMap(({ intents: planned }) => planned);
+  if (intents.length === 0) {
+    return Result.ok(undefined);
+  }
+  const activeWorkspaces = [
+    ...new Map(
+      intents.flatMap((intent) =>
+        intent.workspace?.state === "active"
+          ? [
+              [
+                intent.workspace.id,
+                {
+                  id: intent.workspace.id,
+                  organizationId: intent.organizationId,
+                },
+              ] as const,
+            ]
+          : [],
+      ),
+    ).values(),
+  ].toSorted((left, right) => compareCodeUnit(left.id, right.id));
+  if (activeWorkspaces.length > 0) {
+    await withAggregateParentBatch({
+      mode: "share",
+      organizationIds: [],
+      tx,
+      workspaceIds: activeWorkspaces.map((workspace) => workspace.id),
+    });
+    const locked = await tx
+      .select({
+        id: workspaces.id,
+        organizationId: workspaces.organizationId,
+        status: workspaces.status,
+      })
+      .from(workspaces)
+      .where(
+        and(
+          inArray(
+            workspaces.id,
+            activeWorkspaces.map(({ id }) => id),
+          ),
+          inArray(
+            workspaces.organizationId,
+            activeWorkspaces.map((workspace) => workspace.organizationId),
+          ),
+        ),
+      )
+      .orderBy(asc(workspaces.id))
+      .limit(activeWorkspaces.length);
+    const lockedById = new Map(locked.map((row) => [row.id, row]));
+    if (
+      activeWorkspaces.some((workspace) => {
+        const row = lockedById.get(workspace.id);
+        return (
+          row?.organizationId !== workspace.organizationId ||
+          row.status !== "active"
+        );
+      })
+    ) {
+      return Result.err(
+        new OrganizationFileUsageError({
+          message: "Copy destination matter is unavailable",
+          reason: "destination_unavailable",
+        }),
+      );
+    }
+  }
+
+  const nextAttemptAt = new Date(
+    Temporal.Now.instant().epochMilliseconds +
+      PREPUBLICATION_COPY_INTENT_LEASE_MS,
+  );
+  // Exact-key crash-recovery ownership for the later audited owner
+  // publication. The publication transaction retires these rows.
+  await insertWritingObjectCleanupIntents(
+    tx,
+    intents.map((intent) => ({
+      chatThreadId: intent.chatThreadId,
+      id: intent.id,
+      nextAttemptAt,
+      objectKey: intent.objectKey,
+      organizationId: intent.organizationId,
+      workspaceId: intent.workspace?.id ?? null,
+      writerUserId: intent.writerUserId,
+    })),
+  );
+  return Result.ok(undefined);
+};
+
+const lockPrepublicationCopyIntentWriters = async (
+  tx: Transaction,
+  plans: readonly PrepublicationCopyIntentPlan[],
+): Promise<void> => {
+  const organizationIds: SafeId<"organization">[] = [
+    ...new Set(
+      plans.flatMap(({ intents }) =>
+        intents.map((intent) => intent.organizationId),
+      ),
+    ),
+  ].toSorted();
+  for (const organizationId of organizationIds) {
+    // db-await-in-loop: take each organization's writer lock in sorted order.
+    await lockOrganizationObjectIntentsForWriter(tx, organizationId);
+  }
+};
+
 /** All capacity decisions share ordered roster and counter locks. */
 const reserveOrganizationFilesBytesOnce = async (
   inputs: readonly FileUsageInput[],
   db?: FileUsageDb,
+  prepublicationPlans: readonly PrepublicationCopyIntentPlan[] = [],
 ): Promise<Result<FileUsageReservation[], OrganizationFileUsageError>> => {
   if (inputs.length === 0) {
     return Result.ok([]);
   }
-  if (!envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS) {
+  if (
+    !envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS &&
+    prepublicationPlans.length === 0
+  ) {
     return Result.ok(inputs.map(() => ({ status: "disabled" as const })));
   }
   const keys = new Set<string>();
@@ -839,147 +1097,172 @@ const reserveOrganizationFilesBytesOnce = async (
   let transactionFailure: OrganizationFileUsageError | undefined;
   const reserved = await Result.tryPromise({
     try: async () =>
-      await (db ?? (await fileUsageDb())).transaction(async (tx) => {
-        const abortReservation = (
-          reason: OrganizationFileUsageError["reason"],
-        ) => {
-          transactionFailure = batchUsageError(reason);
-          return tx.rollback();
-        };
-        await lockAssignmentCapacities(tx, organizationIds);
-        await tx
-          .insert(organizationFileUsage)
-          .values(organizationIds.map((id) => ({ organizationId: id })))
-          .onConflictDoNothing();
-        const counters = await tx
-          .select()
-          .from(organizationFileUsage)
-          .where(
-            sql`${organizationFileUsage.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          )
-          .orderBy(asc(organizationFileUsage.organizationId))
-          .limit(organizationIds.length)
-          .for("update");
-        const objects = await tx
-          .select()
-          .from(organizationFileObjects)
-          .where(
-            sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify([...keys])}::text::jsonb))`,
-          );
-        const capacities = await tx.execute(sql`
+      await withAggregateTransaction(
+        db ?? (await fileUsageDb()),
+        async (tx) => {
+          const abortReservation = (
+            reason: OrganizationFileUsageError["reason"],
+          ) => {
+            transactionFailure = batchUsageError(reason);
+            return tx.rollback();
+          };
+          // Serialize with seat designation, which changes the capacities
+          // read below.
+          await lockAssignmentCapacities(tx, organizationIds);
+          // No plan locks no writer fence.
+          await lockPrepublicationCopyIntentWriters(tx, prepublicationPlans);
+          const limited = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+          let counters: Awaited<
+            ReturnType<typeof lockOrganizationFileCounters>
+          > = [];
+          if (limited) {
+            await tx
+              .insert(organizationFileUsage)
+              .values(organizationIds.map((id) => ({ organizationId: id })))
+              .onConflictDoNothing();
+            counters = await lockOrganizationFileCounters({
+              organizationIds,
+              tx,
+            });
+          }
+          const locked = await withAggregateParentBatch({
+            mode: "update",
+            organizationIds,
+            tx,
+          });
+          if (locked.organizationIds.size !== organizationIds.length) {
+            return panic("Organization disappeared during file reservation");
+          }
+          if (prepublicationPlans.length > 0) {
+            const copyIntents =
+              await reservePrepublicationCopyIntentsInTransaction(
+                tx,
+                prepublicationPlans,
+              );
+            if (Result.isError(copyIntents)) {
+              transactionFailure = copyIntents.error;
+              return tx.rollback();
+            }
+          }
+          if (!limited) {
+            return inputs.map(() => ({ status: "disabled" as const }));
+          }
+          const objects = await tx
+            .select()
+            .from(organizationFileObjects)
+            .where(
+              sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify([...keys])}::text::jsonb))`,
+            );
+          const capacities = await tx.execute(sql`
           select id as "organizationId", organization_storage_capacity(id)::text as capacity
           from jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb) as ids(id)
         `);
-        const objectByKey = new Map(
-          objects.map((object) => [object.objectKey, object]),
-        );
-        const counterByOrg = new Map(
-          counters.map((counter) => [counter.organizationId, counter]),
-        );
-        const capacityByOrg = new Map(
-          executedRows(capacities).map((row) => storageCapacityRow(row)),
-        );
-        const growthByOrg = new Map<SafeId<"organization">, bigint>();
-        const growingOrgs = new Set<SafeId<"organization">>();
-        const reservations: FileUsageReservation[] = [];
-        const mutations: {
-          organizationId: string;
-          objectKey: string;
-          sizeBytes: string;
-          writeId: string;
-          sha256: string | null;
-          reservedDelta: string;
-        }[] = [];
-        for (const input of inputs) {
-          const existing = objectByKey.get(input.objectKey);
-          if (existing && existing.organizationId !== input.organizationId) {
-            return abortReservation("key_conflict");
-          }
-          if (
-            existing &&
-            (existing.status === "reserved" ||
-              existing.pendingSizeBytes !== null)
-          ) {
-            return abortReservation("reservation_busy");
-          }
-          const size = BigInt(input.sizeBytes);
-          const growth = existing
-            ? positiveDifference(size, existing.sizeBytes)
-            : size;
-          growthByOrg.set(
-            input.organizationId,
-            (growthByOrg.get(input.organizationId) ?? 0n) + growth,
+          const objectByKey = new Map(
+            objects.map((object) => [object.objectKey, object]),
           );
-          if (!existing || size > existing.sizeBytes) {
-            growingOrgs.add(input.organizationId);
+          const counterByOrg = new Map(
+            counters.map((counter) => [counter.organizationId, counter]),
+          );
+          const capacityByOrg = new Map(
+            executedRows(capacities).map((row) => storageCapacityRow(row)),
+          );
+          const growthByOrg = new Map<SafeId<"organization">, bigint>();
+          const growingOrgs = new Set<SafeId<"organization">>();
+          const reservations: FileUsageReservation[] = [];
+          const mutations: {
+            organizationId: string;
+            objectKey: string;
+            sizeBytes: string;
+            writeId: string;
+            sha256: string | null;
+            reservedDelta: string;
+          }[] = [];
+          for (const input of inputs) {
+            const existing = objectByKey.get(input.objectKey);
+            if (existing && existing.organizationId !== input.organizationId) {
+              return abortReservation("key_conflict");
+            }
+            if (
+              existing &&
+              (existing.status === "reserved" ||
+                existing.pendingSizeBytes !== null)
+            ) {
+              return abortReservation("reservation_busy");
+            }
+            const size = BigInt(input.sizeBytes);
+            const growth = existing
+              ? positiveDifference(size, existing.sizeBytes)
+              : size;
+            growthByOrg.set(
+              input.organizationId,
+              (growthByOrg.get(input.organizationId) ?? 0n) + growth,
+            );
+            if (!existing || size > existing.sizeBytes) {
+              growingOrgs.add(input.organizationId);
+            }
+            if (
+              existing?.sizeBytes === size &&
+              input.contentSha256Hex === undefined
+            ) {
+              reservations.push({ status: "already_committed" });
+              continue;
+            }
+            const writeId = Bun.randomUUIDv7();
+            reservations.push({
+              status: "reserved",
+              organizationId: input.organizationId,
+              objectKey: input.objectKey,
+              writeId,
+            });
+            mutations.push({
+              organizationId: input.organizationId,
+              objectKey: input.objectKey,
+              sizeBytes: size.toString(),
+              writeId,
+              sha256: input.contentSha256Hex ?? null,
+              reservedDelta: growth.toString(),
+            });
           }
-          if (
-            existing?.sizeBytes === size &&
-            input.contentSha256Hex === undefined
-          ) {
-            reservations.push({ status: "already_committed" });
-            continue;
+          for (const organizationId of organizationIds) {
+            const counter = counterByOrg.get(organizationId);
+            if (!counter) {
+              return panic("Organization file counter disappeared");
+            }
+            // Null is a valid capacity (unbounded); only a missing row is a fault.
+            const capacity = capacityByOrg.get(organizationId);
+            if (capacity === undefined) {
+              return panic("Organization storage capacity row is missing");
+            }
+            if (
+              capacity !== null &&
+              growingOrgs.has(organizationId) &&
+              counter.committedBytes +
+                counter.reservedBytes +
+                (growthByOrg.get(organizationId) ?? 0n) >
+                capacity
+            ) {
+              return abortReservation("capacity_exceeded");
+            }
           }
-          const writeId = Bun.randomUUIDv7();
-          reservations.push({
-            status: "reserved",
-            organizationId: input.organizationId,
-            objectKey: input.objectKey,
-            writeId,
-          });
-          mutations.push({
-            organizationId: input.organizationId,
-            objectKey: input.objectKey,
-            sizeBytes: size.toString(),
-            writeId,
-            sha256: input.contentSha256Hex ?? null,
-            reservedDelta: growth.toString(),
-          });
-        }
-        for (const organizationId of organizationIds) {
-          const counter = counterByOrg.get(organizationId);
-          if (!counter) {
-            return panic("Organization file counter disappeared");
+          if (mutations.length !== 0) {
+            const changed = await reserveOrganizationFileObjectTransitions(
+              tx,
+              mutations.map(({ sha256, ...mutation }) => ({
+                ...mutation,
+                expectedSha256Hex: sha256,
+              })),
+            );
+            const outcome = changed.at(0);
+            if (
+              !isRecord(outcome) ||
+              outcome["changed_count"] !== mutations.length
+            ) {
+              return abortReservation("key_conflict");
+            }
           }
-          // Null is a valid capacity (unbounded); only a missing row is a fault.
-          const capacity = capacityByOrg.get(organizationId);
-          if (capacity === undefined) {
-            return panic("Organization storage capacity row is missing");
-          }
-          if (
-            capacity !== null &&
-            growingOrgs.has(organizationId) &&
-            counter.committedBytes +
-              counter.reservedBytes +
-              (growthByOrg.get(organizationId) ?? 0n) >
-              capacity
-          ) {
-            return abortReservation("capacity_exceeded");
-          }
-        }
-        if (mutations.length !== 0) {
-          const changed = await tx.execute(sql`
-          with input as (select * from jsonb_to_recordset(${JSON.stringify(mutations)}::text::jsonb) as x("organizationId" text, "objectKey" text, "sizeBytes" bigint, "writeId" text, sha256 text, "reservedDelta" bigint)),
-          changed as (
-            insert into organization_file_objects (organization_id, object_key, size_bytes, status, write_id, expected_sha256_hex, reservation_started_at)
-            select "organizationId", "objectKey", "sizeBytes", 'reserved', "writeId", sha256, now() from input
-            on conflict (object_key) do update set pending_size_bytes = excluded.size_bytes, write_id = excluded.write_id, expected_sha256_hex = excluded.expected_sha256_hex, reservation_started_at = excluded.reservation_started_at, updated_at = now()
-            where organization_file_objects.organization_id = excluded.organization_id and organization_file_objects.write_id is null
-            returning object_key
-          ), deltas as (select "organizationId", sum("reservedDelta") as reserved from input join changed on changed.object_key = input."objectKey" group by "organizationId")
-          update organization_file_usage u set reserved_bytes = u.reserved_bytes + d.reserved, updated_at = now() from deltas d where u.organization_id = d."organizationId"
-          returning (select count(*)::int from changed) as changed_count
-        `);
-          const outcome = executedRows(changed).at(0);
-          if (
-            !isRecord(outcome) ||
-            outcome["changed_count"] !== mutations.length
-          ) {
-            return abortReservation("key_conflict");
-          }
-        }
-        return reservations;
-      }),
+          return reservations;
+        },
+      ),
     catch: (cause) => transactionFailure ?? storageUnavailable(cause),
   });
   return reserved;
@@ -1049,12 +1332,6 @@ const recoverOrganizationFileReservations = async (
       head.value.contentLength !==
       Number(object.pendingSizeBytes ?? object.sizeBytes)
     ) {
-      if (
-        object.expectedSha256Hex !== null &&
-        ageMs >= FILE_RESERVATION_ABANDON_DELAY_MS
-      ) {
-        toRelease.push(reservation);
-      }
       continue;
     }
     if (
@@ -1080,9 +1357,6 @@ const recoverOrganizationFileReservations = async (
       if (
         hashSha256Hex(new Uint8Array(read.value)) !== object.expectedSha256Hex
       ) {
-        if (ageMs >= FILE_RESERVATION_ABANDON_DELAY_MS) {
-          toRelease.push(reservation);
-        }
         continue;
       }
     }
@@ -1126,6 +1400,65 @@ export const reserveOrganizationFilesBytes = async (
   return await reserveOrganizationFilesBytesOnce(checkedInputs, db);
 };
 
+type PrepublicationFileUsageReservation = {
+  cleanupIntentIds: SafeId<"pendingUpload">[];
+  objectKey: string;
+  reservation: FileUsageReservation;
+};
+
+/**
+ * Atomically bind copy accounting to deletion-surviving exact-key cleanup.
+ * The returned intents stay live until the caller's owner-publication
+ * transaction retires them.
+ */
+const reservePrepublicationOrganizationFilesBytes = async (
+  inputs: readonly PrepublicationFileUsageInput[],
+  db?: FileUsageDb,
+): Promise<
+  Result<PrepublicationFileUsageReservation[], OrganizationFileUsageError>
+> => {
+  const checkedInputs = snapshotOperationInput(inputs);
+  const plans = planPrepublicationCopyIntents(checkedInputs);
+  let reserved = await reserveOrganizationFilesBytesOnce(
+    checkedInputs,
+    db,
+    plans,
+  );
+  if (
+    Result.isError(reserved) &&
+    reserved.error.reason === "reservation_busy"
+  ) {
+    const recovered = await recoverOrganizationFileReservations(
+      checkedInputs,
+      db,
+    );
+    if (Result.isError(recovered)) {
+      return Result.err(recovered.error);
+    }
+    reserved = await reserveOrganizationFilesBytesOnce(
+      checkedInputs,
+      db,
+      plans,
+    );
+  }
+  if (Result.isError(reserved)) {
+    return Result.err(reserved.error);
+  }
+  return Result.ok(
+    reserved.value.map((reservation, index) => {
+      const plan = plans.at(index);
+      if (!plan) {
+        return panic("Prepublication intent plan must match its reservation");
+      }
+      return {
+        cleanupIntentIds: plan.intentIds,
+        objectKey: plan.objectKey,
+        reservation,
+      };
+    }),
+  );
+};
+
 export const ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT = 128;
 
 type FileBatchTransition = "commit" | "release" | "remove";
@@ -1160,132 +1493,145 @@ const transitionOrganizationFilesBytes = async ({
   }
   return await Result.tryPromise({
     try: async () =>
-      await (db ?? (await fileUsageDb())).transaction(async (tx) => {
-        const initial = await tx
-          .select({ organizationId: organizationFileObjects.organizationId })
-          .from(organizationFileObjects)
-          .where(
-            sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify(keys)}::text::jsonb))`,
-          );
-        const organizationIds = [
-          ...new Set(
-            initial
-              .map((object) => object.organizationId)
-              .concat(active.map((reservation) => reservation.organizationId)),
-          ),
-        ].toSorted();
-        if (organizationIds.length === 0) {
-          return { busyObjectKeys: transition === "commit" ? keys : [] };
-        }
-        const counters = await tx
-          .select()
-          .from(organizationFileUsage)
-          .where(
-            sql`${organizationFileUsage.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          )
-          .orderBy(asc(organizationFileUsage.organizationId))
-          .limit(organizationIds.length)
-          .for("update");
-        const objects = await tx
-          .select()
-          .from(organizationFileObjects)
-          .where(
-            sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify(keys)}::text::jsonb))`,
-          );
-        const objectByKey = new Map(
-          objects.map((object) => [object.objectKey, object]),
-        );
-        const counterOrgs = new Set(
-          counters.map((counter) => counter.organizationId),
-        );
-        const reservationsByKey = new Map(
-          active.map((reservation) => [reservation.objectKey, reservation]),
-        );
-        const mutations: {
-          organizationId: string;
-          objectKey: string;
-          sizeBytes: string;
-          remove: boolean;
-          committedDelta: string;
-          reservedDelta: string;
-        }[] = [];
-        const busyObjectKeys: string[] = [];
-        for (const key of keys) {
-          const object = objectByKey.get(key);
-          const reservation = reservationsByKey.get(key);
-          if (
-            transition === "commit" &&
-            (!object ||
-              !reservation ||
-              !counterOrgs.has(reservation.organizationId))
-          ) {
-            busyObjectKeys.push(key);
-            continue;
+      await withAggregateTransaction(
+        db ?? (await fileUsageDb()),
+        async (tx) => {
+          const initial = await tx
+            .select({ organizationId: organizationFileObjects.organizationId })
+            .from(organizationFileObjects)
+            .where(
+              sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify(keys)}::text::jsonb))`,
+            );
+          const organizationIds: SafeId<"organization">[] = [
+            ...new Set(
+              initial
+                .map((object) =>
+                  brandPersistedOrganizationId(object.organizationId),
+                )
+                .concat(
+                  active.map((reservation) => reservation.organizationId),
+                ),
+            ),
+          ].toSorted();
+          if (organizationIds.length === 0) {
+            return { busyObjectKeys: transition === "commit" ? keys : [] };
           }
-          if (!object) {
-            continue;
-          }
-          if (
-            transition !== "remove" &&
-            (!reservation ||
-              object.organizationId !== reservation.organizationId ||
-              object.writeId !== reservation.writeId)
-          ) {
-            if (transition === "commit") {
-              busyObjectKeys.push(key);
-            }
-            continue;
-          }
-          if (transition === "remove" && object.writeId !== null) {
-            continue;
-          }
-          if (
-            transition !== "remove" &&
-            object.status === "committed" &&
-            object.pendingSizeBytes === null
-          ) {
-            continue;
-          }
-          if (!counterOrgs.has(object.organizationId)) {
-            return panic("File counter disappeared during batch transition");
-          }
-          const nextSize = object.pendingSizeBytes ?? object.sizeBytes;
-          const remove =
-            transition === "remove" ||
-            (transition === "release" && object.status === "reserved");
-          let committedDelta = 0n;
-          if (transition === "commit") {
-            committedDelta =
-              nextSize -
-              (object.status === "committed" ? object.sizeBytes : 0n);
-          } else if (transition === "remove" && object.status === "committed") {
-            committedDelta = -object.sizeBytes;
-          }
-          mutations.push({
-            organizationId: object.organizationId,
-            objectKey: key,
-            sizeBytes: (transition === "commit"
-              ? nextSize
-              : object.sizeBytes
-            ).toString(),
-            remove,
-            committedDelta: committedDelta.toString(),
-            reservedDelta: (-reservedContribution(object)).toString(),
+          const counters = await lockOrganizationFileCounters({
+            organizationIds,
+            tx,
           });
-        }
-        if (mutations.length === 0) {
-          return { busyObjectKeys };
-        }
-        await tx.execute(sql`
+          const locked = await withAggregateParentBatch({
+            mode: "update",
+            organizationIds,
+            tx,
+          });
+          if (locked.organizationIds.size !== organizationIds.length) {
+            return panic("Organization disappeared during file transition");
+          }
+          const objects = await tx
+            .select()
+            .from(organizationFileObjects)
+            .where(
+              sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify(keys)}::text::jsonb))`,
+            );
+          const objectByKey = new Map(
+            objects.map((object) => [object.objectKey, object]),
+          );
+          const counterOrgs = new Set(
+            counters.map((counter) => counter.organizationId),
+          );
+          const reservationsByKey = new Map(
+            active.map((reservation) => [reservation.objectKey, reservation]),
+          );
+          const mutations: {
+            organizationId: string;
+            objectKey: string;
+            sizeBytes: string;
+            remove: boolean;
+            committedDelta: string;
+            reservedDelta: string;
+          }[] = [];
+          const busyObjectKeys: string[] = [];
+          for (const key of keys) {
+            const object = objectByKey.get(key);
+            const reservation = reservationsByKey.get(key);
+            if (
+              transition === "commit" &&
+              (!object ||
+                !reservation ||
+                !counterOrgs.has(reservation.organizationId))
+            ) {
+              busyObjectKeys.push(key);
+              continue;
+            }
+            if (!object) {
+              continue;
+            }
+            if (
+              transition !== "remove" &&
+              (!reservation ||
+                object.organizationId !== reservation.organizationId ||
+                object.writeId !== reservation.writeId)
+            ) {
+              if (transition === "commit") {
+                busyObjectKeys.push(key);
+              }
+              continue;
+            }
+            if (transition === "remove" && object.writeId !== null) {
+              continue;
+            }
+            if (
+              transition !== "remove" &&
+              object.status === "committed" &&
+              object.pendingSizeBytes === null
+            ) {
+              continue;
+            }
+            if (!counterOrgs.has(object.organizationId)) {
+              return panic("File counter disappeared during batch transition");
+            }
+            const nextSize = object.pendingSizeBytes ?? object.sizeBytes;
+            const remove =
+              transition === "remove" ||
+              (transition === "release" && object.status === "reserved");
+            let committedDelta = 0n;
+            if (transition === "commit") {
+              committedDelta =
+                nextSize -
+                (object.status === "committed" ? object.sizeBytes : 0n);
+            } else if (
+              transition === "remove" &&
+              object.status === "committed"
+            ) {
+              committedDelta = -object.sizeBytes;
+            }
+            mutations.push({
+              organizationId: object.organizationId,
+              objectKey: key,
+              sizeBytes: (transition === "commit"
+                ? nextSize
+                : object.sizeBytes
+              ).toString(),
+              remove,
+              committedDelta: committedDelta.toString(),
+              reservedDelta: (-reservedContribution(object)).toString(),
+            });
+          }
+          if (mutations.length === 0) {
+            return { busyObjectKeys };
+          }
+          await tx.execute(sql`
         with input as (select * from jsonb_to_recordset(${JSON.stringify(mutations)}::text::jsonb) as x("organizationId" text, "objectKey" text, "sizeBytes" bigint, remove boolean, "committedDelta" bigint, "reservedDelta" bigint)),
         removed as (delete from organization_file_objects o using input i where o.object_key = i."objectKey" and o.organization_id = i."organizationId" and i.remove returning o.object_key),
-        updated as (update organization_file_objects o set status = 'committed', size_bytes = i."sizeBytes", pending_size_bytes = null, write_id = null, expected_sha256_hex = null, reservation_started_at = null, updated_at = now() from input i where o.object_key = i."objectKey" and o.organization_id = i."organizationId" and not i.remove returning o.object_key),
+        updated as (update organization_file_objects o set status = 'committed', size_bytes = i."sizeBytes", pending_size_bytes = null, write_id = null, expected_sha256_hex = null, reservation_started_at = null, reconciliation_state = 'active', reconciliation_attempt_count = 0, reconcile_after = null, updated_at = now() from input i where o.object_key = i."objectKey" and o.organization_id = i."organizationId" and not i.remove returning o.object_key),
         changed as (select object_key from removed union all select object_key from updated),
         deltas as (select "organizationId", sum("committedDelta") as committed, sum("reservedDelta") as reserved from input join changed on changed.object_key = input."objectKey" group by "organizationId")
         update organization_file_usage u set committed_bytes = u.committed_bytes + d.committed, reserved_bytes = u.reserved_bytes + d.reserved, updated_at = now() from deltas d where u.organization_id = d."organizationId"
       `);
-        return { busyObjectKeys };
-      }),
+          return { busyObjectKeys };
+        },
+      ),
     catch: (cause) =>
       cause instanceof OrganizationFileUsageError
         ? cause

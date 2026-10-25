@@ -28,6 +28,7 @@ const ledgerCalls = new Set([
   "writeOrganizationFile",
   "copyOrganizationFile",
   "copyOrganizationFiles",
+  "copyOrganizationFilesForPublication",
   "writeOrganizationFiles",
   "storeOcrSearchablePdfDerivative",
 ]);

@@ -247,8 +247,20 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
   expect(compiled.sql).toContain("::timestamptz");
-  expect(compiled.sql).toContain("FOR UPDATE");
-  expect(compiled.sql).toContain("FOR UPDATE OF e");
+  // The entity row is locked in its own statement first, so the CAS above
+  // reads every version commit made while the projection waited.
+  const statements = executeMock.mock.calls.map(
+    ([executedQuery]) => new PgDialect().sqlToQuery(executedQuery).sql,
+  );
+  const entityLockAt = statements.findIndex(
+    (statement) =>
+      statement.includes('"entities"') && statement.includes("FOR UPDATE"),
+  );
+  const projectionAt = statements.findIndex((statement) =>
+    statement.includes("INSERT INTO search_documents"),
+  );
+  expect(entityLockAt).toBeGreaterThan(-1);
+  expect(entityLockAt).toBeLessThan(projectionAt);
   expect(compiled.sql).toContain("NOT EXISTS");
   expect(compiled.sql).toContain("FROM extracted_content ec");
 });

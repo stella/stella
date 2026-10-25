@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DocumentSource } from "@/api/lib/document-source";
+import type { BufferWriteAuthority } from "@/api/lib/entities/buffer-write-authority";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type {
@@ -82,6 +83,8 @@ type CreateEntityVersionFromBufferInput = {
   source: DocumentSource | null;
   writePolicy: FileVersionWritePolicy;
   scanWarnings?: string[] | undefined;
+  /** Required: a delayed member action rechecks its authority before any lock. */
+  authority: BufferWriteAuthority;
   afterWrite?:
     | ((
         tx: Transaction,
@@ -173,6 +176,7 @@ export const createEntityVersionFromBuffer = async ({
   source,
   writePolicy,
   scanWarnings,
+  authority,
   afterWrite,
   dependencies = CREATE_ENTITY_VERSION_FROM_BUFFER_DEPENDENCIES,
 }: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
@@ -309,8 +313,11 @@ export const createEntityVersionFromBuffer = async ({
     // object; a rolled-back intent remains recoverable by the bounded janitor.
     const transactionState = { durableReferencePrepared: false };
     const writeResult = await safeDb(async (tx) => {
+      // The version writer rechecks a delayed actor's authority first, before
+      // its document and matter locks.
       const versionWriteResult = await dependencies.writeFileVersion({
         tx,
+        authority,
         organizationId,
         workspaceId,
         entityId,

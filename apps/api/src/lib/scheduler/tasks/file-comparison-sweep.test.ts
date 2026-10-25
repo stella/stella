@@ -114,6 +114,74 @@ test("schedules one bounded global sweep of expired comparison staging", async (
   ]);
 });
 
+test("drains full pages until the sweep reaches a short page", async () => {
+  const pages = [
+    { scanned: 50, sweptUploads: 50, failed: 0 },
+    { scanned: 50, sweptUploads: 49, failed: 0 },
+    { scanned: 2, sweptUploads: 2, failed: 0 },
+  ];
+  const sweep = mock(async () =>
+    Result.ok(pages.shift() ?? { scanned: 0, sweptUploads: 0, failed: 0 }),
+  );
+  const { db, rows } = recordingDb();
+
+  await createSweepFileComparisonUploadsTask({ sweep })(
+    asTestRaw<SchedulerTaskContext>({
+      db,
+      logger: { info: mock() },
+      runId: RUN_ID,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(sweep).toHaveBeenCalledTimes(3);
+  expect(rows).toEqual([
+    expect.objectContaining({ counts: { sweptUploads: 101 } }),
+  ]);
+});
+
+test("bounds catch-up by batch count and wall-clock budget", async () => {
+  const fullPage = {
+    scanned: FILE_COMPARISON_SWEEP_LIMIT,
+    sweptUploads: FILE_COMPARISON_SWEEP_LIMIT,
+    failed: 0,
+  };
+  const byBatch = mock(async () => Result.ok(fullPage));
+  const byTime = mock(async () => Result.ok(fullPage));
+  const batchDb = recordingDb().db;
+  const timeDb = recordingDb().db;
+
+  await createSweepFileComparisonUploadsTask({
+    maxBatches: 2,
+    sweep: byBatch,
+  })(
+    asTestRaw<SchedulerTaskContext>({
+      db: batchDb,
+      logger: { info: mock() },
+      runId: RUN_ID,
+      signal: new AbortController().signal,
+    }),
+  );
+  await createSweepFileComparisonUploadsTask({
+    maxDurationMs: 1,
+    now: (() => {
+      let tick = 0;
+      return () => tick++;
+    })(),
+    sweep: byTime,
+  })(
+    asTestRaw<SchedulerTaskContext>({
+      db: timeDb,
+      logger: { info: mock() },
+      runId: RUN_ID,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(byBatch).toHaveBeenCalledTimes(2);
+  expect(byTime).toHaveBeenCalledTimes(1);
+});
+
 test("a sweep that removed nothing records no audit run", async () => {
   sweepMock.mockResolvedValue(
     Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }),
@@ -405,5 +473,39 @@ describe("comparison sweep replay and runner capture", () => {
     );
     expect(await remainingIds()).toEqual([renewedId]);
     expect(analytics.exceptions()).toHaveLength(0);
+  });
+
+  test("keeps an active comparison claim and sweeps it after the lease expires", async () => {
+    const claimedId = uploadIds.at(0) ?? panic("Expected a claimed upload");
+    await testDb
+      .update(fileComparisonUploads)
+      .set({
+        claimId: Bun.randomUUIDv7(),
+        claimExpiresAt: new Date(Date.now() + 60_000),
+        status: "processing",
+      })
+      .where(eq(fileComparisonUploads.id, claimedId));
+
+    expect(
+      await sweepExpiredFileComparisonUploads({
+        safeDb,
+        deleteObject: async () => Result.ok(undefined),
+      }),
+    ).toEqual(
+      Result.ok({ scanned: uploadIds.length - 1, sweptUploads: 2, failed: 0 }),
+    );
+    expect(await remainingIds()).toEqual([claimedId]);
+
+    await testDb
+      .update(fileComparisonUploads)
+      .set({ claimExpiresAt: new Date(Date.now() - 1) })
+      .where(eq(fileComparisonUploads.id, claimedId));
+    expect(
+      await sweepExpiredFileComparisonUploads({
+        safeDb,
+        deleteObject: async () => Result.ok(undefined),
+      }),
+    ).toEqual(Result.ok({ scanned: 1, sweptUploads: 1, failed: 0 }));
+    expect(await remainingIds()).toEqual([]);
   });
 });

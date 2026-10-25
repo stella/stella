@@ -77,11 +77,10 @@ const PENDING_APPLICATION_STATUS_SQL = sql.raw(
  * with the reference documents those positions came from and the side it was
  * judged for, measured against one pinned document version.
  *
- * The target and the basis are pinned by value, not by reference: `basis`
- * embeds the whole position snapshot and every reference's version, and there
- * is no foreign key from a run to a playbook or to the reviewed documents. A
- * completed review therefore stays readable after the playbook is deleted or
- * the document moves on. Workspace deletion still cascades everything.
+ * The basis is pinned by value: `basis` embeds the whole position snapshot and
+ * every reference's version, with no foreign key to a playbook or reference
+ * document. The target entity remains the content owner, so permanently
+ * deleting it cascades its copied review basis, skipped terms, and findings.
  */
 export const documentReviewRuns = p.pgTable(
   "document_review_runs",
@@ -93,8 +92,8 @@ export const documentReviewRuns = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    // Target pin. Plain identifier columns: a deleted document must not take
-    // its review history with it, so these deliberately carry no foreign key.
+    // Version and field ids preserve the historical input while the entity FK
+    // below binds every copied review payload to permanent target deletion.
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
@@ -220,6 +219,13 @@ export const documentReviewRuns = p.pgTable(
     ),
     p
       .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "document_review_runs_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "document_review_runs_workspace_organization_fk",
@@ -228,7 +234,13 @@ export const documentReviewRuns = p.pgTable(
     // Both scopes in every command: the run row carries an organization
     // discriminator, so a valid workspace pin must not authorize a row whose
     // organization_id came from anywhere else.
-    ...wsOrganizationPolicies("document_review_runs", { columns: table }),
+    // The target key carries cascade only: run visibility follows the workspace.
+    ...wsOrganizationPolicies("document_review_runs", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "context" }],
+      ]),
+    }),
   ],
 );
 

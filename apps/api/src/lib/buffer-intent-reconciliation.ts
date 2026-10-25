@@ -19,10 +19,19 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  insertWritingObjectCleanupIntents,
+  lockOrganizationObjectIntentsForWriter,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 import { LIMITS } from "@/api/lib/limits";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+export {
+  lockOrganizationObjectIntentsForLifecycle,
+  lockOrganizationObjectIntentsForWriter,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 
 type DeleteObject = (
   key: string,
@@ -121,28 +130,6 @@ class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
 )<{ message: string }> {}
 
-const organizationObjectIntentLockKey = (
-  organizationId: SafeId<"organization">,
-): string => `buffer-object:${organizationId}`;
-
-export const lockOrganizationObjectIntentsForWriter = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock_shared(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
-export const lockOrganizationObjectIntentsForLifecycle = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
 type ActiveWorkspaceBufferIntentOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -217,6 +204,8 @@ export const reserveObjectCleanupIntents = async ({
     await lockOrganizationObjectIntentsForWriter(tx, organizationId);
 
     if (uniqueWorkspaceIds.length > 0) {
+      // Readers keep the shared matter lock they take today; publication
+      // takes the matter's update lock first, through the aggregate owner.
       const lockedWorkspaces = await tx
         .select({ id: workspaces.id, status: workspaces.status })
         .from(workspaces)
@@ -242,8 +231,8 @@ export const reserveObjectCleanupIntents = async ({
         });
       }
     }
-    // audit: skip; crash-recovery ownership for the later audited mutation.
-    await tx.insert(bufferObjectCleanupIntents).values(
+    await insertWritingObjectCleanupIntents(
+      tx,
       intents.map(({ id, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
@@ -253,7 +242,6 @@ export const reserveObjectCleanupIntents = async ({
         ),
         objectKey,
         organizationId,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
         workspaceId: ownerWorkspaceId,
       })),
     );

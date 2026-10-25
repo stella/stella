@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, getTableName, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import { user } from "@/api/db/auth-schema";
 import {
   accountDeletionEffectChunks,
   accountDeletionRequests,
@@ -13,6 +14,7 @@ import {
 import { recordAccountDeletionRequest } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -23,27 +25,23 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-      const { db, sql: client } = openClient();
-      const schema = `deletion_effect_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      await db.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
+      const { db } = openClient();
+      // The request row is locked through its owner, so the fixture lives in
+      // the real tables and removes only its own rows afterwards.
+      const userId = mintAuthProviderId<"user">();
+      const requestId = createSafeId<"accountDeletionRequest">();
+      await db.insert(user).values({
+        id: userId,
+        name: "Account deletion fixture",
+        email: `${userId}@example.test`,
+      });
       try {
-        for (const table of [
-          accountDeletionRequests,
-          accountDeletionEffectChunks,
-        ]) {
-          const name = getTableName(table);
-          await db.execute(
-            sql`CREATE TABLE ${sql.identifier(schema)}.${sql.identifier(name)} (LIKE public.${sql.identifier(name)} INCLUDING ALL)`,
-          );
-        }
-        await client.unsafe(`SET search_path TO ${schema}, public`);
-        const requestId = createSafeId<"accountDeletionRequest">();
         const notBefore = new Date(Date.now() + 60 * 60 * 1000);
         await db.transaction(async (tx) => {
           await recordAccountDeletionRequest({
             tx,
             deletionRequestId: requestId,
-            currentUserId: "account-deletion-fixture",
+            currentUserId: userId,
             organizationIds: [],
             workspaceIds: [],
             taskReassignmentCount: 0,
@@ -80,8 +78,13 @@ describe.skipIf(!enabled)("account deletion storage deadlines", () => {
           await claimNextAccountDeletionEffectChunk(requestId, db),
         ).not.toBeNull();
       } finally {
-        await client.unsafe("SET search_path TO public");
-        await db.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
+        await db
+          .delete(accountDeletionEffectChunks)
+          .where(eq(accountDeletionEffectChunks.requestId, requestId));
+        await db
+          .delete(accountDeletionRequests)
+          .where(eq(accountDeletionRequests.id, requestId));
+        await db.delete(user).where(eq(user.id, userId));
       }
     });
   });

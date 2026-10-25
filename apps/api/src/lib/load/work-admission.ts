@@ -93,6 +93,7 @@ export const createWorkAdmission = ({
   };
   const states = {
     "heavy-sidecar": createPoolState("heavy-sidecar"),
+    "file-scan": createPoolState("file-scan"),
   } as const satisfies Record<WorkPool, PoolState>;
 
   type AcquireOptions = {
@@ -210,6 +211,7 @@ export const createWorkAdmission = ({
     stats: () =>
       ({
         "heavy-sidecar": poolMetrics("heavy-sidecar"),
+        "file-scan": poolMetrics("file-scan"),
       }) as const satisfies Record<WorkPool, ReturnType<typeof poolMetrics>>,
   };
 };

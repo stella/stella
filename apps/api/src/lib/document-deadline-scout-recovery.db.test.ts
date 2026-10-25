@@ -7,7 +7,7 @@
  * Driven against a real (PGlite) database with a stubbed queue.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -254,6 +254,7 @@ test("a scan skipped for an exhausted period is not dispatched before the period
   const periodEnd = new Date(claimedAt.getTime() + 60 * 60 * 1000);
 
   await skipDeadlineScan({
+    claimedAt,
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
     skippedUntil: periodEnd,
@@ -289,6 +290,38 @@ test("a scan skipped for an exhausted period is not dispatched before the period
     .where(eq(documentProcessingRuns.id, runId));
   expect((await sweep()).count).toBe(1);
   expect(added.map(({ data }) => data)).toEqual([{ sourceRunId: runId }]);
+});
+
+test("an expired worker cannot settle a replacement claim", async () => {
+  const runId = await insertExpiredScoutClaim();
+  const [expired] = await testDb
+    .select({ claimedAt: documentProcessingRuns.deadlineScoutClaimedAt })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, runId));
+  const expiredClaimedAt =
+    expired?.claimedAt ?? panic("Expired claim fixture is missing its lease");
+  const replacementClaimedAt = new Date();
+  await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutClaimedAt: replacementClaimedAt })
+    .where(eq(documentProcessingRuns.id, runId));
+
+  await skipDeadlineScan({
+    claimedAt: expiredClaimedAt,
+    db: asTestRaw<typeof rootDb>(testDb),
+    runId,
+    skippedUntil: new Date(Date.now() + 60_000),
+  });
+
+  const [row] = await testDb
+    .select({
+      claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+      status: documentProcessingRuns.deadlineScoutStatus,
+    })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, runId));
+  expect(row?.status).toBe("running");
+  expect(row?.claimedAt?.getTime()).toBe(replacementClaimedAt.getTime());
 });
 
 test("a period refusal inside the scout run skips the scan until the period ends, keeping its attempt", async () => {
@@ -375,6 +408,7 @@ test("a period refusal inside the scout run skips the scan until the period ends
 test("a skip applies only to a running scan, and only a pending scan may carry one", async () => {
   const runId = await insertPendingScoutRun();
   await skipDeadlineScan({
+    claimedAt: new Date(),
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
     skippedUntil: new Date(Date.now() + 60_000),

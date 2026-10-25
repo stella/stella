@@ -15,6 +15,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import {
@@ -156,6 +157,7 @@ export default createSafeHandler(
 
     const created = yield* Result.await(
       createEntityFromBuffer({
+        authority: CALLER_AUTHORIZED,
         scopedDb,
         organizationId: session.activeOrganizationId,
         workspaceId: destinationWorkspaceId,

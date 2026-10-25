@@ -399,9 +399,12 @@ const recordUploadedMail = async ({
     try: async () =>
       await enqueueUploadedMail({
         file: {
+          entityVersionId: run.entityVersionId,
+          fieldId: run.fieldId,
           sourceFileId: source.fileId,
+          sourceSha256Hex: run.sourceSha256Hex,
           storageMimeType: source.storageMimeType,
-          mimeType: source.extractionMimeType,
+          extractionMimeType: source.extractionMimeType,
         },
         scope: {
           organizationId: run.organizationId,
@@ -434,6 +437,7 @@ export const executeNativeExtraction = async ({
     key: FileKey;
     mimeType: string;
     signal: AbortSignal;
+    maxBytes?: number;
   }) => Promise<ScannedFile>;
   run: NativeExtractionRun;
   dependencies?: ExecuteNativeExtractionDependencies | undefined;
@@ -455,7 +459,14 @@ export const executeNativeExtraction = async ({
   });
   const stored = await withTimeout(
     async (signal) =>
-      await readSource({ key, mimeType: source.extractionMimeType, signal }),
+      await readSource({
+        key,
+        mimeType: source.extractionMimeType,
+        signal,
+        ...(source.fileId === fileField.pdfFileId
+          ? { maxBytes: LIMITS.fileDerivativePdfMaxBytes }
+          : {}),
+      }),
     {
       label: "native extraction source read",
       signal: lifecycleSignal,

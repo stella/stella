@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import { env } from "@/api/env";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
@@ -52,6 +54,7 @@ type ConvertToPdfResult = {
 
 class GotenbergError extends TaggedError("GotenbergError")<{
   message: string;
+  kind: "http" | "transport" | "response-too-large";
   statusCode?: number;
   cause?: unknown;
 }> {}
@@ -182,8 +185,15 @@ const GOTENBERG_RETRY = {
   delayMs: 2000,
   backoff: "exponential",
   shouldRetry: (error: GotenbergError) =>
-    error.statusCode === undefined || error.statusCode >= 500,
+    error.kind === "transport" ||
+    (error.kind === "http" && (error.statusCode ?? 0) >= 500),
 } as const;
+
+const tooLargeConverterResponse = () =>
+  new GotenbergError({
+    message: `Gotenberg PDF exceeds the ${LIMITS.fileDerivativePdfMaxBytes}-byte limit`,
+    kind: "response-too-large",
+  });
 
 type ConvertToPdfOptions = {
   /**
@@ -345,7 +355,7 @@ export const convertToPdf = async (
     }
   }
 
-  return await Result.tryPromise(
+  const converted = await Result.tryPromise(
     {
       try: async () => {
         const source = XLSX_MIME_TYPES.has(mimeType)
@@ -381,12 +391,40 @@ export const convertToPdf = async (
         if (!response.ok) {
           throw new GotenbergError({
             message: `Gotenberg returned ${response.status}`,
+            kind: "http",
             statusCode: response.status,
           });
         }
 
-        const result = await response.arrayBuffer();
-        return { buffer: result, sizeBytes: result.byteLength };
+        const contentLength = response.headers.get("content-length");
+        const declaredBytes =
+          contentLength === null
+            ? null
+            : parseIntegerToken(contentLength, { sign: "unsigned" }).unwrapOr(
+                Number.POSITIVE_INFINITY,
+              );
+        if (
+          declaredBytes !== null &&
+          declaredBytes > LIMITS.fileDerivativePdfMaxBytes
+        ) {
+          await response.body?.cancel();
+          return { type: "too-large" } as const;
+        }
+        const responseBytes =
+          response.body === null
+            ? new Uint8Array()
+            : await readCappedBytes(
+                response.body,
+                LIMITS.fileDerivativePdfMaxBytes,
+              );
+        if (responseBytes === null) {
+          return { type: "too-large" } as const;
+        }
+        const result = toArrayBuffer(responseBytes);
+        return {
+          type: "converted",
+          converted: { buffer: result, sizeBytes: result.byteLength },
+        } as const;
       },
       catch: (cause) => {
         if (cause instanceof GotenbergError) {
@@ -394,10 +432,18 @@ export const convertToPdf = async (
         }
         return new GotenbergError({
           message: "Failed to reach Gotenberg",
+          kind: "transport",
           cause,
         });
       },
     },
     retry === "in-call" ? { retry: GOTENBERG_RETRY } : undefined,
   );
+  if (Result.isError(converted)) {
+    return converted;
+  }
+  // An oversized converter response is final: a retry returns the same PDF.
+  return converted.value.type === "too-large"
+    ? Result.err(tooLargeConverterResponse())
+    : Result.ok(converted.value.converted);
 };

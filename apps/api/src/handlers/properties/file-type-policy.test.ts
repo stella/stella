@@ -8,6 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 import { fields, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -299,6 +300,7 @@ test("renaming a file column retains its scope and generated document creation",
   const fake = startFakeS3();
   try {
     const created = await createEntityFromBuffer({
+      authority: CALLER_AUTHORIZED,
       scopedDb: asTestRaw<
         Parameters<typeof createEntityFromBuffer>[0]["scopedDb"]
       >(createScopedDb(db, [ids.wsA1], ids.orgA, ids.userA1)),

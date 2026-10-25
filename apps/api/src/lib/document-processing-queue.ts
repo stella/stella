@@ -27,6 +27,7 @@ import {
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -43,11 +44,18 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  lockObjectCleanupIntentsForWriter,
+  lockOrganizationObjectIntentsForWriter,
+  reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { encryptContent } from "@/api/lib/content-encryption";
 import {
   withAggregateEntityBatch,
+  withAggregateLock,
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -133,7 +141,10 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
-import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
+import {
+  DEADLINE_SCOUT_LEASE_TIMEOUT_MS,
+  deadlineScoutDue,
+} from "@/api/lib/scouts/document-deadline-skip";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
@@ -152,7 +163,6 @@ const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
-const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
 const SEARCH_INDEX_REPLAY_CONCURRENCY = 2;
 const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
@@ -285,16 +295,21 @@ const lockRunWorkspace = async (
  * so neither can leave a persisted projection permanently without its PDF.
  */
 const writeOcrSearchablePdfDerivative = async ({
+  claimToken,
+  database,
   lifecycleSignal,
   payload,
   run,
   sourceKey,
 }: {
+  claimToken: string;
+  database: typeof rootDb;
   lifecycleSignal: AbortSignal;
   payload: DocumentOcrPayload;
   run: typeof documentProcessingRuns.$inferSelect;
   sourceKey: string;
-}): Promise<void> => {
+}): Promise<boolean> => {
+  let published = false;
   const written = await Result.tryPromise({
     try: async () => {
       const scope = {
@@ -318,6 +333,56 @@ const writeOcrSearchablePdfDerivative = async ({
         workspaceId: run.workspaceId,
         runId: run.id,
       });
+      const cleanupIntentId = await withAggregateTransaction(
+        database,
+        async (tx) => {
+          // Organization teardown takes this lock before tenant rows. Keep the
+          // same order while binding the cleanup intent to the live claim.
+          await lockOrganizationObjectIntentsForWriter(tx, run.organizationId);
+          const workspace = await lockRunWorkspace(tx, run);
+          if (workspace?.status !== "active") {
+            return null;
+          }
+          const claimLock = await withAggregateLock({
+            aggregate: "processingClaim",
+            id: { id: run.id, workspaceId: run.workspaceId },
+            mode: "update",
+            tx,
+          });
+          if (claimLock.status !== "locked") {
+            return null;
+          }
+          const ownedRuns = await tx
+            .select({ id: documentProcessingRuns.id })
+            .from(documentProcessingRuns)
+            .where(
+              and(
+                eq(documentProcessingRuns.id, run.id),
+                eq(documentProcessingRuns.status, "running"),
+                eq(documentProcessingRuns.claimedBy, claimToken),
+              ),
+            )
+            .limit(1);
+          if (!ownedRuns.at(0)) {
+            return null;
+          }
+          const cleanupIntent = await reserveObjectCleanupIntent({
+            objectKey,
+            organizationId: run.organizationId,
+            safeDb: safeDbFromScoped(
+              async (runInTransaction) => await runInTransaction(tx),
+            ),
+            workspaceId: run.workspaceId,
+          });
+          if (Result.isError(cleanupIntent)) {
+            throw cleanupIntent.error;
+          }
+          return cleanupIntent.value;
+        },
+      );
+      if (cleanupIntentId === null) {
+        return;
+      }
       const writePdf: OcrDerivativeWrite = async ({
         content,
         objectKey: checkedObjectKey,
@@ -340,6 +405,41 @@ const writeOcrSearchablePdfDerivative = async ({
       if (Result.isError(fileWrite)) {
         throw fileWrite.error;
       }
+      published = await withAggregateTransaction(database, async (tx) => {
+        const workspace = await lockRunWorkspace(tx, run);
+        if (workspace?.status !== "active") {
+          return false;
+        }
+        const claimLock = await withAggregateLock({
+          aggregate: "processingClaim",
+          id: { id: run.id, workspaceId: run.workspaceId },
+          mode: "update",
+          tx,
+        });
+        if (claimLock.status !== "locked") {
+          return false;
+        }
+        const ownedRuns = await tx
+          .select({ id: documentProcessingRuns.id })
+          .from(documentProcessingRuns)
+          .where(
+            and(
+              eq(documentProcessingRuns.id, run.id),
+              eq(documentProcessingRuns.status, "running"),
+              eq(documentProcessingRuns.claimedBy, claimToken),
+            ),
+          )
+          .limit(1);
+        if (!ownedRuns.at(0)) {
+          return false;
+        }
+        await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
+        await retirePublishedObjectCleanupIntentsInTransaction({
+          tx,
+          intentIds: [cleanupIntentId],
+        });
+        return true;
+      });
     },
     catch: (cause) => cause,
   });
@@ -351,6 +451,7 @@ const writeOcrSearchablePdfDerivative = async ({
       cause: written.error,
     });
   }
+  return published;
 };
 
 const markRunCancelled = async (
@@ -386,6 +487,7 @@ const markRunCancelled = async (
 };
 
 type DocumentProcessingLeaseHeartbeat = {
+  signal: AbortSignal;
   stop: () => void;
 };
 
@@ -447,9 +549,10 @@ const startDocumentProcessingLeaseHeartbeat = ({
   database: typeof rootDb;
   runId: SafeId<"documentProcessingRun">;
 }): DocumentProcessingLeaseHeartbeat => {
+  const leaseController = new AbortController();
   const renew = createDocumentProcessingLeaseRenewal({
     renewLease: async () => {
-      await database
+      const renewed = await database
         .update(documentProcessingRuns)
         .set({
           claimedAt: new Date(),
@@ -461,7 +564,11 @@ const startDocumentProcessingLeaseHeartbeat = ({
             eq(documentProcessingRuns.status, "running"),
             eq(documentProcessingRuns.claimedBy, claimToken),
           ),
-        );
+        )
+        .returning({ id: documentProcessingRuns.id });
+      if (!renewed.at(0)) {
+        leaseController.abort();
+      }
     },
     onError: (error) => {
       logger.warn("document_processing.lease_heartbeat_failed", {
@@ -477,6 +584,7 @@ const startDocumentProcessingLeaseHeartbeat = ({
   timer.unref();
 
   return {
+    signal: leaseController.signal,
     stop: () => {
       clearInterval(timer);
     },
@@ -1091,9 +1199,10 @@ export const processDocumentProcessingRun = async (
     database,
     runId: run.id,
   });
+  const attemptSignal = AbortSignal.any([lifecycleSignal, heartbeat.signal]);
   const processingResult = await Result.tryPromise({
     try: async () => {
-      lifecycleSignal.throwIfAborted();
+      attemptSignal.throwIfAborted();
       if (
         run.kind === "ocr" &&
         (await admitOcrRunUnderPolicy({ claimToken, database, run })) === "stop"
@@ -1124,15 +1233,23 @@ export const processDocumentProcessingRun = async (
           )({
             database,
             fileField: source.content,
-            lifecycleSignal,
-            readSource: async (input) =>
-              await readStoredFile({
-                ...input,
+            lifecycleSignal: attemptSignal,
+            readSource: async (input) => {
+              if (input.maxBytes !== undefined) {
+                // Derivative reads use the bounded owner-client path. The key
+                // was built above from this run's authoritative tenant IDs.
+                return await readStoredFile(input);
+              }
+              return await readStoredFile({
+                key: input.key,
+                mimeType: input.mimeType,
+                signal: input.signal,
                 scope: {
                   organizationId: run.organizationId,
                   workspaceId: run.workspaceId,
                 },
-              }),
+              });
+            },
             run,
           });
           switch (extractionOutcome) {
@@ -1153,7 +1270,7 @@ export const processDocumentProcessingRun = async (
                 `Unhandled extraction outcome: ${String(extractionOutcome)}`,
               );
           }
-          lifecycleSignal.throwIfAborted();
+          attemptSignal.throwIfAborted();
           const persistedSource = await readCurrentDocumentSource({
             database,
             entityId: run.entityId,
@@ -1174,7 +1291,7 @@ export const processDocumentProcessingRun = async (
             indexEntity: async () =>
               await upsertSearchDocument(run.entityId, { database }),
           });
-          lifecycleSignal.throwIfAborted();
+          attemptSignal.throwIfAborted();
           await completeDocumentProcessingRun({ claimToken, database, run });
           return;
         }
@@ -1205,7 +1322,7 @@ export const processDocumentProcessingRun = async (
           organizationId: run.organizationId,
           workspaceId: run.workspaceId,
         },
-        signal: lifecycleSignal,
+        signal: attemptSignal,
         sourceKey,
       });
       if (Result.isError(result)) {
@@ -1215,7 +1332,7 @@ export const processDocumentProcessingRun = async (
           cause: result.error,
         });
       }
-      lifecycleSignal.throwIfAborted();
+      attemptSignal.throwIfAborted();
 
       const [encrypted, encryptedPayload] = await Promise.all([
         encryptContent(run.organizationId, result.value.text),
@@ -1224,7 +1341,7 @@ export const processDocumentProcessingRun = async (
           serializeDocumentOcrPayload(result.value.payload),
         ),
       ]);
-      lifecycleSignal.throwIfAborted();
+      attemptSignal.throwIfAborted();
       const persistenceOutcome = await persistOcrProjection({
         claimToken,
         ciphertext: encrypted.ciphertext,
@@ -1247,26 +1364,31 @@ export const processDocumentProcessingRun = async (
           persistenceOutcome satisfies never;
           panic(`Unhandled persistence outcome: ${String(persistenceOutcome)}`);
       }
-      lifecycleSignal.throwIfAborted();
+      attemptSignal.throwIfAborted();
 
       // The derivative is written before indexing: a failed index leaves a
       // retryable run that `recoverFailedSearchIndex` completes without
       // revisiting storage, so ordering it after indexing would let that
       // replay mark a run succeeded that never got its searchable PDF.
       if (persistenceOutcome === "persisted") {
-        await writeOcrSearchablePdfDerivative({
-          lifecycleSignal,
+        const derivativePublished = await writeOcrSearchablePdfDerivative({
+          claimToken,
+          database,
+          lifecycleSignal: attemptSignal,
           payload: result.value.payload,
           run,
           sourceKey,
         });
+        if (!derivativePublished) {
+          return;
+        }
       }
 
       await indexDocumentProjectionAtJobBoundary({
         indexEntity: async () =>
           await upsertSearchDocument(run.entityId, { database }),
       });
-      lifecycleSignal.throwIfAborted();
+      attemptSignal.throwIfAborted();
 
       await completeDocumentProcessingRun({ claimToken, database, run });
     },

@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 /**
  * `prepare_file_comparison`: reserve short-lived storage for two DOCX files
  * stella does not hold, so `compare_documents` can redline them. It owns no
@@ -14,15 +15,23 @@ import { fileComparisonUploads } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import type { PresignedUploadHeaders } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   FILE_COMPARISON_INPUT_TTL_SECONDS,
+  FILE_COMPARISON_ORGANIZATION_OUTSTANDING_BYTE_LIMIT,
+  FILE_COMPARISON_ORGANIZATION_OUTSTANDING_ROW_LIMIT,
+  FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT,
+  FILE_COMPARISON_OUTSTANDING_ROW_LIMIT,
   fileComparisonExpiry,
   fileComparisonObjectKey,
+  readOutstandingFileComparisonCapacity,
 } from "@/api/lib/uploads/file-comparison/uploads";
 import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -198,32 +207,40 @@ export type ReservedUpload = {
   url: string;
 };
 
+type ReservedInput = Omit<ReservedUpload, "headers" | "url">;
+
 export type PrepareFileComparisonDependencies = {
   presignUploadUrl: typeof presignUploadUrl;
 };
 
 const DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES: PrepareFileComparisonDependencies =
-  { presignUploadUrl };
+  {
+    presignUploadUrl,
+  };
 
 const presignInput = async ({
   userId,
   dependencies,
-  file,
   organizationId,
+  reservation,
 }: {
   dependencies: PrepareFileComparisonDependencies;
-  file: FileComparisonInputFile;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  reservation: ReservedInput;
 }): Promise<Result<ReservedUpload, unknown>> => {
-  const id = createSafeId<"fileComparisonUpload">();
   const presigned = await dependencies.presignUploadUrl({
     userId,
-    key: fileComparisonObjectKey({ organizationId, uploadId: id }),
+    key: fileComparisonObjectKey({
+      organizationId,
+      uploadId: reservation.id,
+    }),
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
-    contentLength: file.size,
-    sha256Base64: Buffer.from(file.sha256Hex, "hex").toString("base64"),
+    contentLength: reservation.declaredSize,
+    sha256Base64: Buffer.from(reservation.declaredSha256, "hex").toString(
+      "base64",
+    ),
     scope: { organizationId, workspaceId: null },
     tagAsTemporaryUpload: true,
   });
@@ -231,19 +248,70 @@ const presignInput = async ({
     return Result.err(presigned.error);
   }
   return Result.ok({
-    declaredName: sanitizeFilename(file.name),
-    declaredSha256: file.sha256Hex,
-    declaredSize: file.size,
+    ...reservation,
     headers: presigned.value.headers,
-    id,
     url: presigned.value.url,
   });
 };
+
+const reserveInput = (file: FileComparisonInputFile): ReservedInput => ({
+  declaredName: sanitizeFilename(file.name),
+  declaredSha256: file.sha256Hex,
+  declaredSize: file.size,
+  id: createSafeId<"fileComparisonUpload">(),
+});
 
 type ReservedFileComparisonInputs = {
   base: ReservedUpload;
   target: ReservedUpload;
   urlExpiresAt: string;
+};
+
+const RESERVATION_EXPIRY_FAILURE_SINK = failureSink({
+  event: "file_comparison.expire_unpresigned_reservation_failed",
+  expected: [],
+});
+
+const expireReservedInputs = async ({
+  context,
+  uploadIds,
+}: {
+  context: AuthorizedMcpRequestContext;
+  uploadIds: readonly [
+    SafeId<"fileComparisonUpload">,
+    SafeId<"fileComparisonUpload">,
+  ];
+}): Promise<void> => {
+  const expired = await context.safeDb(async (tx) => {
+    await tx
+      .update(fileComparisonUploads)
+      .set({ expiresAt: new Date() })
+      .where(
+        and(
+          inArray(fileComparisonUploads.id, uploadIds),
+          eq(fileComparisonUploads.organizationId, context.organizationId),
+          eq(fileComparisonUploads.userId, context.userId),
+          eq(fileComparisonUploads.status, "pending"),
+        ),
+      );
+    await context.recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.FILE_COMPARISON,
+      resourceId: uploadIds[0],
+      metadata: {
+        baseUploadId: uploadIds[0],
+        targetUploadId: uploadIds[1],
+        reason: "presign_failed",
+      },
+      workspaceId: null,
+    });
+  });
+  if (Result.isError(expired)) {
+    observeFailure(expired.error, {
+      sink: RESERVATION_EXPIRY_FAILURE_SINK,
+      ctx: { stage: "expire-unpresigned-reservation" },
+    });
+  }
 };
 
 /**
@@ -263,19 +331,11 @@ export const reserveFileComparisonInputs = async ({
   target: FileComparisonInputFile;
 }): Promise<Result<ReservedFileComparisonInputs, InternalToolErrorResult>> => {
   const { organizationId, userId } = context;
-  const [reservedBase, reservedTarget] = await Promise.all([
-    presignInput({ dependencies, file: base, organizationId, userId }),
-    presignInput({ dependencies, file: target, organizationId, userId }),
-  ]);
-  if (Result.isError(reservedBase)) {
-    return Result.err(internalFailureResult(reservedBase.error));
-  }
-  if (Result.isError(reservedTarget)) {
-    return Result.err(internalFailureResult(reservedTarget.error));
-  }
+  const reservedBase = reserveInput(base);
+  const reservedTarget = reserveInput(target);
 
   const expiresAt = fileComparisonExpiry(FILE_COMPARISON_INPUT_TTL_SECONDS);
-  const rows = [reservedBase.value, reservedTarget.value].map((upload) => ({
+  const rows = [reservedBase, reservedTarget].map((upload) => ({
     declaredName: upload.declaredName,
     declaredSha256: upload.declaredSha256,
     declaredSize: upload.declaredSize,
@@ -287,33 +347,90 @@ export const reserveFileComparisonInputs = async ({
     userId,
   }));
 
-  const inserted = await Result.tryPromise(
-    async () =>
-      await context.scopedDb(async (tx) => {
-        await tx.insert(fileComparisonUploads).values(rows);
-        // Sizes only: the names are the caller's, and the bytes are never
-        // this organization's content to begin with.
-        await context.recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.FILE_COMPARISON,
-          resourceId: reservedBase.value.id,
-          metadata: {
-            baseUploadId: reservedBase.value.id,
-            targetUploadId: reservedTarget.value.id,
-            baseSizeBytes: reservedBase.value.declaredSize,
-            targetSizeBytes: reservedTarget.value.declaredSize,
-          },
-          workspaceId: null,
-        });
-      }),
-  );
+  const inserted = await context.safeDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "fileComparisonCapacity",
+      id: { organizationId },
+      tx,
+    });
+    const outstanding = await readOutstandingFileComparisonCapacity(tx);
+    const requestedBytes = base.size + target.size;
+    if (
+      outstanding.userRows + rows.length >
+        FILE_COMPARISON_OUTSTANDING_ROW_LIMIT ||
+      outstanding.userBytes + requestedBytes >
+        FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT ||
+      outstanding.organizationRows + rows.length >
+        FILE_COMPARISON_ORGANIZATION_OUTSTANDING_ROW_LIMIT ||
+      outstanding.organizationBytes + requestedBytes >
+        FILE_COMPARISON_ORGANIZATION_OUTSTANDING_BYTE_LIMIT
+    ) {
+      return "at_capacity" as const;
+    }
+
+    await tx.insert(fileComparisonUploads).values(rows);
+    // Sizes only: the names are the caller's, and the bytes are never
+    // this organization's content to begin with.
+    await context.recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.FILE_COMPARISON,
+      resourceId: reservedBase.id,
+      metadata: {
+        baseUploadId: reservedBase.id,
+        targetUploadId: reservedTarget.id,
+        baseSizeBytes: reservedBase.declaredSize,
+        targetSizeBytes: reservedTarget.declaredSize,
+      },
+      workspaceId: null,
+    });
+    return "admitted" as const;
+  });
   if (Result.isError(inserted)) {
     return Result.err(internalFailureResult(inserted.error));
   }
+  if (inserted.value === "at_capacity") {
+    return Result.err(
+      structuredErrorResult({
+        code: "rate_limited",
+        message: "Too many temporary comparison files are still retained",
+        hint: "Use an existing reservation, or retry after earlier comparison files are consumed or expire.",
+        retryable: true,
+      }),
+    );
+  }
+
+  const [presignedBase, presignedTarget] = await Promise.all([
+    presignInput({
+      dependencies,
+      organizationId,
+      reservation: reservedBase,
+      userId,
+    }),
+    presignInput({
+      dependencies,
+      organizationId,
+      reservation: reservedTarget,
+      userId,
+    }),
+  ]);
+  if (Result.isError(presignedBase)) {
+    await expireReservedInputs({
+      context,
+      uploadIds: [reservedBase.id, reservedTarget.id],
+    });
+    return Result.err(internalFailureResult(presignedBase.error));
+  }
+  if (Result.isError(presignedTarget)) {
+    await expireReservedInputs({
+      context,
+      uploadIds: [reservedBase.id, reservedTarget.id],
+    });
+    return Result.err(internalFailureResult(presignedTarget.error));
+  }
 
   return Result.ok({
-    base: reservedBase.value,
-    target: reservedTarget.value,
+    base: presignedBase.value,
+    target: presignedTarget.value,
     // Two deadlines, and the output carries the earlier one because it is the
     // one the client acts on: the signed PUT dies well before the row does.
     urlExpiresAt: fileComparisonExpiry(

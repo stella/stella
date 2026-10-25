@@ -1,24 +1,25 @@
-import { Result, UnhandledException } from "better-result";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { panic, Result, UnhandledException } from "better-result";
+import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   contacts,
   entities,
   searchProjectionRepairQueue,
+  workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
 import type { SearchProjectionKind } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+import { repairSearchDocument } from "@/api/lib/search/index-entity";
 import {
-  reindexWorkspacesForContact,
-  upsertContactSearchDocument,
-  upsertWorkspaceSearchDocument,
+  repairContactSearchDocument,
+  repairWorkspaceSearchDocument,
 } from "@/api/lib/search/index-global";
 
 /**
@@ -49,6 +50,7 @@ const SEARCH_PROJECTION_REPAIR_CONCURRENCY = 4;
 
 const REPAIR_RETRY_BASE_SECONDS = 60;
 const REPAIR_RETRY_MAX_SECONDS = 6 * 60 * 60;
+const RELATED_WORKSPACE_REPAIR_BATCH_SIZE = 100;
 /**
  * A repair that fails this many times is parked (`next_attempt_at =
  * infinity`): the claim query never picks it up again, so a permanently
@@ -76,35 +78,116 @@ type SearchProjectionRepairDb = Pick<
 type SearchProjectionRepairDatabase = SearchProjectionRepairDb &
   Pick<typeof rootDb, "query" | "transaction">;
 
-export type SearchProjectionRepairDeps = {
-  db: SearchProjectionRepairDb;
-  repair: Record<SearchProjectionKind, (sourceId: string) => Promise<void>>;
-};
-
 export type SearchProjectionRepairOutcome = {
   failed: number;
   repaired: number;
 };
 
-type ClaimedRepair = {
-  kind: SearchProjectionKind;
-  revision: string;
-  sourceId: string;
+export type SearchProjectionRepairClaim = {
+  [Kind in SearchProjectionKind]: {
+    kind: Kind;
+    revision: string;
+    sourceId: string;
+  };
+}[SearchProjectionKind];
+
+type SearchProjectionRepairClaimOf<Kind extends SearchProjectionKind> = Extract<
+  SearchProjectionRepairClaim,
+  { kind: Kind }
+>;
+
+type ClaimedRepair = SearchProjectionRepairClaim;
+
+export type SearchProjectionRepairDeps = {
+  db: SearchProjectionRepairDb;
+  repair: {
+    [Kind in SearchProjectionKind]: (
+      claim: SearchProjectionRepairClaimOf<Kind>,
+    ) => Promise<void>;
+  };
+};
+
+/** Marks one keyset page of the matters a contact's text reaches. */
+const markContactWorkspacePage = async (
+  tx: Transaction,
+  contactId: SafeId<"contact">,
+  after: SafeId<"workspace"> | null,
+): Promise<SafeId<"workspace">[]> => {
+  const contact = await tx.query.contacts.findFirst({
+    where: { id: { eq: contactId } },
+    columns: { organizationId: true },
+  });
+  if (!contact) {
+    return [];
+  }
+  const rows = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .leftJoin(
+      workspaceContacts,
+      eq(workspaceContacts.workspaceId, workspaces.id),
+    )
+    .where(
+      and(
+        eq(workspaces.organizationId, contact.organizationId),
+        after ? gt(workspaces.id, after) : undefined,
+        or(
+          eq(workspaces.clientId, contactId),
+          eq(workspaceContacts.contactId, contactId),
+        ),
+      ),
+    )
+    .groupBy(workspaces.id)
+    .orderBy(asc(workspaces.id))
+    .limit(RELATED_WORKSPACE_REPAIR_BATCH_SIZE);
+  const ids = rows.map(({ id }) => id);
+  await enqueueWorkspaceSearchRepairs(tx, ids);
+  return ids;
+};
+
+const enqueueAndFlushContactWorkspaces = async (
+  contactId: SafeId<"contact">,
+  database: SearchProjectionRepairDatabase,
+): Promise<void> => {
+  let after: SafeId<"workspace"> | null = null;
+  while (true) {
+    const pageAfter = after;
+    // db-await-in-loop: keyset walk over the contact's matters, one page per round.
+    const workspaceIds = await withAggregateTransaction(
+      database,
+      async (tx): Promise<SafeId<"workspace">[]> =>
+        await markContactWorkspacePage(tx, contactId, pageAfter),
+    );
+    if (workspaceIds.length === 0) {
+      return;
+    }
+    // db-await-in-loop: flush the page just enqueued before reading the next.
+    await flushSearchRepairs({
+      deps: createSearchProjectionRepairDeps(database),
+      kind: SEARCH_PROJECTION_KIND.workspace,
+      sourceIds: workspaceIds,
+    });
+    if (workspaceIds.length < RELATED_WORKSPACE_REPAIR_BATCH_SIZE) {
+      return;
+    }
+    after = workspaceIds.at(-1) ?? panic("Related workspace page was empty");
+  }
 };
 
 /**
- * Repairing a contact repairs every projection its text reaches: its own
- * document, and the matters that fold the contact's name into their
- * searchable text as client or party. Splitting the two would let a rename
- * refresh the contact while every matter carrying that name kept the old one.
+ * Repairing a contact marks every matter its text reaches, then flushes those
+ * marks through the workspace repair path. A workspace projection therefore
+ * always publishes under its own revision, including contact-driven rebuilds.
  */
 const repairContactProjection = async (
-  sourceId: string,
+  claim: SearchProjectionRepairClaimOf<"contact">,
   database: SearchProjectionRepairDatabase,
 ): Promise<void> => {
-  const contactId = toSafeId<"contact">(sourceId);
-  await upsertContactSearchDocument(contactId, database);
-  await reindexWorkspacesForContact(contactId, database);
+  await repairContactSearchDocument(claim, database);
+  await enqueueAndFlushContactWorkspaces(
+    toSafeId<"contact">(claim.sourceId),
+    database,
+  );
 };
 
 /**
@@ -116,15 +199,10 @@ export const createSearchProjectionRepairDeps = (
 ): SearchProjectionRepairDeps => ({
   db: database,
   repair: {
-    contact: async (sourceId) =>
-      await repairContactProjection(sourceId, database),
-    entity: async (sourceId) =>
-      await upsertSearchDocument(toSafeId<"entity">(sourceId), { database }),
-    workspace: async (sourceId) =>
-      await upsertWorkspaceSearchDocument(
-        toSafeId<"workspace">(sourceId),
-        database,
-      ),
+    contact: async (claim) => await repairContactProjection(claim, database),
+    entity: async (claim) => await repairSearchDocument(claim, { database }),
+    workspace: async (claim) =>
+      await repairWorkspaceSearchDocument(claim, database),
   },
 });
 
@@ -241,6 +319,40 @@ const claimedColumns = {
   sourceId: searchProjectionRepairQueue.sourceId,
 };
 
+type ClaimedRepairRow = {
+  kind: SearchProjectionKind;
+  revision: string;
+  sourceId: string;
+};
+
+const claimedRepairFromRow = (row: ClaimedRepairRow): ClaimedRepair => {
+  switch (row.kind) {
+    case SEARCH_PROJECTION_KIND.contact:
+      return {
+        kind: SEARCH_PROJECTION_KIND.contact,
+        revision: row.revision,
+        sourceId: row.sourceId,
+      };
+    case SEARCH_PROJECTION_KIND.entity:
+      return {
+        kind: SEARCH_PROJECTION_KIND.entity,
+        revision: row.revision,
+        sourceId: row.sourceId,
+      };
+    case SEARCH_PROJECTION_KIND.workspace:
+      return {
+        kind: SEARCH_PROJECTION_KIND.workspace,
+        revision: row.revision,
+        sourceId: row.sourceId,
+      };
+    default:
+      return panic(
+        "Unexpected search projection repair kind",
+        row.kind satisfies never,
+      );
+  }
+};
+
 const claimQueuedRepairs = async ({
   db,
   kind,
@@ -250,16 +362,18 @@ const claimQueuedRepairs = async ({
   kind: SearchProjectionKind;
   sourceIds: readonly string[];
 }): Promise<ClaimedRepair[]> =>
-  await db
-    .select(claimedColumns)
-    .from(searchProjectionRepairQueue)
-    .where(
-      and(
-        eq(searchProjectionRepairQueue.kind, kind),
-        inArray(searchProjectionRepairQueue.sourceId, [...sourceIds]),
-      ),
-    )
-    .limit(sourceIds.length);
+  (
+    await db
+      .select(claimedColumns)
+      .from(searchProjectionRepairQueue)
+      .where(
+        and(
+          eq(searchProjectionRepairQueue.kind, kind),
+          inArray(searchProjectionRepairQueue.sourceId, [...sourceIds]),
+        ),
+      )
+      .limit(sourceIds.length)
+  ).map(claimedRepairFromRow);
 
 /**
  * Due rows, oldest dirt first. A row the repair could not fix carries a
@@ -273,16 +387,18 @@ const claimDueRepairs = async ({
   db: SearchProjectionRepairDb;
   limit: number;
 }): Promise<ClaimedRepair[]> =>
-  await db
-    .select(claimedColumns)
-    .from(searchProjectionRepairQueue)
-    .where(lte(searchProjectionRepairQueue.nextAttemptAt, sql`now()`))
-    .orderBy(
-      asc(searchProjectionRepairQueue.enqueuedAt),
-      asc(searchProjectionRepairQueue.kind),
-      asc(searchProjectionRepairQueue.sourceId),
-    )
-    .limit(limit);
+  (
+    await db
+      .select(claimedColumns)
+      .from(searchProjectionRepairQueue)
+      .where(lte(searchProjectionRepairQueue.nextAttemptAt, sql`now()`))
+      .orderBy(
+        asc(searchProjectionRepairQueue.enqueuedAt),
+        asc(searchProjectionRepairQueue.kind),
+        asc(searchProjectionRepairQueue.sourceId),
+      )
+      .limit(limit)
+  ).map(claimedRepairFromRow);
 
 /**
  * Both settlements match on the revision that was claimed. A mutation that
@@ -351,7 +467,22 @@ const repairClaim = async ({
   outcome: SearchProjectionRepairOutcome;
 }): Promise<void> => {
   const attempt = await Result.tryPromise({
-    try: async () => await deps.repair[claim.kind](claim.sourceId),
+    try: async () => {
+      switch (claim.kind) {
+        case SEARCH_PROJECTION_KIND.contact:
+          await deps.repair.contact(claim);
+          return;
+        case SEARCH_PROJECTION_KIND.entity:
+          await deps.repair.entity(claim);
+          return;
+        case SEARCH_PROJECTION_KIND.workspace:
+          await deps.repair.workspace(claim);
+          return;
+        default:
+          claim satisfies never;
+          panic("Unknown search projection kind");
+      }
+    },
     catch: (cause) =>
       cause instanceof Error ? cause : new UnhandledException({ cause }),
   });

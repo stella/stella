@@ -7,7 +7,7 @@ import type {
 } from "@stll/api-contract";
 
 import { status } from "@/api/http/status";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
@@ -183,7 +183,7 @@ export const desktopEditSessionEventsHandler = async (
   const userId = authorized.value.userId;
 
   // Declare conn in outer scope so cancel() can reference the exact instance.
-  let conn: SessionEventConnection;
+  let conn: SessionEventConnection | null = null;
   let livenessRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   const cleanupLivenessRefresh = () => {
@@ -192,6 +192,26 @@ export const desktopEditSessionEventsHandler = async (
     }
     clearInterval(livenessRefreshTimer);
     livenessRefreshTimer = null;
+  };
+
+  const closeConnection = () => {
+    cleanupLivenessRefresh();
+    if (conn === null) {
+      return;
+    }
+    const connection = conn;
+    conn = null;
+    const sessionConns = connections.get(sessionId);
+    sessionConns?.delete(connection);
+    if (
+      sessionConns?.size === 0 &&
+      connections.get(sessionId) === sessionConns
+    ) {
+      connections.delete(sessionId);
+    }
+    Result.try(() => {
+      connection.controller.close();
+    }).unwrapOr(undefined);
   };
 
   const refreshLiveness = async (): Promise<boolean> =>
@@ -211,16 +231,32 @@ export const desktopEditSessionEventsHandler = async (
     });
   }
 
-  const refreshLivenessInBackground = () => {
-    refreshLiveness().catch((error: unknown) => {
-      captureError(error, { sessionId });
+  const refreshLivenessInBackground = async () => {
+    const current = await Result.tryPromise({
+      try: refreshLiveness,
+      catch: (error) => error,
     });
+    if (Result.isError(current)) {
+      captureError(current.error, { sessionId });
+      closeConnection();
+      return;
+    }
+    if (!current.value) {
+      closeConnection();
+    }
+  };
+
+  const scheduleLivenessRefresh = (): void => {
+    detached(
+      refreshLivenessInBackground(),
+      "desktop-edit-session.liveness-refresh",
+    );
   };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       livenessRefreshTimer = setInterval(
-        refreshLivenessInBackground,
+        scheduleLivenessRefresh,
         dependencies.livenessRefreshIntervalMs,
       );
 
@@ -253,14 +289,7 @@ export const desktopEditSessionEventsHandler = async (
       }
     },
     cancel() {
-      cleanupLivenessRefresh();
-      const sessionConns = connections.get(sessionId);
-      if (sessionConns) {
-        sessionConns.delete(conn);
-        if (sessionConns.size === 0) {
-          connections.delete(sessionId);
-        }
-      }
+      closeConnection();
     },
   });
 

@@ -396,7 +396,7 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
     const old = new Date(Date.now() - 2 * 60 * 60_000);
     await database
       .update(organizationFileObjects)
-      .set({ reservationStartedAt: old, updatedAt: old })
+      .set({ reconcileAfter: old, reservationStartedAt: old, updatedAt: old })
       .where(
         eq(organizationFileObjects.organizationId, fixture.organizationId),
       );

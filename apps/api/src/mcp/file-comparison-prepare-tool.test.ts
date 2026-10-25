@@ -1,8 +1,17 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { S3PresignError } from "@/api/lib/s3-presign";
+import {
+  FILE_COMPARISON_ORGANIZATION_OUTSTANDING_BYTE_LIMIT,
+  FILE_COMPARISON_ORGANIZATION_OUTSTANDING_ROW_LIMIT,
+  FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT,
+  FILE_COMPARISON_OUTSTANDING_ROW_LIMIT,
+} from "@/api/lib/uploads/file-comparison/uploads";
 import { handlePrepareFileComparisonTool } from "@/api/mcp/file-comparison-prepare-tool";
 import type { PrepareFileComparisonDependencies } from "@/api/mcp/file-comparison-prepare-tool";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
@@ -11,6 +20,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const ORGANIZATION_ID = "org_1";
+const dialect = new PgDialect();
 const BASE_SHA =
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const TARGET_SHA =
@@ -29,17 +39,57 @@ type AuditEvent = { metadata?: Record<string, unknown>; workspaceId?: unknown };
 
 const createHarness = ({
   memberRole = "owner",
-}: { memberRole?: string } = {}) => {
+  outstanding = {
+    organizationBytes: 0,
+    organizationRows: 0,
+    userBytes: 0,
+    userRows: 0,
+  },
+  presignFails = false,
+}: {
+  memberRole?: string;
+  outstanding?: {
+    organizationBytes: number;
+    organizationRows: number;
+    userBytes: number;
+    userRows: number;
+  };
+  presignFails?: boolean;
+} = {}) => {
   const inserted: InsertedRow[][] = [];
   const audited: AuditEvent[] = [];
   const presignedKeys: string[] = [];
+  const updates: Record<string, unknown>[] = [];
 
   const { safeDb, scopedDb } = createScopedDbMock({
+    execute: async (query: SQL) =>
+      await Promise.resolve(
+        dialect
+          .sqlToQuery(query)
+          .sql.includes("file_comparison_outstanding_capacity()")
+          ? [
+              {
+                organization_bytes: outstanding.organizationBytes,
+                organization_rows: outstanding.organizationRows,
+                user_bytes: outstanding.userBytes,
+                user_rows: outstanding.userRows,
+              },
+            ]
+          : [{ acquired: true, key1: 0x0f_10_cc_ad, key2: 1 }],
+      ),
     insert: () => ({
       values: async (rows: InsertedRow[]) => {
         inserted.push(rows);
         await Promise.resolve();
       },
+    }),
+    update: () => ({
+      set: (values: Record<string, unknown>) => ({
+        where: async () => {
+          updates.push(values);
+          await Promise.resolve();
+        },
+      }),
     }),
   });
 
@@ -64,6 +114,11 @@ const createHarness = ({
   const dependencies: PrepareFileComparisonDependencies = {
     presignUploadUrl: async ({ key, contentType, sha256Base64 }) => {
       presignedKeys.push(key);
+      if (presignFails) {
+        return Result.err(
+          new S3PresignError({ message: "presign unavailable" }),
+        );
+      }
       return await Promise.resolve(
         Result.ok({
           url: `https://s3.example/${key}`,
@@ -81,7 +136,9 @@ const createHarness = ({
   return {
     audited,
     inserted,
+    outstanding,
     presignedKeys,
+    updates,
     run: async (args: Record<string, unknown>) =>
       await handlePrepareFileComparisonTool({ args, context }, dependencies),
   };
@@ -222,5 +279,88 @@ describe("prepare_file_comparison", () => {
 
     expect(error.code).toBe("permission_denied");
     expect(harness.inserted).toHaveLength(0);
+  });
+
+  test("refuses reservations that would exceed the retained row or byte quota", async () => {
+    const byRows = createHarness({
+      outstanding: {
+        organizationBytes: 0,
+        organizationRows: 0,
+        userBytes: 0,
+        userRows: FILE_COMPARISON_OUTSTANDING_ROW_LIMIT - 1,
+      },
+    });
+    const byBytes = createHarness({
+      outstanding: {
+        organizationBytes: 0,
+        organizationRows: 0,
+        userBytes: FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT - 1,
+        userRows: 0,
+      },
+    });
+
+    expect(errorOf(await byRows.run(validArgs())).code).toBe("rate_limited");
+    expect(errorOf(await byBytes.run(validArgs())).code).toBe("rate_limited");
+    expect(byRows.inserted).toHaveLength(0);
+    expect(byRows.presignedKeys).toHaveLength(0);
+    expect(byBytes.inserted).toHaveLength(0);
+    expect(byBytes.presignedKeys).toHaveLength(0);
+  });
+
+  test("refuses reservations that would exceed the organization quota", async () => {
+    const byRows = createHarness({
+      outstanding: {
+        organizationBytes: 0,
+        organizationRows:
+          FILE_COMPARISON_ORGANIZATION_OUTSTANDING_ROW_LIMIT - 1,
+        userBytes: 0,
+        userRows: 0,
+      },
+    });
+    const byBytes = createHarness({
+      outstanding: {
+        organizationBytes:
+          FILE_COMPARISON_ORGANIZATION_OUTSTANDING_BYTE_LIMIT - 1,
+        organizationRows: 0,
+        userBytes: 0,
+        userRows: 0,
+      },
+    });
+
+    expect(errorOf(await byRows.run(validArgs())).code).toBe("rate_limited");
+    expect(errorOf(await byBytes.run(validArgs())).code).toBe("rate_limited");
+    expect(byRows.inserted).toHaveLength(0);
+    expect(byBytes.inserted).toHaveLength(0);
+  });
+
+  test("admits new files only after cleanup removes retained rows", async () => {
+    const harness = createHarness({
+      outstanding: {
+        organizationBytes: FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT,
+        organizationRows: FILE_COMPARISON_OUTSTANDING_ROW_LIMIT,
+        userBytes: FILE_COMPARISON_OUTSTANDING_BYTE_LIMIT,
+        userRows: FILE_COMPARISON_OUTSTANDING_ROW_LIMIT,
+      },
+    });
+
+    expect(errorOf(await harness.run(validArgs())).code).toBe("rate_limited");
+
+    // Object deletion alone does not release quota. The sweep deletes the row
+    // only after the object, and this census observes that committed removal.
+    harness.outstanding.organizationBytes = 0;
+    harness.outstanding.organizationRows = 0;
+    harness.outstanding.userBytes = 0;
+    harness.outstanding.userRows = 0;
+    expect(dataOf(await harness.run(validArgs())).next.tool).toBe(
+      "compare_documents",
+    );
+  });
+
+  test("expires both retained rows when presigning fails", async () => {
+    const harness = createHarness({ presignFails: true });
+
+    expect(errorOf(await harness.run(validArgs())).code).toBe("internal_error");
+    expect(harness.inserted.at(0)).toHaveLength(2);
+    expect(harness.updates).toEqual([{ expiresAt: expect.any(Date) }]);
   });
 });

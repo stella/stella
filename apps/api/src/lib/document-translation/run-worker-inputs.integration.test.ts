@@ -36,6 +36,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import * as translationAI from "@/api/lib/document-translation/ai";
 import { processDocumentTranslationRun } from "@/api/lib/document-translation/run-queue";
+import { authorizeBufferWrite } from "@/api/lib/entities/buffer-write-authority";
 import * as entityWriter from "@/api/lib/entities/create-from-buffer";
 import { createFileKey } from "@/api/lib/files/utils";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
@@ -148,7 +149,10 @@ beforeEach(async () => {
       fileName: input.fileName,
       renamed: false,
     };
-    await input.scopedDb(async (tx) => await input.afterCreate?.(tx, created));
+    await input.scopedDb(async (tx) => {
+      await authorizeBufferWrite(input.authority, tx);
+      await input.afterCreate?.(tx, created);
+    });
     return Result.ok(created);
   });
   fakeS3.requests.length = 0;
@@ -183,6 +187,10 @@ afterEach(async () => {
     .values(originalOrganizationMember)
     .onConflictDoNothing();
   await testDb
+    .update(member)
+    .set({ role: originalOrganizationMember.role })
+    .where(eq(member.id, ids.memberA1org));
+  await testDb
     .insert(workspaceMembers)
     .values(originalMatterMembers)
     .onConflictDoNothing();
@@ -204,7 +212,7 @@ const expectStoppedBeforeReading = async () => {
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
-    errorCode: "document_unresolved",
+    errorCode: "internal",
     outputEntityId: null,
   });
   expect(run?.finishedAt).not.toBeNull();
@@ -223,6 +231,14 @@ describe("document translation run", () => {
 
   test("a run stops when its requester has left the organization", async () => {
     await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+
+  test("a run stops before model work after a permission-losing role downgrade", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
     await expectStoppedBeforeReading();
   });
 

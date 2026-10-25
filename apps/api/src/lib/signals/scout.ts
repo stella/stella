@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { ScoutKey } from "@stll/api-contract/signals";
 
@@ -82,7 +82,12 @@ export const runScout = async ({
           insertedCount: emitted.insertedIds.length,
           finishedAt: new Date(),
         })
-        .where(eq(scoutRuns.id, runId));
+        .where(
+          and(
+            eq(scoutRuns.id, runId),
+            eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+          ),
+        );
       return emitted;
     });
   } catch (error) {
@@ -98,7 +103,12 @@ export const runScout = async ({
               error: errorTag(error),
               finishedAt: new Date(),
             })
-            .where(eq(scoutRuns.id, runId)),
+            .where(
+              and(
+                eq(scoutRuns.id, runId),
+                eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+              ),
+            ),
         ),
     );
     if (Result.isError(recorded)) {

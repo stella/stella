@@ -145,7 +145,9 @@ const commonContext = () => ({
   recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
 });
 
-const fileMessage = async (parsed: ParsedCorrespondence) => {
+const fileMessage = async (
+  parsed: Extract<ParsedCorrespondence, { source: "delivery" }>,
+) => {
   const result = await createCorrespondence({
     safeDb: safeDbFor(ids.userA1, ids.wsA1),
     workspaceId: ids.wsA1,
