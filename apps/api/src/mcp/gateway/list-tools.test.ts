@@ -75,16 +75,16 @@ const hasLookupTool = (definitions: readonly McpToolDefinition[]): boolean =>
     (definition) => definition.name === "lookup_business_registry",
   );
 
-const tenantlessSkillContext = (): McpRequestContext => {
+const tenantlessSkillContext = (): AuthorizedMcpRequestContext => {
   const builder = {
     from: () => builder,
     where: () => builder,
     orderBy: () => builder,
     limit: async () => [],
   };
-  const safeDb: McpRequestContext["safeDb"] = async (run) =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (run) =>
     Result.ok(await run(asTestRaw<Transaction>({ select: () => builder })));
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes: ["stella:skills", "stella:knowledge_write"],
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_no_skills"),

@@ -206,6 +206,7 @@ describe("MCP gateway skill tools", () => {
     const builtIn = {
       description: "Built-in guidance",
       displayName: "Built-in guidance",
+      invocation: "auto",
       name: "playbook-builder",
       source: CHAT_SKILL_SOURCE.builtIn,
       version: null,
@@ -215,7 +216,7 @@ describe("MCP gateway skill tools", () => {
 
     const context = createContext();
     expect(await loadVisibleSkillTools({ context, mode: "default" })).toEqual(
-      [],
+      noModelOfferedSkills<ResolvedSkillTool>(),
     );
     expect(
       await resolveSkillTool({

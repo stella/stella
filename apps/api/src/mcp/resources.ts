@@ -38,6 +38,7 @@ import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import { getMcpResourceScopes, getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
@@ -46,6 +47,10 @@ import {
   FEEDBACK_WORKFLOW_REFERENCE_URI,
   FEEDBACK_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/feedback-workflow-reference";
+import {
+  listOfferedStaticMcpToolDefinitions,
+  usableStaticMcpToolNames,
+} from "@/api/mcp/gateway/static-tool-visibility";
 import {
   buildLegislationWorkflowReference,
   LEGISLATION_WORKFLOW_REFERENCE_URI,
@@ -80,11 +85,15 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
  * same caller's tool vocabulary. Shipped skills also follow catalog precedence,
  * so an enabled tenant skill shadows the shipped resource with the same slug.
  */
-export type ResourceContext = McpFeatureAccessContext & {
+type SessionlessResourceContext = McpFeatureAccessContext & {
+  grantedScopes?: undefined;
   organizationId?: SafeId<"organization"> | undefined;
   safeDb?: SafeDb | undefined;
   userId?: SafeId<"user"> | undefined;
 };
+
+/** A live session's request context, or a caller without one. */
+export type ResourceContext = SessionlessResourceContext | McpRequestResources;
 
 type StaticResource = {
   uri: string;
@@ -344,10 +353,35 @@ const uploadAppResourceMeta = (): Record<string, unknown> => {
   };
 };
 
+/**
+ * The tools a resource may depend on for this caller. A live session reads
+ * its own `tools/list` projection (scopes, role, write authority and
+ * confirmation included), so a read-only session is never pointed at a
+ * workflow whose write step it cannot call. A caller without a session reads
+ * the surface's list.
+ */
+const listedToolNames = (
+  mode: McpMode,
+  context: ResourceContext | undefined,
+): ReadonlySet<string> => {
+  if (context === undefined || context.grantedScopes === undefined) {
+    return surfaceToolVocabulary(mode, context).listed;
+  }
+  return usableStaticMcpToolNames(
+    listOfferedStaticMcpToolDefinitions({
+      context,
+      mode,
+      scopes: context.grantedScopes,
+    }),
+    context.grantedScopes,
+  );
+};
+
 type ResourceServingOptions = {
   resource: StaticResource;
   mode: McpMode;
   context?: ResourceContext | undefined;
+  listed: ReadonlySet<string>;
   isFeatureEnabled?: typeof isMcpToolFeatureEnabled | undefined;
 };
 
@@ -355,6 +389,7 @@ const isResourceServedInMode = ({
   resource,
   mode,
   context,
+  listed,
   isFeatureEnabled = isMcpToolFeatureEnabled,
 }: ResourceServingOptions): boolean => {
   if (
@@ -369,9 +404,8 @@ const isResourceServedInMode = ({
     return false;
   }
 
-  const vocabulary = surfaceToolVocabulary(mode, context);
   return resource.requiredTools(mode).every((name) => {
-    if (!vocabulary.listed.has(name)) {
+    if (!listed.has(name)) {
       return false;
     }
     const tool = getStaticMcpToolDefinition(name, mode);
@@ -460,12 +494,19 @@ type ListMcpResourcesOptions = Pick<
 export const listMcpResources = async (
   mode: McpMode,
   { context, isFeatureEnabled }: ListMcpResourcesOptions = {},
-): Promise<Resource[]> =>
-  (await resourcesFor(context))
+): Promise<Resource[]> => {
+  const listed = listedToolNames(mode, context);
+  return (await resourcesFor(context))
     .filter(
       (resource) =>
         resource.listed &&
-        isResourceServedInMode({ resource, mode, context, isFeatureEnabled }),
+        isResourceServedInMode({
+          resource,
+          mode,
+          context,
+          listed,
+          isFeatureEnabled,
+        }),
     )
     .map(({ description, mimeType, name, title, uri }) => ({
       uri,
@@ -474,6 +515,7 @@ export const listMcpResources = async (
       description,
       mimeType,
     }));
+};
 
 export const readMcpResource = async (
   uri: string,
@@ -483,7 +525,15 @@ export const readMcpResource = async (
   const resource = (await resourcesFor(context)).find(
     (entry) => entry.uri === uri,
   );
-  if (!resource || !isResourceServedInMode({ resource, mode, context })) {
+  if (
+    !resource ||
+    !isResourceServedInMode({
+      resource,
+      mode,
+      context,
+      listed: listedToolNames(mode, context),
+    })
+  ) {
     throw new ProtocolError(
       ProtocolErrorCode.InvalidParams,
       `Unknown resource: ${uri}`,
@@ -510,11 +560,15 @@ export const scopeMcpResourceReferences = async (
     context,
   }: {
     mode: McpMode;
-    context?: McpFeatureAccessContext | undefined;
+    context?: ResourceContext | undefined;
   },
 ): Promise<string> => {
+  const listed = listedToolNames(mode, context);
   const hiddenUris = (await resourcesFor(context))
-    .filter((resource) => !isResourceServedInMode({ resource, mode, context }))
+    .filter(
+      (resource) =>
+        !isResourceServedInMode({ resource, mode, context, listed }),
+    )
     .map((resource) => resource.uri);
   if (!hiddenUris.some((uri) => text.includes(uri))) {
     return text;
