@@ -205,7 +205,7 @@ type McpServerDependencies = {
     token: string,
     options: {
       mode: McpMode;
-      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+      resolveApiKeySession: typeof resolveMachineApiKeySession;
     },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: (error: unknown, context?: Record<string, string>) => void;

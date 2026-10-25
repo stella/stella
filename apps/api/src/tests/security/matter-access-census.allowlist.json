@@ -64,7 +64,6 @@
       "readAccountProfessionalUse#rootDb": 1,
       "realtimeAuthorizers.user#rootDb": 1,
       "realtimeAuthorizers.workspace#rootDb": 1,
-      "resolveAccessTokenIdentity.authorizationResult#rootDb": 1,
       "resolveCredentialMemberAuthorization#rootDb": 1,
       "resolveValidateAuth.getActiveWorkspaceIds": 2,
       "resolveValidateAuth.getActiveWorkspaceIds.activeWorkspaceIds": 1,

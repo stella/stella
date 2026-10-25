@@ -45,7 +45,10 @@ import {
 import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { sweepBoundStreams } from "@/api/lib/sse";
-import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import {
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
+} from "@/api/mcp/api-key-auth";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -1210,6 +1213,7 @@ describe("handleMcpHttpRequest", () => {
       expect(opened.structuredContent).toEqual(pickerResult);
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "documents",
+        resolveApiKeySession: resolveMachineApiKeySession,
       });
       expect(listMcpToolsMock).toHaveBeenCalledWith(context, "documents", [
         "stella:read",
@@ -1308,6 +1312,7 @@ describe("handleMcpHttpRequest", () => {
       });
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",
+        resolveApiKeySession: resolveMachineApiKeySession,
       });
       expect(listMcpToolsMock).toHaveBeenCalledWith(context, "law", [
         "stella:search",
@@ -1408,6 +1413,7 @@ describe("handleMcpHttpRequest", () => {
     try {
       expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
         mode: "default",
+        resolveApiKeySession: resolveMachineApiKeySession,
       });
       await sweepBoundStreams(async () => new Set());
       expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {

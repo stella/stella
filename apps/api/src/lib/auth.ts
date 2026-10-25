@@ -3456,14 +3456,11 @@ const resolveAccessTokenIdentity = async ({
   const organizationId = toSafeId<"organization">(tokenSession.organizationId);
   const authorizationResult = await Result.tryPromise(
     async () =>
-      await resolveMemberAuthorization(
-        {
-          userId,
-          organizationId,
-          workspaceId: initialWorkspaceId ?? undefined,
-        },
-        rootDb,
-      ),
+      await resolveCredentialMemberAuthorization({
+        userId,
+        organizationId,
+        workspaceId: initialWorkspaceId ?? undefined,
+      }),
   );
   if (Result.isError(authorizationResult)) {
     return { ok: false, statusCode: 500 };
