@@ -110,7 +110,8 @@ const appConfigBase = ({
   },
   // No update channel exists yet; every build runs the bundle it shipped.
   updates: { enabled: false },
-  plugins: ["expo-router"],
+  // Scene life cycle: iOS 27 asserts at launch without it.
+  plugins: ["expo-router", "./plugins/with-scene-lifecycle.ts"],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
