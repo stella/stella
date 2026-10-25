@@ -14,6 +14,7 @@ import type {
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import {
   type ParsedEmail,
   renderEmailBodyHtml,
@@ -167,7 +168,7 @@ const normalizeMailbox = (address: Address): string | null => {
   if (address.group || !address.address) {
     return null;
   }
-  const mailbox = address.address.trim().toLowerCase();
+  const mailbox = normalizeEmail(address.address);
   const at = mailbox.lastIndexOf("@");
   if (
     at <= 0 ||

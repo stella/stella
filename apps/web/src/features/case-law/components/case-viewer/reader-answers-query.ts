@@ -33,21 +33,42 @@ export const readerAnswersOptions = ({
   queryOptions({
     queryKey: ["reader-answers", organizationId, userId, decisionId],
     queryFn: async ({ signal }): Promise<ReaderAnswer[]> => {
+      const queryDecisionId = toSafeId<"caseLawDecision">(decisionId);
       const answers: ReaderAnswer[] = [];
       const cursors = new Set<string>();
       let cursor: string | undefined;
       do {
-        const page = unwrapApiResponse(
-          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
-          await api.reader.answers.get({
-            query: {
-              decisionId: toSafeId<"caseLawDecision">(decisionId),
-              limit: 50,
-              ...(cursor === undefined ? {} : { cursor }),
-            },
-            fetch: { signal },
-          }),
+        const pageRequest = {
+          query: {
+            decisionId: queryDecisionId,
+            limit: 50,
+            ...(cursor === undefined ? {} : { cursor }),
+          },
+          fetch: { signal },
+        };
+        const fetched = await Result.tryPromise(async () =>
+          unwrapApiResponse(
+            // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- The next page cursor is known only after the preceding response.
+            await api.reader.answers.get(pageRequest),
+          ),
         );
+        if (fetched.isErr()) {
+          // A refusal is an APIError and passes through; a TypeError is the
+          // network failing.
+          const { cause } = fetched.error;
+          return readQueryResult(
+            Result.err(
+              cause instanceof TypeError || !(cause instanceof Error)
+                ? new ReaderAnswerFailure({
+                    kind: "request",
+                    message: "Reader answer request failed",
+                    cause,
+                  })
+                : cause,
+            ),
+          );
+        }
+        const page = fetched.value;
         answers.push(...page.items);
         cursor = page.nextCursor ?? undefined;
         if (cursor !== undefined) {

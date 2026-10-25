@@ -13,6 +13,8 @@ import { Temporal } from "@stll/time";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { hashSessionToken } from "@/api/lib/auth/session-token";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import { isRecord } from "@/api/lib/type-guards";
 
 const HINT_LIFETIME_MS = 10 * 60 * 1000;
@@ -26,7 +28,10 @@ const hintSchema = v.strictObject({
 });
 type Hint = v.InferOutput<typeof hintSchema>;
 
-type CallbackProof = { email: string; provider: Hint["provider"] } | null;
+type CallbackProof = {
+  email: NormalizedEmail;
+  provider: Hint["provider"];
+} | null;
 const callbackProof = defineRequestState<CallbackProof>(() => null);
 
 export const socialLinkHintIdentifier = (value: string) =>
@@ -105,7 +110,7 @@ export const createSocialLinkHintPlugin = (
                     typeof result.user.email === "string"
                   ) {
                     await callbackProof.set({
-                      email: result.user.email.toLowerCase(),
+                      email: normalizeEmail(result.user.email),
                       provider: parsedProvider.output,
                     });
                   }

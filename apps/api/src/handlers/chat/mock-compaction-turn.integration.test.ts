@@ -57,6 +57,7 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
+// timeout: the stalled provider case exercises the production compaction deadline before the second turn can settle.
 test.each(["completed", "stalled"] as const)(
   "a second mock turn settles after %s compaction",
   async (summary) => {
