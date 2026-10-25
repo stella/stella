@@ -48,8 +48,8 @@ import {
 } from "@/api/mcp/feedback-workflow-reference";
 import {
   buildLegislationWorkflowReference,
-  legislationWorkflowToolNames,
   LEGISLATION_WORKFLOW_REFERENCE_URI,
+  legislationWorkflowToolNames,
 } from "@/api/mcp/legislation-workflow-reference";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { surfaceToolVocabulary } from "@/api/mcp/surface-tool-mentions";
