@@ -190,6 +190,61 @@ describe("official VAT exchange rates", () => {
     expect(weekend.effectiveDate).toBe("2026-10-23");
   });
 
+  test("CZ: on a Czech public holiday, the previous ČNB publication is final at once", async () => {
+    // 2026-10-28 (Wednesday) is a public holiday: ČNB announces nothing, and
+    // the 27 October rate applies to it.
+    const rate = valueOf(
+      await fetchVatExchangeRate({
+        country: "CZ",
+        currency: "EUR",
+        referenceDate: "2026-10-28",
+        today: "2026-10-28",
+        fetcher: fixtureFetch(
+          "27.10.2026 #207\nzemě|měna|množství|kód|kurz\nEMU|euro|1|EUR|24,330",
+        ),
+      }),
+    );
+    expect(rate.effectiveDate).toBe("2026-10-27");
+  });
+
+  test("PL: on Corpus Christi, NBP's previous table is final at once", async () => {
+    // Easter 2026 falls on 5 April, so Corpus Christi is Thursday 4 June; a
+    // Friday tax point needs the table of that holiday, which NBP never publishes.
+    const holiday = valueOf(
+      await fetchVatExchangeRate({
+        country: "PL",
+        currency: "EUR",
+        referenceDate: "2026-06-05",
+        today: "2026-06-04",
+        fetcher: fixtureFetch(
+          JSON.stringify({
+            rates: [
+              { no: "106/A/NBP/2026", effectiveDate: "2026-06-03", mid: 4.25 },
+            ],
+          }),
+        ),
+      }),
+    );
+    expect(holiday.effectiveDate).toBe("2026-06-03");
+    // The day before, a working day, still waits for its own table.
+    const pending = await fetchVatExchangeRate({
+      country: "PL",
+      currency: "EUR",
+      referenceDate: "2026-06-04",
+      today: "2026-06-03",
+      fetcher: fixtureFetch(
+        JSON.stringify({
+          rates: [
+            { no: "105/A/NBP/2026", effectiveDate: "2026-06-02", mid: 4.25 },
+          ],
+        }),
+      ),
+    });
+    expect(Result.isError(pending) && pending.error).toBeInstanceOf(
+      VatRateNotPublishedError,
+    );
+  });
+
   test("SK: on a Sunday, a Monday tax point takes Friday's ECB rate at once", async () => {
     // Required: Sunday 2026-10-25, a non-publication day; Friday's rate is final.
     const rate = valueOf(

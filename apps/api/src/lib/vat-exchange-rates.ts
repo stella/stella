@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -152,17 +152,102 @@ const notPublished = (availableFrom: string) =>
     }),
   );
 
-const isWeekend = (date: string) =>
-  Temporal.PlainDate.from(date).dayOfWeek >= 6;
+type RateSource = VatExchangeRate["source"];
+
+/** Gregorian Easter Sunday (anonymous Gregorian computus). */
+const easterSunday = (year: number) => {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return Temporal.PlainDate.from({ year, month, day });
+};
+
+/** Weekday dates a source does not publish on, besides weekends. */
+const closedDays = (source: RateSource, year: number) => {
+  const easter = easterSunday(year);
+  const goodFriday = easter.subtract({ days: 2 }).toString();
+  const easterMonday = easter.add({ days: 1 }).toString();
+  const fixed = (monthDays: readonly string[]) =>
+    monthDays.map((monthDay) => `${String(year)}-${monthDay}`);
+  switch (source) {
+    // ČNB announces on Czech working days: zákon 245/2000 Sb. § 1 and § 2.
+    case "CNB":
+      return new Set([
+        ...fixed([
+          "01-01",
+          "05-01",
+          "05-08",
+          "07-05",
+          "07-06",
+          "09-28",
+          "10-28",
+          "11-17",
+          "12-24",
+          "12-25",
+          "12-26",
+        ]),
+        goodFriday,
+        easterMonday,
+      ]);
+    // ECB reference rates follow the TARGET closing days.
+    case "ECB":
+      return new Set([
+        ...fixed(["01-01", "05-01", "12-25", "12-26"]),
+        goodFriday,
+        easterMonday,
+      ]);
+    // NBP publishes on Polish working days: ustawa o dniach wolnych od pracy
+    // (24 December is a public holiday from 2025).
+    case "NBP":
+      return new Set([
+        ...fixed([
+          "01-01",
+          "01-06",
+          "05-01",
+          "05-03",
+          "08-15",
+          "11-01",
+          "11-11",
+          "12-25",
+          "12-26",
+        ]),
+        ...(year >= 2025 ? fixed(["12-24"]) : []),
+        easterMonday,
+        // Corpus Christi, the 60th day after Easter Sunday.
+        easter.add({ days: 60 }).toString(),
+      ]);
+    default: {
+      source satisfies never;
+      return panic("Unknown exchange-rate source");
+    }
+  }
+};
+
+const isPublicationDay = (source: RateSource, date: string) => {
+  const day = Temporal.PlainDate.from(date);
+  return day.dayOfWeek < 6 && !closedDays(source, day.year).has(date);
+};
 
 /**
- * A rate source must hold its publication for `required`: while that day
- * is ahead, or is a weekday today whose rate is not out yet, the latest
- * observation is the wrong one. ČNB, ECB and NBP never publish at weekends, so a
- * weekend `required` is final at once, and a passed day's gap is final too. A
- * weekday holiday is refused only on the holiday itself, until it has passed.
+ * A rate source must hold its publication for `required`: while that day is
+ * ahead, or is today's publication day and its rate is not out yet, the latest
+ * observation is the wrong one. On a day the source does not publish (weekend
+ * or its holiday), the previous publication is final at once, and a passed
+ * day's gap is final too.
  */
 const publicationPending = (input: {
+  source: RateSource;
   required: string;
   latest: string;
   today: string;
@@ -170,7 +255,7 @@ const publicationPending = (input: {
   input.required > input.today ||
   (input.required === input.today &&
     input.latest !== input.required &&
-    !isWeekend(input.required));
+    isPublicationDay(input.source, input.required));
 type RateResult = Promise<Result<VatExchangeRate, VatExchangeRateError>>;
 
 const fetchCnbRate = async ({
@@ -229,6 +314,7 @@ const fetchCnbRate = async ({
   // today's rate does not exist and the file still carries the previous one.
   if (
     publicationPending({
+      source: "CNB",
       required: referenceDate,
       latest: effectiveDate,
       today,
@@ -308,7 +394,9 @@ const fetchEcbRate = async ({
       }),
     );
   }
-  if (publicationPending({ required: end, latest: date, today })) {
+  if (
+    publicationPending({ source: "ECB", required: end, latest: date, today })
+  ) {
     return notPublished(end);
   }
   const normalized = normalizeRate({
@@ -379,7 +467,12 @@ const fetchNbpRate = async ({
     );
   }
   if (
-    publicationPending({ required: end, latest: rate.effectiveDate, today })
+    publicationPending({
+      source: "NBP",
+      required: end,
+      latest: rate.effectiveDate,
+      today,
+    })
   ) {
     return notPublished(end);
   }
