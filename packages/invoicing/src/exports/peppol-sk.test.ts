@@ -173,6 +173,10 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
   const { vatId: _sellerVatId, ...sellerWithoutVatId } = seller;
   const { country: _buyerCountry, ...buyerWithoutCountry } = buyer;
   const {
+    registrationNumber: _sellerRegistration,
+    ...sellerWithoutRegistration
+  } = seller;
+  const {
     vatId: _buyerVatId,
     registrationNumber: _buyerRegistration,
     ...buyerWithoutIdentifiers
@@ -279,6 +283,21 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
               description: "Reverse charge",
               netAmountMinor: cents(100),
               vatTreatment: "reverse_charge" as const,
+            },
+          ],
+        }),
+    ],
+    [
+      "seller IČO",
+      () =>
+        peppolRecord({
+          number: "invalid",
+          seller: sellerWithoutRegistration,
+          lines: [
+            {
+              description: "Outside the scope",
+              netAmountMinor: cents(100),
+              vatTreatment: "outside_scope" as const,
             },
           ],
         }),

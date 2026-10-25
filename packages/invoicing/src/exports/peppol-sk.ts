@@ -32,6 +32,12 @@ const partyRefusal = (record: InvoiceExportRecord): string | null => {
   if (!record.buyer.name.trim()) {
     return "buyer name is required";
   }
+  // EN 16931 BR-CO-26: the seller carries an identifier, VAT ID or legal
+  // registration ID; the IČO is the one every Slovak seller has, whatever the
+  // VAT category (an outside-scope invoice may carry no VAT IDs).
+  if (!record.seller.registrationNumber?.trim()) {
+    return "seller IČO (registration number) is required";
+  }
   if (!SLOVAK_TAX_ID.test(record.seller.taxId?.trim() ?? "")) {
     return "seller DIČ (tax ID) must be a 10-digit Slovak DIČ";
   }
