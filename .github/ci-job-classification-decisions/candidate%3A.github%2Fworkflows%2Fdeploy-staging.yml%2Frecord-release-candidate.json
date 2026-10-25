@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Records the required release/staging-proof status when a release candidate staging run ends; no publication or deployment.",
+  "reviewedDigest": "f9636e42452a3eb2cc448b321a7d6a82b26835bad866b01f21267f3c703a7c79"
+}

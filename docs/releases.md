@@ -123,9 +123,10 @@ A maintenance release runs in this order:
    over `main/heavy` and `main/pr-depth` only; a dependency audit waiver is
    `WAIVE_DEPENDENCY_AUDIT=true WAIVER_REASON='<reason>'`, as for the tag.
 2. Release PR: commit the prepared files, open the pull request and merge it
-   through the queue once its CI is green.
-3. Release-candidate staging deploy (step 6 below). If staging is off, the run
-   starts it with a 2 h lease and waits until it answers before deploying.
+   through the queue once its CI and `release/staging-proof` are green.
+3. Release-candidate staging deploy (step 6 below), started by the pull
+   request itself. If staging is off, the run starts it with a 2 h lease and
+   waits until it answers before deploying.
 4. Tag (step 7 below).
 
 The steps in full:
@@ -181,7 +182,25 @@ The steps in full:
 6. The release-candidate gates start at the cut by themselves: when the release
    pull request opens or updates, `release-proof.yml` dispatches
    `deploy-staging.yml` and `main-heavy.yml` once for its head with
-   `release_candidate=true`. To run them again by hand:
+   `release_candidate=true`.
+
+   `release/staging-proof` is a required status on every pull request head
+   and merge group into `main`; `release-proof.yml` records it. A pull request
+   that is not a release passes at once. On a release head it mirrors that
+   head's staging proof: pending while the run is going, `success` once
+   `staging/verified` passed (the description names the `main` it deployed
+   with), and `failure` when the candidate was refused, the run ended before
+   staging verified it, or main moved past the head before a proof started
+   (update the release branch to start one). The staging run settles the
+   status itself when it ends, whatever ended it. In the merge queue the
+   release passes only when its merge group has exactly the proven head's tree
+   on exactly the proven `main`; that is the tree the version commit gets, so
+   its staging proof after merge is reuse, never a second deploy. If `main`
+   moved after the proof, the group fails and the release branch needs an
+   update (which proves the new head). Set `STELLA_MERGE_HOLD` for the release
+   window to keep `main` still while the proof runs.
+
+   To run the proofs again by hand:
 
    ```bash
    gh workflow run main-heavy.yml --ref main -f sha=<release-pr-head-sha> -F release_candidate=true

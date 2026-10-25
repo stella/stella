@@ -95,6 +95,7 @@
     "deploy-staging.yml/build-api": "main",
     "deploy-staging.yml/build-web": "main",
     "deploy-staging.yml/promote-staging": "main",
+    "deploy-staging.yml/record-release-candidate": "main",
     "publish-npm.yml/release-trigger": "main",
     "publish-npm.yml/pack": "main",
     "publish-npm.yml/release": "main",
@@ -202,6 +203,10 @@
       "cancelInProgress": false
     },
     "release-pr.yml": {
+      "role": "publish",
+      "cancelInProgress": false
+    },
+    "release-proof.yml": {
       "role": "publish",
       "cancelInProgress": false
     },

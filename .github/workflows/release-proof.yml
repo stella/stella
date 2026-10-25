@@ -1,15 +1,33 @@
 name: Prove release PR tree
 
+# Owns release/staging-proof, a required status: every pull request head and
+# merge group into main gets it from here. Non-release pull requests pass at
+# once. A release pull request head dispatches its pinned release proofs and
+# mirrors the staging proof (scripts/release-staging-proof-status.sh), and its
+# merge group passes only when it lands the proven tree on the proven main.
+# Only main's tooling runs: pull request data is never executed.
+
 on:
   pull_request_target:
     branches: [main]
-    types: [opened, synchronize, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  merge_group:
+    types: [checks_requested]
+  # When the requirement or its owner changes on main, every open pull request
+  # head gets the status at once instead of on its next push.
+  push:
+    branches: [main]
+    paths:
+      - .github/branch-protection/ruleset-main.json
+      - .github/workflows/release-proof.yml
+      - scripts/release-staging-proof-status.sh
+  workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 defaults:
   run:
@@ -17,26 +35,37 @@ defaults:
 
 jobs:
   dispatch:
+    name: Record the release staging proof
+    # A body edit cannot change what a pull request is; a title edit can. A
+    # dispatch writes statuses, so it runs only as main's workflow.
     if: >-
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.title, 'chore: release v')
+      (github.event_name != 'workflow_dispatch' && github.event_name != 'push' || github.ref == 'refs/heads/main') &&
+      (github.event.action != 'edited' || github.event.changes.title != null)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
       actions: write
+      statuses: write
     steps:
-      # Only main's verifier and dispatch logic execute with this token.
+      # Only main's verifier and dispatch logic execute with this token. Only a
+      # release head needs main's history.
       - name: Checkout trusted main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          fetch-depth: 0
+          # 0 is falsy in expressions, so the full-history case is the fallback.
+          fetch-depth: "${{ !(github.event_name == 'pull_request_target' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.title, 'chore: release v')) && 1 || 0 }}"
           persist-credentials: false
 
       - name: Dispatch pinned release proofs once
+        id: dispatch
+        if: >-
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.draft == false &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.title, 'chore: release v')
         env:
           GH_TOKEN: ${{ github.token }}
           PROOF_SHA: ${{ github.event.pull_request.head.sha }}
@@ -45,9 +74,11 @@ jobs:
           verified=0
           bash scripts/verify-release-tree-proof.sh --allow-pr-head "$GITHUB_REPOSITORY" "$PROOF_SHA" "$PROOF_SHA" >/dev/null || verified=$?
           if [[ "$verified" -eq 3 ]]; then
-            # Main moved past the release PR head; the merged version commit
-            # is proved after merge, so this head gets no early proof run.
-            echo "Skipped: main moved past release PR head $PROOF_SHA; the version commit is proved after merge." >> "$GITHUB_STEP_SUMMARY"
+            # Main moved past the release PR head. The merged version commit
+            # could not reuse a proof of this head, so none starts here, and
+            # release/staging-proof asks for a branch update.
+            echo "Skipped: main moved past release PR head $PROOF_SHA; update the release branch to prove it." >> "$GITHUB_STEP_SUMMARY"
+            echo "no_proof_reason=Main moved past this head; update the release branch to start its staging proof" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           [[ "$verified" -eq 0 ]] || exit "$verified"
@@ -67,3 +98,35 @@ jobs:
             fi
             gh workflow run "$workflow.yml" --repo "$GITHUB_REPOSITORY" --ref main -f sha="$PROOF_SHA" -f release_candidate=true
           done
+
+      # Runs after a refused dispatch too, so the refusal shows on the head.
+      - name: Record release/staging-proof
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_OUTCOME: ${{ steps.dispatch.outcome }}
+          NO_PROOF_REASON: ${{ steps.dispatch.outputs.no_proof_reason }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          status=scripts/release-staging-proof-status.sh
+          case "$GITHUB_EVENT_NAME" in
+            pull_request_target)
+              if [[ "$DISPATCH_OUTCOME" == failure ]]; then
+                export NO_PROOF_REASON="Release candidate refused before staging; see the release proof run"
+              fi
+              bash "$status" pull-request "$PULL_REQUEST"
+              ;;
+            merge_group)
+              [[ "$GROUP_HEAD_REF" =~ ^refs/heads/gh-readonly-queue/main/pr-([1-9][0-9]*)-[0-9a-f]{40}$ ]] ||
+                { echo "::error::Merge group ref does not name a pull request: $GROUP_HEAD_REF" >&2; exit 1; }
+              bash "$status" merge-group "${BASH_REMATCH[1]}" "$GROUP_HEAD_SHA" "$GROUP_BASE_SHA"
+              ;;
+            push | workflow_dispatch)
+              bash "$status" open-pull-requests
+              ;;
+            *) echo "::error::Unexpected event: $GITHUB_EVENT_NAME" >&2; exit 1 ;;
+          esac

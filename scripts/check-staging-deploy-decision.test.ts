@@ -295,7 +295,10 @@ beforeAll(async () => {
       "deploy-staging.yml no longer records staging verification",
     );
   }
-  const recordBody = workflow.slice(recordRun + "run: |\n".length);
+  // The step body ends where the next job, or the file, begins.
+  const recordRest = workflow.slice(recordRun + "run: |\n".length);
+  const nextJob = recordRest.search(/\n\n {2}\S/u);
+  const recordBody = nextJob === -1 ? recordRest : recordRest.slice(0, nextJob);
   await Bun.write(
     recordScriptPath,
     recordBody

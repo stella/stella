@@ -990,3 +990,51 @@ jobs:
             '{state: $state, environment_url: "https://staging.stll.app", log_url: $url}' |
             bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
               --method POST --input - >/dev/null
+
+  # A release pull request head requires release/staging-proof. Whatever ends
+  # this run (a refusal, a failed build or promotion, a failed smoke, a
+  # cancellation) settles it, so a red proof shows on the pull request.
+  record-release-candidate:
+    name: Record the release candidate proof
+    needs:
+      [
+        resolve,
+        staging-health,
+        staging-wake,
+        build-api,
+        build-web,
+        promote-staging,
+      ]
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      inputs.release_candidate == true && inputs.sha != '' && inputs.proof_sha == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/release-staging-proof-status.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Record release/staging-proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Not a full lowercase commit SHA; nothing to record."
+            exit 0
+          fi
+          bash .gh-retry/scripts/release-staging-proof-status.sh finished-run "$RELEASE_SHA" "$GITHUB_RUN_ID"

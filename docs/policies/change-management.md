@@ -107,6 +107,10 @@ skipped.
   `ci-result` and `dependency-review` required status checks
   in strict mode: PRs cannot be merged unless checks pass on
   the exact commit being merged.
+- `release/staging-proof` is also required. It passes at once for a pull
+  request that is not a release; a release pull request needs a passing
+  staging proof of its head, and its merge group must land exactly that
+  proven tree (`docs/releases.md`).
 - A weekly audit workflow (`audit-branch-protection.yml`)
   verifies that the live ruleset matches the expected
   configuration.

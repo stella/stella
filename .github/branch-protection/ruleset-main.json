@@ -53,6 +53,9 @@
           },
           {
             "context": "cla"
+          },
+          {
+            "context": "release/staging-proof"
           }
         ]
       }
