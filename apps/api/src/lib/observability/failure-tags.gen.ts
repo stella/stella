@@ -291,6 +291,7 @@ export const FAILURE_TAGS = [
   "OnlineIndexMonitoringError",
   "OnlineLockRetryDeferred",
   "OoxmlValidationError",
+  "OperatorEndpointError",
   "OrganizationStorageTeardownBoundError",
   "OrganizationStorageTeardownStateError",
   "OwnerAccessLostError",
