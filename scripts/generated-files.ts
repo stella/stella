@@ -396,6 +396,8 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
+      "apps/api/src/mcp/web-handoff-link-contract.ts",
+      "apps/api/src/mcp/write-result-omission.ts",
       "apps/api/src/mcp/decision-reader-contract.ts",
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
