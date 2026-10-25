@@ -1617,11 +1617,18 @@ const MAX_FETCHED_LOGS = 20;
 type Gh = (args: readonly string[]) => string | undefined;
 
 const ghCommand: Gh = (args) => {
-  const result = Bun.spawnSync(["gh", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return result.exitCode === 0 ? result.stdout.toString() : undefined;
+  const result = Bun.spawnSync(
+    ["bash", path.join(import.meta.dir, "gh-retry.sh"), ...args],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode === 0) {
+    return result.stdout.toString();
+  }
+  if (args.includes("--allow-escape-sequences")) {
+    // The retry owner emits safe status metadata; raw HTTP traces stay private.
+    process.stderr.write(result.stderr);
+  }
+  return undefined;
 };
 
 /**

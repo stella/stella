@@ -1835,6 +1835,14 @@ test("show prints a run's digest from its artifact, else from its job logs", () 
     expect(fromArtifact.exitCode).toBe(0);
     expect(fromArtifact.stderr.toString()).toBe("");
     expect(fromArtifact.stdout.toString()).toBe(summaryMarkdown(failures));
+
+    rmSync(path.join(logs, "11.log"));
+    const unavailable = show();
+    expect(unavailable.exitCode).toBe(0);
+    expect(unavailable.stdout.toString()).toContain(
+      'Log of job "ci-checks-policy" was unavailable to the digest.',
+    );
+    expect(unavailable.stderr.toString()).toContain("GitHub command failed:");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

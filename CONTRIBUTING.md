@@ -158,6 +158,10 @@ the failed jobs' logs:
 bun scripts/ci-failure-digest.ts show <run-id-or-url> --repo stella/stella
 ```
 
+The `show` command requires GitHub CLI 2.97.0 or newer; job-log downloads use
+its `--allow-escape-sequences` option. Failed log downloads print the shared
+GitHub retry helper's status metadata and appear as unavailable in the digest.
+
 Each record keeps the failing check's own closing output (up to 15 lines),
 without passing tests or runner banners. Jobs that were cancelled without a
 failed step, such as test shards stopped by fail-fast, are listed apart as
