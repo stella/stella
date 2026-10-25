@@ -5,6 +5,7 @@ import {
   fetchVatExchangeRate,
   VatRateCurrencyError,
   VatRateMalformedError,
+  VatRateUnavailableError,
 } from "./vat-exchange-rates";
 
 const fixture = async (name: string) =>
@@ -96,4 +97,31 @@ describe("official VAT exchange rates", () => {
       VatRateCurrencyError,
     );
   });
+
+  test.each(["PL", "SK"] as const)(
+    "%s: a 404 for an unpublished currency is a currency error, not an outage",
+    async (country) => {
+      const unpublished = await fetchVatExchangeRate({
+        country,
+        currency: "XYZ",
+        referenceDate: "2026-01-05",
+        fetcher: async () =>
+          new Response("404 NotFound - Not Found - Brak danych", {
+            status: 404,
+          }),
+      });
+      expect(Result.isError(unpublished) && unpublished.error).toBeInstanceOf(
+        VatRateCurrencyError,
+      );
+      const outage = await fetchVatExchangeRate({
+        country,
+        currency: "USD",
+        referenceDate: "2026-01-05",
+        fetcher: async () => new Response("", { status: 503 }),
+      });
+      expect(Result.isError(outage) && outage.error).toBeInstanceOf(
+        VatRateUnavailableError,
+      );
+    },
+  );
 });

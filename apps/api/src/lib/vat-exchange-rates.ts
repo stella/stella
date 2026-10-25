@@ -30,7 +30,14 @@ const TIMEOUT_MS = 10_000;
 const daysBefore = (date: string, days: number) =>
   Temporal.PlainDate.from(date).subtract({ days }).toString();
 
-const request = async (url: string, fetcher: Fetcher) => {
+type RateHttpRequest = {
+  url: string;
+  fetcher: Fetcher;
+  /** ECB and NBP answer 404 for a currency they do not publish. */
+  currencyOn404?: { source: string; currency: string };
+};
+
+const request = async ({ url, fetcher, currencyOn404 }: RateHttpRequest) => {
   const requested = await Result.tryPromise({
     try: async () =>
       await fetcher(url, {
@@ -48,6 +55,14 @@ const request = async (url: string, fetcher: Fetcher) => {
     return requested;
   }
   const response = requested.value;
+  if (response.status === 404 && currencyOn404 !== undefined) {
+    return Result.err(
+      new VatRateCurrencyError({
+        message: `${currencyOn404.source} does not publish a ${currencyOn404.currency} rate`,
+        currency: currencyOn404.currency,
+      }),
+    );
+  }
   if (!response.ok) {
     return Result.err(
       new VatRateUnavailableError({
@@ -115,10 +130,10 @@ const fetchCnbRate = async ({
 }: RateRequest): RateResult => {
   // CZ zákon 235/2004 Sb. § 4 odst. 8: use the ČNB rate valid on the tax point (the daily file carries forward on non-publication days).
   const displayDate = referenceDate.split("-").toReversed().join(".");
-  const requested = await request(
-    `https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=${displayDate}`,
+  const requested = await request({
+    url: `https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=${displayDate}`,
     fetcher,
-  );
+  });
   if (Result.isError(requested)) {
     return requested;
   }
@@ -176,10 +191,11 @@ const fetchEcbRate = async ({
 }: RateRequest): RateResult => {
   // SK zákon 222/2004 Z. z. § 26 ods. 1: use the ECB rate from the day before the tax point; latest earlier publication on a gap (weekend rule UNVERIFIED).
   const end = daysBefore(referenceDate, 1);
-  const requested = await request(
-    `https://data-api.ecb.europa.eu/service/data/EXR/D.${encodeURIComponent(currency)}.EUR.SP00.A?startPeriod=${daysBefore(end, 10)}&endPeriod=${end}&format=jsondata`,
+  const requested = await request({
+    url: `https://data-api.ecb.europa.eu/service/data/EXR/D.${encodeURIComponent(currency)}.EUR.SP00.A?startPeriod=${daysBefore(end, 10)}&endPeriod=${end}&format=jsondata`,
     fetcher,
-  );
+    currencyOn404: { source: "ECB", currency },
+  });
   if (Result.isError(requested)) {
     return requested;
   }
@@ -243,10 +259,11 @@ const fetchNbpRate = async ({
 }: RateRequest): RateResult => {
   // PL ustawa o VAT art. 31a ust. 1: use NBP table A's latest effectiveDate strictly before the tax point.
   const end = daysBefore(referenceDate, 1);
-  const requested = await request(
-    `https://api.nbp.pl/api/exchangerates/rates/a/${encodeURIComponent(currency)}/${daysBefore(end, 10)}/${end}/?format=json`,
+  const requested = await request({
+    url: `https://api.nbp.pl/api/exchangerates/rates/a/${encodeURIComponent(currency)}/${daysBefore(end, 10)}/${end}/?format=json`,
     fetcher,
-  );
+    currencyOn404: { source: "NBP", currency },
+  });
   if (Result.isError(requested)) {
     return requested;
   }
