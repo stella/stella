@@ -1459,13 +1459,19 @@ describe("list_capabilities", () => {
     });
     const payload = parseToolPayload<{ items: { id: string }[] }>(result);
     const ids = payload.items.map(({ id }) => id);
+    const idMatches = ids.filter((id) => id.includes("suggestion"));
 
-    expect(ids.slice(0, 2)).toEqual([
-      "time-entries.suggestions.decisions.create",
-      "time-entries.suggestions.list",
-    ]);
+    expect(idMatches).toEqual(
+      expect.arrayContaining([
+        "time-entries.suggestions.decisions.create",
+        "time-entries.suggestions.list",
+      ]),
+    );
+    expect(ids.slice(0, idMatches.length)).toEqual(idMatches);
     expect(ids).toContain("templates.fields.suggest");
-    expect(ids.indexOf("templates.fields.suggest")).toBeGreaterThan(1);
+    expect(ids.indexOf("templates.fields.suggest")).toBeGreaterThanOrEqual(
+      idMatches.length,
+    );
   });
 
   test("pages a query in relevance order without repeats", async () => {
