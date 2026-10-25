@@ -78,7 +78,9 @@ export type Analytics = {
 };
 
 export type FollowupSurface =
-  "chat-thread" | "document-chat" | "inspector-chat";
+  | "chat-thread"
+  | "document-chat"
+  | "inspector-chat";
 
 // Click-through needs where and how a suggestion was used, never which
 // conversation it came from.
@@ -178,7 +180,7 @@ type ProvisionPlacementGapsProperties = {
   count: number;
 };
 
-type AnalyticsResetOptions = {
+export type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;
 };
 

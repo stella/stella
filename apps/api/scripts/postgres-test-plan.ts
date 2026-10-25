@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -151,63 +150,25 @@ const isMigrationRunnerModule = (testPath: string, specifier: string) => {
   );
 };
 
+// Bun's scan lists the modules a file loads at run time: value imports,
+// `require` calls and dynamic `import()`, never type-only imports.
+const runtimeImports = new Bun.Transpiler({ loader: "ts" });
+
 /** Migration bundles can change roles shared by every database in the cluster. */
 export const clusterExclusiveMigrationTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
   const paths = new Set<string>();
   for (const [testPath, source] of sources) {
-    const file = ts.createSourceFile(
-      testPath,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    const visit = (node: ts.Node) => {
-      if (
-        ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        isMigrationRunnerModule(testPath, node.moduleSpecifier.text) &&
-        node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
-      ) {
-        const bindings = node.importClause?.namedBindings;
-        if (
-          bindings === undefined ||
-          ts.isNamespaceImport(bindings) ||
-          node.importClause?.name !== undefined ||
-          bindings.elements.some((element) => !element.isTypeOnly)
-        ) {
-          paths.add(testPath);
-        }
-      }
-      if (
-        ts.isImportEqualsDeclaration(node) &&
-        !node.isTypeOnly &&
-        ts.isExternalModuleReference(node.moduleReference) &&
-        ts.isStringLiteral(node.moduleReference.expression) &&
-        isMigrationRunnerModule(testPath, node.moduleReference.expression.text)
-      ) {
-        paths.add(testPath);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require")) &&
-        node.arguments.length === 1
-      ) {
-        const specifier = node.arguments.at(0);
-        if (
-          specifier !== undefined &&
-          ts.isStringLiteral(specifier) &&
-          isMigrationRunnerModule(testPath, specifier.text)
-        ) {
-          paths.add(testPath);
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(file);
+    if (
+      runtimeImports
+        .scanImports(source)
+        .some(({ path: specifier }) =>
+          isMigrationRunnerModule(testPath, specifier),
+        )
+    ) {
+      paths.add(testPath);
+    }
   }
   return paths;
 };
