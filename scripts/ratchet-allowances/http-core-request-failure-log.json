@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/observability/request-lifecycle.ts",
+  "delta": 1,
+  "reason": "The request failure log is the record the framework hook already wrote; the scan now resolves its error attributes, which a second `details` local in the framework hook hid from the name-based lookup."
+}
