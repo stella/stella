@@ -17,7 +17,8 @@
 #   release-staging-proof-status.sh merge-group <number> <group head> <resolved base>
 #   release-staging-proof-status.sh finished-run <release head> <run id>
 # NO_PROOF_REASON names why no proof was started for a release head;
-# PROOF_DISPATCHED=true says this run just dispatched its staging proof.
+# PROOF_DISPATCHED=true says this run just dispatched its staging proof;
+# RELEASES_ONLY=true makes open-pull-requests skip non-release heads.
 set -euo pipefail
 
 context=release/staging-proof
@@ -60,15 +61,14 @@ latest_proof() {
 # Write back the result a proof run already recorded on the head, if any.
 # Writers of one head are not serialized, so a pending write for a run can
 # land after that run's result; writing the result back after it keeps the
-# result last in every interleaving.
+# result last in every interleaving. Fails when the run recorded none.
 write_back() {
   local head="$1" url="$2" result
   result=$(api --paginate --slurp "repos/$repo/commits/$head/statuses?per_page=100" | jq -c --arg context "$context" --arg url "$url" '
     [.[][] | select(.context == $context and .target_url == $url and .creator.login == "github-actions[bot]" and
       (.state == "success" or .state == "failure" or .state == "error"))][0] // empty')
-  if [[ -n "$result" ]]; then
-    post "$head" "$(jq -r '.state' <<< "$result")" "$(jq -r '.description' <<< "$result")" "$url"
-  fi
+  [[ -n "$result" ]] || return 1
+  post "$head" "$(jq -r '.state' <<< "$result")" "$(jq -r '.description' <<< "$result")" "$url"
 }
 
 # The newest deploy-staging proof run for a head, or {}.
@@ -81,8 +81,9 @@ newest_run() {
 
 # Reconcile a release head. It never derives a result from a run: a run's
 # success or failure is written only by that run's own finished-run job. This
-# path writes pending for an unfinished run, the failure that names the
-# dispatch when the head has no proof run at all, and write-backs.
+# path writes pending for an unfinished run, write-backs, and a failure that
+# names the dispatch when the head has no proof run, or when its run is
+# completed (so its own last job is over too) without having recorded one.
 release_head() {
   local head="$1" run run_id url
   run=$(newest_run "$head")
@@ -93,14 +94,15 @@ release_head() {
     # the run's recorded result goes back on top of this pending write.
     post "$head" pending "Staging proof dispatched; waiting for its run to start"
     url=$(newest_run "$head" | jq -r '.html_url // ""')
-    if [[ -n "$url" ]]; then write_back "$head" "$url"; fi
+    if [[ -n "$url" ]]; then write_back "$head" "$url" || true; fi
   elif [[ -z "$run_id" ]]; then
     post "$head" failure "${NO_PROOF_REASON:-No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=$head}"
   elif [[ "$(jq -r '.status' <<< "$run")" != completed ]]; then
     post "$head" pending "Staging proof running: run $run_id" "$url"
-    write_back "$head" "$url"
+    write_back "$head" "$url" || true
   else
-    write_back "$head" "$url"
+    write_back "$head" "$url" ||
+      post "$head" failure "Proof run $run_id recorded no result; dispatch deploy-staging.yml release_candidate=true sha=$head" "$url"
   fi
 }
 
@@ -112,7 +114,7 @@ record_pull() {
     echo "Pull request $(jq -r '.number' <<< "$pull") is not open; nothing to record."
   elif is_release "$pull"; then
     release_head "$head"
-  else
+  elif [[ "${RELEASES_ONLY:-}" != true ]]; then
     post "$head" success "Not a release pull request"
   fi
 }

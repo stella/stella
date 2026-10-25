@@ -217,22 +217,49 @@ describe("pull request heads", () => {
     target_url: runUrl,
   };
 
-  test("a reconciliation never derives a result from a finished run", () => {
-    // Its own last job has not recorded a result yet.
+  test("a completed run that recorded no result fails the head with the dispatch", () => {
+    // Its last job never ran; the head still shows the run's pending status,
+    // and staging/verified is not read as a result.
     respond(`repos/${repository}/pulls/7`, pull());
     statuses(head, [
+      {
+        context: "release/staging-proof",
+        state: "pending",
+        description: `Staging proof running: run ${runId}`,
+        creator: bot,
+        target_url: runUrl,
+      },
       stagingVerified(
         "success",
         `Staging smoke success: run ${runId}; main=${mainBase}`,
       ),
     ]);
-    for (const conclusion of ["success", "failure"]) {
-      runs([stagingRun("completed", conclusion)]);
-      expect(run(["pull-request", "7"]).posted).toEqual([]);
-    }
+    runs([stagingRun("completed", "cancelled")]);
+    expect(run(["pull-request", "7"]).posted).toEqual([
+      {
+        sha: head,
+        state: "failure",
+        context: "release/staging-proof",
+        description: `Proof run ${runId} recorded no result; dispatch deploy-staging.yml release_candidate=true sha=${head}`,
+        target_url: runUrl,
+      },
+    ]);
   });
 
-  test("a reconciliation writes back the result a finished run recorded", () => {
+  test("the release sweep records release heads only", () => {
+    respond(`repos/${repository}/pulls?state=open&base=main&per_page=100`, [
+      [pull({ title: "feat: one", sha: "e".repeat(40), number: 1 }), pull()],
+    ]);
+    statuses(head, []);
+    runs([]);
+    expect(
+      run(["open-pull-requests"], { RELEASES_ONLY: "true" }).posted.map(
+        ({ sha, state }) => [sha, state],
+      ),
+    ).toEqual([[head, "failure"]]);
+  });
+
+  test("a completed run that recorded success keeps it", () => {
     respond(`repos/${repository}/pulls/7`, pull());
     statuses(head, [recordedResult]);
     runs([

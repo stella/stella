@@ -22,6 +22,11 @@ on:
       - .github/workflows/release-proof.yml
       - scripts/release-staging-proof-status.sh
   workflow_dispatch:
+  # A proof run started with GITHUB_TOKEN raises no workflow_run event, so an
+  # hourly sweep of release heads settles one whose run ended without
+  # recording a result.
+  schedule:
+    - cron: "41 * * * *"
 
 permissions: {}
 
@@ -42,7 +47,7 @@ jobs:
     # status; a title edit or a retarget (a base change, such as onto main)
     # can. A dispatch writes statuses, so it runs only as main's workflow.
     if: >-
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'push' || github.ref == 'refs/heads/main') &&
+      (github.event_name != 'workflow_dispatch' && github.event_name != 'push' && github.event_name != 'schedule' || github.ref == 'refs/heads/main') &&
       (github.event.action != 'edited' || github.event.changes.title != null || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -152,6 +157,9 @@ jobs:
               ;;
             push | workflow_dispatch)
               bash "$status" open-pull-requests
+              ;;
+            schedule)
+              RELEASES_ONLY=true bash "$status" open-pull-requests
               ;;
             *) echo "::error::Unexpected event: $GITHUB_EVENT_NAME" >&2; exit 1 ;;
           esac
