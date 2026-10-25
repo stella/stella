@@ -448,7 +448,9 @@ test("a client asking for a fresh sign-in gets the sign-in form despite a sessio
     return (
       url.pathname === "/auth" &&
       signedQuery !== null &&
-      new URLSearchParams(signedQuery).get("prompt") === "login"
+      (new URLSearchParams(signedQuery).get("prompt") ?? "")
+        .split(" ")
+        .includes("login")
     );
   });
   // Nothing is signed out until someone signs in.

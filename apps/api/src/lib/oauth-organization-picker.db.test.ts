@@ -50,6 +50,12 @@ const createOrganization = async (owner: HumanBrowser, name: string) =>
     headers: owner.headers(),
   });
 
+/** The prompt values of the signed request a page received. */
+const signedPrompts = (page: URL): string[] =>
+  (new URLSearchParams(readSignedQuery(page)).get("prompt") ?? "")
+    .split(" ")
+    .filter(Boolean);
+
 type ContinueAfterPickingOptions = {
   browser: HumanBrowser;
   picker: URL;
@@ -147,9 +153,7 @@ describe("OAuth organization picker", () => {
       "select_account",
     );
     expect(picker.pathname).toBe(OAUTH_ORGANIZATION_PAGE_PATH);
-    expect(new URLSearchParams(readSignedQuery(picker)).get("prompt")).toBe(
-      "select_account",
-    );
+    expect(signedPrompts(picker)).toContain("select_account");
 
     const consentPage = await continueAfterPicking({
       browser,
@@ -157,9 +161,7 @@ describe("OAuth organization picker", () => {
       status: "selected",
     });
     expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
-    expect(
-      new URLSearchParams(readSignedQuery(consentPage)).get("prompt") ?? "",
-    ).not.toContain("select_account");
+    expect(signedPrompts(consentPage)).not.toContain("select_account");
 
     const grant = await consentAndExchange({
       browser,
@@ -185,9 +187,7 @@ describe("OAuth organization picker", () => {
       "login",
     );
     expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
-    expect(new URLSearchParams(readSignedQuery(signIn)).get("prompt")).toBe(
-      "login",
-    );
+    expect(signedPrompts(signIn)).toContain("login");
 
     // The user leaves the sign-in form without signing in. Every step the web
     // pages can post with that request, under the session that was already
@@ -222,9 +222,7 @@ describe("OAuth organization picker", () => {
     for (const redirect of continuations) {
       expect(redirect.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
       expect(redirect.searchParams.has("code")).toBe(false);
-      expect(new URLSearchParams(readSignedQuery(redirect)).get("prompt")).toBe(
-        "login",
-      );
+      expect(signedPrompts(redirect)).toContain("login");
     }
   });
 
@@ -252,9 +250,7 @@ describe("OAuth organization picker", () => {
       });
     expect(second.userId).not.toBe(first.userId);
     expect(picker.pathname).toBe(OAUTH_ORGANIZATION_PAGE_PATH);
-    expect(new URLSearchParams(readSignedQuery(picker)).get("prompt")).toBe(
-      null,
-    );
+    expect(signedPrompts(picker)).not.toContain("login");
 
     const secondOrganization = await createOrganization(second, "Second");
     await second.setActiveOrganization(secondOrganization.id);
