@@ -11,7 +11,7 @@ export const hex = buffer.toString("hex");
 // oxlint-disable-next-line prefer-bun-native/no-buffer-string-encoding -- fixture: base64 through Buffer#toString must be rejected
 export const base64 = Buffer.from(bytes).toString("base64");
 // oxlint-disable-next-line prefer-bun-native/no-buffer-string-encoding -- fixture: base64url through Buffer#toString must be rejected
-export const base64Url = buffer["toString"]("base64url");
+export const base64Url = buffer.toString("base64url");
 
 // Allowed: the native encoders, and a number's radix.
 // expect-clean: prefer-bun-native/no-buffer-string-encoding
