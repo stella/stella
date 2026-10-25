@@ -1,6 +1,6 @@
 import type { SafeId } from "@/api/lib/branded-types";
 
-export const IGNORED_EVENT_DISPOSITIONS = {
+const IGNORED_EVENT_DISPOSITIONS = {
   expected: "expected",
   needs_operator: "needs_operator",
   // The dispatch step that produced the reason raised its own alert.
