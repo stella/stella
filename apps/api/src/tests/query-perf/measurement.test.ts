@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { READ_BUDGETS } from "@/api/lib/read-budgets";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 
 import {
   budgetViolations,

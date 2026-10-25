@@ -8,7 +8,6 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import plannerSettings from "./planner-settings.json" with { type: "json" };
 
-export const QUERY_PERF_SETTINGS = plannerSettings;
 // Startup settings cover seed, VACUUM, policy DDL and database DDL outside transactions.
 export const QUERY_PERF_CONNECTION_SETTINGS = {
   statement_timeout: 30_000,

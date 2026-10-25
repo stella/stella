@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { corpusIndexGenerations } from "@/api/db/schema";
+import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -59,6 +60,24 @@ const SEED_CHUNK_ROWS = 20_000;
 
 const LEGISLATION_SOURCE_ID = "01990000-00a0-7000-8000-000000000001";
 
+type SeedHandle = Pick<TransactionOf<GatedTestDb>, "execute">;
+
+/**
+ * Writes rows in their final state directly. The projection tables' triggers
+ * admit only the projector's own transitions (a revision starts reserved, a
+ * state changes under the mutation fence), so the fixture's transaction skips
+ * them, as a restore does; the rows written satisfy every table check.
+ */
+const withoutTriggers = async (
+  database: GatedTestDb,
+  write: (tx: SeedHandle) => Promise<void>,
+) => {
+  await database.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL session_replication_role = replica`);
+    await write(tx);
+  });
+};
+
 /** A UUID whose last group carries `n`, under a per-table prefix. */
 const uuidOf = (prefix: string, n: string) =>
   `('01990000-${prefix}-7000-8000-' || lpad(to_hex(${n}), 12, '0'))::uuid`;
@@ -73,7 +92,7 @@ const chunks = (rows: number) =>
   }));
 
 const seedQuietChunk = async (
-  database: GatedTestDb,
+  database: SeedHandle,
   generation: string,
   { first, last }: { first: number; last: number },
 ) => {
@@ -111,7 +130,7 @@ const seedQuietChunk = async (
 };
 
 const seedBusyChunk = async (
-  database: GatedTestDb,
+  database: SeedHandle,
   generation: string,
   rows: number,
   { first, last }: { first: number; last: number },
@@ -149,7 +168,7 @@ const seedBusyChunk = async (
 
 /** Works with several consolidations each; every version converged. */
 const seedLegislationChunk = async (
-  database: GatedTestDb,
+  database: SeedHandle,
   { first, last }: { first: number; last: number },
 ) => {
   const versions = LEGISLATION_VERSIONS_PER_WORK;
@@ -206,7 +225,7 @@ export const serveCaseLawGeneration = async (
   database: GatedTestDb,
   generation: CaseLawScenarioGeneration,
 ) => {
-  await database.transaction(async (tx) => {
+  await withoutTriggers(database, async (tx) => {
     await tx.execute(sql`UPDATE corpus_index_generations SET status = 'building'
       WHERE family = 'case_law' AND status = 'serving'`);
     await tx.execute(sql`UPDATE corpus_index_generations SET status = 'serving'
@@ -238,9 +257,11 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
   for (const { generation, kind, rows } of SCENARIO_GENERATIONS) {
     for (const chunk of chunks(rows)) {
       // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
-      await (kind === "quiet"
-        ? seedQuietChunk(database, generation, chunk)
-        : seedBusyChunk(database, generation, rows, chunk));
+      await withoutTriggers(database, async (tx) => {
+        await (kind === "quiet"
+          ? seedQuietChunk(tx, generation, chunk)
+          : seedBusyChunk(tx, generation, rows, chunk));
+      });
     }
   }
   await database.execute(sql`INSERT INTO legislation_sources (id, adapter_key, name)
@@ -249,7 +270,9 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
     LEGISLATION_WORKS * LEGISLATION_VERSIONS_PER_WORK,
   )) {
     // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
-    await seedLegislationChunk(database, chunk);
+    await withoutTriggers(database, async (tx) => {
+      await seedLegislationChunk(tx, chunk);
+    });
   }
   for (const table of [
     "corpus_index_generations",

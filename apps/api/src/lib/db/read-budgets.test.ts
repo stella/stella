@@ -5,7 +5,7 @@ import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
   UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
-} from "@/api/lib/read-budgets";
+} from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
@@ -14,11 +14,11 @@ import {
   ledgerMergeBase,
   parseReasonedLedger,
   runLedgerMembershipGuard,
-} from "../../../../scripts/ledger-membership.ts";
+} from "../../../../../scripts/ledger-membership.ts";
 import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
-const repoRoot = path.resolve(import.meta.dir, "../../../..");
-const LEDGER = "apps/api/src/lib/read-budgets-unmeasured.json";
+const repoRoot = path.resolve(import.meta.dir, "../../../../..");
+const LEDGER = "apps/api/src/lib/db/read-budgets-unmeasured.json";
 const unmeasured = new Set(
   parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
 );

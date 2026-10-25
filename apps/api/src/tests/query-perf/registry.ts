@@ -2,11 +2,11 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { legislationCandidateRowsStatement } from "@/api/handlers/legislation/search";
-import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import type {
   ReadBudgetId,
   ScheduledJobReadBudgetId,
-} from "@/api/lib/read-budgets";
+} from "@/api/lib/db/read-budgets";
+import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";

@@ -9,6 +9,7 @@ import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
+import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
@@ -18,7 +19,6 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
-import type { ScheduledJobReads } from "@/api/lib/read-budgets";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import {
@@ -267,7 +267,7 @@ type DeclaredSchedulerJob = SchedulerJobDefinition & {
   /**
    * What one run reads: a measured budget, the shared load governor, or a
    * shrink-only ledger entry for jobs registered before read budgets. See
-   * `@/api/lib/read-budgets`.
+   * `@/api/lib/db/read-budgets`.
    */
   reads: ScheduledJobReads;
 };

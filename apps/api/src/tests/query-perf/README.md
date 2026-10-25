@@ -1,6 +1,6 @@
 Run `bun run test:perf` from `apps/api` with `DATABASE_URL` pointing to a
 fresh, migrated PostgreSQL 18 database. The suite measures every read budget
-in `apps/api/src/lib/read-budgets.ts` with `EXPLAIN (ANALYZE, BUFFERS)` and
+in `apps/api/src/lib/db/read-budgets.ts` with `EXPLAIN (ANALYZE, BUFFERS)` and
 fails when a measurement exceeds its budget. Budgets are absolute: nothing is
 recorded, and nothing is compared with an earlier run, so a statement that has
 been expensive for weeks fails as surely as a new one. The primary metric is
@@ -47,7 +47,7 @@ its own 35-second deadline. Phase logs identify pending work; failures dump
 bounded activity and lock diagnostics through a separate connection.
 
 Declarations are checked without a database by
-`apps/api/src/lib/read-budgets.test.ts`: every scheduled job states its reads,
+`apps/api/src/lib/db/read-budgets.test.ts`: every scheduled job states its reads,
 every MCP tool has a budget or an entry in the shrink-only ledger
-`apps/api/src/lib/read-budgets-unmeasured.json`, and a job outside the shared
+`apps/api/src/lib/db/read-budgets-unmeasured.json`, and a job outside the shared
 load governor stays under the per-run page ceiling.

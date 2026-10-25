@@ -2,12 +2,12 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
-import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/read-budgets";
 
 import {
   CASE_LAW_SCENARIOS,

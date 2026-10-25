@@ -86,7 +86,7 @@ export const queryPerfRequired = (
         file.startsWith("scripts/query-perf") ||
         file.startsWith("packages/") ||
         [
-          "apps/api/src/lib/read-budgets.ts",
+          "apps/api/src/lib/db/read-budgets.ts",
           "apps/api/package.json",
           "apps/api/bunfig.toml",
           "apps/api/src/tests/setup-env.ts",
