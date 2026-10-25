@@ -632,7 +632,7 @@ const withCappedRequestBody = async (
  * instance.
  */
 type McpFactoryState = {
-  context: McpRequestContext;
+  context: McpRequestResources;
   session: McpSession;
 };
 
@@ -1076,7 +1076,7 @@ export const createMcpHttpRequestHandler = ({
     mode,
     session,
   }: {
-    context: McpRequestContext;
+    context: McpRequestResources;
     mode: McpMode;
     session: McpSession;
   }) => {
@@ -1234,7 +1234,7 @@ export const createMcpHttpRequestHandler = ({
     session,
   }: {
     authInfo: AuthInfo;
-    context: McpRequestContext;
+    context: McpRequestResources;
     mode: McpMode;
     parsedBody: unknown;
     request: Request;
