@@ -531,27 +531,5 @@
         "index": "corpus_index_projection_states_pending_idx"
       }
     ]
-  },
-  "corpus-index.convergence-state-probe": {
-    "scans": [
-      {
-        "position": "root/0/0",
-        "relation": "corpus_index_projection_states",
-        "nodeType": "Index Only Scan",
-        "index": "corpus_index_projection_states_pkey"
-      },
-      {
-        "position": "root/1/0",
-        "relation": "corpus_index_projection_states",
-        "nodeType": "Index Only Scan",
-        "index": "corpus_index_projection_states_blocked_idx"
-      },
-      {
-        "position": "root/2/0",
-        "relation": "corpus_index_projection_states",
-        "nodeType": "Index Scan",
-        "index": "corpus_index_projection_states_pending_idx"
-      }
-    ]
   }
 }
