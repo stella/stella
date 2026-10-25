@@ -13,6 +13,7 @@ import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 
 import { env } from "@/api/env";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteDefinition } from "@/api/http/route";
@@ -245,7 +246,7 @@ describe("kill switch at an AI endpoint", () => {
         asTestRaw({
           set,
           request: new Request("https://example.test/chat/improve-prompt"),
-          route: "/chat/improve-prompt",
+          route: "/v1/chat/improve-prompt" satisfies ApiRoutePath,
           user: { id: userId },
           session: { activeOrganizationId: organizationId },
           memberRole: sessionMemberRole("owner"),
@@ -264,7 +265,7 @@ describe("kill switch at an AI endpoint", () => {
     await using server = serveForTest(
       createHttpApp({
         routes: routes({
-          "/chat/improve-prompt": { POST: improvePromptRoute },
+          "/v1/chat/improve-prompt": { POST: improvePromptRoute },
         }),
         middleware: [errorBoundary],
       }),

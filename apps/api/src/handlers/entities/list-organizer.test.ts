@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import listFiles from "@/api/handlers/entities/files/list";
 import listFolders from "@/api/handlers/entities/folders/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -33,7 +34,7 @@ const createContext = ({
   query,
   safeDb: async <T>() => Result.ok(asTestRaw<T>(rows)),
   request: new Request("https://example.test/v1/entities/ws/files"),
-  route: "/v1/entities/:workspaceId/files",
+  route: "/v1/entities/:workspaceId/files" satisfies ApiRoutePath,
 });
 
 const createFoldersContext = (

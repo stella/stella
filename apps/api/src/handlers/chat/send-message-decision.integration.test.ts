@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/chat/send-message-side-effects";
 import { createGetThreads } from "@/api/handlers/chat/threads/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -174,8 +175,8 @@ const createContext = (): SendMessageCtx => {
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     session: { activeOrganizationId: ids.orgA },

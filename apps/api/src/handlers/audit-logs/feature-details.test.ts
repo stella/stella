@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -113,7 +114,7 @@ const contextFor = ({
     query: {},
     recordAuditEvent: auditRecorderDouble(),
     request: new Request("https://example.test/v1/audit-logs"),
-    route: "/v1/audit-logs",
+    route: "/v1/audit-logs" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: PRINCIPAL.organizationId },
     set: { headers: {} },

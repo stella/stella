@@ -13,6 +13,7 @@ import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 import { docxSuggestions, entities } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import rejectPendingDocxSuggestions from "@/api/handlers/docx-suggestions/reject-pending";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -34,7 +35,7 @@ setDefaultTimeout(120_000);
 type WorkspaceTestContext = {
   memberRole: AuthorizedMemberRole;
   request: Request;
-  route: string;
+  route: ApiRoutePath;
   recordAuditEvent: () => Promise<void>;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
@@ -223,7 +224,7 @@ const createWorkspaceContext = ({
     request: new Request(
       `https://example.test/docx-suggestions/${workspaceId}`,
     ),
-    route: "/security/docx-suggestions-reject-pending",
+    route: "/v1/docx-suggestions/:workspaceId/entity/:entityId/reject-pending",
     recordAuditEvent: async () => {},
     safeDb: createSafeDb(testDb, activeWorkspaceIds, organizationId, userId),
     scopedDb: createScopedDb(

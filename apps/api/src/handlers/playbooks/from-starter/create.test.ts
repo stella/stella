@@ -16,6 +16,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -76,7 +77,7 @@ const createOrgContext = (
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/playbooks/from-starter"),
-    route: "/playbooks/from-starter",
+    route: "/v1/playbooks/from-starter" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },

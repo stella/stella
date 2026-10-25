@@ -15,6 +15,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -200,7 +201,8 @@ const approveAuthorization = async ({
         `https://api.example.test/v1/mcp/connectors/${slug}/approve-authorization`,
         { method: "POST" },
       ),
-      route: "/v1/mcp/connectors/:slug/approve-authorization",
+      route:
+        "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
     }),
   );
 };
@@ -236,7 +238,7 @@ const connectAsMember = async ({
       request: new Request(
         `https://api.example.test/v1/mcp/connectors/${slug}/connect`,
       ),
-      route: "/v1/mcp/connectors/:slug/connect",
+      route: "/v1/mcp/connectors/:slug/connect" satisfies ApiRoutePath,
     }),
   );
 };
@@ -457,7 +459,8 @@ describe("MCP connector authorization reviews", () => {
         "https://api.example.test/v1/mcp/connectors/shared/approve-authorization",
         { method: "POST" },
       ),
-      route: "/v1/mcp/connectors/:slug/approve-authorization",
+      route:
+        "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
     });
     expect(await approval.handler(approvalContext)).toEqual({ approved: true });
     expect(audits).toHaveLength(1);
@@ -765,7 +768,8 @@ describe("MCP connector authorization reviews", () => {
         "https://api.example.test/v1/mcp/connectors/legacy/approve-authorization",
         { method: "POST" },
       ),
-      route: "/v1/mcp/connectors/:slug/approve-authorization",
+      route:
+        "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
     });
     expect(await approval.handler(approvalContext)).toEqual({ approved: true });
 

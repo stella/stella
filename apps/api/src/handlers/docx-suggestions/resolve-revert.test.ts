@@ -14,6 +14,7 @@ import { docxSuggestions } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -35,7 +36,7 @@ setDefaultTimeout(120_000);
 type WorkspaceTestContext = {
   memberRole: AuthorizedMemberRole;
   request: Request;
-  route: string;
+  route: ApiRoutePath;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
   session: { activeOrganizationId: SafeId<"organization"> };
@@ -117,7 +118,9 @@ describe("docx suggestion resolve/revert state transitions", () => {
       resolvedByUserId: ids.userA1,
       resolvedAt: new Date(),
     });
-    const context = workspaceAContext();
+    const context = workspaceAContext(
+      "/v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert",
+    );
     const params = {
       workspaceId: ids.wsA1,
       entityId: ids.entityA1,
@@ -139,9 +142,15 @@ describe("docx suggestion resolve/revert state transitions", () => {
   test("reverting an already-pending suggestion is a no-op", async () => {
     const suggestionId = await insertSuggestion();
 
-    const result = await runHandler(revertDocxSuggestion, workspaceAContext(), {
-      params: { workspaceId: ids.wsA1, entityId: ids.entityA1, suggestionId },
-    });
+    const result = await runHandler(
+      revertDocxSuggestion,
+      workspaceAContext(
+        "/v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert",
+      ),
+      {
+        params: { workspaceId: ids.wsA1, entityId: ids.entityA1, suggestionId },
+      },
+    );
     expect(result).toEqual({ updated: false });
 
     const row = await readSuggestion(suggestionId);
@@ -210,8 +219,11 @@ const readSuggestion = async (suggestionId: SafeId<"docxSuggestion">) => {
   return rows.at(0);
 };
 
-const workspaceAContext = (): WorkspaceTestContext =>
+const workspaceAContext = (
+  route: ApiRoutePath = "/v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/resolve",
+): WorkspaceTestContext =>
   createWorkspaceContext({
+    route,
     workspaceId: ids.wsA1,
     organizationId: ids.orgA,
     userId: ids.userA1,
@@ -219,16 +231,20 @@ const workspaceAContext = (): WorkspaceTestContext =>
 
 const workspaceBContext = (): WorkspaceTestContext =>
   createWorkspaceContext({
+    route:
+      "/v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/resolve",
     workspaceId: ids.wsB1,
     organizationId: ids.orgB,
     userId: ids.userB1,
   });
 
 const createWorkspaceContext = ({
+  route,
   workspaceId,
   organizationId,
   userId,
 }: {
+  route: ApiRoutePath;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -239,7 +255,7 @@ const createWorkspaceContext = ({
     request: new Request(
       `https://example.test/docx-suggestions/${workspaceId}`,
     ),
-    route: "/security/docx-suggestions-transition",
+    route,
     safeDb: createSafeDb(testDb, activeWorkspaceIds, organizationId, userId),
     scopedDb: createScopedDb(
       testDb,

@@ -29,6 +29,7 @@ import getMessages from "@/api/handlers/chat/messages/list";
 import getOlderMessages from "@/api/handlers/chat/older-messages/list";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -572,7 +573,8 @@ const turnContext = (
     ...readerContext(threadId),
     params: { threadId, turnId },
     query,
-    route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+    route:
+      "/v1/chat/threads/:threadId/turns/:turnId/join" satisfies ApiRoutePath,
   });
 
 const measureRejoin = async ({
