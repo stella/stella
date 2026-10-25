@@ -346,14 +346,7 @@ test("migration check jobs disable production load gates", () => {
 test("required checks report on pull requests and merge groups", () => {
   const required = [
     ["ci-result", workflow, "ci-result"],
-    [
-      "dependency-review",
-      readFileSync(
-        new URL("../.github/workflows/dependency-review.yml", import.meta.url),
-        "utf-8",
-      ),
-      "dependency-review",
-    ],
+    ["dependency-review", workflow, "dependency-review"],
     [
       "cla",
       readFileSync(
