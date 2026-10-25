@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
@@ -12,6 +14,7 @@ import {
   withoutRaisedReferenceMarkers,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 type PlSnTextLine = Extract<PlSnLine, { type: "text" }>;
 
@@ -218,12 +221,8 @@ describe("reading recorded PDF lines", () => {
 const SN_FIXTURE = (name: string): URL =>
   new URL(`__fixtures__/${name}.pdf`, import.meta.url);
 
-/** The decision's stored paragraphs, as the reader and search see them. */
-const supremeCourtParagraphs = async (
-  name: string,
-  caseNumber: string,
-): Promise<string[]> => {
-  const { fulltext } = await parsePlSnDecisionPdf({
+const parseSupremeCourtFixture = async (name: string, caseNumber: string) =>
+  await parsePlSnDecisionPdf({
     pdfBytes: new Uint8Array(await Bun.file(SN_FIXTURE(name)).arrayBuffer()),
     caseNumber,
     court: "Sąd Najwyższy",
@@ -233,10 +232,60 @@ const supremeCourtParagraphs = async (
     documentUrl: undefined,
     documentId: name,
   });
-  return fulltext.split("\n\n");
+
+/** The decision's stored paragraphs, as the reader and search see them. */
+const supremeCourtParagraphs = async (
+  name: string,
+  caseNumber: string,
+): Promise<string[]> =>
+  (await parseSupremeCourtFixture(name, caseNumber)).fulltext.split("\n\n");
+
+/** Each superscript in the stored document, with the text set before it. */
+const superscriptsOf = (blocks: DocumentAst["blocks"]): string[] => {
+  const found: string[] = [];
+  const walk = (inlines: readonly Inline[], before: string): string => {
+    let text = before;
+    for (const inline of inlines) {
+      if (inline.type === "text") {
+        text += inline.text;
+      } else if (inline.type === "superscript") {
+        const label = inlinesToPlainText(inline.children);
+        found.push(`${text.slice(-12)}^${label}`);
+        text += label;
+      } else if (hasInlineChildren(inline)) {
+        text = walk(inline.children, text);
+      }
+    }
+    return text;
+  };
+  for (const block of blocks) {
+    if ("inlines" in block) {
+      walk(block.inlines, "");
+    }
+  }
+  return found;
 };
 
 describe("reading recorded Supreme Court PDFs", () => {
+  test("a superscript printed above its line is set back after the character it follows", async () => {
+    const { documentAst, fulltext } = await parseSupremeCourtFixture(
+      "pl-sn-i-csk-2892-23",
+      "I CSK 2892/23",
+    );
+
+    expect(
+      superscriptsOf(documentAst.blocks).some((entry) =>
+        entry.endsWith("w art. 398^9"),
+      ),
+    ).toBe(true);
+    expect(
+      fulltext.split("\n\n").filter((paragraph) => /^\d+$/u.test(paragraph)),
+    ).toEqual([]);
+    expect(fulltext).toContain(
+      "służy instytucja tzw. przedsądu, ustanowiona w art. 3989 k.p.c.",
+    );
+  });
+
   test("an operative point set as an indented block stays one paragraph", async () => {
     const paragraphs = await supremeCourtParagraphs(
       "pl-sn-i-csk-2892-23",

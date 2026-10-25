@@ -40,6 +40,8 @@ export type PlSnRun = {
   text: string;
   bold: boolean;
   footnoteReference?: string | undefined;
+  /** Set raised in small type: an article's or a unit's index (`394¹`). */
+  superscript?: true | undefined;
 };
 
 /**
@@ -138,7 +140,16 @@ type ExtractedLine = {
   readonly x: number;
   /** Where the line ends; read only where block continuation is asked for. */
   readonly right?: number | undefined;
+  /** Superscripts the text layer printed as a line of their own above it. */
+  readonly superscripts?: readonly SuperscriptMark[] | undefined;
 };
+
+/**
+ * One superscript, placed by how many of its line's printed characters
+ * (whitespace aside) stand before it: counting printed characters survives
+ * the spacing the line's text is normalised with.
+ */
+type SuperscriptMark = { readonly after: number; readonly text: string };
 
 type PageFurnitureSpan = PdfSpan & {
   readonly bbox: PdfSpan["bbox"] & { readonly y: number };
@@ -276,10 +287,57 @@ export const withoutRaisedReferenceMarkers = (
  */
 const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
   const ranges = buildBoldRanges([...line.spans], line.text);
-  return ranges.flatMap((range) => {
+  const runs = ranges.flatMap((range) => {
     const text = collapseSpacedLetters(line.text.slice(range.start, range.end));
     return text.length === 0 ? [] : [{ text, bold: range.bold }];
   });
+  return line.superscripts === undefined
+    ? runs
+    : withSuperscripts(runs, line.superscripts);
+};
+
+/**
+ * The runs with each superscript set in after the printed character it
+ * follows. Collapsing letter spacing removes only whitespace, so the count
+ * of printed characters still finds the place.
+ */
+const withSuperscripts = (
+  runs: readonly PlSnRun[],
+  marks: readonly SuperscriptMark[],
+): PlSnRun[] => {
+  const pending = marks.toSorted((left, right) => left.after - right.after);
+  const out: PlSnRun[] = [];
+  let printed = 0;
+  const setDue = (bold: boolean): void => {
+    while (pending.length > 0 && (pending.at(0)?.after ?? 0) <= printed) {
+      const mark = pending.shift();
+      if (mark !== undefined) {
+        out.push({ text: mark.text, bold, superscript: true });
+      }
+    }
+  };
+  for (const run of runs) {
+    setDue(run.bold);
+    let start = 0;
+    let end = 0;
+    for (const character of run.text) {
+      end += character.length;
+      if (/\s/u.test(character)) {
+        continue;
+      }
+      printed += 1;
+      if ((pending.at(0)?.after ?? Number.POSITIVE_INFINITY) <= printed) {
+        out.push({ ...run, text: run.text.slice(start, end) });
+        setDue(run.bold);
+        start = end;
+      }
+    }
+    if (start < run.text.length) {
+      out.push({ ...run, text: run.text.slice(start) });
+    }
+  }
+  setDue(runs.at(-1)?.bold ?? false);
+  return out;
 };
 
 /**
@@ -658,10 +716,16 @@ export const assemblePlSnParagraphs = (
 
   // Copied rather than shared: joining a broken word rewrites the run it
   // lands in, and the lines handed in are the caller's to keep.
-  const copyRun = ({ bold, text, footnoteReference }: PlSnRun): PlSnRun => ({
+  const copyRun = ({
+    bold,
+    text,
+    footnoteReference,
+    superscript,
+  }: PlSnRun): PlSnRun => ({
     bold,
     text,
     ...(footnoteReference === undefined ? {} : { footnoteReference }),
+    ...(superscript === undefined ? {} : { superscript }),
   });
 
   for (const line of lines) {
@@ -694,11 +758,19 @@ export const assemblePlSnParagraphs = (
     if (
       previous.bold === head.bold &&
       previous.footnoteReference === undefined &&
-      head.footnoteReference === undefined
+      head.footnoteReference === undefined &&
+      previous.superscript === undefined &&
+      head.superscript === undefined
     ) {
       previous.text += separator + head.text;
-    } else {
+    } else if (head.superscript === undefined) {
       current.push({ text: separator + head.text, bold: head.bold });
+    } else {
+      // The line break's space stays on the baseline, out of the index.
+      if (separator.length > 0) {
+        current.push({ text: separator, bold: head.bold });
+      }
+      current.push(copyRun(head));
     }
     current.push(...tail.map(copyRun));
   }
@@ -720,12 +792,118 @@ export const plSnParagraphsToHtml = (
     .map(
       (runs) =>
         `<p>${runs
-          .map(({ bold, text }) =>
-            bold ? `<b>${escapeHtml(text)}</b>` : escapeHtml(text),
-          )
+          .map(({ bold, superscript, text }) => {
+            const raised =
+              superscript === true
+                ? `<sup>${escapeHtml(text)}</sup>`
+                : escapeHtml(text);
+            return bold ? `<b>${raised}</b>` : raised;
+          })
           .join("")}</p>`,
     )
     .join("");
+
+type PdfTextLine = ReturnType<
+  ReturnType<PDF["getPages"]>[number]["extractText"]
+>["lines"][number];
+
+const extractedLineOf = (
+  line: PdfTextLine,
+  superscripts?: readonly SuperscriptMark[],
+): ExtractedLine => ({
+  spans: line.spans,
+  text: normalizeSpanText(line.text),
+  x: line.bbox.x,
+  right: line.bbox.x + line.bbox.width,
+  ...(superscripts === undefined || superscripts.length === 0
+    ? {}
+    : { superscripts }),
+});
+
+/** The printed (non-whitespace) characters of a line, in order. */
+const printedCharactersOf = (line: PdfTextLine) =>
+  line.spans
+    .flatMap(({ chars }) => chars)
+    .filter(({ char }) => char.trim().length > 0);
+
+/**
+ * The page's lines with every superscript line folded into the line it is
+ * printed over.
+ *
+ * The text layer gives a raised small-type index its own line, read before
+ * the line it belongs to: `art. 394¹ § 1¹` arrives as `1 1` above
+ * `art. 394 § 1`. A line counts as one only when it is all digits in small
+ * type, sits within a body line's height above the next line, and every
+ * mark lies over that line; each mark then follows the characters printed
+ * left of it. Anything else stays the line it was.
+ */
+const liftSuperscripts = (
+  lines: readonly PdfTextLine[],
+  bodySize: number,
+): ExtractedLine[] => {
+  const smallType = (line: PdfTextLine): boolean =>
+    printedCharactersOf(line).every(
+      ({ fontSize }) => fontSize <= bodySize * SMALL_TYPE_RATIO,
+    );
+  const marksOver = (
+    raised: PdfTextLine,
+    base: PdfTextLine | undefined,
+  ): SuperscriptMark[] | undefined => {
+    const characters = printedCharactersOf(raised);
+    if (
+      base === undefined ||
+      characters.length === 0 ||
+      !/^[\p{N}\s]+$/u.test(raised.text) ||
+      !smallType(raised) ||
+      smallType(base) ||
+      raised.bbox.y <= base.bbox.y ||
+      raised.bbox.y - base.bbox.y >= bodySize ||
+      characters.some(
+        ({ bbox }) =>
+          bbox.x < base.bbox.x || bbox.x > base.bbox.x + base.bbox.width,
+      )
+    ) {
+      return undefined;
+    }
+    // Adjacent digits are one index (`10`); a gap starts the next mark.
+    const groups: (typeof characters)[] = [];
+    for (const character of characters) {
+      const group = groups.at(-1);
+      const previous = group?.at(-1);
+      if (
+        group !== undefined &&
+        previous !== undefined &&
+        character.bbox.x - (previous.bbox.x + previous.bbox.width) <
+          previous.bbox.width / 2
+      ) {
+        group.push(character);
+      } else {
+        groups.push([character]);
+      }
+    }
+    const printed = printedCharactersOf(base);
+    return groups.map((group) => {
+      const x = group.at(0)?.bbox.x ?? 0;
+      return {
+        after: printed.filter(({ bbox }) => bbox.x + bbox.width / 2 < x).length,
+        text: group.map(({ char }) => char).join(""),
+      };
+    });
+  };
+
+  const out: ExtractedLine[] = [];
+  let pending: SuperscriptMark[] = [];
+  for (const [index, line] of lines.entries()) {
+    const marks = marksOver(line, lines[index + 1]);
+    if (marks !== undefined) {
+      pending.push(...marks);
+      continue;
+    }
+    out.push(extractedLineOf(line, pending));
+    pending = [];
+  }
+  return out;
+};
 
 /** Every line of every page, in reading order. */
 export const extractPlSnLines = async (
@@ -734,20 +912,16 @@ export const extractPlSnLines = async (
   options: ExtractPlSnLinesOptions = {},
 ): Promise<PlSnLine[]> => {
   const pdf = await PDF.load(pdfBytes);
-  const pages = pdf.getPages().map((page) =>
-    page.extractText().lines.map((line): ExtractedLine => ({
-      spans: line.spans,
-      text: normalizeSpanText(line.text),
-      x: line.bbox.x,
-      right: line.bbox.x + line.bbox.width,
-    })),
-  );
+  const textPages = pdf.getPages().map((page) => page.extractText().lines);
   const { supremeCourt } = options;
   if (supremeCourt === undefined) {
-    return pages.flatMap((lines) => readPage(lines, paragraphStart));
+    return textPages.flatMap((lines) =>
+      readPage(lines.map(extractedLineOf), paragraphStart),
+    );
   }
 
-  const bodySize = bodyFontSizeOf(pages.flat());
+  const bodySize = bodyFontSizeOf(textPages.flat());
+  const pages = textPages.map((lines) => liftSuperscripts(lines, bodySize));
   const bodyPages = pages.map((lines, pageIndex) => {
     const first = lines.findIndex(({ text }) => text.length > 0);
     const start =
@@ -837,6 +1011,7 @@ export const parsePlSnDecisionPdf = async (
     sourceUrl: input.sourceUrl,
     documentUrl: input.documentUrl,
     content: plSnParagraphsToHtml(paragraphs),
+    superscripts: true,
     // sn.pl indexes neither, so there is nothing to carry onto the AST.
     keywords: [],
     statutes: [],
