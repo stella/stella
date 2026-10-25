@@ -15,7 +15,7 @@ import {
 import type { LocatedUsCodeCitation } from "./us-code-citations";
 
 /** `42 U.S.C. 1983(a)(1) et seq.`, then the printed span it was read from. */
-const read = (text: string): [string, string][] =>
+const read = (text: string): readonly [string, string][] =>
   locateUsCodeCitations(text).map((citation) => [
     printedCitation(citation),
     text.slice(citation.start, citation.end),

@@ -51,11 +51,16 @@ describe("US provision keys", () => {
         provision.workIdentifier,
         provision.anchor,
       ]);
-      expect(parseProvisionKey(frame)).toEqual({
-        jurisdiction: provision.jurisdiction,
-        workIdentifier: provision.workIdentifier,
-        anchor: provision.anchor,
-      });
+      const decoded = parseProvisionKey(frame);
+      expect(
+        decoded === null
+          ? null
+          : [decoded.jurisdiction, decoded.workIdentifier, decoded.anchor],
+      ).toEqual([
+        provision.jurisdiction,
+        provision.workIdentifier,
+        provision.anchor,
+      ]);
     }
   });
 

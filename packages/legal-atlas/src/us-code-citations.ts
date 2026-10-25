@@ -24,6 +24,7 @@
  * `us-code-citations.LICENSE`) and against real opinion text.
  */
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { US_REPORTER_SPELLING_SOURCE } from "@stll/api-contract/us-reporter-citation";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
@@ -89,16 +90,21 @@ export const usCodeWorkIdentifier = (work: UsCodeWork): string =>
 const WORK_IDENTIFIER =
   /^(?<title>[1-9]\d?) (?<code>U\.S\.C\.|C\.F\.R\.) (?<section>\S+)$/u;
 
+/** A title or section number the reader matched, as a number; null for any other text. */
+const wholeNumber = (digits: string | undefined): number | null =>
+  parseIntegerToken(digits, { sign: "unsigned" }).unwrapOr(null);
+
 /** The work a canonical identifier names, or null for any other text. */
 export const parseUsCodeWorkIdentifier = (raw: string): UsCodeWork | null => {
   const groups = WORK_IDENTIFIER.exec(raw)?.groups;
   const section = groups?.["section"];
-  if (groups === undefined || section === undefined) {
+  const title = wholeNumber(groups?.["title"]);
+  if (groups === undefined || section === undefined || title === null) {
     return null;
   }
   const work: UsCodeWork = {
     code: groups["code"] === "U.S.C." ? "usc" : "cfr",
-    title: Number(groups["title"]),
+    title,
     section,
   };
   return isUsCodeWork(work) && usCodeWorkIdentifier(work) === raw ? work : null;
@@ -468,10 +474,10 @@ const codeHitAt = (text: string, match: RegExpExecArray): CodeHit | null => {
   const before = TITLE_BEFORE.exec(
     text.slice(Math.max(0, match.index - 40), match.index),
   );
-  const title = Number(before?.groups?.["title"]);
+  const title = wholeNumber(before?.groups?.["title"]);
   if (
     before === null ||
-    !Number.isSafeInteger(title) ||
+    title === null ||
     title > US_CODES[code].maxTitle ||
     // A number across a paragraph break is a page number or a footnote
     // mark, not the title (`Court 3\n\n C.F.R. § 1614.106`).
@@ -532,10 +538,11 @@ export const locateUsCodeCitations = (
   }
   for (const match of text.matchAll(PHRASE)) {
     const section = match.groups?.["section"];
-    if (section === undefined) {
+    const title = wholeNumber(match.groups?.["title"]);
+    if (section === undefined || title === null) {
       continue;
     }
-    const citation = located("usc", Number(match.groups?.["title"]), {
+    const citation = located("usc", title, {
       section: canonicalSection("usc", section),
       path: pathLabels(match.groups?.["path"] ?? ""),
       openEnded: false,
@@ -552,7 +559,7 @@ export const locateUsCodeCitations = (
 // --- Identity -------------------------------------------------------------
 
 /** The section a reference carries: its leading number and the rest. */
-const SECTION_SPLIT = /^(?<number>[1-9]\d*)(?<suffix>.*)$/u;
+const SECTION_SPLIT = /^(?<number>[1-9]\d*)(?<suffix>\D.*)?$/u;
 
 /**
  * A located citation as the jurisdiction-neutral reference: the section's
@@ -564,14 +571,14 @@ export const usCodeReference = (
   citation: Pick<LocatedUsCodeCitation, "work" | "path" | "openEnded">,
 ): ProvisionReference | null => {
   const parts = SECTION_SPLIT.exec(citation.work.section)?.groups;
-  const number = parts?.["number"];
-  if (number === undefined) {
+  const number = wholeNumber(parts?.["number"]);
+  if (number === null) {
     return null;
   }
   const suffix = parts?.["suffix"] ?? "";
   return {
     unit: "section",
-    section: Number(number),
+    section: number,
     sectionSuffix: suffix === "" ? null : suffix,
     subsection:
       citation.path.length === 0

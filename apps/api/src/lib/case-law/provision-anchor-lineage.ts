@@ -14,7 +14,8 @@
  *
  * The stored projection repeats this rule in SQL
  * (`case_law_provision_anchor_lineage` in the
- * `20261022230000_provision_citation_anchor_lineage` migration);
+ * `20261022230000_provision_citation_anchor_lineage` migration and the later
+ * ones that redefine it);
  * `provision-anchor-lineage.db.test.ts` holds the two to the same answers.
  */
 
