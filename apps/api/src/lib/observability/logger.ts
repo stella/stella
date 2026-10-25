@@ -294,7 +294,7 @@ const emit = ({
 }: {
   attributes: LoggerAttributeInput | undefined;
   message: string;
-  severityNumber: SeverityNumber;
+  severityNumber: LogSeverityNumber;
   severityText: string;
   outputStream?: OutputStream;
 }): void => {
