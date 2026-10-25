@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "89b77cb7a40c6386bdffbbd734c8a3a745b02f81292c4feb20655df959b61fcf",
+  "sourceUrl": "https://jurisprudencia-backend2.tst.jus.br/rest/pesquisa-textual/1/2 (POST tipos=[OJ], no dates, ordenacao=numero)",
+  "capturedAt": "2026-10-25T02:26:30.000Z",
+  "note": "two orientações jurisprudenciais numbered 1 by two different chambers (SDC and SDI2); the OJ filter also counts the transitory ones"
+}

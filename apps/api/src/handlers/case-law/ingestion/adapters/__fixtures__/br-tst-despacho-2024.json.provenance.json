@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "8ddbd6cbf57f7e92d29d68aea06833f6425ebe8d495c3b2ef25314af07efd241",
+  "sourceUrl": "https://jurisprudencia-backend2.tst.jus.br/rest/pesquisa-textual/1/2 (POST tipos=[DESPACHO], publicacao 2024-03-15..2024-03-15, ordenacao=data)",
+  "capturedAt": "2026-10-25T02:31:20.000Z",
+  "note": "two despachos: one in plain text, one as a CDATA-wrapped HTML fragment. Each codCPFSignatario value (a signatory's personal tax id) was replaced by 00000000000 before commit; every other byte is as served."
+}

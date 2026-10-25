@@ -1,4 +1,5 @@
-import { inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 
 import { caseLawCoverageSlices } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -7,6 +8,7 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
+  BR_TST_PRECEDENTS_SLICE,
   CASE_LAW_SOURCE_ROWS_BOUND,
 } from "@/api/lib/legal-search/ingestion-constants";
 
@@ -33,11 +35,27 @@ export type CaseLawKnownGaps =
     }
   | { type: "not_reconciled"; reason: string };
 
-const YEAR_PREFIX_SLICE = { type: "year-prefix" } as const;
+type CoverageSliceGrammar =
+  | {
+      readonly type: "year-prefix";
+      /**
+       * Slices of the source that cover no year: a set the publisher lists
+       * whole. They stay in the ledger and its operator reads; the per-year
+       * table has no year to place them under, so it leaves them out rather
+       * than reading the whole source as off its grammar.
+       */
+      readonly undated: readonly string[];
+    }
+  | { readonly type: "not-reconciled"; readonly reason: string };
+
+const YEAR_PREFIX_SLICE = {
+  type: "year-prefix",
+  undated: [],
+} as const satisfies CoverageSliceGrammar;
 const NOT_DATE_SLICED = {
   type: "not-reconciled",
   reason: "The source listing is not partitioned into calendar-date slices.",
-} as const;
+} as const satisfies CoverageSliceGrammar;
 
 /**
  * The grammar that turns each adapter's durable slice key into a calendar
@@ -50,6 +68,10 @@ const COVERAGE_SLICE_GRAMMAR = {
   [ADAPTER_KEYS.CZ_NSS]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.CZ_US]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.CZ_UOHS]: NOT_DATE_SLICED,
+  [ADAPTER_KEYS.BR_TST]: {
+    type: "year-prefix",
+    undated: [BR_TST_PRECEDENTS_SLICE],
+  },
   [ADAPTER_KEYS.SK_COURTS]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.SK_US]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.PL_COURTS]: YEAR_PREFIX_SLICE,
@@ -75,17 +97,10 @@ const COVERAGE_SLICE_GRAMMAR = {
   [ADAPTER_KEYS.PL_KIS]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.PL_UODO]: YEAR_PREFIX_SLICE,
   [ADAPTER_KEYS.PL_UOKIK]: YEAR_PREFIX_SLICE,
-} as const satisfies Record<
-  AdapterKey,
-  | typeof YEAR_PREFIX_SLICE
-  | { readonly type: "not-reconciled"; readonly reason: string }
->;
+} as const satisfies Record<AdapterKey, CoverageSliceGrammar>;
 
-const COVERAGE_SLICE_GRAMMAR_BY_KEY: ReadonlyMap<
-  string,
-  | typeof YEAR_PREFIX_SLICE
-  | { readonly type: "not-reconciled"; readonly reason: string }
-> = new Map(Object.entries(COVERAGE_SLICE_GRAMMAR));
+const COVERAGE_SLICE_GRAMMAR_BY_KEY: ReadonlyMap<string, CoverageSliceGrammar> =
+  new Map(Object.entries(COVERAGE_SLICE_GRAMMAR));
 
 /** Four decimal digits are the entire declared year key space. */
 export const CASE_LAW_COVERAGE_YEARS_PER_SOURCE_BOUND = 10_000;
@@ -155,6 +170,7 @@ export const readCaseLawCoverageYearsQuery = async (
 ): Promise<ReadonlyMap<string, CaseLawKnownGaps>> => {
   const result = new Map<string, CaseLawKnownGaps>();
   const reconciledSourceIds: SafeId<"caseLawSource">[] = [];
+  const undatedSlices: SQL[] = [];
 
   for (const source of sources) {
     const grammar = COVERAGE_SLICE_GRAMMAR_BY_KEY.get(source.adapterKey);
@@ -173,6 +189,14 @@ export const readCaseLawCoverageYearsQuery = async (
       continue;
     }
     reconciledSourceIds.push(source.id);
+    if (grammar.undated.length > 0) {
+      undatedSlices.push(
+        and(
+          eq(caseLawCoverageSlices.sourceId, source.id),
+          inArray(caseLawCoverageSlices.slice, [...grammar.undated]),
+        ) ?? sql`false`,
+      );
+    }
   }
 
   if (reconciledSourceIds.length === 0) {
@@ -194,7 +218,14 @@ export const readCaseLawCoverageYearsQuery = async (
         unlistedSlices: sql<number>`count(*) FILTER (WHERE ${caseLawCoverageSlices.reported} IS NULL)::integer`,
       })
       .from(caseLawCoverageSlices)
-      .where(inArray(caseLawCoverageSlices.sourceId, reconciledSourceIds))
+      .where(
+        and(
+          inArray(caseLawCoverageSlices.sourceId, reconciledSourceIds),
+          undatedSlices.length === 0
+            ? undefined
+            : not(or(...undatedSlices) ?? sql`false`),
+        ),
+      )
       .groupBy(caseLawCoverageSlices.sourceId, sliceYear)
       .orderBy(caseLawCoverageSlices.sourceId, sliceYear),
     COVERAGE_YEAR_ROWS_BOUND,

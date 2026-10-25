@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
@@ -43,6 +44,15 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
   "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
+  /**
+   * The TST jurisprudence backend. It states no limit; one request a second
+   * is politeness, and each answer can run to megabytes of full text.
+   */
+  "tst-jus-br": {
+    publisher: "TST",
+    intervalMs: 1000,
+    hosts: ["jurisprudencia-backend2.tst.jus.br"],
+  },
   "edpb-eu": {
     publisher: "European Data Protection Board",
     intervalMs: 1000,

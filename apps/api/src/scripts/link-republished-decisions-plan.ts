@@ -29,6 +29,7 @@ export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.CZ_NSS]: 0,
   [ADAPTER_KEYS.CZ_US]: 0,
   [ADAPTER_KEYS.CZ_UOHS]: 0,
+  [ADAPTER_KEYS.BR_TST]: 0,
   [ADAPTER_KEYS.SK_COURTS]: 1,
   [ADAPTER_KEYS.SK_US]: 0,
   [ADAPTER_KEYS.PL_COURTS]: 1,
@@ -90,7 +91,9 @@ export type RepublishedDecisionCandidate = {
 };
 
 type CandidateDisposition =
-  "link" | "separate_alias_group_survivor" | "separate_already_retired";
+  | "link"
+  | "separate_alias_group_survivor"
+  | "separate_already_retired";
 
 export type ApplyRepublishedDecisionOutcome =
   | { type: "linked"; retiredId: SafeId<"caseLawDecision"> }

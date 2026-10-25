@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "9760613b2754ae6aa18b1e920c603d65e8345e9cc0fd86ccfb198ba59c99911f",
+  "sourceUrl": "https://jurisprudencia-backend2.tst.jus.br/rest/pesquisa-textual/1/2 (POST tipos=[SUM], no dates, ordenacao=numero)",
+  "capturedAt": "2026-10-25T02:15:40.000Z",
+  "note": "the first two súmulas by number, with their precedents and publication dates"
+}

@@ -14,6 +14,7 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import { buildBrTstDecision } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { parseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
@@ -107,6 +108,25 @@ const readCzUohs: EvidenceReader = async (fixture) => [
     }),
   },
 ];
+
+/** Every record of a recorded TST search response, built as the crawl builds it. */
+const readBrTst: EvidenceReader = async (fixture) => {
+  const recorded = await jsonOf(fixture);
+  const items = isRecord(recorded) ? recorded["registros"] : undefined;
+  if (!isUnknownArray(items)) {
+    return panic(`${fixture} is not a TST search response`);
+  }
+  return items.flatMap((item, index) => {
+    const record = isRecord(item) ? item["registro"] : undefined;
+    if (!isRecord(record)) {
+      return panic(`${fixture} lists a row with no record`);
+    }
+    const { documentAst } = buildBrTstDecision(record).decision;
+    return isDocumentAst(documentAst)
+      ? [{ id: `${fixture}#${String(index)}`, ast: documentAst }]
+      : panic(`${fixture}#${String(index)} built no document`);
+  });
+};
 
 const readCzNss: EvidenceReader = async (fixture) => [
   {
@@ -364,6 +384,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
   "cz-uohs": readCzUohs,
+  "br-tst": readBrTst,
   "sk-courts": null,
   "sk-us": readSkUs,
   "pl-courts": null,

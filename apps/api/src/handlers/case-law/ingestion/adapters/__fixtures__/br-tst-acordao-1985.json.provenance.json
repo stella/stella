@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "2f95f1b2a57ec51192049cc0bee38a9ce2b12682a3da30bd23742ea140f3cc68",
+  "sourceUrl": "https://jurisprudencia-backend2.tst.jus.br/rest/pesquisa-textual/1/1 (POST tipos=[], publicacao 1900-01-01..1989-12-31, ordenacao=data)",
+  "capturedAt": "2026-10-25T02:24:10.000Z",
+  "note": "the only record published before 1990: an acórdão whose numFormatado prints no class, so its docket is read from numero, and whose full text has no paragraph styles"
+}
