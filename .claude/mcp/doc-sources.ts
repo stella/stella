@@ -152,6 +152,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "expo",
       "expo-constants",
+      "expo-doctor",
       "expo-linking",
       "expo-router",
       "expo-status-bar",
@@ -227,6 +228,10 @@ export const DOC_SOURCES = {
     },
     url: "https://oxc.rs/llms.txt",
   },
+  OxlintTailwindcss: {
+    dependencies: ["oxlint-tailwindcss"],
+    url: "https://oxlint-tailwindcss.pages.dev/llms.txt",
+  },
   Streamdown: {
     dependencies: ["streamdown", "@streamdown/cjk", "@streamdown/math"],
     url: "https://streamdown.dev/llms.txt",
@@ -271,8 +276,8 @@ export const DOC_SOURCES = {
 
 const NO_LLMS_TXT_EXPLANATION =
   "The canonical project documentation did not publish an llms.txt endpoint when checked.";
-const NO_LLMS_TXT_CHECKED_AT = "2026-09-25T00:00:00.000Z";
-const NO_LLMS_TXT_EXPIRES_AT = "2026-10-25T00:00:00.000Z";
+const NO_LLMS_TXT_CHECKED_AT = "2026-10-25T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-11-24T00:00:00.000Z";
 
 const noLlmsTxt = (dependency: string): NoLlmsTxtExclusion => ({
   checkedAt: NO_LLMS_TXT_CHECKED_AT,
@@ -335,7 +340,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "driver.js",
   "entities",
   "eslint",
-  "expo-doctor",
   "franc",
   "happy-dom",
   "immer",
@@ -348,7 +352,6 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "lefthook",
   "nodemailer",
   "onnxruntime-node",
-  "oxlint-tailwindcss",
   "parse5",
   "parse5-htmlparser2-tree-adapter",
   "pdfjs-dist",
