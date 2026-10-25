@@ -104,7 +104,7 @@ const taxCategory = ({
   if (withReason && category === "E") {
     reason = text(
       "cbc:TaxExemptionReason",
-      exemptionReason ?? EXEMPTION_REASON["E"],
+      exemptionReason?.trim() || EXEMPTION_REASON["E"],
     );
   } else if (withReason) {
     reason = text("cbc:TaxExemptionReason", EXEMPTION_REASON[category]);

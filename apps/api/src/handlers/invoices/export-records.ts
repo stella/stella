@@ -72,16 +72,23 @@ const PARTY_FIELDS = [
 
 type StoredParty = Record<(typeof PARTY_FIELDS)[number], string | null>;
 
-const presentText = (value: string | null): value is string =>
-  value !== null && value.trim() !== "";
+/**
+ * Stored text as every export reads it: trimmed, and absent when blank. The
+ * one place exports get identifiers from, so a format's validation and its
+ * output never see different strings.
+ */
+const exportText = (value: string | null): string | null => {
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed;
+};
 
 /** A party as an export carries it: blank stored fields are left out. */
 const partyOf = (name: string, stored: StoredParty): InvoiceParty => ({
   name,
   ...Object.fromEntries(
     PARTY_FIELDS.flatMap((field) => {
-      const value = stored[field];
-      return presentText(value) ? [[field, value]] : [];
+      const value = exportText(stored[field]);
+      return value === null ? [] : [[field, value]];
     }),
   ),
 });
@@ -221,7 +228,7 @@ const exportLines = (
       grossAmountMinor: line.grossAmountMinor,
       vatRateBps: line.vatRateBps,
       vatTreatment: line.vatTreatment,
-      exemptionReason: line.exemptionReason,
+      exemptionReason: exportText(line.exemptionReason),
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
@@ -238,24 +245,27 @@ const exportLines = (
 
 const exportSellerOf = (
   seller: NonNullable<ReturnType<LoadedExport["sellers"]["get"]>>,
-): InvoiceExportSeller => ({
-  ...partyOf(seller.legalName, {
-    registrationNumber: seller.registrationId,
-    taxId: seller.taxId,
-    vatId: seller.vatId,
-    addressLine1: seller.addressLine1,
-    addressLine2: seller.addressLine2,
-    city: seller.city,
-    postalCode: seller.postalCode,
-    country: seller.country,
-  }),
-  ...(presentText(seller.iban) ? { iban: seller.iban } : {}),
-  ...(presentText(seller.bic) ? { bic: seller.bic } : {}),
-  ...(presentText(seller.accountNumber)
-    ? { accountNumber: seller.accountNumber }
-    : {}),
-  homeCurrency: seller.defaultCurrency,
-});
+): InvoiceExportSeller => {
+  const iban = exportText(seller.iban);
+  const bic = exportText(seller.bic);
+  const accountNumber = exportText(seller.accountNumber);
+  return {
+    ...partyOf(seller.legalName, {
+      registrationNumber: seller.registrationId,
+      taxId: seller.taxId,
+      vatId: seller.vatId,
+      addressLine1: seller.addressLine1,
+      addressLine2: seller.addressLine2,
+      city: seller.city,
+      postalCode: seller.postalCode,
+      country: seller.country,
+    }),
+    ...(iban === null ? {} : { iban }),
+    ...(bic === null ? {} : { bic }),
+    ...(accountNumber === null ? {} : { accountNumber }),
+    homeCurrency: seller.defaultCurrency,
+  };
+};
 
 /**
  * The loaded invoices as export records. Refused when a selected invoice is

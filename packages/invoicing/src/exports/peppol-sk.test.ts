@@ -402,7 +402,7 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
 
   test("generated line sets keep document line totals equal at two decimals", () => {
     assertProperty(
-      "peppol-sk-line-extension-total",
+      "generated line sets keep document line totals equal at two decimals",
       fc.property(
         fc.array(fc.integer({ min: 1, max: 1_000_000 }), {
           minLength: 1,
