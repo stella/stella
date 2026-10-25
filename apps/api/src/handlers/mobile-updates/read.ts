@@ -29,8 +29,6 @@ const config = {
     type: "public",
     reason: "Relays the mobile app's signed public updates.",
   },
-  // The protocol's own policy: a phone asks again on every launch.
-  cache: { kind: "private", maxAge: 0 },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   params: v.object({ variant: v.picklist(MOBILE_UPDATE_VARIANTS) }),
