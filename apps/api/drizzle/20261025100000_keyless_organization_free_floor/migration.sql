@@ -5,7 +5,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "organization_access_states"
   DROP CONSTRAINT "organization_access_states_shape";--> statement-breakpoint
 ALTER TABLE "organization_access_states"
-  ADD CONSTRAINT "organization_access_states_shape" CHECK (
+  ADD CONSTRAINT "organization_access_states_shape" CHECK ((
     (
       state = 'self_managed_keys'
       AND evaluation_started_at IS NULL
@@ -23,4 +23,4 @@ ALTER TABLE "organization_access_states"
         OR evaluation_ends_at > evaluation_started_at
       )
     )
-  ) IS TRUE;
+  ) IS TRUE) NOT VALID;
