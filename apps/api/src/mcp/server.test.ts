@@ -3,6 +3,7 @@ import {
   type FetchLike,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
@@ -78,6 +79,7 @@ import {
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
+import { compileClientWireSchema } from "@/api/tests/helpers/wire-json-schema";
 
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
   Result.ok(undefined),
@@ -2700,6 +2702,68 @@ describe("MCP transport conformance", () => {
           { type: "text", text: expect.stringContaining("Action applied.") },
         ]);
       }
+    }
+  });
+
+  test("an omitted mutation result still validates against the tool's advertised outputSchema", async () => {
+    const definition = listStaticMcpToolDefinitions("default").find(
+      (tool) =>
+        !tool.annotations.readOnlyHint &&
+        toMcpTools([tool])[0]?.outputSchema !== undefined,
+    );
+    const outputSchema =
+      definition === undefined
+        ? undefined
+        : toMcpTools([definition])[0]?.outputSchema;
+    if (definition === undefined || outputSchema === undefined) {
+      panic("Missing mutation tool with an output contract");
+    }
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: [definition.scope, ...(definition.additionalScopes ?? [])],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ memberRole: "owner" });
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({ pageSize: 10, requestBytes: 2000, responseBytes: 512 }),
+    );
+    getMcpToolDefinitionMock.mockResolvedValue(definition);
+    handleMcpToolCallMock.mockResolvedValue({
+      content: [{ type: "text", text: "é".repeat(400) }],
+    });
+    const validate = compileClientWireSchema(
+      new AjvJsonSchemaValidator(),
+      outputSchema,
+    );
+
+    for (const protocol of ["legacy", "modern"] as const) {
+      const params = { name: definition.name, arguments: {} };
+      const response = await handleMcpHttpRequest(
+        protocol === "modern"
+          ? createModernMcpRequest({ id: 1, method: "tools/call", params })
+          : createMcpRequest({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params,
+            }),
+      );
+      const envelope =
+        await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+      // The fixture reaches the omission path: the result is not an error, so
+      // a client validates `structuredContent` against the advertised schema.
+      expect(envelope.result.isError).toBe(false);
+      expect(envelope.result.structuredContent).toMatchObject({
+        applied: true,
+        resultOmitted: true,
+      });
+      expect({
+        protocol,
+        valid: validate(envelope.result.structuredContent).valid,
+      }).toEqual({ protocol, valid: true });
     }
   });
 

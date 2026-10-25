@@ -123,6 +123,104 @@ describe("invoice PDF", () => {
     expect(text).toContain("CZ87654321");
   });
 
+  test.each([
+    {
+      country: "CZ",
+      language: "cs",
+      currency: "EUR",
+      homeCurrency: "CZK",
+      rate: "25",
+      source: "CNB",
+      rateLine: "1 EUR = 25 CZK",
+      homeVatMinor: 250_000,
+      totalLabel: "DPH v domácí měně celkem",
+    },
+    {
+      country: "SK",
+      language: "sk",
+      currency: "USD",
+      homeCurrency: "EUR",
+      // ECB quotes the foreign currency per euro, as published.
+      rate: "1.25",
+      source: "ECB",
+      rateLine: "1 EUR = 1,25 USD",
+      homeVatMinor: 8000,
+      totalLabel: "DPH v domácej mene spolu",
+    },
+    {
+      country: "PL",
+      language: "pl",
+      currency: "EUR",
+      homeCurrency: "PLN",
+      rate: "4.3",
+      source: "NBP",
+      rateLine: "1 EUR = 4,3 PLN",
+      homeVatMinor: 43_000,
+      totalLabel: "Łączny VAT w walucie krajowej",
+    },
+  ] as const)(
+    "prints home-currency VAT and the official rate for a $country seller",
+    async ({
+      country,
+      language,
+      currency,
+      homeCurrency,
+      rate,
+      source,
+      rateLine,
+      homeVatMinor,
+      totalLabel,
+    }) => {
+      const { text } = await textOf({
+        ...options,
+        invoice: {
+          ...options.invoice,
+          language,
+          currency,
+          vatExchangeRate: rate,
+          vatExchangeRateSource: source,
+          vatExchangeRateDate: "2026-09-29",
+          vatExchangeRateReference: null,
+          vatExchangeRateTaxPoint: "2026-09-30",
+          lines: [
+            {
+              ...sampleLine,
+              vatTreatment: "domestic_vat",
+              vatRateBps: 2000,
+              vatAmount: 10_000,
+              grossAmount: 65_555,
+            },
+          ],
+        },
+        seller: { ...options.seller, country, vatId: `${country}87654321` },
+        totals: {
+          netAmountMinor: cents(55_555),
+          vatAmountMinor: cents(10_000),
+          grossAmountMinor: cents(65_555),
+          vatBreakdown: [
+            {
+              vatTreatment: "domestic_vat",
+              vatRateBps: 2000,
+              netAmountMinor: cents(55_555),
+              vatAmountMinor: cents(10_000),
+              grossAmountMinor: cents(65_555),
+            },
+          ],
+        },
+      });
+      expect(text).toContain(totalLabel);
+      expect(text).toContain(source);
+      expect(text.replace(/[\u00a0\u202f]/gu, " ")).toContain(rateLine);
+      expect(text).toContain(
+        formatMoneyCents({
+          amountCents: homeVatMinor,
+          currency: homeCurrency,
+          locale: language,
+        }).replace(/[\u00a0\u202f]/gu, " "),
+      );
+    },
+  );
+
   test("prints each line's quantity, unit and unit price in the reader's number format", async () => {
     const { text } = await textOf({
       ...options,
