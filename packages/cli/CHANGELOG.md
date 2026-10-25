@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 5.5.0
+
+### Minor Changes
+
+- [#6809](https://github.com/stella/stella/pull/6809) [`0b3bcae`](https://github.com/stella/stella/commit/0b3bcae5f2ab01d64b9182f76b587bc973a2f168) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Finalizing a VAT invoice in a currency other than the seller country's VAT currency records the official exchange rate for its tax point and states the VAT in that currency.
+
 ## 5.4.0
 
 ### Minor Changes
