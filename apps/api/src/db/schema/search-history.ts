@@ -1,4 +1,4 @@
-import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
 import {
   bytea,
@@ -46,7 +46,7 @@ export const searchHistoryEntries = p.pgTable(
      * or the one an opened page's path names. Null on queries a browser kept
      * from before entries named one; no country-scoped list shows those.
      */
-    country: p.text("country", { enum: CASE_LAW_JURISDICTIONS }),
+    country: p.text("country").$type<CaseLawJurisdiction>(),
     courtId: p.varchar("court_id", { length: 128 }),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),
