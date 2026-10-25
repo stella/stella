@@ -68,11 +68,12 @@ jobs:
           bun-version-file: "package.json"
           no-cache: true
 
-      # The signing key reaches only the signing step, never the install.
+      # The signing key reaches only the signing step, never the install. A
+      # cold install, as every release job: a signed update restores no cache
+      # another job wrote.
       - name: Install mobile dependencies
-        uses: ./.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
       - name: Export each platform's bundle
         working-directory: apps/mobile
