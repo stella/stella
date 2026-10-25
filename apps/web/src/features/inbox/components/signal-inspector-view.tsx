@@ -17,6 +17,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import type { InboxSignalViewPayload } from "@/features/inbox/signal-inspector.logic";
 import {
   OPEN_WORK_STATUS_LABEL_KEY,
@@ -56,22 +57,22 @@ export const SignalInspectorView = ({
         <div className="flex flex-col gap-5 p-4">
           {isPending && <EvidenceSkeleton />}
           {isError && (
-            <div
+            <RecoverableErrorStatus
               className="text-muted-foreground flex flex-col items-center gap-3 py-10 text-center text-sm"
-              role="alert"
-            >
-              <AlertCircleIcon className="text-destructive size-8" />
-              <p>{t("common.unexpectedError")}</p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "inbox.refetch-signal-evidence");
-                }}
-                size="sm"
-                variant="outline"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+              message={t("common.unexpectedError")}
+              icon={<AlertCircleIcon className="text-destructive size-8" />}
+              actions={
+                <Button
+                  onClick={() => {
+                    detached(refetch(), "inbox.refetch-signal-evidence");
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {t("common.retry")}
+                </Button>
+              }
+            />
           )}
           {signal && <SignalHeader signal={signal} />}
           {signal && (
