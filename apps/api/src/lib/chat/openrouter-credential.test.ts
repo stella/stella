@@ -116,7 +116,9 @@ const createHarness = ({
   exchangeReplies = [],
   exchangeFetcher,
   random = () => 0,
-  timeoutMs = 100,
+  // The deadline runs on a real timer while the fixture clock is fake, so the
+  // default leaves room for a loaded machine; timeout tests pass their own.
+  timeoutMs = 30_000,
 }: {
   configuration?: ProviderOptions["configuration"];
   clock?: ReturnType<typeof createClock>;
@@ -217,7 +219,7 @@ const createHarness = ({
       clock.advance(delayMs);
     },
     random,
-    timeoutMs, // timeout: fixture default, elapsed only on the fake clock
+    timeoutMs, // timeout: fixture default (real timer), shortened only by timeout tests
   });
   return {
     provider,
