@@ -236,6 +236,9 @@
         "src/i18n-check.ts",
         "src/i18n-typegen.ts",
         "src/dev-postgres.ts",
+        // Root package scripts run these checks by path.
+        "src/workspace-hygiene.ts",
+        "src/model-catalog-upstream.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
       ]
