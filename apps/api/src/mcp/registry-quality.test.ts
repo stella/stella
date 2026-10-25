@@ -18,6 +18,8 @@ import { propertyConfig } from "@stll/property-testing";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   collisionSafeToolName,
   DYNAMIC_TOOL_NAMESPACES,
@@ -46,16 +48,22 @@ import type {
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
 import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   compileWireSchema,
   createWireSchemaValidator,
   schemaComparisonArbitrary,
 } from "@/api/tests/helpers/wire-json-schema";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   baselineAudiences,
@@ -86,6 +94,331 @@ const SURFACES = MCP_MODES.map((mode) => ({
   mode,
   definitions: listStaticMcpToolDefinitions(mode),
 }));
+
+const databaseAccessForbidden = asTestRaw<
+  AuthorizedMcpRequestContext["scopedDb"]
+>(() => {
+  throw new Error("database must not be reached before tool authorization");
+});
+
+const contextWithoutDeclaredPermissions = (): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    credentialPermissions: { searchHistory: ["read"] },
+    grantedScopes: [],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: async () => {},
+    safeDb: toSafeDbMock(databaseAccessForbidden),
+    scopedDb: databaseAccessForbidden,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    userEmail: "standard@example.test",
+    userId: toSafeId<"user">("user_1"),
+  });
+
+const toolResultErrorCode = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+) => {
+  const content = result.content.at(0);
+  if (content?.type !== "text") {
+    return undefined;
+  }
+  const parsed: unknown = JSON.parse(content.text);
+  if (typeof parsed !== "object" || parsed === null || !("error" in parsed)) {
+    return undefined;
+  }
+  const { error } = parsed;
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+  return typeof error.code === "string" ? error.code : undefined;
+};
+
+test("every declared tool permission is refused before database access", async () => {
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (
+      definition.permissions.type === "open-read" ||
+      definition.permissions.type === "delegated"
+    ) {
+      continue;
+    }
+    const result = await handleMcpToolCall({
+      args: {},
+      context: contextWithoutDeclaredPermissions(),
+      toolName: definition.name,
+    });
+    expect(toolResultErrorCode(result), definition.name).toBe(
+      "permission_denied",
+    );
+  }
+});
+
+test("every read tool permission declaration stays visible in review", () => {
+  const census = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (definition) => definition.access === "read",
+  )
+    .map(({ name, permissions }) => ({
+      name,
+      kind: permissions.type,
+      ...(permissions.type === "open-read"
+        ? { reason: permissions.reason }
+        : {}),
+    }))
+    .toSorted((left, right) => {
+      if (left.name === right.name) {
+        return 0;
+      }
+      return left.name < right.name ? -1 : 1;
+    });
+
+  expect(census).toMatchInlineSnapshot(`
+    [
+      {
+        "kind": "open-read",
+        "name": "case_law_coverage",
+        "reason": "public case-law coverage metadata",
+      },
+      {
+        "kind": "all",
+        "name": "check_counterparty",
+      },
+      {
+        "kind": "open-read",
+        "name": "describe_capability",
+        "reason": "reads the static capability catalog metadata",
+      },
+      {
+        "kind": "open-read",
+        "name": "fetch",
+        "reason": "fetches only public law or caller-accessible matter records",
+      },
+      {
+        "kind": "all",
+        "name": "get_usage",
+      },
+      {
+        "kind": "all",
+        "name": "list_audit_log",
+      },
+      {
+        "kind": "open-read",
+        "name": "list_capabilities",
+        "reason": "reads the static capability catalog metadata",
+      },
+      {
+        "kind": "all",
+        "name": "list_clauses",
+      },
+      {
+        "kind": "all",
+        "name": "list_contacts",
+      },
+      {
+        "kind": "all",
+        "name": "list_documents",
+      },
+      {
+        "kind": "all",
+        "name": "list_invoices",
+      },
+      {
+        "kind": "open-read",
+        "name": "list_matters",
+        "reason": "reads only matters admitted by the caller scoped database",
+      },
+      {
+        "kind": "all",
+        "name": "list_playbooks",
+      },
+      {
+        "kind": "all",
+        "name": "list_properties",
+      },
+      {
+        "kind": "all",
+        "name": "list_reader_annotations",
+      },
+      {
+        "kind": "all",
+        "name": "list_tasks",
+      },
+      {
+        "kind": "all",
+        "name": "list_templates",
+      },
+      {
+        "kind": "all",
+        "name": "list_time_entries",
+      },
+      {
+        "kind": "all",
+        "name": "lookup_business_registry",
+      },
+      {
+        "kind": "open-read",
+        "name": "open_case_law_decision",
+        "reason": "public case-law and legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "prepare_feedback",
+        "reason": "builds a feedback preview from caller-supplied data",
+      },
+      {
+        "kind": "open-read",
+        "name": "preview_cited_provision",
+        "reason": "public case-law and legislation corpus",
+      },
+      {
+        "kind": "all",
+        "name": "preview_template_conditions",
+      },
+      {
+        "kind": "delegated",
+        "name": "read_capability",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_case_law_citations",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_case_law_decision",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_case_law_decision_blocks",
+        "reason": "public case-law and legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_contact",
+        "reason": "reads only contacts in matters admitted by the caller scoped database",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_content_across_matters",
+        "reason": "reads only documents admitted by the caller scoped database",
+      },
+      {
+        "kind": "all",
+        "name": "read_document",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_provision_history",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_statute",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "read_statute_provisions",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "resolve_case_law_decision",
+        "reason": "public law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "resolve_law_citation",
+        "reason": "public law corpus",
+      },
+      {
+        "kind": "all",
+        "name": "resolve_rate",
+      },
+      {
+        "kind": "open-read",
+        "name": "search",
+        "reason": "searches only public law and caller-accessible matter records",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_across_matters",
+        "reason": "searches only matters admitted by the caller search allowlist",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_boe_legislation",
+        "reason": "public legislation corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_case_law",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_legislation",
+        "reason": "public legislation corpus",
+      },
+    ]
+  `);
+});
+
+// Read tools that a surface defines with a declaration of its own, keyed by
+// `<mode>:<name>`. Every other surface read must declare exactly what the
+// default registry declares for the same name, so the census above covers it.
+const SURFACE_READ_DECLARATIONS: Record<
+  string,
+  { kind: string; reason?: string }
+> = {
+  "law:fetch": { kind: "open-read", reason: "public law corpus" },
+  "law:search": { kind: "open-read", reason: "public law corpus" },
+};
+
+test("every surface's read declarations are covered by the census", () => {
+  const declarationOf = (definition: McpToolDefinition) =>
+    definition.access === "read"
+      ? {
+          kind: definition.permissions.type,
+          ...(definition.permissions.type === "open-read"
+            ? { reason: definition.permissions.reason }
+            : {}),
+        }
+      : undefined;
+  const defaultDeclarations = new Map<string, ReturnType<typeof declarationOf>>(
+    DEFAULT_MCP_TOOL_DEFINITIONS.map((definition) => [
+      definition.name,
+      declarationOf(definition),
+    ]),
+  );
+  const uncovered: string[] = [];
+  const used = new Set<string>();
+  for (const { mode, definitions } of SURFACES) {
+    for (const definition of definitions) {
+      const declaration = declarationOf(definition);
+      if (declaration === undefined) {
+        continue;
+      }
+      const key = `${mode}:${definition.name}`;
+      const expected =
+        SURFACE_READ_DECLARATIONS[key] ??
+        defaultDeclarations.get(definition.name);
+      if (SURFACE_READ_DECLARATIONS[key] !== undefined) {
+        used.add(key);
+      }
+      if (!Bun.deepEquals(declaration, expected)) {
+        uncovered.push(`${key} ${JSON.stringify(declaration)}`);
+      }
+    }
+  }
+  expect(uncovered).toEqual([]);
+  expect(Object.keys(SURFACE_READ_DECLARATIONS).toSorted()).toEqual(
+    [...used].toSorted(),
+  );
+});
 
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.
@@ -699,38 +1032,44 @@ describe("MCP static tool-set coherence", () => {
 describe("MCP wire schemas under an independent validator", () => {
   const validator = createWireSchemaValidator();
 
-  // Two sources that compact to one published schema are distinct inputs to
-  // the equivalence check, so a contract is keyed by both projections.
-  const contractKey = (
-    contract: Pick<
-      RuntimeMcpToolOutputContract,
-      "outputSchema" | "outputSchemaSource"
-    >,
-  ): string =>
-    JSON.stringify([
-      contract.outputSchema,
-      deriveUncompactedMcpOutputSchema(contract.outputSchemaSource),
-    ]);
+  type ComparedContract = {
+    outputSchema: RuntimeMcpToolOutputContract["outputSchema"];
+    /**
+     * The uncompacted projection of the same contract, advertised the way the
+     * published one is (a write tool's accepts its omitted result too), so
+     * the comparison isolates compaction.
+     */
+    uncompacted: RuntimeMcpToolOutputContract["outputSchema"];
+    tool: string;
+  };
 
   const outputContracts = () => {
-    const contracts = new Map<
-      string,
-      Pick<
-        RuntimeMcpToolOutputContract,
-        "outputSchema" | "outputSchemaSource"
-      > & {
-        tool: string;
-      }
-    >();
+    // Two sources that compact to one published schema are distinct inputs to
+    // the equivalence check, so a contract is keyed by both projections.
+    const contracts = new Map<string, ComparedContract>();
+    const add = (compared: ComparedContract) => {
+      contracts.set(
+        JSON.stringify([compared.outputSchema, compared.uncompacted]),
+        compared,
+      );
+    };
     for (const mode of MCP_MODES) {
-      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), {
-        mode,
-      })) {
-        const contract = getStaticMcpToolOutputContract(tool.name, mode);
+      for (const definition of listStaticMcpToolDefinitions(mode)) {
+        const contract = getStaticMcpToolOutputContract(definition.name, mode);
         if (contract !== undefined) {
-          contracts.set(contractKey(contract), {
-            tool: `${mode}/${tool.name}`,
-            ...contract,
+          add({
+            tool: `${mode}/${definition.name}`,
+            outputSchema: contract.outputSchema,
+            uncompacted: advertisedMcpOutputSchema({
+              contract: {
+                ...contract,
+                outputSchema: deriveUncompactedMcpOutputSchema(
+                  contract.outputSchemaSource,
+                ),
+              },
+              access: definition.access,
+              compaction: "none",
+            }),
           });
         }
       }
@@ -739,9 +1078,12 @@ describe("MCP wire schemas under an independent validator", () => {
       DYNAMIC_TOOL_FAMILY_POLICIES,
     )) {
       if (policy.owner === "stella") {
-        contracts.set(contractKey(policy.output), {
+        add({
           tool: `family/${family}`,
-          ...policy.output,
+          outputSchema: policy.output.outputSchema,
+          uncompacted: deriveUncompactedMcpOutputSchema(
+            policy.output.outputSchemaSource,
+          ),
         });
       }
     }
@@ -771,12 +1113,7 @@ describe("MCP wire schemas under an independent validator", () => {
 
   test("every output schema accepts exactly what its uncompacted projection accepts", () => {
     let compacted = 0;
-    for (const {
-      tool,
-      outputSchema,
-      outputSchemaSource,
-    } of outputContracts()) {
-      const uncompacted = deriveUncompactedMcpOutputSchema(outputSchemaSource);
+    for (const { tool, outputSchema, uncompacted } of outputContracts()) {
       if (JSON.stringify(uncompacted) === JSON.stringify(outputSchema)) {
         continue;
       }

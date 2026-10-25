@@ -12,13 +12,13 @@ import { capabilityRoute } from "@/api/lib/capability-route";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
 
 /**
  * The subset of an Elysia safe-handler context the generic capability path
- * reconstructs from an `McpRequestContext` plus the gateway `Request`. It is a
+ * reconstructs from an `McpRequestResources` plus the gateway `Request`. It is a
  * structural superset of both `RootHandlerContext` and (with `workspaceId`)
  * `WorkspaceHandlerContext` for every field a safe handler or the safe-handler
  * wrapper actually reads: `body`/`params`/`query` (validated input), the
@@ -81,7 +81,7 @@ export const synthesizeCapabilityContext = async ({
   workspaceId,
 }: {
   capabilityId: string;
-  context: McpRequestContext;
+  context: McpRequestResources;
   input: { body: unknown; params: unknown; query: unknown };
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;

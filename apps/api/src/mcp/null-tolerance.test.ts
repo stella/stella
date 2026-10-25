@@ -5,7 +5,8 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -38,7 +39,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  * handled exactly as any other value under that key.
  */
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
     const builder = {
       select: () => builder,
@@ -59,11 +60,11 @@ const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
 
 const noopRecorder = asTestRaw<AuditRecorder>(mock(async () => undefined));
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const workspaceIds = ["ws_1"];
   const set = new Set(workspaceIds);
   const safeDb = toSafeDbMock(emptyScopedDb);
-  return {
+  return authorizedMcpContextForTest({
     featureAccessSnapshot: enrolledTimeBillingSnapshot({
       organizationId: "org_1",
       userId: "user_1",
@@ -98,7 +99,7 @@ const createContext = (): McpRequestContext => {
     testDependencies: { loadOrgSettingsForAuth: loadOrgSettingsMock },
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const loadOrgSettingsMock = mock(async () => ({

@@ -7,9 +7,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -54,19 +55,21 @@ const buildContext = ({
 }: {
   accessibleWorkspaceIds?: ReturnType<typeof toSafeId<"workspace">>[];
   scopedDb?: ScopedDb;
-} = {}): McpRequestContext =>
-  buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: toSafeId<"organization">("org_1"),
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds,
-      pinnedIds: [],
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: toSafeId<"organization">("org_1"),
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds,
+        pinnedIds: [],
+      }),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
     }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  );
 
 describe("runRegistryReadTool", () => {
   // Per test: the real capture path throttles identical errors to one event

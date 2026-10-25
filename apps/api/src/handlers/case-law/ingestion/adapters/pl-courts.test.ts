@@ -105,7 +105,9 @@ const namesInRole = (
 ): readonly string[] =>
   (decision.judges ?? [])
     .filter((judge) => judge.role === role)
-    .map((judge) => judge.nameAsPrinted);
+    .flatMap((judge) =>
+      judge.nameAsPrinted === undefined ? [] : [judge.nameAsPrinted],
+    );
 
 describe("pl-courts reads what SAOS serves", () => {
   test("every field the recorded payloads state has a disposition", async () => {

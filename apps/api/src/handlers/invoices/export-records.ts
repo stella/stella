@@ -306,6 +306,15 @@ export const toExportRecords = (
         }),
       );
     }
+    if (invoice.vatExchangeRate !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Invoice ${invoice.invoiceNumber} includes VAT stated in the seller's home currency`,
+          hint: "This export cannot yet carry the home-currency VAT; use the PDF.",
+        }),
+      );
+    }
     if (!seller) {
       return Result.err(
         new HandlerError({

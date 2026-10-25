@@ -72,3 +72,14 @@ export {
   type InvoicePartyId,
 } from "./profiles/country-profiles";
 export { INVOICE_PDF_LABELS } from "./profiles/pdf-labels";
+export {
+  formatExchangeRate,
+  homeCurrencyVat,
+  isVatRateSource,
+  normalizeVatExchangeRate,
+  VAT_RATE_QUOTE_BASIS,
+  vatRateReferenceDate,
+  vatTaxPointDate,
+  type VatRateCountry,
+  type VatRateSource,
+} from "./vat-currency";
