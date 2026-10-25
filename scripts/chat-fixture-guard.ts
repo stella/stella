@@ -35,8 +35,8 @@ import { compareCodeUnit } from "@stll/collation";
 import {
   type Expression,
   type Node,
+  type ObjectProperty as Property,
   parseSource,
-  type Property,
   type SpreadElement,
   walk,
 } from "../packages/scripts/src/syntax-tree";
@@ -69,7 +69,7 @@ export type SnapshotLiteral = { line: number; path: string };
 const MAX_BINDING_HOPS = 8;
 
 /** `node` without the wrappers that leave its value unchanged. */
-const unwrap = (node: Expression): Expression => {
+const unwrap = (node: Node): Node => {
   let current = node;
   while (
     current.type === "TSAsExpression" ||

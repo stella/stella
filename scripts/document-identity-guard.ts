@@ -228,7 +228,7 @@ const reachesRenderer = ({
 
 type CollectInitializerOptions = {
   name: string;
-  expression: Expression;
+  expression: Node;
   collect: (name: string, node: RendererFunction) => void;
 };
 
@@ -283,12 +283,12 @@ const isDocumentRenderer = ({
     if (DOCUMENT_INPUT.test(nodeText(parameter, file))) {
       return true;
     }
-    const inputType = parameter.typeAnnotation?.typeAnnotation;
-    if (
-      inputType === undefined ||
-      inputType === null ||
-      !(inputType.type === "TSTypeReference")
-    ) {
+    const input =
+      parameter.type === "TSParameterProperty"
+        ? parameter.parameter
+        : parameter;
+    const inputType = input.typeAnnotation?.typeAnnotation;
+    if (inputType === undefined || !(inputType.type === "TSTypeReference")) {
       return false;
     }
     const inputName = nodeText(inputType.typeName, file);

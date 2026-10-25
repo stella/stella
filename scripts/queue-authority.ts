@@ -65,14 +65,14 @@ import {
   type ArrowFunctionExpression,
   type CallExpression,
   type Expression,
-  type FunctionDeclaration,
-  type FunctionExpression,
+  type Function as SyntaxFunction,
   type ImportExpression,
   type Node,
   type ObjectExpression,
+  type ObjectProperty,
   parseSource as parseSyntax,
   type Program,
-  type Property,
+  type SpreadElement,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
@@ -210,7 +210,9 @@ const propertyName = (name: Node): string | null => {
     ? name.value
     : null;
 };
-const isPropertyAssignment = (node: Node): node is Property =>
+const isPropertyAssignment = (
+  node: ObjectProperty | SpreadElement,
+): node is ObjectProperty =>
   node.type === "Property" &&
   !node.shorthand &&
   !node.method &&
@@ -536,7 +538,7 @@ const workerQueueNames = (
   for (const construction of constructions) {
     const first = construction.arguments.at(0);
     const names =
-      first === undefined
+      first === undefined || first.type === "SpreadElement"
         ? null
         : resolveStrings(first, { relativePath, file, readFile, depth: 0 });
     if (names === null) {
@@ -835,7 +837,8 @@ const valueIdentifier = (value: Expression): string | null => {
 };
 
 type FunctionLike =
-  ArrowFunctionExpression | FunctionExpression | FunctionDeclaration;
+  | ArrowFunctionExpression
+  | (SyntaxFunction & { type: "FunctionDeclaration" | "FunctionExpression" });
 const isFunctionLike = (node: Node): node is FunctionLike =>
   node.type === "ArrowFunctionExpression" ||
   node.type === "FunctionExpression" ||
@@ -876,7 +879,7 @@ const parameterIndex = (fn: FunctionLike | undefined, name: string): number =>
  * every boot call resolves to the same single module.
  */
 const injectedTaskModule = (
-  property: Property,
+  property: ObjectProperty,
   value: string,
   registry: { file: Program; path: string },
   readFile: AuditInput["readFile"],
@@ -925,7 +928,10 @@ const injectedTaskModule = (
       continue;
     }
     const argument = call.arguments[factory.position];
-    const supplied = argument === undefined ? null : valueIdentifier(argument);
+    const supplied =
+      argument === undefined || argument.type === "SpreadElement"
+        ? null
+        : valueIdentifier(argument);
     modules.add(
       (supplied === null ? undefined : bootImports.get(supplied)) ??
         SCHEDULER_BOOT_FILE,

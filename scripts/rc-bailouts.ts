@@ -36,6 +36,7 @@ import {
   type Function as SyntaxFunction,
   type MethodDefinition,
   type Node,
+  type ObjectProperty as Property,
   parseSource,
   walk,
 } from "../packages/scripts/src/syntax-tree";
@@ -140,13 +141,15 @@ type FunctionLocation = {
   start: number;
 };
 
-type FunctionNode = SyntaxFunction | ArrowFunctionExpression | MethodDefinition;
+type FunctionNode =
+  SyntaxFunction | ArrowFunctionExpression | MethodDefinition | Property;
 
 const isFunctionLikeDeclaration = (node: Node): node is FunctionNode =>
   node.type === "ArrowFunctionExpression" ||
   node.type === "FunctionDeclaration" ||
   node.type === "FunctionExpression" ||
-  node.type === "MethodDefinition";
+  node.type === "MethodDefinition" ||
+  (node.type === "Property" && (node.method || node.kind !== "init"));
 
 const sourceFileFor = (file: string, code: string) => {
   const parsed = parseSource(file, code);
@@ -166,7 +169,10 @@ const functionName = (sourceFile: SourceTree, node: FunctionNode): string => {
   ) {
     return node.id.name;
   }
-  if (node.type === "MethodDefinition" && node.key.type === "Identifier") {
+  if (
+    (node.type === "MethodDefinition" || node.type === "Property") &&
+    node.key.type === "Identifier"
+  ) {
     return node.key.name;
   }
   for (const parent of (sourceFile.parents.get(node) ?? []).toReversed()) {
@@ -277,14 +283,24 @@ const addExplicitOptOuts = (
     if (!isFunctionLikeDeclaration(node)) {
       return;
     }
-    // MethodDefinition owns the function value's source range and name.
+    // Methods own the function value's source range and name.
+    const parent = ancestors.at(-1);
     if (
       node.type === "FunctionExpression" &&
-      ancestors.at(-1)?.type === "MethodDefinition"
+      (parent?.type === "MethodDefinition" ||
+        (parent?.type === "Property" &&
+          (parent.method || parent.kind !== "init")))
     ) {
       return;
     }
-    const body = node.type === "MethodDefinition" ? node.value.body : node.body;
+    let body;
+    if (node.type === "MethodDefinition") {
+      body = node.value.body;
+    } else if (node.type === "Property") {
+      body = node.value.type === "FunctionExpression" ? node.value.body : null;
+    } else {
+      body = node.body;
+    }
     if (body?.type !== "BlockStatement") {
       return;
     }
@@ -452,6 +468,23 @@ const selfTestDiff = (firstKey: string, secondKey: string) => {
   };
 };
 
+const selfTestMethodOwnership = () => {
+  const methodCode =
+    'const view = { render() { "use no memo"; useMemo(() => 1, []); return null; } };';
+  const methodSource = sourceFileFor("method.tsx", methodCode);
+  const methodOptOuts = new Map<string, BailoutRecord>();
+  addExplicitOptOuts(methodSource, "method.tsx", methodCode, methodOptOuts);
+  const methodNode = enclosingFunction(
+    methodSource,
+    methodCode.indexOf("useMemo"),
+  );
+  return (
+    methodNode !== undefined &&
+    functionName(methodSource, methodNode) === "render" &&
+    methodOptOuts.get("method.tsx::render")?.memos === 1
+  );
+};
+
 const runSelfTest = (): number => {
   const code = [
     "export const Outer = () => {",
@@ -518,6 +551,8 @@ const runSelfTest = (): number => {
     .get("module-opt-out.tsx::<module-transform>")
     ?.reasons.has("explicit module opt-out: use no forget");
 
+  const methodOwnershipWorks = selfTestMethodOwnership();
+
   const compilerCode = [
     "export function RefReader() {",
     "  const ref = useRef(null);",
@@ -545,6 +580,7 @@ const runSelfTest = (): number => {
     byteOffsetsWork &&
     optOutWorks &&
     moduleOptOutWorks &&
+    methodOwnershipWorks &&
     compilerDiagnosticWorks &&
     diffWorks &&
     packageScopeWorks &&
@@ -554,6 +590,7 @@ const runSelfTest = (): number => {
     return 0;
   }
   console.error("rc-bailouts --self-test: FAIL", {
+    methodOwnershipWorks,
     firstKey,
     secondKey,
     firstMemos:

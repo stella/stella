@@ -1,12 +1,13 @@
 import path from "node:path";
 
 import {
-  type Identifier,
   type Node,
   type ParsedSource,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { parseSource } from "./parse-memo";
+
+type Identifier = Extract<Node, { type: "Identifier" }>;
 
 const TRUNCATING_CLASS =
   /(?:^|[\s:])(?:truncate|text-ellipsis|line-clamp-\d+|whitespace-nowrap|overflow-hidden)(?:\s|$)/u;
@@ -130,7 +131,10 @@ const collectToastBindings = (source: SourceTree) => {
   return { toastNames, errorWrappers, resolve };
 };
 
-const returnedExpressions = (body: Node) => {
+const returnedExpressions = (body: Node | null) => {
+  if (body === null) {
+    return [];
+  }
   const expressions: Node[] = [];
   const visit = (node: Node) => {
     if (node.type === "ReturnStatement") {

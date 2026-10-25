@@ -43,8 +43,8 @@ import { compareCodeUnit } from "@stll/collation";
 
 import {
   type Node,
+  type ObjectProperty as Property,
   parseSource,
-  type Property,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
@@ -167,7 +167,10 @@ const enclosingName = (ancestors: readonly Node[], source: string): string => {
       current.id
     ) {
       names.push(current.id.name);
-    } else if (current.type === "MethodDefinition") {
+    } else if (
+      (current.type === "MethodDefinition" && current.kind === "method") ||
+      (current.type === "Property" && current.method)
+    ) {
       names.push(source.slice(current.key.start, current.key.end));
     } else if (
       current.type === "VariableDeclarator" &&
@@ -261,8 +264,7 @@ const writerMembersOf = ({
       }
       const dedupe = properties.get("dedupeKey");
       if (
-        dedupe !== undefined &&
-        dedupe.kind === "init" &&
+        dedupe?.kind === "init" &&
         !dedupe.method &&
         !dedupe.shorthand &&
         mentions(dedupe.value, EXTERNAL_ID) &&
