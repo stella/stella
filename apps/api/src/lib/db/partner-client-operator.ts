@@ -1,8 +1,5 @@
 import { TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
-
-import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { oauthClient, oauthClientResource } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +19,7 @@ export type CreatePartnerOAuthClientOptions = {
   name: string;
   redirectUris: readonly string[];
   mcpResourceUrl: string;
+  clientSecretSha256: string;
 };
 
 /**
@@ -34,16 +32,16 @@ export const createPartnerOAuthClientInTransaction = async ({
   name,
   redirectUris,
   mcpResourceUrl,
+  clientSecretSha256,
 }: CreatePartnerOAuthClientOptions & { tx: Transaction }) => {
   const clientId = Bun.randomUUIDv7().replaceAll("-", "");
-  const clientSecret = randomBytes(32).toString("base64url");
   await tx.insert(oauthClient).values({
     id: createSafeId<"mcpOAuthClient">(),
     clientId,
     registrationOrigin: "managed",
     type: PARTNER_CLIENT_TYPE,
     name,
-    clientSecret: sha256Base64Url(clientSecret),
+    clientSecret: clientSecretSha256,
     public: false,
     requirePKCE: true,
     skipConsent: false,
@@ -62,13 +60,12 @@ export const createPartnerOAuthClientInTransaction = async ({
     subject: createSafeId<"systemScriptRun">(),
     counts: { created: 1, rotated: 0, disabled: 0 },
   });
-  return { clientId, clientSecret };
+  return { clientId };
 };
 
-export type ChangePartnerOAuthClientOptions = {
-  clientId: string;
-  operation: "rotate" | "disable";
-};
+export type ChangePartnerOAuthClientOptions =
+  | { clientId: string; operation: "rotate"; clientSecretSha256: string }
+  | { clientId: string; operation: "disable" };
 
 /**
  * Rotation replaces the secret; refresh needs client authentication, so the
@@ -77,17 +74,15 @@ export type ChangePartnerOAuthClientOptions = {
  */
 export const changePartnerOAuthClientInTransaction = async ({
   tx,
-  clientId,
-  operation,
+  ...change
 }: ChangePartnerOAuthClientOptions & { tx: Transaction }) => {
-  const clientSecret =
-    operation === "rotate" ? randomBytes(32).toString("base64url") : null;
+  const { clientId, operation } = change;
   const changed = await tx
     .update(oauthClient)
     .set(
-      clientSecret === null
-        ? { disabled: true }
-        : { clientSecret: sha256Base64Url(clientSecret) },
+      change.operation === "rotate"
+        ? { clientSecret: change.clientSecretSha256 }
+        : { disabled: true },
     )
     .where(
       and(
@@ -112,5 +107,5 @@ export const changePartnerOAuthClientInTransaction = async ({
         ? { created: 0, rotated: 1, disabled: 0 }
         : { created: 0, rotated: 0, disabled: 1 },
   });
-  return { clientId, clientSecret };
+  return { clientId };
 };

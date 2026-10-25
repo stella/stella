@@ -18,7 +18,11 @@ import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
-import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
+import {
+  mintPartnerClientSecret,
+  PARTNER_CLIENT_SECRET_SHA256_PATTERN,
+  PARTNER_CLIENT_TYPE,
+} from "@/api/lib/db/partner-client-contract";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
@@ -33,12 +37,18 @@ afterAll(releaseAgentAuthTestDb);
 const PARTNER_REDIRECT = "https://consent.partner.example/redirect";
 const AUDIT_ACTOR = "system:partner-client-operator";
 
-const create = async () =>
-  await createPartnerOAuthClient({
+const create = async () => {
+  const { clientSecret, clientSecretSha256 } = mintPartnerClientSecret();
+  const created = await createPartnerOAuthClient({
     name: "Example partner assistant",
     redirectUris: [PARTNER_REDIRECT],
     mcpResourceUrl: getMcpResourceUrl(),
+    clientSecretSha256,
   });
+  // The server hands back nothing secret: only the id it assigned.
+  expect(created).toEqual({ clientId: expect.any(String) });
+  return { clientId: created.clientId, clientSecret };
+};
 
 const storedClient = async (clientId: string) =>
   (
@@ -175,6 +185,15 @@ const auditCounts = async () =>
   ).map(({ counts }) => counts);
 
 describe("partner OAuth clients", () => {
+  test("the digest argument takes a minted secret's digest and refuses the secret itself", () => {
+    const { clientSecret, clientSecretSha256 } = mintPartnerClientSecret();
+    expect(clientSecretSha256).toBe(sha256Base64Url(clientSecret));
+    expect(PARTNER_CLIENT_SECRET_SHA256_PATTERN.test(clientSecretSha256)).toBe(
+      true,
+    );
+    expect(PARTNER_CLIENT_SECRET_SHA256_PATTERN.test(clientSecret)).toBe(false);
+  });
+
   test("create stores a confidential client linked to the MCP resource only", async () => {
     const before = (await auditCounts()).length;
     const { clientId, clientSecret } = await create();
@@ -257,11 +276,14 @@ describe("partner OAuth clients", () => {
       tokenSchema,
       await (await authorizeAndExchange(credentials)).json(),
     );
+    const { clientSecret: newSecret, clientSecretSha256 } =
+      mintPartnerClientSecret();
     const rotated = await changePartnerOAuthClient({
       clientId: credentials.clientId,
       operation: "rotate",
+      clientSecretSha256,
     });
-    const newSecret = v.parse(v.string(), rotated.clientSecret);
+    expect(rotated).toEqual({ clientId: credentials.clientId });
 
     expect(newSecret).not.toBe(credentials.clientSecret);
     expect((await refresh(credentials, tokens.refresh_token)).status).toBe(401);
@@ -305,6 +327,7 @@ describe("partner OAuth clients", () => {
         await changePartnerOAuthClient({
           clientId: credentials.clientId,
           operation: "rotate",
+          clientSecretSha256: mintPartnerClientSecret().clientSecretSha256,
         }),
     );
     expect(Result.isError(again)).toBe(true);
@@ -391,10 +414,16 @@ describe("partner OAuth clients", () => {
     for (const operation of ["rotate", "disable"] as const) {
       const changed = await Result.tryPromise(
         async () =>
-          await changePartnerOAuthClient({
-            clientId: registered.client_id,
-            operation,
-          }),
+          await changePartnerOAuthClient(
+            operation === "rotate"
+              ? {
+                  clientId: registered.client_id,
+                  operation,
+                  clientSecretSha256:
+                    mintPartnerClientSecret().clientSecretSha256,
+                }
+              : { clientId: registered.client_id, operation },
+          ),
       );
       expect(Result.isError(changed)).toBe(true);
     }

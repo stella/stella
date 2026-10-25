@@ -18,6 +18,7 @@
     "test": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun scripts/run-tests.ts",
     "action-cost:report": "bun src/scripts/action-cost-report.ts",
     "oauth:partner-client": "bun run src/scripts/partner-oauth-client.ts",
+    "oauth:partner-client-secret": "bun run src/scripts/partner-oauth-client-secret.ts",
     "oauth:service-client": "bun run src/scripts/service-oauth-client.ts",
     "test:e2e:browser": "playwright test --config e2e/playwright.config.ts",
     "test:postgres": "bun scripts/run-postgres-tests.ts",
