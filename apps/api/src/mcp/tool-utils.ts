@@ -38,7 +38,7 @@ import {
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { isRecord } from "@/api/lib/type-guards";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
