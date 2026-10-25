@@ -88,7 +88,7 @@ export const IMPORT_FIELD_LABELS = {
   notes: "common.notes",
   tags: "templates.tags",
   registration_number: "contacts.fields.registrationNumber",
-  tax_id: "contacts.importStudio.fields.tax_id",
+  tax_id: "common.taxId",
 } as const satisfies Record<ContactImportField, TranslationKey>;
 
 const IMPORT_ISSUE_LABELS = {
@@ -490,7 +490,7 @@ export const ImportCandidateCard = ({
                 index: format.number(ordinal),
               })}
           </span>
-          <span className="text-muted-foreground font-normal">
+          <span>
             {t("contacts.importStudio.sourceRow", {
               index: format.number(row.rowNumber),
             })}

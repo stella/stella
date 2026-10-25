@@ -67,9 +67,15 @@ const Fixture = () => {
           boundaryRect={anchor.bounds}
           doc={window.document}
         >
-          <button type="button" style={{ width: 210, height: 32 }}>
-            Selection action
-          </button>
+          {["First", "Second", "Third"].map((label) => (
+            <button
+              key={label}
+              type="button"
+              style={{ width: 70, height: 32, whiteSpace: "nowrap" }}
+            >
+              {label}
+            </button>
+          ))}
         </SelectionToolbar>
       )}
     </>

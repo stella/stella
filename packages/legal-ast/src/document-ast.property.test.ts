@@ -28,13 +28,14 @@ import type {
   HeadingLevel,
   TableCell,
 } from "./document-ast.js";
-import { hasInlineChildren } from "./inline.js";
+import { hasInlineChildren, LEGISLATION_SERIES } from "./inline.js";
 import type {
   Inline,
-  InlineCitation,
   InlineCitationPin,
   InlineCitationPinPart,
   InlineCitationTarget,
+  InlineDecisionCitation,
+  InlineLegislationTarget,
 } from "./inline.js";
 import { projectionDigest, projectionPieces } from "./projection-digest.js";
 
@@ -91,7 +92,7 @@ const pinOf = ([kind, start, end, withReporter]: [
 
 const annotatedCitation = ([children, annotation]: [
   Inline[],
-  Pick<InlineCitation, "pin" | "target">,
+  Pick<InlineDecisionCitation, "pin" | "target">,
 ]): Inline => ({
   type: "citation",
   cite: "Rep. 2019, 412",
@@ -100,24 +101,42 @@ const annotatedCitation = ([children, annotation]: [
 });
 
 /** The structured fields an annotated citation may carry. */
-const citationAnnotation: fc.Arbitrary<Pick<InlineCitation, "pin" | "target">> =
-  fc.record(
-    {
-      target: fc.constantFrom<InlineCitationTarget>(
-        { status: "identified", identifiers: [REPORTER] },
-        { status: "unresolved", reason: "ambiguous-antecedent" },
-      ),
-      pin: fc
-        .tuple(
-          fc.constantFrom("page", "paragraph", "footnote"),
-          fc.stringMatching(/^\*?\d{1,5}$/u),
-          fc.option(fc.stringMatching(/^\d{1,5}$/u), { nil: undefined }),
-          fc.boolean(),
-        )
-        .map(pinOf),
-    },
-    { requiredKeys: [] },
-  );
+const citationAnnotation: fc.Arbitrary<
+  Pick<InlineDecisionCitation, "pin" | "target">
+> = fc.record(
+  {
+    target: fc.constantFrom<InlineCitationTarget>(
+      { status: "identified", identifiers: [REPORTER] },
+      { status: "unresolved", reason: "ambiguous-antecedent" },
+    ),
+    pin: fc
+      .tuple(
+        fc.constantFrom("page", "paragraph", "footnote"),
+        fc.stringMatching(/^\*?\d{1,5}$/u),
+        fc.option(fc.stringMatching(/^\d{1,5}$/u), { nil: undefined }),
+        fc.boolean(),
+      )
+      .map(pinOf),
+  },
+  { requiredKeys: [] },
+);
+
+const legislationTarget: fc.Arbitrary<InlineLegislationTarget> = fc.record(
+  {
+    status: fc.constant("legislation"),
+    series: fc.constantFrom(...LEGISLATION_SERIES),
+    year: fc.integer({ min: 1950, max: 2099 }),
+    number: fc.integer({ min: 1, max: 9999 }),
+    appliedVersion: fc
+      .date({
+        min: new Date("1950-01-01T00:00:00Z"),
+        max: new Date("2099-12-31T00:00:00Z"),
+        noInvalidDate: true,
+      })
+      .map((date) => ({ date: date.toISOString().slice(0, 10) })),
+  },
+  { requiredKeys: ["status", "series", "year", "number"] },
+);
 
 const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
   node: fc.oneof(
@@ -139,6 +158,14 @@ const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
     fc
       .tuple(fc.array(tie("node"), { maxLength: 3 }), citationAnnotation)
       .map(annotatedCitation),
+    fc
+      .tuple(fc.array(tie("node"), { maxLength: 3 }), legislationTarget)
+      .map(([children, target]): Inline => ({
+        type: "citation",
+        cite: "Regulation (EU) 2016/679",
+        children,
+        target,
+      })),
   ),
 })).node;
 

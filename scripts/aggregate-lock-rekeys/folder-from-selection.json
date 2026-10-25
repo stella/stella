@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/src/handlers/entities/move.ts",
+    "from": "59b4cd3ee950ced84c9e2d1cc0bcc44422620aad97734fe8cefaec266305c23c",
+    "to": "2840d044d2c47f5aca5f6491b869b3c0ca5870020f8a268bbf45046681116720",
+    "reason": "The move's entity row lock takes a list of entity ids in id order so one transaction can move several entities; same table, same transaction, still after the matter tree lock."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/move.ts",
+    "from": "15adc31669d35eb6f4358962c8f5e147984c436751e69b909300bec7573e9780",
+    "to": "c998924749f3b9f8d0e0d3807192086a3adeb6d71ad61d1b245fa6e7072d6e07",
+    "reason": "The move's target folder row lock reads the parent id from an argument instead of the request body; same row, same transaction, same lock order."
+  }
+]

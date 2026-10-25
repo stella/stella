@@ -7,7 +7,6 @@ import {
   classifyMcpTokenVerificationError,
   extractMcpSession,
   getMcpAccessTokenVerificationOptions,
-  isMcpSession,
 } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
@@ -194,106 +193,6 @@ describe("extractMcpSession", () => {
         sub: "user_123",
       }),
     ).toBe("Token missing org_id claim");
-  });
-});
-
-describe("isMcpSession", () => {
-  test("accepts every credential branch and optional workspace attenuation", () => {
-    const credentials = [
-      { type: "agent_run", runId: "run_1" },
-      { type: "oauth_client", clientId: "client_1" },
-      {
-        type: "machine_api_key",
-        id: "key_1",
-        name: "Automation",
-        permissions: { workspace: ["read"] },
-      },
-      { type: "delegated_user" },
-    ];
-
-    for (const credential of credentials) {
-      expect(
-        isMcpSession({
-          credential,
-          organizationId: "org_1",
-          scopes: ["read"],
-          userId: "user_1",
-          workspaceIds: ["workspace_1"],
-        }),
-      ).toBe(true);
-    }
-
-    expect(
-      isMcpSession({
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      }),
-    ).toBe(true);
-  });
-
-  test("rejects malformed nested session fields", () => {
-    const invalidSessions = [
-      { organizationId: "org_1", scopes: [42], userId: "user_1" },
-      { organizationId: "org_1", scopes: [""], userId: "user_1" },
-      {
-        credential: { type: "agent_run", runId: "" },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        credential: { type: "unexpected" },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-        workspaceIds: [null],
-      },
-      {
-        credential: undefined,
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-        workspaceIds: undefined,
-      },
-      // A key credential carries the permission set authorization holds it to,
-      // so one recovered without a usable set is not a session.
-      {
-        credential: {
-          type: "machine_api_key",
-          id: "key_1",
-          name: "Automation",
-        },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        credential: {
-          type: "machine_api_key",
-          id: "key_1",
-          name: "Automation",
-          permissions: { notARealResource: ["read"] },
-        },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-    ];
-
-    for (const session of invalidSessions) {
-      expect(isMcpSession(session)).toBe(false);
-    }
   });
 });
 

@@ -82,6 +82,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-continuation-error": {
+    load: async () => {
+      const { ChatContinuationErrorPlayground } =
+        await import("./-components/chat-continuation-error-playground");
+      return { default: ChatContinuationErrorPlayground };
+    },
+  },
   "chat-status": {
     load: async () => {
       const { ChatStatusPlayground } =

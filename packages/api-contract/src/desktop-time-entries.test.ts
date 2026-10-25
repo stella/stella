@@ -17,6 +17,35 @@ const entry = {
   narrative: "Reviewed document",
   billable: true,
 };
+
+test.each([
+  "0001-01-01",
+  "0099-12-31",
+  "2000-02-29",
+  "2024-02-29",
+  "9999-12-31",
+])("desktop batch accepts the existing calendar day %s", (dateWorked) => {
+  expect(
+    v.safeParse(desktopTimeEntryBatchSchema, {
+      idempotencyKey: "calendar-day",
+      entries: [{ ...entry, dateWorked }],
+    }).success,
+  ).toBe(true);
+});
+
+test.each(["2026-02-30", "1900-02-29", "2026-04-31", "0000-01-01"])(
+  "desktop batch rejects the nonexistent CE day %s",
+  (dateWorked) => {
+    expect(v.is(v.pipe(v.string(), v.isoDate()), dateWorked)).toBe(true);
+    expect(
+      v.safeParse(desktopTimeEntryBatchSchema, {
+        idempotencyKey: "calendar-day",
+        entries: [{ ...entry, dateWorked }],
+      }).success,
+    ).toBe(false);
+  },
+);
+
 test("desktop batch permits only reviewed billing fields and bounded whole durations", () => {
   const body = { idempotencyKey: "day-review", entries: [entry] };
   expect(v.safeParse(desktopTimeEntryBatchSchema, body).success).toBe(true);

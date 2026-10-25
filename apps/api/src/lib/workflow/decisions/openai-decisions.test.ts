@@ -367,6 +367,26 @@ describe("OpenAI Decisions boundary", () => {
     }
   });
 
+  test("uses bounded backoff for a retry-after value with exponent notation", async () => {
+    const delays: number[] = [];
+    const client = createOpenAIDecisionsClient({
+      apiKey: "fixture-key",
+      fetcher: async () =>
+        new Response("limited", {
+          status: 429,
+          headers: { "retry-after": "2e0" },
+        }),
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+    });
+
+    const result = await client.ask({ state, questions });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(delays).toEqual([400, 800]);
+  });
+
   test("recovers after a 429 using exponential backoff", async () => {
     let attempts = 0;
     const delays: number[] = [];
