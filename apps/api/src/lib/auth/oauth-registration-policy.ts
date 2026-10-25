@@ -254,9 +254,9 @@ export type OAuthScopeClient = {
  * request's scope list, or `undefined` when the request names none, in which
  * case the client's own scope list (or the provider's) applies. A requested
  * scope the client was not offered is dropped, never granted; when nothing
- * remains, the provider applies the client's own list and the token response
- * reports what was granted. Elevated scopes remain only for a client
- * identified by a verified client metadata document.
+ * remains, the client's own list applies, as if it had named none, and the
+ * token response reports what was granted. Elevated scopes remain only for a
+ * client identified by a verified client metadata document.
  */
 export const grantableScopes = (
   client: OAuthScopeClient,
@@ -264,8 +264,8 @@ export const grantableScopes = (
   policy: OAuthScopePolicyContext,
 ): string[] => {
   const offered = client.scopes ?? policy.providerScopes;
-  const candidates =
-    requested?.filter((scope) => offered.includes(scope)) ?? offered;
+  const kept = requested?.filter((scope) => offered.includes(scope)) ?? [];
+  const candidates = kept.length > 0 ? kept : offered;
   const mayHoldElevated =
     Boolean(client.clientDiscoveryId) &&
     isVerifiedClientMetadataDocument(client.clientId, policy.verifiedOrigins);

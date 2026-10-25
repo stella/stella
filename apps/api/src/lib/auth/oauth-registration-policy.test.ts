@@ -95,7 +95,10 @@ describe("grantableScopes", () => {
         policy,
       ),
     ).toEqual(["openid", "stella:read"]);
-    expect(grantableScopes(registered(ALL_SCOPES), [], policy)).toEqual([]);
+    // An empty list names nothing, so the client's own (open) list applies.
+    expect(grantableScopes(registered(ALL_SCOPES), [], policy)).toEqual(
+      OPEN_REGISTRATION_SCOPES,
+    );
   });
 
   test("only documented or first-party metadata documents keep every scope", () => {
@@ -161,7 +164,14 @@ describe("unoffered scopes", () => {
     ).toEqual(["stella:read"]);
     expect(
       grantableScopes(registered(ALL_SCOPES), ["mcp:tools"], policy),
-    ).toEqual([]);
+    ).toEqual(OPEN_REGISTRATION_SCOPES);
+    expect(
+      grantableScopes(
+        registered(["openid", "stella:read"]),
+        ["mcp:tools", "picture"],
+        policy,
+      ),
+    ).toEqual(["openid", "stella:read"]);
   });
 });
 

@@ -2,7 +2,10 @@ import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import {
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OAUTH_PROTOCOL_SCOPES,
+} from "@stll/api-contract";
 
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
@@ -13,11 +16,12 @@ import {
   OPEN_REGISTRATION_SCOPES,
 } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
+import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
-import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import { getMcpResourceUrl, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -475,6 +479,7 @@ const startAuthorization = async (
     code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
     code_challenge_method: "S256",
     redirect_uri: redirectUri,
+    resource: getMcpResourceUrl(),
     response_type: "code",
     scope,
   });
@@ -488,11 +493,15 @@ const startAuthorization = async (
     v.parse(v.string(), authorized.headers.get("location")),
   );
   return {
+    browser,
     registered,
     location,
     signed: new URLSearchParams(readSignedQuery(location)),
   };
 };
+
+/** RFC 7636 appendix B: the verifier of the fixed challenge above. */
+const CODE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 
 describe("OAuth client interoperability", () => {
   test("registers Cursor as a native client and asks for consent at its private-use callback", async () => {
@@ -520,18 +529,35 @@ describe("OAuth client interoperability", () => {
     expect(registered.application_type).toBe("web");
   });
 
-  test("a client asking only for unoffered scopes registers and consents with the default set", async () => {
+  test("a client asking only for unoffered scopes is granted its own list", async () => {
     const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.cursorAgentLegacyScope;
-    const { registered, signed } = await startAuthorization(body, {
-      redirectUri: "http://localhost:8787/callback",
-      scope: "mcp:tools",
-    });
-
-    expect(registered.scope.split(" ").toSorted()).toEqual(
-      OPEN_REGISTRATION_SCOPES.toSorted(),
+    const redirectUri = "http://localhost:8787/callback";
+    const { browser, registered, location, signed } = await startAuthorization(
+      body,
+      { redirectUri, scope: "mcp:tools" },
     );
-    expect(signed.get("scope")?.split(" ").toSorted()).toEqual(
-      OPEN_REGISTRATION_SCOPES.toSorted(),
+
+    const open = OPEN_REGISTRATION_SCOPES.toSorted();
+    expect(registered.scope.split(" ").toSorted()).toEqual(open);
+    expect(signed.get("scope")?.split(" ").toSorted()).toEqual(open);
+    const grant = await consentAndExchange({
+      browser,
+      client: { clientId: registered.client_id },
+      codeVerifier: CODE_VERIFIER,
+      consentPage: location,
+      redirectUri,
+    });
+    // The token narrows further to what the MCP resource allows.
+    const resourceScopes =
+      getBetterAuthOAuthResources().find(
+        (resource) => resource.identifier === getMcpResourceUrl(),
+      )?.allowedScopes ?? [];
+    expect(grant.scope.split(" ").toSorted()).toEqual(
+      open.filter(
+        (scope) =>
+          resourceScopes.includes(scope) ||
+          MCP_OAUTH_PROTOCOL_SCOPES.some((protocol) => protocol === scope),
+      ),
     );
   });
 
@@ -543,7 +569,10 @@ describe("OAuth client interoperability", () => {
     });
 
     const granted = ["openid", "profile", "email", "offline_access"];
-    expect(registered.scope.split(" ").toSorted()).toEqual(granted.toSorted());
+    const registeredScopes = registered.scope.split(" ");
+    expect(registeredScopes).toEqual(expect.arrayContaining(granted));
+    expect(registeredScopes).not.toContain("name");
+    expect(registeredScopes).not.toContain("picture");
     expect(signed.get("scope")?.split(" ").toSorted()).toEqual(
       granted.toSorted(),
     );
