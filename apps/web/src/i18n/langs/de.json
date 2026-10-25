@@ -1087,8 +1087,7 @@
       "runEstimate": "{rows, plural, one {# Entscheidung} other {# Entscheidungen}} × {columns, plural, one {# Frage} other {# Fragen}} auf dieser Seite: {cells, plural, one {# Antwort wird erzeugt} other {# Antworten werden erzeugt}}.",
       "runTitle": "Diese Seite beantworten",
       "savedQuestions": "Gespeicherte Fragen",
-      "title": "Recherchetabellen",
-      "updated": "Zuletzt bearbeitet {date}"
+      "title": "Recherchetabellen"
     },
     "results": {
       "excerpt": {

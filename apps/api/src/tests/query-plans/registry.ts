@@ -626,7 +626,8 @@ export const QUERY_PLAN_REGISTRY = [
 ] as const satisfies readonly QueryPlanEntry[];
 
 type SharedQueryDisposition =
-  { type: "registered"; id: string } | { type: "excluded"; reason: string };
+  | { type: "registered"; id: string }
+  | { type: "excluded"; reason: string };
 
 /** Explicit disposition for every shared query id; adding one requires a choice. */
 export const PUBLIC_LAW_PLAN_DISPOSITION = {
@@ -710,6 +711,10 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawSearchTotal]: {
     type: "excluded",
     reason: "Search total SQL varies by filter profile.",
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawSourceHealth]: {
+    type: "excluded",
+    reason: "Reads the small source registry.",
   },
   [PUBLIC_LAW_SHARED_QUERY.legislationNonRedistributableSources]: {
     type: "excluded",

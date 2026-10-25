@@ -1087,8 +1087,7 @@
       "runEstimate": "{rows, plural, one {# resolución} other {# resoluciones}} × {columns, plural, one {# pregunta} other {# preguntas}} en esta página: {cells, plural, one {se generará # respuesta} other {se generarán # respuestas}}.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Preguntas guardadas",
-      "title": "Tablas de investigación",
-      "updated": "Última edición {date}"
+      "title": "Tablas de investigación"
     },
     "results": {
       "excerpt": {
