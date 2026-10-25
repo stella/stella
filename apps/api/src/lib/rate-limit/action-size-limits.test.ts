@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { connect } from "node:net";
 
 import {
   createCursorPage,
@@ -11,10 +12,10 @@ import {
   ActionSizeError,
   actionSizeErrorResponse,
   boundActionJsonResponse,
-  boundActionRequest,
   getActionSizePolicy,
   getTenantActionSizePolicy,
   normalizeTenantPageLimit,
+  reframeBoundedRequest,
   withTenantActionSizePolicy,
 } from "./action-size-limits";
 
@@ -42,16 +43,23 @@ describe("tenant action size boundaries", () => {
       const size = utf8.encode(body).byteLength;
       for (const declaredLength of [undefined, "0", "1", String(size)]) {
         const original = requestWithBody(body, declaredLength);
-        const bounded = await boundActionRequest(original, size);
+        const bounded = await reframeBoundedRequest(original, size);
         if (Result.isError(bounded)) {
           throw bounded.error;
         }
-        expect(bounded.value).toBe(original);
-        expect(original.bodyUsed).toBe(false);
-        expect(await bounded.value.text()).toBe(body);
-        expect(bounded.value.headers.get("content-length")).toBe(String(size));
-        expect(bounded.value.headers.get("x-request-id")).toBe("request-size");
-        const refused = await boundActionRequest(
+        // A new request framed from exactly the metered bytes.
+        const reframed = bounded.value.request;
+        expect(reframed).not.toBe(original);
+        expect(bounded.value.bytes).toBe(size);
+        expect(reframed.url).toBe(original.url);
+        expect(reframed.method).toBe("POST");
+        expect(new Uint8Array(await reframed.arrayBuffer())).toEqual(
+          utf8.encode(body),
+        );
+        expect(reframed.headers.get("content-length")).toBe(String(size));
+        expect(reframed.headers.get("content-type")).toBe("application/json");
+        expect(reframed.headers.get("x-request-id")).toBe("request-size");
+        const refused = await reframeBoundedRequest(
           requestWithBody(body, declaredLength),
           size - 1,
         );
@@ -84,19 +92,18 @@ describe("tenant action size boundaries", () => {
       headers: { "content-length": "4" },
       method: "POST",
     });
-    expect(Result.isError(await boundActionRequest(declaredOversize, 3))).toBe(
-      true,
-    );
+    expect(
+      Result.isError(await reframeBoundedRequest(declaredOversize, 3)),
+    ).toBe(true);
     expect(pulls).toBe(0);
     const chunked = new Request("http://localhost/v1/action", {
       body: source(),
       headers: { "content-length": "1" },
       method: "POST",
     });
-    expect(Result.isError(await boundActionRequest(chunked, 3))).toBe(true);
-    // A tee can prefetch one chunk; neither branch may keep pulling after cancellation.
-    expect(pulls).toBeGreaterThanOrEqual(2);
-    expect(pulls).toBeLessThanOrEqual(3);
+    expect(Result.isError(await reframeBoundedRequest(chunked, 3))).toBe(true);
+    // Read once with no tee: the chunk that crosses the bound is the last pull.
+    expect(pulls).toBe(2);
     expect(cancelled).toBe(true);
     const pullsAtCancellation = pulls;
     await Promise.resolve();
@@ -104,9 +111,104 @@ describe("tenant action size boundaries", () => {
     for (const declaredLength of ["-1", "1.5", "NaN", "not-a-length"]) {
       expect(
         Result.isError(
-          await boundActionRequest(requestWithBody("{}", declaredLength), 10),
+          await reframeBoundedRequest(
+            requestWithBody("{}", declaredLength),
+            10,
+          ),
         ),
       ).toBe(true);
+    }
+  });
+
+  test("re-framed bodies stream under Bun.serve routes when the body arrived with its headers", async () => {
+    const body = JSON.stringify({ text: "Příloha § 🗂", id: 1 });
+    const bytes = utf8.encode(body).byteLength;
+    const server = Bun.serve({
+      port: 0,
+      routes: {
+        "/v1/action": {
+          POST: async (request) => {
+            // real-time: the awaited pipeline stages run before the body is
+            // touched, and only a real I/O gap lets the body sent with the
+            // headers arrive in full first, the state under test.
+            await Bun.sleep(5);
+            const bounded = await reframeBoundedRequest(request, 1024);
+            if (Result.isError(bounded)) {
+              return new Response(bounded.error.reason, { status: 413 });
+            }
+            const reframed = bounded.value.request;
+            const stream: ReadableStream<Uint8Array> | null = reframed.body;
+            if (stream === null) {
+              return panic("The re-framed request lost its body");
+            }
+            const chunks: Uint8Array[] = [];
+            for await (const chunk of stream) {
+              chunks.push(chunk);
+            }
+            return Response.json({
+              body: Buffer.concat(chunks).toString("utf-8"),
+              contentLength: reframed.headers.get("content-length"),
+              transferEncoding: reframed.headers.get("transfer-encoding"),
+            });
+          },
+        },
+      },
+      fetch: () => new Response("Not found", { status: 404 }),
+      error: (error) => new Response(error.message, { status: 500 }),
+    });
+    const sendInOneWrite = async (framing: string[], payload: string) =>
+      await new Promise<string>((resolve, reject) => {
+        const socket = connect(server.port ?? 0, "127.0.0.1");
+        socket.setEncoding("utf-8");
+        let received = "";
+        socket.on("data", (chunk: string) => {
+          received += chunk;
+        });
+        socket.on("error", (error) => {
+          reject(error);
+        });
+        socket.on("close", () => {
+          resolve(received);
+        });
+        // Headers and body in ONE write, as a load balancer forwards them.
+        socket.write(
+          [
+            "POST /v1/action HTTP/1.1",
+            "Host: localhost",
+            "Content-Type: application/json",
+            ...framing,
+            "Connection: close",
+            "",
+            payload,
+          ].join("\r\n"),
+        );
+      });
+    try {
+      for (const [framing, payload] of [
+        [[`Content-Length: ${bytes}`], body],
+        [
+          ["Transfer-Encoding: chunked"],
+          `${bytes.toString(16)}\r\n${body}\r\n0\r\n\r\n`,
+        ],
+      ] as const) {
+        const raw = await sendInOneWrite([...framing], payload);
+        const separator = raw.indexOf("\r\n\r\n");
+        expect({
+          framing,
+          status: raw.slice(0, raw.indexOf("\r\n")),
+          answer: raw.slice(separator + 4),
+        }).toEqual({
+          framing,
+          status: "HTTP/1.1 200 OK",
+          answer: JSON.stringify({
+            body,
+            contentLength: String(bytes),
+            transferEncoding: null,
+          }),
+        });
+      }
+    } finally {
+      await server.stop(true);
     }
   });
 

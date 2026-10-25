@@ -1,4 +1,4 @@
-import { panic, Result, TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
@@ -75,12 +75,33 @@ const requestTooLarge = () =>
     reason: "request_too_large",
   });
 
-// Meter actual bytes even when Content-Length is present. Retain at most the
-// allowed body and stop reading immediately when a chunk crosses the bound.
-export const boundActionRequest = async (
+/** A request whose body was read once and re-framed from its metered bytes. */
+export type BoundedRequest = {
+  readonly request: Request;
+  /** The body's actual size in bytes; 0 without a body. */
+  readonly bytes: number;
+};
+
+/**
+ * The one reader that meters and re-frames a request body. A declared
+ * Content-Length is checked first without touching the body; the actual bytes
+ * are metered even when it is present, at most the allowed body is retained,
+ * and the source is cancelled at the chunk that crosses the bound.
+ *
+ * The body is read once from the request itself, never through a tee: under
+ * `Bun.serve({ routes })`, `clone()` of a request whose body has already
+ * arrived leaves the original's stream locked, so a later stream reader of it
+ * fails. The answer is a new request framed from exactly the metered bytes:
+ * same url, method, signal and headers, with `content-length` set to the
+ * metered size and `transfer-encoding` dropped. No reader needs the
+ * socket-bound original: the pipeline resolves and seals the client address
+ * once, before any body is read, and every resolver reads that sealed address
+ * first. A request without a body is returned as is.
+ */
+export const reframeBoundedRequest = async (
   request: Request,
   maximum: number,
-): Promise<Result<Request, ActionSizeError>> => {
+): Promise<Result<BoundedRequest, ActionSizeError>> => {
   const length = request.headers.get("content-length");
   if (
     length !== null &&
@@ -89,38 +110,39 @@ export const boundActionRequest = async (
     return Result.err(requestTooLarge());
   }
   if (request.body === null) {
-    return Result.ok(request);
+    return Result.ok({ request, bytes: 0 });
   }
-  // Meter a tee while retaining Bun's original socket-bound Request.
-  const metered = request.clone();
-  const stream: ReadableStream<Uint8Array> | null = metered.body;
-  if (stream === null) {
-    return panic("Cloned action request lost its body");
-  }
-  let size = 0;
-  const reader = stream.getReader();
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        request.headers.set("content-length", String(size));
-        return Result.ok(request);
-      }
-      size += chunk.value.byteLength;
-      if (size <= maximum) {
-        continue;
-      }
-      // Both tee branches must cancel together; either alone waits for its peer.
-      await Promise.all([reader.cancel(), request.body.cancel()]);
+  // Bun types the stream's chunks as `any`; a request body is bytes.
+  const stream: ReadableStream<Uint8Array> = request.body;
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  for await (const chunk of stream) {
+    bytes += chunk.byteLength;
+    if (bytes > maximum) {
+      // Leaving the loop cancels the source: the rest of the upload is never
+      // read into this process.
       return Result.err(requestTooLarge());
     }
-  } finally {
-    try {
-      await reader.cancel();
-    } finally {
-      reader.releaseLock();
-    }
+    chunks.push(chunk);
   }
+  const body = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const headers = new Headers(request.headers);
+  headers.set("content-length", String(bytes));
+  headers.delete("transfer-encoding");
+  return Result.ok({
+    request: new Request(request.url, {
+      body,
+      headers,
+      method: request.method,
+      signal: request.signal,
+    }),
+    bytes,
+  });
 };
 
 export const actionSizeErrorResponse = (
