@@ -77,7 +77,10 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { isPendingTwoFactorSignIn } from "@/api/lib/auth-artifacts";
+import {
+  CredentialIssuanceFence,
+  isPendingTwoFactorSignIn,
+} from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
@@ -1527,6 +1530,29 @@ export const createAuth = (
   };
 
   const rawAuthAdapter = drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS);
+  /**
+   * The account and grant a provider token is issued under. Tokens without a
+   * user (client credentials) carry no account credential.
+   */
+  const providerGrantTokenAuthority = (
+    model: string,
+    data: Record<string, unknown>,
+  ) => {
+    if (model !== "oauthAccessToken" && model !== "oauthRefreshToken") {
+      return undefined;
+    }
+    const { userId, sessionId, authorizationCodeId } = data;
+    if (typeof userId !== "string") {
+      return undefined;
+    }
+    return {
+      userId: brandPersistedUserId(userId),
+      sessionId: typeof sessionId === "string" ? sessionId : null,
+      grantId:
+        typeof authorizationCodeId === "string" ? authorizationCodeId : null,
+    };
+  };
+
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
       adapter: rawAuthAdapter(options),
@@ -1555,21 +1581,35 @@ export const createAuth = (
       },
       protectCreate: (raw) => async (args) => {
         const table = requireAuthRetention({ model: args.model });
+        const grant = providerGrantTokenAuthority(args.model, args.data);
         const clientId =
           table === "verification"
             ? authorizationClientId(args.data)
             : undefined;
-        if (!clientId) {
+        if (!clientId && grant === undefined) {
           return await raw.create(args);
         }
         return await rootDb.transaction(async (tx) => {
-          const clients = await tx.execute(
-            sql`select client_id from oauth_client where client_id = ${clientId} for key share`,
-          );
-          if (clients.length === 0) {
+          // The provider writes each token on its own; the fence makes an
+          // account reset either delete the token or refuse it.
+          if (
+            grant !== undefined &&
+            (await CredentialIssuanceFence.holdForGrant(tx, grant)) === null
+          ) {
             throw new APIError("BAD_REQUEST", {
-              message: "Authorization client is unavailable.",
+              error: "invalid_grant",
+              error_description: "The authorization is no longer valid.",
             });
+          }
+          if (clientId) {
+            const clients = await tx.execute(
+              sql`select client_id from oauth_client where client_id = ${clientId} for key share`,
+            );
+            if (clients.length === 0) {
+              throw new APIError("BAD_REQUEST", {
+                message: "Authorization client is unavailable.",
+              });
+            }
           }
           return await drizzleAdapter(
             tx,

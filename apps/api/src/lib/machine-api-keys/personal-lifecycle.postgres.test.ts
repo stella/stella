@@ -17,6 +17,8 @@ import {
 } from "@/api/lib/audit-log";
 import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
 import type { SafeId } from "@/api/lib/branded-types";
+import { issueDesktopAccountCredential } from "@/api/lib/business-registries/desktop/issuance";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -239,6 +241,18 @@ if (!databaseUrl || !runPostgres) {
             metadata: { name: key.name, scopes: key.scopes },
           }),
         }),
+      // A desktop connection issues under the browser session that requested it.
+      "desktop account": async (options: RacingMint) =>
+        await issueDesktopAccountCredential({
+          identity: {
+            userId: options.userId,
+            organizationId: options.organizationId,
+            deviceJkt: "A".repeat(43),
+            sessionId: options.sessionId,
+          },
+          recordAuditEvent: racingAuditRecorder(options),
+          database: options.database,
+        }),
     } satisfies Record<
       string,
       (options: RacingMint) => Promise<Result<unknown, HandlerError>>
@@ -331,5 +345,62 @@ if (!databaseUrl || !runPostgres) {
       },
       15_000,
     );
+
+    test("a desktop credential whose audit receipt fails leaves no key", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
+        await db.insert(user).values({
+          id: userId,
+          name: "Fixture member",
+          email: `${userId}@example.test`,
+          emailVerified: true,
+        });
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Audit failure fixture",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        await db.insert(member).values({
+          id: mintAuthProviderIdValue(),
+          organizationId,
+          userId,
+          role: "member",
+          createdAt: new Date(),
+        });
+        const liveSession = liveSessionRow(userId);
+        await db.insert(session).values(liveSession);
+        try {
+          const issued = await issueDesktopAccountCredential({
+            identity: {
+              userId,
+              organizationId,
+              deviceJkt: "A".repeat(43),
+              sessionId: liveSession.id,
+            },
+            // The receipt write fails after the key row is inserted.
+            recordAuditEvent: async () => {
+              throw new DatabaseError({ message: "Audit write failed" });
+            },
+            database: db,
+          });
+          expect(issued.isErr()).toBe(true);
+          expect(
+            await db
+              .select({ id: apikey.id })
+              .from(apikey)
+              .where(eq(apikey.referenceId, userId)),
+          ).toEqual([]);
+        } finally {
+          await db.delete(apikey).where(eq(apikey.referenceId, userId));
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      });
+    });
   });
 }

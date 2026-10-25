@@ -170,6 +170,19 @@ const assertIssuanceCall = (
   ) {
     throw new TypeError(`${filename}: issuance config must have a known owner`);
   }
+  // The provider endpoint commits on its own connection, outside the
+  // account's credential fence that an access reset serializes against.
+  const callee = node.expression;
+  if (
+    (ts.isPropertyAccessExpression(callee) ||
+      ts.isElementAccessExpression(callee)) &&
+    ts.isPropertyAccessExpression(callee.expression) &&
+    callee.expression.name.text === "api"
+  ) {
+    throw new TypeError(
+      `${filename}: desktop issuance must write under the credential fence`,
+    );
+  }
 
   const names: string[] = [];
   for (const entry of body.properties) {
@@ -403,8 +416,23 @@ describe("desktop registry API-key configuration", () => {
             ? {
                 ...entry,
                 source: entry.source.replace(
-                  "expiresIn: null",
-                  "expiresIn: DESKTOP_REGISTRY_KEY_SECONDS",
+                  "desktopCredentialWriter(fence, now).createApiKey(",
+                  "getAuth().api.createApiKey(",
+                ),
+              }
+            : entry,
+        ),
+      ),
+    ).toThrow("desktop issuance must write under the credential fence");
+    expect(() =>
+      assertDesktopIssuance(
+        sources.map((entry) =>
+          entry === issuer
+            ? {
+                ...entry,
+                source: entry.source.replace(
+                  "expiresIn: null,",
+                  "expiresIn: DESKTOP_REGISTRY_KEY_SECONDS,",
                 ),
               }
             : entry,
@@ -447,7 +475,7 @@ describe("desktop registry API-key configuration", () => {
         {
           filename: "unowned-issuer.ts",
           source:
-            "auth.api.createApiKey({ body: { configId: DESKTOP_REGISTRY_KEY_CONFIG, expiresIn: 2592000, metadata: {} } });",
+            "writer.createApiKey({ body: { configId: DESKTOP_REGISTRY_KEY_CONFIG, expiresIn: 2592000, metadata: {} } });",
         },
       ]),
     ).toThrow("desktop provider expiry must be null");

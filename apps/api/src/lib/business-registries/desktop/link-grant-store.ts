@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, gt, inArray, like, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import * as v from "valibot";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -15,17 +16,35 @@ import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/cred
 const LINK_GRANT_LIFETIME_MS = 60_000;
 const LINK_GRANT_PREFIX = "desktop-link";
 
-const grantValue = ({
-  userId,
-  organizationId,
-  verifierHash,
-  deviceJkt,
-}: {
+type GrantClaim = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   verifierHash: string;
   deviceJkt: string;
-}) => JSON.stringify({ userId, organizationId, verifierHash, deviceJkt });
+};
+
+const claimValue = ({
+  userId,
+  organizationId,
+  verifierHash,
+  deviceJkt,
+}: GrantClaim) =>
+  JSON.stringify({ userId, organizationId, verifierHash, deviceJkt });
+
+// The issuing browser session is stored beside the claim: the desktop never
+// learns it, and redemption issues its credential only while it is live.
+const ISSUING_SESSION_FIELD = "sessionId";
+const grantValue = (claim: GrantClaim & { sessionId: string }) =>
+  JSON.stringify({
+    userId: claim.userId,
+    organizationId: claim.organizationId,
+    verifierHash: claim.verifierHash,
+    deviceJkt: claim.deviceJkt,
+    [ISSUING_SESSION_FIELD]: claim.sessionId,
+  });
+const issuingSessionSchema = v.object({
+  [ISSUING_SESSION_FIELD]: v.pipe(v.string(), v.nonEmpty()),
+});
 
 // Auth verification rows deny ordinary application access. A single root
 // DELETE commits the claim independently of later credential issuance.
@@ -57,6 +76,8 @@ export type CreateDesktopLinkGrantOptions = {
   deviceJkt: string;
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
+  /** The browser session that requests the connection. */
+  sessionId: string;
   db: LinkGrantDb;
   now?: Date;
 };
@@ -67,6 +88,7 @@ export const createDesktopLinkGrant = async ({
   deviceJkt,
   userId,
   organizationId,
+  sessionId,
   db,
   now = new Date(Temporal.Now.instant().epochMilliseconds),
 }: CreateDesktopLinkGrantOptions) => {
@@ -84,7 +106,13 @@ export const createDesktopLinkGrant = async ({
       await db.insert(verification).values({
         id: `${LINK_GRANT_PREFIX}:${correlationId}`,
         identifier: `${LINK_GRANT_PREFIX}:${correlationId}`,
-        value: grantValue({ userId, organizationId, verifierHash, deviceJkt }),
+        value: grantValue({
+          userId,
+          organizationId,
+          verifierHash,
+          deviceJkt,
+          sessionId,
+        }),
         expiresAt,
       });
       return { userId, organizationId, expiresAt: expiresAt.toISOString() };
@@ -133,13 +161,13 @@ export const consumeDesktopLinkGrant = async ({
               `${LINK_GRANT_PREFIX}:${correlationId}`,
             ),
             eq(
-              verification.value,
-              grantValue({
+              sql`${verification.value}::text::jsonb - ${ISSUING_SESSION_FIELD}::text`,
+              sql`${claimValue({
                 userId: identity.userId,
                 organizationId: identity.organizationId,
                 deviceJkt,
                 verifierHash: hashSha256Hex(verifier),
-              }),
+              })}::text::jsonb`,
             ),
             gt(verification.expiresAt, sql`${now.toISOString()}::timestamptz`),
           ),
@@ -155,7 +183,12 @@ export const consumeDesktopLinkGrant = async ({
   if (consumed.isErr()) {
     return Result.err(consumed.error);
   }
-  if (consumed.value.length !== 1) {
+  const [claimed] = consumed.value;
+  const issuing = v.safeParse(
+    issuingSessionSchema,
+    Result.try((): unknown => JSON.parse(claimed?.value ?? "")).unwrapOr(null),
+  );
+  if (consumed.value.length !== 1 || !issuing.success) {
     return Result.err(
       new HandlerError({
         status: 401,
@@ -165,5 +198,9 @@ export const consumeDesktopLinkGrant = async ({
   }
   // The conditional claim proves these exact identity values were stored by
   // the signed-in browser; request identity alone never authorizes a member.
-  return Result.ok({ ...identity, deviceJkt });
+  return Result.ok({
+    ...identity,
+    deviceJkt,
+    sessionId: issuing.output[ISSUING_SESSION_FIELD],
+  });
 };
