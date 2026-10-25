@@ -26,6 +26,7 @@ const toastManager = Toast.createToastManager<ToastData>();
 const anchoredToastManager = Toast.createToastManager<ToastData>();
 
 const TOAST_RIGHT_OFFSET_VAR = "--stella-toast-right-offset";
+const ERROR_TOAST_TIMEOUT_MS = 8000;
 
 const TOAST_ICONS = {
   error: <CircleAlertIcon className="text-destructive" />,
@@ -511,17 +512,12 @@ const subscribeWindowFocus = (onChange: () => void) => {
 const readWindowFocus = () => document.hasFocus();
 const readServerWindowFocus = () => true;
 
-function normalizeToastAddOptions({
-  action,
-  actionProps,
-  timeout,
-  type,
-  ...options
-}: ToastUpdateOptions) {
+function normalizeToastAddOptions(options: ToastUpdateOptions) {
+  const { action, actionProps, timeout, type, ...addOptions } = options;
   return {
-    ...options,
+    ...addOptions,
     ...normalizeToastActionProps({ action, actionProps }),
-    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(type)),
+    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(options)),
     type,
   };
 }
@@ -530,7 +526,7 @@ function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
   const { action, actionProps, timeout, type, ...updateOptions } = options;
   const normalizedTimeout =
     timeout === undefined
-      ? normalizeDefaultToastUpdateTimeout(type)
+      ? normalizeDefaultToastUpdateTimeout(options)
       : normalizeToastTimeout(timeout);
 
   return {
@@ -547,12 +543,12 @@ function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
   };
 }
 
-function normalizeDefaultToastUpdateTimeout(type: ToastType | undefined) {
-  if (type === undefined) {
+function normalizeDefaultToastUpdateTimeout(options: ToastUpdateOptions) {
+  if (options.type === undefined) {
     return undefined;
   }
 
-  return normalizeToastTimeout(getDefaultToastTimeout(type));
+  return normalizeToastTimeout(getDefaultToastTimeout(options));
 }
 
 function normalizeToastActionProps({
@@ -579,9 +575,29 @@ function normalizeToastActionProps({
   };
 }
 
-function getDefaultToastTimeout(type: ToastType | undefined) {
-  if (type === "loading" || type === "error") {
+/**
+ * A short plain error closes on its own like any notice. An error that carries
+ * detail (a description, rich content such as a provider reason to copy) or an
+ * action stays until dismissed, so it is never gone before it can be read.
+ */
+function getDefaultToastTimeout({
+  action,
+  actionProps,
+  description,
+  title,
+  type,
+}: ToastUpdateOptions) {
+  if (type === "loading") {
     return 0;
+  }
+
+  if (type === "error") {
+    const plain =
+      typeof title === "string" &&
+      (description === undefined || description === null) &&
+      action === undefined &&
+      actionProps === undefined;
+    return plain ? ERROR_TOAST_TIMEOUT_MS : 0;
   }
 
   if (type === "warning") {

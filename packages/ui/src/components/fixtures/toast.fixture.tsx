@@ -80,6 +80,14 @@ const ToastFixture = () => (
       >
         success
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          stellaToast.error("Plain failure");
+        }}
+      >
+        plain error
+      </button>
     </main>
   </ToastProvider>
 );

@@ -162,6 +162,20 @@ for (const entry of ["error", "add", "update", "promise"]) {
   });
 }
 
+test("a plain error toast counts down and closes on its own", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto(fixturePath);
+  await page.getByRole("button", { name: "plain error", exact: true }).click();
+  await page.mouse.move(0, 0);
+  const title = page.locator('[data-slot="toast-title"]');
+  await expect(title).toHaveText("Plain failure");
+  await expect(page.locator('[data-slot="toast-countdown"]')).toBeVisible();
+  await page.clock.fastForward(10_000);
+  await expect(title).toHaveCount(0);
+});
+
 test("success toasts retain their automatic timeout", async ({ page }) => {
   await page.clock.install();
   await page.goto(fixturePath);
