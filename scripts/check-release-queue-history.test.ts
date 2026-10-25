@@ -1146,6 +1146,8 @@ const VERSION_READERS: Record<string, string> = {
   "scripts/ci-root-check-inputs.json": "changed-path scope",
   "scripts/prepare-maintenance-release.ts":
     "readPreviousRelease answers superseded for an untagged VERSION",
+  "scripts/rehearse-migration-upgrade.sh":
+    "checkout image build label; base release comes from the committed production promotion record",
   "scripts/verify-release-candidate-tree.mjs":
     "VERSION changed against main and is a supported release version",
   "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",

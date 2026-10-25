@@ -18,6 +18,8 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import { assertOnlineRepairRehearsalCoverage } from "./online-migration-rehearsal-guard";
+import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
 import {
   assertOnlineMigrationsApplied,
   ensureOnlineIndexValid,
@@ -1736,3 +1738,182 @@ const indexRow = (
 
 const indexOfStatement = (statements: string[], fragment: string): number =>
   statements.findIndex((statement) => statement.includes(fragment));
+
+describe("online repair observations", () => {
+  test("records the actual completion census and only the repairs it invokes", async () => {
+    const harness = createHarness();
+    const records: OnlineRepairRehearsalRecord[] = [];
+    const calls: string[] = [];
+    const pending = {
+      type: "pending",
+      reason: "checkpoint",
+      cursor: "1",
+      holdUntil: 1,
+      heldSince: 0,
+    } as const;
+    const repairs = (["complete", "incomplete", "pending"] as const).map(
+      (initial) => {
+        let attempted = false;
+        return {
+          name: initial,
+          readCompletion: async (): Promise<OnlineRepairCompletion> => {
+            if (
+              initial === "complete" ||
+              (attempted && initial === "incomplete")
+            ) {
+              return { type: "complete" };
+            }
+            return initial === "pending"
+              ? pending
+              : { type: "incomplete", reason: "upgrade" };
+          },
+          repair: async () => {
+            expect(records.slice(-2)).toEqual([
+              { type: "checked", name: initial, completion: initial },
+              { type: "attempted", name: initial },
+            ]);
+            calls.push(initial);
+            attempted = true;
+            return { type: "complete" } as const;
+          },
+        } satisfies OnlineRepair;
+      },
+    );
+    await runOnlineMigrations(harness.pool, {
+      repairs,
+      log: () => undefined,
+      observeRepair: (record) => {
+        records.push(record);
+      },
+    });
+    expect(records).toEqual([
+      { type: "checked", name: "complete", completion: "complete" },
+      { type: "checked", name: "incomplete", completion: "incomplete" },
+      { type: "attempted", name: "incomplete" },
+      { type: "checked", name: "pending", completion: "pending" },
+      { type: "attempted", name: "pending" },
+    ]);
+    expect(calls).toEqual(["incomplete", "pending"]);
+    assertOnlineRepairRehearsalCoverage({ records, repairs });
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a deferred repair resumes with fresh checks without certifying skipped later repairs", async () => {
+    const records: OnlineRepairRehearsalRecord[] = [];
+    let attempts = 0;
+    const repair = {
+      name: "resume",
+      readCompletion: async (): Promise<OnlineRepairCompletion> =>
+        attempts >= 2
+          ? { type: "complete" }
+          : { type: "incomplete", reason: "upgrade" },
+      repair: async () => {
+        attempts += 1;
+        return attempts === 1
+          ? ({ type: "deferred", step: "resume", retryAfterMs: 1 } as const)
+          : ({ type: "complete" } as const);
+      },
+    } satisfies OnlineRepair;
+    const later = {
+      name: "later",
+      readCompletion: async () => ({ type: "complete" }) as const,
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+    const repairs = [repair, later];
+    const options = {
+      repairs,
+      observeRepair: (record: OnlineRepairRehearsalRecord) => {
+        records.push(record);
+      },
+    };
+    expect(
+      (await runOnlineMigrations(createHarness().pool, options)).type,
+    ).toBe("deferred");
+    expect(() =>
+      assertOnlineRepairRehearsalCoverage({ records, repairs }),
+    ).toThrow("later");
+    expect(
+      (await runOnlineMigrations(createHarness().pool, options)).type,
+    ).toBe("complete");
+    assertOnlineRepairRehearsalCoverage({ records, repairs });
+    expect(records).toEqual([
+      { type: "checked", name: "resume", completion: "incomplete" },
+      { type: "attempted", name: "resume" },
+      { type: "checked", name: "resume", completion: "incomplete" },
+      { type: "attempted", name: "resume" },
+      { type: "checked", name: "later", completion: "complete" },
+    ]);
+    expect(attempts).toBe(2);
+  });
+
+  test("startup validation never supplies repair execution observations", async () => {
+    const records: OnlineRepairRehearsalRecord[] = [];
+    let calls = 0;
+    const repair = {
+      name: "historical",
+      readCompletion: async () => ({ type: "complete" }) as const,
+      repair: async () => {
+        calls += 1;
+        return { type: "complete" } as const;
+      },
+    } satisfies OnlineRepair;
+    await assertOnlineMigrationsApplied(createHarness().pool, {
+      repairs: [repair],
+      observeRepair: (record) => {
+        records.push(record);
+      },
+    });
+    expect(records).toEqual([]);
+    expect(calls).toBe(0);
+  });
+
+  test("observations preserve postcondition failures and lock release", async () => {
+    const harness = createHarness();
+    const records: OnlineRepairRehearsalRecord[] = [];
+    const repair = {
+      name: "broken",
+      readCompletion: async () =>
+        ({ type: "incomplete", reason: "rows left" }) as const,
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+    const failure = await rejectionOf(
+      runOnlineMigrations(harness.pool, {
+        repairs: [repair],
+        observeRepair: (record) => {
+          records.push(record);
+        },
+      }),
+    );
+    expect(String(failure)).toContain("Online repair broken is not complete");
+    expect(records).toEqual([
+      { type: "checked", name: "broken", completion: "incomplete" },
+      { type: "attempted", name: "broken" },
+    ]);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a failed completion read cannot manufacture an attempted observation", async () => {
+    const harness = createHarness();
+    const records: OnlineRepairRehearsalRecord[] = [];
+    const failure = new TypeError("read unavailable");
+    const repair = {
+      name: "unreadable",
+      readCompletion: async () => {
+        throw failure;
+      },
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+    expect(
+      await rejectionOf(
+        runOnlineMigrations(harness.pool, {
+          repairs: [repair],
+          observeRepair: (record) => {
+            records.push(record);
+          },
+        }),
+      ),
+    ).toBe(failure);
+    expect(records).toEqual([]);
+    expect(harness.released()).toBe(true);
+  });
+});

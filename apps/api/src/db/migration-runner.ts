@@ -39,6 +39,7 @@ import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
+import type { OnlineRepairOptions } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
@@ -648,6 +649,7 @@ type RunMigrationsOptions = {
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
+  observeRepair?: OnlineRepairOptions["observeRepair"];
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
   lockWaitRetry?: LockWaitRetry;
@@ -661,6 +663,22 @@ const migrationSessionCanUnlock = (
   laneHeld: boolean,
   sessionState: "open" | "terminated",
 ) => laneHeld && sessionState === "open";
+
+const createOnlineMigrationConnection = (
+  connection: ReservedSQL,
+  session: { state: "open" | "terminated" },
+): OnlineMigrationConnection => ({
+  terminate: async () => {
+    session.state = "terminated";
+    await terminateReserved(connection);
+  },
+  execute: async (query, params = []) => {
+    await connection.unsafe(query, [...params]);
+  },
+  query: async (query, params = []) =>
+    await connection.unsafe(query, [...params]),
+  release: (): void => undefined,
+});
 
 type SchemaObservationOptions = {
   observer: OnlineMigrationConnection;
@@ -703,6 +721,7 @@ export const runMigrations = async ({
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  observeRepair,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
@@ -838,24 +857,17 @@ export const runMigrations = async ({
       retriesSpent: () => lockTelemetry.retriesSpent,
     };
     clock.startedAt = timing.clock();
-    const onlineConnection: OnlineMigrationConnection = {
-      terminate: async () => {
-        session.state = "terminated";
-        await terminateReserved(connection);
-      },
-      execute: async (query, params = []) => {
-        await connection.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        await connection.unsafe(query, [...params]),
-      release: (): void => undefined,
-    };
+    const onlineConnection = createOnlineMigrationConnection(
+      connection,
+      session,
+    );
     const online = await runOnline(
       { reserve: async () => await Promise.resolve(onlineConnection) },
       {
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        observeRepair,
       },
     );
     clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
