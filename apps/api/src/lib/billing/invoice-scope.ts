@@ -53,11 +53,17 @@ type InvoiceShareColumns = {
   totalAmount: SQLWrapper;
 };
 
-/** A legacy single-matter invoice has only its stored total until lines exist. */
+/**
+ * The part of an invoice a matter bills. A single-matter invoice is wholly its
+ * matter's, so the share is its stored total, the same figure its detail and
+ * list show (a legacy draft's attached entries count there before they have
+ * lines). A client invoice spreads over matters, so a matter's share is the sum
+ * of its lines there.
+ */
 export const invoiceMatterShare = (
   table: InvoiceShareColumns,
   workspaceId: SafeId<"workspace">,
 ) =>
-  sql<number>`COALESCE((SELECT SUM(share_line.gross_amount) FROM public.invoice_lines share_line WHERE share_line.invoice_id = ${table.id} AND share_line.workspace_id = ${workspaceId}), CASE WHEN ${table.workspaceId} = ${workspaceId} THEN ${table.totalAmount} ELSE 0 END)::bigint`.mapWith(
+  sql<number>`(CASE WHEN ${table.workspaceId} IS NOT NULL THEN CASE WHEN ${table.workspaceId} = ${workspaceId} THEN ${table.totalAmount} ELSE 0 END ELSE COALESCE((SELECT SUM(share_line.gross_amount) FROM public.invoice_lines share_line WHERE share_line.invoice_id = ${table.id} AND share_line.workspace_id = ${workspaceId}), 0) END)::bigint`.mapWith(
     Number,
   );

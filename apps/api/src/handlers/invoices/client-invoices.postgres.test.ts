@@ -35,7 +35,10 @@ import {
   manualLineDraft,
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
-import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import {
+  invoiceInMatter,
+  invoiceMatterShare,
+} from "@/api/lib/billing/invoice-scope";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1578,6 +1581,48 @@ if (!databaseUrl || !runPostgres) {
             ),
           ),
       ).toEqual([{ id: scenario.invoiceId }]);
+    });
+
+    test("a matter's share is a single-matter invoice's stored total and a client invoice's lines there", async () => {
+      const scenario = await seedScenario();
+      const legacyId = createSafeId<"invoice">();
+      // One stored line; an entry attached before lines existed carries the
+      // rest of the stored total.
+      await db.insert(invoices).values({
+        id: legacyId,
+        organizationId: scenario.orgId,
+        workspaceId: scenario.firstMatterId,
+        invoiceDate: "2026-10-15",
+        currency: "EUR",
+        totalAmount: cents(363),
+      });
+      await insertLine({
+        organizationId: scenario.orgId,
+        workspaceId: scenario.firstMatterId,
+        invoiceId: legacyId,
+        ownerId: scenario.actors.owner,
+      });
+      const shareOf = async (
+        invoiceId: SafeId<"invoice">,
+        workspaceId: SafeId<"workspace">,
+      ) =>
+        (
+          await db
+            .select({ share: invoiceMatterShare(invoices, workspaceId) })
+            .from(invoices)
+            .where(eq(invoices.id, invoiceId))
+        ).at(0)?.share;
+      expect(await shareOf(legacyId, scenario.firstMatterId)).toBe(363);
+      expect(await shareOf(legacyId, scenario.secondMatterId)).toBe(0);
+      expect(await shareOf(scenario.invoiceId, scenario.firstMatterId)).toBe(
+        121,
+      );
+      expect(await shareOf(scenario.invoiceId, scenario.secondMatterId)).toBe(
+        121,
+      );
+      expect(
+        await shareOf(scenario.invoiceId, scenario.otherClientMatterId),
+      ).toBe(0);
     });
 
     test("line constraints reject a different client and cross-tenant invoice or matter even on a root write", async () => {
