@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { API } from "typescript/unstable/async";
+import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
 
 import {
@@ -39,10 +39,10 @@ const buildProgram = async (recorder: CompilerInputRecorder) => {
   const tsconfig = path.join(directory, "tsconfig.json");
   const api = new API({ cwd: directory, fs: recorder.fileSystem() });
   try {
-    const snapshot = await api.updateSnapshot({ openProjects: [tsconfig] });
+    const snapshot = await api.createSnapshot({ openProjects: [tsconfig] });
     return (
       (await snapshot
-        .getProject(tsconfig)
+        .getConfiguredProject(tsconfig)
         ?.program.getSourceFile(path.join(directory, "src/a.ts"))) !== undefined
     );
   } finally {
@@ -154,7 +154,8 @@ test("portable stamps keep directory entries as names", async () => {
       import { createCompilerInputRecorder } from ${JSON.stringify(path.join(import.meta.dir, "compiler-input-stamp.ts"))};
       const root = process.cwd();
       const recorder = createCompilerInputRecorder();
-      recorder.fileSystem().getAccessibleEntries?.(root);
+      const fileSystem = recorder.fileSystem();
+      if (typeof fileSystem.getAccessibleEntries === "function") fileSystem.getAccessibleEntries(root);
       console.log(JSON.stringify(recorder.portableStamp("context", root)));
     `,
     ],
@@ -168,6 +169,7 @@ test("portable stamps keep directory entries as names", async () => {
   expect(Object.values(portable.entries)).toContainEqual({
     files: ["tsconfig.json"],
     directories: ["src"],
+    symlinks: [],
   });
   const localized = localizeStamp(portable, realpathSync(directory));
   expect(localized).toBeDefined();

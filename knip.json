@@ -11,7 +11,7 @@
       "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
-        "typescript",
+        "tsrs",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",

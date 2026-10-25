@@ -14,18 +14,27 @@ import {
 } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import type { FileSystem, FileSystemEntries } from "typescript/unstable/fs";
+import type {
+  FileSystemCallbacks,
+  FileSystemEntries,
+  FileSystemStat,
+} from "tsrs/unstable/fs";
+import { serverFS } from "tsrs/unstable/fs";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
 const pathListSchema = v.array(v.string());
-// A directory's file and subdirectory names, as the compiler lists them.
+// A directory's file and subdirectory names, as the compiler lists them, and
+// which of them are symbolic links.
 const entriesSchema = v.strictObject({
   files: pathListSchema,
   directories: pathListSchema,
+  symlinks: pathListSchema,
 });
+
+type Entries = v.InferOutput<typeof entriesSchema>;
 const existenceSchema = v.strictObject({
   present: pathListSchema,
   absent: pathListSchema,
@@ -80,13 +89,13 @@ const decodeSource = (bytes: Buffer): string => {
   return bytes.toString("utf-8");
 };
 
-const EMPTY_ENTRIES: FileSystemEntries = { files: [], directories: [] };
+const EMPTY_ENTRIES: Entries = { files: [], directories: [], symlinks: [] };
 
 /**
  * A directory's entries as the compiler sees them: names only, a symbolic link
  * counted as what it points at, sorted. Unreadable directories have none.
  */
-const accessibleEntries = (directory: string): FileSystemEntries => {
+const accessibleEntries = (directory: string): Entries => {
   const listed = Result.try(() =>
     readdirSync(directory, { withFileTypes: true }),
   );
@@ -95,7 +104,11 @@ const accessibleEntries = (directory: string): FileSystemEntries => {
   }
   const files: string[] = [];
   const directories: string[] = [];
+  const symlinks: string[] = [];
   for (const entry of listed.value) {
+    if (entry.isSymbolicLink()) {
+      symlinks.push(entry.name);
+    }
     const target = entry.isSymbolicLink()
       ? Result.try(() =>
           statSync(path.join(directory, entry.name), { throwIfNoEntry: false }),
@@ -107,7 +120,30 @@ const accessibleEntries = (directory: string): FileSystemEntries => {
       directories.push(entry.name);
     }
   }
-  return { files: files.toSorted(), directories: directories.toSorted() };
+  return {
+    files: files.toSorted(),
+    directories: directories.toSorted(),
+    symlinks: symlinks.toSorted(),
+  };
+};
+
+const toCompilerEntries = (entries: Entries): FileSystemEntries => ({
+  files: [...entries.files],
+  directories: [...entries.directories],
+  symlinks: [...entries.symlinks],
+});
+
+const statOnDisk = (fileName: string): FileSystemStat | undefined => {
+  const found = statSync(fileName, { throwIfNoEntry: false });
+  return found === undefined
+    ? undefined
+    : { mode: found.mode, size: found.size, mtime: found.mtime };
+};
+
+// The compiler never writes while it only reads a program.
+const READ_ONLY: Pick<FileSystemCallbacks, "writeFile" | "removeFile"> = {
+  writeFile: serverFS.error,
+  removeFile: serverFS.error,
 };
 
 const isFileOnDisk = (fileName: string) =>
@@ -125,7 +161,9 @@ export type CompilerInputRecorder = {
    * answered from disk and recorded, except for `virtualFiles`, which are
    * served from memory and never recorded.
    */
-  fileSystem: (virtualFiles?: ReadonlyMap<string, string>) => FileSystem;
+  fileSystem: (
+    virtualFiles?: ReadonlyMap<string, string>,
+  ) => FileSystemCallbacks;
   /** Records a file the caller reads outside the compiler. */
   readFile: (fileName: string) => string | undefined;
   stamp: (context: string) => CompilerInputStamp;
@@ -332,13 +370,13 @@ const existence = (answers: Map<string, boolean>) => {
 
 // Every directory that holds a virtual file, so resolution can reach it.
 const virtualDirectoriesOf = (virtualFiles: ReadonlyMap<string, string>) => {
-  const directories = new Map<string, FileSystemEntries>();
+  const directories = new Map<string, Entries>();
   const entriesOf = (directory: string) => {
     const known = directories.get(directory);
     if (known !== undefined) {
       return known;
     }
-    const created: FileSystemEntries = { files: [], directories: [] };
+    const created: Entries = { files: [], directories: [], symlinks: [] };
     directories.set(directory, created);
     return created;
   };
@@ -361,17 +399,27 @@ const virtualDirectoriesOf = (virtualFiles: ReadonlyMap<string, string>) => {
 };
 
 const mergeEntries = (
-  real: FileSystemEntries,
-  virtual: FileSystemEntries | undefined,
+  real: Entries,
+  virtual: Entries | undefined,
 ): FileSystemEntries =>
-  virtual === undefined
-    ? real
-    : {
-        files: [...new Set([...real.files, ...virtual.files])].toSorted(),
-        directories: [
-          ...new Set([...real.directories, ...virtual.directories]),
-        ].toSorted(),
-      };
+  toCompilerEntries(
+    virtual === undefined
+      ? real
+      : {
+          files: [...new Set([...real.files, ...virtual.files])].toSorted(),
+          directories: [
+            ...new Set([...real.directories, ...virtual.directories]),
+          ].toSorted(),
+          symlinks: real.symlinks,
+        },
+  );
+
+// A virtual file's stat, answered from memory like its text.
+const virtualStat = (text: string): FileSystemStat => ({
+  mode: 0o10_0644,
+  size: Buffer.byteLength(text),
+  mtime: new Date(0),
+});
 
 /**
  * The file system for a program built without recording: `virtualFiles` from
@@ -379,20 +427,27 @@ const mergeEntries = (
  */
 export const serveVirtualFiles = (
   virtualFiles: ReadonlyMap<string, string>,
-): FileSystem => {
+): FileSystemCallbacks => {
   const virtualDirectories = virtualDirectoriesOf(virtualFiles);
   return {
-    readFile: (fileName) => virtualFiles.get(fileName),
-    fileExists: (fileName) => (virtualFiles.has(fileName) ? true : undefined),
+    readFile: (fileName) => virtualFiles.get(fileName) ?? serverFS.useOS,
+    fileExists: (fileName) =>
+      virtualFiles.has(fileName) ? true : serverFS.useOS,
     directoryExists: (directory) =>
-      virtualDirectories.has(directory) ? true : undefined,
-    realpath: (fileName) => (virtualFiles.has(fileName) ? fileName : undefined),
+      virtualDirectories.has(directory) ? true : serverFS.useOS,
+    realpath: (fileName) =>
+      virtualFiles.has(fileName) ? serverFS.identity : serverFS.useOS,
+    stat: (fileName) => {
+      const text = virtualFiles.get(fileName);
+      return text === undefined ? serverFS.useOS : virtualStat(text);
+    },
     getAccessibleEntries: (directory) => {
       const virtual = virtualDirectories.get(directory);
       return virtual === undefined
-        ? undefined
+        ? serverFS.useOS
         : mergeEntries(accessibleEntries(directory), virtual);
     },
+    ...READ_ONLY,
   };
 };
 
@@ -403,7 +458,7 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   const files = new Map<string, boolean>();
   const directories = new Map<string, boolean>();
   const realpaths = new Map<string, string>();
-  const entries = new Map<string, FileSystemEntries>();
+  const entries = new Map<string, Entries>();
   // Reads the bytes once and hands the compiler that text, so the recorded
   // hash is of the bytes it parsed even if the file changes while the program
   // is built.
@@ -424,40 +479,52 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   };
   const fileSystem = (
     virtualFiles: ReadonlyMap<string, string> = new Map(),
-  ): FileSystem => {
+  ): FileSystemCallbacks => {
     const virtualDirectories = virtualDirectoriesOf(virtualFiles);
+    const recordFile = (fileName: string) => {
+      const exists = isFileOnDisk(fileName);
+      files.set(fileName, exists);
+      return exists;
+    };
+    const recordDirectory = (directory: string) => {
+      const exists = isDirectoryOnDisk(directory);
+      directories.set(directory, exists);
+      return exists;
+    };
     return {
       readFile: (fileName) =>
-        virtualFiles.get(fileName) ?? recordRead(fileName) ?? null,
-      fileExists: (fileName) => {
-        if (virtualFiles.has(fileName)) {
-          return true;
-        }
-        const exists = isFileOnDisk(fileName);
-        files.set(fileName, exists);
-        return exists;
-      },
-      directoryExists: (directory) => {
-        if (virtualDirectories.has(directory)) {
-          return true;
-        }
-        const exists = isDirectoryOnDisk(directory);
-        directories.set(directory, exists);
-        return exists;
-      },
+        virtualFiles.get(fileName) ?? recordRead(fileName),
+      fileExists: (fileName) =>
+        virtualFiles.has(fileName) || recordFile(fileName),
+      directoryExists: (directory) =>
+        virtualDirectories.has(directory) || recordDirectory(directory),
       realpath: (fileName) => {
         if (virtualFiles.has(fileName)) {
-          return fileName;
+          return serverFS.identity;
         }
         const real = realpathOnDisk(fileName);
         realpaths.set(fileName, real);
         return real;
+      },
+      // What the answer depends on is whether the path is a file or a
+      // directory; a file's bytes are recorded when the compiler reads it.
+      stat: (fileName) => {
+        const text = virtualFiles.get(fileName);
+        if (text !== undefined) {
+          return virtualStat(text);
+        }
+        const found = statOnDisk(fileName);
+        if (!recordFile(fileName)) {
+          recordDirectory(fileName);
+        }
+        return found;
       },
       getAccessibleEntries: (directory) => {
         const found = accessibleEntries(directory);
         entries.set(directory, found);
         return mergeEntries(found, virtualDirectories.get(directory));
       },
+      ...READ_ONLY,
     };
   };
   const stamp = (
@@ -471,14 +538,7 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     files: existence(files),
     directories: existence(directories),
     realpaths: sortedRecord(realpaths),
-    entries: sortedRecord(
-      new Map(
-        [...entries].map(([directory, found]) => [
-          directory,
-          { files: [...found.files], directories: [...found.directories] },
-        ]),
-      ),
-    ),
+    entries: sortedRecord(entries),
   });
   return {
     fileSystem,
@@ -549,7 +609,8 @@ function* checks(stamp: CompilerInputStamp): Generator<Check> {
       const current = accessibleEntries(directory);
       return (
         sameStrings(current.files, found.files) &&
-        sameStrings(current.directories, found.directories)
+        sameStrings(current.directories, found.directories) &&
+        sameStrings(current.symlinks, found.symlinks)
       );
     };
   }
