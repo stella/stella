@@ -75,6 +75,15 @@ const lineRefusal = (record: InvoiceExportRecord): string | null => {
   if (categories.has("not_vat_payer")) {
     return "non-VAT-payer sellers may not issue Slovak e-invoices";
   }
+  // EN 16931 BR-AE-03: a reverse-charge invoice names the buyer's VAT ID
+  // (BT-48) or legal registration ID (BT-47); the Peppol endpoint is neither.
+  if (
+    categories.has("reverse_charge") &&
+    !record.buyer.vatId?.trim() &&
+    !record.buyer.registrationNumber?.trim()
+  ) {
+    return "a reverse-charge invoice needs the buyer's IČ DPH or IČO";
+  }
   if (categories.has("outside_scope") && categories.size > 1) {
     return "an outside-scope (O) line cannot be mixed with other VAT categories; export it on a separate invoice";
   }

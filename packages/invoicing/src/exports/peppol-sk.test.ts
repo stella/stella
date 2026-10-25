@@ -172,6 +172,11 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
   const { iban: _sellerIban, ...sellerWithoutIban } = seller;
   const { vatId: _sellerVatId, ...sellerWithoutVatId } = seller;
   const { country: _buyerCountry, ...buyerWithoutCountry } = buyer;
+  const {
+    vatId: _buyerVatId,
+    registrationNumber: _buyerRegistration,
+    ...buyerWithoutIdentifiers
+  } = buyer;
   const invalidRecords: readonly (readonly [
     string,
     () => ReturnType<typeof peppolRecord>,
@@ -261,6 +266,21 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
           number: "invalid",
           buyer: buyerWithoutCountry,
           lines: [{ description: "Work", netAmountMinor: cents(100) }],
+        }),
+    ],
+    [
+      "needs the buyer's IČ DPH or IČO",
+      () =>
+        peppolRecord({
+          number: "invalid",
+          buyer: buyerWithoutIdentifiers,
+          lines: [
+            {
+              description: "Reverse charge",
+              netAmountMinor: cents(100),
+              vatTreatment: "reverse_charge" as const,
+            },
+          ],
         }),
     ],
     [
