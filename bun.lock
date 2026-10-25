@@ -1674,7 +1674,7 @@
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.87.0",
     "@shadcn/lint": "0.1.0",
-    "@silurus/ooxml": "0.88.0",
+    "@silurus/ooxml": "0.89.2",
     "@stll/aho-corasick": "1.0.4",
     "@stll/aho-corasick-wasm": "1.0.4",
     "@stll/anonymize": "3.0.7",
@@ -3058,7 +3058,7 @@
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
 
-    "@silurus/ooxml": ["@silurus/ooxml@0.88.0", "", {}, "sha512-dhMs1/U5fB5bh/Hv8BNTgCsHVNOl+qkquohsROblku7jghsmd1BZAE//LR6omB7aCVLGJ3sp4IqzqdkgT5wicQ=="],
+    "@silurus/ooxml": ["@silurus/ooxml@0.89.2", "", {}, "sha512-XrUNtwAEOZXeeYE1Sv5VP5NPEiK+pvzv710FWUdQsfikLQicLB1pWYhqVIHgVkMkIX2VjW4llOatGYsfGticAw=="],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.27.12", "", {}, "sha512-hhyNJ+nbR6ZR7pToHvllEFun9TL0sbL+tk/ON75lo+Xas054uez98qRbsuNt7MBCyZKK4+8Yli/OAGZhmfBZ/g=="],
 
