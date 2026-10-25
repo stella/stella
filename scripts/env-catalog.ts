@@ -1469,6 +1469,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
+  // Run-artifact downloads: the bound of one attempt and the pause before the retry.
+  "ARTIFACT_DOWNLOAD_ATTEMPT_SECONDS",
+  "ARTIFACT_DOWNLOAD_RETRY_PAUSE_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",

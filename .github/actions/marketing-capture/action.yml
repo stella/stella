@@ -130,10 +130,14 @@ runs:
 
     - name: Download production web build
       if: inputs.web-build-artifact != ''
-      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-      with:
-        name: ${{ inputs.web-build-artifact }}
-        path: apps/web/dist
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARTIFACT_NAME: ${{ inputs.web-build-artifact }}
+      run: >-
+        bash scripts/download-run-artifact.sh
+        --name "$ARTIFACT_NAME"
+        --path apps/web/dist
 
     - name: Validate production web build
       # The artifact must match the checked-out commit, including a historical

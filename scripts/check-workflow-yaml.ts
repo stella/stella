@@ -258,6 +258,165 @@ export const validateLocalActionReferences = ({
   }
 };
 
+const DOWNLOAD_ARTIFACT_ACTION = "actions/download-artifact";
+
+export const ARTIFACT_DOWNLOAD_EXCEPTION_REASON = {
+  /** run-id, repository or github-token: the script reads this run only. */
+  anotherRun: "another-run",
+  /** gh needs actions: read; the action uses the runner's own artifact token. */
+  noActionsRead: "no-actions-read",
+} as const;
+
+type ArtifactDownloadExceptionReason =
+  (typeof ARTIFACT_DOWNLOAD_EXCEPTION_REASON)[keyof typeof ARTIFACT_DOWNLOAD_EXCEPTION_REASON];
+
+export type ArtifactDownloadException = {
+  /** Repository-relative workflow or composite action file. */
+  readonly file: string;
+  /** Job id; undefined for a composite action step. */
+  readonly job: string | undefined;
+  readonly step: string;
+  readonly reason: ArtifactDownloadExceptionReason;
+  readonly detail: string;
+};
+
+/**
+ * Steps that keep actions/download-artifact. Every other artifact download
+ * runs scripts/download-run-artifact.sh, which bounds and retries attempts.
+ */
+export const ARTIFACT_DOWNLOAD_EXCEPTIONS: readonly ArtifactDownloadException[] =
+  [
+    {
+      file: ".github/workflows/ai-provider-canary.yml",
+      job: "require-provider-coverage",
+      step: "Download configured-provider markers",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.noActionsRead,
+      detail: "The job grants contents: read only.",
+    },
+    {
+      file: ".github/workflows/api-test-memory.yml",
+      job: "refresh",
+      step: "Download this run's measurements",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.noActionsRead,
+      detail: "The job grants contents: read only.",
+    },
+    {
+      file: ".github/workflows/generated-conflicts-publish.yml",
+      job: "publish",
+      step: "Download the resolution",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.anotherRun,
+      detail: "Reads the selected resolve run through run-id.",
+    },
+    {
+      file: ".github/workflows/marketing-screenshots-publish.yml",
+      job: "publish",
+      step: "Download regenerated baselines",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.anotherRun,
+      detail: "Reads the selected capture run through run-id.",
+    },
+    {
+      file: ".github/workflows/type-cost-measurement.yml",
+      job: "measure",
+      step: "Download compiler inputs",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.noActionsRead,
+      detail: "The job inherits contents: read only.",
+    },
+  ];
+
+type ArtifactDownloadStep = {
+  file: string;
+  job: string | undefined;
+  step: string;
+};
+
+const artifactDownloadSteps = (
+  value: unknown,
+  file: string,
+): ArtifactDownloadStep[] => {
+  if (!isRecord(value)) {
+    return [];
+  }
+  const groups: { job: string | undefined; steps: unknown }[] = [];
+  if (isRecord(value["jobs"])) {
+    for (const [job, definition] of Object.entries(value["jobs"])) {
+      if (isRecord(definition) && "steps" in definition) {
+        groups.push({ job, steps: definition["steps"] });
+      }
+    }
+  }
+  if (isRecord(value["runs"]) && "steps" in value["runs"]) {
+    groups.push({ job: undefined, steps: value["runs"]["steps"] });
+  }
+  return groups.flatMap(({ job, steps }) =>
+    flattenWorkflowSteps(steps).flatMap((step, index) => {
+      const uses = step["uses"];
+      if (
+        typeof uses !== "string" ||
+        uses.split("@")[0]?.trim() !== DOWNLOAD_ARTIFACT_ACTION
+      ) {
+        return [];
+      }
+      const name = step["name"];
+      return [
+        {
+          file,
+          job,
+          step: typeof name === "string" ? name : `steps[${String(index)}]`,
+        },
+      ];
+    }),
+  );
+};
+
+const describeStep = ({ file, job, step }: ArtifactDownloadStep): string =>
+  job === undefined
+    ? `${file} step "${step}"`
+    : `${file} job ${job} step "${step}"`;
+
+const sameStep = (left: ArtifactDownloadStep, right: ArtifactDownloadStep) =>
+  left.file === right.file &&
+  left.job === right.job &&
+  left.step === right.step;
+
+type ArtifactDownloadOptions = {
+  value: unknown;
+  /** Repository-relative path, the key of the exception list. */
+  file: string;
+  exceptions: readonly ArtifactDownloadException[];
+};
+
+/** Returns the steps that use actions/download-artifact under an exception. */
+export const validateArtifactDownloads = ({
+  value,
+  file,
+  exceptions,
+}: ArtifactDownloadOptions): ArtifactDownloadStep[] => {
+  const steps = artifactDownloadSteps(value, file);
+  for (const step of steps) {
+    if (!exceptions.some((exception) => sameStep(exception, step))) {
+      throw new WorkflowYamlError({
+        message: `${describeStep(step)} uses ${DOWNLOAD_ARTIFACT_ACTION}; download artifacts of this run with scripts/download-run-artifact.sh, which bounds each attempt and retries a stalled one once (an exception needs a reason in ARTIFACT_DOWNLOAD_EXCEPTIONS in scripts/check-workflow-yaml.ts)`,
+        file,
+      });
+    }
+  }
+  return steps;
+};
+
+export const validateArtifactDownloadExceptions = (
+  exceptions: readonly ArtifactDownloadException[],
+  seen: readonly ArtifactDownloadStep[],
+): void => {
+  for (const exception of exceptions) {
+    if (!seen.some((step) => sameStep(exception, step))) {
+      throw new WorkflowYamlError({
+        message: `${describeStep(exception)} is listed in ARTIFACT_DOWNLOAD_EXCEPTIONS but does not use ${DOWNLOAD_ARTIFACT_ACTION}; remove the stale exception`,
+        file: exception.file,
+      });
+    }
+  }
+};
+
 /** Lint the archive spelling as an equivalent local path without editing workflows. */
 type ActionlintWorkflowSourceOptions = {
   source: string;
@@ -327,7 +486,11 @@ export const actionlintWorkflowSource = ({
   return normalized;
 };
 
-export const checkWorkflowYaml = async (root: string): Promise<void> => {
+export const checkWorkflowYaml = async (
+  root: string,
+  artifactDownloadExceptions: readonly ArtifactDownloadException[] = ARTIFACT_DOWNLOAD_EXCEPTIONS,
+): Promise<void> => {
+  const artifactDownloads: ArtifactDownloadStep[] = [];
   const workflowDirectory = path.join(root, WORKFLOW_DIRECTORY);
   const workflowNames = (await readdir(workflowDirectory))
     .filter((name) =>
@@ -348,6 +511,13 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
       root,
       file,
     });
+    artifactDownloads.push(
+      ...validateArtifactDownloads({
+        value,
+        file: `${WORKFLOW_DIRECTORY}/${name}`,
+        exceptions: artifactDownloadExceptions,
+      }),
+    );
   }
 
   const actionDirectory = path.join(root, ACTION_DIRECTORY);
@@ -367,16 +537,24 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
         file: path.join(actionDirectory, name),
       });
     }
-    const file = path.join(
-      actionDirectory,
-      name,
-      metadata[0] ?? panic("action metadata missing"),
-    );
+    const metadataName = metadata[0] ?? panic("action metadata missing");
+    const file = path.join(actionDirectory, name, metadataName);
     const action = await parseWorkflowYaml(file);
     validateNoRubyShell(action, file);
     validateActionMetadata(action, file);
     validateLocalActionReferences({ value: action, root, file });
+    artifactDownloads.push(
+      ...validateArtifactDownloads({
+        value: action,
+        file: `${ACTION_DIRECTORY}/${name}/${metadataName}`,
+        exceptions: artifactDownloadExceptions,
+      }),
+    );
   }
+  validateArtifactDownloadExceptions(
+    artifactDownloadExceptions,
+    artifactDownloads,
+  );
   await validateNoRubyProcessSpawns(root);
 };
 

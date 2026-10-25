@@ -176,6 +176,7 @@
     "scripts/docker-source-closure.test.ts",
     "scripts/document-identity-guard.test.ts",
     "scripts/document-identity-guard.ts",
+    "scripts/download-run-artifact.sh",
     "scripts/e2e-geometry-shards.test.ts",
     "scripts/e2e-shard-budget.test.ts",
     "scripts/e2e-spec-shards.test.ts",

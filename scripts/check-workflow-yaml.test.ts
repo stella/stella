@@ -7,9 +7,13 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   actionlintWorkflowSource,
+  ARTIFACT_DOWNLOAD_EXCEPTION_REASON,
+  ARTIFACT_DOWNLOAD_EXCEPTIONS,
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
+  validateArtifactDownloadExceptions,
+  validateArtifactDownloads,
   validateLocalActionReferences,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
@@ -256,7 +260,141 @@ describe("workflow YAML validation", () => {
   });
 
   test("a composite action may use action.yaml", async () => {
-    await checkWorkflowYaml(path.join(FIXTURES, "yaml-action-root"));
+    await checkWorkflowYaml(path.join(FIXTURES, "yaml-action-root"), []);
+  });
+
+  test("every repository step that keeps actions/download-artifact has a typed reason", async () => {
+    // The repository check passes with the real list; each entry names a step
+    // that still uses the action, so a converted step cannot leave one behind.
+    expect(ARTIFACT_DOWNLOAD_EXCEPTIONS.length).toBeGreaterThan(0);
+    for (const exception of ARTIFACT_DOWNLOAD_EXCEPTIONS) {
+      expect(Object.values(ARTIFACT_DOWNLOAD_EXCEPTION_REASON)).toContain(
+        exception.reason,
+      );
+      expect(exception.detail.trim()).not.toBe("");
+    }
+    const [first, ...rest] = ARTIFACT_DOWNLOAD_EXCEPTIONS;
+    expect(first).toBeDefined();
+    const rejection = await rejectionOf(checkWorkflowYaml(ROOT, rest));
+    expect(rejection instanceof Error ? rejection.message : "").toBe(
+      `${first?.file ?? ""} job ${first?.job ?? ""} step "${first?.step ?? ""}" uses actions/download-artifact; download artifacts of this run with scripts/download-run-artifact.sh, which bounds each attempt and retries a stalled one once (an exception needs a reason in ARTIFACT_DOWNLOAD_EXCEPTIONS in scripts/check-workflow-yaml.ts)`,
+    );
+  });
+
+  test("a workflow or composite step using actions/download-artifact outside the exceptions names its file and step", () => {
+    const workflow = Bun.YAML.parse(`jobs:
+  report:
+    steps:
+      - name: Download reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: report-*
+`);
+    expect(() =>
+      validateArtifactDownloads({
+        value: workflow,
+        file: ".github/workflows/report.yml",
+        exceptions: [],
+      }),
+    ).toThrow(
+      '.github/workflows/report.yml job report step "Download reports" uses actions/download-artifact; download artifacts of this run with scripts/download-run-artifact.sh',
+    );
+    const action = {
+      name: "setup",
+      description: "Fixture composite action",
+      runs: {
+        using: "composite",
+        steps: [{ name: "Fetch build", uses: "actions/download-artifact@v8" }],
+      },
+    };
+    expect(() =>
+      validateArtifactDownloads({
+        value: action,
+        file: ".github/actions/setup/action.yml",
+        exceptions: [],
+      }),
+    ).toThrow(
+      '.github/actions/setup/action.yml step "Fetch build" uses actions/download-artifact',
+    );
+    // Steps inside a parallel group are checked like any other step.
+    const parallel = {
+      jobs: {
+        check: {
+          steps: [
+            {
+              parallel: [
+                { name: "Inner", uses: "actions/download-artifact@v8" },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    expect(() =>
+      validateArtifactDownloads({
+        value: parallel,
+        file: ".github/workflows/parallel.yml",
+        exceptions: [],
+      }),
+    ).toThrow('job check step "Inner" uses actions/download-artifact');
+  });
+
+  test("an exception admits exactly its own step and a stale exception is refused", () => {
+    const exception = {
+      file: ".github/workflows/report.yml",
+      job: "report",
+      step: "Download reports",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.anotherRun,
+      detail: "Reads the producing run through run-id.",
+    } as const;
+    const workflow = {
+      jobs: {
+        report: {
+          steps: [
+            { name: "Download reports", uses: "actions/download-artifact@v8" },
+          ],
+        },
+        other: {
+          steps: [
+            { name: "Download reports", uses: "actions/download-artifact@v8" },
+          ],
+        },
+      },
+    };
+    expect(() =>
+      validateArtifactDownloads({
+        value: workflow,
+        file: ".github/workflows/report.yml",
+        exceptions: [exception],
+      }),
+    ).toThrow(
+      'job other step "Download reports" uses actions/download-artifact',
+    );
+    const admitted = validateArtifactDownloads({
+      value: { jobs: { report: workflow.jobs.report } },
+      file: ".github/workflows/report.yml",
+      exceptions: [exception],
+    });
+    expect(() =>
+      validateArtifactDownloadExceptions([exception], admitted),
+    ).not.toThrow();
+    expect(() => validateArtifactDownloadExceptions([exception], [])).toThrow(
+      '.github/workflows/report.yml job report step "Download reports" is listed in ARTIFACT_DOWNLOAD_EXCEPTIONS but does not use actions/download-artifact; remove the stale exception',
+    );
+    // Other actions with a similar name are not artifact downloads.
+    expect(
+      validateArtifactDownloads({
+        value: {
+          jobs: {
+            report: {
+              steps: [{ name: "Upload", uses: "actions/upload-artifact@v7" }],
+            },
+          },
+        },
+        file: ".github/workflows/report.yml",
+        exceptions: [],
+      }),
+    ).toEqual([]);
   });
 
   test("a composite action stored as action.yaml is validated", async () => {

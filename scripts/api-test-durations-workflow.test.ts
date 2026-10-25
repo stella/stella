@@ -137,7 +137,9 @@ test("API shards consume and verify the plan artifact before testing", () => {
   ).toBeFalse();
   expect(
     workflowStepByName(shardSteps, "Download planned API test durations"),
-  ).toMatchObject({ with: { name: "api-test-durations-plan" } });
+  ).toMatchObject({
+    run: 'bash scripts/download-run-artifact.sh --name api-test-durations-plan --path "$RUNNER_TEMP"',
+  });
   const verifyIndex = shardSteps.findIndex(
     (step) => step["name"] === "Verify planned API test durations",
   );
@@ -239,11 +241,7 @@ test("Postgres durations refresh exclusively from successful service timings", (
   expect(
     workflowStepByName(steps, "Download Postgres test timings"),
   ).toMatchObject({
-    with: {
-      pattern: "postgres-test-timings-*",
-      path: `\${{ runner.temp }}/postgres-test-timings`,
-      "merge-multiple": true,
-    },
+    run: "bash scripts/download-run-artifact.sh --pattern 'postgres-test-timings-*' --merge --path \"$RUNNER_TEMP/postgres-test-timings\"",
   });
   expect(
     workflowStepByName(steps, "Restore previous Postgres test durations"),

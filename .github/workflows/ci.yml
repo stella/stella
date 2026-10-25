@@ -1936,10 +1936,13 @@ jobs:
 
       - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
@@ -2263,14 +2266,16 @@ jobs:
           cp .env.example .env
 
       - name: Download generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -2588,14 +2593,16 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -2735,11 +2742,13 @@ jobs:
 
       - name: Download planned API test durations
         if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.api_test_durations_hash != 'missing'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: api-test-durations-plan
-          # A directory: the single-file artifact lands as api-test-durations.json.
-          path: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A directory: the single-file artifact lands as api-test-durations.json.
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name api-test-durations-plan
+          --path "$RUNNER_TEMP"
 
       - name: Verify planned API test durations
         if: startsWith(matrix.shard, 'api-')
@@ -3012,11 +3021,13 @@ jobs:
           retention-days: 7
 
       - name: Download API test timings
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: api-test-timings-api-*
-          path: ${{ runner.temp }}/api-test-timings
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --pattern 'api-test-timings-api-*'
+          --merge
+          --path "$RUNNER_TEMP/api-test-timings"
 
       - name: Restore previous API test durations
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -3040,11 +3051,13 @@ jobs:
 
       - name: Download Postgres test timings
         if: needs.postgres-service-suites.result == 'success'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: postgres-test-timings-*
-          path: ${{ runner.temp }}/postgres-test-timings
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --pattern 'postgres-test-timings-*'
+          --merge
+          --path "$RUNNER_TEMP/postgres-test-timings"
 
       - name: Restore previous Postgres test durations
         if: needs.postgres-service-suites.result == 'success'
@@ -3362,10 +3375,13 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
@@ -3521,10 +3537,13 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download generated sources
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: generated-sources-${{ needs.generated-sources.outputs.input_hash }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name "$ARTIFACT_NAME"
+          --path "$RUNNER_TEMP/generated-sources"
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
@@ -3642,11 +3661,13 @@ jobs:
 
       - name: Download planned Postgres test durations
         if: needs.ci-plan.outputs.postgres_test_durations_hash != 'missing'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: postgres-test-durations-plan
-          # A directory: the single-file artifact lands as postgres-test-durations.json.
-          path: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A directory: the single-file artifact lands as postgres-test-durations.json.
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --name postgres-test-durations-plan
+          --path "$RUNNER_TEMP"
 
       - name: Verify planned Postgres test durations
         env:
@@ -5113,6 +5134,9 @@ jobs:
           E2E_EXECUTION_PROFILE: standard
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/route-smoke-${{ matrix.shard }}
+          # The shard's main run writes report-<shard>.zip; e2e-report merges
+          # both blob artifacts into one directory, so this one has its own name.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-${{ matrix.shard }}.zip
         run: >-
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e --
           --project=route-smoke
@@ -5696,11 +5720,13 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Download Playwright blob reports
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: playwright-blob-*
-          path: apps/web/all-blob-reports
-          merge-multiple: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          bash scripts/download-run-artifact.sh
+          --pattern 'playwright-blob-*'
+          --merge
+          --path apps/web/all-blob-reports
 
       - name: Merge Playwright reports
         run: bun --filter @stll/playwright-tools report
