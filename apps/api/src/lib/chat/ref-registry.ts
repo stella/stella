@@ -12,6 +12,7 @@ import {
   toChatResourceHref,
   toChatSourceCitationHref,
 } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -25,6 +26,7 @@ import {
   type ChatRefTokenKind,
 } from "@/api/lib/chat/ref-token";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -140,10 +142,20 @@ const reportRefTelemetry = ({
   outcome: keyof typeof REF_TELEMETRY_OUTCOME;
   ref: string;
 }) => {
-  captureError(new TelemetryError(REF_TELEMETRY_OUTCOME[outcome]), {
+  const error = new TelemetryError(REF_TELEMETRY_OUTCOME[outcome]);
+  const description = describeUnresolvedRef(ref);
+  if (outcome === "unminted") {
+    classifyFailure(error, "model_output_invalid");
+    logger.warn("chat-ref-registry.unresolved", {
+      kind,
+      outcome,
+      ...description,
+    });
+  }
+  captureError(error, {
     source: "chat-ref-registry",
     kind,
-    ...describeUnresolvedRef(ref),
+    ...description,
   });
 };
 

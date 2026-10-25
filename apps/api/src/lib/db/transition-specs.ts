@@ -3,6 +3,7 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 import {
   accountExports,
   caseLawDecisionCitationStatsState,
+  caseLawReplayBatches,
   desktopEditSessions,
   desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
@@ -112,6 +113,37 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
+});
+
+// Readmission and recovery move the attempt and receipt status atomically.
+// Legacy replay writers remain in the shrinking direct-write ledger.
+const CASE_LAW_REPLAY_BATCH_TRANSITIONS = defineLifecycle({
+  table: caseLawReplayBatches,
+  key: "id",
+  graphs: {
+    status: {
+      edges: {
+        reserved: [
+          "completed",
+          "blocked",
+          "superseded",
+          "retry-exhausted",
+          "retry-terminal",
+        ],
+        "retry-exhausted": ["reserved", "superseded"],
+        "retry-terminal": [],
+        completed: ["reserved", "retry-terminal"],
+        superseded: ["reserved", "retry-terminal"],
+        failed: [],
+        blocked: [],
+      },
+      terminal: ["retry-terminal", "failed", "blocked"],
+    },
+    attemptState: {
+      edges: { idle: ["picked-up"], "picked-up": ["idle"] },
+      terminal: [],
+    },
+  },
 });
 
 const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
@@ -323,7 +355,7 @@ export const TRANSITIONS = {
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawReconciliationItems: { unmanaged: UNMANAGED_REASONS.projection },
-  caseLawReplayBatches: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
