@@ -69,6 +69,8 @@ const server = serveForTest(
           access: "public",
           config: {},
           run: async () => {
+            // real-time: the ambient id must survive a real I/O gap, which a
+            // fake timer or a microtask never opens.
             await Bun.sleep(HANDLER_WAIT_MS);
             return getRequestId() ?? "no-ambient-id";
           },

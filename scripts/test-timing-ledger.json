@@ -680,11 +680,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/lib/db-query-counter.test.ts::buildCountingApp::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/lib/db-query-counter.test.ts::loop::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -835,11 +830,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/api/src/lib/observability/request-context.test.ts::buildReceiptApp::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/api/src/lib/queue-worker-error-log.test.ts::<module>::Bun.sleep",
     "count": 4,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -876,7 +866,7 @@
   },
   {
     "id": "no-real-time-wait::apps/api/src/lib/rate-limit/rate-limit.test.ts::<module>::Bun.sleep",
-    "count": 2,
+    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -3395,11 +3385,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/elysia-bundle.artifact.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/email/inbound/ingest.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -4785,11 +4770,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::scripts/check-write-contracts.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::scripts/ci-browser-scope.test.ts::<module>::test timeout",
     "count": 4,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
@@ -4936,11 +4916,6 @@
   },
   {
     "id": "no-unreasoned-timeout::scripts/oxlint-safe-fixers.test.ts::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::scripts/oxlint-typebox-unsafe.test.ts::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },

@@ -100,4 +100,4 @@ process.stdout.write(JSON.stringify(results));
   } finally {
     rmSync(testDir, { recursive: true, force: true });
   }
-}, 30_000);
+}, 30_000); // timeout: compiling the core into one executable takes seconds.

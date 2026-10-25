@@ -185,6 +185,7 @@ const server = serveForTest(
               index < Number(ctx.params["count"]);
               index += 1
             ) {
+              // real-time: only a real I/O wait opens that gap.
               await Bun.sleep(QUERY_WAIT_MS);
               queryCountLogger.logQuery("SELECT request", []);
             }
