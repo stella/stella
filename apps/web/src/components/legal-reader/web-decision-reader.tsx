@@ -7,7 +7,6 @@ import {
   prepareDecisionTextPlacements,
 } from "@stll/decision-reader/decision-text";
 import type { DecisionTextProps } from "@stll/decision-reader/decision-text";
-import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
 import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import {
   holdLanding,
@@ -19,6 +18,7 @@ import type {
   DecisionStatuteCitationAnchor,
   ExternalDecisionProvisionAnchor,
 } from "@stll/decision-reader/reader-types";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -42,7 +42,8 @@ export type WebDecisionReaderProps = Omit<
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   externalProvisionAnchors?:
-    readonly ExternalDecisionProvisionAnchor[] | undefined;
+    | readonly ExternalDecisionProvisionAnchor[]
+    | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };

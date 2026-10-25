@@ -4770,6 +4770,7 @@
     "modelError": "Le modèle n’a pas pu terminer cette réponse.",
     "networkError": "La connexion a été interrompue. Réessayez.",
     "regenerate": "Régénérer la réponse",
+    "selectionError": "Sélectionnez du texte dans la décision elle-même.",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
     "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",

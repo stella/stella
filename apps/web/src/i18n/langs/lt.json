@@ -4770,6 +4770,7 @@
     "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
     "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
     "regenerate": "Generuoti atsakymą iš naujo",
+    "selectionError": "Pažymėkite tekstą iš paties sprendimo.",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
     "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
