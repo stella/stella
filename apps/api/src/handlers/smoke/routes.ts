@@ -34,6 +34,7 @@ import { routes } from "@/api/http/route";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { logger } from "@/api/lib/observability/logger";
+import { releaseLoadAllowed } from "@/api/lib/scheduler/release-load-deployment";
 import {
   bringReleaseLoadJobsForward,
   readReleaseLoadJobs,
@@ -82,15 +83,20 @@ const mintSession = defineEndpoint.public(
 );
 
 /**
- * The scheduled corpus jobs the release proof's MCP load overlaps. Same gate
- * as the session route: inert unless the smoke secret is configured, which
- * production never is. A caller holding the secret can only move the listed
- * recurring jobs' next run forward, never pause, edit or add a job.
+ * The scheduled corpus jobs the release proof's MCP load overlaps. Gated
+ * twice: the smoke secret, as for the session route, and the deployment,
+ * which must be staging (`releaseLoadAllowed`; any other or unknown origin
+ * refuses). A caller holding the secret can only move the listed recurring
+ * jobs' next run forward, never pause, edit or add a job.
  */
+const isAuthorizedReleaseLoadCaller = (request: Request): boolean =>
+  releaseLoadAllowed(env.PUBLIC_URL) &&
+  isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"));
+
 const readScheduledLoadJobs = defineEndpoint.public(
   { bodyMode: "none" },
   async ({ request }) => {
-    if (!isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"))) {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
       return notAvailable();
     }
     return { jobs: await readReleaseLoadJobs() };
@@ -100,7 +106,7 @@ const readScheduledLoadJobs = defineEndpoint.public(
 const bringScheduledLoadJobsForward = defineEndpoint.public(
   { bodyMode: "none" },
   async ({ request }) => {
-    if (!isAuthorizedSmokeCaller(request.headers.get("x-smoke-secret"))) {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
       return notAvailable();
     }
     const dueAt = new Date();

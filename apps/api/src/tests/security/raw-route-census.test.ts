@@ -111,7 +111,7 @@ const RAW_ROUTES = {
   "GET /smoke/scheduled-jobs": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason:
-      "Authorized by a shared secret; inert unless the secret is configured. Reads when fixed corpus jobs last ran.",
+      "Authorized by a shared secret and refused outside the staging deployment. Reads when fixed corpus jobs last ran.",
   },
   "GET /started": {
     access: RAW_ROUTE_ACCESS.sessionless,
@@ -191,7 +191,7 @@ const RAW_ROUTES = {
   "POST /smoke/scheduled-jobs": {
     access: RAW_ROUTE_ACCESS.sessionless,
     reason:
-      "Authorized by a shared secret; inert unless the secret is configured. Only moves fixed recurring corpus jobs' next run forward.",
+      "Authorized by a shared secret and refused outside the staging deployment. Only moves fixed recurring corpus jobs' next run forward.",
   },
   "POST /smoke/session": {
     access: RAW_ROUTE_ACCESS.sessionless,
