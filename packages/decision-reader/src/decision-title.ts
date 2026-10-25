@@ -1,6 +1,4 @@
-import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-identity";
-
-export { DECISION_TITLE_SEPARATOR };
+export const DECISION_TITLE_SEPARATOR = "·";
 
 type DecisionTitleSource = {
   caseNumber: string;

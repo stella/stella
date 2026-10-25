@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import { readCappedBytes } from "@stll/skills/streaming";
@@ -279,11 +280,12 @@ export const createOpenAIDecisionsClient = ({
         );
       }
       const retryAfter = headers.get("retry-after");
-      const seconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+      const seconds =
+        retryAfter === null
+          ? null
+          : parseDecimalToken(retryAfter, { sign: "unsigned" }).unwrapOr(null);
       const delay = Math.min(
-        Number.isFinite(seconds) && seconds >= 0
-          ? seconds * 1000
-          : RETRY_BASE_DELAY_MS * 2 ** attempt,
+        seconds !== null ? seconds * 1000 : RETRY_BASE_DELAY_MS * 2 ** attempt,
         MAX_RETRY_DELAY_MS,
       );
       const waited = await Result.tryPromise({
