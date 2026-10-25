@@ -50,7 +50,10 @@ const TITLES = [
   "CSc.",
   "DrSc.",
   "LL.M.",
+  "DSc.",
+  "S.J.D.",
   "dr. h. c.",
+  "Univ. Priv. Prof.",
 ] as const;
 
 const judgeName = fc.constantFrom(...JUDGE_NAMES);
