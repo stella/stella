@@ -36,7 +36,7 @@ export type VatExchangeRateError =
   | VatRateNotPublishedError;
 
 /** One fetched rate document: its HTTP status and decoded text. */
-export type RateDocument = { status: number; text: string };
+type RateDocument = { status: number; text: string };
 
 /** Fetches one official rate document. */
 export type RateTransport = (
@@ -45,8 +45,8 @@ export type RateTransport = (
 
 const UNAVAILABLE_MESSAGE =
   "The official VAT exchange-rate service is unavailable; retry finalizing later";
-// A daily rate file is a few kilobytes; the cap and the total timeout bound a
-// source that answers slowly or without end.
+// A daily rate file is a few kilobytes: the byte cap bounds the body, and the
+// header policy bounds a source that does not answer.
 const MAX_RATE_DOCUMENT_BYTES = 1_048_576;
 const RATE_REQUEST_TIMEOUT_MS = 20_000;
 
@@ -58,7 +58,7 @@ export const officialRateTransport =
       url,
       permit,
       maxBytes: MAX_RATE_DOCUMENT_BYTES,
-      timeoutMs: RATE_REQUEST_TIMEOUT_MS,
+      timeout: { type: "headers", ms: RATE_REQUEST_TIMEOUT_MS },
       headers: { accept: "application/json, text/plain" },
     });
     if (Result.isError(fetched)) {
