@@ -18,9 +18,13 @@ type FakeStellaApiOptions = {
   additionalRoomIds?: string[];
   canEdit?: boolean;
   generation?: number;
+  /** `previous-release` answers heartbeats with `{ activeAt }` only. */
+  heartbeatContract?: "current" | "previous-release";
   holdFirstStore?: boolean;
   initialSnapshotBase64?: string | null;
   loadFailureStatus?: number;
+  /** A second participant's token that only ever reads the room. */
+  readerToken?: string;
   refreshedToken?: string;
   refreshedTokenTtlMs?: number;
   replacementToken?: string;
@@ -39,6 +43,7 @@ type FakeStellaApi = {
   loadRequestBodies: () => Record<string, unknown>[];
   refreshRequests: () => number;
   releaseFirstStore: () => void;
+  setCanEdit: (canEdit: boolean) => void;
   setGeneration: (generation: number) => void;
   setAuthorizedGeneration: (generation: number) => void;
   setLoadResponse: (response: FolioCollabSnapshotLoadResponse) => void;
@@ -121,9 +126,11 @@ const createFakeStellaApi = ({
   additionalRoomIds = [],
   canEdit = true,
   generation = 0,
+  heartbeatContract = "current",
   holdFirstStore = false,
   initialSnapshotBase64 = null,
   loadFailureStatus,
+  readerToken,
   refreshedToken = "collab_token_refreshed",
   refreshedTokenTtlMs = 60 * 60 * 1000,
   replacementToken,
@@ -150,6 +157,7 @@ const createFakeStellaApi = ({
   let storeRequests = 0;
   let storeFailureStatus: number | null = null;
   let currentToken = token;
+  let currentCanEdit = canEdit;
   let tokenGeneration = generation;
   const firstStoreGate = Promise.withResolvers<undefined>();
   let firstStoreHeld = holdFirstStore;
@@ -167,8 +175,11 @@ const createFakeStellaApi = ({
         const requestedRoomId = [...roomGenerations.keys()].find(
           (acceptedRoomId) => `{${acceptedRoomId}}` === requestedRoomName,
         );
+        const isReader =
+          readerToken !== undefined && requestToken === readerToken;
         const tokenAuthorized =
           requestToken === token ||
+          isReader ||
           (replacementToken !== undefined && requestToken === replacementToken);
 
         if (
@@ -187,13 +198,13 @@ const createFakeStellaApi = ({
         }
 
         return Response.json({
-          canEdit,
+          canEdit: isReader ? false : currentCanEdit,
           generation: roomGenerations.get(requestedRoomId),
           roomId: requestedRoomId,
           roomName: requestedRoomName,
           tokenExpiresAt,
-          userId: "user_test",
-          userName: "Authorized user",
+          userId: isReader ? "user_reader" : "user_test",
+          userName: isReader ? "Reading user" : "Authorized user",
         });
       }
 
@@ -210,7 +221,7 @@ const createFakeStellaApi = ({
 
         currentToken = refreshedToken;
         return Response.json({
-          canEdit,
+          canEdit: currentCanEdit,
           generation: roomGenerations.get(String(body["roomId"])),
           token: refreshedToken,
           tokenExpiresAt: new Date(
@@ -221,14 +232,21 @@ const createFakeStellaApi = ({
 
       if (url.pathname === "/v1/folio-collab-rooms/heartbeat") {
         heartbeatRequestBodies.push(body);
+        const isReader =
+          readerToken !== undefined && body["token"] === readerToken;
         if (
           !roomGenerations.has(String(body["roomId"])) ||
-          body["token"] !== currentToken
+          (body["token"] !== currentToken && !isReader)
         ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        return Response.json({ activeAt: new Date().toISOString() });
+        const activeAt = new Date().toISOString();
+        return Response.json(
+          heartbeatContract === "current" && body["includeCanEdit"] === true
+            ? { activeAt, canEdit: isReader ? false : currentCanEdit }
+            : { activeAt },
+        );
       }
 
       if (url.pathname === "/v1/folio-collab-rooms/snapshot/load") {
@@ -330,6 +348,9 @@ const createFakeStellaApi = ({
     loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
     releaseFirstStore: () => firstStoreGate.resolve(undefined),
+    setCanEdit: (nextCanEdit) => {
+      currentCanEdit = nextCanEdit;
+    },
     setAuthorizedGeneration: (nextGeneration) => {
       roomGenerations.set(roomId, nextGeneration);
       tokenGeneration = nextGeneration;
@@ -708,7 +729,11 @@ describe("collaboration server", () => {
         { roomName: TEST_ROOM_NAME, token: "collab_token_test" },
       ]);
       expect(fakeApi.heartbeatRequestBodies()).toEqual([
-        { roomId: TEST_ROOM_ID, token: "collab_token_test" },
+        {
+          roomId: TEST_ROOM_ID,
+          token: "collab_token_test",
+          includeCanEdit: true,
+        },
       ]);
       await waitFor(
         () => fakeApi.loadRequestBodies().length === 1,
@@ -773,6 +798,225 @@ describe("collaboration server", () => {
       secondProvider.destroy();
       firstDoc.destroy();
       secondDoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("reconnects a writer when a heartbeat observes an edit-permission downgrade", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      roomActivityHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const closeCodes: number[] = [];
+    const document = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: document,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate with edit permission.",
+      );
+      const heartbeatCountBeforeDowngrade =
+        fakeApi.heartbeatRequestBodies().length;
+
+      fakeApi.setCanEdit(false);
+
+      await waitFor(
+        () => closeCodes.length > 0,
+        "Permission downgrade did not reconnect the collaboration client.",
+      );
+      expect(fakeApi.heartbeatRequestBodies().length).toBeGreaterThan(
+        heartbeatCountBeforeDowngrade,
+      );
+    } finally {
+      provider.destroy();
+      document.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("a writer's downgrade reconnects only the writer, not a reader in the same room", async () => {
+    const fakeApi = createFakeStellaApi({ readerToken: "collab_token_reader" });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      roomActivityHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const writerCloses: number[] = [];
+    const readerCloses: number[] = [];
+    const writerDocument = new Doc();
+    const readerDocument = new Doc();
+    const writer = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        writerCloses.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: writerDocument,
+    });
+    const reader = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        readerCloses.push(code);
+      },
+      token: "collab_token_reader",
+      url: collabServer.websocketUrl,
+      ydoc: readerDocument,
+    });
+
+    try {
+      await waitFor(
+        () => writer.isAuthenticated && reader.isAuthenticated,
+        "Writer and reader did not both authenticate.",
+      );
+      const heartbeatsWithBoth = fakeApi.heartbeatRequestBodies().length;
+      await waitFor(
+        () => fakeApi.heartbeatRequestBodies().length > heartbeatsWithBoth + 4,
+        "Room heartbeats did not run for both participants.",
+      );
+      expect({ writerCloses, readerCloses }).toEqual({
+        writerCloses: [],
+        readerCloses: [],
+      });
+
+      fakeApi.setCanEdit(false);
+
+      await waitFor(
+        () => writerCloses.length > 0,
+        "The writer's downgrade did not reconnect the writer.",
+      );
+      const heartbeatsAfterDowngrade = fakeApi.heartbeatRequestBodies().length;
+      await waitFor(
+        () =>
+          fakeApi.heartbeatRequestBodies().length >
+          heartbeatsAfterDowngrade + 4,
+        "Room heartbeats stopped after the writer's downgrade.",
+      );
+      expect(readerCloses).toEqual([]);
+    } finally {
+      writer.destroy();
+      reader.destroy();
+      writerDocument.destroy();
+      readerDocument.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("authenticates and keeps a room open against an API of the previous release", async () => {
+    const fakeApi = createFakeStellaApi({
+      heartbeatContract: "previous-release",
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      roomActivityHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const closeCodes: number[] = [];
+    const document = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: document,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate against a previous-release API.",
+      );
+      const heartbeatsAfterAuthentication =
+        fakeApi.heartbeatRequestBodies().length;
+      await waitFor(
+        () =>
+          fakeApi.heartbeatRequestBodies().length >
+          heartbeatsAfterAuthentication + 2,
+        "Room heartbeats stopped against a previous-release API.",
+      );
+      expect(closeCodes).toEqual([]);
+    } finally {
+      provider.destroy();
+      document.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("reconnects an admitted writer when another socket authenticates after a downgrade", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      // No heartbeat runs during the test: only the second authentication can
+      // reveal the downgrade.
+      roomActivityHeartbeatIntervalMs: 60_000,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const closeCodes: number[] = [];
+    const writerDocument = new Doc();
+    const readerDocument = new Doc();
+    const writer = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: writerDocument,
+    });
+    let reader: ReturnType<typeof createProvider> | undefined;
+
+    try {
+      await waitFor(
+        () => writer.isAuthenticated,
+        "Writer did not authenticate with edit permission.",
+      );
+
+      fakeApi.setCanEdit(false);
+      reader = createProvider({
+        name: TEST_ROOM_NAME,
+        token: "collab_token_test",
+        url: collabServer.websocketUrl,
+        ydoc: readerDocument,
+      });
+
+      await waitFor(
+        () => closeCodes.length > 0,
+        "A second authentication after the downgrade left the writer connected.",
+      );
+    } finally {
+      reader?.destroy();
+      writer.destroy();
+      readerDocument.destroy();
+      writerDocument.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }

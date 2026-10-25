@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -55,6 +55,10 @@ const ACCESS_CASES = [
   "evaluation_ended",
 ] as const;
 type AccessCase = (typeof ACCESS_CASES)[number];
+
+// Without an access state an organization admits only its founding member.
+const assignmentsFor = (access: AccessCase): number =>
+  access === "missing" ? 1 : ASSIGNMENTS;
 
 type EntitlementCase =
   | { type: "none" }
@@ -130,7 +134,8 @@ const expected = (
       memberCapacity: BOUNDS_MEMBERS_BY_ACCESS[access]
         ? Math.min(PAID_MAX_MEMBERS, PAID_SEATS)
         : null,
-      storageCapacity: PAID_STORAGE_BYTES_PER_ASSIGNMENT * BigInt(ASSIGNMENTS),
+      storageCapacity:
+        PAID_STORAGE_BYTES_PER_ASSIGNMENT * BigInt(assignmentsFor(access)),
     };
   }
   if (freeFloor === "seeded" && FALLS_TO_FREE_BY_ACCESS[access]) {
@@ -203,27 +208,6 @@ if (!databaseUrl || !runPostgresTests) {
                   slug: `effective-${organizationId}`,
                   createdAt: now,
                 });
-                // Seat assignments reference a membership. Members join before
-                // any access state or entitlement can bound the organization.
-                const memberIds = Array.from({ length: ASSIGNMENTS }, () =>
-                  mintAuthProviderIdValue(),
-                );
-                await tx.insert(user).values(
-                  memberIds.map((id) => ({
-                    id,
-                    name: "Effective policy",
-                    email: `${id}@effective.test`,
-                  })),
-                );
-                await tx.insert(member).values(
-                  memberIds.map((userId, index) => ({
-                    id: mintAuthProviderIdValue(),
-                    organizationId,
-                    userId,
-                    role: index === 0 ? "owner" : "member",
-                    createdAt: now,
-                  })),
-                );
                 switch (access) {
                   case "missing":
                     break;
@@ -262,6 +246,29 @@ if (!databaseUrl || !runPostgresTests) {
                   default:
                     access satisfies never;
                 }
+                // Seat assignments reference a membership. Members join after
+                // the access state and before any entitlement or free floor
+                // can bound the organization.
+                const memberIds = Array.from(
+                  { length: assignmentsFor(access) },
+                  () => mintAuthProviderIdValue(),
+                );
+                await tx.insert(user).values(
+                  memberIds.map((id) => ({
+                    id,
+                    name: "Effective policy",
+                    email: `${id}@effective.test`,
+                  })),
+                );
+                await tx.insert(member).values(
+                  memberIds.map((userId, index) => ({
+                    id: mintAuthProviderIdValue(),
+                    organizationId,
+                    userId,
+                    role: index === 0 ? "owner" : "member",
+                    createdAt: now,
+                  })),
+                );
                 if (entitlement.type === "entitlement") {
                   await tx.insert(usageEntitlements).values({
                     id: createSafeId<"usageEntitlement">(),
@@ -384,6 +391,12 @@ if (!databaseUrl || !runPostgresTests) {
             });
             // Two members joined during the evaluation, while nothing bounded
             // the organization; the evaluation then ended.
+            await tx.insert(organizationAccessStates).values({
+              organizationId,
+              state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+              evaluationStartedAt: new Date(Date.now() - 30 * DAY_IN_MS),
+              evaluationEndsAt: new Date(Date.now() + DAY_IN_MS),
+            });
             await tx.insert(member).values(
               userIds.slice(0, 2).map((userId, index) => ({
                 id: mintAuthProviderIdValue(),
@@ -393,13 +406,16 @@ if (!databaseUrl || !runPostgresTests) {
                 createdAt: new Date(),
               })),
             );
-            await tx.insert(organizationAccessStates).values({
-              organizationId,
-              state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
-              evaluationStartedAt: new Date(Date.now() - 30 * DAY_IN_MS),
-              evaluationEndsAt: new Date(Date.now() - DAY_IN_MS),
-              evaluationEndedAt: new Date(Date.now() - DAY_IN_MS),
-            });
+            await tx
+              .update(organizationAccessStates)
+              .set({
+                state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+                evaluationEndsAt: new Date(Date.now() - DAY_IN_MS),
+                evaluationEndedAt: new Date(Date.now() - DAY_IN_MS),
+              })
+              .where(
+                eq(organizationAccessStates.organizationId, organizationId),
+              );
 
             const refused = await tx
               .transaction(

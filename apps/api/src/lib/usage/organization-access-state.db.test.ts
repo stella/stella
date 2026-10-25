@@ -23,6 +23,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
+  ORGANIZATION_ACCESS_STATE_ORIGIN,
   organizationAccessStates,
   organizationSettings,
   usagePolicies,
@@ -77,12 +78,14 @@ const evaluatingOrgId = mintAuthProviderId<"organization">();
 const expiredOrgId = mintAuthProviderId<"organization">();
 const unrecordedOrgId = mintAuthProviderId<"organization">();
 const createdOrgId = mintAuthProviderId<"organization">();
+const reconciledOrgId = mintAuthProviderId<"organization">();
 const fixtureOrgIds = [
   selfManagedOrgId,
   evaluatingOrgId,
   expiredOrgId,
   unrecordedOrgId,
   createdOrgId,
+  reconciledOrgId,
 ];
 
 const requestScope = (organizationId: SafeId<"organization">): ScopedDb =>
@@ -216,12 +219,9 @@ testState.beforeAll(async () => {
     .where(eq(organizationSettings.organizationId, ids.orgA));
 
   const now = Date.now();
+  // setupRlsTestData records orgA as self-managed; it has its own stored AI
+  // config.
   await testDb.insert(organizationAccessStates).values([
-    // orgA has its own stored AI config.
-    {
-      organizationId: ids.orgA,
-      state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-    },
     {
       organizationId: selfManagedOrgId,
       state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
@@ -325,14 +325,21 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
   test("without its own key, only a running evaluation reaches the instance provider", async () => {
     await withAccessStateEnforced(async () => {
       expect(await authStatus(evaluatingOrgId)).toBe(ORG_AI_CONFIG_STATUS.ok);
+      // A member of an organization with no recorded state is refused before
+      // the key check: the missing state grants no seat.
+      expect(await authStatus(unrecordedOrgId)).toBe(
+        ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      );
       for (const organizationId of [
         selfManagedOrgId,
         expiredOrgId,
         unrecordedOrgId,
       ]) {
-        expect(await authStatus(organizationId)).toBe(
-          ORG_AI_CONFIG_STATUS.ownKeyRequired,
-        );
+        if (organizationId !== unrecordedOrgId) {
+          expect(await authStatus(organizationId)).toBe(
+            ORG_AI_CONFIG_STATUS.ownKeyRequired,
+          );
+        }
         for (const load of await strictLoads(organizationId)) {
           expect(Result.isError(load)).toBe(true);
           if (Result.isError(load)) {
@@ -375,6 +382,37 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       expect(await authStatus(createdOrgId)).toBe(
         ORG_AI_CONFIG_STATUS.ownKeyRequired,
       );
+    });
+  });
+
+  test("enabled creation supersedes only a legacy reconciler row", async () => {
+    const reconciledAt = new Date(Date.now() - DAY_IN_MS);
+    await ownerDb().insert(organizationAccessStates).values({
+      organizationId: reconciledOrgId,
+      state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+      origin: ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
+      createdAt: reconciledAt,
+      updatedAt: reconciledAt,
+    });
+
+    await withAccessStateEnforced(async () => {
+      const now = new Date();
+      await recordNewOrganizationAccessState(ownerDb(), {
+        organizationId: reconciledOrgId,
+        now,
+      });
+      expect(await readState(reconciledOrgId)).toMatchObject({
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+        evaluationStartedAt: now,
+      });
+
+      const started = await readState(reconciledOrgId);
+      await recordNewOrganizationAccessState(ownerDb(), {
+        organizationId: reconciledOrgId,
+        now: new Date(now.getTime() + DAY_IN_MS),
+      });
+      expect(await readState(reconciledOrgId)).toEqual(started);
     });
   });
 

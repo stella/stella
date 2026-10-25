@@ -31,6 +31,7 @@ export default createSafeRootHandler(
         expiresInDays: body.expiresInDays,
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        sessionId: session.id,
         recordAuditEvent,
       }),
     );

@@ -34,6 +34,7 @@ import {
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   OAUTH_PROVIDER_SESSION_PATHS,
+  readRequestAuthSession,
   resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveMemberAuthorization,
   resolveUserRealtimeAuthorization,
@@ -48,8 +49,10 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -118,6 +121,12 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  for (const organizationId of [orgFull, orgEmpty]) {
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
+    });
+  }
 
   await testDb.insert(member).values([
     {
@@ -459,8 +468,7 @@ describe("resolveUserRealtimeAuthorization", () => {
   });
 });
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
-const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
+const fakeCtx = (path: string) => asTestRaw<HookEndpointContext>({ path });
 
 describe("withStellaTwoFactorSignInGate", () => {
   test("keeps the after-hook (and its original handler) instead of dropping it", () => {
@@ -1097,6 +1105,59 @@ describe("session freshness", () => {
     expect(getAuth().options.session.cookieCache.version).toBeFunction();
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
+
+  test.each([
+    ["http://localhost/api-keys", "POST"],
+    ["http://localhost/api-keys/personal/rotate", "POST"],
+    ["http://localhost/v1/api-keys", "DELETE"],
+    ["http://localhost/v1/api-keys/personal", "PATCH"],
+  ])(
+    "API-key mutation reads the session from storage (%s %s)",
+    async (url, method) => {
+      const reads: unknown[] = [];
+
+      await readRequestAuthSession({
+        request: new Request(url, { method }),
+        getSession: async (options) => {
+          reads.push(options);
+          return { headers: new Headers(), response: null };
+        },
+      });
+
+      expect(reads).toEqual([
+        {
+          headers: new Headers(),
+          query: { disableCookieCache: true, disableRefresh: true },
+          returnHeaders: true,
+        },
+      ]);
+    },
+  );
+
+  test.each([
+    ["http://localhost/v1/api-keys/personal", "GET"],
+    ["http://localhost/v1/workspaces", "POST"],
+  ])(
+    "ordinary request retains the cookie-cache path (%s %s)",
+    async (url, method) => {
+      const reads: unknown[] = [];
+
+      await readRequestAuthSession({
+        request: new Request(url, { method }),
+        getSession: async (options) => {
+          reads.push(options);
+          return { headers: new Headers(), response: null };
+        },
+      });
+
+      expect(reads).toEqual([
+        {
+          headers: new Headers(),
+          returnHeaders: true,
+        },
+      ]);
+    },
+  );
 });
 
 describe("OAuth resource provisioning", () => {

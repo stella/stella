@@ -80,3 +80,25 @@ export const requireEmailOtpResetConfirmation = async ({
     }),
   );
 };
+
+/**
+ * The email whose account an email-code sign-in is promoting to verified, when
+ * this user update is that promotion. Better Auth removes the account's linked
+ * providers and sessions before it writes the promotion and creates the new
+ * session after it, so credentials swept at this point cannot outlive the reset
+ * through a displaced sign-in.
+ */
+export const emailOtpPromotionEmail = (
+  update: Record<string, unknown>,
+  context: { path?: string | undefined; body?: unknown } | null | undefined,
+): string | undefined => {
+  if (
+    context?.path !== EMAIL_OTP_SIGN_IN_PATH ||
+    update["emailVerified"] !== true ||
+    !isRecord(context.body)
+  ) {
+    return undefined;
+  }
+  const email = context.body["email"];
+  return typeof email === "string" ? normalizeEmail(email) : undefined;
+};

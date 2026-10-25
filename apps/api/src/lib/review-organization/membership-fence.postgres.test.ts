@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import { createMembershipFence } from "@/api/lib/review-organization/reset";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -37,6 +38,10 @@ if (!databaseUrl || !enabled) {
         await reset.sql`
           INSERT INTO organization (id, name, slug, created_at)
           VALUES (${organizationId}, 'Fence fixture', ${`fence-${organizationId}`}, now())`;
+        await recordNewOrganizationAccessState(reset.db, {
+          organizationId,
+          now: new Date(),
+        });
         await reset.sql`
           INSERT INTO member (id, organization_id, user_id, role, created_at)
           VALUES (${Bun.randomUUIDv7()}, ${organizationId}, ${reviewUserId}, 'owner', now())`;

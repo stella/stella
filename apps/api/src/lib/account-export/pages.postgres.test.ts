@@ -43,6 +43,7 @@ import {
   EXPORTED_ACCOUNT_TABLE_NAMES,
 } from "@/api/lib/account-export/registry";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
@@ -107,6 +108,10 @@ describe.skipIf(!enabled)("account export personal data", () => {
           name: "Claim comment organization",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
         });
         await db.insert(member).values(
           users.map((userId, index) => ({
@@ -545,6 +550,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
             createdAt: new Date(),
           })),
         );
+        for (const organizationId of organizations) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId,
+            now: new Date(),
+          });
+        }
         await db.insert(member).values(
           organizations.flatMap((organizationId) =>
             users.map((memberUserId) => ({

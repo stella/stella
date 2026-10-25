@@ -50,6 +50,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -122,8 +123,7 @@ beforeAll(async () => {
     }
     return await realFetch(input, init);
   };
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test stub: the call signature matches, but `typeof fetch` also carries a `preconnect` static this stub does not need
-  globalThis.fetch = fetchStub as typeof fetch;
+  globalThis.fetch = asFetchMock(fetchStub);
 });
 
 afterAll(async () => {
@@ -451,6 +451,39 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
 });
 
 describe("agent-auth ID-JAG replay + freshness", () => {
+  test.each([
+    ["an object without requiredAmr", {}],
+    ["an empty requiredAmr list", { requiredAmr: [] }],
+    ["a non-array requiredAmr", { requiredAmr: "mfa" }],
+    ["a requiredAmr list with a non-string value", { requiredAmr: [1] }],
+    ["an unknown policy key", { requiredAmr: ["mfa"], mode: "any" }],
+  ])("rejects malformed issuer attestation policy: %s", async (_, policy) => {
+    enableFeature();
+    await trustIssuer(policy);
+    const assertion = await mintIdJag({ amr: ["mfa"] });
+
+    const response = await postIdentity(identityAssertionBody(assertion));
+
+    expect(response.status).toBe(401);
+    expect((await readJson(response))["error"]).toBe("invalid_assertion");
+  });
+
+  test("requires every configured issuer AMR value", async () => {
+    enableFeature();
+    await trustIssuer({ requiredAmr: ["pwd", "mfa"] });
+
+    const missing = await postIdentity(
+      identityAssertionBody(await mintIdJag({ amr: ["pwd"] })),
+    );
+    const satisfied = await postIdentity(
+      identityAssertionBody(await mintIdJag({ amr: ["pwd", "mfa"] })),
+    );
+
+    expect(missing.status).toBe(401);
+    expect((await readJson(missing))["error"]).toBe("invalid_assertion");
+    expect(satisfied.status).toBe(200);
+  });
+
   test("a replayed jti is rejected", async () => {
     enableFeature();
     await trustIssuer();

@@ -37,6 +37,7 @@ import {
   writeOrganizationFile,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -484,13 +485,19 @@ describe("organization file usage", () => {
       storageBytesPerAssignment: 40n,
       serviceActionsPerPeriod: 3,
     });
-    await testDb.insert(organizationAccessStates).values({
-      organizationId: ids.orgB,
+    const evaluationEnded = {
       state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
       evaluationStartedAt: new Date(now - 120_000),
       evaluationEndsAt: new Date(now - 60_000),
       evaluationEndedAt: new Date(now - 60_000),
-    });
+    };
+    await testDb
+      .insert(organizationAccessStates)
+      .values({ organizationId: ids.orgB, ...evaluationEnded })
+      .onConflictDoUpdate({
+        target: organizationAccessStates.organizationId,
+        set: evaluationEnded,
+      });
     try {
       const freeInput = (objectKey: string, sizeBytes: number) => ({
         organizationId: ids.orgB,
@@ -524,6 +531,10 @@ describe("organization file usage", () => {
       await testDb
         .delete(organizationAccessStates)
         .where(eq(organizationAccessStates.organizationId, ids.orgB));
+      await recordNewOrganizationAccessState(testDb, {
+        organizationId: ids.orgB,
+        now: new Date(),
+      });
       await testDb
         .delete(usagePolicies)
         .where(eq(usagePolicies.id, freePolicyId));

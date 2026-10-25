@@ -22,6 +22,26 @@ export default {
         reason:
           "Revalidates the actor's locked membership after the handler authorizes deletion.",
       },
+      {
+        path: "apps/api/src/lib/db/member-authority.ts",
+        reason:
+          "Provides shared transaction-held organization and matter membership rechecks for deferred actions.",
+      },
+      {
+        path: "apps/api/src/lib/memory/persist-explicit-memory.ts",
+        reason:
+          "Revalidates the locked member role immediately before persisting an explicit memory.",
+      },
+      {
+        path: "apps/api/src/lib/flows/start-automated-flow-run.ts",
+        reason:
+          "Revalidates the definition author's current role before scheduling a durable run.",
+      },
+      {
+        path: "apps/api/src/handlers/reports/report-export-queue.ts",
+        reason:
+          "Revalidates the queued export requester's current role before loading report content.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

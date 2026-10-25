@@ -6,15 +6,24 @@ import { propertyConfig } from "@stll/property-testing";
 
 import type { CreateAnnotationInput } from "@/components/legal-reader/annotations/annotation-types";
 import {
+  claimGuestAnnotations,
   createGuestAnnotation,
   deleteGuestAnnotation,
   EMPTY_GUEST_ANNOTATION_STORE,
   guestAnnotationRows,
   readGuestAnnotationStore,
   updateGuestAnnotation,
+  uploadClaimedGuestAnnotations,
   writeGuestAnnotationStore,
 } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
-import type { GuestAnnotationTarget } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
+import type {
+  GuestAnnotation,
+  GuestAnnotationClaimant,
+  GuestAnnotationStore,
+  GuestAnnotationTarget,
+} from "@/components/legal-reader/annotations/guest-annotation-store.logic";
+import { pruneUserStorage } from "@/lib/account/user-scoped-storage";
+import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 
 const ids = [
   "019b0121-9dd7-7000-8000-000000000001",
@@ -210,5 +219,163 @@ describe("guest annotation store", () => {
       ),
       propertyConfig(),
     );
+  });
+});
+
+describe("guest marks an account claims on sign-in", () => {
+  const alice: GuestAnnotationClaimant = { kind: "user", userId: "alice" };
+  const bob: GuestAnnotationClaimant = { kind: "user", userId: "bob" };
+  const visitor: StorageOwner = { kind: "visitor" };
+  const aliceClaimedKey = "legal-reader-claimed-annotations:v2:u:alice";
+
+  /** A tab's session storage, as the sign-in and sign-out pruning walks it. */
+  const tabStorage = (): Storage => {
+    const entries = new Map<string, string>();
+    return {
+      get length() {
+        return entries.size;
+      },
+      clear: () => {
+        entries.clear();
+      },
+      getItem: (key) => entries.get(key) ?? null,
+      key: (index) => [...entries.keys()].at(index) ?? null,
+      removeItem: (key) => {
+        entries.delete(key);
+      },
+      setItem: (key, value) => {
+        entries.set(key, value);
+      },
+    };
+  };
+
+  const guestMarks = (count: number): GuestAnnotationStore => {
+    let next = 0;
+    const newId = () =>
+      `019b0121-9dd7-7000-8000-${String(next++).padStart(12, "0")}`;
+    let store = EMPTY_GUEST_ANNOTATION_STORE;
+    for (let index = 0; index < count; index += 1) {
+      store = createGuestAnnotation({
+        input,
+        newId,
+        now: new Date("2026-09-09T12:00:00.000Z"),
+        store,
+        target: statute,
+      });
+    }
+    return store;
+  };
+
+  const claim = (storage: Storage, owner: GuestAnnotationClaimant) => {
+    const claimed = claimGuestAnnotations(storage, owner);
+    if (Result.isError(claimed)) {
+      throw claimed.error;
+    }
+    return claimed.value.items;
+  };
+
+  /** What waits for Alice; the tab holds no guest marks, so it only reads. */
+  const keptForAlice = (storage: Storage) =>
+    claim(storage, alice).map((item) => item.requestId);
+
+  /**
+   * A visitor leaves three marks and signs in as Alice, who signs out while
+   * her first mark is still uploading.
+   */
+  const signOutMidUpload = async () => {
+    const storage = tabStorage();
+    const areas = { local: null, session: storage };
+    const marks = guestMarks(3);
+    expect(Result.isOk(writeGuestAnnotationStore(storage, marks))).toBe(true);
+    let owner: StorageOwner = visitor;
+    const signIn = (next: StorageOwner) => {
+      pruneUserStorage(areas, owner, next);
+      owner = next;
+    };
+    const uploads: string[] = [];
+    const recordUpload = async (item: GuestAnnotation) => {
+      uploads.push(item.requestId);
+      return await Promise.resolve(Result.ok(undefined));
+    };
+
+    signIn(alice);
+    const results = await uploadClaimedGuestAnnotations({
+      isCurrentOwner: () => owner === alice,
+      items: claim(storage, alice),
+      limit: 1,
+      owner: alice,
+      storage,
+      upload: async (item) => {
+        signIn(visitor);
+        return await recordUpload(item);
+      },
+    });
+    expect(results.every((result) => Result.isOk(result))).toBe(true);
+    const requestIds = marks.items.map((item) => item.requestId);
+    return {
+      owner: () => owner,
+      recordUpload,
+      requestIds,
+      signIn,
+      storage,
+      uploads,
+    };
+  };
+
+  test("a sign-out mid-upload keeps the marks not yet uploaded for that account", async () => {
+    const { requestIds, storage, uploads } = await signOutMidUpload();
+
+    expect(uploads).toEqual(requestIds.slice(0, 1));
+    expect(keptForAlice(storage)).toEqual(requestIds.slice(1));
+    // The visitor now in the tab does not see them as their own marks.
+    expect(readGuestAnnotationStore(storage)).toEqual(
+      EMPTY_GUEST_ANNOTATION_STORE,
+    );
+  });
+
+  test("the same account's next sign-in uploads each kept mark exactly once", async () => {
+    const { owner, recordUpload, requestIds, signIn, storage, uploads } =
+      await signOutMidUpload();
+
+    signIn(alice);
+    const items = claim(storage, alice);
+    await uploadClaimedGuestAnnotations({
+      isCurrentOwner: () => owner() === alice,
+      items,
+      limit: 4,
+      owner: alice,
+      storage,
+      upload: recordUpload,
+    });
+
+    expect(uploads).toHaveLength(requestIds.length);
+    expect(new Set(uploads)).toEqual(new Set(requestIds));
+    expect(storage.getItem(aliceClaimedKey)).toBeNull();
+    expect(keptForAlice(storage)).toEqual([]);
+  });
+
+  test("another account's sign-in neither uploads nor sees the kept marks", async () => {
+    const { owner, recordUpload, requestIds, signIn, storage, uploads } =
+      await signOutMidUpload();
+
+    signIn(bob);
+    const items = claim(storage, bob);
+    await uploadClaimedGuestAnnotations({
+      isCurrentOwner: () => owner() === bob,
+      items,
+      limit: 4,
+      owner: bob,
+      storage,
+      upload: recordUpload,
+    });
+
+    expect(items).toEqual([]);
+    expect(uploads).toEqual(requestIds.slice(0, 1));
+    expect(readGuestAnnotationStore(storage)).toEqual(
+      EMPTY_GUEST_ANNOTATION_STORE,
+    );
+    // Still waiting for Alice, through Bob's session and his sign-out.
+    signIn(visitor);
+    expect(keptForAlice(storage)).toEqual(requestIds.slice(1));
   });
 });

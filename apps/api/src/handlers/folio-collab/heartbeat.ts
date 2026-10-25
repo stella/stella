@@ -12,7 +12,10 @@ const config = {
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({ keys: ["roomId", "token"] }),
+  body: permissiveBodySchema({
+    keys: ["roomId", "token"],
+    passthroughKeys: ["includeCanEdit"],
+  }),
 } satisfies TokenHandlerConfig;
 
 const heartbeatFolioCollabRoom = createSafeTokenHandler(
@@ -45,7 +48,16 @@ const heartbeatFolioCollabRoom = createSafeTokenHandler(
       );
     }
 
-    return Result.ok({ activeAt: heartbeat.activeAt.toISOString() });
+    const activeAt = heartbeat.activeAt.toISOString();
+    // Collaboration servers of the previous release parse this response
+    // strictly as `{ activeAt }`, so the permission is reported only to a
+    // server that asks for it. Once no such server runs, `canEdit` can be
+    // returned unconditionally and the request flag removed.
+    return Result.ok(
+      body?.includeCanEdit === true
+        ? { activeAt, canEdit: room.canEdit }
+        : { activeAt },
+    );
   },
 );
 

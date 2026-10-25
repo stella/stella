@@ -110,7 +110,7 @@ export const ROOT_OPERATION_RESULTS = {
     reason: "Returns one page of an organization's machine key rows.",
   },
   recordNewOrganizationAccessState: {
-    file: "apps/api/src/lib/auth.ts",
+    file: "apps/api/src/lib/usage/organization-access-state-owner.ts",
     reason: "Records a new organization's access state; returns nothing.",
   },
   readUserProfessionalUse: {

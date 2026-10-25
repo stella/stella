@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { TransactionRollbackError } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
 import {
   loadOrgAIConfig,
@@ -19,7 +19,10 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { SYNTHETIC_PRINCIPAL } from "./constants";
@@ -67,6 +70,14 @@ describe.skipIf(!enabled)("monitoring principal AI admission", () => {
             await recordNewOrganizationAccessState(tx, {
               organizationId,
               now: new Date(),
+            });
+            // AI admission requires current organization membership.
+            await tx.insert(member).values({
+              id: mintAuthProviderIdValue(),
+              organizationId,
+              userId: normal.userId,
+              role: "owner",
+              createdAt: new Date(),
             });
             const ordinary = { organizationId, userId: normal.userId };
             for (const personalKey of [false, true]) {
