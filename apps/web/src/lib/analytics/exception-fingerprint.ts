@@ -7,7 +7,11 @@ import {
 } from "@stll/errors/exception-cause-chain";
 import type { ExceptionScope } from "@stll/errors/exception-scope";
 import { exceptionScopeIdentity } from "@stll/errors/exception-scope";
-import { readFingerprintFields } from "@stll/errors/fingerprint-fields";
+import {
+  isFingerprintFieldPath,
+  MAX_FINGERPRINT_FIELD_PATH_CHARS,
+  readFingerprintFields,
+} from "@stll/errors/fingerprint-fields";
 
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
@@ -223,13 +227,22 @@ export const sanitizeFingerprintFields = (
     }
     for (const [key, field] of Object.entries(value)) {
       if (
-        /^[A-Za-z][A-Za-z0-9_.-]{0,159}\.(?:reason|phase|stage|termination)(?:\.(?:reason|phase|stage|termination))*$/u.test(
-          key,
-        ) &&
-        typeof field === "string" &&
-        /^[A-Za-z0-9_-]{1,80}$/u.test(field)
+        key.length > 160 + 1 + MAX_FINGERPRINT_FIELD_PATH_CHARS ||
+        typeof field !== "string" ||
+        !/^[A-Za-z0-9_-]{1,80}$/u.test(field)
       ) {
-        fields.set(key, field);
+        continue;
+      }
+      const parts = key.split(".");
+      for (let start = 1; start < parts.length; start += 1) {
+        const owner = parts.slice(0, start).join(".");
+        if (
+          /^[A-Za-z][A-Za-z0-9_.-]{0,159}$/u.test(owner) &&
+          isFingerprintFieldPath(parts.slice(start))
+        ) {
+          fields.set(key, field);
+          break;
+        }
       }
     }
     return Object.fromEntries(fields);

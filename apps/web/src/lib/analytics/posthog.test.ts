@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 import * as posthogSdk from "posthog-js";
@@ -8,9 +9,11 @@ import {
 } from "@stll/api-contract";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
+import { declareFingerprintFields } from "@stll/errors/fingerprint-fields";
 import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/env";
+import { capturedExceptionIdentity } from "@/lib/analytics/exception-fingerprint";
 import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
@@ -2576,6 +2579,52 @@ describe("PostHog browser analytics adapter", () => {
       ).not.toBe(fingerprint);
     }
     expect(JSON.stringify(baseline)).not.toContain("private document title");
+  });
+
+  test("nested finite kinds remain distinct through capture and transport sanitization", () => {
+    class StructuredFailure extends TaggedError("StructuredFailure")<{
+      message: string;
+      reason: { kind: "read" | "write"; detail: string };
+    }> {
+      static {
+        declareFingerprintFields(this, ["reason.kind"]);
+      }
+    }
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+    const sanitize = (kind: "read" | "write") => {
+      const identity = capturedExceptionIdentity(
+        new StructuredFailure({
+          message: "PRIVATE_MESSAGE",
+          reason: { kind, detail: "PRIVATE_DETAIL" },
+        }),
+      );
+      expect(identity.fields).toEqual({
+        "cause0.StructuredFailure.reason.kind": kind,
+      });
+      const event = initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          exception_key: "nestedKind:failure",
+          exception_scope: "scope:1234abcd",
+          exception_error_types: identity.types,
+          exception_fields: {
+            ...identity.fields,
+            "cause0.StructuredFailure.reason.detail": "PRIVATE_DETAIL",
+            "cause0.StructuredFailure.kind": "PRIVATE_ROOT_KIND",
+          },
+          $exception_list: [
+            { type: "StructuredFailure", value: "PRIVATE_MESSAGE" },
+          ],
+        },
+      });
+      const fingerprint = event?.properties?.["$exception_fingerprint"];
+      expect(fingerprint).toContain(
+        JSON.stringify(["cause0.StructuredFailure.reason.kind", kind]),
+      );
+      expect(JSON.stringify(event)).not.toContain("PRIVATE_");
+      return fingerprint;
+    };
+    expect(sanitize("read")).not.toBe(sanitize("write"));
   });
 
   test("sanitizer keeps a validated API response identity and groups by it", () => {

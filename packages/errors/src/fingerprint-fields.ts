@@ -54,8 +54,26 @@ type ReadFingerprintFieldsOptions = {
 // three fields and two path components. Cause depth also bounds nested dimensions.
 const MAX_FINGERPRINT_FIELDS = 16;
 const MAX_PROTOTYPE_DEPTH = 16;
-const MAX_FIELD_PATH_CHARS =
-  MAX_EXCEPTION_CAUSE_DEPTH * ("termination".length + 1) - 1;
+export const MAX_FINGERPRINT_FIELD_PATH_CHARS =
+  MAX_EXCEPTION_CAUSE_DEPTH *
+    (Math.max(
+      ...FINGERPRINT_KEYS.map((key) => key.length),
+      NESTED_DISCRIMINATOR_KEY.length,
+    ) +
+      1) -
+  1;
+
+/** Capture and transport sanitizers share the finite dimension grammar. */
+export const isFingerprintFieldPath = (path: readonly string[]): boolean =>
+  path.length > 0 &&
+  path.length <= MAX_EXCEPTION_CAUSE_DEPTH &&
+  path.every(
+    (key, pathIndex) =>
+      FINGERPRINT_KEYS.some((dimension) => dimension === key) ||
+      (pathIndex > 0 &&
+        pathIndex === path.length - 1 &&
+        key === NESTED_DISCRIMINATOR_KEY),
+  );
 
 type FingerprintFieldsResult = {
   fields: Readonly<Record<string, string>> | undefined;
@@ -107,7 +125,7 @@ export const readFingerprintFields = ({
       if (typeof field !== "string") {
         continue;
       }
-      if (field.length > MAX_FIELD_PATH_CHARS) {
+      if (field.length > MAX_FINGERPRINT_FIELD_PATH_CHARS) {
         status = "read_failed";
         continue;
       }
@@ -116,15 +134,7 @@ export const readFingerprintFields = ({
         status = "read_failed";
         continue;
       }
-      if (
-        path.every(
-          (key, pathIndex) =>
-            FINGERPRINT_KEYS.some((dimension) => dimension === key) ||
-            (pathIndex > 0 &&
-              pathIndex === path.length - 1 &&
-              key === NESTED_DISCRIMINATOR_KEY),
-        )
-      ) {
+      if (isFingerprintFieldPath(path)) {
         fields.add(field);
       }
     }
