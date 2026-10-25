@@ -1,0 +1,8 @@
+# Formatter options live in bunfig.toml [fmt]. This empty config only ends
+# bun fmt's config lookup here. Without a config file at the repository root,
+# bun fmt keeps looking in the directories above it: a checkout nested inside
+# another checkout then uses an outer .oxfmtrc.json or .prettierrc, or, when
+# an outer package.json depends on oxfmt, oxfmt's defaults instead of
+# Prettier's, and rewrites files it did not change.
+# scripts/formatter-config-root.test.ts keeps it that way.
+{}

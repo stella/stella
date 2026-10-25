@@ -224,6 +224,20 @@ describe("UBL 2.1 (EN 16931)", () => {
     expect(between(invoice ?? "", "cbc:TaxExemptionReason")).toEqual([
       "Exempt from VAT",
     ]);
+    const [blankBasis] = buildUblFiles([
+      {
+        ...DOMESTIC_INVOICE,
+        lines: DOMESTIC_INVOICE.lines.map((line) => ({
+          ...line,
+          exemptionReason: line.vatTreatment === "exempt" ? " " : null,
+        })),
+      },
+    ])
+      .unwrap()
+      .map((file) => file.content);
+    expect(between(blankBasis ?? "", "cbc:TaxExemptionReason")).toEqual([
+      "Exempt from VAT",
+    ]);
     const [euro] = buildUblFiles([EURO_INVOICE])
       .unwrap()
       .map((file) => file.content);
