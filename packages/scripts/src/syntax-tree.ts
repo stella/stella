@@ -14,6 +14,14 @@ export { Visitor, type VisitorObject } from "oxc-parser";
 // ESTree node types (`Node`, `CallExpression`, `TSTypeReference`, …).
 export type * from "oxc-parser";
 
+/**
+ * ESTree's own names. oxc types identifiers and properties by role (binding,
+ * reference, object literal entry, pattern entry, …); these are every node
+ * that carries the ESTree tag.
+ */
+export type Identifier = Extract<Node, { type: "Identifier" }>;
+export type Property = Extract<Node, { type: "Property" }>;
+
 export type SourceLocation = {
   /** 1-based line. */
   readonly line: number;
@@ -49,7 +57,8 @@ export const walk = (
   visit: (
     node: Node,
     ancestors: readonly Node[],
-  ) => "skip-children" | undefined,
+    // Any other return value, including none, visits the children.
+  ) => unknown,
 ): void => {
   const ancestors: Node[] = [];
   const enter = (node: Node): void => {
