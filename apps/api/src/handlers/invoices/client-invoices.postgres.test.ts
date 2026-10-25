@@ -1176,326 +1176,333 @@ if (!databaseUrl || !runPostgres) {
       ).toEqual({ invoices: [], lines: [] });
     });
 
-    test("members create client credit drafts only while authorized for their whole original", async () => {
-      const scenario = await seedScenario();
-      const foreign = await seedScenario();
-      await db
-        .update(invoices)
-        .set({
-          status: INVOICE_STATUS.FINALIZED,
-          finalizedAt: new Date("2026-10-15T12:00:00Z"),
-          invoiceNumber: "CLIENT-ORIGINAL",
-          netAmount: cents(200),
-          vatAmount: cents(42),
-          totalAmount: cents(242),
-        })
-        .where(eq(invoices.id, scenario.invoiceId));
-      const readQuota = async () =>
-        await scoped(
-          scenario,
-          scenario.actors.full,
-        )(
-          async (tx) =>
-            await tx
-              .select({
-                first: sql<string>`public.stella_matter_invoice_count(${scenario.firstMatterId})::text`,
-                second: sql<string>`public.stella_matter_invoice_count(${scenario.secondMatterId})::text`,
-              })
-              .from(sql`(SELECT 1) quota`),
-        );
-      expect(await readQuota()).toEqual([{ first: "1", second: "1" }]);
-      const memberRole = sessionMemberRole("member");
-      expect(
-        hasMemberPermission(memberRole, { invoice: ["create", "update"] }),
-      ).toBe(true);
-      const auditEvents: unknown[] = [];
-      const contextFor = async (
-        target: typeof scenario,
-        actor: SafeId<"user">,
-      ) => {
-        const scopedDb = scoped(target, actor);
-        const visible = await scopedDb(
-          async (tx) =>
-            await tx
-              .select({ id: workspaces.id })
-              .from(workspaces)
-              .where(
-                inArray(workspaces.id, [
-                  target.firstMatterId,
-                  target.secondMatterId,
-                ]),
-              ),
-        );
-        return {
-          safeDb: createMembershipSafeDb(markRlsDatabase(db), {
-            organizationId: target.orgId,
-            userId: actor,
-            serverValidatedWorkspaceIds: [],
-          }),
-          scopedDb,
-          audit: async (_tx: unknown, event: unknown) => {
-            auditEvents.push(event);
-          },
-          memberRole,
-          session: { activeOrganizationId: target.orgId },
-          user: { id: actor },
-          workspaceId: target.firstMatterId,
-          getActiveWorkspaceIds: async () => visible.map(({ id }) => id),
-          getAccessibleWorkspaces: async () =>
-            visible.map(({ id }) => ({ id, status: "active" as const })),
-          getWorkspaceAccess: async (id: SafeId<"workspace">) =>
-            visible.some((matter) => matter.id === id)
-              ? { id, status: "active" as const }
-              : null,
-          pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
-            visible.some((matter) => matter.id === id),
-        };
-      };
-      const body = {
-        documentType: "credit_note",
-        originalInvoiceId: scenario.invoiceId,
-        invoiceDate: "2026-10-16",
-        currency: "EUR",
-        timeEntryIds: [],
-      } satisfies Parameters<typeof createInvoice.handler>[0]["body"];
-      const fullContext = await contextFor(scenario, scenario.actors.full);
-      const created = await createInvoice.handler(
-        createTestHandlerContext<Parameters<typeof createInvoice.handler>[0]>({
-          ...fullContext,
-          body,
-        }),
-      );
-      if (!("id" in created)) {
-        panic("Expected authorized client credit draft", { result: created });
-      }
-      expect(
-        await scoped(
-          scenario,
-          scenario.actors.full,
-        )(
-          async (tx) =>
-            await tx.query.invoices.findFirst({
-              where: { id: { eq: created.id } },
-              columns: {
-                workspaceId: true,
-                clientId: true,
-                originalInvoiceId: true,
-                documentType: true,
-              },
+    // timeout: seeds a matter to its 10 000-invoice limit, and every quota read counts across all of them.
+    test(
+      "members create client credit drafts only while authorized for their whole original",
+      async () => {
+        const scenario = await seedScenario();
+        const foreign = await seedScenario();
+        await db
+          .update(invoices)
+          .set({
+            status: INVOICE_STATUS.FINALIZED,
+            finalizedAt: new Date("2026-10-15T12:00:00Z"),
+            invoiceNumber: "CLIENT-ORIGINAL",
+            netAmount: cents(200),
+            vatAmount: cents(42),
+            totalAmount: cents(242),
+          })
+          .where(eq(invoices.id, scenario.invoiceId));
+        const readQuota = async () =>
+          await scoped(
+            scenario,
+            scenario.actors.full,
+          )(
+            async (tx) =>
+              await tx
+                .select({
+                  first: sql<string>`public.stella_matter_invoice_count(${scenario.firstMatterId})::text`,
+                  second: sql<string>`public.stella_matter_invoice_count(${scenario.secondMatterId})::text`,
+                })
+                .from(sql`(SELECT 1) quota`),
+          );
+        expect(await readQuota()).toEqual([{ first: "1", second: "1" }]);
+        const memberRole = sessionMemberRole("member");
+        expect(
+          hasMemberPermission(memberRole, { invoice: ["create", "update"] }),
+        ).toBe(true);
+        const auditEvents: unknown[] = [];
+        const contextFor = async (
+          target: typeof scenario,
+          actor: SafeId<"user">,
+        ) => {
+          const scopedDb = scoped(target, actor);
+          const visible = await scopedDb(
+            async (tx) =>
+              await tx
+                .select({ id: workspaces.id })
+                .from(workspaces)
+                .where(
+                  inArray(workspaces.id, [
+                    target.firstMatterId,
+                    target.secondMatterId,
+                  ]),
+                ),
+          );
+          return {
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId: target.orgId,
+              userId: actor,
+              serverValidatedWorkspaceIds: [],
             }),
-        ),
-      ).toEqual({
-        workspaceId: null,
-        clientId: scenario.clientId,
-        originalInvoiceId: scenario.invoiceId,
-        documentType: "credit_note",
-      });
-      const lines = await scoped(
-        scenario,
-        scenario.actors.full,
-      )(
-        async (tx) =>
-          await tx.query.invoiceLines.findMany({
-            where: { invoiceId: { eq: created.id } },
-          }),
-      );
-      expect(lines).toEqual([]);
-      expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
-      expect(auditEvents.length).toBeGreaterThan(0);
-      await db.execute(sql`INSERT INTO invoices
+            scopedDb,
+            audit: async (_tx: unknown, event: unknown) => {
+              auditEvents.push(event);
+            },
+            memberRole,
+            session: { activeOrganizationId: target.orgId },
+            user: { id: actor },
+            workspaceId: target.firstMatterId,
+            getActiveWorkspaceIds: async () => visible.map(({ id }) => id),
+            getAccessibleWorkspaces: async () =>
+              visible.map(({ id }) => ({ id, status: "active" as const })),
+            getWorkspaceAccess: async (id: SafeId<"workspace">) =>
+              visible.some((matter) => matter.id === id)
+                ? { id, status: "active" as const }
+                : null,
+            pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
+              visible.some((matter) => matter.id === id),
+          };
+        };
+        const body = {
+          documentType: "credit_note",
+          originalInvoiceId: scenario.invoiceId,
+          invoiceDate: "2026-10-16",
+          currency: "EUR",
+          timeEntryIds: [],
+        } satisfies Parameters<typeof createInvoice.handler>[0]["body"];
+        const fullContext = await contextFor(scenario, scenario.actors.full);
+        const created = await createInvoice.handler(
+          createTestHandlerContext<Parameters<typeof createInvoice.handler>[0]>(
+            {
+              ...fullContext,
+              body,
+            },
+          ),
+        );
+        if (!("id" in created)) {
+          panic("Expected authorized client credit draft", { result: created });
+        }
+        expect(
+          await scoped(
+            scenario,
+            scenario.actors.full,
+          )(
+            async (tx) =>
+              await tx.query.invoices.findFirst({
+                where: { id: { eq: created.id } },
+                columns: {
+                  workspaceId: true,
+                  clientId: true,
+                  originalInvoiceId: true,
+                  documentType: true,
+                },
+              }),
+          ),
+        ).toEqual({
+          workspaceId: null,
+          clientId: scenario.clientId,
+          originalInvoiceId: scenario.invoiceId,
+          documentType: "credit_note",
+        });
+        const lines = await scoped(
+          scenario,
+          scenario.actors.full,
+        )(
+          async (tx) =>
+            await tx.query.invoiceLines.findMany({
+              where: { invoiceId: { eq: created.id } },
+            }),
+        );
+        expect(lines).toEqual([]);
+        expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
+        expect(auditEvents.length).toBeGreaterThan(0);
+        await db.execute(sql`INSERT INTO invoices
         (id, organization_id, workspace_id, client_id, invoice_date, currency, status)
         SELECT gen_random_uuid(), ${scenario.orgId}, ${scenario.secondMatterId}::uuid,
           ${scenario.clientId}::uuid, '2026-10-16'::date, 'EUR', 'draft'
         FROM generate_series(1, ${LIMITS.invoicesPerWorkspace - 2})`);
-      expect(await readQuota()).toEqual([
-        { first: "2", second: String(LIMITS.invoicesPerWorkspace) },
-      ]);
-      const creditsBeforeQuotaRefusal = await db.query.invoices.findMany({
-        where: {
-          organizationId: { eq: scenario.orgId },
-          originalInvoiceId: { eq: scenario.invoiceId },
-        },
-        columns: { id: true },
-        orderBy: { id: "asc" },
-      });
-      const auditCountBeforeQuotaRefusal = auditEvents.length;
-      expect(
-        await createInvoice.handler(
-          createTestHandlerContext<Parameters<typeof createInvoice.handler>[0]>(
-            { ...fullContext, body },
-          ),
-        ),
-      ).toMatchObject({
-        code: 400,
-        response: {
-          message: "Invoice limit reached for a participating matter",
-        },
-      });
-      expect(
-        await db.query.invoices.findMany({
+        expect(await readQuota()).toEqual([
+          { first: "2", second: String(LIMITS.invoicesPerWorkspace) },
+        ]);
+        const creditsBeforeQuotaRefusal = await db.query.invoices.findMany({
           where: {
             organizationId: { eq: scenario.orgId },
             originalInvoiceId: { eq: scenario.invoiceId },
           },
           columns: { id: true },
           orderBy: { id: "asc" },
-        }),
-      ).toEqual(creditsBeforeQuotaRefusal);
-      expect(auditEvents).toHaveLength(auditCountBeforeQuotaRefusal);
-      expect(await readQuota()).toEqual([
-        { first: "2", second: String(LIMITS.invoicesPerWorkspace) },
-      ]);
-      await db
-        .delete(invoices)
-        .where(
-          and(
-            eq(invoices.organizationId, scenario.orgId),
-            eq(invoices.workspaceId, scenario.secondMatterId),
-          ),
-        );
-      expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
-      const beforeRefusals = await db.query.invoices.findMany({
-        where: { organizationId: { eq: scenario.orgId } },
-        columns: { id: true },
-        orderBy: { id: "asc" },
-      });
-      expect(
-        await scoped(
-          scenario,
-          scenario.actors.partial,
-        )(async (tx) => ({
-          quota: await tx
-            .select({
-              count: sql<string>`public.stella_matter_invoice_count(${scenario.firstMatterId})::text`,
-            })
-            .from(sql`(SELECT 1) quota`),
-          invoices: await tx.query.invoices.findMany({
-            where: { id: { in: [scenario.invoiceId, created.id] } },
-            columns: { id: true },
-          }),
-        })),
-      ).toEqual({ quota: [{ count: "2" }], invoices: [] });
-      await expectSqlState(
-        scoped(
-          scenario,
-          scenario.actors.partial,
-        )(
-          async (tx) =>
-            await tx
-              .select({
-                count: sql<string>`public.stella_matter_invoice_count(${scenario.secondMatterId})::text`,
-              })
-              .from(sql`(SELECT 1) quota`),
-        ),
-        "42501",
-      );
-      const partialContext = await contextFor(
-        scenario,
-        scenario.actors.partial,
-      );
-      for (const context of [
-        partialContext,
-        await contextFor(foreign, foreign.actors.full),
-      ]) {
+        });
+        const auditCountBeforeQuotaRefusal = auditEvents.length;
         expect(
           await createInvoice.handler(
             createTestHandlerContext<
               Parameters<typeof createInvoice.handler>[0]
-            >({ ...context, body }),
+            >({ ...fullContext, body }),
           ),
         ).toMatchObject({
-          code: 422,
-          response: { message: "Original invoice not found in this matter" },
+          code: 400,
+          response: {
+            message: "Invoice limit reached for a participating matter",
+          },
         });
-      }
-      expect(
-        await db.query.invoices.findMany({
+        expect(
+          await db.query.invoices.findMany({
+            where: {
+              organizationId: { eq: scenario.orgId },
+              originalInvoiceId: { eq: scenario.invoiceId },
+            },
+            columns: { id: true },
+            orderBy: { id: "asc" },
+          }),
+        ).toEqual(creditsBeforeQuotaRefusal);
+        expect(auditEvents).toHaveLength(auditCountBeforeQuotaRefusal);
+        expect(await readQuota()).toEqual([
+          { first: "2", second: String(LIMITS.invoicesPerWorkspace) },
+        ]);
+        await db
+          .delete(invoices)
+          .where(
+            and(
+              eq(invoices.organizationId, scenario.orgId),
+              eq(invoices.workspaceId, scenario.secondMatterId),
+            ),
+          );
+        expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
+        const beforeRefusals = await db.query.invoices.findMany({
           where: { organizationId: { eq: scenario.orgId } },
           columns: { id: true },
           orderBy: { id: "asc" },
-        }),
-      ).toEqual(beforeRefusals);
-      await expectSqlState(
-        scoped(
+        });
+        expect(
+          await scoped(
+            scenario,
+            scenario.actors.partial,
+          )(async (tx) => ({
+            quota: await tx
+              .select({
+                count: sql<string>`public.stella_matter_invoice_count(${scenario.firstMatterId})::text`,
+              })
+              .from(sql`(SELECT 1) quota`),
+            invoices: await tx.query.invoices.findMany({
+              where: { id: { in: [scenario.invoiceId, created.id] } },
+              columns: { id: true },
+            }),
+          })),
+        ).toEqual({ quota: [{ count: "2" }], invoices: [] });
+        await expectSqlState(
+          scoped(
+            scenario,
+            scenario.actors.partial,
+          )(
+            async (tx) =>
+              await tx
+                .select({
+                  count: sql<string>`public.stella_matter_invoice_count(${scenario.secondMatterId})::text`,
+                })
+                .from(sql`(SELECT 1) quota`),
+          ),
+          "42501",
+        );
+        const partialContext = await contextFor(
           scenario,
           scenario.actors.partial,
-        )(
-          async (tx) =>
-            await tx.insert(invoices).values({
-              organizationId: scenario.orgId,
-              workspaceId: null,
-              clientId: scenario.clientId,
-              documentType: "credit_note",
-              originalInvoiceId: scenario.invoiceId,
-              invoiceDate: "2026-10-16",
-              currency: "EUR",
-            }),
-        ),
-        "42501",
-      );
-      await expectSqlState(
-        scoped(
-          scenario,
-          scenario.actors.full,
-        )(
-          async (tx) =>
-            await tx.insert(invoices).values({
-              organizationId: scenario.orgId,
-              workspaceId: null,
-              clientId: scenario.clientId,
-              invoiceDate: "2026-10-16",
-              currency: "EUR",
-            }),
-        ),
-        "42501",
-      );
-      const line = await createInvoiceLine.handler(
-        createTestHandlerContext<
-          Parameters<typeof createInvoiceLine.handler>[0]
-        >({
-          ...fullContext,
-          params: {
-            workspaceId: scenario.firstMatterId,
-            invoiceId: created.id,
-          },
-          body: {
-            source: {
-              type: "manual",
-              description: "Correction",
-              quantity: "1",
-              unitPriceMinor: 100,
-            },
-            vatRateBps: 2100,
-            vatTreatment: "domestic_vat",
-          },
-        }),
-      );
-      expect(line).toHaveProperty("id");
-      expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
-      await db
-        .delete(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.userId, scenario.actors.full),
-            eq(workspaceMembers.workspaceId, scenario.secondMatterId),
-          ),
         );
-      expect(
-        await scoped(
-          scenario,
-          scenario.actors.full,
-        )(async (tx) => ({
-          invoices: await tx.query.invoices.findMany({
-            where: { id: { eq: created.id } },
+        for (const context of [
+          partialContext,
+          await contextFor(foreign, foreign.actors.full),
+        ]) {
+          expect(
+            await createInvoice.handler(
+              createTestHandlerContext<
+                Parameters<typeof createInvoice.handler>[0]
+              >({ ...context, body }),
+            ),
+          ).toMatchObject({
+            code: 422,
+            response: { message: "Original invoice not found in this matter" },
+          });
+        }
+        expect(
+          await db.query.invoices.findMany({
+            where: { organizationId: { eq: scenario.orgId } },
             columns: { id: true },
+            orderBy: { id: "asc" },
           }),
-          lines: await tx.query.invoiceLines.findMany({
-            where: { invoiceId: { eq: created.id } },
-            columns: { id: true },
+        ).toEqual(beforeRefusals);
+        await expectSqlState(
+          scoped(
+            scenario,
+            scenario.actors.partial,
+          )(
+            async (tx) =>
+              await tx.insert(invoices).values({
+                organizationId: scenario.orgId,
+                workspaceId: null,
+                clientId: scenario.clientId,
+                documentType: "credit_note",
+                originalInvoiceId: scenario.invoiceId,
+                invoiceDate: "2026-10-16",
+                currency: "EUR",
+              }),
+          ),
+          "42501",
+        );
+        await expectSqlState(
+          scoped(
+            scenario,
+            scenario.actors.full,
+          )(
+            async (tx) =>
+              await tx.insert(invoices).values({
+                organizationId: scenario.orgId,
+                workspaceId: null,
+                clientId: scenario.clientId,
+                invoiceDate: "2026-10-16",
+                currency: "EUR",
+              }),
+          ),
+          "42501",
+        );
+        const line = await createInvoiceLine.handler(
+          createTestHandlerContext<
+            Parameters<typeof createInvoiceLine.handler>[0]
+          >({
+            ...fullContext,
+            params: {
+              workspaceId: scenario.firstMatterId,
+              invoiceId: created.id,
+            },
+            body: {
+              source: {
+                type: "manual",
+                description: "Correction",
+                quantity: "1",
+                unitPriceMinor: 100,
+              },
+              vatRateBps: 2100,
+              vatTreatment: "domestic_vat",
+            },
           }),
-        })),
-      ).toEqual({ invoices: [], lines: [] });
-    });
+        );
+        expect(line).toHaveProperty("id");
+        expect(await readQuota()).toEqual([{ first: "2", second: "2" }]);
+        await db
+          .delete(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.userId, scenario.actors.full),
+              eq(workspaceMembers.workspaceId, scenario.secondMatterId),
+            ),
+          );
+        expect(
+          await scoped(
+            scenario,
+            scenario.actors.full,
+          )(async (tx) => ({
+            invoices: await tx.query.invoices.findMany({
+              where: { id: { eq: created.id } },
+              columns: { id: true },
+            }),
+            lines: await tx.query.invoiceLines.findMany({
+              where: { invoiceId: { eq: created.id } },
+              columns: { id: true },
+            }),
+          })),
+        ).toEqual({ invoices: [], lines: [] });
+      },
+      { timeout: 120_000 },
+    );
 
     test("a client invoice with no lines left is visible and writable only to owners and admins", async () => {
       const scenario = await seedScenario();
