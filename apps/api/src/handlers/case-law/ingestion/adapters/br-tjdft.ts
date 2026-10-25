@@ -12,13 +12,14 @@
  * descending, an order new records can enter anywhere. So the crawl never
  * pages an open set: it pages one publication day of one base at a time (a
  * window that is closed once the day is over in Brasília), compares every
- * page's `hits.value` with the first page's, and walks the window again from
- * its first page when the count moved or the rows it listed do not add up to
- * the count (rules 14 and 19). The frontier starts at the last closed day and
- * advances only over days that have closed since; a cycle with no closed day
- * sends no request. History behind the frontier is the reconciliation walk's,
- * over the same day-and-base slices, and the ledger it writes compares the
- * identities a slice lists against the publisher's count (rules 15 and 16).
+ * page's `hits.value` with the first page's, keeps the exact ids it listed,
+ * and walks the window again from its first page when the count moved, a row
+ * came back twice, or the distinct ids do not add up to the count (rules 14
+ * and 19). The frontier starts at the last closed day and advances only over
+ * days that have closed since; a cycle with no closed day sends no request.
+ * History behind the frontier is the reconciliation walk's, over year, month
+ * and day slices by era, each listed twice and counted only when both passes
+ * name the same records under the same count (rules 15, 16 and 19).
  *
  * Coverage blind spot: records with no `dataPublicacao` match no window. On
  * 2026-10-25 that was 28,405 of 1,766,289 acórdãos and 401,220 of 1,750,162
@@ -32,10 +33,12 @@
  *
  * Secrecy. A record flagged `segredoJustica` is published with its parties
  * blanked but with its text. The pipeline has no withholding state an
- * adapter can set at ingestion, so such a record is not stored at all and
- * not detail-read: the crawl counts it against the window's total as
- * excluded, and the reconciliation listing leaves it out of what a slice is
- * measured against.
+ * adapter can set at ingestion, so such a record is not stored at all: a
+ * listing row flagged secret is not detail-read, and a detail answer flagged
+ * secret is not built. The crawl counts either against the window's total as
+ * excluded, and reconciliation leaves it out of what a slice is measured
+ * against. A record stored while public that is later flagged is not taken
+ * down by this adapter.
  */
 
 import { panic, Result } from "better-result";
@@ -188,12 +191,19 @@ const isDay = (value: string): boolean =>
 
 // ── Requests ─────────────────────────────────────────────
 
-const listingBody = (base: BrTjdftBase, day: string, page: number) =>
+/** Publication days from `from` to `to`, both included. */
+type PublicationRange = { from: string; to: string };
+
+const listingBody = (
+  base: BrTjdftBase,
+  { from, to }: PublicationRange,
+  page: number,
+) =>
   JSON.stringify({
     query: "",
     termosAcessorios: [
       { campo: "base", valor: base },
-      { campo: "dataPublicacao", valor: `entre ${day} e ${day}` },
+      { campo: "dataPublicacao", valor: `entre ${from} e ${to}` },
     ],
     pagina: page,
     tamanho: BR_TJDFT_PAGE_SIZE,
@@ -467,9 +477,24 @@ const listingContent = (row: Record<string, unknown>) =>
     ),
   );
 
-/** A content-addressed audit identity for a row stating no usable id. */
+/**
+ * A content-addressed audit identity for a row stating no usable id. Built
+ * from the fields that stay as they are once the id recovers, never from
+ * the malformed id itself: the recovered row names the same fingerprint as a
+ * repair alias and adopts the quarantine row instead of adding a second one.
+ */
 const quarantineIdOf = (row: Record<string, unknown>): string =>
-  `quarantine:${sha256Hex(JSON.stringify(listingContent(row)))}`;
+  `quarantine:${sha256Hex(
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(listingContent(row)).filter(([key]) => key !== "uuid"),
+      ),
+    ),
+  )}`;
+
+/** The id a listed row is held under: its own, or its quarantine one. */
+const rowIdentityOf = (row: Record<string, unknown>): string =>
+  uuidOf(row) ?? quarantineIdOf(row);
 
 const DECISION_TYPE_BY_SUBBASE = {
   acordaos: "acórdão",
@@ -641,7 +666,7 @@ export const assembleBrTjdftDecision = ({
 }: AssembleBrTjdftOptions): IngestionResult => {
   const record = detail?.record ?? listing;
   const uuid = uuidOf(listing);
-  const sourceDocumentId = uuid ?? quarantineIdOf(listing);
+  const sourceDocumentId = rowIdentityOf(listing);
   const { caseNumber, reading } = brTjdftCaseNumberOf(record, sourceDocumentId);
   const decisionType = brTjdftDecisionTypeOf(record);
   const decisionDate = brTjdftCalendarDay(record["dataJulgamento"]);
@@ -683,6 +708,11 @@ export const assembleBrTjdftDecision = ({
       ? { caseNumberIsPlaceholder: true }
       : {}),
     sourceDocumentId,
+    // Repair-only: it adopts a row stored while the id was malformed, and
+    // is never reserved on its own (rule 20).
+    ...(uuid === undefined
+      ? {}
+      : { sourceDocumentIdRepairAliases: [quarantineIdOf(listing)] }),
     court: COURT,
     country: ADAPTER_MANIFESTS[KEY].country,
     language: LANGUAGE,
@@ -758,7 +788,12 @@ type RowBuild =
   | { type: "detail-absent"; decision: IngestionResult }
   | { type: "unread"; item: UnreadListedItem }
   /** A row with no publisher id, kept under a content-addressed identity. */
-  | { type: "quarantined"; decision: IngestionResult };
+  | { type: "quarantined"; decision: IngestionResult }
+  /**
+   * The record is under judicial secrecy by its own answer, whatever the
+   * listing row said: nothing of it is built or kept.
+   */
+  | { type: "excluded" };
 
 const buildRow = async (
   row: Record<string, unknown>,
@@ -782,6 +817,9 @@ const buildRow = async (
   }
   switch (read.value.type) {
     case "read":
+      if (isBrTjdftSecret(read.value.record)) {
+        return Result.ok({ type: "excluded" });
+      }
       return Result.ok({
         type: "built",
         decision: assembleBrTjdftDecision({
@@ -847,9 +885,20 @@ const collectRows = async (
         if (Result.isError(outcome)) {
           return undefined;
         }
-        return outcome.value.type === "unread"
-          ? outcome.value.item.listing
-          : outcome.value.decision;
+        const value = outcome.value;
+        switch (value.type) {
+          case "unread":
+            return value.item.listing;
+          case "excluded":
+            return undefined;
+          case "built":
+          case "detail-absent":
+          case "quarantined":
+            return value.decision;
+          default:
+            value satisfies never;
+            return panic(`Unhandled TJDFT row: ${JSON.stringify(value)}`);
+        }
       },
     });
     if (built.type === "item_build_failed") {
@@ -870,6 +919,9 @@ const collectRows = async (
       // The pipeline decides what an unread detail costs the page.
       case "unread":
         unreadItems.push(outcome.item);
+        break;
+      case "excluded":
+        excluded += 1;
         break;
       default:
         outcome satisfies never;
@@ -897,8 +949,12 @@ const cursorSchema = v.strictObject({
   page: v.pipe(v.number(), v.integer(), v.minValue(0)),
   /** The window's count as its first page stated it; null before that page. */
   total: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
-  /** Rows the window listed so far, secret ones included. */
-  listed: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /**
+   * The ids of the rows the window listed so far, secret ones included. A
+   * count of rows cannot tell a row listed twice from two rows, so the
+   * window is whole only when its distinct ids are its count.
+   */
+  seen: v.array(v.string()),
   /** Of those, the rows under judicial secrecy, which are not stored. */
   excluded: v.pipe(v.number(), v.integer(), v.minValue(0)),
   restarts: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -919,7 +975,7 @@ const windowStart = (
   base,
   page: 0,
   total: null,
-  listed: 0,
+  seen: [],
   excluded: 0,
   restarts,
 });
@@ -984,7 +1040,11 @@ const crawlPage = async (
     });
   }
   const listing = await search({
-    body: listingBody(position.base, position.day, position.page),
+    body: listingBody(
+      position.base,
+      { from: position.day, to: position.day },
+      position.page,
+    ),
     stage: "listing",
     cursor,
     signal,
@@ -1019,16 +1079,32 @@ const crawlPage = async (
     return collected;
   }
   const { decisions, itemBuildFailures, unreadItems } = collected.value;
-  const listed = position.listed + rows.length;
+  const seen = new Set(position.seen);
+  const repeated = rows.some((row) => {
+    const id = rowIdentityOf(row);
+    const known = seen.has(id);
+    seen.add(id);
+    return known;
+  });
   const excluded = position.excluded + collected.value.excluded;
   const moved = position.total !== null && position.total !== total;
   const lastPage = offset + rows.length >= total;
   let next: BrTjdftCursor;
   if (moved) {
     next = restartWindow(position, "count changed between pages");
+  } else if (repeated) {
+    // A row seen on an earlier page moved under the offsets, so some other
+    // row of the window was skipped.
+    next = restartWindow(position, "a row was listed twice");
   } else if (!lastPage) {
-    next = { ...position, page: position.page + 1, total, listed, excluded };
-  } else if (listed !== total) {
+    next = {
+      ...position,
+      page: position.page + 1,
+      total,
+      seen: [...seen],
+      excluded,
+    };
+  } else if (seen.size !== total) {
     next = restartWindow(position, "listed rows do not add up to the count");
   } else {
     // The secret records are counted here, against the window's own total,
@@ -1055,26 +1131,113 @@ const crawlPage = async (
 
 const SLICE_SEPARATOR = ":";
 
-export const brTjdftSlice = (day: string, base: BrTjdftBase): string =>
-  `${day}${SLICE_SEPARATOR}${base}`;
+/**
+ * History is sliced by how much of it there is. The search dates a handful
+ * of acórdãos before the court sat in 1960 and some thousands a year until
+ * the late 1990s; a daily slice over that span costs a listing request per
+ * empty day on every sweep. So a slice is a year before 1960, a month until
+ * 2000 (no month of those years comes near the slice ceiling) and a day
+ * from 2000, when the court publishes thousands a month.
+ */
+const MONTH_SLICES_FROM_YEAR = 1960;
+const DAY_SLICES_FROM = "2000-01-01";
 
+type SlicePeriod =
+  | { type: "year"; year: number }
+  | { type: "month"; year: number; month: number }
+  | { type: "day"; day: string };
+
+const padded = (value: number, width: number): string =>
+  String(value).padStart(width, "0");
+
+const periodKey = (period: SlicePeriod): string => {
+  switch (period.type) {
+    case "year":
+      return padded(period.year, 4);
+    case "month":
+      return `${padded(period.year, 4)}-${padded(period.month, 2)}`;
+    case "day":
+      return period.day;
+    default:
+      period satisfies never;
+      return panic(`Unhandled TJDFT slice period: ${JSON.stringify(period)}`);
+  }
+};
+
+/** The slice period a publication day belongs to. */
+const periodOfDay = (day: string): SlicePeriod => {
+  const date = Temporal.PlainDate.from(day);
+  if (date.year < MONTH_SLICES_FROM_YEAR) {
+    return { type: "year", year: date.year };
+  }
+  return day < DAY_SLICES_FROM
+    ? { type: "month", year: date.year, month: date.month }
+    : { type: "day", day };
+};
+
+const rangeOf = (period: SlicePeriod): PublicationRange => {
+  switch (period.type) {
+    case "year":
+      return {
+        from: `${padded(period.year, 4)}-01-01`,
+        to: `${padded(period.year, 4)}-12-31`,
+      };
+    case "month": {
+      const month = Temporal.PlainYearMonth.from({
+        year: period.year,
+        month: period.month,
+      });
+      return {
+        from: month.toPlainDate({ day: 1 }).toString(),
+        to: month.toPlainDate({ day: month.daysInMonth }).toString(),
+      };
+    }
+    case "day":
+      return { from: period.day, to: period.day };
+    default:
+      period satisfies never;
+      return panic(`Unhandled TJDFT slice period: ${JSON.stringify(period)}`);
+  }
+};
+
+export const brTjdftSlice = (period: string, base: BrTjdftBase): string =>
+  `${period}${SLICE_SEPARATOR}${base}`;
+
+const sliceAt = (period: SlicePeriod, base: BrTjdftBase): string =>
+  brTjdftSlice(periodKey(period), base);
+
+const SLICE_PERIOD_PATTERN = /^\d{4}(?:-\d{2}(?:-\d{2})?)?$/u;
+
+/**
+ * A slice this adapter writes, or undefined. A period is accepted only in
+ * the shape its tier gives it, so `1999-02-01` (a day where the months run)
+ * names no slice.
+ */
 const parseBrTjdftSlice = (
   slice: string,
-): { day: string; base: BrTjdftBase } | undefined => {
-  const [day, base, ...rest] = slice.split(SLICE_SEPARATOR);
+): { period: SlicePeriod; base: BrTjdftBase } | undefined => {
+  const [key, base, ...rest] = slice.split(SLICE_SEPARATOR);
   if (
-    day === undefined ||
+    key === undefined ||
     rest.length > 0 ||
-    !isDay(day) ||
-    (base !== "acordaos" && base !== "decisoes")
+    (base !== "acordaos" && base !== "decisoes") ||
+    !SLICE_PERIOD_PATTERN.test(key)
   ) {
     return undefined;
   }
-  return { day, base };
+  // A year or a month key, filled out to the first day it covers.
+  const firstDay = `${key}${"-01-01".slice(key.length - 4)}`;
+  if (!isDay(firstDay)) {
+    return undefined;
+  }
+  const period = periodOfDay(firstDay);
+  return periodKey(period) === key ? { period, base } : undefined;
 };
 
+const FIRST_SLICE = sliceAt(periodOfDay(FIRST_DAY), "acordaos");
+
 const sliceOf = (now: Date): string =>
-  brTjdftSlice(brTjdftLastClosedDay(now), "decisoes");
+  sliceAt(periodOfDay(brTjdftLastClosedDay(now)), "decisoes");
 
 const nextSlice = (slice: string, now: Date): string | null => {
   const parsed = parseBrTjdftSlice(slice);
@@ -1083,8 +1246,8 @@ const nextSlice = (slice: string, now: Date): string | null => {
   }
   const next =
     parsed.base === "acordaos"
-      ? brTjdftSlice(parsed.day, "decisoes")
-      : brTjdftSlice(nextDay(parsed.day), "acordaos");
+      ? sliceAt(parsed.period, "decisoes")
+      : sliceAt(periodOfDay(nextDay(rangeOf(parsed.period).to)), "acordaos");
   return next > sliceOf(now) ? null : next;
 };
 
@@ -1094,20 +1257,32 @@ const previousSlice = (slice: string): string | null => {
     return null;
   }
   if (parsed.base === "decisoes") {
-    return brTjdftSlice(parsed.day, "acordaos");
+    return sliceAt(parsed.period, "acordaos");
   }
-  const previous = previousDay(parsed.day);
-  return previous < FIRST_DAY ? null : brTjdftSlice(previous, "decisoes");
+  const { from } = rangeOf(parsed.period);
+  return from <= FIRST_DAY
+    ? null
+    : sliceAt(periodOfDay(previousDay(from)), "decisoes");
 };
 
 /**
- * What one walk of a slice has listed so far. The engine lists a slice page
- * by page from the first, and a listing is only a count of the slice if the
- * count held still and the distinct ids add up to it; otherwise the walk
- * fails and the slice is retried rather than recorded short or whole.
+ * One walk of a slice. The engine lists a slice page by page from the
+ * first, and the walk states twice as many pages as the slice holds: the
+ * first pass lists the records, the second lists the slice again for its ids
+ * alone (rule 19). The listing counts the slice only if the count held still
+ * through both passes, each pass's distinct ids add up to it, and the two
+ * passes name the same records; a record replaced by another under an
+ * unchanged count fails the walk, and the slice is retried rather than
+ * recorded whole.
  */
-const sliceWalks = new Map<string, { total: number; ids: Set<string> }>();
+type SliceWalk = {
+  total: number;
+  passes: readonly [Set<string>, Set<string>];
+};
+
+const sliceWalks = new Map<string, SliceWalk>();
 const MAX_OPEN_SLICE_WALKS = 64;
+const VERIFYING_PASS = 1;
 
 type SlicePageOptions = {
   slice: string;
@@ -1115,16 +1290,21 @@ type SlicePageOptions = {
   signal?: AbortSignal | undefined;
 };
 
+const sameIds = (left: Set<string>, right: Set<string>): boolean =>
+  left.size === right.size && [...left].every((id) => right.has(id));
+
 const listSlicePage = async (
   { slice, page, signal }: SlicePageOptions,
   { now }: CrawlDependencies,
 ): Promise<ReconciliationSlicePage> => {
   const parsed = parseBrTjdftSlice(slice);
-  const refuse = (message: string) =>
-    new AdapterFetchError({ message, adapterKey: KEY, cursor: slice });
+  const refuse = (message: string) => {
+    sliceWalks.delete(slice);
+    return new AdapterFetchError({ message, adapterKey: KEY, cursor: slice });
+  };
   if (
     parsed === undefined ||
-    parsed.day < FIRST_DAY ||
+    slice < FIRST_SLICE ||
     slice > sliceOf(now()) ||
     !Number.isSafeInteger(page) ||
     page < 0
@@ -1133,13 +1313,24 @@ const listSlicePage = async (
       refuse(`Invalid TJDFT reconciliation page: ${slice}/${page}`),
     );
   }
+  const known = page === 0 ? undefined : sliceWalks.get(slice);
+  if (page > 0 && known === undefined) {
+    return await Promise.reject(
+      refuse(`TJDFT slice ${slice} page ${page} has no walk to continue`),
+    );
+  }
+  const passPages =
+    known === undefined ? 0 : Math.ceil(known.total / BR_TJDFT_PAGE_SIZE);
+  const pass = page >= passPages && page > 0 ? VERIFYING_PASS : 0;
+  const passPage = pass === VERIFYING_PASS ? page - passPages : page;
   const listing = await search({
-    body: listingBody(parsed.base, parsed.day, page),
+    body: listingBody(parsed.base, rangeOf(parsed.period), passPage),
     stage: "listing",
     cursor: slice,
     signal,
   });
   if (Result.isError(listing)) {
+    sliceWalks.delete(slice);
     return await Promise.reject(listing.error);
   }
   const { total, rows } = listing.value;
@@ -1147,50 +1338,61 @@ const listSlicePage = async (
     if (sliceWalks.size >= MAX_OPEN_SLICE_WALKS) {
       sliceWalks.clear();
     }
-    sliceWalks.set(slice, { total, ids: new Set() });
+    sliceWalks.set(slice, { total, passes: [new Set(), new Set()] });
   }
   const walk = sliceWalks.get(slice);
   if (walk === undefined || walk.total !== total) {
-    sliceWalks.delete(slice);
     return await Promise.reject(
       refuse(`TJDFT slice ${slice} changed its count while it was listed`),
     );
   }
-  const offset = page * BR_TJDFT_PAGE_SIZE;
+  const offset = passPage * BR_TJDFT_PAGE_SIZE;
   if (
     rows.length > BR_TJDFT_PAGE_SIZE ||
     (rows.length === 0 && offset < total)
   ) {
-    sliceWalks.delete(slice);
     return await Promise.reject(
       refuse(`TJDFT slice ${slice} page ${page} does not match its count`),
     );
   }
+  const ids = walk.passes[pass];
   for (const row of rows) {
-    walk.ids.add(uuidOf(row) ?? quarantineIdOf(row));
+    ids.add(rowIdentityOf(row));
   }
-  const totalPages = Math.ceil(total / BR_TJDFT_PAGE_SIZE);
-  if (page + 1 >= totalPages) {
+  const pagesPerPass = Math.ceil(total / BR_TJDFT_PAGE_SIZE);
+  if (passPage + 1 >= pagesPerPass && ids.size !== total) {
+    return await Promise.reject(
+      refuse(
+        `TJDFT slice ${slice} listed ${ids.size} distinct records for a count of ${total}`,
+      ),
+    );
+  }
+  if (pass === VERIFYING_PASS && passPage + 1 >= pagesPerPass) {
+    const [first, second] = walk.passes;
     sliceWalks.delete(slice);
-    if (walk.ids.size !== total) {
+    if (!sameIds(first, second)) {
       return await Promise.reject(
         refuse(
-          `TJDFT slice ${slice} listed ${walk.ids.size} distinct records for a count of ${total}`,
+          `TJDFT slice ${slice} changed its records between two listings under an unchanged count`,
         ),
       );
     }
   }
   return {
-    items: rows
-      .filter((row) => !isBrTjdftSecret(row))
-      .map((row) => ({
-        identity: {
-          type: "document" as const,
-          sourceDocumentId: uuidOf(row) ?? quarantineIdOf(row),
-        },
-        payload: row,
-      })),
-    totalPages,
+    // The verifying pass reads ids only; the records came with the first.
+    items:
+      pass === VERIFYING_PASS
+        ? []
+        : rows
+            .filter((row) => !isBrTjdftSecret(row))
+            .map((row) => ({
+              identity: {
+                type: "document" as const,
+                sourceDocumentId: rowIdentityOf(row),
+              },
+              payload: row,
+            })),
+    totalPages: 2 * pagesPerPass,
   };
 };
 
@@ -1211,6 +1413,9 @@ const buildReconciliationDecision = async (
       return { type: "built", decision: built.value.decision };
     case "detail-absent":
       return { type: "detail-unavailable" };
+    // Retired: a record the court keeps secret is never held.
+    case "excluded":
+      return { type: "unkeyable" };
     case "unread":
       return await Promise.reject(
         new AdapterFetchError({
@@ -1233,7 +1438,7 @@ const reparseStoredRaw = (
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
-    identityOf: (listing) => uuidOf(listing) ?? quarantineIdOf(listing),
+    identityOf: rowIdentityOf,
   });
   if (read.type === "rejected") {
     return read;
@@ -1517,7 +1722,7 @@ export const createBrTjdftAdapter = (
       revisionOf: (payload) =>
         isRecord(payload) ? listingContent(payload) : null,
       heldRequiresDetail: true,
-      firstSlice: brTjdftSlice(FIRST_DAY, "acordaos"),
+      firstSlice: FIRST_SLICE,
       sliceOf,
       nextSlice: (slice) => nextSlice(slice, dependencies.now()),
       previousSlice,

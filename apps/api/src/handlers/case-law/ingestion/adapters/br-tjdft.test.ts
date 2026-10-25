@@ -188,7 +188,7 @@ const cursorOf = (overrides: Partial<BrTjdftCursor> = {}): string =>
     base: "acordaos",
     page: 0,
     total: null,
-    listed: 0,
+    seen: [],
     excluded: 0,
     restarts: 0,
     ...overrides,
@@ -472,12 +472,14 @@ describe("the crawl", () => {
         ),
       ).toBe(false);
     }
-    expect(nextCursorOf(page)).toMatchObject({
+    const next = nextCursorOf(page);
+    expect(next).toMatchObject({
       page: 1,
       total: listing.total,
-      listed: listing.rows.length,
       excluded: secret.length,
     });
+    // The secret rows are counted against the window, as ids.
+    expect(next.seen).toHaveLength(listing.rows.length);
   });
 
   test("a window longer than one page is followed to its end, then to the next base", async () => {
@@ -492,8 +494,8 @@ describe("the crawl", () => {
       base: "acordaos",
       page: 1,
       total: rows.length,
-      listed: BR_TJDFT_PAGE_SIZE,
     });
+    expect(nextCursorOf(first).seen).toHaveLength(BR_TJDFT_PAGE_SIZE);
     const second = await adapter.fetchPage(
       JSON.stringify(nextCursorOf(first)),
       {},
@@ -565,11 +567,8 @@ describe("the crawl", () => {
           );
     });
     const first = await adapter.fetchPage(cursorOf(), {});
-    expect(nextCursorOf(first)).toMatchObject({
-      page: 1,
-      total,
-      listed: BR_TJDFT_PAGE_SIZE - 2,
-    });
+    expect(nextCursorOf(first)).toMatchObject({ page: 1, total });
+    expect(nextCursorOf(first).seen).toHaveLength(BR_TJDFT_PAGE_SIZE - 2);
     const second = await adapter.fetchPage(
       JSON.stringify(nextCursorOf(first)),
       {},
@@ -726,7 +725,8 @@ describe("the reconciliation slices", () => {
       slice: "2024-03-01:acordaos",
       page: 0,
     });
-    expect(listed.totalPages).toBe(Math.ceil(total / BR_TJDFT_PAGE_SIZE));
+    // Each page twice: the records, then the ids again to verify them.
+    expect(listed.totalPages).toBe(2 * Math.ceil(total / BR_TJDFT_PAGE_SIZE));
     expect(listed.items).toHaveLength(
       rows.filter((row) => row["segredoJustica"] !== true).length,
     );
@@ -817,5 +817,175 @@ describe("the publisher", () => {
     expect(
       await brTjdftAdapter.getTotalCount(AbortSignal.timeout(5000)),
     ).toEqual({ type: "count", total: 1422 });
+  });
+});
+
+// ── Secrecy, identity and slice shape ───────────────────
+
+/** The detail answer for whichever synthetic row the request names. */
+const syntheticDetail = (call: Call): Response =>
+  detailAnswer(
+    rowAt(Number.parseInt(termOf(call.body, "uuid")?.slice(-12) ?? "0", 16)),
+  );
+
+describe("secrecy stated only by the detail answer", () => {
+  test("keeps the record out of the crawl and the reconciliation walk", async () => {
+    // The listing row says public; the record itself says secret.
+    const listed = rowAt(0);
+    stubPublisher((call) =>
+      isDetail(call)
+        ? detailAnswer({ ...listed, segredoJustica: true })
+        : answer(1, [listed]),
+    );
+    const page = await adapter.fetchPage(cursorOf(), {});
+    const value = Result.isOk(page) ? page.value : panic("the page failed");
+    expect(value.decisions).toHaveLength(0);
+    expect(value.unreadItems ?? []).toHaveLength(0);
+    expect(nextCursorOf(page)).toMatchObject({ base: "decisoes" });
+    expect(await adapter.reconciliation.buildDecision(listed)).toEqual({
+      type: "unkeyable",
+    });
+  });
+});
+
+describe("a window's identities", () => {
+  test("a row listed twice under an unchanged count restarts the window", async () => {
+    // The order moved between the pages: page 1 repeats A39 and A40 is never
+    // listed, though the count and the number of rows both say 41.
+    stubPublisher((call) => {
+      if (isDetail(call)) {
+        return syntheticDetail(call);
+      }
+      return Number(call.body["pagina"]) === 0
+        ? answer(
+            41,
+            Array.from({ length: BR_TJDFT_PAGE_SIZE }, (_, index) =>
+              rowAt(index),
+            ),
+          )
+        : answer(41, [rowAt(BR_TJDFT_PAGE_SIZE - 1)]);
+    });
+    const first = await adapter.fetchPage(cursorOf(), {});
+    const second = await adapter.fetchPage(
+      JSON.stringify(nextCursorOf(first)),
+      {},
+    );
+    expect(nextCursorOf(second)).toMatchObject({
+      day: "2024-03-01",
+      base: "acordaos",
+      page: 0,
+      restarts: 1,
+    });
+  });
+});
+
+describe("a reconciliation slice's identities", () => {
+  /** Lists every page the slice states, as the engine does. */
+  const walkSlice = async (slice: string) => {
+    const items: string[] = [];
+    let totalPages = 1;
+    for (let page = 0; page < totalPages; page += 1) {
+      const listed = await adapter.reconciliation.listSlicePage({
+        slice,
+        page,
+      });
+      totalPages = listed.totalPages;
+      for (const { identity } of listed.items) {
+        items.push(
+          identity.type === "document" ? identity.sourceDocumentId : "",
+        );
+      }
+    }
+    return items;
+  };
+
+  test("a slice whose membership changed under an unchanged count is not recorded", async () => {
+    // A0 withdrawn and X published ahead of it between the passes: the count
+    // stays 41 and the first pass alone reads as complete.
+    const replacement = rowAt(500);
+    let listings = 0;
+    stubPublisher((call) => {
+      const page = Number(call.body["pagina"]);
+      const pass = Math.floor(listings / 2);
+      listings += 1;
+      if (page === 1) {
+        return answer(41, [rowAt(BR_TJDFT_PAGE_SIZE)]);
+      }
+      const rows = Array.from({ length: BR_TJDFT_PAGE_SIZE }, (_, index) =>
+        rowAt(index),
+      );
+      return answer(41, pass === 0 ? rows : [replacement, ...rows.slice(1)]);
+    });
+    expect(await rejectionOf(walkSlice("2024-03-03:acordaos"))).toMatchObject({
+      message: expect.stringContaining("changed its records"),
+    });
+  });
+
+  test("a slice listed twice alike is recorded once, with every record", async () => {
+    windowPublisher((base) =>
+      base === "acordaos"
+        ? Array.from({ length: 41 }, (_, index) => rowAt(index))
+        : [],
+    );
+    const items = await walkSlice("2024-03-04:acordaos");
+    expect(items).toHaveLength(41);
+    expect(new Set(items).size).toBe(41);
+  });
+});
+
+describe("a row that recovers its publisher id", () => {
+  test("names its quarantine row as a repair alias", () => {
+    const malformed = assembleBrTjdftDecision({
+      listing: rowAt(0, { uuid: "not-a-uuid" }),
+      detail: undefined,
+      detailStatus: "no-publisher-identity",
+    });
+    const recovered = assembleBrTjdftDecision({
+      listing: rowAt(0),
+      detail: {
+        record: rowAt(0),
+        raw: JSON.stringify({ hits: { value: 1 }, registros: [rowAt(0)] }),
+      },
+      detailStatus: undefined,
+    });
+    const quarantineId = malformed.sourceDocumentId ?? panic("no identity");
+    expect(quarantineId).toMatch(/^quarantine:/u);
+    expect(recovered.sourceDocumentIdRepairAliases).toEqual([quarantineId]);
+  });
+});
+
+describe("the reconciliation history", () => {
+  const { reconciliation } = adapter;
+
+  test("is walked in years before 1960 and in months before 2000", () => {
+    expect(reconciliation.firstSlice).toBe("1900:acordaos");
+    expect(reconciliation.previousSlice("2000-01-01:acordaos")).toBe(
+      "1999-12:decisoes",
+    );
+    expect(reconciliation.nextSlice("1999-12:decisoes")).toBe(
+      "2000-01-01:acordaos",
+    );
+    expect(reconciliation.previousSlice("1960-01:acordaos")).toBe(
+      "1959:decisoes",
+    );
+    expect(reconciliation.nextSlice("1959:decisoes")).toBe("1960-01:acordaos");
+    const walked: string[] = [];
+    let slice: string | null = reconciliation.sliceOf(NOW);
+    while (slice !== null) {
+      walked.push(slice);
+      slice = reconciliation.previousSlice(slice);
+    }
+    expect(walked.at(-1)).toBe(reconciliation.firstSlice);
+    expect(walked.toReversed()).toEqual(walked.toSorted());
+    // Daily slices from 1900 would be over 92,000.
+    expect(walked.length).toBeLessThan(21_000);
+  });
+
+  test("a month slice asks for its whole month", async () => {
+    const calls = stubPublisher(() => answer(0, []));
+    await reconciliation.listSlicePage({ slice: "1999-02:acordaos", page: 0 });
+    expect(termOf(calls[0]?.body ?? {}, "dataPublicacao")).toBe(
+      "entre 1999-02-01 e 1999-02-28",
+    );
   });
 });

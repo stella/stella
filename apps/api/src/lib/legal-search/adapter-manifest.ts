@@ -696,9 +696,10 @@ export const ADAPTER_MANIFESTS = {
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
     dateRange: {
-      // The crawl slices by publication day. The court sits since 1960, but
-      // the search dates 21 acórdãos between 1900 and 1957 (data-entry
-      // dates, served as published), so the range opens with them.
+      // Sliced by publication date. The court sits since 1960, but the
+      // search dates 21 acórdãos between 1900 and 1957 (data-entry dates,
+      // served as published), so the range opens with them; reconciliation
+      // walks those years a year at a time.
       type: "publication-date",
       fromInclusive: "1900-01-01",
       through: OPEN_RANGE,
