@@ -12,10 +12,7 @@ import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import type {
-  CaseLawScenarioGeneration,
-  CorpusReadBudgetSeed,
-} from "./corpus-seed";
+import type { CorpusReadBudgetSeed, ServedCaseLaw } from "./corpus-seed";
 import {
   CASE_LAW_SCENARIOS,
   LEGISLATION_CANDIDATE_COUNT,
@@ -64,7 +61,7 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
 
 /**
  * Scheduled jobs measured per run, each against every corpus scenario it can
- * meet, at one size and at twice that size.
+ * meet, at one size and, where the scenario has one, at twice that size.
  */
 export const SCHEDULED_JOB_MEASUREMENTS = [
   {
@@ -78,10 +75,7 @@ export const SCHEDULED_JOB_MEASUREMENTS = [
   budgetId: ScheduledJobReadBudgetId;
   jobId: string;
   task: string;
-  scenarios: readonly {
-    size: CaseLawScenarioGeneration;
-    double: CaseLawScenarioGeneration;
-  }[];
+  scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
 }[];
 
 /** Which profile measures each budget; every budget has exactly one. */

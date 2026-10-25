@@ -16,7 +16,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
  * has, at a fraction of its size. Round synthetic values only; no corpus
  * content or catalog observation belongs here.
  *
- * Each case-law scenario exists at two sizes, so a scheduled job is measured
+ * Most case-law scenarios exist at two sizes, so a scheduled job is measured
  * once against each and must read the same pages at both: a bounded read
  * passes at any size, and a read that grows with the corpus cannot pass by
  * being measured on a small fixture.
@@ -30,23 +30,60 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
 
-export const CASE_LAW_SCENARIOS = {
-  quiet: { size: "case_law_v5", double: "case_law_v6" },
-  busy: { size: "case_law_v7", double: "case_law_v8" },
-} as const;
-
 export type CaseLawScenarioGeneration =
-  (typeof CASE_LAW_SCENARIOS)[keyof typeof CASE_LAW_SCENARIOS][
-    "size" | "double"];
+  "case_law_v5" | "case_law_v6" | "case_law_v7" | "case_law_v8" | "case_law_v9";
+
+/**
+ * The generations readers are served: the family's serving generation, and
+ * the generation each flipped jurisdiction points at.
+ */
+export type ServedCaseLaw = {
+  serving: CaseLawScenarioGeneration;
+  flipped?: readonly (readonly [string, CaseLawScenarioGeneration])[];
+};
+
+type CaseLawScenario = { size: ServedCaseLaw; double?: ServedCaseLaw };
+
+export const CASE_LAW_SCENARIOS = {
+  quiet: {
+    size: { serving: "case_law_v5" },
+    double: { serving: "case_law_v6" },
+  },
+  busy: {
+    size: { serving: "case_law_v7" },
+    double: { serving: "case_law_v8" },
+  },
+  // Two jurisdictions flipped to generations of their own: three served
+  // generations, each with a queue past the report's scan cap. A cap per
+  // generation reads three windows; the run's budget holds one.
+  servedThree: {
+    size: {
+      serving: "case_law_v7",
+      flipped: [
+        ["CZE", "case_law_v8"],
+        ["SVK", "case_law_v9"],
+      ],
+    },
+  },
+} as const satisfies Record<string, CaseLawScenario>;
+
+export const describeServed = ({ serving, flipped = [] }: ServedCaseLaw) =>
+  [
+    serving,
+    ...flipped.map(
+      ([jurisdiction, generation]) => `${jurisdiction}:${generation}`,
+    ),
+  ].join("+");
 
 const SCENARIO_GENERATIONS = [
   { generation: "case_law_v5", kind: "quiet", rows: CORPUS_SCENARIO_ROWS },
   { generation: "case_law_v6", kind: "quiet", rows: 2 * CORPUS_SCENARIO_ROWS },
   { generation: "case_law_v7", kind: "busy", rows: CORPUS_SCENARIO_ROWS },
   { generation: "case_law_v8", kind: "busy", rows: 2 * CORPUS_SCENARIO_ROWS },
+  { generation: "case_law_v9", kind: "busy", rows: CORPUS_SCENARIO_ROWS },
 ] as const satisfies readonly {
   generation: CaseLawScenarioGeneration;
-  kind: keyof typeof CASE_LAW_SCENARIOS;
+  kind: "quiet" | "busy";
   rows: number;
 }[];
 
@@ -67,6 +104,7 @@ type SeedHandle = Pick<TransactionOf<GatedTestDb>, "execute">;
 /** The seeded tables whose guard triggers the fixture's writes skip. */
 const GUARDED_TABLES = [
   "corpus_index_generations",
+  "corpus_index_jurisdiction_serving",
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
   "legislation_documents",
@@ -85,12 +123,12 @@ const withoutTriggers = async (
 ) => {
   await database.transaction(async (tx) => {
     for (const table of GUARDED_TABLES) {
-      // db-await-in-loop: four fixed tables; ALTER TABLE takes one table per statement.
+      // db-await-in-loop: five fixed tables; ALTER TABLE takes one table per statement.
       await tx.execute(sql.raw(`ALTER TABLE ${table} DISABLE TRIGGER USER`));
     }
     await write(tx);
     for (const table of GUARDED_TABLES) {
-      // db-await-in-loop: four fixed tables; ALTER TABLE takes one table per statement.
+      // db-await-in-loop: five fixed tables; ALTER TABLE takes one table per statement.
       await tx.execute(sql.raw(`ALTER TABLE ${table} ENABLE TRIGGER USER`));
     }
   });
@@ -278,16 +316,29 @@ const seedLegislationChunk = async (
   );
 };
 
-/** Moves `serving` to one case-law generation; the others are building. */
-export const serveCaseLawGeneration = async (
+/**
+ * Serves case law from `served`: `serving` becomes the family's serving
+ * generation (the others are building) and each flipped jurisdiction points
+ * at its generation, replacing any earlier pointers.
+ */
+export const serveCaseLaw = async (
   database: GatedTestDb,
-  generation: CaseLawScenarioGeneration,
+  { serving, flipped = [] }: ServedCaseLaw,
 ) => {
   await withoutTriggers(database, async (tx) => {
     await tx.execute(sql`UPDATE corpus_index_generations SET status = 'building'
       WHERE family = 'case_law' AND status = 'serving'`);
     await tx.execute(sql`UPDATE corpus_index_generations SET status = 'serving'
-      WHERE family = 'case_law' AND generation = ${generation}`);
+      WHERE family = 'case_law' AND generation = ${serving}`);
+    await tx.execute(
+      sql`DELETE FROM corpus_index_jurisdiction_serving WHERE family = 'case_law'`,
+    );
+    for (const [jurisdiction, generation] of flipped) {
+      // db-await-in-loop: a scenario flips at most a handful of jurisdictions.
+      await tx.execute(sql`INSERT INTO corpus_index_jurisdiction_serving
+        (family, jurisdiction, generation, from_generation)
+        VALUES ('case_law', ${jurisdiction}, ${generation}, ${serving})`);
+    }
   });
 };
 

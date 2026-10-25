@@ -12,8 +12,10 @@ import {
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
+  describeServed,
   seedCorpusReadBudgets,
-  serveCaseLawGeneration,
+  serveCaseLaw,
+  type ServedCaseLaw,
 } from "./corpus-seed";
 import { withQueryPerfFixture } from "./fixture";
 import {
@@ -231,9 +233,10 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const runPages = async (
           jobId: string,
           task: string,
-          generation: CaseLawScenarioGeneration,
+          served: ServedCaseLaw,
         ) => {
-          await serveCaseLawGeneration(db, generation);
+          await serveCaseLaw(db, served);
+          const generation = describeServed(served);
           const run = await measureScheduledJobRun({
             database: db,
             openClient,
@@ -253,20 +256,25 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           const { budgetId } = job;
           measured.add(budgetId);
           for (const scenario of job.scenarios) {
-            // db-await-in-loop: scenarios move the serving generation, so they run one at a time.
+            const label = describeServed(scenario.size);
+            // db-await-in-loop: scenarios move the served generations, so they run one at a time.
             const size = await deadline.run(
-              `run ${job.jobId} on ${scenario.size}`,
+              `run ${job.jobId} on ${label}`,
               async () => await runPages(job.jobId, job.task, scenario.size),
             );
-            // db-await-in-loop: the twin scenario moves the serving generation after the first run finished.
-            const double = await deadline.run(
-              `run ${job.jobId} on ${scenario.double}`,
-              async () => await runPages(job.jobId, job.task, scenario.double),
-            );
             note(budgetProblem(budgetId, size));
+            const twin = "double" in scenario ? scenario.double : undefined;
+            if (twin === undefined) {
+              continue;
+            }
+            // db-await-in-loop: the twin scenario moves the served generations after the first run finished.
+            const double = await deadline.run(
+              `run ${job.jobId} on ${describeServed(twin)}`,
+              async () => await runPages(job.jobId, job.task, twin),
+            );
             note(budgetProblem(budgetId, double));
             for (const violation of scaleViolations({ size, double })) {
-              note(`${job.jobId} on ${scenario.size}: ${violation}`);
+              note(`${job.jobId} on ${label}: ${violation}`);
             }
           }
         }
@@ -326,8 +334,8 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const growth = await deadline.run(
           "measure revision checks",
           async () => ({
-            size: await revisionChecks(quiet.size),
-            double: await revisionChecks(quiet.double),
+            size: await revisionChecks(quiet.size.serving),
+            double: await revisionChecks(quiet.double.serving),
           }),
         );
         log({

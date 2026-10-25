@@ -28,7 +28,10 @@ template; the fixture database is dropped after its clients close.
   waiting) exists at one size and at twice that size; the run must stay in
   its budget at both and read the same pages at both (10% plus 64 pages for
   a deeper index), so a read that grows with the corpus fails however small
-  the fixture is.
+  the fixture is. A third scenario serves three generations at once (two
+  jurisdictions flipped to their own), each with a queue past the freshness
+  report's scan cap, so a cap applied per generation instead of per run goes
+  over the budget.
 
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
