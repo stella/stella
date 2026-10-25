@@ -52,8 +52,7 @@ const redirectUriSchema = v.pipe(
   v.check((value) => {
     const url = URL.parse(value);
     return (
-      url !== null &&
-      url.protocol === "https:" &&
+      url?.protocol === "https:" &&
       url.hash === "" &&
       url.username === "" &&
       url.password === "" &&
