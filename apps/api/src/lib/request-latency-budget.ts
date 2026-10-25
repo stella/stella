@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { classifyFailure } from "@stll/errors";
@@ -95,20 +96,21 @@ export const runBoundedRequestStep = async <T>(
   { label, budgetMs }: { label: string; budgetMs: number },
 ): Promise<BoundedRequestStep<T>> => {
   const timeoutMs = requestBoundedTimeoutMs(budgetMs);
-  try {
-    return {
-      status: "complete",
-      value: await withTimeout(operation, { label, timeoutMs }),
-    };
-  } catch (error) {
-    if (error instanceof TimeoutError && error.label === label) {
-      return {
-        status: "degraded",
-        reason: "budget_exhausted",
-        budgetMs: timeoutMs,
-        error: classifyFailure(error, "timeout_budgeted"),
-      };
-    }
-    return { status: "failed", error };
+  const outcome = await Result.tryPromise({
+    try: async () => await withTimeout(operation, { label, timeoutMs }),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(outcome)) {
+    return { status: "complete", value: outcome.value };
   }
+  const { error } = outcome;
+  if (error instanceof TimeoutError && error.label === label) {
+    return {
+      status: "degraded",
+      reason: "budget_exhausted",
+      budgetMs: timeoutMs,
+      error: classifyFailure(error, "timeout_budgeted"),
+    };
+  }
+  return { status: "failed", error };
 };
