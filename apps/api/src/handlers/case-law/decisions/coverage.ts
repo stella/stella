@@ -346,8 +346,22 @@ const sumOfKnown = (terms: readonly (number | null)[]): number | null => {
   return total;
 };
 
+/** A part of the answer that can fail without failing the page. */
+export type CaseLawCoveragePart =
+  | "arrivals"
+  | "slice-completeness"
+  | "facets"
+  | "courts"
+  | "provision-processing";
+
 type CoverageLoad = {
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
+  /**
+   * Called by every branch that answers without a part it could not read.
+   * The page still answers; the caller decides what a partial answer may be
+   * used for (it is never kept as the shared answer).
+   */
+  onPartialFailure: (part: CaseLawCoveragePart) => void;
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
   /** Null when the read failed as a whole, so no source gets a number. */
@@ -368,6 +382,18 @@ type CoverageLoad = {
   }) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
+/** A read whose null means it failed; the failure is reported as it is read. */
+const reportingNull = async <Value>(
+  read: () => Promise<Value | null>,
+  onNull: () => void,
+): Promise<Value | null> => {
+  const value = await read();
+  if (value === null) {
+    onNull();
+  }
+  return value;
+};
+
 const coverageError = (fallback: string) => (cause: unknown) =>
   new CoverageError({
     message: cause instanceof Error ? cause.message : fallback,
@@ -386,6 +412,7 @@ const coverageError = (fallback: string) => (cause: unknown) =>
 export const loadCaseLawCoverage = async ({
   excludedSourceIds,
   now,
+  onPartialFailure,
   readArrivals,
   readCourts,
   readFacets,
@@ -402,7 +429,10 @@ export const loadCaseLawCoverage = async ({
 
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
-  const arrivals = await readArrivals(admitted.map(({ id }) => id));
+  const arrivals = await reportingNull(
+    async () => await readArrivals(admitted.map(({ id }) => id)),
+    () => onPartialFailure("arrivals"),
+  );
   // Per-year completeness is a per-source detail: a failed ledger read marks
   // every source not reconciled and the rest of the page still answers.
   const yearCompleteness = await Result.tryPromise({
@@ -410,6 +440,7 @@ export const loadCaseLawCoverage = async ({
     catch: coverageError("reading case-law slice completeness failed"),
   });
   if (Result.isError(yearCompleteness)) {
+    onPartialFailure("slice-completeness");
     observeFailure(yearCompleteness.error, {
       sink: sliceCompletenessReadFailure,
     });
@@ -536,6 +567,7 @@ export const loadCaseLawCoverage = async ({
       // An admitted country whose index cannot be read has no searchable
       // number, and zero is not that: the row degrades to what is stored,
       // which is true whatever the index is doing.
+      onPartialFailure("facets");
       logger.warn("case_law.coverage.facets_unavailable", { country });
       countries.push({
         ...base,
@@ -576,6 +608,7 @@ export const loadCaseLawCoverage = async ({
       catch: coverageError("reading the per-court breakdown failed"),
     });
     if (Result.isError(courts)) {
+      onPartialFailure("courts");
       logger.warn("case_law.coverage.courts_unavailable", {
         country,
         "error.type": errorTag(courts.error),
@@ -610,6 +643,16 @@ type CaseLawCoverageAnswer =
   | { message: string };
 
 /**
+ * One computed answer and whether every part of it was read. `complete` is
+ * false as soon as any branch of the computation answered without a part,
+ * and for an unavailable answer, so neither is ever shared.
+ */
+export type CaseLawCoverageComputation = {
+  answer: CaseLawCoverageAnswer;
+  complete: boolean;
+};
+
+/**
  * How long one computed answer is served. The answer walks every country's
  * facets and court activity, seconds of reads, and it describes a corpus that
  * moves by ingestion batches; `generatedAt` states the instant it describes,
@@ -626,23 +669,29 @@ const COVERAGE_ANSWER_TTL_MS = 5 * 60_000;
  */
 const coverageAnswers = new WeakMap<
   CaseLawPublicReadDb,
-  TtlFlightCache<CaseLawCoverageAnswer>
+  TtlFlightCache<CaseLawCoverageComputation>
 >();
+
+/** The shared answer cache; only a complete answer is kept. */
+export const createCaseLawCoverageCache = (now: () => number) =>
+  createTtlFlightCache<CaseLawCoverageComputation>({
+    ttlMs: COVERAGE_ANSWER_TTL_MS,
+    // One key per source policy; a policy changes rarely.
+    maxEntries: 4,
+    now,
+    keep: ({ complete }) => complete,
+  });
 
 const coverageAnswersFor = (
   caseLawDb: CaseLawPublicReadDb,
-): TtlFlightCache<CaseLawCoverageAnswer> => {
+): TtlFlightCache<CaseLawCoverageComputation> => {
   const existing = coverageAnswers.get(caseLawDb);
   if (existing !== undefined) {
     return existing;
   }
-  const created = createTtlFlightCache<CaseLawCoverageAnswer>({
-    ttlMs: COVERAGE_ANSWER_TTL_MS,
-    // One key per source policy; a policy changes rarely.
-    maxEntries: 4,
-    now: () => Temporal.Now.instant().epochMilliseconds,
-    keep: (answer) => !("message" in answer),
-  });
+  const created = createCaseLawCoverageCache(
+    () => Temporal.Now.instant().epochMilliseconds,
+  );
   coverageAnswers.set(caseLawDb, created);
   return created;
 };
@@ -661,86 +710,34 @@ export const readCaseLawCoverageHandler = async (
     return { message: "Coverage is unavailable" };
   }
   const policy = excludedSourceIds.value;
-  return await coverageAnswersFor(caseLawDb).read(
+  const { answer } = await coverageAnswersFor(caseLawDb).read(
     // A set: the order it was read in must not split one policy in two.
     JSON.stringify(policy.toSorted(compareCodeUnit)),
     async () => await computeCaseLawCoverageAnswer(caseLawDb, policy),
   );
+  return answer;
 };
 
-const computeCaseLawCoverageAnswer = async (
-  caseLawDb: CaseLawPublicReadDb,
-  excludedSourceIds: readonly SafeId<"caseLawSource">[],
-): Promise<CaseLawCoverageAnswer> => {
-  // One instant for the whole page: the freshness windows, the arrivals window
-  // and `generatedAt` all describe the same moment, so a reader comparing a
-  // source's last sync against the stated time is comparing like with like.
-  const now = new Date();
+type CoverageAssembly = {
+  load: Omit<CoverageLoad, "onPartialFailure">;
+  readProvisionProcessing: () => Promise<
+    Awaited<ReturnType<typeof readProvisionPendingCounts>>
+  >;
+};
 
+/**
+ * The answer and its completeness from one set of readers. Completeness is
+ * collected from the branches that degrade, as they degrade: no separate
+ * check can disagree with what the answer holds.
+ */
+export const assembleCaseLawCoverageAnswer = async ({
+  load,
+  readProvisionProcessing,
+}: CoverageAssembly): Promise<CaseLawCoverageComputation> => {
+  const failedParts = new Set<CaseLawCoveragePart>();
   const result = await loadCaseLawCoverage({
-    excludedSourceIds,
-    now,
-    readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
-    readYearCompleteness: async (sources) =>
-      await caseLawDb(
-        async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
-      ),
-    readArrivals: async (sourceIds) => {
-      // One stored count per source, recounted by the scheduler: the week's
-      // window is never walked on the request path. A failure leaves the
-      // window unknown rather than failing the page: how much arrived this
-      // week is the smallest claim here, and the totals beside it still answer.
-      const arrivals = await Result.tryPromise({
-        try: async () =>
-          await caseLawDb(
-            async (tx) =>
-              await readCaseLawArrivalsQuery(tx, { sourceIds, now }),
-          ),
-        catch: coverageError("reading the week's arrivals failed"),
-      });
-      if (Result.isError(arrivals)) {
-        logger.warn("case_law.coverage.arrivals_unavailable", {
-          "error.type": errorTag(arrivals.error),
-        });
-        return null;
-      }
-      return arrivals.value;
-    },
-    readFacets: async (country) =>
-      await readBrowseFacetsUnderPolicy({
-        country,
-        excludedSourceIds,
-      }),
-    readCourts: async ({ buckets, country, total }) => {
-      const [courtWeights, activity, courtCount] = await Promise.all([
-        loadPublicCourtWeights(),
-        caseLawDb(
-          async (tx) =>
-            await readCaseLawCourtActivityQuery(tx, {
-              country,
-              courts: buckets.map(({ value }) => value),
-              excludedSourceIds,
-              now,
-            }),
-        ),
-        caseLawDb(
-          async (tx) =>
-            await readCaseLawCourtCountQuery(tx, {
-              country,
-              excludedSourceIds,
-              engine: envBase.LEGAL_SEARCH_PROVIDER,
-            }),
-        ),
-      ]);
-      return caseLawCourtStatusRows({
-        activity,
-        buckets,
-        country,
-        courtWeights,
-        courtCount,
-        total,
-      });
-    },
+    ...load,
+    onPartialFailure: (part) => failedParts.add(part),
   });
   if (Result.isError(result)) {
     // Unlike the hint beside the search box, this page IS the numbers:
@@ -749,25 +746,111 @@ const computeCaseLawCoverageAnswer = async (
     logger.warn("case_law.coverage.unavailable", {
       "error.type": errorTag(result.error),
     });
-    return { message: "Coverage is unavailable" };
+    return {
+      answer: { message: "Coverage is unavailable" },
+      complete: false,
+    };
   }
 
   const provisionProcessing = await Result.tryPromise({
-    try: async () =>
-      await caseLawDb(readProvisionPendingCounts, {
-        isolation: "repeatable-read",
-      }),
+    try: readProvisionProcessing,
     catch: coverageError("reading provision status failed"),
   });
   if (Result.isError(provisionProcessing)) {
+    failedParts.add("provision-processing");
     observeFailure(provisionProcessing.error, {
       sink: provisionStatusReadFailure,
     });
   }
   return {
-    ...result.value,
-    provisionProcessing: Result.isError(provisionProcessing)
-      ? unavailableProvisionPendingCounts()
-      : provisionProcessing.value,
+    answer: {
+      ...result.value,
+      provisionProcessing: Result.isError(provisionProcessing)
+        ? unavailableProvisionPendingCounts()
+        : provisionProcessing.value,
+    },
+    complete: failedParts.size === 0,
   };
+};
+
+const computeCaseLawCoverageAnswer = async (
+  caseLawDb: CaseLawPublicReadDb,
+  excludedSourceIds: readonly SafeId<"caseLawSource">[],
+): Promise<CaseLawCoverageComputation> => {
+  // One instant for the whole page: the freshness windows, the arrivals window
+  // and `generatedAt` all describe the same moment, so a reader comparing a
+  // source's last sync against the stated time is comparing like with like.
+  const now = new Date();
+
+  return await assembleCaseLawCoverageAnswer({
+    readProvisionProcessing: async () =>
+      await caseLawDb(readProvisionPendingCounts, {
+        isolation: "repeatable-read",
+      }),
+    load: {
+      excludedSourceIds,
+      now,
+      readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
+      readYearCompleteness: async (sources) =>
+        await caseLawDb(
+          async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
+        ),
+      readArrivals: async (sourceIds) => {
+        // One stored count per source, recounted by the scheduler: the week's
+        // window is never walked on the request path. A failure leaves the
+        // window unknown rather than failing the page: how much arrived this
+        // week is the smallest claim here, and the totals beside it still answer.
+        const arrivals = await Result.tryPromise({
+          try: async () =>
+            await caseLawDb(
+              async (tx) =>
+                await readCaseLawArrivalsQuery(tx, { sourceIds, now }),
+            ),
+          catch: coverageError("reading the week's arrivals failed"),
+        });
+        if (Result.isError(arrivals)) {
+          logger.warn("case_law.coverage.arrivals_unavailable", {
+            "error.type": errorTag(arrivals.error),
+          });
+          return null;
+        }
+        return arrivals.value;
+      },
+      readFacets: async (country) =>
+        await readBrowseFacetsUnderPolicy({
+          country,
+          excludedSourceIds,
+        }),
+      readCourts: async ({ buckets, country, total }) => {
+        const [courtWeights, activity, courtCount] = await Promise.all([
+          loadPublicCourtWeights(),
+          caseLawDb(
+            async (tx) =>
+              await readCaseLawCourtActivityQuery(tx, {
+                country,
+                courts: buckets.map(({ value }) => value),
+                excludedSourceIds,
+                now,
+              }),
+          ),
+          caseLawDb(
+            async (tx) =>
+              await readCaseLawCourtCountQuery(tx, {
+                country,
+                excludedSourceIds,
+                engine: envBase.LEGAL_SEARCH_PROVIDER,
+              }),
+          ),
+        ]);
+        return caseLawCourtStatusRows({
+          activity,
+          buckets,
+          country,
+          courtWeights,
+          courtCount,
+          total,
+        });
+      },
+    },
+  });
 };
