@@ -190,7 +190,7 @@ export const readOrganizationAccessSnapshot = async (
                   serviceActionsPerPeriod: source.serviceActionsPerPeriod,
                 },
           original,
-        } as const satisfies OrganizationAccessSnapshot;
+        } satisfies OrganizationAccessSnapshot;
       default:
         source.source satisfies never;
         return panic("Unhandled entitlement source");
