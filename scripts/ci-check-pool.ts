@@ -9,6 +9,10 @@
 // check fails the step after all selected checks have finished, unless its
 // `continue-on-error` holds: then its conclusion is success. Every failed check
 // still emits an error annotation so the failure digest can report its cause.
+// Each check runs under its budget (scripts/ci-check-budgets.ts, derived from
+// its measured p95). A check stopped at its budget is a timeout: a typed
+// infrastructure failure the digest never reports as a finding. A check that
+// passes after most of its budget is a warning, before it ever times out.
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
@@ -26,6 +30,12 @@ import {
 import { availableParallelism } from "node:os";
 import path from "node:path";
 
+import {
+  budgetBasis,
+  type CheckBudget,
+  checkBudget,
+  nearBudget,
+} from "./ci-check-budgets";
 import {
   CHECK_POOL_JOBS,
   type CheckPoolJob,
@@ -182,13 +192,19 @@ export type PlannedCheck =
       status: "selected";
       env: Record<string, string>;
       continueOnError: boolean;
+      budget: CheckBudget;
     }
   | { check: PoolCheck; status: "skipped" }
   | { check: PoolCheck; status: "invalid"; message: string };
 
+/**
+ * Select each check, as its step condition would. A selected check without
+ * a budget is invalid, so no check runs unbounded.
+ */
 export const planChecks = (
   checks: readonly PoolCheck[],
   context: Context,
+  budgetOf: (check: PoolCheck) => CheckBudget,
 ): PlannedCheck[] =>
   checks.map((check) => {
     try {
@@ -201,6 +217,7 @@ export const planChecks = (
               check.continueOnError,
               context,
             ),
+            budget: budgetOf(check),
           }
         : { check, status: "skipped" };
     } catch (error) {
@@ -223,23 +240,29 @@ export type CheckResult = {
   outcome: "success" | "failure" | "skipped";
   /** A failure that `continue-on-error` lets pass: conclusion success. */
   continuedOnError: boolean;
+  /** The pool stopped the check at its budget: an infrastructure failure. */
+  timedOut: boolean;
   detail: string;
   seconds: number;
+  /** Undefined for a check that never ran. */
+  budget: CheckBudget | undefined;
   maxRssBytes: number | undefined;
 };
 
 /** A failed check's detail when it printed no failed test or error line. */
 export const exitCodeDetail = (exitCode: number) => `exit code ${exitCode}`;
 
+/** A timed-out check's detail: how long it ran and why it was stopped. */
+export const timeoutDetail = (seconds: number, budget: CheckBudget) =>
+  `timed out after ${seconds.toFixed(1)} s (${budgetBasis(budget)})`;
+
 const launchedOutcome = (
   launched: Launched,
-  check: PoolCheck,
+  seconds: number,
+  budget: CheckBudget,
 ): Pick<CheckResult, "outcome" | "detail"> => {
   if (launched.timedOut) {
-    return {
-      outcome: "failure",
-      detail: `timed out after ${check.timeoutMinutes ?? 0} min`,
-    };
+    return { outcome: "failure", detail: timeoutDetail(seconds, budget) };
   }
   return launched.exitCode === 0
     ? { outcome: "success", detail: "passed" }
@@ -253,6 +276,7 @@ type RunChecksOptions = {
     index: number,
     check: PoolCheck,
     env: Record<string, string>,
+    budget: CheckBudget,
   ) => Promise<Launched>;
   /** Called once per check, in registry order, as soon as it can be. */
   report: (index: number, result: CheckResult) => void;
@@ -291,7 +315,9 @@ export const runChecks = async ({
       name: entry.check.name,
       id: entry.check.id,
       continuedOnError: false,
+      timedOut: false,
       seconds: 0,
+      budget: undefined,
       maxRssBytes: undefined,
     };
     if (entry.status === "skipped") {
@@ -308,21 +334,32 @@ export const runChecks = async ({
         check: entry.check,
         env: entry.env,
         continueOnError: entry.continueOnError,
+        budget: entry.budget,
       },
     ];
   });
   const worker = async () => {
     for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
       const started = now();
-      const base = { name: item.check.name, id: item.check.id };
+      const base = {
+        name: item.check.name,
+        id: item.check.id,
+        budget: item.budget,
+      };
       try {
-        const launched = await launch(item.index, item.check, item.env);
+        const launched = await launch(
+          item.index,
+          item.check,
+          item.env,
+          item.budget,
+        );
         const seconds = (now() - started) / 1000;
-        const outcome = launchedOutcome(launched, item.check);
+        const outcome = launchedOutcome(launched, seconds, item.budget);
         settle(item.index, {
           ...base,
           seconds,
           maxRssBytes: launched.maxRssBytes,
+          timedOut: launched.timedOut,
           ...outcome,
           continuedOnError:
             item.continueOnError && outcome.outcome === "failure",
@@ -333,6 +370,7 @@ export const runChecks = async ({
           seconds: (now() - started) / 1000,
           maxRssBytes: undefined,
           outcome: "failure",
+          timedOut: false,
           continuedOnError: item.continueOnError,
           detail: error instanceof Error ? error.message : String(error),
         });
@@ -375,6 +413,7 @@ export const processLauncher =
     index: number,
     check: PoolCheck,
     env: Record<string, string>,
+    budget: CheckBudget,
   ): Promise<Launched> => {
     const script = path.join(directory, `${String(index).padStart(3, "0")}.sh`);
     writeFileSync(script, check.run);
@@ -395,13 +434,10 @@ export const processLauncher =
     );
     active.add(child.pid);
     let timedOut = false;
-    const timer =
-      check.timeoutMinutes === undefined
-        ? undefined
-        : setTimeout(() => {
-            timedOut = true;
-            killGroup(child.pid);
-          }, check.timeoutMinutes * 60_000);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup(child.pid);
+    }, budget.seconds * 1000);
     const exitCode = await child.exited;
     clearTimeout(timer);
     // Nothing a check starts may outlive it and contend with the next one.
@@ -603,6 +639,37 @@ export const failedCheckAnnotation = (
 ) =>
   `::error title=${escapeProperty(`${FAILED_CHECK_RECORD}${result.name}`)}::${escapeData(failedCheckCause(result, output))}`;
 
+// A check stopped at its budget says nothing about the code: the runner was
+// too slow. Its cause is a typed infrastructure record that
+// ci-failure-digest.ts classifies as `infra`, never a finding; a test binds
+// the two.
+export const TIMED_OUT_CHECK_CLASS = "kind=infra class=check-timeout";
+export const TIMED_OUT_CHECK_TITLE = "TIMED OUT check: ";
+
+/** The cause of one timed-out check: how long it ran, and its budget. */
+export const timedOutCheckCause = (seconds: number, budget: CheckBudget) =>
+  `${TIMED_OUT_CHECK_CLASS} elapsed_s=${seconds.toFixed(1)} budget_s=${budget.seconds} p95_s=${budget.p95Seconds ?? "unmeasured"}`;
+
+/** The single workflow annotation emitted for one timed-out check. */
+export const timedOutCheckAnnotation = (
+  result: Pick<CheckResult, "name" | "detail">,
+  cause: string,
+) =>
+  `::error title=${escapeProperty(`${TIMED_OUT_CHECK_TITLE}${result.name}`)}::${escapeData(`${cause}: ${result.detail}`)}`;
+
+/** The warning for a check that passed after spending most of its budget. */
+export const nearBudgetWarning = (
+  result: Pick<CheckResult, "name" | "seconds">,
+  budget: CheckBudget,
+) =>
+  `::warning title=${escapeProperty(`Check near its budget: ${result.name}`)}::${escapeData(`passed after ${result.seconds.toFixed(1)} s, ${Math.round((result.seconds / budget.seconds) * 100)}% of its ${budgetBasis(budget)}; make it faster or refresh scripts/ci-check-budgets.json`)}`;
+
+/** Whether a check passed close enough to its budget to warn. */
+export const isNearBudget = (result: CheckResult) =>
+  result.outcome === "success" &&
+  result.budget !== undefined &&
+  nearBudget(result.seconds, result.budget);
+
 const seconds = (value: number) => `${value.toFixed(1)} s`;
 const mebibytes = (bytes: number | undefined) =>
   bytes === undefined ? "" : String(Math.round(bytes / 1_048_576));
@@ -614,21 +681,22 @@ const cell = (value: string) =>
     .replaceAll("|", "\\|")
     .replaceAll(/\r?\n/gu, " ");
 
+const resultLabel = (result: CheckResult) => {
+  if (result.outcome === "failure") {
+    const failure = result.timedOut ? "timeout (infra)" : "failure";
+    return `${failure}${result.continuedOnError ? " (continue-on-error)" : ""}: ${result.detail}`;
+  }
+  return isNearBudget(result) ? "success (near budget)" : result.outcome;
+};
+
 export const summaryTable = (results: readonly CheckResult[]) =>
   [
-    "| Check | Result | Seconds | Peak RSS (MiB) |",
-    "| --- | --- | ---: | ---: |",
+    "| Check | Result | Seconds | Budget (s) | Peak RSS (MiB) |",
+    "| --- | --- | ---: | ---: | ---: |",
     ...results.map((result) => {
-      const failure = result.continuedOnError
-        ? "failure (continue-on-error)"
-        : "failure";
-      const outcome =
-        result.outcome === "failure"
-          ? `${failure}: ${result.detail}`
-          : result.outcome;
       const elapsed =
         result.outcome === "skipped" ? "" : result.seconds.toFixed(1);
-      return `| ${cell(result.name)} | ${cell(outcome)} | ${elapsed} | ${mebibytes(result.maxRssBytes)} |`;
+      return `| ${cell(result.name)} | ${cell(resultLabel(result))} | ${elapsed} | ${result.budget?.seconds ?? ""} | ${mebibytes(result.maxRssBytes)} |`;
     }),
   ].join("\n");
 
@@ -655,6 +723,19 @@ const writeOut = (text: string) => {
 };
 const print = (...parts: string[]) => {
   writeOut(`${parts.join(" ")}\n`);
+};
+
+/**
+ * The step's failure kind for automation: `finding` when any blocking check
+ * failed on its own, `infra` when every blocking failure is a timeout (a
+ * rerun on a calmer runner may pass), `none` when the step passes.
+ */
+export const failureKind = (results: readonly CheckResult[]) => {
+  const failed = blockingFailures(results);
+  if (failed.length === 0) {
+    return "none";
+  }
+  return failed.every(({ timedOut }) => timedOut) ? "infra" : "finding";
 };
 
 /** Failures that fail the pool step: those `continue-on-error` does not cover. */
@@ -761,6 +842,7 @@ const main = async () => {
       process.env["CI_CHECK_POOL_PARTITION"],
     ),
     context,
+    (check) => checkBudget(job, check.name, check.timeoutMinutes),
   );
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
@@ -790,11 +872,11 @@ const main = async () => {
   const results = await runChecks({
     planned,
     concurrency,
-    launch: async (index, check, env) => {
+    launch: async (index, check, env, budget) => {
       unreported.set(index, { name: check.name, status: "running" });
-      print(`Starting check: ${check.name}`);
+      print(`Starting check: ${check.name} (budget ${budget.seconds} s)`);
       try {
-        return await launch(index, check, env);
+        return await launch(index, check, env, budget);
       } finally {
         unreported.set(index, { name: check.name, status: "completed" });
       }
@@ -807,9 +889,7 @@ const main = async () => {
       }
       let label = "passed";
       if (result.outcome === "failure") {
-        label = result.continuedOnError
-          ? "FAILED (continue-on-error)"
-          : "FAILED";
+        label = `${result.timedOut ? "TIMED OUT" : "FAILED"}${result.continuedOnError ? " (continue-on-error)" : ""}`;
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
       const output =
@@ -821,9 +901,15 @@ const main = async () => {
         writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
       print("::endgroup::");
-      if (result.outcome === "failure") {
+      if (result.outcome === "failure" && result.timedOut && result.budget) {
+        const cause = timedOutCheckCause(result.seconds, result.budget);
+        print(timedOutCheckAnnotation(result, cause));
+        print(failedCheckRecord(result.name, cause));
+      } else if (result.outcome === "failure") {
         print(failedCheckAnnotation(result, output));
         print(failedCheckRecord(result.name, failedCheckCause(result, output)));
+      } else if (isNearBudget(result) && result.budget) {
+        print(nearBudgetWarning(result, result.budget));
       }
     },
   });
@@ -856,10 +942,23 @@ const main = async () => {
     ),
   );
   const failed = blockingFailures(results);
-  if (failed.length > 0) {
+  const findings = failed.filter(({ timedOut }) => !timedOut);
+  const timedOut = failed.filter(({ timedOut: stopped }) => stopped);
+  if (findings.length > 0) {
     print(
-      `${failed.length} check(s) failed: ${failed.map(({ name }) => name).join("; ")}`,
+      `${findings.length} check(s) failed: ${findings.map(({ name }) => name).join("; ")}`,
     );
+  }
+  if (timedOut.length > 0) {
+    print(
+      `${timedOut.length} check(s) timed out at their budget (infrastructure, not a finding): ${timedOut.map(({ name }) => name).join("; ")}`,
+    );
+  }
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output) {
+    appendFileSync(output, `failure_kind=${failureKind(results)}\n`);
+  }
+  if (failed.length > 0) {
     process.exitCode = 1;
   }
 };

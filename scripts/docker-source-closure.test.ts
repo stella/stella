@@ -12,6 +12,7 @@ import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
 
+import { checkBudget } from "./ci-check-budgets";
 import {
   BUN_FLAGS,
   checkDockerSource,
@@ -1434,7 +1435,7 @@ describe("Docker source closure", () => {
     { rootIgnore: "", specificIgnore: "entry.ts", available: false },
     { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
     { rootIgnore: "", specificIgnore: undefined, available: true },
-  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
+  ])("Dockerfile ignore rules replace the root rules: %j", async (fixture) => {
     const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
     writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
     writeFileSync(
@@ -1459,21 +1460,23 @@ describe("Docker source closure", () => {
         Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
       ).toBe(0);
     }
-    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
+    expect(await checkRepositoryDockerSources(fixtureRoot)).toEqual(
       fixture.available
         ? []
         : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
     );
   });
 
-  // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
-  test("every tracked Dockerfile passes the full hydrated repository check", () => {
+  // timeout: This hydrates and inspects every tracked Dockerfile. Its whole
+  // file took p50 22.4 s and p95 30.1 s in CI before its prunes ran at once;
+  // the pool's measured budget bounds the check itself.
+  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
     expect(
-      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
-  }, 40_000);
+  }, 60_000);
 
-  test("runs after source hydration in the installed light job with a fixed total budget", () => {
+  test("runs after source hydration in the installed light job under its measured budget", () => {
     // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
     const steps = v.parse(
       v.array(
@@ -1504,10 +1507,16 @@ describe("Docker source closure", () => {
     expect(guard).toBeGreaterThan(restore);
     expect(steps[guard]?.if).toContain("steps.install.outcome == 'success'");
     expect(steps[guard]?.if).toContain("package_checks_required == 'true'");
-    expect(steps[guard]?.["timeout-minutes"]).toBe(1);
+    // The pool stops it at its budget (scripts/ci-check-budgets.json); no
+    // hand-set deadline of its own can cut it short first.
+    expect(steps[guard]?.["timeout-minutes"]).toBeUndefined();
     expect(steps[guard]?.run).toBe(
-      "timeout 30s bun test scripts/docker-source-closure.test.ts",
+      "bun test scripts/docker-source-closure.test.ts",
     );
+    expect(
+      checkBudget("ci-checks-rest", "Check Docker source closure", undefined)
+        .p95Seconds,
+    ).not.toBeNull();
   });
 
   test("rejects the omitted root helper even when it exists in the checkout", () => {

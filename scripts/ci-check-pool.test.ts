@@ -14,13 +14,21 @@ import path from "node:path";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  CHECK_BUDGETS,
+  type CheckBudget,
+  checkBudget,
+} from "./ci-check-budgets";
+import {
   blockingFailures,
   checkLogText,
   type CheckResult,
   conditionHolds,
   continueOnErrorHolds,
   failedCheckAnnotation,
+  failureKind,
+  isNearBudget,
   type Launched,
+  nearBudgetWarning,
   partitionChecks,
   planChecks,
   type PlannedCheck,
@@ -31,6 +39,10 @@ import {
   runChecks,
   selectChecks,
   summaryTable,
+  TIMED_OUT_CHECK_CLASS,
+  timedOutCheckAnnotation,
+  timedOutCheckCause,
+  timeoutDetail,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
@@ -49,6 +61,9 @@ const root = path.resolve(import.meta.dir, "..");
 const workflow: unknown = Bun.YAML.parse(
   readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
 );
+
+const BUDGET: CheckBudget = { seconds: 60, p95Seconds: 10 };
+const budgetOf = () => BUDGET;
 
 const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   name,
@@ -291,14 +306,18 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
       return entry.status === "selected" ? [entry.check.name] : [];
     });
   const narrow = JSON.stringify(["ci-checks-rest/Test oxlint plugins"]);
-  const pr = selected(planChecks(rest, context("pull_request", narrow)));
+  const pr = selected(
+    planChecks(rest, context("pull_request", narrow), budgetOf),
+  );
   expect(pr).toContain("Test oxlint plugins");
   expect(pr).not.toContain("Content delivery declarations");
   // A scoped check runs only when root_checks names it (or is empty).
   expect(pr).not.toContain("Workflow YAML");
   // Unscoped checks have no selection gate and always run.
   expect(pr).toContain("Queue authority");
-  const queue = selected(planChecks(rest, context("merge_group", "")));
+  const queue = selected(
+    planChecks(rest, context("merge_group", ""), budgetOf),
+  );
   expect(queue).toContain("Content delivery declarations");
   expect(queue).not.toContain("Bridge-version guard");
   const reused = selected(
@@ -307,6 +326,7 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
       context("push", "", {
         static_receipts: { outputs: { reuse_static_check_001: "true" } },
       }),
+      budgetOf,
     ),
   );
   expect(reused).not.toContain("Test unsignalled skip detection");
@@ -341,6 +361,7 @@ test("an unset root check selection keeps every pooled check, as GitHub reads it
           },
           inputs: { depth: "fast", heavy_only: false, pr_depth_only: true },
         }),
+        budgetOf,
       ).flatMap((entry) =>
         entry.status === "selected" ? [entry.check.name] : [],
       );
@@ -414,6 +435,7 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
               status: "selected",
               env: {},
               continueOnError: false,
+              budget: BUDGET,
             };
           }
           return entry.status === "skipped"
@@ -467,6 +489,7 @@ test("a launched check runs as a bash step with its env, output and timeout", as
       0,
       check("passes", { run: 'echo "out $POOL_VALUE"\necho err >&2\n' }),
       { POOL_VALUE: "set" },
+      BUDGET,
     );
     expect(passed).toMatchObject({ exitCode: 0, timedOut: false });
     expect(readFileSync(path.join(directory, "000.log"), "utf-8")).toBe(
@@ -477,6 +500,7 @@ test("a launched check runs as a bash step with its env, output and timeout", as
       1,
       check("fails", { run: "false | true\necho unreachable\n" }),
       {},
+      BUDGET,
     );
     expect(failed.exitCode).not.toBe(0);
     expect(readFileSync(path.join(directory, "001.log"), "utf-8")).toBe("");
@@ -496,6 +520,7 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
   for (const file of [
     "ci-check-pool.ts",
     "ci-check-pool-registry.ts",
+    "ci-check-budgets.ts",
     "github-expression.ts",
   ]) {
     copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
@@ -530,6 +555,27 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
         })),
         { name: "Later check", run: "sleep 600" },
       ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  // Unmeasured: each fixture check gets the long default budget.
+  writeFileSync(
+    path.join(scripts, "ci-check-budgets.json"),
+    JSON.stringify({
+      ...JSON.parse(
+        readFileSync(path.join(root, "scripts/ci-check-budgets.json"), "utf-8"),
+      ),
+      p95Seconds: {
+        "ci-checks-policy": {},
+        "ci-checks-rest": Object.fromEntries(
+          [
+            "Blocked first",
+            "Buffered failure",
+            ...Array.from({ length: 9 }, (_, index) => `Buffered log ${index}`),
+            "Later check",
+          ].map((name) => [name, null]),
+        ),
+        "code-quality-web-rest": {},
+      },
     }),
   );
   const child = Bun.spawn(
@@ -625,8 +671,10 @@ test("the summary table keeps one row per check whatever a failure says", () => 
       id: undefined,
       outcome: "failure",
       continuedOnError: false,
+      timedOut: false,
       detail: "exit code 1\nsee a|b \\ c",
       seconds: 1.25,
+      budget: BUDGET,
       maxRssBytes: 2 * 1_048_576,
     },
     {
@@ -634,16 +682,18 @@ test("the summary table keeps one row per check whatever a failure says", () => 
       id: undefined,
       outcome: "skipped",
       continuedOnError: false,
+      timedOut: false,
       detail: "condition false",
       seconds: 0,
+      budget: undefined,
       maxRssBytes: undefined,
     },
   ]).split("\n");
   expect(table).toHaveLength(4);
   expect(table[2]).toBe(
-    String.raw`| A \| B | failure: exit code 1 see a\|b \\ c | 1.3 | 2 |`,
+    String.raw`| A \| B | failure: exit code 1 see a\|b \\ c | 1.3 | 60 | 2 |`,
   );
-  expect(table[3]).toBe("| C | skipped |  |  |");
+  expect(table[3]).toBe("| C | skipped |  |  |  |");
 });
 
 test("continue-on-error lets a failed check pass the pool only when it holds", async () => {
@@ -652,7 +702,11 @@ test("continue-on-error lets a failed check pass the pool only when it holds", a
   const lenient = EXPRESSION("github.event_name == 'merge_group'");
   const run = async (declared: PoolCheck["continueOnError"], at = queue) =>
     runChecks({
-      planned: planChecks([check("fails", { continueOnError: declared })], at),
+      planned: planChecks(
+        [check("fails", { continueOnError: declared })],
+        at,
+        budgetOf,
+      ),
       concurrency: 1,
       report: () => undefined,
       launch: async (): Promise<Launched> => ({
@@ -686,7 +740,11 @@ test("an undecidable continue-on-error fails closed", async () => {
   expect(continueOnErrorHolds(unknown, queue)).toBe(false);
   expect(continueOnErrorHolds(EXPRESSION("("), queue)).toBe(false);
   const results = await runChecks({
-    planned: planChecks([check("fails", { continueOnError: unknown })], queue),
+    planned: planChecks(
+      [check("fails", { continueOnError: unknown })],
+      queue,
+      budgetOf,
+    ),
     concurrency: 1,
     report: () => undefined,
     launch: async (): Promise<Launched> => ({
@@ -790,6 +848,7 @@ test("the generated manifest guard defers the scan engine outside PR depth runs 
           outputs: { scan_engine_wasm_required: "true", ...outputs },
         },
       ),
+      budgetOf,
     );
     expect(planned?.status).toBe("selected");
     return planned?.status === "selected"
@@ -846,5 +905,152 @@ test("only a failed check's own error commands reach the job log", () => {
       "::warning::advisory note",
       ...flat,
     ].join("\n"),
+  );
+});
+
+const workflowJobTimeoutMinutes = (job: string) => {
+  const jobs =
+    typeof workflow === "object" && workflow !== null && "jobs" in workflow
+      ? workflow.jobs
+      : undefined;
+  const entry =
+    typeof jobs === "object" && jobs !== null && job in jobs
+      ? Reflect.get(jobs, job)
+      : undefined;
+  const minutes =
+    typeof entry === "object" && entry !== null
+      ? Reflect.get(entry, "timeout-minutes")
+      : undefined;
+  expect(typeof minutes, `${job} timeout-minutes`).toBe("number");
+  return Number(minutes);
+};
+// The pool step starts after checkout, install and preparation.
+const POOL_START_SECONDS = 300;
+// A command that bounds itself (`timeout 30s cmd`) fails as an anonymous
+// exit 124 before the pool's budget can report a typed timeout.
+const SELF_TIMEOUT = /(?:^|[\s;&|(`])timeout\s+(?:-\S+\s+)*\d/mu;
+
+test("every pooled check has one measured budget within its step and job deadlines", () => {
+  for (const job of CHECK_POOL_JOBS) {
+    const pooled = readCheckPool(job);
+    // The ledger covers exactly the registry: no check falls back to a
+    // default because it was forgotten, and a renamed one leaves no entry.
+    expect(
+      [...(CHECK_BUDGETS.p95Seconds.get(job)?.keys() ?? [])].toSorted(),
+      job,
+    ).toEqual(pooled.map(({ name }) => name).toSorted());
+    const jobSeconds = workflowJobTimeoutMinutes(job) * 60;
+    for (const entry of pooled) {
+      const label = `${job}/${entry.name}`;
+      const measured = checkBudget(job, entry.name, undefined);
+      expect(measured.p95Seconds, label).not.toBeNull();
+      // A step deadline below the measured budget would stop the check
+      // first; the job deadline would cancel the pool before it reports.
+      if (entry.timeoutMinutes !== undefined) {
+        expect(entry.timeoutMinutes * 60, label).toBeGreaterThanOrEqual(
+          measured.seconds,
+        );
+      }
+      expect(measured.seconds + POOL_START_SECONDS, label).toBeLessThanOrEqual(
+        jobSeconds,
+      );
+      expect(entry.run, label).not.toMatch(SELF_TIMEOUT);
+    }
+  }
+  expect("timeout 30s bun test x").toMatch(SELF_TIMEOUT);
+  expect("run || timeout -k 5 1m bun x").toMatch(SELF_TIMEOUT);
+  expect("bun test --timeout 35000 x").not.toMatch(SELF_TIMEOUT);
+});
+
+test("a check past its budget is stopped and reported as a typed infrastructure timeout", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-budget-"));
+  try {
+    const started = performance.now();
+    const results = await runChecks({
+      planned: planChecks(
+        [check("Slow", { run: "sleep 30" }), check("Fails", { run: "exit 3" })],
+        context("merge_group", ""),
+        () => ({ seconds: 0.2, p95Seconds: 0.1 }),
+      ),
+      concurrency: 2,
+      launch: processLauncher({ root, directory }),
+      report: () => undefined,
+    });
+    expect(performance.now() - started).toBeLessThan(5000);
+    const [slow, fails] = results;
+    expect(slow).toMatchObject({ outcome: "failure", timedOut: true });
+    expect(slow?.detail).toBe(
+      timeoutDetail(slow?.seconds ?? 0, { seconds: 0.2, p95Seconds: 0.1 }),
+    );
+    expect(slow?.detail).toContain("(budget 0.2 s from p95 0.1 s)");
+    expect(fails).toMatchObject({
+      outcome: "failure",
+      timedOut: false,
+      detail: "exit code 3",
+    });
+    // Only timeouts: automation may rerun. Any finding: a red result.
+    expect(failureKind(results.slice(0, 1))).toBe("infra");
+    expect(failureKind(results)).toBe("finding");
+    expect(failureKind([])).toBe("none");
+    expect(summaryTable(results).split("\n")[2]).toStartWith(
+      "| Slow | timeout (infra): timed out after ",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a timeout names its check, how long it ran and its budget", () => {
+  const cause = timedOutCheckCause(91.04, { seconds: 91, p95Seconds: 30.1 });
+  expect(cause).toBe(
+    `${TIMED_OUT_CHECK_CLASS} elapsed_s=91.0 budget_s=91 p95_s=30.1`,
+  );
+  expect(timedOutCheckCause(600, { seconds: 600, p95Seconds: null })).toEndWith(
+    "p95_s=unmeasured",
+  );
+  expect(
+    timedOutCheckAnnotation(
+      { name: "Check Docker source closure", detail: "timed out" },
+      cause,
+    ),
+  ).toBe(
+    `::error title=TIMED OUT check%3A Check Docker source closure::${cause}: timed out`,
+  );
+});
+
+test("a check that passes after most of its budget is a warning, not a failure", () => {
+  const budget = { seconds: 100, p95Seconds: 30 };
+  const passed = (seconds: number): CheckResult => ({
+    name: "Near",
+    id: undefined,
+    outcome: "success",
+    continuedOnError: false,
+    timedOut: false,
+    detail: "passed",
+    seconds,
+    budget,
+    maxRssBytes: undefined,
+  });
+  const threshold = budget.seconds * CHECK_BUDGETS.warnFraction;
+  expect(isNearBudget(passed(threshold - 0.1))).toBe(false);
+  expect(isNearBudget(passed(threshold))).toBe(true);
+  expect(blockingFailures([passed(99)])).toEqual([]);
+  expect(summaryTable([passed(99)]).split("\n")[2]).toBe(
+    "| Near | success (near budget) | 99.0 | 100 |  |",
+  );
+  expect(nearBudgetWarning(passed(99), budget)).toStartWith(
+    "::warning title=Check near its budget%3A Near::passed after 99.0 s, 99%25 of its budget 100 s from p95 30 s",
+  );
+});
+
+test("a selected check without a budget is invalid, never unbounded", () => {
+  const [planned] = planChecks(
+    [check("Unknown")],
+    context("merge_group", ""),
+    (entry) => checkBudget("ci-checks-rest", entry.name, undefined),
+  );
+  expect(planned?.status).toBe("invalid");
+  expect(planned?.status === "invalid" ? planned.message : "").toContain(
+    'ci-checks-rest: "Unknown" has no entry in scripts/ci-check-budgets.json',
   );
 });

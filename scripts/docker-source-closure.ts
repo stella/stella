@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { builtinModules } from "node:module";
 import path from "node:path";
 import ts from "typescript6";
@@ -1937,7 +1938,9 @@ export const checkDockerSource = (
   return [...new Set(problems)];
 };
 
-export const checkRepositoryDockerSources = (root: string): string[] => {
+export const checkRepositoryDockerSources = async (
+  root: string,
+): Promise<string[]> => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   if (tracked.exitCode !== 0) {
     panic("Cannot enumerate Docker sources");
@@ -1952,8 +1955,11 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
   const scratch = mkdtempSync(
     path.join(scratchParent, "docker-source-closure-"),
   );
+  const prunes: Bun.Subprocess<"ignore", "ignore", "pipe">[] = [];
   try {
-    for (const file of dockerfiles) {
+    // Every prune starts at once: each copies its workspace closure to disk,
+    // and one after another they were most of this check's time.
+    const stages = dockerfiles.map((file, index) => {
       const specificIgnore = `${file}.dockerignore`;
       const ignore = text(
         root,
@@ -1961,41 +1967,63 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
           ? specificIgnore
           : ".dockerignore",
       );
-      const context: SourceTree = new Map(
-        files
-          .filter((entry) => inDockerContext(entry, ignore))
-          .map((entry) => [`/${entry}`, entry]),
-      );
       const source = text(root, file);
       const scopes = dockerPruneScopes(source);
       if (scopes.length > 1) {
         panic(`Multiple prune graphs are unsupported: ${file}`);
       }
+      const directory = path.join(
+        scratch,
+        String(index),
+        file.replaceAll("/", "-"),
+      );
+      const prune =
+        scopes.length === 1
+          ? Bun.spawn(
+              [
+                path.join(root, "node_modules/.bin/turbo"),
+                "prune",
+                ...(scopes[0] ?? []),
+                "--docker",
+                `--out-dir=${directory}`,
+              ],
+              {
+                cwd: root,
+                env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" },
+                stdin: "ignore",
+                stdout: "ignore",
+                stderr: "pipe",
+              },
+            )
+          : undefined;
+      if (prune !== undefined) {
+        prunes.push(prune);
+      }
+      return { file, ignore, source, directory, prune };
+    });
+    const removals: Promise<void>[] = [];
+    for (const { file, ignore, source, directory, prune } of stages) {
+      const context: SourceTree = new Map(
+        files
+          .filter((entry) => inDockerContext(entry, ignore))
+          .map((entry) => [`/${entry}`, entry]),
+      );
       const pruned: SourceTree = new Map();
-      if (scopes.length === 1) {
-        const directory = path.join(
-          scratch,
-          String(problems.length),
-          file.replaceAll("/", "-"),
-        );
-        const prune = Bun.spawnSync(
-          [
-            path.join(root, "node_modules/.bin/turbo"),
-            "prune",
-            ...(scopes[0] ?? []),
-            "--docker",
-            `--out-dir=${directory}`,
-          ],
-          { cwd: root, env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" } },
-        );
-        if (prune.exitCode !== 0) {
-          panic(`Turbo prune failed for ${file}: ${prune.stderr.toString()}`);
+      if (prune !== undefined) {
+        const [exitCode, stderr] = await Promise.all([
+          prune.exited,
+          new Response(prune.stderr).text(),
+        ]);
+        if (exitCode !== 0) {
+          panic(`Turbo prune failed for ${file}: ${stderr}`);
         }
         for (const entry of filesBelow(path.join(directory, "full"))) {
           if (inDockerContext(entry, ignore)) {
             pruned.set(`/app/${entry}`, entry);
           }
         }
+        // Deleting the copy overlaps the closure check below.
+        removals.push(rm(directory, { recursive: true, force: true }));
       }
       problems.push(
         ...checkDockerSource(root, source, context, pruned).map(
@@ -2003,7 +2031,12 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
         ),
       );
     }
+    await Promise.all(removals);
   } finally {
+    for (const prune of prunes) {
+      prune.kill();
+    }
+    await Promise.all(prunes.map(({ exited }) => exited));
     rmSync(scratch, { recursive: true, force: true });
   }
   return problems;
@@ -2022,7 +2055,7 @@ if (import.meta.main) {
     process.exit(0);
   }
   const start = performance.now();
-  const problems = checkRepositoryDockerSources(
+  const problems = await checkRepositoryDockerSources(
     path.resolve(import.meta.dir, ".."),
   );
   if (problems.length > 0) {

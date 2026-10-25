@@ -237,7 +237,7 @@ export const BARE_EXIT_CAUSE = /^exit code -?\d+$/u;
 
 // The pool opens each check's log group with `<name>: <outcome> in <n> s`.
 const POOLED_GROUP_HEADER =
-  /^##\[group\](.*): (?:passed|FAILED(?: \(continue-on-error\))?) in [\d.]+ s$/u;
+  /^##\[group\](.*): (?:passed|(?:FAILED|TIMED OUT)(?: \(continue-on-error\))?) in [\d.]+ s$/u;
 
 type PooledFailureRecord = {
   readonly name: string;
@@ -680,10 +680,11 @@ const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   });
 
 const ERROR_COMMAND = "##[error]";
-// Typed infrastructure annotations: installer stalls and signals, and an E2E
-// stack whose image pulls were rate limited.
-const INSTALL_INFRA_FAILURE =
-  /^kind=infra\s+class=(?:install-(?:stall|signal)|e2e-stack-rate-limited)\b/u;
+// Typed infrastructure annotations: installer stalls and signals, an E2E
+// stack whose image pulls were rate limited, and a pooled check stopped at
+// its time budget (TIMED_OUT_CHECK_CLASS in ci-check-pool.ts).
+export const TYPED_INFRA_FAILURE =
+  /^kind=infra\s+class=(?:install-(?:stall|signal)|e2e-stack-rate-limited|check-timeout)\b/u;
 const GENERIC_PROCESS_EXIT =
   /^(?:Error:\s*)?Process completed with exit code \d+\.?$/u;
 // The installer prints this status after its typed signal/stall annotation.
@@ -911,7 +912,7 @@ export const failureLines = (
   const installFailures = dedupe(
     lines.flatMap(({ text }) => {
       const message = withoutErrorCommand(text);
-      return INSTALL_INFRA_FAILURE.test(message)
+      return TYPED_INFRA_FAILURE.test(message)
         ? [{ message: truncate(message) }]
         : [];
     }),
@@ -1002,7 +1003,7 @@ export const failureLines = (
       // Reserve room for both, keeping code evidence first if the limit is small.
       const independent = found.filter(
         ({ message }) =>
-          !INSTALL_INFRA_FAILURE.test(message) &&
+          !TYPED_INFRA_FAILURE.test(message) &&
           !GENERIC_PROCESS_EXIT.test(message) &&
           !INSTALL_SIGNAL_EXIT.test(message),
       );
@@ -1032,7 +1033,7 @@ export const classify = (
     );
   if (
     substantive.length > 0 &&
-    substantive.every((message) => INSTALL_INFRA_FAILURE.test(message))
+    substantive.every((message) => TYPED_INFRA_FAILURE.test(message))
   ) {
     return "infra";
   }
@@ -1281,6 +1282,10 @@ const pooledLines = (
   cause: string,
   groupLines: readonly string[],
 ): FailureLine[] => {
+  // A timeout's partial output is no finding: the typed cause stands alone.
+  if (TYPED_INFRA_FAILURE.test(cause)) {
+    return [{ message: truncate(cause) }];
+  }
   const generic = BARE_EXIT_CAUSE.test(cause) || RUNNER_EXIT.test(cause);
   const own = checkOutputLines(
     groupLines,

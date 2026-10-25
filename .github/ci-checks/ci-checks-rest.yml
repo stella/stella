@@ -4,7 +4,9 @@
 # command, timeout), the pool evaluates the condition against the job's
 # context, runs the selected checks concurrently (one fewer than the runner
 # CPUs) and prints their logs in this order. Workflow guards read these
-# entries as steps of the job (scripts/workflow-steps.ts).
+# entries as steps of the job (scripts/workflow-steps.ts). Each check's time
+# budget derives from its measured p95 in scripts/ci-check-budgets.json; a
+# command never wraps itself in its own `timeout`.
 checks:
   - name: Content delivery declarations
     env:
@@ -955,8 +957,7 @@ checks:
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_066
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_066 != 'true') }}
-    timeout-minutes: 1
-    run: timeout 30s bun test scripts/docker-source-closure.test.ts
+    run: bun test scripts/docker-source-closure.test.ts
 
   # The same transformation decides what every published tarball exports.
   # Its unit coverage is what keeps a malformed source map — a wildcard, a

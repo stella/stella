@@ -15,6 +15,7 @@ import {
   exitCodeDetail,
   FAILED_CHECK_RECORD,
   failedCheckRecord,
+  timedOutCheckCause,
 } from "./ci-check-pool";
 import {
   annotations,
@@ -52,6 +53,7 @@ import {
   stripAnsi,
   summaryMarkdown,
   testFailures,
+  TYPED_INFRA_FAILURE,
 } from "./ci-failure-digest";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -1846,4 +1848,50 @@ test("show prints a run's digest from its artifact, else from its job logs", () 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("a pooled check stopped at its budget is an infrastructure record, never a finding", () => {
+  const cause = timedOutCheckCause(91, { seconds: 91, p95Seconds: 30.1 });
+  expect(TYPED_INFRA_FAILURE.test(cause)).toBe(true);
+  // A killed test file leaves partial output; none of it is the cause.
+  const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-rest", [
+    "##[group]Check Docker source closure: TIMED OUT in 91.0 s",
+    "(pass) Docker source closure > keeps commands after comment lines [0.12ms]",
+    "(fail) Docker source closure > a test the kill interrupted",
+    "error: expected value",
+    "##[endgroup]",
+    `##[error]${cause}: timed out after 91.0 s`,
+    failedCheckRecord("Check Docker source closure", cause),
+    "##[group]Ratchet guard: FAILED in 3.0 s",
+    "ratchet --check: invalid increase allowances:",
+    "##[endgroup]",
+    `##[error]${exitCodeDetail(1)}`,
+    failedCheckRecord("Ratchet guard", exitCodeDetail(1)),
+    "1 check(s) failed: Ratchet guard",
+    "1 check(s) timed out at their budget (infrastructure, not a finding): Check Docker source closure",
+    "##[error]Process completed with exit code 1.",
+  ]).join("\n");
+  const job = {
+    id: 16,
+    name: "ci-checks-rest (1)",
+    conclusion: "failure",
+    html_url: "https://github.com/o/r/actions/runs/1/job/16",
+    steps: [
+      {
+        name: "Run repository checks",
+        number: 4,
+        conclusion: "failure",
+        started_at: "2026-10-25T16:00:04Z",
+        completed_at: "2026-10-25T16:10:05Z",
+      },
+    ],
+  };
+  const [timeout, ratchet] = buildDigest({ jobs: [job], logFor: () => log });
+  expect(timeout).toMatchObject({
+    step: "Check Docker source closure",
+    kind: "infra",
+    lines: [{ message: cause }],
+  });
+  expect(ratchet?.step).toBe("Ratchet guard");
+  expect(ratchet?.kind).not.toBe("infra");
 });

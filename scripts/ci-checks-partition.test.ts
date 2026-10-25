@@ -780,6 +780,19 @@ const withoutTestTimeout = (step: Step): Step => {
   };
 };
 
+// A command's own time limit is budget metadata, as `timeout-minutes` is: the
+// pool owns each check's budget (scripts/ci-check-budgets.json).
+const withoutCommandTimeout = (step: Step): Step => {
+  const run = step["run"];
+  if (typeof run !== "string") {
+    return step;
+  }
+  return {
+    ...step,
+    run: run.replaceAll(/^(\s*)timeout (?:-\S+ )*\d+[smhd]? /gmu, "$1"),
+  };
+};
+
 // Delegation drops only a family whose owning job runs the same check in this
 // run; scripts/generated-files-guard.test.ts binds it to that job's `if:`.
 const withoutDelegatedGeneratorChecks = (step: Step): Step => {
@@ -914,6 +927,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
+    .map(withoutCommandTimeout)
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
     .map(withoutStepId)

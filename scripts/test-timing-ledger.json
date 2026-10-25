@@ -4830,11 +4830,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::scripts/docker-source-closure.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::scripts/e2e-geometry-shards.test.ts::<module>::test timeout",
     "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
