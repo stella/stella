@@ -22,6 +22,7 @@ import { printError } from "@stll/errors";
 
 import { isValidPolarity } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 
 type Args = {
@@ -275,7 +276,8 @@ const main = async () => {
         if (result.state === "undecided") {
           console.log("LLM classification failed.");
         } else {
-          const color = POLARITY_COLORS[result.answer.choice];
+          const color =
+            POLARITY_COLORS[POLARITY_READINGS[result.answer.choice].polarity];
           console.log(
             `\n${color}${result.answer.choice.toUpperCase()}${RESET}` +
               ` (confidence: ${result.confidence})`,

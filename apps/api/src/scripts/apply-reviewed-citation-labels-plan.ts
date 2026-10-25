@@ -26,6 +26,8 @@ import type {
   CitationReviewStanding,
   ReviewablePolarity,
 } from "@/api/handlers/case-law/polarity/consts";
+import { reviewTextEligibleSql } from "@/api/handlers/case-law/polarity/reviews";
+import { citationTextRevisionFingerprintFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -110,6 +112,7 @@ export const aiReviewEntries = {
   promptSha256: sha256Schema,
   /** Digest of the passage the label was read from. */
   evidenceSha256: sha256Schema,
+  textRevisionSha256: sha256Schema,
   runId: provenanceTextSchema,
   producedAt: v.pipe(
     v.string(),
@@ -201,6 +204,7 @@ type CitationReviewProvenance =
       promptVersion: string;
       promptSha256: string;
       evidenceSha256: string;
+      textRevisionSha256: string;
       runId: string;
       producedAt: string;
     };
@@ -219,6 +223,7 @@ const provenanceOf = (
         promptVersion: entry.promptVersion,
         promptSha256: entry.promptSha256,
         evidenceSha256: entry.evidenceSha256,
+        textRevisionSha256: entry.textRevisionSha256,
         runId: entry.runId,
         producedAt: entry.producedAt,
       };
@@ -234,6 +239,7 @@ type ProvenanceColumns = {
   promptVersion: string | null;
   promptSha256: string | null;
   evidenceSha256: string | null;
+  textRevisionSha256: string | null;
   runId: string | null;
   producedAt: string | null;
 };
@@ -250,6 +256,7 @@ const provenanceColumns = (
         promptVersion: null,
         promptSha256: null,
         evidenceSha256: null,
+        textRevisionSha256: null,
         runId: null,
         producedAt: null,
       };
@@ -261,6 +268,7 @@ const provenanceColumns = (
         promptVersion: provenance.promptVersion,
         promptSha256: provenance.promptSha256,
         evidenceSha256: provenance.evidenceSha256,
+        textRevisionSha256: provenance.textRevisionSha256,
         runId: provenance.runId,
         producedAt: provenance.producedAt,
       };
@@ -276,6 +284,7 @@ const REVIEWED_LABEL_OUTCOMES = [
   "unmatched",
   "refused-precedence",
   "invalid",
+  "stale",
 ] as const;
 
 type ReviewedLabelOutcome = (typeof REVIEWED_LABEL_OUTCOMES)[number];
@@ -286,6 +295,7 @@ export const REVIEWED_LABEL_OUTCOME = {
   UNMATCHED: "unmatched",
   REFUSED_PRECEDENCE: "refused-precedence",
   INVALID: "invalid",
+  STALE: "stale",
 } as const satisfies ConstantMap<ReviewedLabelOutcome>;
 
 const REVIEWED_LABEL_INVALID_REASONS = [
@@ -646,17 +656,21 @@ const labelValues = (
 ): SQL => sql`(
   VALUES ${sql.join(
     labels.map((label, ord) => {
+      const checked = assertCitationStorageField("key", label.citationKey);
+      if (checked.isErr()) {
+        throw checked.error;
+      }
       const columns = provenanceColumns(label.provenance);
-      return sql`(${ord}::int, ${label.citingDecisionId}::uuid, ${label.citationKey}::varchar, ${label.treatment}::varchar, ${label.reviewRef}::varchar, ${columns.origin}::text, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.runId}::text, ${columns.producedAt}::timestamptz${domain.type === "doctrine" ? sql`, ${label.evidenceQuote}::text` : sql``})`;
+      return sql`(${ord}::int, ${label.citingDecisionId}::uuid, ${checked.value}::varchar, ${label.treatment}::varchar, ${label.reviewRef}::varchar, ${columns.origin}::text, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.textRevisionSha256}::varchar, ${columns.runId}::text, ${columns.producedAt}::timestamptz, ${domain.type === "doctrine" ? createSafeId<"caseLawCitationDoctrineReview">() : createSafeId<"caseLawCitationReview">()}::uuid${domain.type === "doctrine" ? sql`, ${label.evidenceQuote}::text` : sql``})`;
     }),
     sql`, `,
   )}
-) AS v(ord, citing_decision_id, citation_key, ${treatmentColumn(domain)}, review_ref, origin, model, prompt_version, prompt_sha256, evidence_sha256, run_id, produced_at${domain.type === "doctrine" ? sql`, evidence_quote` : sql``})`;
+) AS v(ord, citing_decision_id, citation_key, ${treatmentColumn(domain)}, review_ref, origin, model, prompt_version, prompt_sha256, evidence_sha256, text_revision_sha256, run_id, produced_at, review_id${domain.type === "doctrine" ? sql`, evidence_quote` : sql``})`;
 
 /** Every stored field of a review, for comparing a stored one with another. */
 const reviewTuple = (alias: string, domain: CitationLabelDomain): SQL =>
   sql.raw(
-    `(${alias}.${domain.type === "doctrine" ? "doctrinal_treatment" : "polarity"}, ${alias}.review_ref, ${alias}.origin, ${alias}.model, ${alias}.prompt_version, ${alias}.prompt_sha256::text, ${alias}.evidence_sha256::text, ${alias}.run_id, ${alias}.produced_at${domain.type === "doctrine" ? `, ${alias}.evidence_quote` : ""})`,
+    `(${alias}.${domain.type === "doctrine" ? "doctrinal_treatment" : "polarity"}, ${alias}.review_ref, ${alias}.origin, ${alias}.model, ${alias}.prompt_version, ${alias}.prompt_sha256::text, ${alias}.evidence_sha256::text, ${alias}.text_revision_sha256::text, ${alias}.run_id, ${alias}.produced_at${domain.type === "doctrine" ? `, ${alias}.evidence_quote` : ""})`,
   );
 
 /**
@@ -689,21 +703,33 @@ export const reviewMayReplaceSql = ({
   const storedOrigin = sql.raw(`${stored}.origin`);
   const incomingOrigin = sql.raw(`${incoming}.origin`);
   const human = sql`${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}::text`;
-  return sql`COALESCE(
+  const storedEligible = reviewTextEligibleSql({
+    origin: storedOrigin,
+    citingDecisionId: sql.raw(`${stored}.citing_decision_id`),
+    textRevisionSha256: sql.raw(`${stored}.text_revision_sha256`),
+  });
+  return sql`(NOT ${storedEligible} OR COALESCE(
     ${incomingRank} < ${storedRank}
     OR (${incomingRank} = ${storedRank}
         AND ((${incomingOrigin} = ${human} AND ${storedOrigin} = ${human})
           OR (${incomingOrigin} <> ${human} AND ${storedOrigin} <> ${human}
               AND ${sql.raw(`${incoming}.produced_at`)} > ${sql.raw(`${stored}.produced_at`)}))),
-    false)`;
+    false))`;
 };
+
+const incomingTextRevisionFence = citationTextRevisionFingerprintFence({
+  citingDecisionId: sql`v.citing_decision_id`,
+  expectedFingerprint: sql`v.text_revision_sha256`,
+});
+
+const incomingReviewEligibleSql = sql`(v.origin = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW} OR ${incomingTextRevisionFence})`;
 
 /** Rows a label changes: any other polarity, or a rule attribution. */
 const citationDiffersSql = (
   domain: CitationLabelDomain,
 ) => sql`c.citing_decision_id = v.citing_decision_id
    AND c.citation_key = v.citation_key
-   AND (${domain.type === "doctrine" ? sql`c.doctrinal_treatment IS DISTINCT FROM v.doctrinal_treatment` : sql`c.polarity IS DISTINCT FROM v.polarity OR c.polarity_rule_id IS NOT NULL`})`;
+   AND (${domain.type === "doctrine" ? sql`c.doctrinal_treatment IS DISTINCT FROM v.doctrinal_treatment` : sql`c.polarity IS DISTINCT FROM v.polarity OR c.polarity_rule_id IS NOT NULL OR c.polarity_source IS DISTINCT FROM 'review'`})`;
 
 /** Per label, in input order: the stored review and the citation rows it covers. */
 const reviewedLabelStateStatement = (
@@ -711,6 +737,7 @@ const reviewedLabelStateStatement = (
   domain: CitationLabelDomain,
 ): SQL => sql`
   SELECT v.ord,
+         ${incomingReviewEligibleSql} AS text_current,
          (r.id IS NOT NULL
            AND ${reviewTuple("r", domain)} IS NOT DISTINCT FROM ${reviewTuple("v", domain)}) AS same_review,
          (r.id IS NULL OR ${reviewMayReplaceSql({ stored: "r", incoming: "v" })}) AS may_replace,
@@ -728,6 +755,7 @@ const reviewedLabelStateStatement = (
 
 const labelStateRowSchema = v.object({
   ord: v.number(),
+  text_current: v.boolean(),
   same_review: v.boolean(),
   may_replace: v.boolean(),
   citation_rows: v.number(),
@@ -740,6 +768,7 @@ type AcceptedOutcome = Exclude<
   ReviewedLabelOutcome,
   | typeof REVIEWED_LABEL_OUTCOME.INVALID
   | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE
+  | typeof REVIEWED_LABEL_OUTCOME.STALE
 >;
 
 /**
@@ -748,7 +777,13 @@ type AcceptedOutcome = Exclude<
  */
 const outcomeOf = (
   state: LabelState,
-): AcceptedOutcome | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE => {
+):
+  | AcceptedOutcome
+  | typeof REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE
+  | typeof REVIEWED_LABEL_OUTCOME.STALE => {
+  if (!state.text_current) {
+    return REVIEWED_LABEL_OUTCOME.STALE;
+  }
   if (state.same_review) {
     return state.changed_rows > 0
       ? REVIEWED_LABEL_OUTCOME.APPLIED
@@ -790,15 +825,40 @@ const planReviewedLabels = (
 ): PlannedLabels => {
   const accepted: AcceptedLabel[] = [];
   const refused: ReviewedLabelRowResult[] = [];
-  for (const row of stateRows) {
+  const states = stateRows.map((row) => {
     const state = v.parse(labelStateRowSchema, row);
     const label = labels.at(state.ord);
     if (label === undefined) {
       return panic(`label state for an unknown ordinal ${state.ord}`);
     }
+    return { state, label };
+  });
+  for (const { state, label } of states) {
+    if (!state.text_current) {
+      refused.push({
+        ...label.ids,
+        index: label.index,
+        outcome: REVIEWED_LABEL_OUTCOME.STALE,
+      });
+    }
+  }
+  const current = states.filter(({ state }) => state.text_current);
+  const stateByIndex = new Map(
+    current.map(({ label, state }) => [label.index, state]),
+  );
+  const settled = settleDuplicateLabels(current.map(({ label }) => label));
+  refused.push(...settled.settled);
+  for (const label of settled.labels) {
+    const state = stateByIndex.get(label.index);
+    if (state === undefined) {
+      return panic(`settled label without state at index ${label.index}`);
+    }
     const outcome = outcomeOf(state);
-    if (outcome === REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE) {
-      refused.push(refusedRow(label));
+    if (
+      outcome === REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE ||
+      outcome === REVIEWED_LABEL_OUTCOME.STALE
+    ) {
+      refused.push({ ...label.ids, index: label.index, outcome });
       continue;
     }
     accepted.push({
@@ -822,18 +882,13 @@ const upsertReviewsStatement = (
 ): SQL => sql`
   INSERT INTO ${reviewTable(domain)} AS r
     (id, citing_decision_id, citation_key, ${treatmentColumn(domain)}, review_ref, origin,
-     model, prompt_version, prompt_sha256, evidence_sha256, run_id, produced_at${domain.type === "doctrine" ? sql`, evidence_quote` : sql``})
-  VALUES ${sql.join(
-    labels.map((label) => {
-      const checked = assertCitationStorageField("key", label.citationKey);
-      if (checked.isErr()) {
-        throw checked.error;
-      }
-      const columns = provenanceColumns(label.provenance);
-      return sql`(${domain.type === "doctrine" ? createSafeId<"caseLawCitationDoctrineReview">() : createSafeId<"caseLawCitationReview">()}::uuid, ${label.citingDecisionId}::uuid, ${checked.value}, ${label.treatment}, ${label.reviewRef}, ${columns.origin}, ${columns.model}::text, ${columns.promptVersion}::text, ${columns.promptSha256}::text, ${columns.evidenceSha256}::text, ${columns.runId}::text, ${columns.producedAt}::timestamptz${domain.type === "doctrine" ? sql`, ${label.evidenceQuote}::text` : sql``})`;
-    }),
-    sql`, `,
-  )}
+     model, prompt_version, prompt_sha256, evidence_sha256, text_revision_sha256, run_id, produced_at${domain.type === "doctrine" ? sql`, evidence_quote` : sql``})
+  SELECT v.review_id, v.citing_decision_id, v.citation_key,
+         v.${treatmentColumn(domain)}, v.review_ref, v.origin, v.model,
+         v.prompt_version, v.prompt_sha256, v.evidence_sha256,
+         v.text_revision_sha256, v.run_id, v.produced_at${domain.type === "doctrine" ? sql`, v.evidence_quote` : sql``}
+    FROM ${labelValues(labels, domain)}
+   WHERE ${incomingReviewEligibleSql}
   ON CONFLICT (citing_decision_id, citation_key) DO UPDATE
      ${domain.type === "doctrine" ? sql`SET doctrinal_treatment = excluded.doctrinal_treatment, evidence_quote = excluded.evidence_quote,` : sql`SET polarity = excluded.polarity,`}
          review_ref = excluded.review_ref,
@@ -842,6 +897,7 @@ const upsertReviewsStatement = (
          prompt_version = excluded.prompt_version,
          prompt_sha256 = excluded.prompt_sha256,
          evidence_sha256 = excluded.evidence_sha256,
+         text_revision_sha256 = excluded.text_revision_sha256,
          run_id = excluded.run_id,
          produced_at = excluded.produced_at,
          reviewed_at = now(),
@@ -862,14 +918,15 @@ const relabelCitationsStatement = (
   domain: CitationLabelDomain,
 ): SQL => sql`
   UPDATE case_law_citations AS c
-     SET ${domain.type === "doctrine" ? sql`doctrinal_treatment = r.doctrinal_treatment` : sql`polarity = r.polarity, polarity_rule_id = NULL`}
+     SET ${domain.type === "doctrine" ? sql`doctrinal_treatment = r.doctrinal_treatment` : sql`polarity = r.polarity, polarity_rule_id = NULL, polarity_source = 'review', polarity_classifier_version = NULL, polarity_evidence_windows = NULL, polarity_confidence = NULL`}
     FROM ${labelValues(labels, domain)}
     JOIN ${reviewTable(domain)} r
       ON r.citing_decision_id = v.citing_decision_id
      AND r.citation_key = v.citation_key
    WHERE c.citing_decision_id = r.citing_decision_id
      AND c.citation_key = r.citation_key
-     AND (${domain.type === "doctrine" ? sql`c.doctrinal_treatment IS DISTINCT FROM r.doctrinal_treatment` : sql`c.polarity IS DISTINCT FROM r.polarity OR c.polarity_rule_id IS NOT NULL`})
+     AND ${incomingReviewEligibleSql}
+     AND (${domain.type === "doctrine" ? sql`c.doctrinal_treatment IS DISTINCT FROM r.doctrinal_treatment` : sql`c.polarity IS DISTINCT FROM r.polarity OR c.polarity_rule_id IS NOT NULL OR c.polarity_source IS DISTINCT FROM 'review'`})
   RETURNING c.id
 `;
 
@@ -914,6 +971,7 @@ const summarize = (
     unmatched: count(REVIEWED_LABEL_OUTCOME.UNMATCHED),
     "refused-precedence": count(REVIEWED_LABEL_OUTCOME.REFUSED_PRECEDENCE),
     invalid: count(REVIEWED_LABEL_OUTCOME.INVALID),
+    stale: count(REVIEWED_LABEL_OUTCOME.STALE),
     citationRows,
   };
 };
@@ -984,10 +1042,9 @@ const decideReviewedLabels = async ({
     admittedIdentities,
     existingDecisions,
   );
-  const settled = settleDuplicateLabels(resolved.labels);
   const planned: PlannedLabels = { accepted: [], refused: [] };
   for (const currentDomain of domainsOf(domain)) {
-    const labels = settled.labels.filter(
+    const labels = resolved.labels.filter(
       (label) => label.type === currentDomain.type,
     );
     if (labels.length === 0) {
@@ -1004,7 +1061,7 @@ const decideReviewedLabels = async ({
     planned.refused.push(...current.refused);
   }
   return {
-    settled: [...parsed.invalid, ...resolved.invalid, ...settled.settled],
+    settled: [...parsed.invalid, ...resolved.invalid],
     planned,
   };
 };

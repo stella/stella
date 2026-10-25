@@ -7,6 +7,8 @@
  * domain to each other in both directions, so neither can move alone.
  */
 
+import type { ConstantMap } from "../constant-map";
+
 /**
  * One side of the citation graph, seen from a decision: the decisions it
  * cites (`outgoing`) or the decisions that cite it (`incoming`). Citing is
@@ -49,3 +51,27 @@ export const CITATION_TREATMENTS = [
   "unclassified",
 ] as const;
 export type CitationTreatment = (typeof CITATION_TREATMENTS)[number];
+
+/** The classifier tier or review that owns the stored polarity. */
+export const CITATION_POLARITY_SOURCES = [
+  "rule",
+  "system-one",
+  "llm",
+  "review",
+] as const;
+export type CitationPolaritySource = (typeof CITATION_POLARITY_SOURCES)[number];
+
+/** The opinion the citing text explicitly identifies; absence is not majority. */
+export const CITED_PARTS = [
+  "majority",
+  "dissent",
+  "concurrence",
+  "not-stated",
+] as const;
+export const CITED_PART = {
+  MAJORITY: CITED_PARTS[0],
+  DISSENT: CITED_PARTS[1],
+  CONCURRENCE: CITED_PARTS[2],
+  NOT_STATED: CITED_PARTS[3],
+} as const satisfies ConstantMap<CitedPart>;
+export type CitedPart = (typeof CITED_PARTS)[number];

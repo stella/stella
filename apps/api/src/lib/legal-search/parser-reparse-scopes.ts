@@ -109,231 +109,231 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_US]: {
-    version: 27,
-    scope: {
-      type: "all",
-      reason:
-        "the bench read from the opening sentence is part of the judges every re-parse replaces, which have no feature storage of their own",
-    },
-  },
-  [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.SK_US]: {
-    version: 12,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
-    version: 14,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_SN]: {
-    version: 7,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIO]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
-    },
-  },
-  [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 13,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.AT_COURTS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VFGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VWGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_LVWG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_ASYLGH]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UBAS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UVS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_VERG]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_UMSE]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_BKS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 10,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.EU_ECJ]: {
-    version: 16,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.HU_BHGY]: {
     version: 20,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
-  [ADAPTER_KEYS.PL_KIS]: {
-    version: 9,
+  [ADAPTER_KEYS.CZ_NSS]: {
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
-  [ADAPTER_KEYS.PL_UODO]: {
+  [ADAPTER_KEYS.CZ_US]: {
+    version: 28,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.SK_COURTS]: {
+    version: 18,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.SK_US]: {
     version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
-  [ADAPTER_KEYS.PL_UOKIK]: {
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 15,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_SN]: {
+    version: 8,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIO]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_TK]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NSA]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    version: 14,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_COURTS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VFGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VWGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BVWG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_LVWG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_ASYLGH]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UBAS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UVS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_VERG]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_UMSE]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_BKS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason: "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.AT_FINDOK]: {
     version: 11,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
-  [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+  [ADAPTER_KEYS.EU_ECJ]: {
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.HU_BHGY]: {
+    version: 21,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIS]: {
+    version: 10,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UODO]: {
+    version: 14,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    version: 12,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    version: 4,
+    scope: {
+      type: "all",
+      reason:
+        "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts.",
     },
   },
 } as const satisfies ParserVersionScopes<
