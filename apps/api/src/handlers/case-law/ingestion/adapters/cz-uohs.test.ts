@@ -702,7 +702,7 @@ describe("ÚOHS decisions listed without a storable IRI", () => {
     const requested = serve([keyed, empty, overLong, unnamed]);
     const page = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
     expect(requested).not.toContain(PDF_URL);
-    expect(
+    expect<unknown>(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual([emptyId, keyed.iri, overLongId]);
     for (const [record, reason] of [
@@ -756,8 +756,10 @@ describe("ÚOHS decisions listed without a storable IRI", () => {
     const decision = await buildCzUohsDecision(
       parseCzUohsListing({ rozhodnutí: [recovered] })[0]!,
     );
-    expect(decision.sourceDocumentId).toBe(RECOVERED_IRI);
-    expect(decision.sourceDocumentIdRepairAliases).toEqual([quarantineId]);
+    expect<string | undefined>(decision.sourceDocumentId).toBe(RECOVERED_IRI);
+    expect<unknown>(decision.sourceDocumentIdRepairAliases).toEqual([
+      quarantineId,
+    ]);
     const quarantined = await buildCzUohsDecision(
       parseCzUohsListing({ rozhodnutí: [empty] })[0]!,
     );

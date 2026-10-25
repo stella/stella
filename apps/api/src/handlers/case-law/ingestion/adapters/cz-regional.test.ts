@@ -783,8 +783,8 @@ describe("a row an earlier parser stored keeps its key", () => {
     expect(built.type).toBe("built");
     const decision = built.type === "built" ? built.decision : undefined;
     expect(decision?.sourceDocumentId).toBeUndefined();
-    expect(decision?.caseNumber).toBe("");
-    expect(decision?.court).toBe(item.soud ?? "");
+    expect<string | undefined>(decision?.caseNumber).toBe("");
+    expect<string | undefined>(decision?.court).toBe(item.soud ?? "");
     expect(decision?.sourceDocumentIdRepairAliases).toBeUndefined();
     expect(decision?.metadata["identityQuarantined"]).toBeUndefined();
 
@@ -797,7 +797,7 @@ describe("a row an earlier parser stored keeps its key", () => {
       const page = (
         await czRegionalAdapter.fetchPage("2025-06-11:0", {})
       ).unwrap();
-      expect(page.decisions).toEqual([decision]);
+      expect<unknown>(page.decisions).toEqual([decision]);
       // No listing identity can name an empty case number, and a key the
       // stored row never matches would hunt it forever: the ledger counts
       // it as a record it cannot key.

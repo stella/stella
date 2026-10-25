@@ -152,7 +152,7 @@ const listSlicePass = async ({
       [...listing.keyed.values()].map(({ identity, quarantinePeers }) => ({
         sourceDocumentId:
           identity.type === "document" ? identity.sourceDocumentId : "",
-        quarantinePeers: quarantinePeers ?? [],
+        quarantinePeers,
       })),
     );
     return listing;

@@ -721,7 +721,7 @@ export const runIngestionPipeline = async ({
     for (const peer of quarantinePeerCollisions(
       decisions.map((decision) => ({
         sourceDocumentId: decision.sourceDocumentId ?? "",
-        quarantinePeers: decision.sourceDocumentIdRepairAliases ?? [],
+        quarantinePeers: decision.sourceDocumentIdRepairAliases,
       })),
     )) {
       logger.warn("case_law.ingestion.quarantine_peer_collision", {

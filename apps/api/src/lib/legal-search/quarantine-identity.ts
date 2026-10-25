@@ -165,9 +165,9 @@ type QuarantinePeerObservation = {
   readonly sourceDocumentId: string;
   /**
    * For a record keyed on a publisher id, the quarantine ids an id-less
-   * listing of it would get; empty for any other record.
+   * listing of it would get; absent for any other record.
    */
-  readonly quarantinePeers: readonly string[];
+  readonly quarantinePeers?: readonly string[] | undefined;
 };
 
 /**
@@ -193,7 +193,9 @@ export const quarantinePeerCollisions = (
   return [
     ...new Set(
       observations.flatMap(({ quarantinePeers }) =>
-        quarantinePeers.filter((peer) => quarantined.has(peer)),
+        quarantinePeers === undefined
+          ? []
+          : quarantinePeers.filter((peer) => quarantined.has(peer)),
       ),
     ),
   ];
