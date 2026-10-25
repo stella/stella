@@ -236,6 +236,9 @@ type LoopContext = "loop" | "fan-out";
 
 const toPosix = (file: string): string => file.replaceAll(path.sep, "/");
 
+const hasModifiers = (node: ts.Node): node is ts.Node & ts.ModifiersBase =>
+  "modifiers" in node;
+
 const declarationsOf = async (
   symbol: CompilerSymbol | undefined,
 ): Promise<ts.Declaration[]> => {
@@ -953,7 +956,7 @@ export const scanDbAwaitInLoop = async ({
       (await everyAsync(properties, async (property) =>
         (await declarationsOf(property)).some(
           (declaration) =>
-            "modifiers" in declaration &&
+            hasModifiers(declaration) &&
             declaration.modifiers?.some(
               (modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword,
             ),

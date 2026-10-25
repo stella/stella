@@ -774,7 +774,10 @@ const isBetterResultVariant = async (
     !(
       await Promise.all(
         symbol.declarations.map(async (declaration) =>
-          isBetterResultDeclaration(await declaration.resolve()),
+          isBetterResultDeclaration(
+            (await declaration.resolve()) ??
+              panic("A Result declaration handle did not resolve"),
+          ),
         ),
       )
     ).some(Boolean)
@@ -835,7 +838,10 @@ const promiseFulfilledValueType = async (
   if (
     symbol?.name !== "PromiseFulfilledResult" ||
     !(await asyncSome(symbol.declarations, async (handle) =>
-      (await handle.resolve())
+      (
+        (await handle.resolve()) ??
+        panic("A promise declaration handle did not resolve")
+      )
         .getSourceFile()
         .fileName.replaceAll("\\", "/")
         .endsWith("/lib.es2020.promise.d.ts"),
@@ -905,7 +911,10 @@ const isUnwrapWithoutMessage = async (
   const signature = await checker.getResolvedSignature(call);
   if (
     signature.declaration === undefined ||
-    !isBetterResultDeclaration(await signature.declaration.resolve())
+    !isBetterResultDeclaration(
+      (await signature.declaration.resolve()) ??
+        panic("A Result signature declaration handle did not resolve"),
+    )
   ) {
     return false;
   }
