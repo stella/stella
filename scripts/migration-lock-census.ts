@@ -736,6 +736,30 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "The origin CHECK is added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
   },
   {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-column",
+    reason:
+      "The two nullable, default-free UUID binding columns are catalog-only additions without a table rewrite; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-constraint",
+    reason:
+      "The single-binding CHECK is added NOT VALID, enforcing new writes without scanning existing rows; the gated online phase validates it after deploy, with this catalog addition bounded by 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-foreign-key",
+    reason:
+      "The two composite binding foreign keys retain organization identity and are added NOT VALID without scanning existing rows; validation runs through the online table gate, while pre-deploy lock acquisition is bounded by 1s and each catalog statement by 5s.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "create-policy",
+    reason:
+      "The seven replacement policies retain organization and visibility checks, add binding reach, and allow a matter-bound skill's author to write it; each catalog-only replacement stays in the migration transaction under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:

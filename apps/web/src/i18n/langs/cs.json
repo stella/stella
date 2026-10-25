@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Jeden klient",
+      "availabilityClientBadgeHelp": "Dostupná jen ve spisech jednoho klienta.",
+      "availabilityClientHelp": "Použitelná jen ve spisech tohoto klienta. Později to nelze změnit.",
+      "availabilityFixedHelp": "Nastaveno při vytvoření dovednosti. Nelze to změnit.",
+      "availabilityLabel": "Dostupné v",
+      "availabilityMatter": "Jeden spis",
+      "availabilityMatterBadgeHelp": "Dostupná jen v jednom spisu.",
+      "availabilityMatterHelp": "Použitelná jen v tomto spisu. Později to nelze změnit.",
+      "availabilityOrganization": "Celá organizace",
+      "availabilityTeamNeedsMatter": "Chcete-li dovednost sdílet s týmem, vyberte spis, pro který je určena. Později to nelze změnit.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvořte playbook pro kontrolu smluv pozici po pozici na základě vašich dříve podepsaných smluv, krátkého rozhovoru a běžných tržních standardů.",

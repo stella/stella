@@ -987,7 +987,13 @@ describe("the free floor", () => {
         await insertEndedEvaluation(tx, organizationId);
         await tx
           .update(usageEntitlements)
-          .set({ status, currentPeriodEnd: new Date(Date.now() - DAY_IN_MS) })
+          // Provider statuses belong to hosted entitlements; a manual one
+          // is bounded by its period end alone.
+          .set({
+            status,
+            source: "hosted",
+            currentPeriodEnd: new Date(Date.now() - DAY_IN_MS),
+          })
           .where(eq(usageEntitlements.organizationId, organizationId));
         expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
           5,
