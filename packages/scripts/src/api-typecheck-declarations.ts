@@ -50,9 +50,15 @@ const declarationProfile = (
   );
 };
 
+// A JSON module (`resolveJsonModule`) is data: it references no other module.
+const JSON_MODULE = /\.json$/iu;
+
 export const typescriptModuleReferences = (text: string, filename: string) => {
   const imports = new Set<string>();
   let dynamic = false;
+  if (JSON_MODULE.test(filename)) {
+    return { imports, dynamic };
+  }
   const parsed = parseSource(filename, text);
   walk(parsed.program, (node) => {
     if (

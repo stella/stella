@@ -21,6 +21,7 @@ import {
   emitApiTypecheckDeclarations,
   missingDeclarationCacheInputs,
   regenerateApiDeclarationSurface,
+  typescriptModuleReferences,
   writeApiDeclarationSurface,
 } from "./api-typecheck-declarations";
 import { nativeTypecheckProgramFiles } from "./api-typecheck-inputs";
@@ -719,4 +720,19 @@ test("stable wrappers prepare and restore exact roots and owners without committ
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("reads a JSON module in the program as referencing nothing", () => {
+  expect(
+    typescriptModuleReferences(
+      '{\n  "name": "@stll/cli",\n  "exports": { ".": "./src/index.ts" }\n}\n',
+      "/repo/packages/cli/package.json",
+    ),
+  ).toEqual({ imports: new Set(), dynamic: false });
+  expect(
+    typescriptModuleReferences(
+      'import { a } from "./a";\nexport * from "./b";\nawait import(name);\n',
+      "/repo/src/index.ts",
+    ),
+  ).toEqual({ imports: new Set(["./a", "./b"]), dynamic: true });
 });
