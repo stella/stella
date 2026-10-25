@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
+import { serverFS } from "tsrs/unstable/fs";
 import * as v from "valibot";
 
 import { waiverKey } from "./dated-waiver-fix-task";
@@ -60,31 +61,62 @@ const MODULE_EXTENSIONS = new Set([
   ".mjs",
   ".cjs",
 ]);
-export const validateRemovalModules = (
+export const validateRemovalModules = async (
   files: Readonly<Record<string, string>>,
-): void => {
+): Promise<void> => {
   const failures: WaiverPublishFailure[] = [];
   for (const [file, content] of Object.entries(files)) {
     if (!MODULE_EXTENSIONS.has(path.extname(file))) {
       continue;
     }
-    const parsed = Result.try(() => {
-      const source = ts.createSourceFile(
-        file,
-        content,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const options = { allowJs: true, noLib: true, noResolve: true };
-      const host = ts.createCompilerHost(options);
-      host.getSourceFile = (name) => (name === file ? source : undefined);
-      const diagnostics = ts
-        .createProgram([file], options, host)
-        .getSyntacticDiagnostics(source);
-      if (diagnostics.length > 0) {
-        throw new WaiverPublishError({
-          message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")).join("; ")}`,
-        });
+    const parsed = await Result.tryPromise(async () => {
+      const filename = path.resolve(file);
+      const config = path.resolve("tsconfig.__waiver-publish__.json");
+      const virtualFiles = new Map([
+        [filename, content],
+        [
+          config,
+          JSON.stringify({
+            files: [filename],
+            compilerOptions: {
+              allowJs: true,
+              noLib: true,
+              noResolve: true,
+              noEmit: true,
+            },
+          }),
+        ],
+      ]);
+      const api = new API({
+        cwd: process.cwd(),
+        fs: {
+          readFile: (name) => virtualFiles.get(name) ?? serverFS.useOS,
+          fileExists: (name) =>
+            virtualFiles.has(name) ? true : serverFS.useOS,
+          directoryExists: serverFS.useOS,
+          getAccessibleEntries: serverFS.useOS,
+          realpath: (name) =>
+            virtualFiles.has(name) ? serverFS.identity : serverFS.useOS,
+          stat: serverFS.useOS,
+          writeFile: serverFS.error,
+          removeFile: serverFS.error,
+        },
+      });
+      try {
+        const snapshot = await api.createSnapshot({ openProjects: [config] });
+        const project =
+          snapshot.getConfiguredProject(config) ??
+          panic("The generated module program did not open");
+        const diagnostics = await project.program.getSyntacticDiagnostics([
+          filename,
+        ]);
+        if (diagnostics.length > 0) {
+          throw new WaiverPublishError({
+            message: `Generated module has syntax diagnostics: ${file}: ${diagnostics.map(({ text }) => text).join("; ")}`,
+          });
+        }
+      } finally {
+        await api.close();
       }
     });
     if (Result.isError(parsed)) {
@@ -332,7 +364,7 @@ export const publishRemoval = async ({
   request,
   disarmExisting,
 }: PublishRemovalOptions): Promise<PublishedRemoval | undefined> => {
-  validateRemovalModules(files);
+  await validateRemovalModules(files);
   const { api } = removalLocation({ branch, repo });
   const setRef = async (refBranch: string, sha: string): Promise<void> => {
     const refs = v.parse(
