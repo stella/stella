@@ -1,3 +1,5 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "hosted_customer_erasures" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "external_customer_ref" text NOT NULL UNIQUE,
@@ -18,3 +20,5 @@ ALTER TABLE "hosted_customer_erasures" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "hosted_customer_erasures" FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
 CREATE POLICY "hosted_customer_erasures_no_stella_access" ON "hosted_customer_erasures" FOR ALL TO stella USING (false) WITH CHECK (false);
+--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "hosted_customer_erasures" FROM stella;

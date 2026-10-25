@@ -39,11 +39,15 @@ const ERASURE_FAILED = failureSink({
   expected: [],
 });
 
-export class HostedCustomerErasureTerminalError extends TaggedError(
+class HostedCustomerErasureTerminalError extends TaggedError(
   "HostedCustomerErasureTerminalError",
 )<{ message: string }> {}
 
-/** Leases due erasures: the lease and the claim audit commit with the row locks. */
+/**
+ * Leases due erasures: the lease and the claim audit commit with the row
+ * locks. Attempts count only settled outcomes, so an interrupted run leaves
+ * the row retryable once the lease lapses.
+ */
 const claimDueErasures = async (
   db: SchedulerTaskContext["db"],
   runId: SchedulerTaskContext["runId"],
@@ -70,7 +74,6 @@ const claimDueErasures = async (
       const claimed = await tx
         .update(hostedCustomerErasures)
         .set({
-          attempts: sql`${hostedCustomerErasures.attempts} + 1`,
           nextAttemptAt: sql`now() + (${CLAIM_LEASE_MS} * interval '1 millisecond')`,
           updatedAt: sql`now()`,
         })
@@ -159,7 +162,7 @@ export const runHostedCustomerErasures = async (
     } else {
       failures.push({
         id: row.id,
-        attempts: row.attempts,
+        attempts: row.attempts + 1,
         code: errorCode(result.error),
       });
     }
@@ -170,10 +173,6 @@ export const runHostedCustomerErasures = async (
 
   let erased = 0;
   let failed = 0;
-  const from = [
-    HOSTED_CUSTOMER_ERASURE_STATUS.pending,
-    HOSTED_CUSTOMER_ERASURE_STATUS.failed,
-  ];
   await withAggregateTransaction(db, async (tx) => {
     if (erasedIds.length > 0) {
       await transitionBatch({
@@ -181,9 +180,15 @@ export const runHostedCustomerErasures = async (
         spec: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
         ids: erasedIds,
         options: {
-          from,
+          from: [
+            HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+            HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+          ],
           to: HOSTED_CUSTOMER_ERASURE_STATUS.erased,
-          set: { lastErrorCode: null },
+          set: {
+            attempts: sql`${hostedCustomerErasures.attempts} + 1`,
+            lastErrorCode: null,
+          },
         },
         recordTransitionAuditEvent: (_tx, rows) => {
           erased += rows.length;
@@ -198,9 +203,13 @@ export const runHostedCustomerErasures = async (
         spec: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
         ids: failures.map(({ id }) => id),
         options: {
-          from,
+          from: [
+            HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+            HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+          ],
           to: HOSTED_CUSTOMER_ERASURE_STATUS.failed,
           set: {
+            attempts: sql`${hostedCustomerErasures.attempts} + 1`,
             lastErrorCode: sqlCaseFragment({
               operand: sql`${hostedCustomerErasures.id}`,
               branches: failures.map(
@@ -208,7 +217,7 @@ export const runHostedCustomerErasures = async (
               ),
               fallback: sql`${hostedCustomerErasures.lastErrorCode}`,
             }),
-            nextAttemptAt: sql`${dependencies.now().toISOString()}::timestamptz + interval '1 minute' * power(2, ${hostedCustomerErasures.attempts} - 1)`,
+            nextAttemptAt: sql`${dependencies.now().toISOString()}::timestamptz + interval '1 minute' * power(2, ${hostedCustomerErasures.attempts})`,
           },
         },
         recordTransitionAuditEvent: (_tx, rows) => {

@@ -54,12 +54,14 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
-const context = (): SchedulerTaskContext =>
+const context = (
+  signal: AbortSignal = new AbortController().signal,
+): SchedulerTaskContext =>
   asTestRaw<SchedulerTaskContext>({
     db,
     dueAt: DueSlot.of({ nextRunAt: NOW, lockedAt: NOW }),
     runId: toSafeId<"schedulerJobRun">(`run_${Bun.randomUUIDv7()}`),
-    signal: new AbortController().signal,
+    signal,
   });
 
 const run = async ({
@@ -251,6 +253,36 @@ describe("hosted customer erasure task", () => {
     expect(observations[0]?.[1]).toMatchObject({ ctx: { jobId: last.id } });
   });
 
+  test("an interrupted run leases the row without spending an attempt", async () => {
+    const intent = await insertIntent({ attempts: 2 });
+    let calls = 0;
+    installFetch(async () => {
+      calls += 1;
+      return new Response(null, { status: 204 });
+    });
+    const aborted = new AbortController();
+    aborted.abort();
+
+    await runHostedCustomerErasures(context(aborted.signal), {
+      credentials,
+      provider: "polar",
+      erase: eraseHostedCustomer,
+      observe: () => undefined,
+      now: () => NOW,
+    });
+
+    const row = (
+      await db
+        .select()
+        .from(hostedCustomerErasures)
+        .where(eq(hostedCustomerErasures.id, intent.id))
+    ).at(0);
+    expect(calls).toBe(0);
+    expect(row?.status).toBe(HOSTED_CUSTOMER_ERASURE_STATUS.pending);
+    expect(row?.attempts).toBe(2);
+    expect(row?.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
   test("an overlapping run cannot claim a leased row", async () => {
     await insertIntent();
     let calls = 0;
@@ -321,7 +353,7 @@ const seedOrganization = async (hosted: boolean) => {
 };
 
 describe("organization deletion erasure intent", () => {
-  test("records one idempotent intent only for an organization with hosted history", async () => {
+  test("records one idempotent intent for every deleted organization", async () => {
     const hostedId = await seedOrganization(true);
     const replayId = await seedOrganization(true);
     const neutralId = await seedOrganization(false);
@@ -347,7 +379,13 @@ describe("organization deletion erasure intent", () => {
     const rows = await db.select().from(hostedCustomerErasures);
     expect(
       rows.map(({ externalCustomerRef }) => externalCustomerRef).toSorted(),
-    ).toEqual([`stella_org_${hostedId}`, `stella_org_${replayId}`].toSorted());
+    ).toEqual(
+      [
+        `stella_org_${hostedId}`,
+        `stella_org_${neutralId}`,
+        `stella_org_${replayId}`,
+      ].toSorted(),
+    );
   });
 
   test("a refused renewing deletion and a rolled-back deletion leave no intent", async () => {

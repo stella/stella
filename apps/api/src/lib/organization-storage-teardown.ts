@@ -22,7 +22,6 @@ import {
   styleSets,
   templates,
   templateVersions,
-  usageEntitlements,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -41,6 +40,7 @@ import {
 } from "@/api/lib/file-key";
 import { extractFieldFileRefs } from "@/api/lib/files/field-file-refs";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
+import { hostedExternalAccountRef } from "@/api/lib/hosted-usage-provider/external-account-ref";
 import { LIMITS } from "@/api/lib/limits";
 import {
   forEachOcrDerivativePage,
@@ -1029,27 +1029,14 @@ export const completeOrganizationDeletion = async ({
   pagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
-  const hostedEntitlement = await tx
-    .select({ id: usageEntitlements.id })
-    .from(usageEntitlements)
-    .where(
-      and(
-        eq(usageEntitlements.organizationId, organizationId),
-        or(
-          eq(usageEntitlements.source, "hosted"),
-          sql`${usageEntitlements.hostedAccountRef} IS NOT NULL`,
-        ),
-      ),
-    )
-    .limit(1);
-  if (hostedEntitlement.length > 0) {
-    await tx
-      .insert(hostedCustomerErasures)
-      .values({ externalCustomerRef: `stella_org_${organizationId}` })
-      .onConflictDoNothing({
-        target: hostedCustomerErasures.externalCustomerRef,
-      });
-  }
+  // Every deletion records the intent: a checkout can create the provider
+  // record before any entitlement exists, and a missing record erases as done.
+  await tx
+    .insert(hostedCustomerErasures)
+    .values({ externalCustomerRef: hostedExternalAccountRef(organizationId) })
+    .onConflictDoNothing({
+      target: hostedCustomerErasures.externalCustomerRef,
+    });
 
   const teardown = await recordOrganizationStorageTeardown({
     organizationId,

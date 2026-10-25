@@ -1,6 +1,6 @@
 /** Thin client for the hosted usage provider's outbound HTTP API. */
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
@@ -100,21 +100,30 @@ const sendProviderRequest = async (
     authorization: `Bearer ${credentials.apiKey}`,
     "Polar-Version": getHostedUsageProviderApiVersion(),
   };
-  return await fetchWithTimeout(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-    `${credentials.baseUrl}/v1/${request.path}`,
-    request.method === "POST"
-      ? {
+  const init = (() => {
+    switch (request.method) {
+      case "POST":
+        return {
           method: request.method,
           headers: { ...headers, "content-type": "application/json" },
           body: JSON.stringify(request.body),
           timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
-        }
-      : {
+        };
+      case "DELETE":
+        return {
           method: request.method,
           headers,
           timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
-        },
+        };
+      default:
+        request satisfies never;
+        return panic("Unhandled provider request method");
+    }
+  })();
+  return await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
+    `${credentials.baseUrl}/v1/${request.path}`,
+    init,
   );
 };
 
@@ -132,31 +141,35 @@ export const eraseHostedCustomer = async ({
 }: {
   credentials: HostedUsageProviderApiCredentials;
   externalCustomerRef: string;
-}): Promise<Result<void, HostedUsageProviderApiError>> =>
-  await Result.tryPromise({
-    try: async () => {
-      // Deletes the customer, cancels its subscriptions and anonymizes its
-      // personal data; the provider keeps historic orders and subscriptions.
-      const response = await sendProviderRequest(credentials, {
+}): Promise<Result<void, HostedUsageProviderApiError>> => {
+  // Deletes the customer, cancels its subscriptions and anonymizes its
+  // personal data; the provider keeps historic orders and subscriptions.
+  const sent = await Result.tryPromise({
+    try: async () =>
+      await sendProviderRequest(credentials, {
         method: "DELETE",
         path: `customers/external/${encodeURIComponent(externalCustomerRef)}?anonymize=true`,
-      });
-      if (response.status === 204 || response.status === 404) {
-        return;
-      }
-      throw new HostedUsageProviderApiError({
-        message: `Hosted customer erasure returned ${response.status}`,
-        status: response.status,
-      });
-    },
+      }),
     catch: (cause) =>
-      cause instanceof HostedUsageProviderApiError
-        ? cause
-        : new HostedUsageProviderApiError({
-            message: "Hosted customer erasure failed",
-            cause,
-          }),
+      new HostedUsageProviderApiError({
+        message: "Hosted customer erasure failed",
+        cause,
+      }),
   });
+  if (Result.isError(sent)) {
+    return Result.err(sent.error);
+  }
+  const { status } = sent.value;
+  if (status === 204 || status === 404) {
+    return Result.ok(undefined);
+  }
+  return Result.err(
+    new HostedUsageProviderApiError({
+      message: `Hosted customer erasure returned ${status}`,
+      status,
+    }),
+  );
+};
 
 const createNeutralSetupSession = async ({
   credentials,
