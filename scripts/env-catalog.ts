@@ -1645,9 +1645,13 @@ export const TOOLING_ENV_KEYS = new Set([
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_GATE_DIR",
-  // Release pull request refresh: open release numbers and the release to update.
+  // Release pull request refresh: open release numbers, the release to update,
+  // its branch, whether main merges in, and the versioned staging tip.
   "RELEASE_NUMBERS",
   "RELEASE_PULL_REQUEST",
+  "RELEASE_BRANCH",
+  "MERGE_MAIN",
+  "STAGED_HEAD",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
