@@ -30,13 +30,13 @@ import {
 import {
   MOBILE_RUNTIME_VERSION_PATTERN,
   MOBILE_UPDATE_PLATFORMS,
-  type MobileUpdatePlatform,
-  type MobileUpdatePointer,
-  type MobileUpdateTarget,
   mobileUpdateAssetKey,
   mobileUpdateManifestKey,
+  type MobileUpdatePlatform,
+  type MobileUpdatePointer,
   mobileUpdatePointerKey,
   mobileUpdateSignatureKey,
+  type MobileUpdateTarget,
 } from "@stll/api-contract/mobile-updates";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 
@@ -71,7 +71,7 @@ type ManifestAsset = {
   url: string;
 };
 
-export type UpdateFile = { key: string; bytes: Uint8Array | string };
+type UpdateFile = { key: string; bytes: Uint8Array | string };
 
 export type SignedUpdate = {
   updateId: string;
