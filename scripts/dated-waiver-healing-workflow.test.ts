@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
 
 import { PROBE_PHASE_BUDGET_MS } from "./dated-waiver-probes";
@@ -281,15 +283,87 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   expect(trackedFiles?.run).toBe(
     'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
-  // Offline, over the tracked tree, scoped to the change when one is listed.
-  expect(check?.run).toMatch(
-    /^bun --preload \.\/scripts\/offline-network-preload\.ts scripts\/dated-waivers\.ts --check --tracked-files "\$RUNNER_TEMP\/dated-waiver-tracked-files" "\$\{scope\[@\]\}"$/mu,
-  );
-  expect(check?.run).toContain(
-    'scope=(--changed-files "$DATED_WAIVER_CHANGED_FILES")',
+  // Offline, over the tracked tree, always scoped to the run's change: an
+  // unset list fails the check instead of widening it to every waiver.
+  expect(check?.run).toBe(
+    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"',
   );
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
+  }
+});
+
+// A main run lists only what its commit changed, so a waiver that elapses
+// overnight fails the commit that touches its file, never the next main run.
+test("CI expiry runs on main list the files their commit changed", () => {
+  const ci: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const quickChecks = v.parse(
+    v.object({
+      jobs: v.object({
+        "ci-quick-checks": v.object({
+          steps: v.array(
+            v.looseObject({ name: v.string(), run: v.optional(v.string()) }),
+          ),
+        }),
+      }),
+    }),
+    ci,
+  ).jobs["ci-quick-checks"].steps;
+  const list = quickChecks.find(
+    ({ name }) => name === "dated-waiver-expiry: List files the change touches",
+  )?.run;
+  if (list === undefined) {
+    throw new TypeError("Missing dated waiver change listing");
+  }
+  const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-scope-"));
+  try {
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd: directory });
+      expect(result.exitCode).toBe(0);
+    };
+    git("init", "--quiet", "--initial-branch=main");
+    git("config", "user.email", "ci@example.invalid");
+    git("config", "user.name", "CI");
+    writeFileSync(path.join(directory, "waivers.ts"), "expiresAt\n");
+    git("add", "waivers.ts");
+    git("commit", "--quiet", "--message", "waiver");
+    writeFileSync(path.join(directory, "unrelated.ts"), "change\n");
+    git("add", "unrelated.ts");
+    git("commit", "--quiet", "--message", "unrelated");
+
+    for (const event of ["push", "workflow_dispatch", "schedule"]) {
+      const githubEnv = path.join(directory, `${event}.env`);
+      writeFileSync(githubEnv, "");
+      const listed = Bun.spawnSync(["bash", "-euo", "pipefail", "-c", list], {
+        cwd: directory,
+        env: {
+          ...process.env,
+          GITHUB_ENV: githubEnv,
+          GITHUB_EVENT_NAME: event,
+          RUNNER_TEMP: directory,
+          TARGET_REF: "",
+        },
+      });
+      expect(listed.stderr.toString(), event).toBe("");
+      expect(listed.exitCode, event).toBe(0);
+      expect(
+        readFileSync(
+          path.join(directory, "dated-waiver-changed-files"),
+          "utf-8",
+        ),
+        event,
+      ).toBe("unrelated.ts\0");
+      expect(readFileSync(githubEnv, "utf-8"), event).toBe(
+        `DATED_WAIVER_CHANGED_FILES=${directory}/dated-waiver-changed-files\n`,
+      );
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
   }
 });
