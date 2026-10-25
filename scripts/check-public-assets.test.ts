@@ -5,9 +5,10 @@ import nodePath from "node:path";
 
 import {
   findDuplicateRasterAssets,
+  findUnreferencedPublicAssets,
   groupDuplicateRasterAssets,
   isRasterAsset,
-} from "./check-duplicate-raster-assets";
+} from "./check-public-assets";
 
 const temporaryDirectories: string[] = [];
 
@@ -71,5 +72,47 @@ describe("duplicate raster asset guard", () => {
 
     expect(duplicates).toHaveLength(1);
     expect(duplicates[0]?.paths).toEqual(["first.png", "nested/second.jpg"]);
+  });
+});
+
+describe("unreferenced public asset guard", () => {
+  test("fails a public file only when no consumer names it", async () => {
+    const rootDir = await mkdtemp(
+      nodePath.join(tmpdir(), "stella-unreferenced-assets-"),
+    );
+    temporaryDirectories.push(rootDir);
+    const files = {
+      "apps/web/public/branding/used.webp": "bytes",
+      "apps/web/public/branding/by-name.png": "bytes",
+      "apps/web/public/branding/dead.webp": "bytes",
+      "apps/web/public/self-named.svg":
+        "<svg><title>self-named.svg</title></svg>",
+      "apps/web/public/only-in-scripts.png": "bytes",
+      "apps/landing/public/fonts/OFL-Example.txt": "license",
+      "apps/landing/public/fonts/example.woff2": "bytes",
+      "apps/web/src/routes/sign-in.tsx":
+        'const background = "/branding/used.webp";\nconst logo = "by-name.png";\n',
+      "apps/landing/src/styles/fonts.css":
+        'src: url("/fonts/example.woff2") format("woff2");\n',
+      "scripts/render.ts": 'const input = "only-in-scripts.png";\n',
+      "docs/assets.md": "dead.webp was the old background\n",
+    };
+    await Promise.all(
+      Object.entries(files).map(
+        async ([filePath, text]) =>
+          await Bun.write(nodePath.join(rootDir, filePath), text),
+      ),
+    );
+
+    expect(
+      await findUnreferencedPublicAssets({
+        files: Object.keys(files),
+        rootDir,
+      }),
+    ).toEqual([
+      "apps/web/public/branding/dead.webp",
+      "apps/web/public/only-in-scripts.png",
+      "apps/web/public/self-named.svg",
+    ]);
   });
 });
