@@ -4,7 +4,11 @@ import { expect, test } from "bun:test";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DAY_IN_MS } from "@stll/time";
 
-import { loadCaseLawCorpusStatus } from "@/api/handlers/case-law/decisions/status";
+import { COVERAGE_CURRENT_WITHIN_MS } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  caseLawCorpusStatusAt,
+  loadCaseLawCorpusSnapshot,
+} from "@/api/handlers/case-law/decisions/status";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -62,10 +66,9 @@ const loadWith = async ({
   readSources?: () => Promise<BoundedReadResult<SourceRow>>;
 }) => {
   const scopes: string[] = [];
-  const result = await loadCaseLawCorpusStatus({
+  const snapshot = await loadCaseLawCorpusSnapshot({
     country: COUNTRY,
     excludedSourceIds,
-    now: NOW,
     readFacets: async ({ country }) => {
       scopes.push(country);
       return await readFacets(country);
@@ -73,7 +76,10 @@ const loadWith = async ({
     readUpdatedAt: async () => UPDATED_AT,
     readSources,
   });
-  return { result, scopes };
+  const result = Result.isError(snapshot)
+    ? snapshot
+    : Result.ok(caseLawCorpusStatusAt(snapshot.value, NOW));
+  return { result, scopes, snapshot };
 };
 
 const healthOf = async (sources: SourceRow[]) => {
@@ -209,4 +215,30 @@ test("a withheld source does not count towards the health", async () => {
     throw result.error;
   }
   expect(result.value.health).toBe("current");
+});
+
+test("a cached snapshot is judged at the instant it is served", async () => {
+  // Synced a minute inside the current window when the snapshot was read.
+  const { snapshot } = await loadWith({
+    readSources: async () =>
+      complete([
+        {
+          ...CURRENT_CZ_SOURCE,
+          lastSyncAt: new Date(
+            NOW.getTime() - COVERAGE_CURRENT_WITHIN_MS + 60_000,
+          ),
+        },
+      ]),
+  });
+  if (Result.isError(snapshot)) {
+    throw snapshot.error;
+  }
+
+  // The coverage page measures from its own request; a snapshot served two
+  // minutes later must not keep the verdict its window has since passed.
+  expect(caseLawCorpusStatusAt(snapshot.value, NOW).health).toBe("current");
+  expect(
+    caseLawCorpusStatusAt(snapshot.value, new Date(NOW.getTime() + 120_000))
+      .health,
+  ).toBe("delayed");
 });

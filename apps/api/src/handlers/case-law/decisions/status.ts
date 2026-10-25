@@ -171,8 +171,16 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
   readUpdatedAt: (read: CorpusUpdatedAtRead) => Promise<string | null>;
   readSources: () => Promise<BoundedReadResult<CaseLawSourceHealthRow>>;
-  /** The instant the health windows are measured back from. */
-  now: Date;
+};
+
+/**
+ * What the status cache holds: the count, the timestamp and the country's
+ * sources as health inputs. The health itself is judged per request, so the
+ * windows are measured from the same instant the coverage page measures them
+ * from and a cached snapshot never states a verdict its window has passed.
+ */
+export type CaseLawCorpusSnapshot = Omit<CaseLawCorpusStatus, "health"> & {
+  sources: readonly Pick<CaseLawSourceHealthRow, "enabled" | "lastSyncAt">[];
 };
 
 const corpusStatusError = (fallback: string) => (cause: unknown) =>
@@ -184,21 +192,20 @@ const corpusStatusError = (fallback: string) => (cause: unknown) =>
 /**
  * Each part of the status from the read that already answers it cheaply: the
  * count from the facets this page asks for anyway, the timestamp from one
- * index row, the health from the small source table. Each read is normalised
+ * index row, the health inputs from the small source table. Each read is normalised
  * to a value: the cache that holds the load would otherwise keep a rejected
  * promise for a full window. A failed source read fails the status rather
  * than reporting `unknown`, which the badge would state as a source that has
  * never run.
  */
-export const loadCaseLawCorpusStatus = async ({
+export const loadCaseLawCorpusSnapshot = async ({
   country,
   excludedSourceIds,
-  now,
   readFacets,
   readSources,
   readUpdatedAt,
 }: CorpusStatusLoad): Promise<
-  Result<CaseLawCorpusStatus, CorpusStatusError>
+  Result<CaseLawCorpusSnapshot, CorpusStatusError>
 > => {
   const read = { country, excludedSourceIds };
   const [facets, updatedAt, sources] = await Promise.all([
@@ -245,23 +252,32 @@ export const loadCaseLawCorpusStatus = async ({
     ({ value }) => value === country,
   );
   const withheld = new Set<string>(excludedSourceIds.map(String));
-  const health = caseLawCountryHealth(
-    sources.value.rows
+  return Result.ok({
+    decisions: bucket?.count ?? 0,
+    updatedAt: updatedAt.value,
+    sources: sources.value.rows
       .filter(
         (source) =>
           !withheld.has(String(source.id)) &&
           caseLawSourceJurisdiction(source.adapterKey) === country,
       )
-      .map(({ enabled, lastSyncAt }) =>
-        caseLawSourceHealth({ enabled, lastSyncAt, now }),
-      ),
-  );
-  return Result.ok({
-    decisions: bucket?.count ?? 0,
-    updatedAt: updatedAt.value,
-    health,
+      .map(({ enabled, lastSyncAt }) => ({ enabled, lastSyncAt })),
   });
 };
+
+/** The snapshot as the badge states it at `now`. */
+export const caseLawCorpusStatusAt = (
+  { decisions, updatedAt, sources }: CaseLawCorpusSnapshot,
+  now: Date,
+): CaseLawCorpusStatus => ({
+  decisions,
+  updatedAt,
+  health: caseLawCountryHealth(
+    sources.map(({ enabled, lastSyncAt }) =>
+      caseLawSourceHealth({ enabled, lastSyncAt, now }),
+    ),
+  ),
+});
 
 const STATUS_CACHE_TTL_MS = 5 * 60 * 1000;
 const STATUS_CACHE_MAX_ENTRIES = 16;
@@ -273,7 +289,7 @@ const STATUS_CACHE_MAX_ENTRIES = 16;
 const STATUS_CACHE_FAILURE_TTL_MS = 30 * 1000;
 
 const corpusStatus = createTtlResultCache({
-  load: loadCaseLawCorpusStatus,
+  load: loadCaseLawCorpusSnapshot,
   // Source policy is an input to the answer, so a revocation changes the key
   // instead of waiting out the window; sorted because the set has no order.
   key: ({ country, excludedSourceIds }: CorpusStatusLoad) =>
@@ -321,7 +337,6 @@ export const readCaseLawCorpusStatusHandler = async (
   const result = await corpusStatus({
     country: publicCountry,
     excludedSourceIds: excludedSourceIds.value,
-    now: new Date(),
     readFacets: readBrowseFacetsUnderPolicy,
     readUpdatedAt: async (read) =>
       await caseLawDb(
@@ -337,5 +352,5 @@ export const readCaseLawCorpusStatusHandler = async (
     return EMPTY_STATUS;
   }
 
-  return result.value;
+  return caseLawCorpusStatusAt(result.value, new Date());
 };
