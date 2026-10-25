@@ -42,6 +42,7 @@ export const FAILURE_REASON_GRADE = {
   // the lock or statement timeout is expected.
   pg_lock_timeout_budgeted: "transient",
   pg_statement_budget_exhausted: "transient",
+  // parser-output-unchanged: a failure grade for budgeted request timeouts; no parser reads it.
   // Only through a bounded request step: the request answered without the
   // step, inside a sub-budget of its own latency budget. The counterpart of
   // `timeout_unbounded`, a wait nobody bounded against the caller's budget.
