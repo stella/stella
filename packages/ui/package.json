@@ -54,6 +54,7 @@
     "./court-badge": "./src/components/court-badge.tsx",
     "./ai-label": "./src/components/ai-label.tsx",
     "./control-size": "./src/lib/control-size.ts",
+    "./field-trigger": "./src/lib/field-trigger.ts",
     "./animated-count": "./src/components/animated-count.tsx",
     "./copy-button": "./src/components/copy-button.tsx",
     "./calendar": "./src/calendar/index.ts",

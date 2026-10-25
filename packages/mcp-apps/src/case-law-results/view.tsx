@@ -30,6 +30,7 @@ import { CourtFilter } from "@stll/ui/court-filter";
 import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { FIELD_TRIGGER_CLASS_NAME } from "@stll/ui/field-trigger";
 import {
   CaseLawIcon,
   ChevronRightIcon,
@@ -37,6 +38,7 @@ import {
   SearchIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { cn } from "@stll/ui/lib/utils";
 import {
   Pagination,
   PaginationContent,
@@ -532,13 +534,11 @@ const SearchControls = ({
           </FieldLabel>
           <Popover>
             <PopoverTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-auto min-h-11 w-full flex-wrap justify-start text-start"
-                />
-              }
+              className={cn(
+                FIELD_TRIGGER_CLASS_NAME,
+                "h-auto min-w-0 flex-wrap justify-start text-start",
+              )}
+              type="button"
             >
               <span className="sr-only">{t("court")}</span>
               {courts.length === 0

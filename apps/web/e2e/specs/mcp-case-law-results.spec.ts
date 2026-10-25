@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { FrameLocator, Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type * as v from "valibot";
 
+import type { McpAppFailure } from "@stll/api-contract/mcp-app-failure";
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import {
   APP_RESOLVE_FIXTURE,
@@ -22,7 +23,7 @@ type AppFixtureHost = {
   appLinks: string[];
   appSizes: { height: number }[];
   sendAppResult: (data: unknown) => void;
-  sendAppError: () => void;
+  sendAppError: (failure?: McpAppFailure) => void;
   sendAppLocale: (nextLocale: string) => void;
 };
 declare global {
@@ -234,12 +235,15 @@ const mountApp = async ({
             method: "ui/notifications/tool-result",
             params: toolsResult(data),
           }),
-        sendAppError: () =>
+        sendAppError: (failure?: McpAppFailure) =>
           reply({
             jsonrpc: "2.0",
             method: "ui/notifications/tool-result",
             params: {
               isError: true,
+              ...(failure === undefined
+                ? {}
+                : { structuredContent: { appFailure: failure } }),
               content: [{ type: "text", text: "Read unavailable." }],
             },
           }),
@@ -269,6 +273,16 @@ const mountApp = async ({
 
 const hostHistory = async (page: Page, key: "appCalls" | "appLinks") =>
   page.evaluate((historyKey) => globalThis.appFixtureHost[historyKey], key);
+
+const selectCourt = async (app: FrameLocator, option: string) => {
+  const trigger = app.getByRole("button", { name: /^Court/u });
+  await trigger.click();
+  await app.getByRole("checkbox", { name: option, exact: true }).click();
+  await trigger.click();
+};
+
+const selectedCourts = (app: FrameLocator) =>
+  app.getByRole("button", { name: /^Court/u }).locator("bdi");
 
 test("case-law app filters, pages and opens links through the MCP host", async ({
   page,
@@ -350,10 +364,7 @@ test("case-law app filters, pages and opens links through the MCP host", async (
   await expect(
     app.getByRole("cell").filter({ hasText: "I. ÚS 123/24" }),
   ).toBeVisible();
-  await app.getByRole("combobox", { name: "Court", exact: true }).click();
-  await app
-    .getByRole("option", { name: "Constitutional courts", exact: true })
-    .click();
+  await selectCourt(app, "Ústavní soud");
   await app.getByRole("button", { name: /^From/u }).click();
   await app.getByRole("button", { name: "Today", exact: true }).click();
   const today = app.locator('[role="gridcell"][aria-current="date"]');
@@ -397,10 +408,7 @@ test("court filters preserve multiple query phrasings until the search text is e
     queries,
   });
   await expect(app.locator("tbody tr")).toHaveCount(1);
-  await app.getByRole("combobox", { name: "Court", exact: true }).click();
-  await app
-    .getByRole("option", { name: "Constitutional courts", exact: true })
-    .click();
+  await selectCourt(app, "Ústavní soud");
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => hostHistory(page, "appCalls"))
@@ -433,10 +441,7 @@ test("court filters preserve multiple query phrasings until the search text is e
     });
 });
 
-for (const { selection, filter } of [
-  { selection: "Ústavní soud", filter: { court: "Ústavní soud" } },
-  { selection: "Constitutional courts", filter: { courts: ["Ústavní soud"] } },
-]) {
+for (const selection of ["Ústavní soud", "Constitutional courts"]) {
   test(`changing country clears the ${selection} court selection`, async ({
     page,
   }) => {
@@ -448,8 +453,7 @@ for (const { selection, filter } of [
       bundle: "country-fixture",
     });
     await expect(app.locator("tbody tr")).toHaveCount(1);
-    await app.getByRole("combobox", { name: "Court", exact: true }).click();
-    await app.getByRole("option", { name: selection, exact: true }).click();
+    await selectCourt(app, selection);
     await app.getByRole("button", { name: "Filter", exact: true }).click();
     await expect
       .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
@@ -459,14 +463,14 @@ for (const { selection, filter } of [
           queries: ["náhrada škody"],
           country: "CZE",
           limit: 10,
-          ...filter,
+          courts: ["Ústavní soud"],
         },
       });
     await app.getByRole("combobox", { name: "Country", exact: true }).click();
     await app.getByRole("option", { name: "SVK", exact: true }).click();
-    await expect(
-      app.getByRole("combobox", { name: "Court", exact: true }),
-    ).toHaveText("All");
+    const courtButton = app.getByRole("button", { name: /^Court/u });
+    await expect(selectedCourts(app)).toHaveCount(0);
+    await expect(courtButton).toContainText("All");
     await app.getByRole("button", { name: "Filter", exact: true }).click();
     await expect
       .poll(async () => (await hostHistory(page, "appCalls")).at(-1))
@@ -493,13 +497,8 @@ test("a selected court tier survives a later response without facets", async ({
     payload: APP_SEARCH_FIXTURE,
   });
   await expect(app.locator("tbody tr")).toHaveCount(1);
-  await app.getByRole("combobox", { name: "Court", exact: true }).click();
-  await app
-    .getByRole("option", { name: "Constitutional courts", exact: true })
-    .click();
-  await expect(
-    app.getByRole("combobox", { name: "Court", exact: true }),
-  ).toHaveText("Constitutional courts");
+  await selectCourt(app, "Constitutional courts");
+  await expect(selectedCourts(app)).toHaveText(["Ústavní soud"]);
   await page.evaluate(
     (payload) =>
       globalThis.appFixtureHost.sendAppResult({
@@ -510,9 +509,7 @@ test("a selected court tier survives a later response without facets", async ({
     APP_SEARCH_FIXTURE,
   );
   await expect(app.locator("tbody tr")).toHaveCount(0);
-  await expect(
-    app.getByRole("combobox", { name: "Court", exact: true }),
-  ).toHaveText("Constitutional courts");
+  await expect(selectedCourts(app)).toHaveText(["Ústavní soud"]);
   await app.getByRole("button", { name: "Filter", exact: true }).click();
   await expect
     .poll(async () => hostHistory(page, "appCalls"))
@@ -564,8 +561,31 @@ test("resolve app renders every status and surfaces recoverable errors", async (
   }
   expect(await hostHistory(page, "appCalls")).toEqual([]);
   await page.evaluate(() => globalThis.appFixtureHost.sendAppError());
-  await expect(app.getByRole("alert")).toContainText("Read unavailable.");
-  await app.getByRole("button").click();
+  const alert = app.getByRole("alert");
+  const alertMessage = alert.locator("p");
+  await expect(alertMessage).toHaveText(
+    /^stella nemohla dokončit požadavek\. Požadavek: app-[0-9a-f]+-\d+$/u,
+  );
+  await expect(alertMessage).not.toContainText("Read unavailable.");
+  await expect(
+    alert.getByRole("button", { name: "Spustit znovu", exact: true }),
+  ).toHaveCount(0);
+  const recoverableFailure = {
+    type: "tool_failure",
+    requestId: "resolve-fixture-request",
+    retryable: true,
+    fields: [],
+    toolCode: "internal_error",
+  } satisfies McpAppFailure;
+  await page.evaluate(
+    (failure) => globalThis.appFixtureHost.sendAppError(failure),
+    recoverableFailure,
+  );
+  await expect(alertMessage).toHaveText(
+    "stella nemohla dokončit požadavek. Požadavek: resolve-fixture-request",
+  );
+  await expect(alertMessage).not.toContainText("Read unavailable.");
+  await app.getByRole("button", { name: "Spustit znovu", exact: true }).click();
   await expect
     .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
