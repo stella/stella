@@ -55,17 +55,33 @@ export const skipsAfterTolerantParent = (
     }
     return seen;
   };
+  // A conditional job at or above `name` can skip, and so skip `name` too.
+  const maySkip = (name: string) =>
+    [name, ...ancestors(name)].some(
+      (ancestor) => jobs[ancestor]?.if !== undefined,
+    );
+  // `needs.<need>.result == 'success'` skips the job whenever that need skips.
+  const requiresSuccess = (name: string, need: string) => {
+    const escaped = need.replaceAll(
+      /[$()*+.?[\\\]^{|}]/gu,
+      (char) => `\\${char}`,
+    );
+    return conditionMatches(
+      name,
+      new RegExp(String.raw`needs\.${escaped}\.result\s*==\s*'success'`, "u"),
+    );
+  };
+  // The parent runs after a skip along some need it does not require to succeed.
+  const survivesSkip = (parent: string) =>
+    conditionMatches(parent, TOLERATES_SKIP) &&
+    needs(parent).some(
+      (need) => maySkip(need) && !requiresSuccess(parent, need),
+    );
   return Object.keys(jobs)
     .filter(
       (name) =>
         !conditionMatches(name, STATUS_FUNCTION) &&
-        needs(name).some(
-          (parent) =>
-            conditionMatches(parent, TOLERATES_SKIP) &&
-            [...ancestors(parent)].some(
-              (ancestor) => jobs[ancestor]?.if !== undefined,
-            ),
-        ),
+        needs(name).some(survivesSkip),
     )
     .map((name) => `${file}#${name}`);
 };
@@ -114,6 +130,12 @@ test("the check finds the child of a tolerant parent and nothing that skips with
     // A negated failure() runs after the skip, so its child must say so.
     lenient: { needs: ["wake"], if: "!failure()" },
     publish: { needs: ["lenient"] },
+    // Requiring the skipped need's success skips the parent with it.
+    guarded: {
+      needs: ["wake"],
+      if: "!cancelled() && needs.wake.result == 'success'",
+    },
+    package: { needs: ["guarded"] },
   };
   expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual([
     "w.yml#promote",
