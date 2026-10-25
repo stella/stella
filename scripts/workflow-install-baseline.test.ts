@@ -27,6 +27,8 @@ const PUSH_TO_MAIN = {
 const INSTALL_WITH_SCRIPTS =
   /\bbun (?:install|ci)\b(?![^\n]*--ignore-scripts)/u;
 
+// timeout: each test builds a git remote and runs a synchronous git
+// checkout for every installing workflow job; no wait is involved.
 setDefaultTimeout(30_000);
 
 let roots: string[] = [];

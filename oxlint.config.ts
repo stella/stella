@@ -492,6 +492,11 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
     "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
   ]),
+  fixtureRuleOverride("test-timing.fixture.ts", [
+    "test-timing/no-real-time-wait",
+    "test-timing/no-polling-loop",
+    "test-timing/no-unreasoned-timeout",
+  ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
   ]),
@@ -1762,6 +1767,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
+    "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
     "./.oxlint-plugins/result-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
@@ -1974,6 +1980,25 @@ const config = defineConfig({
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
+      },
+    },
+    {
+      // Tests wait on the work's own completion signal, not on the clock.
+      // Existing sites are budgeted in scripts/test-timing-ledger.json,
+      // which only shrinks.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      rules: {
+        "test-timing/no-real-time-wait": "error",
+        "test-timing/no-polling-loop": "error",
+      },
+    },
+    {
+      // A raised timeout or retry needs its reason. The custom lint rule
+      // tests take theirs from scripts/check-oxlint-test-timeouts.ts.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      excludeFiles: [".oxlint-plugins/__tests__/**"],
+      rules: {
+        "test-timing/no-unreasoned-timeout": "error",
       },
     },
     {
