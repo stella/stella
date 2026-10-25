@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import {
   createPersonalApiKey,
+  issueMachineApiKey,
   listPersonalApiKeys,
   readPersonalApiKeyPolicy,
   revokePersonalApiKey,
@@ -505,6 +506,48 @@ describe("personal key persistence and receipts", () => {
       });
     },
   );
+
+  test("a machine key carries only what the role locked at issuance grants", async () => {
+    await withFixture(async ({ admin }) => {
+      const issue = async () =>
+        await issueMachineApiKey({
+          ...admin,
+          name: "Settings key",
+          scopes: ["stella:read"],
+          permissions: { organizationSettings: ["update"] },
+          expiresInDays: undefined,
+          audience: undefined,
+          auditEvent: (key) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+            resourceId: key.id,
+            metadata: { name: key.name },
+          }),
+        });
+      expect((await issue()).isOk()).toBe(true);
+
+      // The handler validated the request for an administrator; the caller is
+      // demoted before issuance takes its locks.
+      await db
+        .update(member)
+        .set({ role: "member" })
+        .where(
+          and(
+            eq(member.organizationId, admin.organizationId),
+            eq(member.userId, admin.userId),
+          ),
+        );
+      const demoted = await issue();
+
+      expect(demoted.isErr() && demoted.error.status).toBe(403);
+      expect(
+        await db
+          .select({ id: apikey.id })
+          .from(apikey)
+          .where(eq(apikey.referenceId, admin.userId)),
+      ).toHaveLength(1);
+    });
+  });
 
   test("rotation retains the persisted permission ceiling after an owner is promoted", async () => {
     await withFixture(async ({ own }) => {

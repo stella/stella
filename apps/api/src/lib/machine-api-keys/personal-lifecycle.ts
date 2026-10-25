@@ -12,6 +12,7 @@ import { organizationSettings } from "@/api/db/schema";
 import {
   mintMachineApiKey,
   toMachineApiKeySummary,
+  validateGrantablePermissions,
 } from "@/api/handlers/api-keys/mint";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -353,8 +354,17 @@ export const issueMachineApiKey = async ({
       database,
       authority: { type: "issue", sessionId },
     },
-    async ({ fence }) => {
+    async ({ fence, memberRole }) => {
       const issuing = issuingFence(fence);
+      // The role locked in this transaction decides what the key may carry: a
+      // caller demoted after its request was validated cannot keep the grant.
+      const grantable = validateGrantablePermissions({
+        memberRole,
+        requested: options.permissions,
+      });
+      if (grantable.type === "error") {
+        return abortTransaction(grantable.error);
+      }
       const minted = await mintMachineApiKey(
         options,
         createApiKeyUnderFence(issuing, new Date()),
