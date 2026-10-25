@@ -252,6 +252,8 @@ test("operator scripts build once, sharing their code through chunks", () => {
   const split = scripts.filter((bundle) => /--splitting(?:\s|$)/u.test(bundle));
   expect(split).toHaveLength(1);
   expect(buildOutputs(split.at(0) ?? "").length).toBeGreaterThan(1);
+  // The image smoke finds the split scripts by their chunk imports.
+  expect(split.at(0)).toContain('--chunk-naming "chunk-[hash].js"');
   expect(
     scripts
       .filter((bundle) => !split.includes(bundle))

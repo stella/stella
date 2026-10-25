@@ -192,6 +192,7 @@ RUN bun build \
     --outdir /app/bundles \
     --public-path /app/ \
     --entry-naming "[name].js" \
+    --chunk-naming "chunk-[hash].js" \
     apps/api/src/scripts/backfill-case-law-slugs.ts \
     apps/api/scripts/seed-usage-policies.ts \
     apps/api/scripts/replay-provider-events.ts \

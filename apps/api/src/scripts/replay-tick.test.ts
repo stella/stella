@@ -71,7 +71,7 @@ describe("scheduled replay entrypoint", () => {
   });
 
   test("production cannot acquire fixture overrides before database or storage setup", async () => {
-    const entry = new URL("replay-tick.ts", import.meta.url).pathname;
+    const entry = new URL("replay-tick-command.ts", import.meta.url).pathname;
     const child = Bun.spawn({
       cmd: [
         process.execPath,
