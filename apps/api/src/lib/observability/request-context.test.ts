@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { setInterval } from "node:timers/promises";
 
 import { REQUEST_ID_HEADER } from "@stll/api-contract";
+import { deferred } from "@stll/test-kit";
 
 import { apiPipeline } from "@/api/api-pipeline";
 import { createHttpApp } from "@/api/http/app";
@@ -61,25 +62,41 @@ describe("request metadata", () => {
 // the ambient id has to survive an I/O gap, and that gap is where background
 // work used to join the scope. Served by a real `Bun.serve`, because the
 // failure pinned below only exists on a real event loop.
-const server = serveForTest(
-  createHttpApp({
-    middleware: apiPipeline,
-    routes: routes({
-      "/ping": {
-        GET: {
-          access: "public",
-          config: {},
-          run: async () => {
-            // real-time: the ambient id must survive a real I/O gap, which a
-            // fake timer or a microtask never opens.
-            await Bun.sleep(HANDLER_WAIT_MS);
-            return getRequestId() ?? "no-ambient-id";
+type ReceiptServerOptions = {
+  beforeRequest?: () => Promise<void>;
+  waitMs?: number;
+};
+
+const createReceiptServer = ({
+  beforeRequest,
+  waitMs = HANDLER_WAIT_MS,
+}: ReceiptServerOptions = {}) =>
+  serveForTest(
+    createHttpApp({
+      middleware: apiPipeline,
+      routes: routes({
+        "/ping": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async () => {
+              if (beforeRequest !== undefined) {
+                await beforeRequest();
+              }
+              if (waitMs > 0) {
+                // real-time: the ambient id must survive a real I/O gap, which
+                // a fake timer or a microtask never opens.
+                await Bun.sleep(waitMs);
+              }
+              return getRequestId() ?? "no-ambient-id";
+            },
           },
         },
-      },
+      }),
     }),
-  }),
-);
+  );
+
+const server = createReceiptServer();
 
 afterAll(async () => {
   await server.stop();
@@ -104,41 +121,63 @@ describe("x-request-id response header", () => {
   // leaves it on the ambient async context frame, so a background loop
   // resuming there adopted the in-flight request's id and stamped it on
   // unrelated work from then on.
-  test("the ambient id belongs to its own request and never to background work", async () => {
-    const controller = new AbortController();
-    const backgroundIds: (string | undefined)[] = [];
-    const backgroundLoop = async () => {
+  test.each([0, HANDLER_WAIT_MS])(
+    "the ambient id stays isolated with a %ims handler",
+    async (waitMs) => {
+      const controller = new AbortController();
+      const entered = deferred();
+      const sampled = deferred();
+      const isolatedServer = createReceiptServer({
+        waitMs,
+        beforeRequest: () => {
+          entered.resolve();
+          return sampled.promise;
+        },
+      });
+      const backgroundIds: (string | undefined)[] = [];
+      const backgroundLoop = async () => {
+        await entered.promise;
+        try {
+          // real-time: exercise a timer continuation while a request is active.
+          for await (const _tick of setInterval(BACKGROUND_WAIT_MS, undefined, {
+            signal: controller.signal,
+          })) {
+            backgroundIds.push(getRequestId());
+            sampled.resolve();
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            throw error;
+          }
+        }
+      };
+      const background = backgroundLoop();
+
+      const mismatches: string[] = [];
       try {
-        // real-time: exercise a timer continuation while a request is active.
-        for await (const _tick of setInterval(BACKGROUND_WAIT_MS, undefined, {
-          signal: controller.signal,
-        })) {
-          backgroundIds.push(getRequestId());
+        for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
+          const response = await fetch(new URL("/ping", isolatedServer.url));
+          const ambient = await response.text();
+          const header = response.headers.get(REQUEST_ID_HEADER);
+          if (ambient !== header) {
+            mismatches.push(`${header ?? "(no header)"} !== ${ambient}`);
+          }
         }
-      } catch (error) {
-        if (!controller.signal.aborted) throw error;
-      }
-    };
-    const background = backgroundLoop();
-
-    const mismatches: string[] = [];
-    try {
-      for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-        const response = await fetch(new URL("/ping", server.url));
-        const ambient = await response.text();
-        const header = response.headers.get(REQUEST_ID_HEADER);
-        if (ambient !== header) {
-          mismatches.push(`${header ?? "(no header)"} !== ${ambient}`);
+      } finally {
+        entered.resolve();
+        controller.abort();
+        try {
+          await background;
+        } finally {
+          await isolatedServer.stop();
         }
       }
-    } finally {
-      controller.abort();
-      await background;
-    }
 
-    expect(mismatches).toEqual([]);
-    expect(backgroundIds.filter((id) => id !== undefined)).toEqual([]);
-  });
+      expect(backgroundIds.length).toBeGreaterThan(0);
+      expect(mismatches).toEqual([]);
+      expect(backgroundIds.filter((id) => id !== undefined)).toEqual([]);
+    },
+  );
 
   test("concurrent requests get distinct receipt ids", async () => {
     const [first, second] = await Promise.all([

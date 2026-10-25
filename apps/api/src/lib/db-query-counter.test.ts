@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { setInterval } from "node:timers/promises";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { deferred } from "@stll/test-kit";
 
 import { createHttpApp } from "@/api/http/app";
 import { setResponseHeaders } from "@/api/http/headers";
@@ -168,36 +169,42 @@ const stampQueryCount: Middleware = async (_ctx, inner) => {
       );
 };
 
-const server = serveForTest(
-  createHttpApp({
-    middleware: [requestScope, stampQueryCount],
-    routes: routes({
-      "/queries/:count": {
-        GET: {
-          access: "public",
-          config: {},
-          run: async ({ ctx }) => {
-            // Waits on a timer rather than the microtask queue: a query is
-            // real I/O, and only an I/O wait leaves the gap in which the
-            // background loop below used to resume inside this request's
-            // async context frame.
-            for (
-              let index = 0;
-              index < Number(ctx.params["count"]);
-              index += 1
-            ) {
-              // real-time: only a real I/O wait opens that gap.
-              await Bun.sleep(QUERY_WAIT_MS);
-              queryCountLogger.logQuery("SELECT request", []);
-            }
-            await runCountedTransaction(async () => undefined);
-            return "ok";
+const createCountingServer = (beforeRequest?: () => Promise<void>) =>
+  serveForTest(
+    createHttpApp({
+      middleware: [requestScope, stampQueryCount],
+      routes: routes({
+        "/queries/:count": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              if (beforeRequest !== undefined) {
+                await beforeRequest();
+              }
+              // Waits on a timer rather than the microtask queue: a query is
+              // real I/O, and only an I/O wait leaves the gap in which the
+              // background loop below used to resume inside this request's
+              // async context frame.
+              for (
+                let index = 0;
+                index < Number(ctx.params["count"]);
+                index += 1
+              ) {
+                // real-time: only a real I/O wait opens that gap.
+                await Bun.sleep(QUERY_WAIT_MS);
+                queryCountLogger.logQuery("SELECT request", []);
+              }
+              await runCountedTransaction(async () => undefined);
+              return "ok";
+            },
           },
         },
-      },
+      }),
     }),
-  }),
-);
+  );
+
+const server = createCountingServer();
 
 afterAll(async () => {
   await server.stop();
@@ -205,16 +212,30 @@ afterAll(async () => {
 
 // Queries from work that belongs to no request: started before any request
 // exists and never awaited by one. Each tick resumes after a real timer.
-const runBackgroundQueries = async (signal: AbortSignal): Promise<void> => {
+type BackgroundQueryOptions = {
+  signal: AbortSignal;
+  requestEntered: Promise<void>;
+  sampled: () => void;
+};
+
+const runBackgroundQueries = async ({
+  signal,
+  requestEntered,
+  sampled,
+}: BackgroundQueryOptions) => {
+  await requestEntered;
   try {
     // real-time: exercise detached query work while requests are processed.
     for await (const _tick of setInterval(BACKGROUND_QUERY_WAIT_MS, undefined, {
       signal,
     })) {
       queryCountLogger.logQuery("SELECT background", []);
+      sampled();
     }
   } catch (error) {
-    if (!signal.aborted) throw error;
+    if (!signal.aborted) {
+      throw error;
+    }
   }
 };
 
@@ -271,23 +292,50 @@ describe("db query counter HTTP header", () => {
     }
   });
 
-  test("a request counts its own queries and no others", async () => {
-    const controller = new AbortController();
-    const background = runBackgroundQueries(controller.signal);
+  test.each([0, 4])(
+    "a request with %i queries counts no background work",
+    async (queryCount) => {
+      const controller = new AbortController();
+      const entered = deferred();
+      const sampled = deferred();
+      let samples = 0;
+      const isolatedServer = createCountingServer(() => {
+        entered.resolve();
+        return sampled.promise;
+      });
+      const background = runBackgroundQueries({
+        signal: controller.signal,
+        requestEntered: entered.promise,
+        sampled: () => {
+          samples += 1;
+          sampled.resolve();
+        },
+      });
 
-    const counts: (string | null)[] = [];
-    try {
-      for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-        const response = await fetch(new URL("/queries/4", server.url));
-        counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
+      const counts: (string | null)[] = [];
+      try {
+        for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
+          const response = await fetch(
+            new URL(`/queries/${String(queryCount)}`, isolatedServer.url),
+          );
+          counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
+        }
+      } finally {
+        entered.resolve();
+        controller.abort();
+        try {
+          await background;
+        } finally {
+          await isolatedServer.stop();
+        }
       }
-    } finally {
-      controller.abort();
-      await background;
-    }
 
-    expect(counts).toEqual(Array.from({ length: REQUEST_ROUNDS }, () => "4"));
-  });
+      expect(samples).toBeGreaterThan(0);
+      expect(counts).toEqual(
+        Array.from({ length: REQUEST_ROUNDS }, () => String(queryCount)),
+      );
+    },
+  );
 
   test("concurrent requests get independent counts", async () => {
     const [three, seven] = await Promise.all([
