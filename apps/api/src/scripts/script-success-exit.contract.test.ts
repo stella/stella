@@ -1,50 +1,50 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import ts from "typescript6";
+
+import {
+  type BlockStatement,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const successPhase = (source: string): string => {
-  const parsed = ts.createSourceFile(
-    "script.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  let body: ts.Block | undefined;
-  const visit = (node: ts.Node): void => {
+  const parsed = parseSource("script.ts", source);
+  const bodies: BlockStatement[] = [];
+  walk(parsed.program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "runScriptWithErrorOutput"
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "runScriptWithErrorOutput"
     ) {
       const callback = node.arguments.at(0);
       if (
-        callback &&
-        ts.isArrowFunction(callback) &&
-        ts.isBlock(callback.body)
+        callback?.type === "ArrowFunctionExpression" &&
+        callback.body.type === "BlockStatement"
       ) {
-        body = callback.body;
+        bodies.push(callback.body);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+  });
+  const body = bodies.at(-1);
   if (!body) {
     throw new TypeError("Script entrypoint output boundary missing");
   }
-  const statements = body.statements;
+  const statements = body.body;
   const outputIndex = statements.findLastIndex((statement) => {
     if (
-      !ts.isExpressionStatement(statement) ||
-      !ts.isCallExpression(statement.expression)
+      statement.type !== "ExpressionStatement" ||
+      statement.expression.type !== "CallExpression"
     ) {
       return false;
     }
-    const callee = statement.expression.expression;
+    const callee = statement.expression.callee;
     return (
-      ts.isPropertyAccessExpression(callee) &&
-      ts.isIdentifier(callee.expression) &&
-      callee.expression.text === "console" &&
-      callee.name.text === "log"
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.object.type === "Identifier" &&
+      callee.object.name === "console" &&
+      callee.property.type === "Identifier" &&
+      callee.property.name === "log"
     );
   });
   if (outputIndex === -1) {
@@ -52,7 +52,7 @@ const successPhase = (source: string): string => {
   }
   return statements
     .slice(outputIndex)
-    .map((statement) => statement.getText(parsed))
+    .map((statement) => source.slice(statement.start, statement.end))
     .join("\n");
 };
 

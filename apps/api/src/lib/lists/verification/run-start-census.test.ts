@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import createVerification from "@/api/handlers/lists/verifications/create";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.create";
@@ -10,82 +11,90 @@ const owner = "src/lib/lists/verification/start-run.ts";
 const tableName = "legalListVerificationRuns";
 
 const collectRunInserts = (source: string) => {
-  const file = ts.createSourceFile(
-    "fixture.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const file = parseSource("fixture.ts", source);
   const aliases = new Set([tableName]);
   const namespaces = new Set<string>();
-  for (const statement of file.statements) {
-    if (!ts.isImportDeclaration(statement)) {
+  for (const statement of file.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if ((binding.propertyName ?? binding.name).text === tableName) {
-          aliases.add(binding.name.text);
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportSpecifier") {
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        if (imported === tableName) {
+          aliases.add(binding.local.name);
         }
       }
-    }
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
+      if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.add(binding.local.name);
+      }
     }
   }
-  const isRunTable = (node: ts.Expression): boolean => {
-    if (ts.isIdentifier(node)) {
-      return aliases.has(node.text);
+  const isRunTable = (node: Node): boolean => {
+    if (node.type === "Identifier") {
+      return aliases.has(node.name);
     }
-    if (ts.isPropertyAccessExpression(node)) {
-      return (
-        namespaces.has(node.expression.getText(file)) &&
-        node.name.text === tableName
-      );
+    if (node.type !== "MemberExpression") {
+      return false;
     }
-    if (ts.isElementAccessExpression(node)) {
-      return (
-        namespaces.has(node.expression.getText(file)) &&
-        ts.isStringLiteral(node.argumentExpression) &&
-        node.argumentExpression.text === tableName
-      );
+    let member: string | undefined;
+    if (
+      node.computed &&
+      node.property.type === "Literal" &&
+      typeof node.property.value === "string"
+    ) {
+      member = node.property.value;
     }
-    return false;
+    if (!node.computed && node.property.type === "Identifier") {
+      member = node.property.name;
+    }
+    return (
+      namespaces.has(source.slice(node.object.start, node.object.end)) &&
+      member === tableName
+    );
   };
   const sites: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(file.program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      isRunTable(node.initializer)
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init &&
+      isRunTable(node.init)
     ) {
-      aliases.add(node.name.text);
+      aliases.add(node.id.name);
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "insert"
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier" &&
+      node.callee.property.name === "insert"
     ) {
       const target = node.arguments.at(0);
       if (target && isRunTable(target)) {
-        sites.push(node.getText(file));
+        sites.push(source.slice(node.start, node.end));
       }
     }
+    let text: string | null | undefined;
+    if (node.type === "Literal" && typeof node.value === "string") {
+      text = node.value;
+    }
+    if (node.type === "TemplateLiteral") {
+      text = node.quasis.at(0)?.value.cooked;
+    }
     if (
-      (ts.isStringLiteral(node) ||
-        ts.isNoSubstitutionTemplateLiteral(node) ||
-        ts.isTemplateHead(node)) &&
+      text !== undefined &&
+      text !== null &&
       /\bINSERT\s+INTO\s+(?:"?\w+"?\.)?"?legal_list_verification_runs\b/iu.test(
-        node.text,
+        text,
       )
     ) {
-      sites.push(node.text);
+      sites.push(text);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return sites;
 };
 

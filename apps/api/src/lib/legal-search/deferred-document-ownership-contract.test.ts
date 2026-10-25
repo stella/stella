@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript6";
+
+import {
+  type Node,
+  parseSource,
+  type VariableDeclarator,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DEFERRED_DOCUMENT_WRITER_CAPABILITIES } from "@/api/lib/legal-search/deferred-document-writer-contract";
@@ -20,24 +26,20 @@ const acquisitionNames = new Set([
   "withDeferredDocumentSourceOwnership",
 ]);
 
-const parse = (source: string, file = writerPath) =>
-  ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+const parse = (source: string, file = writerPath) => parseSource(file, source);
 
-const hasExport = (node: ts.Node) =>
-  ts.canHaveModifiers(node) &&
-  ts
-    .getModifiers(node)
-    ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword);
-
-const callsAcquisition = (node: ts.Node): boolean => {
-  if (
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    acquisitionNames.has(node.expression.text)
-  ) {
-    return true;
-  }
-  return ts.forEachChild(node, callsAcquisition) === true;
+const callsAcquisition = (node: Node): boolean => {
+  let found = false;
+  walk(node, (child) => {
+    if (
+      child.type === "CallExpression" &&
+      child.callee.type === "Identifier" &&
+      acquisitionNames.has(child.callee.name)
+    ) {
+      found = true;
+    }
+  });
+  return found;
 };
 
 const writerProblems = (source: string): string[] => {
@@ -50,38 +52,52 @@ const writerProblems = (source: string): string[] => {
     "markDocumentUnavailable",
     "parkDocumentFetch",
   ]);
-  const declarations = new Map<string, ts.VariableDeclaration>();
-  for (const statement of tree.statements) {
+  const declarations = new Map<string, VariableDeclarator>();
+  for (const outer of tree.program.body) {
+    const statement =
+      outer.type === "ExportNamedDeclaration" ? outer.declaration : outer;
     if (
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text.endsWith("Owned")
+      statement?.type === "FunctionDeclaration" &&
+      statement.id?.name.endsWith("Owned")
     ) {
       problems.push(
-        `${statement.name.text}: raw operation must use the owned arrow function contract`,
+        `${statement.id.name}: raw operation must use the owned arrow function contract`,
       );
     }
-    if (!ts.isVariableStatement(statement)) {
+    if (statement?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name)) {
+    for (const declaration of statement.declarations) {
+      if (declaration.id.type !== "Identifier") {
         continue;
       }
-      const name = declaration.name.text;
+      const name = declaration.id.name;
       declarations.set(name, declaration);
       if (!name.endsWith("Owned")) {
         continue;
       }
       publicOperations.add(name.slice(0, -"Owned".length));
-      if (hasExport(statement)) {
+      if (outer.type === "ExportNamedDeclaration") {
         problems.push(`${name}: raw operation is exported`);
       }
       if (
-        declaration.initializer === undefined ||
-        !ts.isArrowFunction(declaration.initializer) ||
-        !declaration.initializer.parameters.some((parameter) =>
-          parameter.type?.getText(tree).includes("DeferredDocumentSourceFence"),
-        )
+        declaration.init?.type !== "ArrowFunctionExpression" ||
+        !declaration.init.params.some((parameter) => {
+          const binding =
+            parameter.type === "TSParameterProperty"
+              ? parameter.parameter
+              : parameter;
+          const target =
+            binding.type === "AssignmentPattern" ? binding.left : binding;
+          const annotation = target.typeAnnotation;
+          return (
+            annotation !== null &&
+            annotation !== undefined &&
+            source
+              .slice(annotation.start, annotation.end)
+              .includes("DeferredDocumentSourceFence")
+          );
+        })
       ) {
         problems.push(`${name}: raw operation requires a source fence`);
       }
@@ -89,24 +105,21 @@ const writerProblems = (source: string): string[] => {
   }
   for (const name of publicOperations) {
     const declaration = declarations.get(name);
-    if (
-      declaration?.initializer === undefined ||
-      !callsAcquisition(declaration.initializer)
-    ) {
+    if (!declaration?.init || !callsAcquisition(declaration.init)) {
       problems.push(`${name}: public operation must acquire ownership`);
     }
   }
-  for (const statement of tree.statements) {
-    if (!ts.isExportDeclaration(statement)) {
-      continue;
-    }
-    if (statement.exportClause === undefined) {
+  for (const statement of tree.program.body) {
+    if (statement.type === "ExportAllDeclaration") {
       problems.push("writer must not re-export raw modules");
-      continue;
     }
-    if (ts.isNamedExports(statement.exportClause)) {
-      for (const element of statement.exportClause.elements) {
-        if ((element.propertyName ?? element.name).text.endsWith("Owned")) {
+    if (statement.type === "ExportNamedDeclaration") {
+      for (const element of statement.specifiers) {
+        const name =
+          element.local.type === "Identifier"
+            ? element.local.name
+            : element.local.value;
+        if (name.endsWith("Owned")) {
           problems.push("writer must not re-export raw operations");
         }
       }
@@ -118,26 +131,27 @@ const writerProblems = (source: string): string[] => {
 const callerProblems = (source: string, file: string): string[] => {
   const tree = parse(source, file);
   const problems: string[] = [];
-  for (const statement of tree.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of tree.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const module = canonicalModuleId(statement.moduleSpecifier.text, file);
+    const module = canonicalModuleId(statement.source.value, file);
     if (module === ownershipModule && file !== writerPath) {
       problems.push(`${file}: ownership constructor belongs to the writer`);
     }
     if (module !== writerModule) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings !== undefined && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if ((binding.propertyName ?? binding.name).text.endsWith("Owned")) {
-          problems.push(`${file}: raw operation import`);
-        }
+    for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const name =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
+      if (name.endsWith("Owned")) {
+        problems.push(`${file}: raw operation import`);
       }
     }
   }

@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const srcRoot = new URL("../../", import.meta.url);
-const propertyName = (name: ts.PropertyName) =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+const propertyName = (name: Node): string | undefined => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  if (name.type === "Literal" && typeof name.value === "string") {
+    return name.value;
+  }
+  return undefined;
+};
 
 describe("period identity coverage", () => {
   test("finite admission callers supply a phase identity and independent concurrency-only callers stay explicit", async () => {
@@ -18,27 +26,22 @@ describe("period identity coverage", () => {
         continue;
       }
       const source = await Bun.file(new URL(file, srcRoot)).text();
-      const tree = ts.createSourceFile(
-        file,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-      );
+      const tree = parseSource(file, source);
       const admissionNames = new Set<string>();
-      for (const statement of tree.statements) {
-        if (!ts.isImportDeclaration(statement)) {
+      for (const statement of tree.program.body) {
+        if (statement.type !== "ImportDeclaration") {
           continue;
         }
-        const bindings = statement.importClause?.namedBindings;
-        if (!bindings || !ts.isNamedImports(bindings)) {
-          continue;
-        }
-        for (const binding of bindings.elements) {
-          if (
-            (binding.propertyName ?? binding.name).text ===
-            "withActionAdmission"
-          ) {
-            admissionNames.add(binding.name.text);
+        for (const binding of statement.specifiers) {
+          if (binding.type !== "ImportSpecifier") {
+            continue;
+          }
+          const name =
+            binding.imported.type === "Identifier"
+              ? binding.imported.name
+              : binding.imported.value;
+          if (name === "withActionAdmission") {
+            admissionNames.add(binding.local.name);
           }
         }
       }
@@ -48,48 +51,54 @@ describe("period identity coverage", () => {
       if (file === "lib/api-handlers.ts") {
         admissionNames.add("admit");
       }
-      const discoverAdmissionDefaults = (node: ts.Node): void => {
+      walk(tree.program, (node) => {
         if (
-          ts.isBindingElement(node) &&
-          ts.isIdentifier(node.name) &&
-          node.initializer &&
-          ts.isIdentifier(node.initializer) &&
-          admissionNames.has(node.initializer.text)
+          node.type === "AssignmentPattern" &&
+          node.left.type === "Identifier" &&
+          node.right.type === "Identifier" &&
+          admissionNames.has(node.right.name)
         ) {
-          admissionNames.add(node.name.text);
+          admissionNames.add(node.left.name);
         }
-        ts.forEachChild(node, discoverAdmissionDefaults);
-      };
-      discoverAdmissionDefaults(tree);
-      const visit = (node: ts.Node): void => {
+      });
+      walk(tree.program, (node) => {
         if (
-          ts.isCallExpression(node) &&
-          ts.isIdentifier(node.expression) &&
-          admissionNames.has(node.expression.text)
+          node.type === "CallExpression" &&
+          node.callee.type === "Identifier" &&
+          admissionNames.has(node.callee.name)
         ) {
           const options = node.arguments.at(0);
-          expect(options && ts.isObjectLiteralExpression(options), file).toBe(
-            true,
-          );
-          if (options && ts.isObjectLiteralExpression(options)) {
+          expect(options?.type === "ObjectExpression", file).toBe(true);
+          if (options?.type === "ObjectExpression") {
             const hasIndependentScope = options.properties.some(
               (property) =>
-                ts.isPropertyAssignment(property) &&
-                propertyName(property.name) === "scope" &&
-                ts.isStringLiteral(property.initializer) &&
-                property.initializer.text === "independent",
+                property.type === "Property" &&
+                property.kind === "init" &&
+                !property.method &&
+                !property.shorthand &&
+                propertyName(property.key) === "scope" &&
+                property.value.type === "Literal" &&
+                typeof property.value.value === "string" &&
+                property.value.value === "independent",
             );
             const hasPeriodIdentity = options.properties.some(
               (property) =>
-                ts.isPropertyAssignment(property) &&
-                propertyName(property.name) === "periodIdentity",
+                property.type === "Property" &&
+                property.kind === "init" &&
+                !property.method &&
+                !property.shorthand &&
+                propertyName(property.key) === "periodIdentity",
             );
             const isBackgroundJob = options.properties.some(
               (property) =>
-                ts.isPropertyAssignment(property) &&
-                propertyName(property.name) === "execution" &&
-                ts.isStringLiteral(property.initializer) &&
-                property.initializer.text === "background-job",
+                property.type === "Property" &&
+                property.kind === "init" &&
+                !property.method &&
+                !property.shorthand &&
+                propertyName(property.key) === "execution" &&
+                property.value.type === "Literal" &&
+                typeof property.value.value === "string" &&
+                property.value.value === "background-job",
             );
             if (
               (hasIndependentScope || isBackgroundJob) &&
@@ -103,52 +112,57 @@ describe("period identity coverage", () => {
           }
         }
         if (
-          ts.isCallExpression(node) &&
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === "admitFiniteAction"
+          node.type === "CallExpression" &&
+          node.callee.type === "Identifier" &&
+          node.callee.name === "admitFiniteAction"
         ) {
           authorizedFiniteCallers.push(file);
           const options = node.arguments.at(0);
-          expect(options && ts.isObjectLiteralExpression(options), file).toBe(
-            true,
-          );
-          if (options && ts.isObjectLiteralExpression(options)) {
+          expect(options?.type === "ObjectExpression", file).toBe(true);
+          if (options?.type === "ObjectExpression") {
             expect(
               options.properties.some(
                 (property) =>
-                  ts.isPropertyAssignment(property) &&
-                  propertyName(property.name) === "actionKind" &&
-                  ts.isStringLiteral(property.initializer) &&
-                  property.initializer.text.length > 0,
+                  property.type === "Property" &&
+                  property.kind === "init" &&
+                  !property.method &&
+                  !property.shorthand &&
+                  propertyName(property.key) === "actionKind" &&
+                  property.value.type === "Literal" &&
+                  typeof property.value.value === "string" &&
+                  property.value.value.length > 0,
               ),
               file,
             ).toBe(true);
           }
         }
         if (
-          ts.isPropertyAssignment(node) &&
-          propertyName(node.name) === "actionAdmission"
+          node.type === "Property" &&
+          node.kind === "init" &&
+          !node.method &&
+          !node.shorthand &&
+          propertyName(node.key) === "actionAdmission"
         ) {
           declarations.push(file);
-          expect(ts.isObjectLiteralExpression(node.initializer), file).toBe(
-            true,
-          );
-          if (ts.isObjectLiteralExpression(node.initializer)) {
+          expect(node.value.type === "ObjectExpression", file).toBe(true);
+          if (node.value.type === "ObjectExpression") {
             expect(
-              node.initializer.properties.some(
+              node.value.properties.some(
                 (property) =>
-                  ts.isPropertyAssignment(property) &&
-                  propertyName(property.name) === "actionKind" &&
-                  ts.isStringLiteral(property.initializer) &&
-                  property.initializer.text.length > 0,
+                  property.type === "Property" &&
+                  property.kind === "init" &&
+                  !property.method &&
+                  !property.shorthand &&
+                  propertyName(property.key) === "actionKind" &&
+                  property.value.type === "Literal" &&
+                  typeof property.value.value === "string" &&
+                  property.value.value.length > 0,
               ),
               file,
             ).toBe(true);
           }
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(tree);
+      });
     }
     expect(callers.toSorted()).toEqual([
       "lib/api-handlers.ts",

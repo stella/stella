@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 describe("chat thumbnail backfill query", () => {
   test("always joins the chat thread for organization ownership", () => {
@@ -9,37 +10,46 @@ describe("chat thumbnail backfill query", () => {
       import.meta.dir,
       "../../scripts/backfill-image-thumbnails.helpers.ts",
     );
-    const source = ts.createSourceFile(
+    const source = parseSource(
       helperPath,
       fs.readFileSync(helperPath, "utf-8"),
-      ts.ScriptTarget.Latest,
-      true,
     );
-    const declaration = source.statements.find(
-      (statement): statement is ts.VariableStatement =>
-        ts.isVariableStatement(statement) &&
-        statement.declarationList.declarations.some(
+    const declaration = source.program.body.find((statement) => {
+      const value =
+        statement.type === "ExportNamedDeclaration"
+          ? statement.declaration
+          : statement;
+      return (
+        value?.type === "VariableDeclaration" &&
+        value.declarations.some(
           (item) =>
-            ts.isIdentifier(item.name) &&
-            item.name.text === "buildChatThumbnailQuery",
-        ),
-    );
+            item.id.type === "Identifier" &&
+            item.id.name === "buildChatThumbnailQuery",
+        )
+      );
+    });
+    const value =
+      declaration?.type === "ExportNamedDeclaration"
+        ? declaration.declaration
+        : declaration;
     const initializer =
-      declaration?.declarationList.declarations.at(0)?.initializer;
-    expect(initializer && ts.isArrowFunction(initializer)).toBe(true);
-    const callsInnerJoin = (node: ts.Node) => {
+      value?.type === "VariableDeclaration"
+        ? value.declarations.at(0)?.init
+        : undefined;
+    expect(initializer?.type === "ArrowFunctionExpression").toBe(true);
+    const callsInnerJoin = (node: Node) => {
       let found = false;
-      const visit = (child: ts.Node) => {
+      walk(node, (child) => {
         if (
-          ts.isCallExpression(child) &&
-          ts.isPropertyAccessExpression(child.expression) &&
-          child.expression.name.text === "innerJoin"
+          child.type === "CallExpression" &&
+          child.callee.type === "MemberExpression" &&
+          !child.callee.computed &&
+          child.callee.property.type === "Identifier" &&
+          child.callee.property.name === "innerJoin"
         ) {
           found = true;
         }
-        ts.forEachChild(child, visit);
-      };
-      visit(node);
+      });
       return found;
     };
     expect(initializer && callsInnerJoin(initializer)).toBe(true);

@@ -14,7 +14,8 @@
 
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../..");
 const OWNER_IMPORT = "@/api/lib/github/outbound-text";
@@ -37,55 +38,74 @@ type GithubModule = {
   untaggedMarkdown: number[];
 };
 
-const propertyName = (name: ts.PropertyName): string | undefined =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+const propertyName = (name: Node): string | undefined => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  if (name.type === "Literal" && typeof name.value === "string") {
+    return name.value;
+  }
+  return undefined;
+};
 
 const scanGithubModule = (file: string, source: string): GithubModule => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSource(file, source);
   const result: GithubModule = {
     file,
     talksToGithub: GITHUB_HOST.test(source),
     writes: /@octokit\//u.test(source),
     untaggedMarkdown: [],
   };
-  const visit = (node: ts.Node): void => {
-    if (ts.isPropertyAssignment(node) && propertyName(node.name) === "method") {
-      const value = node.initializer;
-      const literal =
-        ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)
-          ? value.text.toUpperCase()
-          : undefined;
+  walk(sourceFile.program, (node, ancestors) => {
+    if (
+      node.type === "Property" &&
+      node.kind === "init" &&
+      !node.method &&
+      !node.shorthand &&
+      !node.computed &&
+      propertyName(node.key) === "method"
+    ) {
+      const value = node.value;
+      let text: string | null | undefined;
+      if (value.type === "Literal" && typeof value.value === "string") {
+        text = value.value;
+      }
+      if (value.type === "TemplateLiteral" && value.expressions.length === 0) {
+        text = value.quasis.at(0)?.value.cooked;
+      }
+      const literal = text?.toUpperCase();
       if (literal === undefined || !READ_METHODS.has(literal)) {
         result.writes = true;
       }
     }
-    if (ts.isShorthandPropertyAssignment(node) && node.name.text === "method") {
+    if (
+      node.type === "Property" &&
+      node.shorthand &&
+      propertyName(node.key) === "method"
+    ) {
       result.writes = true;
     }
-    if (ts.isIdentifier(node) && node.text === "githubMarkdown") {
-      const parent = node.parent;
+    if (node.type === "Identifier" && node.name === "githubMarkdown") {
+      const parent = ancestors.at(-1);
+      if (
+        parent?.type === "Property" &&
+        parent.shorthand &&
+        parent.key === node
+      ) {
+        return;
+      }
       const isTag =
-        ts.isTaggedTemplateExpression(parent) && parent.tag === node;
+        parent?.type === "TaggedTemplateExpression" && parent.tag === node;
       const isImport =
-        ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent);
-      // The owner's own definition of the tag.
+        parent?.type === "ImportSpecifier" ||
+        parent?.type === "ExportSpecifier";
       const isDefinition =
-        ts.isVariableDeclaration(parent) && parent.name === node;
+        parent?.type === "VariableDeclarator" && parent.id === node;
       if (!isTag && !isImport && !isDefinition) {
-        result.untaggedMarkdown.push(
-          sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-        );
+        result.untaggedMarkdown.push(sourceFile.locate(node.start).line);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return result;
 };
 
