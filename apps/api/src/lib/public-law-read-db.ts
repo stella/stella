@@ -16,6 +16,7 @@ import {
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
   requestBoundedTimeoutMs,
@@ -538,14 +539,31 @@ export const publicLawReadDb = async <T>(
     try: async () => await transaction,
     catch: (cause) => cause,
   });
-  if (Result.isOk(outcome)) {
-    return outcome.value;
+  // The read keeps the rejection contract its callers handle; only what the
+  // rejection carries changes when the request's budget ended it.
+  return Result.isOk(outcome)
+    ? outcome.value
+    : await Promise.reject(publicLawReadFailure(outcome.error));
+};
+
+/**
+ * What a failed read rejects with: the budget's `timeout_budgeted`
+ * TimeoutError when the request's deadline ended it, else the failure itself
+ * (a non-Error rejection wrapped, so the rejection is always an Error).
+ */
+const publicLawReadFailure = (error: unknown): Error => {
+  const expiry = requestBudgetExpiry(error, {
+    clampedTimeout: isRequestClampedTimeout(error),
+  });
+  if (expiry !== undefined) {
+    return expiry;
   }
-  throw (
-    requestBudgetExpiry(outcome.error, {
-      clampedTimeout: isRequestClampedTimeout(outcome.error),
-    }) ?? outcome.error
-  );
+  return error instanceof Error
+    ? error
+    : new DatabaseError({
+        message: "Public-law read transaction rejected with a non-Error value",
+        cause: error,
+      });
 };
 
 /** The timeouts the read guards clamp to the request's deadline. */
