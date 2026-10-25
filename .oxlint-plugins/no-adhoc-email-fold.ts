@@ -1,5 +1,5 @@
 // Email addresses compare equal through one owner,
-// apps/api/src/lib/normalized-email.ts. A hand-written fold elsewhere
+// apps/api/src/lib/email/normalized-email.ts. A hand-written fold elsewhere
 // can disagree with it (trim or not, JavaScript or SQL case mapping), and a
 // gate that folds one way admits an address the account lookup resolves
 // another way. Syntax only: a value counts as an address when the binding or
@@ -110,10 +110,10 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
-          fold: "Fold an email address with normalizeEmail() from @/api/lib/normalized-email so every comparison, key and lookup uses one rule.",
+          fold: "Fold an email address with normalizeEmail() from @/api/lib/email/normalized-email so every comparison, key and lookup uses one rule.",
           schema:
-            "Validate an email address with emailAddressSchema from @/api/lib/normalized-email instead of a lowercase action in the pipe.",
-          sql: "Compare a stored email column with emailColumnMatches() from @/api/lib/normalized-email instead of folding it in SQL by hand.",
+            "Validate an email address with emailAddressSchema from @/api/lib/email/normalized-email instead of a lowercase action in the pipe.",
+          sql: "Compare a stored email column with emailColumnMatches() from @/api/lib/email/normalized-email instead of folding it in SQL by hand.",
         },
       },
       createOnce(context) {

@@ -18,13 +18,13 @@ import {
   type InboundMailReceivingInput,
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
-import { emailAddressSchema } from "@/api/lib/normalized-email";
 import {
   caseLawCanariesEnvSchema,
   caseLawDailyBandsEnvSchema,

@@ -12,8 +12,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { normalizeEmail } from "@/api/lib/normalized-email";
 
 const bodySchema = t.Object({
   address: t.String({ format: "email", minLength: 3, maxLength: 320 }),

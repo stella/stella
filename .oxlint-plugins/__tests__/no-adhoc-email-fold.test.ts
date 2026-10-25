@@ -5,7 +5,7 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-adhoc-email-fold";
 const RULE_ID = `${RULE}/${RULE}`;
-const OWNER = "apps/api/src/lib/normalized-email.ts";
+const OWNER = "apps/api/src/lib/email/normalized-email.ts";
 
 test("rejects every hand-written fold of an email-named value", async () => {
   const source = [

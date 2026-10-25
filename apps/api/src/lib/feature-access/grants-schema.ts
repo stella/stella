@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
-import { emailAddressSchema } from "@/api/lib/normalized-email";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 

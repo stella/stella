@@ -7,7 +7,10 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { emailAddressSchema, normalizeEmail } from "@/api/lib/normalized-email";
+import {
+  emailAddressSchema,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 
 // Characters whose case mapping differs between folds or runtimes: Turkish
 // dotted and dotless i, the long s, the Kelvin sign, Greek sigma in its

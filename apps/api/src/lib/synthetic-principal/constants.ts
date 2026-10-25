@@ -1,4 +1,4 @@
-import { normalizeEmail } from "@/api/lib/normalized-email";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 
 export const SYNTHETIC_PRINCIPAL = {
   user: {

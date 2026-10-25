@@ -2,9 +2,9 @@ import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
 
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
-import { normalizeEmail } from "@/api/lib/normalized-email";
-import type { NormalizedEmail } from "@/api/lib/normalized-email";
 import { OTP_DELIVERY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";

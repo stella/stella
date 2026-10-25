@@ -12,8 +12,8 @@ import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 
 import { hashSessionToken } from "@/api/lib/auth/session-token";
-import { normalizeEmail } from "@/api/lib/normalized-email";
-import type { NormalizedEmail } from "@/api/lib/normalized-email";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,

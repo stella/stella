@@ -8,7 +8,7 @@ import { Result } from "better-result";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import type { DemoAccountConfig } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
-import { normalizeEmail } from "@/api/lib/normalized-email";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,

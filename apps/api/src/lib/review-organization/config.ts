@@ -2,7 +2,10 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-import { emailAddressSchema, normalizeEmail } from "@/api/lib/normalized-email";
+import {
+  emailAddressSchema,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import {
   AUTH_PROVIDER_ID_PATTERN,
   brandPersistedOrganizationId,

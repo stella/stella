@@ -30,12 +30,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
+import {
+  emailColumnMatches,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { emailColumnMatches, normalizeEmail } from "@/api/lib/normalized-email";
 import { recordOrganizationStorageTeardown } from "@/api/lib/organization-storage-teardown";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";

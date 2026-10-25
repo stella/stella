@@ -8,8 +8,8 @@ import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { normalizeEmail } from "@/api/lib/normalized-email";
 
 const config = {
   contract: "patch",

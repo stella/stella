@@ -6,7 +6,10 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { emailColumnMatches, normalizeEmail } from "@/api/lib/normalized-email";
+import {
+  emailColumnMatches,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 /**

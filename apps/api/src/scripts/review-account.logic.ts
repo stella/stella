@@ -2,8 +2,8 @@ import type { AuthContext } from "better-auth";
 import { Result, TaggedError } from "better-result";
 
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
-import { normalizeEmail } from "@/api/lib/normalized-email";
-import type { NormalizedEmail } from "@/api/lib/normalized-email";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,

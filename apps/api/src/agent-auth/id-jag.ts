@@ -22,7 +22,7 @@ import {
 } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
-import { emailAddressSchema } from "@/api/lib/normalized-email";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 
 /**
  * The error vocabulary the ID-JAG path maps onto HTTP. `issuer_not_enabled`

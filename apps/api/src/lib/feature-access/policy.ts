@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
-import { normalizeEmail } from "@/api/lib/normalized-email";
 
 const featureAccessProof = Symbol("featureAccessProof");
 

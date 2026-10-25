@@ -16,8 +16,8 @@ import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { LIMITS } from "@/api/lib/limits";
-import { normalizeEmail } from "@/api/lib/normalized-email";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
 

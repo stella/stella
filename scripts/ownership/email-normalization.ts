@@ -3,7 +3,7 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "email-normalization",
   capability: "Deciding whether two email addresses are the same address",
-  owner: ["apps/api/src/lib/normalized-email.ts"],
+  owner: ["apps/api/src/lib/email/normalized-email.ts"],
   summary:
     "Account lookups, demo, review and system account checks, rate-limit " +
     "and one-time-code keys, identity linking and allowed senders compare " +
