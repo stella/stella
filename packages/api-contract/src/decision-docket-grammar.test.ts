@@ -42,6 +42,34 @@ const canonicalDocketArbitraries = {
             .padStart(4, "0")}`,
       ),
   ),
+  BRA: fc.oneof(
+    fc
+      .tuple(
+        fc.constantFrom("RE", "ARE", "ADI", "HC", "REsp", "AREsp", "MS"),
+        fc.integer({ min: 1, max: 99_999_999 }),
+        fc.constantFrom("", "/SP", "/DF"),
+        fc.constantFrom("", "AgInt no ", "EDcl no AgRg no "),
+        fc.constantFrom("", " AgR", " AgR-ED", " ED-segundos"),
+      )
+      .map(
+        ([className, number, state, incidents, trailing]) =>
+          `${incidents}${className} ${number.toLocaleString("pt-BR")}${state}${trailing}`,
+      ),
+    fc
+      .tuple(
+        fc.integer({ min: 1, max: 9_999_999 }),
+        fc.integer({ min: 0, max: 99 }),
+        fc.integer({ min: 1950, max: 2099 }),
+        fc.integer({ min: 1, max: 9 }),
+        fc.integer({ min: 0, max: 27 }),
+        fc.integer({ min: 0, max: 9999 }),
+        fc.constantFrom("", "RR - ", "Ag-AIRR-", "ApCiv "),
+      )
+      .map(
+        ([sequence, check, year, branch, tribunal, origin, lead]) =>
+          `${lead}${sequence}-${String(check).padStart(2, "0")}.${year}.${branch}.${String(tribunal).padStart(2, "0")}.${String(origin).padStart(4, "0")}`,
+      ),
+  ),
   CZE: fc.oneof(
     fc
       .tuple(

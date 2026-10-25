@@ -7,6 +7,44 @@ type DecisionDocketGrammarFixture = {
 
 /** Synthetic spellings that each declared grammar must canonicalize alike. */
 export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
+  BRA: [
+    {
+      canonical: "RE 99234567",
+      variants: [
+        "RE 99.234.567",
+        "re 99234567",
+        "RE 99.234.567/SP",
+        "RE 99234567 AgR",
+        "RE 99234567 agr-ed",
+        "AgR no RE 99.234.567",
+      ],
+    },
+    {
+      canonical: "REsp 99810170",
+      variants: [
+        "REsp 99.810.170/RS",
+        "AgInt no REsp 99.810.170/RS",
+        "EDcl no AgInt no REsp 99810170",
+        "resp 99810170",
+      ],
+    },
+    { canonical: "AREsp 99810170", variants: ["AgInt no AREsp 99.810.170/SP"] },
+    { canonical: "ADI 99341", variants: ["ADI 99.341 MC-Ref", "ADI 99341/DF"] },
+    { canonical: "HC 99456", variants: ["HC 99.456", "HC 99456 AgR-segundo"] },
+    {
+      canonical: "0000751-20.2099.5.08.0017",
+      variants: [
+        "751-20.2099.5.08.0017",
+        "Ag-AIRR - 751-20.2099.5.08.0017",
+        "RR-751-20.2099.5.08.0017",
+        "00007512020995080017",
+      ],
+    },
+    {
+      canonical: "0701234-56.2099.8.07.0001",
+      variants: ["07012345620998070001", "ApCiv 0701234-56.2099.8.07.0001"],
+    },
+  ],
   AUT: [
     {
       canonical: "99 Xy 99999/99x",

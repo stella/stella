@@ -383,6 +383,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -7023,6 +7024,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -14443,6 +14445,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",
@@ -16463,6 +16466,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
               "spelling": "alpha-3",
               "admitted": [
                 "AUT",
+                "BRA",
                 "CZE",
                 "EU",
                 "GBR",

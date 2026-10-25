@@ -286,6 +286,7 @@ const CAPITAL_MARKER_SIZE = 0.05;
  */
 const CAPITAL_BY_JURISDICTION = {
   AUT: [48.21, 16.37],
+  BRA: [-15.8, -47.86],
   CZE: [50.08, 14.44],
   EU: [49.62, 6.13],
   GBR: [51.51, -0.13],
@@ -298,14 +299,15 @@ const CAPITAL_BY_JURISDICTION = {
 /**
  * Each jurisdiction's colour, on the pin and in the legend, taken from its
  * flag: the EU's blue, the Czech red, the Slovak blue, the Hungarian green,
- * the Polish and Austrian reds, the United States' navy. Most of these flags
- * are red, white and blue, so the reds cannot be told apart by colour alone;
- * the legend's names and the capitals' places on the sphere carry the
- * identity where the hue does not. Fixed per jurisdiction, so a country keeps
+ * the Polish and Austrian reds, the Brazilian green, the United States' navy.
+ * Most of these flags are red, white and blue, so the reds cannot be told
+ * apart by colour alone; the legend's names and the capitals' places on the
+ * sphere carry the identity where the hue does not. Fixed per jurisdiction, so a country keeps
  * its colour when another arrives.
  */
 const COLOR_BY_JURISDICTION = {
   AUT: "#ed2939",
+  BRA: "#009c3b",
   CZE: "#d7141a",
   EU: "#003399",
   GBR: "#012169",

@@ -24,6 +24,7 @@ import {
  */
 const CORPUS_MORPHOLOGY_LANGUAGE_BY_JURISDICTION = {
   AUT: "de",
+  BRA: "pt",
   CZE: "cs",
   EU: null,
   GBR: "en",
