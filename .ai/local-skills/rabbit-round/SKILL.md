@@ -98,9 +98,10 @@ disposition's own prerequisite holds:
 
 Refetch the thread first and triage any new bot finding in it. In every case,
 resolve it only when every participant is a confirmed allowed bot; any human,
-unknown, mixed-participant, or uncertain participant leaves the thread open. Top-level bot comments have no resolution
-state: the PR body entry is the whole disposition there. Do not minimize bot
-summaries by default.
+unknown, mixed-participant, or uncertain participant leaves the thread open.
+
+Top-level bot comments have no resolution state: the PR body entry is the whole
+disposition there. Do not minimize bot summaries by default.
 
 ## 5. Recheck the Current Head
 
