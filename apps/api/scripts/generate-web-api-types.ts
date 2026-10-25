@@ -684,7 +684,9 @@ export const printContract = async ({
     }
     const printedArguments: string[] = [];
     for (const [index, argument] of typeArguments.entries()) {
-      printedArguments.push(await at(`<${index}>`, () => print(argument)));
+      printedArguments.push(
+        await at(`<${index}>`, async () => print(argument)),
+      );
     }
     return `${local}<${printedArguments.join(", ")}>`;
   };
@@ -944,7 +946,7 @@ export const printContract = async ({
         name +
           (constraint === undefined
             ? ""
-            : ` extends ${await at("extends", () => print(constraint))}`),
+            : ` extends ${await at("extends", async () => print(constraint))}`),
       );
     }
     const parameters: string[] = [];
@@ -979,7 +981,7 @@ export const printContract = async ({
       const returnType =
         (await checker.getReturnTypeOfSignature(sig)) ??
         panic("generate-web-api-types: signature without a return type");
-      returned = await at("=>", () => print(returnType));
+      returned = await at("=>", async () => print(returnType));
     } else {
       const asserts =
         predicate.kind === TypePredicateKind.AssertsThis ||
@@ -993,7 +995,7 @@ export const printContract = async ({
       returned = `${asserts ? "asserts " : ""}${subject}${
         narrowed === undefined
           ? ""
-          : ` is ${await at("is", () => print(narrowed))}`
+          : ` is ${await at("is", async () => print(narrowed))}`
       }`;
     }
     const generics =
@@ -1010,19 +1012,19 @@ export const printContract = async ({
     for (const [index, sig] of (
       await compiler.callSignatures(type)
     ).entries()) {
-      members.push(await at(`call${index}`, () => signature(sig, false)));
+      members.push(await at(`call${index}`, async () => signature(sig, false)));
     }
     for (const [index, sig] of (
       await compiler.constructSignatures(type)
     ).entries()) {
       members.push(
-        `new ${await at(`new${index}`, () => signature(sig, false))}`,
+        `new ${await at(`new${index}`, async () => signature(sig, false))}`,
       );
     }
     for (const info of await compiler.indexInfos(type)) {
-      const key = await at("[key]", () => print(info.keyType));
+      const key = await at("[key]", async () => print(info.keyType));
       members.push(
-        `${info.isReadonly ? "readonly " : ""}[key: ${key}]: ${await at(`[${key}]`, () => print(info.valueType))}`,
+        `${info.isReadonly ? "readonly " : ""}[key: ${key}]: ${await at(`[${key}]`, async () => print(info.valueType))}`,
       );
     }
     for (const property of await compiler.properties(type)) {
@@ -1037,7 +1039,7 @@ export const printContract = async ({
         ) {
           for (const [index, sig] of signatures.entries()) {
             members.push(
-              `${key}${await at(`${key}#${index}`, () => signature(sig, false))}`,
+              `${key}${await at(`${key}#${index}`, async () => signature(sig, false))}`,
             );
           }
           continue;
@@ -1045,7 +1047,7 @@ export const printContract = async ({
       }
       const printed = await at(key, async () => {
         if (wireResponse && key === "response") {
-          return await withWire(true, () => print(propertyType));
+          return await withWire(true, async () => print(propertyType));
         }
         if (!optional) {
           return await print(propertyType);
@@ -1074,7 +1076,7 @@ export const printContract = async ({
     for (const member of members) {
       printed.push({
         kind: unionMemberKind(member),
-        printed: await at("|", () => unionMember(member)),
+        printed: await at("|", async () => unionMember(member)),
       });
     }
     return orderUnionMembers(printed).join(" | ");
@@ -1091,7 +1093,7 @@ export const printContract = async ({
       await compiler.typeArguments(reference)
     ).entries()) {
       const flags = target.elementFlags[index] ?? ElementFlags.Required;
-      const printed = await at(`[${index}]`, () => print(element));
+      const printed = await at(`[${index}]`, async () => print(element));
       const wrapped = /[|&]|=>/u.test(printed) ? `(${printed})` : printed;
       if (hasFlag(flags, ElementFlags.Rest)) {
         elements.push(`...${wrapped}[]`);
@@ -1108,7 +1110,7 @@ export const printContract = async ({
 
   const print = async (type: Type): Promise<string> => {
     if (wire && !(await reachesDate(type))) {
-      return await withWire(false, () => print(type));
+      return await withWire(false, async () => print(type));
     }
     if (wire && (await isDate(type))) {
       return "string";
@@ -1191,13 +1193,13 @@ export const printContract = async ({
         text.replaceAll(/[`\\]/gu, "\\$&").replaceAll("${", "\\${");
       let printed = `\`${escape(texts[0] ?? "")}`;
       for (const [index, span] of (await compiler.members(type)).entries()) {
-        printed += `\${${await at(`\${${index}}`, () => print(span))}}${escape(texts[index + 1] ?? "")}`;
+        printed += `\${${await at(`\${${index}}`, async () => print(span))}}${escape(texts[index + 1] ?? "")}`;
       }
       return `${printed}\``;
     }
     if (type.isStringMappingType()) {
       const inner = await type.getTarget();
-      const printed = await at("mapping", () => print(inner));
+      const printed = await at("mapping", async () => print(inner));
       const name =
         (await compiler.symbol(type))?.name ??
         panic("generate-web-api-types: string mapping without a symbol");
@@ -1208,14 +1210,14 @@ export const printContract = async ({
     }
     if (type.isUnionType()) {
       const members = await compiler.members(type);
-      return await memo(type, () => unionBody(members));
+      return await memo(type, async () => unionBody(members));
     }
     if (type.isIntersectionType()) {
       const members = await compiler.members(type);
       return await memo(type, async () => {
         const printed: string[] = [];
         for (const member of members) {
-          const text = await at("&", () => print(member));
+          const text = await at("&", async () => print(member));
           printed.push(
             /[|]|=>/u.test(text) &&
               !text.startsWith("") &&
@@ -1234,7 +1236,7 @@ export const printContract = async ({
     if (type.isTypeReference()) {
       const target = await compiler.target(type);
       if (target.isTupleType()) {
-        return await memo(type, () => tuple(type, target));
+        return await memo(type, async () => tuple(type, target));
       }
       if (await compiler.isArray(type)) {
         const element = (await compiler.typeArguments(type)).at(0);
@@ -1242,7 +1244,7 @@ export const printContract = async ({
           (await compiler.symbol(target))?.name === "ReadonlyArray"
             ? "ReadonlyArray"
             : "Array";
-        return `${name}<${element === undefined ? "unknown" : await at("[]", () => print(element))}>`;
+        return `${name}<${element === undefined ? "unknown" : await at("[]", async () => print(element))}>`;
       }
       const name = await globalNameOf(await compiler.symbol(target));
       if (name !== undefined) {
@@ -1252,7 +1254,7 @@ export const printContract = async ({
         }
         const printed: string[] = [];
         for (const [index, argument] of typeArguments.entries()) {
-          printed.push(await at(`<${index}>`, () => print(argument)));
+          printed.push(await at(`<${index}>`, async () => print(argument)));
         }
         return `${name}<${printed.join(", ")}>`;
       }
@@ -1272,7 +1274,7 @@ export const printContract = async ({
     ) {
       return "Record<never, never>";
     }
-    return await memo(type, () => objectBody(type));
+    return await memo(type, async () => objectBody(type));
   };
 
   // Asks for the graph the printer walks a level at a time, every question
