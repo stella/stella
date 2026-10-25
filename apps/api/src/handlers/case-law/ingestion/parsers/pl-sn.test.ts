@@ -286,6 +286,40 @@ describe("reading recorded Supreme Court PDFs", () => {
     );
   });
 
+  test("a superscript after a line's last word stays at the end of that line", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-v-csk-98-17",
+      "V CSK 98/17",
+    );
+
+    expect(
+      paragraphs.some((paragraph) =>
+        paragraph.startsWith(
+          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 3989 § 1 pkt 2 k.p.c.",
+        ),
+      ),
+    ).toBe(true);
+    expect(paragraphs.some((paragraph) => /^\d+\s/u.test(paragraph))).toBe(
+      false,
+    );
+  });
+
+  test("a numbered point after a full line ending in a comma opens its own paragraph", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-iii-kk-333-26",
+      "III KK 333/26",
+    );
+
+    expect(paragraphs).toContain(
+      "1. oddalić kasację jako oczywiście bezzasadną,",
+    );
+    expect(
+      paragraphs.some((paragraph) =>
+        paragraph.startsWith("2. obciążyć oskarżycielkę posiłkową"),
+      ),
+    ).toBe(true);
+  });
+
   test("an operative point set as an indented block stays one paragraph", async () => {
     const paragraphs = await supremeCourtParagraphs(
       "pl-sn-i-csk-2892-23",
