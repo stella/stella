@@ -446,20 +446,31 @@ function provenance(
   });
   let found = false;
   visit(owner, (node) => {
+    if (node.type !== "Property") {
+      return;
+    }
+    // `{ name = fallback }` binds `name` through a default.
+    const binding =
+      node.value.type === "AssignmentPattern" ? node.value.left : node.value;
+    if (binding.type !== "Identifier" || !names.has(binding.name)) {
+      return;
+    }
     const ancestors = unitOf(inventory, node)?.ancestors.get(node);
     const pattern = ancestors?.at(-1);
-    const parameter = ancestors?.at(-2);
+    // `({ name } = {})` wraps the whole parameter in a default.
+    const defaulted = ancestors?.at(-2);
+    const parameter =
+      defaulted?.type === "AssignmentPattern" ? defaulted : pattern;
+    const owningFunction =
+      defaulted?.type === "AssignmentPattern" ? ancestors?.at(-3) : defaulted;
     if (
-      node.type !== "Property" ||
-      node.value.type !== "Identifier" ||
-      !names.has(node.value.name) ||
       pattern?.type !== "ObjectPattern" ||
       !(
-        parameter?.type === "ArrowFunctionExpression" ||
-        parameter?.type === "FunctionExpression" ||
-        parameter?.type === "FunctionDeclaration"
+        owningFunction?.type === "ArrowFunctionExpression" ||
+        owningFunction?.type === "FunctionExpression" ||
+        owningFunction?.type === "FunctionDeclaration"
       ) ||
-      !parameter.params.some((param) => param === pattern)
+      !owningFunction.params.some((param) => param === parameter)
     ) {
       return;
     }

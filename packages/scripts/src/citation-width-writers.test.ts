@@ -145,8 +145,10 @@ const declarations: Record<string, Declaration> = {
     },
 };
 
-const propertyName = (node: Node) => {
-  if (node.type === "Identifier") {
+// A computed key names a field only when it is a string literal: `[column]`
+// is whatever `column` holds at run time.
+const propertyName = (node: Node, computed = false) => {
+  if (node.type === "Identifier" && !computed) {
     return node.name;
   }
   return node.type === "Literal" && typeof node.value === "string"
@@ -172,7 +174,7 @@ const ownerOf = (ancestors: readonly Node[]): string => {
       (parent.value.type === "ArrowFunctionExpression" ||
         parent.value.type === "FunctionExpression")
     ) {
-      return propertyName(parent.key) ?? "computed-producer";
+      return propertyName(parent.key, parent.computed) ?? "computed-producer";
     }
   }
   return "module";
@@ -186,7 +188,7 @@ const writtenFields = (node: Node): string[] | null => {
     node.properties.some(
       (property) =>
         property.type === "SpreadElement" ||
-        (property.computed && propertyName(property.key) === null),
+        (property.computed && propertyName(property.key, true) === null),
     )
   ) {
     return null;
@@ -195,7 +197,7 @@ const writtenFields = (node: Node): string[] | null => {
     if (property.type !== "Property" || property.method) {
       return [];
     }
-    const name = propertyName(property.key);
+    const name = propertyName(property.key, property.computed);
     return name && fields.has(name) ? [name] : [];
   });
 };
@@ -285,7 +287,7 @@ const discoverWriters = (file: string, text: string): Writer[] => {
               property.type === "Property" &&
               !property.method &&
               !property.shorthand &&
-              propertyName(property.key) === "set"
+              propertyName(property.key, property.computed) === "set"
                 ? [property.value]
                 : [],
             )
@@ -380,6 +382,7 @@ test("new ORM and SQL writers require their own checked producer", () => {
     "db.insert(caseLawCitations).values({citationKey: supplied});",
     "db.update(caseLawDecisions).set({citationKey: supplied});",
     'db.update(caseLawDecisions).set({["citationKey"]: supplied});',
+    "db.update(caseLawDecisions).set({[column]: supplied});",
     "db.update(caseLawDecisions).set({...supplied});",
     "db.insert(caseLawCitationReviews).values(rows);",
     'import { caseLawCitations as citations } from "@/api/db/schema"; db.insert(citations).values(rows);',

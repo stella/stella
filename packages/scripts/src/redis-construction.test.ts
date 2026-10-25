@@ -15,6 +15,17 @@ const factoryNames = new Set([
   "createCollabRedisClient",
 ]);
 
+// A non-computed key's decoded name: `connection` and "connection" are
+// both `connection`.
+const staticKeyName = (key: Node): string | null => {
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : null;
+};
+
 const inspectConstruction = (source: string, file: string) => {
   // Escaped source is always parsed, so a module or binding written with
   // Unicode escapes cannot bypass the fast path.
@@ -209,10 +220,8 @@ const inspectConstruction = (source: string, file: string) => {
                 element.type === "Property" &&
                 !element.computed &&
                 element.key.type === "Identifier" &&
-                !forbiddenBinding(
-                  source.slice(element.key.start, element.key.end),
-                  module,
-                ),
+                // The decoded name: an escaped `RedisClient` is the same binding.
+                !forbiddenBinding(element.key.name, module),
             );
           if (!safeBun) {
             violations.push("raw-client-dynamic-import");
@@ -240,8 +249,7 @@ const inspectConstruction = (source: string, file: string) => {
               property.kind === "init" &&
               !property.method &&
               !property.shorthand &&
-              source.slice(property.key.start, property.key.end) ===
-                "storeClass",
+              staticKeyName(property.key) === "storeClass",
           )
         : undefined;
     if (
@@ -289,8 +297,7 @@ const inspectConstruction = (source: string, file: string) => {
               !property.computed &&
               property.kind === "init" &&
               !property.method &&
-              source.slice(property.key.start, property.key.end) ===
-                "connection",
+              staticKeyName(property.key) === "connection",
           )
         : undefined;
     if (
@@ -383,6 +390,7 @@ for (const source of [
   "const make = createRedisClient; make();",
   'factory["createRedisClient"]();',
   'import { createBullMqConnection as make } from "@/api/lib/redis-client"; make({ storeClass: "cache" });',
+  'const { \\u0052edisClient } = await import("bun");',
 ]) {
   test(`the construction guard rejects an invalid declaration: ${source}`, () => {
     expect(
@@ -404,6 +412,22 @@ test("type imports and declared factory aliases remain available", () => {
   );
   expect(result.violations).toEqual([]);
   expect(result.declarations).toEqual([
+    { storeClass: "durable-coordination", factory: "createRedisClient" },
+  ]);
+});
+
+test("a quoted or escaped storeClass key declares the store class", () => {
+  const result = inspectConstruction(
+    [
+      'import { createRedisClient as create } from "@/api/lib/redis-client";',
+      'create({ "storeClass": "durable-coordination" });',
+      'create({ \\u0073toreClass: "durable-coordination" });',
+    ].join("\n"),
+    "apps/api/src/lib/example.ts",
+  );
+  expect(result.violations).toEqual([]);
+  expect(result.declarations).toEqual([
+    { storeClass: "durable-coordination", factory: "createRedisClient" },
     { storeClass: "durable-coordination", factory: "createRedisClient" },
   ]);
 });
