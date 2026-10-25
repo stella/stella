@@ -5,18 +5,6 @@ defaults:
     shell: bash
 
 on:
-  pull_request:
-    paths:
-      - bun.lock
-      - "**/package.json"
-      - Cargo.lock
-      - "**/Cargo.lock"
-      - Cargo.toml
-      - "**/Cargo.toml"
-      - .github/workflows/dependency-audit.yml
-      - scripts/dependency-audit.ts
-      - scripts/check-trusted-dependencies.ts
-      - scripts/retry.sh
   push:
     branches: [main]
   schedule:
