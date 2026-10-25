@@ -737,7 +737,9 @@ export const assembleCaseLawCoverageAnswer = async ({
   const failedParts = new Set<CaseLawCoveragePart>();
   const result = await loadCaseLawCoverage({
     ...load,
-    onPartialFailure: (part) => failedParts.add(part),
+    onPartialFailure: (part) => {
+      failedParts.add(part);
+    },
   });
   if (Result.isError(result)) {
     // Unlike the hint beside the search box, this page IS the numbers:
