@@ -10,6 +10,12 @@ import {
   PL_KIO_DOCUMENT_REJECTION,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
+import {
+  VatRateCurrencyError,
+  VatRateMalformedError,
+  VatRateNotPublishedError,
+  VatRateUnavailableError,
+} from "@/api/lib/billing/vat-exchange-rates";
 import { WorkDeadlineError, WorkRefusal } from "@/api/lib/load/work-admission";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -17,6 +23,47 @@ import { TAGGED_FAILURE_REASON } from "@/api/lib/observability/failure-tag-polic
 import { FAILURE_TAGS } from "@/api/lib/observability/failure-tags.gen";
 
 const sink = failureSink({ event: "tag-policy.contract", expected: [] });
+
+test.each([
+  {
+    error: new VatRateCurrencyError({
+      message: "unsupported currency",
+      currency: "USD",
+    }),
+    reason: "request_validation",
+    grade: "client",
+  },
+  {
+    error: new VatRateNotPublishedError({
+      message: "publication pending",
+      availableFrom: "2026-10-26",
+    }),
+    reason: "conflict",
+    grade: "client",
+  },
+  {
+    error: new VatRateMalformedError({
+      message: "malformed upstream response",
+    }),
+    reason: "upstream_unavailable",
+    grade: "transient",
+  },
+  {
+    error: new VatRateUnavailableError({ message: "upstream unavailable" }),
+    reason: "upstream_unavailable",
+    grade: "transient",
+  },
+])(
+  "VAT $error._tag keeps the invoice boundary's $grade disposition",
+  ({ error, reason, grade }) => {
+    for (const observed of [error, new UnhandledException({ cause: error })]) {
+      expect(gradeFailure(readEvidence(observed), sink)).toMatchObject({
+        reason,
+        grade,
+      });
+    }
+  },
+);
 
 test.each([
   { name: "Panic", error: () => new Panic({ message: "failure" }) },
