@@ -23,6 +23,7 @@ import {
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { reclaimCorpusUpload } from "@/api/lib/legal-search/corpus-storage";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const CLEANUP_RETRY_MAX_DELAY_MS = DAY_IN_MS;
 const CLEANUP_RETRY_UNIT_MS = 60 * 1000;
@@ -881,10 +882,13 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
           catch: (cause) => cause,
         });
         if (Result.isError(released)) {
-          captureError(released.error, {
-            corpusUploadIntentId: row.id,
-            step: "reconcileCaseLawCorpusUploadIntents.reclaim",
-          });
+          captureError(
+            released.error,
+            handlerErrorContext("legalsearch.cleanupResults.released_error", {
+              corpusUploadIntentId: row.id,
+              step: "reconcileCaseLawCorpusUploadIntents.reclaim",
+            }),
+          );
           return null;
         }
         switch (released.value.type) {

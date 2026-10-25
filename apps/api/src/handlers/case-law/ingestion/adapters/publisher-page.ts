@@ -1,4 +1,4 @@
-// parser-output-unchanged: failure stop kinds classify rejected pages only; accepted page validation and parsed records are unchanged.
+// parser-output-unchanged: failure stop kinds and fingerprint fields classify rejected pages only; accepted page validation and parsed records are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
@@ -6,6 +6,7 @@ import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
 
+import { declareFingerprintFields } from "@stll/errors";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -33,6 +34,10 @@ const PUBLISHER_PAGE_STOP_KIND = {
 } as const satisfies Record<PublisherPageReason, IngestionStopKind>;
 
 export class PublisherPageError extends AdapterFetchError {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
   override readonly name = "PublisherPageError";
   readonly reason: PublisherPageReason;
 

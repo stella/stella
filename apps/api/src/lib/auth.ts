@@ -267,6 +267,7 @@ import {
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1649,7 +1650,12 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(teardown.error, { organizationId });
+          captureError(
+            teardown.error,
+            handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {
+              organizationId,
+            }),
+          );
           throw teardown.error instanceof OrganizationStorageTeardownBoundError
             ? new APIError("BAD_REQUEST", {
                 error: "organization_storage_too_large",
@@ -2552,7 +2558,12 @@ export const createAuth = (
                   sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                   lang,
                 }).catch((error: unknown) => {
-                  captureError(error, { source: "new-device-login-email" });
+                  captureError(
+                    error,
+                    handlerErrorContext("lib.notified", {
+                      source: "new-device-login-email",
+                    }),
+                  );
                   throw error;
                 }),
               );
@@ -2560,7 +2571,12 @@ export const createAuth = (
             isTransactionalEmailConfigured,
             isLocalDev: isLocalDevOpen,
             onError: (error) =>
-              captureError(error, { source: "new-device-login-hook" }),
+              captureError(
+                error,
+                handlerErrorContext("lib.auth.notified_error", {
+                  source: "new-device-login-hook",
+                }),
+              ),
           },
         });
       }),

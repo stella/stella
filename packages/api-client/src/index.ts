@@ -18,6 +18,9 @@ import { panic, Result } from "better-result";
 
 import { toWireInput } from "@stll/api-contract/http-input";
 
+import type { ScopedResponseObserver } from "./scoped-response";
+export type { ScopedResponse } from "./scoped-response";
+
 const METHOD_NAMES = [
   "get",
   "post",
@@ -161,6 +164,8 @@ export type ApiClient<TNode> = {
 type MaybePromise<TValue> = TValue | Promise<TValue>;
 
 export type ApiClientOptions = {
+  /** Observes the same unread response with its declared route, before decoding. */
+  readonly onScopedResponse?: ScopedResponseObserver;
   /** Fetch settings every request starts from; credentials default to `include`. */
   readonly fetch?: RequestInit;
   /** Sends the request; `globalThis.fetch` when absent. */
@@ -183,6 +188,11 @@ export type ApiClientOptions = {
 type ClientConfig = {
   readonly origin: string;
   readonly options: ApiClientOptions;
+};
+
+type ClientPath = {
+  readonly segments: readonly string[];
+  readonly template: readonly string[];
 };
 
 type CallOptions = {
@@ -379,7 +389,7 @@ const decodeBody = async (response: Response): Promise<unknown> => {
 
 const send = async (
   config: ClientConfig,
-  segments: readonly string[],
+  clientPath: ClientPath,
   method: MethodName,
   args: readonly unknown[],
 ): Promise<unknown> => {
@@ -388,7 +398,7 @@ const send = async (
   const encoded = bodiless
     ? { body: undefined, contentType: undefined }
     : encodeBody(args[0]);
-  const path = `/${segments.join("/")}`;
+  const path = `/${clientPath.segments.join("/")}`;
   const { fetch: clientFetch, headers: clientHeaders } = config.options;
 
   const headers = new Headers(clientFetch?.headers);
@@ -418,6 +428,14 @@ const send = async (
   const response = await (config.options.fetcher === undefined
     ? globalThis.fetch(url, init)
     : config.options.fetcher(url, init));
+  await config.options.onScopedResponse?.({
+    response,
+    scope: {
+      type: "request",
+      method: method.toUpperCase(),
+      routeTemplate: `/${clientPath.template.join("/")}`,
+    },
+  });
   await config.options.onResponse?.(response);
 
   const value = await decodeBody(response);
@@ -436,38 +454,55 @@ const send = async (
 };
 
 /** A path parameter call names one value: `workspaces({ workspaceId })`. */
-const pathSegment = (params: unknown): string => {
+const pathSegment = (params: unknown) => {
   if (typeof params !== "object" || params === null) {
     return panic(
       "A path parameter takes one named value, such as { workspaceId }",
     );
   }
-  const values: unknown[] = Object.values(params);
-  const value = values.at(0);
+  const entries: [string, unknown][] = Object.entries(params);
+  const entry = entries.at(0);
+  const value = entry?.[1];
   if (
-    values.length !== 1 ||
+    entry === undefined ||
+    entries.length !== 1 ||
     (typeof value !== "string" && typeof value !== "number")
   ) {
     return panic(
       "A path parameter takes exactly one string or number, such as { workspaceId }",
     );
   }
-  return encodeURIComponent(String(value));
+  return { value: encodeURIComponent(String(value)), template: `:${entry[0]}` };
 };
 
-const node = (config: ClientConfig, segments: readonly string[]): unknown =>
+const node = (config: ClientConfig, path: ClientPath): unknown =>
   new Proxy(() => undefined, {
     get: (_target, property) =>
       // `then` is read by `await`; a client node is never a promise.
       typeof property === "string" && property !== "then"
-        ? node(config, [...segments, property])
+        ? node(config, {
+            segments: [...path.segments, property],
+            template: [...path.template, property],
+          })
         : undefined,
     apply: (_target, _receiver, args: readonly unknown[]) => {
-      const last = segments.at(-1);
+      const last = path.segments.at(-1);
       if (last !== undefined && isMethodName(last)) {
-        return send(config, segments.slice(0, -1), last, args);
+        return send(
+          config,
+          {
+            segments: path.segments.slice(0, -1),
+            template: path.template.slice(0, -1),
+          },
+          last,
+          args,
+        );
       }
-      return node(config, [...segments, pathSegment(args.at(0))]);
+      const segment = pathSegment(args.at(0));
+      return node(config, {
+        segments: [...path.segments, segment.value],
+        template: [...path.template, segment.template],
+      });
     },
   });
 
@@ -485,7 +520,10 @@ export function createApiClient(
   origin: string,
   options: ApiClientOptions = {},
 ): unknown {
-  return node({ origin: withoutTrailingSlashes(origin), options }, []);
+  return node(
+    { origin: withoutTrailingSlashes(origin), options },
+    { segments: [], template: [] },
+  );
 }
 
 // A scan from the end, not `/\/+$/`: that pattern retries from every slash in

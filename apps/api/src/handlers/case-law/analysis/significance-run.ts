@@ -27,6 +27,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
@@ -274,10 +275,13 @@ export const refreshSignificance = async ({
   if (Result.isError(written) && !ActionAdmissionError.is(written.error)) {
     // A reader is already looking at the document layers; the graph one
     // simply does not appear this time. Captured, never swallowed.
-    captureError(written.error, {
-      source: "case-law-analysis-significance",
-      decisionId,
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("analysis.refreshSignificance.written_error", {
+        source: "case-law-analysis-significance",
+        decisionId,
+      }),
+    );
     aiAnalytics?.captureError(written.error);
   }
 };

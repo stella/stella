@@ -31,6 +31,7 @@ import {
   collisionSafeToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
@@ -292,7 +293,12 @@ const isResolvedSkill = ({
 
 const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-skills" });
+    captureError(
+      result.error,
+      handlerErrorContext("gateway.throwOnLoadFault.result_error", {
+        source: "mcp-gateway-skills",
+      }),
+    );
     // A load fault means the skills may still exist: dispatch answers a
     // retryable error rather than `unknown_tool`.
     throw new McpGatewayLoadError({

@@ -3,7 +3,7 @@ import { afterAll, describe, expect, expectTypeOf, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createApiClient } from "./index";
-import type { ApiClientOptions } from "./index";
+import type { ApiClientOptions, ScopedResponse } from "./index";
 
 type Echo = {
   readonly method: string;
@@ -392,4 +392,161 @@ describe("createApiClient", () => {
       readonly value: { readonly message: string };
     } | null>();
   });
+});
+
+const jsonResponse = () =>
+  new Response(JSON.stringify({ items: [1] }), {
+    headers: { "content-type": "application/json" },
+  });
+
+const testFetcher = (
+  handler: (
+    input: Parameters<typeof fetch>[0],
+    init: Parameters<typeof fetch>[1],
+  ) => Promise<Response>,
+): typeof fetch => Object.assign(handler, { preconnect: () => undefined });
+
+class CloneTrackedResponse extends Response {
+  cloneCalls = 0;
+
+  override clone() {
+    this.cloneCalls += 1;
+    return super.clone();
+  }
+}
+
+test("scoped observers retain declared methods and parameter names across concurrent requests", async () => {
+  const seen: unknown[] = [];
+  const transportSymbols: symbol[][] = [];
+  const client = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: testFetcher(async (_input, init) => {
+      transportSymbols.push(Object.getOwnPropertySymbols(init ?? {}));
+      await Promise.resolve();
+      return jsonResponse();
+    }),
+    onScopedResponse: async ({ response, scope }) => {
+      seen.push(scope);
+      expect(response.status).toBe(200);
+      await Promise.resolve();
+    },
+  });
+  await Promise.all([
+    client.v1.items({ itemId: "first-private-id" }).get(),
+    client.v1.items({ itemId: "second-private-id" }).patch({}),
+  ]);
+  expect(seen).toContainEqual({
+    type: "request",
+    method: "GET",
+    routeTemplate: "/v1/items/:itemId",
+  });
+  expect(seen).toContainEqual({
+    type: "request",
+    method: "PATCH",
+    routeTemplate: "/v1/items/:itemId",
+  });
+  expect(seen).toHaveLength(2);
+  expect(JSON.stringify(seen)).not.toContain("private-id");
+  expect(transportSymbols).toEqual([[], []]);
+});
+
+test("scoped observation leaves streamed success bodies for the caller", async () => {
+  const chunks = ['{"items":', "[1]}"];
+  const encoder = new TextEncoder();
+  let chunkIndex = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks.at(chunkIndex);
+      if (chunk === undefined) {
+        controller.close();
+        return;
+      }
+      chunkIndex += 1;
+      controller.enqueue(encoder.encode(chunk));
+    },
+  });
+  const response = new CloneTrackedResponse(body, {
+    headers: { "content-type": "application/json" },
+  });
+  let observed: ScopedResponse | undefined;
+  const client = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: testFetcher(async () => response),
+    onScopedResponse: ({ response: observedResponse }) => {
+      observed = observedResponse;
+    },
+  });
+
+  const result = await client.v1.answers.json.get();
+
+  expect(result.data).toEqual({ items: [1] });
+  expect(observed).toBe(response);
+  expect(response.cloneCalls).toBe(0);
+  expect(response.bodyUsed).toBe(true);
+});
+
+test("scoped clients resolve the current default fetch at request time", async () => {
+  const previousFetch = globalThis.fetch;
+  const observed: string[] = [];
+  const client = createApiClient<TestRoutes>("https://api.example", {
+    onScopedResponse: ({ scope }) => {
+      observed.push(scope.routeTemplate);
+    },
+  });
+  let calls = 0;
+  globalThis.fetch = testFetcher(async () => {
+    calls += 1;
+    return jsonResponse();
+  });
+  try {
+    await client.v1.answers.json.get();
+    expect(calls).toBe(1);
+    expect(observed).toEqual(["/v1/answers/json"]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test.each(["request", "fetch", "scoped-response", "response"] as const)(
+  "preserves the %s boundary rejection without decoding a response",
+  async (boundary) => {
+    const failure = new Error(`Failed ${boundary}`);
+    const response = jsonResponse();
+    let fetchCalls = 0;
+    const fail = () => {
+      throw failure;
+    };
+    const client = createApiClient<TestRoutes>("https://api.example", {
+      ...(boundary === "request" ? { onRequest: fail } : {}),
+      fetcher: async () => {
+        fetchCalls += 1;
+        return boundary === "fetch" ? fail() : response;
+      },
+      ...(boundary === "scoped-response" ? { onScopedResponse: fail } : {}),
+      ...(boundary === "response" ? { onResponse: fail } : {}),
+    });
+    expect(await rejectionOf(client.v1.answers.json.get())).toBe(failure);
+    expect(fetchCalls).toBe(boundary === "request" ? 0 : 1);
+    expect(response.bodyUsed).toBe(false);
+  },
+);
+
+test("scoped and ordinary observers see the same unread response before decoding", async () => {
+  const response = jsonResponse();
+  const order: string[] = [];
+  const client = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: async () => response,
+    onScopedResponse: ({ response: observed }) => {
+      expect(observed).toBe(response);
+      expect(response.bodyUsed).toBe(false);
+      order.push("scoped");
+    },
+    onResponse: (observed) => {
+      expect(observed).toBe(response);
+      expect(response.bodyUsed).toBe(false);
+      order.push("ordinary");
+    },
+  });
+  const result = await client.v1.answers.json.get();
+  expect(order).toEqual(["scoped", "ordinary"]);
+  expect(result.response).toBe(response);
+  expect(result.data).toEqual({ items: [1] });
 });

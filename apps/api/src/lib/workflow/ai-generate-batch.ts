@@ -13,6 +13,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
@@ -225,7 +226,12 @@ const askSystemOne = async ({
       }),
   });
   if (Result.isError(prepared)) {
-    captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    captureError(
+      prepared.error,
+      handlerErrorContext("workflow.askSystemOne.prepared_error", {
+        source: SYSTEM_ONE_ERROR_SOURCE,
+      }),
+    );
     return Result.ok(fallbackAll);
   }
   const { sources, locators } = prepared.value;
