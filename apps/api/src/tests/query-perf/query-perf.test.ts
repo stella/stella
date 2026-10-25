@@ -48,23 +48,26 @@ const profileBudgets = (profile: "corpus" | "tenant") =>
     .toSorted();
 
 /**
- * An entry marked over budget must stay over it: once a change brings it
- * under, the marker has to go, so the budget is enforced again.
+ * Why a measurement breaks its budget, if it does. An entry marked over
+ * budget must stay over it: once a change brings it under, the marker has to
+ * go, so the budget is enforced again.
  */
-const expectWithinBudget = (id: ReadBudgetId, sharedBlocks: number) => {
+const budgetProblem = (
+  id: ReadBudgetId,
+  sharedBlocks: number,
+): string | undefined => {
   const budget = READ_BUDGETS[id];
-  const over = budgetViolations(
-    { sharedBlocks, executionTimeMs: 0 },
-    budget.pages,
-  );
+  const over =
+    budgetViolations({ sharedBlocks, executionTimeMs: 0 }, budget.pages)
+      .length > 0;
   if ("overBudget" in budget) {
-    expect(
-      over,
-      `${id} is marked over budget but measured ${sharedBlocks} <= ${budget.pages}; remove its overBudget marker`,
-    ).not.toEqual([]);
-    return;
+    return over
+      ? undefined
+      : `${id} is marked over budget but measured ${String(sharedBlocks)} <= ${String(budget.pages)}; remove its overBudget marker`;
   }
-  expect(over, `${id}: ${sharedBlocks} pages`).toEqual([]);
+  return over
+    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
+    : undefined;
 };
 
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
@@ -175,6 +178,14 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
       process.env["DATABASE_URL"] ??
       panic("DATABASE_URL required for query perf");
     const measured = new Set<string>();
+    // Every measurement runs and logs before the verdict, so one run reports
+    // all of them.
+    const problems: string[] = [];
+    const note = (problem: string | undefined) => {
+      if (problem !== undefined) {
+        problems.push(problem);
+      }
+    };
     await withQueryPerfFixture({
       databaseUrl,
       profileId: "corpus",
@@ -209,8 +220,12 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             budgetId,
             plan: result.plan.Plan,
           });
-          expect(result.plan.Plan["Actual Rows"]).toBe(entry.expectedRows);
-          expectWithinBudget(budgetId, result.metrics.sharedBlocks);
+          note(
+            result.plan.Plan["Actual Rows"] === entry.expectedRows
+              ? undefined
+              : `${id}: ${String(result.plan.Plan["Actual Rows"])} rows, expected ${String(entry.expectedRows)}`,
+          );
+          note(budgetProblem(budgetId, result.metrics.sharedBlocks));
         }
 
         const runPages = async (
@@ -237,7 +252,6 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         for (const job of SCHEDULED_JOB_MEASUREMENTS) {
           const { budgetId } = job;
           measured.add(budgetId);
-          const budget = READ_BUDGETS[budgetId];
           for (const scenario of job.scenarios) {
             // db-await-in-loop: scenarios move the serving generation, so they run one at a time.
             const size = await deadline.run(
@@ -249,22 +263,11 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               `run ${job.jobId} on ${scenario.double}`,
               async () => await runPages(job.jobId, job.task, scenario.double),
             );
-            expect(
-              budgetViolations(
-                { sharedBlocks: size, executionTimeMs: 0 },
-                budget.pages,
-              ),
-            ).toEqual([]);
-            expect(
-              budgetViolations(
-                { sharedBlocks: double, executionTimeMs: 0 },
-                budget.pages,
-              ),
-            ).toEqual([]);
-            expect(
-              scaleViolations({ size, double }),
-              `${job.jobId} on ${scenario.size}`,
-            ).toEqual([]);
+            note(budgetProblem(budgetId, size));
+            note(budgetProblem(budgetId, double));
+            for (const violation of scaleViolations({ size, double })) {
+              note(`${job.jobId} on ${scenario.size}: ${violation}`);
+            }
           }
         }
 
@@ -292,12 +295,11 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           fixture: "unbounded-freshness",
           pages: unbounded,
         });
-        expect(
-          budgetViolations(
-            { sharedBlocks: unbounded, executionTimeMs: 0 },
-            READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages,
-          ).map(({ kind }) => kind),
-        ).toEqual(["shared-buffer-budget"]);
+        note(
+          unbounded > READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages
+            ? undefined
+            : `the former unbounded freshness reads measured ${String(unbounded)} pages, inside the job's budget: the fixture is too small to refuse them`,
+        );
 
         const revisionChecks = async (
           generation: CaseLawScenarioGeneration,
@@ -333,9 +335,14 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           fixture: "convergence-revision-checks",
           ...growth,
         });
-        expect(scaleViolations(growth)).not.toEqual([]);
+        note(
+          scaleViolations(growth).length > 0
+            ? undefined
+            : `the revision checks read ${String(growth.size)} and ${String(growth.double)} pages: the scale rule did not refuse them`,
+        );
       },
     });
+    expect(problems).toEqual([]);
     expect([...measured].toSorted()).toEqual(profileBudgets("corpus"));
   }, 420_000); // timeout: the corpus profile seeds about a million rows inside its own 300-second deadline.
 });
