@@ -230,6 +230,53 @@ describe("invoice transition integration", () => {
       .where(eq(sellerProfiles.id, sellerProfileId));
   });
 
+  test("lines whose VAT offsets to a zero total still resolve and store the rate", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "CZ seller",
+      vatId: "CZ12345678",
+      vatPayer: true,
+      country: "CZ",
+      defaultCurrency: "EUR",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId, currency: "EUR", vatAmount: cents(0) })
+      .where(eq(invoices.id, invoiceId));
+    await seedVatLine(invoiceId, 10_000);
+    await seedVatLine(invoiceId, -10_000);
+    let calls = 0;
+    const handler = createTransitionInvoice({
+      rateSource: async () => {
+        calls += 1;
+        return Result.ok({
+          rate: "24.330000000000",
+          source: "CNB",
+          effectiveDate: "2026-06-22",
+          sourceReference: null,
+        });
+      },
+    });
+    const context = asTestRaw<Parameters<typeof handler.handler>[0]>(
+      createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+    );
+    expect(await handler.handler(context)).toEqual({ id: invoiceId });
+    expect(calls).toBe(1);
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { vatExchangeRate: true },
+      }),
+    ).toEqual({ vatExchangeRate: "24.330000000000" });
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
   test("finalizes a zero-VAT foreign-currency invoice without requesting a rate", async () => {
     const sellerProfileId = createSafeId<"sellerProfile">();
     await testDb.insert(sellerProfiles).values({

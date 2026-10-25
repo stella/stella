@@ -682,7 +682,12 @@ const applyTransition = async (
     if (totals.isErr()) {
       return Result.err(totals.error);
     }
-    if (options.resolvedVatRate === null && totals.value.vatAmountMinor !== 0) {
+    // The same predicate as the preflight: any VAT-bearing line, so buckets
+    // whose VAT offsets to a zero total still need the rate.
+    if (
+      options.resolvedVatRate === null &&
+      (await invoiceStatesVat(tx, existing.id))
+    ) {
       const unconverted = await unconvertedVatError(tx, {
         sellerProfileId: existing.sellerProfileId,
         organizationId: options.organizationId,
