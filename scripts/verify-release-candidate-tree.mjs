@@ -18,6 +18,25 @@ const FIXED_DATA_PATHS = new Set([
   "apps/landing/public/media/products/recordings-manifest.json",
   "apps/landing/src/data/changelog-release-dates.json",
 ]);
+// Generated files our own bots rewrite on the release branch. A class's paths
+// pass only when every release-range commit touching the class is that bot's,
+// committed by GitHub on its behalf, and the candidate holds exactly the bytes
+// the bot's latest commit wrote. Their bytes have their own, larger bound.
+const GENERATED_CLASSES = [
+  {
+    name: "Tailwind class cache",
+    prefix: ".tailwind-cache/",
+    authorEmail: "114827586+autofix-ci[bot]@users.noreply.github.com",
+  },
+  {
+    name: "landing product media",
+    prefix: "apps/landing/public/media/products/",
+    authorEmail:
+      "281031312+stella-release-deployer[bot]@users.noreply.github.com",
+  },
+];
+const GENERATED_COMMITTER_EMAIL = "noreply@github.com";
+const MAX_GENERATED_DATA_BYTES = 32 * 1024 * 1024;
 
 /**
  * @param {string} message Refusal reason written to stderr.
@@ -104,9 +123,24 @@ if (!changedPaths.includes("VERSION")) {
 }
 
 const packagePaths = /** @type {string[]} */ ([]);
+const generatedPaths = new Map(
+  GENERATED_CLASSES.map((generatedClass) => [
+    generatedClass,
+    /** @type {string[]} */ ([]),
+  ]),
+);
 let changedDataBytes = 0;
+let generatedDataBytes = 0;
 for (const path of changedPaths) {
-  if (PACKAGE_JSON_PATTERN.test(path)) {
+  const generatedClass = FIXED_DATA_PATHS.has(path)
+    ? undefined
+    : GENERATED_CLASSES.find(({ prefix }) => path.startsWith(prefix));
+  if (generatedClass !== undefined) {
+    if (path.includes("\n")) {
+      refuse(`generated path has an unsupported name: ${JSON.stringify(path)}`);
+    }
+    generatedPaths.get(generatedClass)?.push(path);
+  } else if (PACKAGE_JSON_PATTERN.test(path)) {
     packagePaths.push(path);
   } else if (
     path !== "bun.lock" &&
@@ -124,14 +158,96 @@ for (const path of changedPaths) {
   if (!treeEntry.startsWith("100644 blob ")) {
     refuse(`candidate data path is not a regular non-executable file: ${path}`);
   }
-  changedDataBytes += Number(
-    git("cat-file", "-s", candidateSha.concat(":", path)),
-  );
+  const bytes = Number(git("cat-file", "-s", candidateSha.concat(":", path)));
+  if (generatedClass === undefined) {
+    changedDataBytes += bytes;
+  } else {
+    generatedDataBytes += bytes;
+  }
   if (
     !Number.isSafeInteger(changedDataBytes) ||
     changedDataBytes > MAX_CHANGED_DATA_BYTES
   ) {
     refuse("candidate release data exceeds the 2 MiB review bound");
+  }
+  if (
+    !Number.isSafeInteger(generatedDataBytes) ||
+    generatedDataBytes > MAX_GENERATED_DATA_BYTES
+  ) {
+    refuse("candidate generated files exceed the 32 MiB review bound");
+  }
+}
+
+/**
+ * Blob ids under a prefix at a commit, by path.
+ * @param {string} sha Commit whose tree is listed.
+ * @param {string} prefix Directory prefix, ending in a slash.
+ * @returns {Map<string, string>} Blob id per path.
+ */
+const blobsUnder = (sha, prefix) =>
+  new Map(
+    git("ls-tree", "-r", "-z", sha, "--", prefix)
+      .split("\0")
+      .filter(Boolean)
+      .map((entry) => {
+        const [meta = "", path = ""] = entry.split("\t");
+        return [path, meta.split(" ")[2] ?? ""];
+      }),
+  );
+
+for (const [generatedClass, paths] of generatedPaths) {
+  if (paths.length === 0) {
+    continue;
+  }
+  const { name, prefix, authorEmail } = generatedClass;
+  // Newest first; a path's first listing is the latest commit that wrote it.
+  const latestCommitByPath = new Map(/** @type {[string, string][]} */ ([]));
+  let commit = "";
+  for (const line of git(
+    "-c",
+    "core.quotePath=false",
+    "log",
+    "--no-merges",
+    "--no-renames",
+    "--name-only",
+    "--format=%x01%H%x02%ae%x02%ce",
+    mainSha.concat("..", candidateSha),
+    "--",
+    prefix,
+    // Fixed data under the prefix (the media manifest) is the release cut's
+    // own output and is validated as data above, whoever wrote it.
+    ...[...FIXED_DATA_PATHS]
+      .filter((path) => path.startsWith(prefix))
+      .map((path) => ":(exclude,literal)".concat(path)),
+  ).split("\n")) {
+    if (line.startsWith("\u0001")) {
+      const [sha = "", author = "", committer = ""] = line
+        .slice(1)
+        .split("\u0002");
+      if (author !== authorEmail || committer !== GENERATED_COMMITTER_EMAIL) {
+        refuse(
+          `${name} changed by a commit not made by its bot: ${sha} (${author})`,
+        );
+      }
+      commit = sha;
+    } else if (line.length > 0 && !latestCommitByPath.has(line)) {
+      latestCommitByPath.set(line, commit);
+    }
+  }
+  const candidateBlobs = blobsUnder(candidateSha, prefix);
+  const commitBlobs = new Map(
+    /** @type {[string, Map<string, string>][]} */ ([]),
+  );
+  for (const path of paths) {
+    const latest =
+      latestCommitByPath.get(path) ??
+      refuse(`${name} path changed outside a bot commit: ${path}`);
+    const written =
+      commitBlobs.get(latest) ??
+      commitBlobs.set(latest, blobsUnder(latest, prefix)).get(latest);
+    if (written?.get(path) !== candidateBlobs.get(path)) {
+      refuse(`${name} path differs from its bot's commit: ${path}`);
+    }
   }
 }
 

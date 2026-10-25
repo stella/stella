@@ -196,3 +196,233 @@ test.each([
 ])("rejects %s in a release candidate", (_, mutate) =>
   withCandidate(mutate, (result) => expect(result.exitCode).not.toBe(0)),
 );
+
+type Identity = { name: string; email: string };
+const RELEASE_CUT: Identity = {
+  name: "Release cut",
+  email: "release@example.test",
+};
+const GITHUB: Identity = { name: "GitHub", email: "noreply@github.com" };
+const AUTOFIX: Identity = {
+  name: "autofix-ci[bot]",
+  email: "114827586+autofix-ci[bot]@users.noreply.github.com",
+};
+const DEPLOYER: Identity = {
+  name: "stella-release-deployer[bot]",
+  email: "281031312+stella-release-deployer[bot]@users.noreply.github.com",
+};
+const PERSON: Identity = { name: "A person", email: "person@example.test" };
+
+const MEDIA = "apps/landing/public/media/products";
+const MANIFEST = `${MEDIA}/recordings-manifest.json`;
+
+type ReleaseCommit = {
+  author: Identity;
+  committer: Identity;
+  mutate: (directory: string) => void;
+  /** Commits as a merge of a side branch, editing files during the merge. */
+  asMerge?: boolean;
+};
+
+const commitAs = (
+  directory: string,
+  { author, committer }: Pick<ReleaseCommit, "author" | "committer">,
+  ...args: string[]
+) => {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: directory,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: author.name,
+      GIT_AUTHOR_EMAIL: author.email,
+      GIT_COMMITTER_NAME: committer.name,
+      GIT_COMMITTER_EMAIL: committer.email,
+    },
+  });
+  expect(result.exitCode, stderrText(result)).toBe(0);
+};
+
+const commitSideMerge = (
+  directory: string,
+  {
+    main,
+    index,
+    commit,
+  }: { main: string; index: number; commit: ReleaseCommit },
+) => {
+  git(directory, "checkout", "--quiet", "-b", `side-${index}`, main);
+  writeFileSync(path.join(directory, `side-${index}.md`), "side\n");
+  git(directory, "add", "-A");
+  commitAs(
+    directory,
+    { author: RELEASE_CUT, committer: RELEASE_CUT },
+    "commit",
+    "--quiet",
+    "--message",
+    "side",
+  );
+  git(directory, "checkout", "--quiet", "release");
+  commitAs(
+    directory,
+    commit,
+    "merge",
+    "--quiet",
+    "--no-ff",
+    "--no-commit",
+    `side-${index}`,
+  );
+  git(directory, "rm", "--quiet", "--force", `side-${index}.md`);
+  commit.mutate(directory);
+  git(directory, "add", "-A");
+  commitAs(directory, commit, "commit", "--quiet", "--message", "merge");
+};
+
+/** A release range shaped like the bots' own release branches. */
+const withReleaseRange = (
+  commits: readonly ReleaseCommit[],
+  verify: (result: ReturnType<typeof Bun.spawnSync>) => void,
+) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "release-range-"));
+  try {
+    mkdirSync(path.join(directory, ".tailwind-cache"), { recursive: true });
+    mkdirSync(path.join(directory, MEDIA), { recursive: true });
+    git(directory, "init", "--quiet", "--initial-branch=main", "--template=");
+    git(directory, "config", "commit.gpgsign", "false");
+    writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
+    writeLock(directory, "1.0.0");
+    for (const name of ["a1", "b1", "c1"]) {
+      writeFileSync(
+        path.join(directory, `.tailwind-cache/${name}.decl.json`),
+        `{"${name}":true}\n`,
+      );
+    }
+    writeFileSync(path.join(directory, `${MEDIA}/agent.png`), "old-image");
+    writeFileSync(path.join(directory, MANIFEST), '{"recordings":[]}\n');
+    git(directory, "add", ".");
+    commitAs(
+      directory,
+      { author: RELEASE_CUT, committer: RELEASE_CUT },
+      "commit",
+      "--quiet",
+      "--message",
+      "main",
+    );
+    const main = git(directory, "rev-parse", "HEAD");
+    git(directory, "checkout", "--quiet", "-b", "release");
+    for (const [index, commit] of commits.entries()) {
+      if (commit.asMerge === true) {
+        commitSideMerge(directory, { main, index, commit });
+        continue;
+      }
+      commit.mutate(directory);
+      git(directory, "add", "-A");
+      commitAs(directory, commit, "commit", "--quiet", "--message", "step");
+    }
+    const candidate = git(directory, "rev-parse", "HEAD");
+    verify(
+      Bun.spawnSync(["node", verifier, main, candidate], { cwd: directory }),
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+const releaseCut: ReleaseCommit = {
+  author: RELEASE_CUT,
+  committer: RELEASE_CUT,
+  mutate: (directory) => {
+    writeFileSync(path.join(directory, "VERSION"), "1.2.4\n");
+    // The release cut rewrites the recordings manifest itself.
+    writeFileSync(path.join(directory, MANIFEST), '{"recordings":["agent"]}\n');
+  },
+};
+const renameTailwindCache = (directory: string) => {
+  for (const name of ["a1", "b1", "c1"]) {
+    renameSync(
+      path.join(directory, `.tailwind-cache/${name}.decl.json`),
+      path.join(directory, `.tailwind-cache/${name}-next.decl.json`),
+    );
+  }
+};
+// More than the 2 MiB data bound, as a marketing reshoot is.
+const reshootProductMedia = (directory: string) => {
+  writeFileSync(
+    path.join(directory, `${MEDIA}/agent.png`),
+    Buffer.alloc(3 * 1024 * 1024, 1),
+  );
+  writeFileSync(path.join(directory, `${MEDIA}/agent-dark.png`), "new-dark");
+};
+
+test("accepts the bots' own generated release files, as a v0.9.65 range carries them", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+      { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
+    ],
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test.each([
+  [
+    "a Tailwind cache change made by a person",
+    { author: PERSON, committer: PERSON, mutate: renameTailwindCache },
+    "Tailwind class cache changed by a commit not made by its bot",
+  ],
+  [
+    "product media changed by a person",
+    { author: PERSON, committer: PERSON, mutate: reshootProductMedia },
+    "landing product media changed by a commit not made by its bot",
+  ],
+  [
+    "a bot author not committed by GitHub",
+    { author: DEPLOYER, committer: PERSON, mutate: reshootProductMedia },
+    "landing product media changed by a commit not made by its bot",
+  ],
+  [
+    "the other bot's generated class",
+    { author: AUTOFIX, committer: GITHUB, mutate: reshootProductMedia },
+    "landing product media changed by a commit not made by its bot",
+  ],
+])("refuses %s", (_name, commit, message) =>
+  withReleaseRange([releaseCut, commit], (result) => {
+    expect(result.exitCode).not.toBe(0);
+    expect(stderrText(result)).toContain(message);
+  }),
+);
+
+test("refuses a merge that changes a bot's bytes after its commit", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
+      {
+        author: PERSON,
+        committer: PERSON,
+        asMerge: true,
+        mutate: (directory) => {
+          writeFileSync(path.join(directory, `${MEDIA}/agent-dark.png`), "x");
+        },
+      },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "landing product media path differs from its bot's commit",
+      );
+    },
+  ));
+
+test("keeps the 2 MiB bound for release data outside the generated classes", () =>
+  withCandidate(
+    (directory) => {
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        Buffer.alloc(3 * 1024 * 1024, 35),
+      );
+    },
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain("2 MiB review bound");
+    },
+  ));
