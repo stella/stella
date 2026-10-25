@@ -1754,6 +1754,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
+    "./.oxlint-plugins/route-links.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -1807,6 +1808,12 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["**/*.{ts,tsx}"],
+      rules: {
+        "route-links/detached-link-options": "error",
+      },
+    },
     {
       // Page-level narrative copy owns a readable measure. Reusable component
       // internals and task-shaped surfaces are outside this narrow enrolment.
