@@ -384,7 +384,7 @@ const captureErrorWithOptions = (
     // Group by the structural fingerprint instead: same non-PII components,
     // one issue per distinct defect, read from `ERROR_IDENTITY_COMPONENTS` so
     // it stays the identity `captureWindowKey` throttles on. The production
-    // server and long-running worker embed source maps, so the frames are
+    // server and long-running worker ship source maps, so the frames are
     // source positions rather than bundle positions; the artifact test guards
     // that build contract. Stack symbols are deliberately absent: engines can
     // infer one from a data-derived computed property key.
