@@ -336,7 +336,7 @@ const messageTexts = (
   );
 
 /**
- * A safe handler returns its payload directly and an Elysia status response on
+ * A safe handler returns its payload directly and an HTTP core status response on
  * failure, so a `code` property is how a rejection presents itself here.
  */
 const expectForked = async (pending: ReturnType<typeof forkThread.handler>) => {

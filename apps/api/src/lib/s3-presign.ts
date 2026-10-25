@@ -37,6 +37,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
@@ -46,7 +47,6 @@ import {
   TEMP_UPLOAD_TAGGING,
 } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 import {
   issueSessionBoundCredentialTtl,
   requireSessionCredentialIssuer,
@@ -973,6 +973,20 @@ export const presignUploadUrl = async ({
 export type SignedDownloadSource =
   | { kind: "request"; sessionId: string }
   | { kind: "background"; reason: string };
+
+/**
+ * The source of a download a caller asked for: bound to their browser session,
+ * or, for a credential that has none (an MCP session), not bound to a session.
+ */
+export const callerDownloadSource = (session: {
+  readonly id: string | null;
+}): SignedDownloadSource =>
+  session.id === null
+    ? {
+        kind: "background",
+        reason: "requested with a credential that has no browser session",
+      }
+    : { kind: "request", sessionId: session.id };
 
 export type PresignDownloadOptions = {
   userId: string | null;

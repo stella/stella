@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -44,8 +44,8 @@ const resolveDocxSuggestion = createSafeHandler(
       "The document review store updates resolved suggestions locally and hydrates them when the document opens.",
     ),
     params: workspaceParams({
-      entityId: tSafeId("entity"),
-      suggestionId: tSafeId("docxSuggestion"),
+      entityId: resourceIdSchema("entity"),
+      suggestionId: resourceIdSchema("docxSuggestion"),
     }),
     body: tResolveDocxSuggestionBody,
   },

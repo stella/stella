@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -20,12 +20,11 @@ const config = {
   permissions: { firmMemory: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  body: t.Object({
-    // Firm memory is matter-agnostic by construction.
-    kind: t.UnionEnum(["preference", "instruction"]),
-    content: t.String({ minLength: 1, maxLength: 4000 }),
-    pinned: t.Optional(t.Boolean()),
-    language: t.Optional(t.String({ maxLength: 10 })),
+  body: v.object({
+    kind: v.picklist(["preference", "instruction"]),
+    content: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+    pinned: v.optional(v.boolean()),
+    language: v.optional(v.pipe(v.string(), v.maxLength(10))),
   }),
 } satisfies HandlerConfig;
 

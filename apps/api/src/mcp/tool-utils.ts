@@ -41,7 +41,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { getCurrentRequestId } from "@/api/lib/observability/request-context";
+import { getRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -701,7 +701,7 @@ export const structuredErrorResult = ({
   retryable?: boolean | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
-  const requestId = getCurrentRequestId();
+  const requestId = getRequestId();
   const fields = {
     type: "structured",
     message,
@@ -756,8 +756,9 @@ export const validationErrorResult = (
 
 /**
  * The status a reused backing handler answered with, when it answered with
- * one rather than a payload. Elysia's `status(code, body)` returns
- * `{ code, response }`; a bare `{ message }` is accepted too because some
+ * one rather than a payload. The HTTP core's `status(code, body)` returns an
+ * `HttpStatusResponse`, `{ code, response }`; a bare `{ message }` is
+ * accepted too because some
  * handlers return that shape directly. One reader for both, so a tool that
  * branches on a handler's refusal cannot read it differently from its
  * neighbour.

@@ -464,7 +464,7 @@ export const captureError = (
 };
 
 const requestCaptureOptions = (request: Request) => {
-  const reqCtx = getRequestContext(request);
+  const reqCtx = getRequestContext();
   return {
     request,
     distinctId: reqCtx?.posthogDistinctId,

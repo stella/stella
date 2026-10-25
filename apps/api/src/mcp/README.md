@@ -288,14 +288,13 @@ kind, area, entry point, redaction count and per-channel outcome. No content.
 
 `POST /v1/feedback` is the authenticated route the web and desktop apps use
 (`handlers/feedback/create.ts`), rate-limited to 10 reports per user per hour. It
-is mounted at the root like `/v1/notifications` for the Eden type-complexity
-reason documented there.
+is mounted at the root like `/v1/notifications` and shares the standard API
+limiter scope (`lib/rate-limit/standard-api.ts`).
 
 `POST /public/feedback` is the public, unauthenticated intake
 (`handlers/feedback/intake.ts`), for a caller with no Stella account. Its body is
 the same report plus an optional `instance`, parsed from the raw string by a
-Valibot `strictObject` (Elysia's normalizer would strip unknown keys before a
-typed schema could reject them). Identity is not its protection: a per-IP rate
+Valibot `strictObject`. Identity is not its protection: a per-IP rate
 limit of 5 per hour in `intake-guards.ts` is, plus the service's own
 sanitization and fingerprint dedup. All error bodies reuse the
 `{ error: { code, message, hint } }` envelope so a forwarding tool can branch on
@@ -376,7 +375,7 @@ behind the estimates with the Anthropic count_tokens endpoint; it needs
   a Stella-owned family (skills) shares one output contract and annotation
   set, a third-party connector family keeps its upstream contract.
 - `server.ts` and `server-core.ts`: MCP HTTP transport wiring.
-- `../handlers/mcp/routes-core.ts`: Elysia routes that expose the MCP resources.
+- `../handlers/mcp/routes-core.ts`: HTTP routes that expose the MCP resources.
 - `../handlers/mcp-connectors/`: connector management APIs used by the web app.
 
 ## Output projection contracts

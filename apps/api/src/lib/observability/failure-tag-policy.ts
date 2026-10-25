@@ -425,7 +425,6 @@ export const TAGGED_FAILURE_REASON = {
   TokenExchangeError: "tagged_failure",
   TokenRefreshError: "tagged_failure",
   ToolOutputContractDegradedError: "tagged_failure",
-  TypeScriptApiError: "tagged_failure",
   UnknownSkillPromptError: "tagged_failure",
   UnpersistableDecisionFieldError: "tagged_failure",
   Unreachable: "tagged_failure",

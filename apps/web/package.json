@@ -188,7 +188,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",

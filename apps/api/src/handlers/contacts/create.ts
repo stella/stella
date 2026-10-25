@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { count, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 
@@ -32,10 +31,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import {
-  tInvoiceLanguage,
-  tMinorUnitAmount,
-  tSafeId,
-  tUserId,
+  invoiceLanguageSchema,
+  minorUnitAmountSchema,
+  resourceIdSchema,
+  userIdSchema,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -45,42 +44,48 @@ import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-fl
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
-export const createContactBodySchema = t.Object({
-  id: tSafeId("contact"),
+export const createContactBodySchema = v.object({
+  id: resourceIdSchema("contact"),
   type: createContactTypeSchema,
-  prefix: t.Optional(t.String({ maxLength: 32 })),
-  firstName: t.Optional(t.String({ maxLength: 256 })),
-  middleName: t.Optional(t.String({ maxLength: 256 })),
-  lastName: t.Optional(t.String({ maxLength: 256 })),
-  suffix: t.Optional(t.String({ maxLength: 32 })),
-  dateOfBirth: t.Optional(dateOfBirthSchema),
-  nationalityCodes: t.Optional(nationalityCodesSchema),
-  organizationName: t.Optional(t.String({ maxLength: 512 })),
-  displayName: t.String({ minLength: 1, maxLength: 512 }),
-  notes: t.Optional(t.String()),
-  emails: t.Optional(t.Array(contactEmailSchema, { maxItems: 20 })),
-  phones: t.Optional(t.Array(contactPhoneSchema, { maxItems: 20 })),
-  addresses: t.Optional(t.Array(contactAddressSchema, { maxItems: 10 })),
-  metadata: t.Optional(contactMetadataSchema),
-  tags: t.Optional(t.Array(t.String(), { maxItems: 50 })),
-  color: t.Optional(t.String({ maxLength: 32 })),
-  registrationNumber: t.Optional(
-    t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH }),
+  prefix: v.optional(v.pipe(v.string(), v.maxLength(32))),
+  firstName: v.optional(v.pipe(v.string(), v.maxLength(256))),
+  middleName: v.optional(v.pipe(v.string(), v.maxLength(256))),
+  lastName: v.optional(v.pipe(v.string(), v.maxLength(256))),
+  suffix: v.optional(v.pipe(v.string(), v.maxLength(32))),
+  dateOfBirth: v.optional(dateOfBirthSchema),
+  nationalityCodes: v.optional(nationalityCodesSchema),
+  organizationName: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  displayName: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  notes: v.optional(v.string()),
+  emails: v.optional(v.pipe(v.array(contactEmailSchema), v.maxLength(20))),
+  phones: v.optional(v.pipe(v.array(contactPhoneSchema), v.maxLength(20))),
+  addresses: v.optional(v.pipe(v.array(contactAddressSchema), v.maxLength(10))),
+  metadata: v.optional(contactMetadataSchema),
+  tags: v.optional(v.pipe(v.array(v.string()), v.maxLength(50))),
+  color: v.optional(v.pipe(v.string(), v.maxLength(32))),
+  registrationNumber: v.optional(
+    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
   ),
-  taxId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
-  vatId: t.Optional(t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH })),
-  vatPayer: t.Optional(t.Nullable(t.Boolean())),
-  bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
-  billingAddress: t.Optional(billingAddressSchema),
-  defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
-  paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
-  invoiceLanguage: t.Optional(t.Nullable(tInvoiceLanguage)),
-  originatingAttorneyId: t.Optional(tUserId),
-  responsibleAttorneyId: t.Optional(tUserId),
+  taxId: v.optional(
+    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
+  ),
+  vatId: v.optional(
+    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
+  ),
+  vatPayer: v.optional(v.nullable(v.boolean())),
+  bankAccounts: v.optional(v.pipe(v.array(bankAccountSchema), v.maxLength(10))),
+  billingAddress: v.optional(billingAddressSchema),
+  defaultHourlyRate: v.optional(minorUnitAmountSchema(0)),
+  currency: v.optional(v.pipe(v.string(), v.minLength(3), v.maxLength(3))),
+  paymentTermDays: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(365)),
+  ),
+  invoiceLanguage: v.optional(v.nullable(invoiceLanguageSchema)),
+  originatingAttorneyId: v.optional(userIdSchema),
+  responsibleAttorneyId: v.optional(userIdSchema),
 });
 
-export type CreateContactBody = Static<typeof createContactBodySchema>;
+export type CreateContactBody = v.InferOutput<typeof createContactBodySchema>;
 
 export type CreateContactHandlerProps = {
   safeDb: SafeDb;

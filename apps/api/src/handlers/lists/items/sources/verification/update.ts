@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   LEGAL_LIST_SOURCE_VERIFICATION_STATUSES,
@@ -10,17 +10,17 @@ import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets"
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { includes } from "@/api/lib/type-guards";
 
-const bodySchema = t.Object({
-  id: tSafeId("legalListItemSource"),
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  status: t.String({ minLength: 1, maxLength: 32 }),
+const bodySchema = v.object({
+  id: resourceIdSchema("legalListItemSource"),
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  status: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
 });
 const config = {
   contract: "patch",

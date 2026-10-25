@@ -48,7 +48,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -671,7 +671,7 @@ const AddPartyDialog = ({
           contactId: toSafeId<"contact">(body.contactId),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);

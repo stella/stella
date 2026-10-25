@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { legalLists, workspaces } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -12,9 +12,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 
-const bodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 256 }),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+const bodySchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
 });
 
 const config = {

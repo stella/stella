@@ -27,6 +27,7 @@ import { captureRedactedException } from "@/lib/analytics/stack-redaction";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
+  AnalyticsResetOptions,
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
@@ -1092,7 +1093,7 @@ export const createPostHogAnalytics = ({
       // via groupIdentify; the browser only attaches the opaque key.
       posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
     },
-    reset: ({ onlyIfIdentified } = {}) => {
+    reset: ({ onlyIfIdentified }: AnalyticsResetOptions = {}) => {
       signedOutVisitorSeen = true;
       if (onlyIfIdentified && !posthog._isIdentified()) {
         return;

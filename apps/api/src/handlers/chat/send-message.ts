@@ -17,6 +17,7 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import { isServerChatToolCall } from "@stll/api-contract/chat";
+import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -276,11 +277,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
-import {
-  FILE_SIZE_LIMIT_BYTES,
-  FILE_SIZE_LIMITS,
-  LIMITS,
-} from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
@@ -297,6 +294,7 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import { memberSessionStreamBinding } from "@/api/lib/sse";
 import {
   requireTanStackAIAvailableForTask,
   validateTanStackDevModelOverride,
@@ -3339,11 +3337,7 @@ export const createSendMessage = (
                   systemSafe,
                   systemUntrusted,
                   userId: user.id,
-                  viewer: {
-                    kind: "session",
-                    sessionId: session.id,
-                    userId: user.id,
-                  },
+                  viewer: memberSessionStreamBinding({ session, user }),
                   workspaceId,
                 });
 
@@ -3897,7 +3891,7 @@ type ActiveFileFallbackForModel =
 const activeFileSizeLimitError = () =>
   new HandlerError({
     status: 422,
-    message: `Active file exceeds the ${FILE_SIZE_LIMITS.chatContextFile} chat context limit`,
+    message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
 
 const readActiveFileFallbackForModel = async ({

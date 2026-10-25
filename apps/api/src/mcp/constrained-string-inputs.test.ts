@@ -14,8 +14,9 @@
  * tool's projected input schema -- the wire schema the factory emits, so
  * derived and helper-built schemas are covered alike -- plus the body, query,
  * and params schemas of the public case-law and legislation routes, read off
- * the Elysia route table rather than hand-listed. A string property carrying
- * a format constraint has to be owned:
+ * the mounted route table and rendered the way agents see them, rather than
+ * hand-listed. A string property carrying a format constraint has to be
+ * owned:
  *
  * - by the `x-stella-agent-input` marker naming a kind the reader dispatches
  *   on, or
@@ -29,7 +30,8 @@
  *
  * Two constraints the wire schema shows in a reduced form still count: a
  * Valibot `regex` behind a `jsonSchemaProjectionWaiver` reaches the projection
- * as its length bound alone, and a TypeBox pattern reaches it verbatim.
+ * as its length bound alone, and a route schema's `v.regex` reaches its
+ * rendering verbatim.
  *
  * The allowlist only shrinks: every entry must still be flagged, so a field
  * cannot stay on it after it moves to a kind.
@@ -44,9 +46,13 @@ import {
 } from "@stll/agent-input";
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
+import { apiRoutes } from "@/api/api-routes";
+import {
+  isValibotSchema,
+  toRouteJsonSchema,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import api from "@/api/server";
 
 /**
  * Still hand-constrained, by dotted path, with why. A `language` or a
@@ -90,7 +96,7 @@ const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
   "POST /v1/case/research/columns/suggest-prompt.body.filters.language":
     "language tag length-bounded, not the locale kind",
 
-  // Still `t.String({ maxLength: 3 })`, the constraint that rejected
+  // Still `v.maxLength(3)`, the constraint that rejected
   // `Czechia`: three characters admit the code and refuse the name, so
   // `readPublicLawCountry` never sees the spelling it could read.
   "POST /v1/legislation/corpus/search.body.jurisdiction":
@@ -218,19 +224,22 @@ const toolStringProperties = ALL_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
   return found;
 });
 
-const publicLawRoutes = api.routes.filter((route) =>
+const publicLawRoutes = apiRoutes.filter((route) =>
   PUBLIC_LAW_ROUTE_PREFIXES.some((prefix) => route.path.startsWith(prefix)),
 );
 
+/**
+ * A request part as an agent reads it: the route's own valibot schema
+ * rendered for the wire, so a wire string shows the value it carries.
+ */
+const renderedPart = (schema: unknown) =>
+  isValibotSchema(schema) ? toRouteJsonSchema(schema) : undefined;
+
 const routeStringProperties = publicLawRoutes.flatMap((route) => {
-  const hooks: unknown = route.hooks;
-  if (!isRecord(hooks)) {
-    return [];
-  }
   const found: StringProperty[] = [];
   for (const part of REQUEST_SCHEMA_PARTS) {
     collectStringProperties(
-      hooks[part],
+      renderedPart(route.definition.config[part]),
       `${route.method} ${route.path}.${part}`,
       found,
     );
@@ -317,6 +326,18 @@ describe("a string input is constrained by its kind, not by its field", () => {
     expect(toolStringProperties.length).toBeGreaterThan(200);
     expect(publicLawRoutes.length).toBeGreaterThan(30);
     expect(routeStringProperties.length).toBeGreaterThan(50);
+  });
+
+  test("every request part of a public-law route is rendered, none skipped", () => {
+    // A schema that is not valibot would render as nothing and silently drop
+    // out of the walk above.
+    const unrendered = publicLawRoutes.flatMap((route) =>
+      REQUEST_SCHEMA_PARTS.filter((part) => {
+        const schema = route.definition.config[part];
+        return schema !== undefined && !isValibotSchema(schema);
+      }).map((part) => `${route.method} ${route.path}.${part}`),
+    );
+    expect(unrendered).toEqual([]);
   });
 
   test("the reader is asked about a schema, not assumed to claim it", () => {
