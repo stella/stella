@@ -424,7 +424,8 @@ export const offlineCheckStartupViolations = (
       if (
         !ts.isImportDeclaration(statement) ||
         !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.importClause?.isTypeOnly !== false ||
+        statement.importClause === undefined ||
+        statement.importClause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
         statement.importClause.namedBindings === undefined ||
         !ts.isNamedImports(statement.importClause.namedBindings)
       ) {
