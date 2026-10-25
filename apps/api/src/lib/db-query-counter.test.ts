@@ -299,7 +299,7 @@ describe("db query counter HTTP header", () => {
       const entered = deferred();
       const sampled = deferred();
       let samples = 0;
-      const isolatedServer = createCountingServer(() => {
+      const isolatedServer = createCountingServer(async () => {
         entered.resolve();
         return sampled.promise;
       });

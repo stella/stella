@@ -129,7 +129,7 @@ describe("x-request-id response header", () => {
       const sampled = deferred();
       const isolatedServer = createReceiptServer({
         waitMs,
-        beforeRequest: () => {
+        beforeRequest: async () => {
           entered.resolve();
           return sampled.promise;
         },
