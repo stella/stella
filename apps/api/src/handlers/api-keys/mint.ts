@@ -25,6 +25,7 @@ import type {
 } from "@/api/lib/machine-api-key-config";
 import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
 import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
+import type { CreateApiKey } from "@/api/lib/machine-api-keys/fenced-issuance";
 import { logger } from "@/api/lib/observability/logger";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -197,7 +198,7 @@ export const validateGrantablePermissions = ({
   return { type: "ok" };
 };
 
-export type MintMachineApiKeyOptions = {
+type MintMachineApiKeyOptions = {
   kind?: ApiKeyKind;
   name: string;
   scopes: MachineApiKeyScope[];
@@ -226,29 +227,6 @@ export type MintedMachineApiKey = {
   audience: McpMode | undefined;
   expiresAt: Date | null;
 };
-
-/**
- * Writes a minted key. The only implementation is `createApiKeyUnderFence`,
- * which inserts inside a transaction holding the account's credential fence,
- * so a key cannot outlive an access reset that ran concurrently. The ownership
- * ids are parameters rather than body fields precisely so this path cannot be
- * pointed at another user or organization.
- */
-export type CreateApiKey = (options: {
-  body: {
-    configId: string;
-    name: string;
-    userId: string;
-    permissions: Record<string, string[]>;
-    metadata: v.InferInput<typeof machineApiKeyMetadataSchema>;
-    expiresIn: number;
-  };
-}) => Promise<{
-  id: string;
-  start: string | null;
-  key: string;
-  expiresAt: Date | null;
-}>;
 
 export const mintMachineApiKey = async (
   {

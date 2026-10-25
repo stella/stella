@@ -3,7 +3,6 @@ import { generateRandomString } from "better-auth/crypto";
 import { panic } from "better-result";
 
 import { apikey } from "@/api/db/auth-schema";
-import type { CreateApiKey } from "@/api/handlers/api-keys/mint";
 import type { CredentialIssuanceFence } from "@/api/lib/auth-artifacts";
 import {
   MACHINE_API_KEY_LENGTH,
@@ -11,6 +10,29 @@ import {
   MACHINE_API_KEY_RATE_LIMIT,
   MACHINE_API_KEY_START_LENGTH,
 } from "@/api/lib/machine-api-key-config";
+
+/**
+ * Writes a minted key. The only implementation is `createApiKeyUnderFence`,
+ * which inserts inside a transaction holding the account's credential fence,
+ * so a key cannot outlive an access reset that ran concurrently. The ownership
+ * ids are parameters rather than body fields precisely so this path cannot be
+ * pointed at another user or organization.
+ */
+export type CreateApiKey = (options: {
+  body: {
+    configId: string;
+    name: string;
+    userId: string;
+    permissions: Record<string, string[]>;
+    metadata: Readonly<Record<string, unknown>>;
+    expiresIn: number;
+  };
+}) => Promise<{
+  id: string;
+  start: string | null;
+  key: string;
+  expiresAt: Date | null;
+}>;
 
 /**
  * Inserts a key with the plugin's generator and hasher contract, inside the

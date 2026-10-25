@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "delta": 4,
-  "reason": "API key and pending second-factor revocation run inside account recovery or deletion, which records the revocation; organization creation records its initial access state inline instead of through ledger entries, and the creation itself is audited."
+  "delta": 5,
+  "reason": "API key and pending second-factor revocation run inside account recovery or deletion, which records the revocation; organization creation records its initial access state inline instead of through ledger entries, and the creation itself is audited; the fenced API-key writer leaves the receipt to its callers, which record it in the same transaction."
 }

@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import type { InferOk } from "better-result";
 import { and, desc, eq, gt } from "drizzle-orm";
 
 import { apikey, member, organization, user } from "@/api/db/auth-schema";
@@ -9,10 +10,6 @@ import { organizationSettings } from "@/api/db/schema";
 import {
   mintMachineApiKey,
   toMachineApiKeySummary,
-} from "@/api/handlers/api-keys/mint";
-import type {
-  MintedMachineApiKey,
-  MintMachineApiKeyOptions,
 } from "@/api/handlers/api-keys/mint";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -277,7 +274,10 @@ export const createPersonalApiKey = async (options: MintPersonalKeyOptions) =>
       mintPersonalKey(issuingFence(fence), { options, memberRole }),
   );
 
-type IssueMachineApiKeyOptions = MintMachineApiKeyOptions & {
+type MintedMachineApiKey = InferOk<
+  Awaited<ReturnType<typeof mintMachineApiKey>>
+>;
+type IssueMachineApiKeyOptions = Parameters<typeof mintMachineApiKey>[0] & {
   /** The issuing browser session; a credential without one cannot issue. */
   sessionId: string | null;
   recordAuditEvent: AuditRecorder;
