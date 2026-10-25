@@ -8,6 +8,10 @@ import { legalListVerificationRuns } from "@/api/db/schema";
 import { env } from "@/api/env";
 import factDetails from "@/api/handlers/lists/items/fact-details/update";
 import sourceReview from "@/api/handlers/lists/items/sources/verification/update";
+import createComment from "@/api/handlers/lists/verifications/claim-comments/create";
+import deleteComment from "@/api/handlers/lists/verifications/claim-comments/delete";
+import listComments from "@/api/handlers/lists/verifications/claim-comments/list";
+import updateComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import bulkReview from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import review from "@/api/handlers/lists/verifications/claim-reviews/create";
 import create from "@/api/handlers/lists/verifications/create";
@@ -59,6 +63,10 @@ const endpoints = {
   bulkReview,
   factDetails,
   sourceReview,
+  listComments,
+  createComment,
+  updateComment,
+  deleteComment,
 };
 
 describe("verification handler access admission", () => {

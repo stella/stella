@@ -43,8 +43,7 @@ const PROVIDER_ERROR_REASONS = [
 ] as const;
 
 export type ProviderErrorReason =
-  | (typeof PROVIDER_ERROR_REASONS)[number]["reason"]
-  | "unrecognized";
+  (typeof PROVIDER_ERROR_REASONS)[number]["reason"] | "unrecognized";
 
 /** The known template `message` matches, or `unrecognized`. */
 export const providerErrorReason = (message: string): ProviderErrorReason =>

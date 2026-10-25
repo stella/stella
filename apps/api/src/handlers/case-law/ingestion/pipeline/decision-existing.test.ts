@@ -60,6 +60,7 @@ const stored = (result: IngestionResult): ExistingDecision => ({
   ecli: result.ecli ?? null,
   metadata: result.metadata,
   sourceHash: result.rawHash,
+  sourceHashVersion: 0,
   sourceObservedAt: new Date("2026-10-01T00:00:00Z"),
   sourceObservationHash: result.rawHash,
   redactedAt: null,
@@ -97,6 +98,8 @@ describe("an observation that completes a listing-only row", () => {
         observedAt: new Date("2026-10-02T00:00:00Z"),
         observationOrder: 2n,
         refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        sourceFingerprintVersion: 0,
+        sourceFingerprintFromStoredRaw: async () => complete.rawHash,
       }),
     ).toBeNull();
   });

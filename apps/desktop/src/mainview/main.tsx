@@ -41,6 +41,10 @@ const ClipboardEditorWindow = lazy(
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
 
+const AccessibilityGuideApp = lazy(
+  async () => import("../onboarding/AccessibilityGuideApp"),
+);
+
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
   value !== null &&
@@ -129,6 +133,12 @@ const Root = () => {
     content = (
       <Suspense fallback={<main className="bg-background min-h-dvh" />}>
         <ActivityApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "accessibility-guide") {
+    content = (
+      <Suspense fallback={null}>
+        <AccessibilityGuideApp />
       </Suspense>
     );
   } else if (windowLabel === "onboarding") {

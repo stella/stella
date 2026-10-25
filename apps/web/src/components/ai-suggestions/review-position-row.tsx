@@ -251,14 +251,12 @@ const PositionNote = ({ label, text }: { label: string; text: string }) => {
  */
 export const PositionQuickRow = ({
   position,
-  index,
   referenceNames,
   passageTexts,
   onChange,
   onRemove,
 }: {
   position: Position;
-  index: number;
   referenceNames: ReferenceNameLookup | undefined;
   /** The words behind every passage on the list this row sits in, so twenty
    *  rows cost the one read the list already made. */
@@ -311,7 +309,6 @@ export const PositionQuickRow = ({
             </>
           )
         }
-        index={index}
         label={
           position.mode === "graded" &&
           (onChange === undefined ? (

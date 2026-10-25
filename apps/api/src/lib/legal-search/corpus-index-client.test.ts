@@ -1448,8 +1448,7 @@ type PropertySplit = {
   publish_timestamp: number | null;
   create_timestamp: number;
   maturity:
-    | { type: "mature" }
-    | { type: "immature"; maturation_period_millis: number };
+    { type: "mature" } | { type: "immature"; maturation_period_millis: number };
 };
 
 const propertySplitArb: fc.Arbitrary<PropertySplit> = fc.record({

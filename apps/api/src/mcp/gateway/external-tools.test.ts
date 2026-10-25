@@ -200,7 +200,15 @@ describe("external MCP gateway tools", () => {
   });
 
   test("charges the user and connector budget before proxying a call", async () => {
-    proxyMcpToolCallMock.mockResolvedValue({ content: [] });
+    const callOrder: string[] = [];
+    consumeMcpGatewayRateLimitMock.mockImplementation(async () => {
+      callOrder.push("consume");
+      return true;
+    });
+    proxyMcpToolCallMock.mockImplementation(async () => {
+      callOrder.push("proxy");
+      return { content: [] };
+    });
     const context = createContext([[row({ cachedTools: [cachedTool] })]]);
 
     await callGatewayExternalMcpTool({
@@ -215,6 +223,7 @@ describe("external MCP gateway tools", () => {
       userId: context.userId,
     });
     expect(proxyMcpToolCallMock).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["consume", "proxy"]);
   });
 
   test("refuses a call over the gateway budget without reaching the connector", async () => {

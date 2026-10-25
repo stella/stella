@@ -159,8 +159,7 @@ type MatcherUnavailable = {
 };
 
 export type MatcherWorkOutcome<T> =
-  | { status: "completed"; value: T }
-  | MatcherUnavailable;
+  { status: "completed"; value: T } | MatcherUnavailable;
 
 const createMatcherWorker = () =>
   new Worker(

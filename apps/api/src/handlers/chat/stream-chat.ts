@@ -248,6 +248,7 @@ import {
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import {
   modelAcceptsStreamingToolUse,
@@ -385,6 +386,9 @@ type StreamChatProps = {
   tools: ChatToolMap;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
+  /** What authorized the request this turn answers; its response ends with
+   *  it, while the turn runs on for the thread's other viewers. */
+  viewer: SseStreamBinding;
   workspaceId: SafeId<"workspace"> | null;
 };
 
@@ -490,8 +494,7 @@ type ObserveChatOutputStagesOptions = {
   source: AsyncIterable<StreamChunk>;
   startedAt: number;
   getSettlementOutcome: () =>
-    | StreamChatFinishEvent["outcome"]["type"]
-    | undefined;
+    StreamChatFinishEvent["outcome"]["type"] | undefined;
   now?: () => number;
   emitStage?: typeof emitRequestStage;
 };
@@ -508,9 +511,7 @@ const SETTLEMENT_STAGE_OUTCOME = {
 } as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
 
 type OutputGeneratorPosition =
-  | { type: "running" }
-  | { type: "suspended" }
-  | { type: "completed" };
+  { type: "running" } | { type: "suspended" } | { type: "completed" };
 
 const UNFINISHED_GENERATOR_STAGE_OUTCOME = {
   running: "failed",
@@ -605,6 +606,7 @@ export const streamChat = async ({
   tools,
   externalMcpToolSource,
   userId,
+  viewer,
   workspaceId,
 }: StreamChatProps): Promise<StreamChatOutcome> => {
   const admittedAt = performance.now();
@@ -1109,6 +1111,7 @@ export const streamChat = async ({
         finishSettlement,
         readTiming,
       }),
+      viewer,
     ),
   };
 };
@@ -2057,16 +2060,14 @@ const createChatRuntimeMiddleware = ({
 
 type ProcessServerChatStreamProps = {
   reportSnapshotFailure?:
-    | ((error: SnapshotReconciliationError) => void)
-    | undefined;
+    ((error: SnapshotReconciliationError) => void) | undefined;
   /** The run's own signal: aborted by the provider deadline below *and* by the
    *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
   /** Original run control keeps user-stop and ownership-loss precedence. */
   runSignal?: AbortSignal;
   getRestorableCheckpoint?:
-    | (() => PersistableChatMessage | undefined)
-    | undefined;
+    (() => PersistableChatMessage | undefined) | undefined;
   /** The metered provider deadline the caller set for this turn. It is the
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
@@ -4765,8 +4766,7 @@ const restoreInterrupts = <T extends object>(
 };
 
 type ParsedToolResultContent =
-  | { type: "json"; value: unknown }
-  | { type: "text"; value: string };
+  { type: "json"; value: unknown } | { type: "text"; value: string };
 
 type TransformToolResultContentOptions = {
   boundary: ChatThirdPartyBoundary;

@@ -70,11 +70,9 @@ type EgressDependencies = {
   /** Provider boundary for anonymizing tenant-authored text. */
   anonymizeTextFields?: typeof anonymizeTextFields | undefined;
   loadAnonymizationAllowlistCanonicalsByWorkspace?:
-    | typeof loadAnonymizationAllowlistCanonicalsByWorkspace
-    | undefined;
+    typeof loadAnonymizationAllowlistCanonicalsByWorkspace | undefined;
   loadAnonymizationGazetteerEntriesByWorkspace?:
-    | typeof loadAnonymizationGazetteerEntriesByWorkspace
-    | undefined;
+    typeof loadAnonymizationGazetteerEntriesByWorkspace | undefined;
 };
 
 export function finalizeToolEgress<TData>(
@@ -143,8 +141,7 @@ class EgressAnonymizerFailedError extends TaggedError(
 
 /** Why a payload's anonymization did not complete. */
 type EgressAnonymizationError =
-  | AnonymizedFieldBoundaryError
-  | EgressAnonymizerFailedError;
+  AnonymizedFieldBoundaryError | EgressAnonymizerFailedError;
 
 type EgressAnonymize = (
   input: Parameters<typeof anonymizeTextFields>[0],

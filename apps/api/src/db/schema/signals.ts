@@ -63,8 +63,7 @@ export type SignalAcceptedResult =
     }
   | {
       suggestionKind:
-        | typeof SUGGESTION_KIND.ASSIGN
-        | typeof SUGGESTION_KIND.OPEN_CHAT;
+        typeof SUGGESTION_KIND.ASSIGN | typeof SUGGESTION_KIND.OPEN_CHAT;
       result: { type: "none" };
     };
 

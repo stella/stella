@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
@@ -132,6 +132,7 @@ describe("decision write extension", () => {
   });
 
   test("deadline revokes a callback that wakes after the savepoint closes", async () => {
+    const clock = spyOn(performance, "now").mockReturnValue(0);
     const tx = transaction();
     let resume: (() => void) | undefined;
     const suspended = new Promise<void>((resolve) => {
@@ -149,20 +150,61 @@ describe("decision write extension", () => {
       await suspended;
       return { type: "applied" };
     };
-    expect(
-      await runDecisionWriteExtension(tx, decisionId, {
-        extension,
-        deadlineMs: 10,
-      }),
-    ).toEqual({ type: "deferred", reason: "deadline" });
-    expect(tx.stored).toEqual(["canonical"]);
-    expect(tx.statements.at(-1)?.params).toEqual(["0ms", "0ms"]);
-    resume?.();
-    await finished;
-    expect(
-      tx.statements.some((statement) => statement.sql === "late write"),
-    ).toBe(false);
+    try {
+      expect(
+        await runDecisionWriteExtension(tx, decisionId, {
+          extension,
+          deadlineMs: 10,
+        }),
+      ).toEqual({ type: "deferred", reason: "deadline" });
+      expect(finished).toBeDefined();
+      expect(tx.stored).toEqual(["canonical"]);
+      expect(tx.statements.at(-1)?.params).toEqual(["0ms", "0ms"]);
+      resume?.();
+      await finished;
+      expect(
+        tx.statements.some((statement) => statement.sql === "late write"),
+      ).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
   });
+
+  test.each([0, 9, 10, 11, 100])(
+    "executor elapsed time %d is classified before the deadline timer fires",
+    async (elapsedMs) => {
+      let now = 0;
+      const clock = spyOn(performance, "now").mockImplementation(() => now);
+      const tx = transaction();
+      try {
+        const outcome = await runDecisionWriteExtension(tx, decisionId, {
+          deadlineMs: 10,
+          extension: async ({ tx: executor, signal }) => {
+            now = elapsedMs;
+            expect(signal.aborted).toBe(false);
+            await executor.execute(sql.raw("write extension"));
+            return { type: "applied" };
+          },
+        });
+        expect(outcome).toEqual(
+          elapsedMs < 10
+            ? { type: "applied" }
+            : { type: "deferred", reason: "deadline" },
+        );
+        expect(tx.stored).toEqual(
+          elapsedMs < 10 ? ["canonical", "extension"] : ["canonical"],
+        );
+        expect(
+          tx.statements.some(
+            (statement) => statement.sql === "write extension",
+          ),
+        ).toBe(elapsedMs < 10);
+        expect(tx.statements.at(-1)?.params).toEqual(["0ms", "0ms"]);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
 
   test("parent cancellation rolls back the extension and propagates to its caller", async () => {
     const tx = transaction();
