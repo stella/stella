@@ -57,7 +57,8 @@ export type PlSnLine =
       readonly runs: readonly PlSnRun[];
       readonly indented: boolean;
       readonly footnote?:
-        { readonly label: string; readonly noteId: string } | undefined;
+        | { readonly label: string; readonly noteId: string }
+        | undefined;
     }
   | { readonly type: "blank" };
 
@@ -189,11 +190,11 @@ export type ExtractPlSnLinesOptions = {
  * number in the text.
  */
 const isRunningHeader = (
-  text: string | undefined,
+  text: string,
   docket: string,
   pageNumber: number,
 ): boolean => {
-  const words = text?.trim().split(/\s+/u) ?? [];
+  const words = text.trim().split(/\s+/u);
   if (words.at(-1) !== String(pageNumber)) {
     return false;
   }
