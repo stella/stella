@@ -337,6 +337,17 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
     },
   );
 
+  test("carries the due date at document level only, as Peppol BIS expects", () => {
+    const xml = contentOf(
+      peppolRecord({
+        number: "2027-010",
+        lines: [{ description: "Work", netAmountMinor: cents(100) }],
+      }),
+    );
+    expect(xml).toContain("<cbc:DueDate>");
+    expect(xml).not.toContain("<cbc:PaymentDueDate>");
+  });
+
   test("exports a supply taxed at the pre-2025 20 % rate and its correction", () => {
     const invoice = contentOf(
       peppolRecord({

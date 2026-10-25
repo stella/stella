@@ -39,6 +39,8 @@ export type UblSerializationOptions = {
   paymentMeansCode?: "30" | "58";
   omitVatIds?: boolean;
   exemptionReasonCodes?: boolean;
+  /** Peppol BIS carries the due date at document level only (BT-9). */
+  omitPaymentDueDate?: boolean;
 };
 
 /** UNCL 5305 VAT category of a line. */
@@ -252,7 +254,9 @@ const document = (
       ? ""
       : el("cac:PaymentMeans", [
           text("cbc:PaymentMeansCode", options.paymentMeansCode ?? "30"),
-          text("cbc:PaymentDueDate", record.dueDate),
+          options.omitPaymentDueDate
+            ? ""
+            : text("cbc:PaymentDueDate", record.dueDate),
           text("cbc:PaymentID", variableSymbol),
           el("cac:PayeeFinancialAccount", [
             text("cbc:ID", record.seller.iban ?? record.seller.accountNumber),

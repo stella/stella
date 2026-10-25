@@ -125,6 +125,7 @@ export const buildPeppolSkFiles = (
       requireIban: true,
       paymentMeansCode: "58",
       exemptionReasonCodes: true,
+      omitPaymentDueDate: true,
     }),
   );
 };
