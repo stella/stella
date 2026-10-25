@@ -112,14 +112,6 @@ const RAW_DELIVERY_CASES = [
       "content-disposition": "attachment; filename=fixture.txt",
     }),
   },
-  {
-    name: "disposition headers",
-    payload: () => "AB",
-    headers: () =>
-      new Headers({
-        "Content-Disposition": "attachment; filename=fixture.txt",
-      }),
-  },
 ] as const;
 
 describe("handler content delivery", () => {

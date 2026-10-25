@@ -2186,7 +2186,9 @@ export type TokenHandlerConfig = InputSchema &
  */
 export type VerifyCaller<TCaller> = (
   raw: RawRouteInput,
-) => Promise<Result<TCaller, HandlerError>>;
+) =>
+  | Result<TCaller, HandlerError>
+  | Promise<Result<TCaller, HandlerError>>;
 
 type TokenHandlerContext<
   TConfig extends TokenHandlerConfig,

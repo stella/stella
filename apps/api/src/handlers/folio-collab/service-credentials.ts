@@ -39,9 +39,6 @@ const authorizeFolioCollabService = (
 };
 
 /** A snapshot endpoint's caller: the deployment's collaboration service. */
-export const verifyFolioCollabServiceCaller: VerifyCaller<void> = async ({
+export const verifyFolioCollabServiceCaller: VerifyCaller<void> = ({
   request,
-}) =>
-  Promise.resolve(
-    authorizeFolioCollabService(request.headers.get("authorization")),
-  );
+}) => authorizeFolioCollabService(request.headers.get("authorization"));

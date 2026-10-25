@@ -26,7 +26,7 @@ import { decodeRequestInput } from ${httpModule("input")};
 import { toResponse } from ${httpModule("respond")};
 import { routes } from ${httpModule("route")};
 import { status } from ${httpModule("status")};
-import { serveForTest } from ${httpModule("test-server")};
+import { serveForTest } from ${JSON.stringify(path.join(API_ROOT, "src", "tests", "helpers", "test-server.ts"))};
 import * as v from ${JSON.stringify(Bun.resolveSync("valibot", import.meta.dir))};
 const echo = (schema) => ({
   access: 'public',

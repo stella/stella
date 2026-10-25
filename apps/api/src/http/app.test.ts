@@ -91,7 +91,7 @@ const app = createHttpApp({
           return new Response("raw", { headers: { "x-raw": "1" } });
         }),
       },
-      "/teapot": { GET: definition(() => status(418)) },
+      "/conflict": { GET: definition(() => status(409)) },
       "/gone": { DELETE: definition(() => status(204)) },
       "/null": { GET: definition(() => null) },
     }),
@@ -224,9 +224,9 @@ describe("routing", () => {
 
 describe("answers", () => {
   test("a bare status sends its status text, a bodiless status sends none", async () => {
-    const teapot = await server.fetch("http://localhost/teapot");
-    expect(teapot.status).toBe(418);
-    expect(await teapot.text()).toBe("I'm a Teapot");
+    const conflict = await server.fetch("http://localhost/conflict");
+    expect(conflict.status).toBe(409);
+    expect(await conflict.text()).toBe("Conflict");
     const gone = await server.fetch("http://localhost/gone", {
       method: "DELETE",
     });
