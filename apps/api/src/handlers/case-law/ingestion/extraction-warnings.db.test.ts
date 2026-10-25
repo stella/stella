@@ -133,8 +133,8 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         (await ingest({ fulltext: undefined, sequence: 2 })).extractionWarnings,
       ).toEqual(dirty.extractionWarnings);
-      const pointer = await caseLawPublicReadDb(
-        async (tx) => await decisionRecordQuery(tx, dirty.id),
+      const pointer = await caseLawPublicReadDb(async (tx) =>
+        (await decisionRecordQuery(tx, dirty.id)).at(0),
       );
       expect(pointer?.extractionWarnings).toEqual(dirty.extractionWarnings);
       const read = await withRedistributableSubject(
@@ -157,6 +157,7 @@ if (!databaseUrl || !runPostgresTests) {
         direction: "cites",
         limit: 10,
         cursor: undefined,
+        surface: "pages",
       });
       if (passages?.type !== "page") {
         panic("Expected public citation page");
