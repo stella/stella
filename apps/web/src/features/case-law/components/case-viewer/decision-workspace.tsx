@@ -33,22 +33,24 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
-import {
-  VIEWER_OVERLAY_BAR_BAND_PX,
-  VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
-} from "@/components/inspector/viewer-overlay-bar";
-import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
 import type {
   AnalysisMarginItem,
   AnswerMarginItem,
   ProvisionMarginItem,
 } from "@/components/legal-reader/margin-notes";
+import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
@@ -65,6 +67,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
+import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -269,6 +272,32 @@ const ReaderStatusNotices = ({
   );
 };
 
+const decisionAnalysisView = (
+  analysisState: ReturnType<typeof useLazyDecisionAnalysis>["state"],
+) => {
+  const hasAnalysis =
+    analysisState.status === "done" ||
+    (analysisState.status === "generating" && analysisState.tree.length > 0);
+  const isAnalyzing =
+    analysisState.status === "generating" && analysisState.tree.length === 0;
+  const analysisTree = (() => {
+    if (analysisState.status === "done") {
+      return analysisState.analysis.tree;
+    }
+    if (analysisState.status === "generating") {
+      return analysisState.tree;
+    }
+    return [];
+  })();
+
+  // The written layers come whole with the finished analysis; a run still
+  // in flight streams only its tree, so there is nothing to show yet.
+  const completeAnalysis =
+    analysisState.status === "done" ? analysisState.analysis : null;
+
+  return { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis };
+};
+
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   // The citation strip's own summary, already cached for this decision: a
@@ -300,7 +329,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     id: decisionId,
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
-  const mainRef = useRef<HTMLDivElement>(null);
+  const { element: contentElement, attach: attachContent } =
+    useReaderElement<HTMLElement>();
+  const {
+    readerRef: mainRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
   const provisions = useReaderProvisionMode(mainRef);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
@@ -355,7 +390,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     annotations.setActiveAnnotationId(id);
   };
   useExternalSyncEffect(() => {
-    const root = mainRef.current;
+    const root = viewportElement;
     if (root === null) {
       return undefined;
     }
@@ -365,7 +400,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       label: t("readerAnswers.expand"),
       onOpen: openAnswer,
     });
-  }, [visibleAnswers, openAnswer, t]);
+  }, [viewportElement, visibleAnswers, openAnswer, t]);
   const foreignDecisionIds = [
     ...new Set(
       answers.answers
@@ -541,25 +576,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     generateDecisionAnalysis();
   }, [ensureAIAvailable, generateDecisionAnalysis]);
 
-  const hasAnalysis =
-    analysisState.status === "done" ||
-    (analysisState.status === "generating" && analysisState.tree.length > 0);
-  const isAnalyzing =
-    analysisState.status === "generating" && analysisState.tree.length === 0;
-  const analysisTree = (() => {
-    if (analysisState.status === "done") {
-      return analysisState.analysis.tree;
-    }
-    if (analysisState.status === "generating") {
-      return analysisState.tree;
-    }
-    return [];
-  })();
+  const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
+    decisionAnalysisView(analysisState);
 
-  // The written layers come whole with the finished analysis; a run still
-  // in flight streams only its tree, so there is nothing to show yet.
-  const completeAnalysis =
-    analysisState.status === "done" ? analysisState.analysis : null;
+  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
+    completeAnalysis?.tree ?? null,
+  );
 
   // The passage the reader was sent to, marked for as long as they are on it.
   // A jump anywhere else in the document is them leaving it, so the marker
@@ -769,7 +791,20 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
-      <div className="relative min-h-0 flex-1">
+      <div
+        className={cn(
+          LEGAL_READER_LAYOUT_CLASS_NAME,
+          "relative min-h-0 flex-1",
+        )}
+      >
+        <LegalReaderControls
+          textScale={textScale}
+          blocks={ast === null ? [] : ast.blocks}
+          content={contentElement}
+          fallbackBreadcrumb={fallbackBreadcrumb}
+          viewport={viewportElement}
+          key={decisionId}
+        />
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
           {notesFilterOptions.map((option) => {
             const Icon = option.icon;
@@ -801,13 +836,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         {/* The text column is the grid's inline-end column at every width, so
             the bar's corner of this box is the text's corner, as in the
             inspector's reader. */}
-        <FloatingZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
-        />
 
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
@@ -832,9 +860,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               <OutlineRail
                 ariaLabel={t("statutes.outline")}
                 items={analysisOutline.items}
-                // The zoom bar floats beside the rail's top; the rail starts
-                // below it so reaching for the bar never opens the outline.
-                topOffset={VIEWER_OVERLAY_BAR_BAND_PX}
+                // The shared breadcrumb and zoom row owns the top band.
+                topOffset={READER_BREADCRUMB_CLEARANCE}
                 onJump={(id, container) => {
                   const anchorId = analysisOutline.anchorById.get(id);
                   if (anchorId === undefined) {
@@ -881,7 +908,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 scrollContainerRef={mainRef}
               />
             )}
-            <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+            <div
+              className="reader-scroll h-full overflow-y-auto"
+              ref={attachViewport}
+            >
               <ReaderStatusNotices
                 answersError={answers.error}
                 foreignDecisionFailed={foreignDecisionError !== undefined}
@@ -1003,8 +1033,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 <main
                   className={cn(
                     "reader-paper min-w-0 pb-8",
-                    VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+                    LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
                   )}
+                  ref={attachContent}
                   data-slot="reader-document-column"
                 >
                   {/* Below lg the analysis column, and the offer in it, is
