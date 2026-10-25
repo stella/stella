@@ -1,14 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import {
-  createFetchWithTimeout,
-  type Fetcher,
-  fetchWithTimeout,
-  type FetchWithTimeoutInit,
-} from "@stll/fetch";
 import { normalizeVatExchangeRate, type VatRateCountry } from "@stll/invoicing";
 import { Temporal } from "@stll/time";
+
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 export class VatRateUnavailableError extends TaggedError(
   "VatRateUnavailableError",
@@ -32,67 +29,113 @@ export type VatExchangeRate = {
   sourceReference: string | null;
 };
 
-/** The shared outbound transport, bound to an injected fetcher in tests. */
-type Send = (url: string, init: FetchWithTimeoutInit) => Promise<Response>;
-const IDLE_TIMEOUT_MS = 10_000;
-const DEADLINE_MS = 30_000;
+export type VatExchangeRateError =
+  | VatRateUnavailableError
+  | VatRateCurrencyError
+  | VatRateMalformedError
+  | VatRateNotPublishedError;
+
+/** One fetched rate document: its HTTP status and decoded text. */
+export type RateDocument = { status: number; text: string };
+
+/** Fetches one official rate document. */
+export type RateTransport = (
+  url: string,
+) => Promise<Result<RateDocument, VatRateUnavailableError>>;
+
+const UNAVAILABLE_MESSAGE =
+  "The official VAT exchange-rate service is unavailable; retry finalizing later";
+// A daily rate file is a few kilobytes; the cap and the total timeout bound a
+// source that answers slowly or without end.
+const MAX_RATE_DOCUMENT_BYTES = 1_048_576;
+const RATE_REQUEST_TIMEOUT_MS = 20_000;
+
+/** The production transport: bounded, and issued under the caller's permit. */
+export const officialRateTransport =
+  (permit: ThirdPartyOutboundPermit): RateTransport =>
+  async (url) => {
+    const fetched = await safeOutboundFetchBytes({
+      url,
+      permit,
+      maxBytes: MAX_RATE_DOCUMENT_BYTES,
+      timeoutMs: RATE_REQUEST_TIMEOUT_MS,
+      headers: { accept: "application/json, text/plain" },
+    });
+    if (Result.isError(fetched)) {
+      return Result.err(
+        new VatRateUnavailableError({
+          message: UNAVAILABLE_MESSAGE,
+          error: fetched.error,
+        }),
+      );
+    }
+    return Result.ok({
+      status: fetched.value.status,
+      text: new TextDecoder().decode(fetched.value.body),
+    });
+  };
+
 const daysBefore = (date: string, days: number) =>
   Temporal.PlainDate.from(date).subtract({ days }).toString();
 
-type RateHttpRequest = {
+const currencyNotPublished = (source: RateSource, currency: string) =>
+  Result.err(
+    new VatRateCurrencyError({
+      message: `${source} does not publish a ${currency} rate`,
+      currency,
+    }),
+  );
+
+const malformed = (message: string, error?: unknown) =>
+  Result.err(new VatRateMalformedError({ message, error }));
+
+type RateDocumentRequest = {
   url: string;
-  send: Send;
-  /** ECB and NBP answer 404 for a currency they do not publish. */
-  currencyOn404?: { source: string; currency: string };
+  transport: RateTransport;
+  source: RateSource;
+  currency: string;
 };
 
-type RateHttpResult = Result<
-  Response,
-  VatRateUnavailableError | VatRateCurrencyError
->;
-
-const request = async ({
+/** The document text; ECB and NBP answer 404 for a currency they do not publish. */
+const fetchRateDocument = async ({
   url,
-  send,
-  currencyOn404,
-}: RateHttpRequest): Promise<RateHttpResult> => {
-  const requested = await Result.tryPromise({
-    try: async () =>
-      await send(url, {
-        // Idle bounds every body read as well as the headers; the deadline
-        // bounds a source that keeps trickling data.
-        timeout: { type: "idle", ms: IDLE_TIMEOUT_MS },
-        signal: AbortSignal.timeout(DEADLINE_MS),
-        headers: { accept: "application/json, text/plain" },
-      }),
-    catch: (error) =>
+  transport,
+  source,
+  currency,
+}: RateDocumentRequest): Promise<
+  Result<string, VatRateUnavailableError | VatRateCurrencyError>
+> => {
+  const fetched = await transport(url);
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const { status, text } = fetched.value;
+  if (status === 404 && source !== "CNB") {
+    return currencyNotPublished(source, currency);
+  }
+  if (status < 200 || status > 299) {
+    return Result.err(
       new VatRateUnavailableError({
-        message:
-          "The official VAT exchange-rate service is unavailable; retry finalizing later",
+        message: `The official VAT exchange-rate service returned HTTP ${String(status)}; retry finalizing later`,
+      }),
+    );
+  }
+  return Result.ok(text);
+};
+
+const parseRateJson = <TSchema extends v.GenericSchema>(
+  text: string,
+  schema: TSchema,
+  source: RateSource,
+) =>
+  Result.try({
+    try: () => v.parse(schema, JSON.parse(text)),
+    catch: (error) =>
+      new VatRateMalformedError({
+        message: `${source} returned a malformed exchange-rate response`,
         error,
       }),
   });
-  if (Result.isError(requested)) {
-    return requested;
-  }
-  const response = requested.value;
-  if (response.status === 404 && currencyOn404 !== undefined) {
-    return Result.err(
-      new VatRateCurrencyError({
-        message: `${currencyOn404.source} does not publish a ${currencyOn404.currency} rate`,
-        currency: currencyOn404.currency,
-      }),
-    );
-  }
-  if (!response.ok) {
-    return Result.err(
-      new VatRateUnavailableError({
-        message: `The official VAT exchange-rate service returned HTTP ${response.status}; retry finalizing later`,
-      }),
-    );
-  }
-  return Result.ok(response);
-};
 
 const nbpSchema = v.object({
   rates: v.array(
@@ -117,19 +160,8 @@ const ecbSchema = v.object({
   }),
 });
 
-export type VatExchangeRateError =
-  | VatRateUnavailableError
-  | VatRateCurrencyError
-  | VatRateMalformedError
-  | VatRateNotPublishedError;
-
-const malformed = (message: string, error?: unknown) =>
-  Result.err(new VatRateMalformedError({ message, error }));
-
-const normalizeRate = (
-  input: Parameters<typeof normalizeVatExchangeRate>[0],
-) => {
-  const normalized = Result.try({
+const normalizeRate = (input: Parameters<typeof normalizeVatExchangeRate>[0]) =>
+  Result.try({
     try: () => normalizeVatExchangeRate(input),
     catch: (error) =>
       new VatRateMalformedError({
@@ -137,15 +169,13 @@ const normalizeRate = (
         error,
       }),
   });
-  return normalized;
-};
 
 type RateRequest = {
   currency: string;
   referenceDate: string;
   /** Today in Prague time (CET/CEST), where ČNB, ECB and NBP publish. */
   today: string;
-  send: Send;
+  transport: RateTransport;
 };
 
 const notPublished = (availableFrom: string) =>
@@ -266,7 +296,7 @@ const fetchCnbRate = async ({
   currency,
   referenceDate,
   today,
-  send,
+  transport,
 }: RateRequest): RateResult => {
   // ČNB's file for a future date carries the latest rate, not the one valid then.
   if (referenceDate > today) {
@@ -274,40 +304,27 @@ const fetchCnbRate = async ({
   }
   // CZ zákon 235/2004 Sb. § 4 odst. 8: use the ČNB rate valid on the tax point (the daily file carries forward on non-publication days).
   const displayDate = referenceDate.split("-").toReversed().join(".");
-  const requested = await request({
+  const document = await fetchRateDocument({
     url: `https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=${displayDate}`,
-    send,
+    transport,
+    source: "CNB",
+    currency,
   });
-  if (Result.isError(requested)) {
-    return requested;
+  if (Result.isError(document)) {
+    return document;
   }
-  const response = requested.value;
-  const body = await Result.tryPromise({
-    try: async () => await response.text(),
-    catch: (error) =>
-      new VatRateUnavailableError({
-        message:
-          "The official VAT exchange-rate service is unavailable; retry finalizing later",
-        error,
-      }),
-  });
-  if (Result.isError(body)) {
-    return body;
-  }
-  const text = body.value;
-  const lines = text.trim().split(/\r?\n/u);
-  const effective = /(\d{2}\.\d{2}\.\d{4})/u.exec(lines.at(0) ?? "")?.[1];
+  const lines = document.value.trim().split(/\r?\n/u);
+  const header = lines.at(0);
+  const effective =
+    header === undefined
+      ? undefined
+      : /(\d{2}\.\d{2}\.\d{4})/u.exec(header)?.[1];
   const row = lines
     .slice(2)
     .map((line) => line.split("|"))
     .find((columns) => columns[3] === currency);
   if (!row) {
-    return Result.err(
-      new VatRateCurrencyError({
-        message: `ČNB does not publish a ${currency} rate`,
-        currency,
-      }),
-    );
+    return currencyNotPublished("CNB", currency);
   }
   if (!effective || !row[2] || !row[4] || !/^\d+$/u.test(row[2])) {
     return malformed("ČNB returned a malformed daily-rate file");
@@ -328,7 +345,7 @@ const fetchCnbRate = async ({
   }
   const normalized = normalizeRate({
     quote: row[4].replace(",", "."),
-    foreignUnits: Number(row[2]),
+    foreignUnits: BigInt(row[2]),
     direction: "home_per_foreign",
   });
   if (Result.isError(normalized)) {
@@ -346,66 +363,56 @@ const fetchEcbRate = async ({
   currency,
   referenceDate,
   today,
-  send,
+  transport,
 }: RateRequest): RateResult => {
-  // SK zákon 222/2004 Z. z. § 26 ods. 1: use the ECB rate from the day before the tax point; latest earlier publication on a gap (weekend rule UNVERIFIED).
+  // SK zákon 222/2004 Z. z. § 26 ods. 1: use the ECB rate from the day before the tax point; latest earlier publication on a gap.
   const end = daysBefore(referenceDate, 1);
   if (end > today) {
     return notPublished(end);
   }
-  const requested = await request({
+  const document = await fetchRateDocument({
     url: `https://data-api.ecb.europa.eu/service/data/EXR/D.${encodeURIComponent(currency)}.EUR.SP00.A?startPeriod=${daysBefore(end, 10)}&endPeriod=${end}&format=jsondata`,
-    send,
-    currencyOn404: { source: "ECB", currency },
+    transport,
+    source: "ECB",
+    currency,
   });
-  if (Result.isError(requested)) {
-    return requested;
+  if (Result.isError(document)) {
+    return document;
   }
-  const decoded = await Result.tryPromise({
-    try: async () => await requested.value.json(),
-    catch: (error) =>
-      new VatRateMalformedError({
-        message: "ECB returned invalid JSON",
-        error,
-      }),
-  });
-  if (Result.isError(decoded)) {
-    return decoded;
+  const parsed = parseRateJson(document.value, ecbSchema, "ECB");
+  if (Result.isError(parsed)) {
+    return parsed;
   }
-  const body = decoded.value;
-  const parsed = v.safeParse(ecbSchema, body);
-  if (!parsed.success) {
-    return Result.err(
-      new VatRateMalformedError({
-        message: "ECB returned a malformed exchange-rate response",
-        error: parsed.issues,
-      }),
-    );
+  const series = parsed.value.dataSets.at(0)?.series["0:0:0:0:0"];
+  const dates = parsed.value.structure.dimensions.observation.at(0)?.values;
+  if (series === undefined || dates === undefined) {
+    return currencyNotPublished("ECB", currency);
   }
-  const observations = Object.entries(
-    parsed.output.dataSets.at(0)?.series["0:0:0:0:0"]?.observations ?? {},
-  );
-  const dates =
-    parsed.output.structure.dimensions.observation.at(0)?.values ?? [];
-  const last = observations.at(-1);
-  const date = last === undefined ? undefined : dates[Number(last[0])]?.id;
-  const quote = last?.[1][0];
-  if (date === undefined || quote === undefined) {
-    return Result.err(
-      new VatRateCurrencyError({
-        message: `ECB does not publish a ${currency} rate`,
-        currency,
-      }),
-    );
+  // Observations are keyed by their index into the date dimension.
+  const latest = dates
+    .flatMap(({ id }, index) => {
+      const observation = series.observations[String(index)];
+      return observation === undefined
+        ? []
+        : [{ date: id, quote: observation[0] }];
+    })
+    .at(-1);
+  if (latest === undefined) {
+    return currencyNotPublished("ECB", currency);
   }
   if (
-    publicationPending({ source: "ECB", required: end, latest: date, today })
+    publicationPending({
+      source: "ECB",
+      required: end,
+      latest: latest.date,
+      today,
+    })
   ) {
     return notPublished(end);
   }
   const normalized = normalizeRate({
-    quote: String(quote),
-    foreignUnits: 1,
+    quote: String(latest.quote),
+    foreignUnits: 1n,
     direction: "foreign_per_home",
   });
   if (Result.isError(normalized)) {
@@ -414,7 +421,7 @@ const fetchEcbRate = async ({
   return Result.ok({
     rate: normalized.value,
     source: "ECB",
-    effectiveDate: date,
+    effectiveDate: latest.date,
     sourceReference: null,
   });
 };
@@ -423,52 +430,31 @@ const fetchNbpRate = async ({
   currency,
   referenceDate,
   today,
-  send,
+  transport,
 }: RateRequest): RateResult => {
   // PL ustawa o VAT art. 31a ust. 1: use NBP table A's latest effectiveDate strictly before the tax point.
   const end = daysBefore(referenceDate, 1);
   if (end > today) {
     return notPublished(end);
   }
-  const requested = await request({
+  const document = await fetchRateDocument({
     url: `https://api.nbp.pl/api/exchangerates/rates/a/${encodeURIComponent(currency)}/${daysBefore(end, 10)}/${end}/?format=json`,
-    send,
-    currencyOn404: { source: "NBP", currency },
+    transport,
+    source: "NBP",
+    currency,
   });
-  if (Result.isError(requested)) {
-    return requested;
+  if (Result.isError(document)) {
+    return document;
   }
-  const decoded = await Result.tryPromise({
-    try: async () => await requested.value.json(),
-    catch: (error) =>
-      new VatRateMalformedError({
-        message: "NBP returned invalid JSON",
-        error,
-      }),
-  });
-  if (Result.isError(decoded)) {
-    return decoded;
+  const parsed = parseRateJson(document.value, nbpSchema, "NBP");
+  if (Result.isError(parsed)) {
+    return parsed;
   }
-  const body = decoded.value;
-  const parsed = v.safeParse(nbpSchema, body);
-  if (!parsed.success) {
-    return Result.err(
-      new VatRateMalformedError({
-        message: "NBP returned a malformed exchange-rate response",
-        error: parsed.issues,
-      }),
-    );
-  }
-  const rate = parsed.output.rates.findLast(
+  const rate = parsed.value.rates.findLast(
     ({ effectiveDate }) => effectiveDate < referenceDate,
   );
   if (!rate) {
-    return Result.err(
-      new VatRateCurrencyError({
-        message: `NBP does not publish a ${currency} rate`,
-        currency,
-      }),
-    );
+    return currencyNotPublished("NBP", currency);
   }
   if (
     publicationPending({
@@ -482,7 +468,7 @@ const fetchNbpRate = async ({
   }
   const normalized = normalizeRate({
     quote: String(rate.mid),
-    foreignUnits: 1,
+    foreignUnits: 1n,
     direction: "home_per_foreign",
   });
   if (Result.isError(normalized)) {
@@ -505,24 +491,17 @@ const VAT_RATE_SOURCES = {
   (request: RateRequest) => RateResult
 >;
 
-export const fetchVatExchangeRate = async ({
-  country,
-  fetcher,
-  today = Temporal.Now.plainDateISO("Europe/Prague").toString(),
-  ...rateRequest
-}: {
+export type VatRateRequest = {
   country: VatRateCountry;
   currency: string;
   referenceDate: string;
+  transport: RateTransport;
   today?: string;
-  /** Replaces the global fetch underneath the shared transport. */
-  fetcher?: Fetcher;
-}): RateResult =>
-  await VAT_RATE_SOURCES[country]({
-    ...rateRequest,
-    today,
-    send:
-      fetcher === undefined
-        ? fetchWithTimeout
-        : createFetchWithTimeout(fetcher),
-  });
+};
+
+export const fetchVatExchangeRate = async ({
+  country,
+  today = Temporal.Now.plainDateISO("Europe/Prague").toString(),
+  ...rateRequest
+}: VatRateRequest): RateResult =>
+  await VAT_RATE_SOURCES[country]({ ...rateRequest, today });

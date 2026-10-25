@@ -73,14 +73,14 @@ describe("VAT currency", () => {
     expect(
       normalizeVatExchangeRate({
         quote: "15.25",
-        foreignUnits: 100,
+        foreignUnits: 100n,
         direction: "home_per_foreign",
       }),
     ).toBe("0.1525");
     expect(
       normalizeVatExchangeRate({
         quote: "1.25",
-        foreignUnits: 1,
+        foreignUnits: 1n,
         direction: "foreign_per_home",
       }),
     ).toBe("0.8");

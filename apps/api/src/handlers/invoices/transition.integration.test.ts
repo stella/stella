@@ -24,10 +24,10 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { VatRateUnavailableError } from "@/api/lib/billing/vat-exchange-rates";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { VatRateUnavailableError } from "@/api/lib/vat-exchange-rates";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -168,6 +168,7 @@ describe("invoice transition integration", () => {
     ).toEqual({
       code: 503,
       response: {
+        code: "upstream_unavailable",
         message: "The official VAT exchange-rate service is unavailable",
         hint: "Retry finalizing later; no changes were made to the invoice.",
       },

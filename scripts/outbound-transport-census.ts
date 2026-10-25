@@ -340,12 +340,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/lib/vat-exchange-rates.ts",
-    class: "third-party",
-    reason: "Requests official exchange rates from ČNB, ECB and NBP.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/api/src/lib/web-search/jina.ts",
     class: "third-party",
     reason: "Sends validation and page requests to Jina endpoints.",
@@ -1216,6 +1210,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/external-preview/preview.ts",
     reason: "Issues request authority for the external preview routes.",
+  },
+  {
+    path: "apps/api/src/handlers/invoices/transition.ts",
+    reason:
+      "Issues request authority for the official VAT exchange rate an invoice finalize needs.",
   },
   {
     path: "apps/api/src/handlers/legislation/boe/law-structure/get.ts",

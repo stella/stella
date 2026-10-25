@@ -73,6 +73,7 @@ export {
 } from "./profiles/country-profiles";
 export { INVOICE_PDF_LABELS } from "./profiles/pdf-labels";
 export {
+  formatExchangeRate,
   homeCurrencyVat,
   normalizeVatExchangeRate,
   vatRateReferenceDate,

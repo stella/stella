@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { encode } from "uqr";
 
 import {
+  formatExchangeRate,
   homeCurrencyVat,
   INVOICE_COUNTRY_PROFILES,
   INVOICE_PDF_LABELS,
@@ -231,9 +232,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         currency: profile.vatCurrency,
         locale: lang,
       });
-    const displayRate = new Intl.NumberFormat(lang, {
-      maximumFractionDigits: 12,
-    }).format(Number(invoice.vatExchangeRate));
+    const displayRate = formatExchangeRate(invoice.vatExchangeRate, lang);
     return {
       total: homeMoney(converted.totalVatAmountMinor),
       breakdown: converted.byRate.map((row) => ({

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { cents, type CentsAmount } from "@stll/money";
 
 import type { InvoiceCountry } from "./profiles/country-profiles";
@@ -70,10 +71,35 @@ const divideHalfUp = (numerator: bigint, denominator: bigint) => {
   return numerator < 0n ? -rounded : rounded;
 };
 
+/** Linear trim; a `0+$` pattern backtracks quadratically on long zero runs. */
+const withoutTrailingZeros = (digits: string) => {
+  let end = digits.length;
+  while (end > 0 && digits.at(end - 1) === "0") {
+    end -= 1;
+  }
+  return digits.slice(0, end);
+};
+
+/**
+ * A stored rate (a decimal string; numeric columns pad zeros) in the reader's
+ * locale, without a lossy round trip through a double.
+ */
+export const formatExchangeRate = (rate: string, locale: string) => {
+  const [whole = "0", fraction = ""] = rate.split(".");
+  const significant = withoutTrailingZeros(fraction);
+  const format = new Intl.NumberFormat(locale);
+  const separator =
+    format.formatToParts(0.5).find((part) => part.type === "decimal")?.value ??
+    ".";
+  const grouped = format.format(BigInt(whole));
+  return significant === "" ? grouped : `${grouped}${separator}${significant}`;
+};
+
 /** Converts a source quote to home-currency units per one invoice-currency unit. */
 export const normalizeVatExchangeRate = (input: {
   quote: string;
-  foreignUnits: number;
+  /** Units of the invoice currency the quote is given for (ČNB quotes 100 JPY). */
+  foreignUnits: bigint;
   direction: "home_per_foreign" | "foreign_per_home";
   precision?: number;
 }): string => {
@@ -83,25 +109,30 @@ export const normalizeVatExchangeRate = (input: {
     input.direction === "home_per_foreign"
       ? divideHalfUp(
           parsed.coefficient * powerOfTen(precision),
-          powerOfTen(parsed.scale) * BigInt(input.foreignUnits),
+          powerOfTen(parsed.scale) * input.foreignUnits,
         )
       : divideHalfUp(
-          powerOfTen(parsed.scale + precision) * BigInt(input.foreignUnits),
+          powerOfTen(parsed.scale + precision) * input.foreignUnits,
           parsed.coefficient,
         );
   const digits = scaled.toString().padStart(precision + 1, "0");
-  return `${digits.slice(0, -precision)}.${digits.slice(-precision)}`.replace(
-    /\.?0+$/u,
-    "",
-  );
+  const fraction = withoutTrailingZeros(digits.slice(-precision));
+  const whole = digits.slice(0, -precision);
+  return fraction === "" ? whole : `${whole}.${fraction}`;
 };
 
-const convertMinor = (amount: number, rate: Decimal): CentsAmount =>
-  cents(
-    Number(
-      divideHalfUp(BigInt(amount) * rate.coefficient, powerOfTen(rate.scale)),
-    ),
+const convertMinor = (amount: number, rate: Decimal): CentsAmount => {
+  const exact = divideHalfUp(
+    BigInt(amount) * rate.coefficient,
+    powerOfTen(rate.scale),
   );
+  // The shared integer parser owns the bigint-to-number step and its range.
+  const minor = parseIntegerToken(exact.toString());
+  if (minor.isErr()) {
+    return panic("Home-currency VAT exceeds the safe integer range");
+  }
+  return cents(minor.value);
+};
 
 export const homeCurrencyVat = (input: {
   country: VatRateCountry;

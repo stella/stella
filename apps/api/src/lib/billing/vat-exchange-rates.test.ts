@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   fetchVatExchangeRate,
+  type RateTransport,
   VatRateCurrencyError,
   VatRateMalformedError,
   VatRateNotPublishedError,
@@ -14,10 +15,11 @@ const fixture = async (name: string) =>
     new URL(`__fixtures__/vat-exchange-rates/${name}`, import.meta.url),
   ).text();
 
-const fixtureFetch =
-  (body: string, seen?: string[]) => async (input: string | URL | Request) => {
-    seen?.push(input instanceof Request ? input.url : input.toString());
-    return new Response(body);
+const fixtureTransport =
+  (text: string, seen?: string[], status = 200): RateTransport =>
+  async (url) => {
+    seen?.push(url);
+    return Result.ok({ status, text });
   };
 
 const valueOf = <T, E>(result: Result<T, E>) => {
@@ -37,7 +39,7 @@ describe("official VAT exchange rates", () => {
         currency: "JPY",
         referenceDate: "2026-10-24",
         today: "2026-12-31",
-        fetcher: fixtureFetch(await fixture("cnb-2026-10-23.txt"), seen),
+        transport: fixtureTransport(await fixture("cnb-2026-10-23.txt"), seen),
       }),
     );
     // ČNB's published daily-rate file for the reference date.
@@ -61,7 +63,7 @@ describe("official VAT exchange rates", () => {
         currency: "USD",
         referenceDate: "2026-10-26",
         today: "2026-12-31",
-        fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json"), seen),
+        transport: fixtureTransport(await fixture("ecb-2026-10-23.json"), seen),
       }),
     );
     expect(rate.effectiveDate).toBe("2026-10-23");
@@ -76,7 +78,7 @@ describe("official VAT exchange rates", () => {
         currency: "EUR",
         referenceDate: "2026-01-05",
         today: "2026-12-31",
-        fetcher: fixtureFetch(await fixture("nbp-2026-01-02.json")),
+        transport: fixtureTransport(await fixture("nbp-2026-01-02.json")),
       }),
     );
     expect(rate).toEqual({
@@ -93,7 +95,7 @@ describe("official VAT exchange rates", () => {
       currency: "XYZ",
       referenceDate: "2026-01-02",
       today: "2026-12-31",
-      fetcher: fixtureFetch("{}"),
+      transport: fixtureTransport("{}"),
     });
     expect(Result.isError(malformed) && malformed.error).toBeInstanceOf(
       VatRateMalformedError,
@@ -103,7 +105,7 @@ describe("official VAT exchange rates", () => {
       currency: "XYZ",
       referenceDate: "2026-01-02",
       today: "2026-12-31",
-      fetcher: fixtureFetch("02.01.2026 #1\nzemě|měna|množství|kód|kurz"),
+      transport: fixtureTransport("02.01.2026 #1\nzemě|měna|množství|kód|kurz"),
     });
     expect(Result.isError(missing) && missing.error).toBeInstanceOf(
       VatRateCurrencyError,
@@ -118,10 +120,11 @@ describe("official VAT exchange rates", () => {
         currency: "XYZ",
         referenceDate: "2026-01-05",
         today: "2026-12-31",
-        fetcher: async () =>
-          new Response("404 NotFound - Not Found - Brak danych", {
-            status: 404,
-          }),
+        transport: fixtureTransport(
+          "404 NotFound - Not Found - Brak danych",
+          undefined,
+          404,
+        ),
       });
       expect(Result.isError(unpublished) && unpublished.error).toBeInstanceOf(
         VatRateCurrencyError,
@@ -131,7 +134,7 @@ describe("official VAT exchange rates", () => {
         currency: "USD",
         referenceDate: "2026-01-05",
         today: "2026-12-31",
-        fetcher: async () => new Response("", { status: 503 }),
+        transport: fixtureTransport("", undefined, 503),
       });
       expect(Result.isError(outage) && outage.error).toBeInstanceOf(
         VatRateUnavailableError,
@@ -152,7 +155,7 @@ describe("official VAT exchange rates", () => {
         currency: "USD",
         referenceDate,
         today: "2026-10-26",
-        fetcher: fixtureFetch("", seen),
+        transport: fixtureTransport("", seen),
       });
       const error = Result.isError(result) ? result.error : null;
       expect(error).toBeInstanceOf(VatRateNotPublishedError);
@@ -169,7 +172,7 @@ describe("official VAT exchange rates", () => {
       currency: "EUR",
       referenceDate: "2026-10-26",
       today: "2026-10-26",
-      fetcher: fixtureFetch(
+      transport: fixtureTransport(
         "23.10.2026 #205\nzemě|měna|množství|kód|kurz\nEMU|euro|1|EUR|24,330",
       ),
     });
@@ -183,7 +186,7 @@ describe("official VAT exchange rates", () => {
         currency: "EUR",
         referenceDate: "2026-10-25",
         today: "2026-10-25",
-        fetcher: fixtureFetch(
+        transport: fixtureTransport(
           "23.10.2026 #205\nzemě|měna|množství|kód|kurz\nEMU|euro|1|EUR|24,330",
         ),
       }),
@@ -200,7 +203,7 @@ describe("official VAT exchange rates", () => {
         currency: "EUR",
         referenceDate: "2026-10-28",
         today: "2026-10-28",
-        fetcher: fixtureFetch(
+        transport: fixtureTransport(
           "27.10.2026 #207\nzemě|měna|množství|kód|kurz\nEMU|euro|1|EUR|24,330",
         ),
       }),
@@ -217,7 +220,7 @@ describe("official VAT exchange rates", () => {
         currency: "EUR",
         referenceDate: "2026-06-05",
         today: "2026-06-04",
-        fetcher: fixtureFetch(
+        transport: fixtureTransport(
           JSON.stringify({
             rates: [
               { no: "106/A/NBP/2026", effectiveDate: "2026-06-03", mid: 4.25 },
@@ -233,7 +236,7 @@ describe("official VAT exchange rates", () => {
       currency: "EUR",
       referenceDate: "2026-06-04",
       today: "2026-06-03",
-      fetcher: fixtureFetch(
+      transport: fixtureTransport(
         JSON.stringify({
           rates: [
             { no: "105/A/NBP/2026", effectiveDate: "2026-06-02", mid: 4.25 },
@@ -254,7 +257,7 @@ describe("official VAT exchange rates", () => {
         currency: "USD",
         referenceDate: "2026-10-26",
         today: "2026-10-25",
-        fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json")),
+        transport: fixtureTransport(await fixture("ecb-2026-10-23.json")),
       }),
     );
     expect(rate.effectiveDate).toBe("2026-10-23");
@@ -268,7 +271,7 @@ describe("official VAT exchange rates", () => {
       currency: "USD",
       referenceDate: "2026-10-27",
       today: "2026-10-26",
-      fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json")),
+      transport: fixtureTransport(await fixture("ecb-2026-10-23.json")),
     });
     expect(Result.isError(result) && result.error).toBeInstanceOf(
       VatRateNotPublishedError,

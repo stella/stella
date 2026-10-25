@@ -5,6 +5,7 @@ import { t } from "elysia";
 import {
   INVOICE_COUNTRY_PROFILES,
   invoiceCountryOf,
+  type InvoiceDocumentType,
   type VatRateCountry,
   vatRateReferenceDate,
   vatTaxPointDate,
@@ -33,22 +34,25 @@ import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   allocateNumber,
   findDefaultNumberSeries,
 } from "@/api/lib/billing/number-series";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
+import {
+  fetchVatExchangeRate,
+  officialRateTransport,
+  type VatExchangeRate,
+  type VatExchangeRateError,
+  type VatRateRequest,
+} from "@/api/lib/billing/vat-exchange-rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import {
-  fetchVatExchangeRate,
-  type VatExchangeRate,
-  type VatExchangeRateError,
-} from "@/api/lib/vat-exchange-rates";
 
 type TransitionAction =
   "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
@@ -348,12 +352,21 @@ const duplicateInvoiceNumberError = (
       })
     : null;
 
-type VatRateSource = typeof fetchVatExchangeRate;
+type VatRateSource = (
+  request: Omit<VatRateRequest, "transport" | "today">,
+) => ReturnType<typeof fetchVatExchangeRate>;
+
+/** The finalize request is the boundary that issues authority to reach the official rate source. */
+const officialVatRateSource: VatRateSource = async (request) =>
+  await fetchVatExchangeRate({
+    ...request,
+    transport: officialRateTransport(grantThirdPartyOutboundPermit()),
+  });
 
 type VatRateInput = {
   country: VatRateCountry;
   currency: string;
-  documentType: (typeof invoices.$inferSelect)["documentType"];
+  documentType: InvoiceDocumentType;
   invoiceDate: string;
   sellerCountry: string;
   taxableSupplyDate: string | null;
@@ -383,12 +396,14 @@ const vatRateHandlerError = (error: VatExchangeRateError) => {
       });
     case "VatRateMalformedError":
       return new HandlerError({
+        code: "upstream_unavailable",
         status: 503,
         message: "The official VAT exchange-rate response could not be read",
         hint: "Retry finalizing later; if the problem continues, use the seller's home VAT currency.",
       });
     case "VatRateUnavailableError":
       return new HandlerError({
+        code: "upstream_unavailable",
         status: 503,
         message: "The official VAT exchange-rate service is unavailable",
         hint: "Retry finalizing later; no changes were made to the invoice.",
@@ -403,7 +418,7 @@ const vatRateHandlerError = (error: VatExchangeRateError) => {
 type VatRatePreflight = {
   country: string | null;
   currency: string;
-  documentType: (typeof invoices.$inferSelect)["documentType"];
+  documentType: InvoiceDocumentType;
   invoiceDate: string;
   taxableSupplyDate: string | null;
   statesVat: boolean;
@@ -887,7 +902,7 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
   );
 
 export const createTransitionInvoice = ({
-  rateSource = fetchVatExchangeRate,
+  rateSource = officialVatRateSource,
 }: Partial<TransitionInvoiceDependencies> = {}) =>
   transitionInvoiceHandler(rateSource);
 
