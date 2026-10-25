@@ -7,6 +7,13 @@ import {
   MOBILE_UPDATE_VARIANTS,
 } from "@stll/api-contract/mobile-updates";
 
+import {
+  type CdnFetch,
+  cdnFetch,
+  MOBILE_UPDATE_ANSWER_MAX_LENGTH,
+  mobileUpdateAnswer,
+  readSignedMobileUpdate,
+} from "@/api/handlers/mobile-updates/relay";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
@@ -15,13 +22,6 @@ import {
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  type CdnFetch,
-  cdnFetch,
-  MOBILE_UPDATE_ANSWER_MAX_LENGTH,
-  mobileUpdateAnswer,
-  readSignedMobileUpdate,
-} from "@/api/lib/mobile-updates/relay";
 
 const config = {
   contract: "patch",
@@ -94,6 +94,7 @@ export const createReadMobileUpdateHandler = (
           return Result.err(
             new HandlerError({
               status: 503,
+              code: "upstream_unavailable",
               message: "The current update cannot be read right now",
             }),
           );

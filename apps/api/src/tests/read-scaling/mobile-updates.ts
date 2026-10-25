@@ -9,8 +9,8 @@ import {
 import readMobileUpdate, {
   createReadMobileUpdateHandler,
 } from "@/api/handlers/mobile-updates/read";
+import { MOBILE_UPDATES_CDN_ORIGIN } from "@/api/handlers/mobile-updates/relay";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
-import { MOBILE_UPDATES_CDN_ORIGIN } from "@/api/lib/mobile-updates/relay";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const TARGET = {
