@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { corpusIndexGenerations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -82,6 +84,7 @@ const withoutTriggers = async (
   write: (tx: SeedHandle) => Promise<void>,
 ) => {
   await database.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL statement_timeout = '120s'`);
     for (const table of GUARDED_TABLES) {
       // db-await-in-loop: four fixed tables; ALTER TABLE takes one table per statement.
       await tx.execute(sql.raw(`ALTER TABLE ${table} DISABLE TRIGGER USER`));
@@ -92,6 +95,47 @@ const withoutTriggers = async (
       await tx.execute(sql.raw(`ALTER TABLE ${table} ENABLE TRIGGER USER`));
     }
   });
+};
+
+/**
+ * Secondary indexes of the bulk-loaded tables, dropped before the load and
+ * rebuilt from their own definitions after it: building an index once over
+ * the loaded rows is far cheaper than maintaining a dozen of them per row.
+ * Indexes that back a constraint stay, so keys and checks hold throughout.
+ */
+const deferSecondaryIndexes = async (database: GatedTestDb) => {
+  const definitions = v.parse(
+    v.array(v.object({ name: v.string(), definition: v.string() })),
+    executedRows(
+      await database.execute(sql`SELECT index_class.relname AS name,
+        pg_get_indexdef(entry.indexrelid) AS definition
+      FROM pg_index entry
+      JOIN pg_class index_class ON index_class.oid = entry.indexrelid
+      JOIN pg_class table_class ON table_class.oid = entry.indrelid
+      WHERE table_class.relnamespace = 'public'::regnamespace
+        AND table_class.relname IN ('corpus_index_projection_states',
+          'corpus_index_projection_intents', 'legislation_documents')
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_constraint owner WHERE owner.conindid = entry.indexrelid
+        )
+      ORDER BY index_class.relname`),
+    ),
+  );
+  await database.transaction(async (tx) => {
+    for (const { name } of definitions) {
+      // db-await-in-loop: one DROP INDEX per secondary index of three fixed tables.
+      await tx.execute(sql`DROP INDEX ${sql.identifier(name)}`);
+    }
+  });
+  return async () => {
+    await database.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL statement_timeout = '120s'`);
+      for (const { definition } of definitions) {
+        // db-await-in-loop: one CREATE INDEX per dropped index, from its own definition.
+        await tx.execute(sql.raw(definition));
+      }
+    });
+  };
 };
 
 /** A UUID whose last group carries `n`, under a per-table prefix. */
@@ -270,6 +314,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       status: "serving" as const,
     },
   ]);
+  const rebuildIndexes = await deferSecondaryIndexes(database);
   for (const { generation, kind, rows } of SCENARIO_GENERATIONS) {
     for (const chunk of chunks(rows)) {
       // db-await-in-loop: bounded seed chunks keep each statement inside the fixture's statement timeout.
@@ -290,6 +335,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) => {
       await seedLegislationChunk(tx, chunk);
     });
   }
+  await rebuildIndexes();
   for (const table of [
     "corpus_index_generations",
     "corpus_index_projection_states",
