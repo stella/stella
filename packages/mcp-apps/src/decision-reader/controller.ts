@@ -94,8 +94,7 @@ export const createReaderController = (
         ...createReaderSnapshot(),
         document: createReaderPager(document.metadata),
         requestStatus: "conflict",
-        requestFailure:
-          requestFailure ?? appFailure("conflict", createAppRequestId(), true),
+        requestFailure,
         documentRevision: snapshot.documentRevision + 1,
       };
       publish();
