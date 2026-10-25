@@ -16,11 +16,13 @@ import {
   fields,
   fileComparisonUploads,
   folioCollabRooms,
+  hostedCustomerErasures,
   pendingUploads,
   propertyDependencies,
   styleSets,
   templates,
   templateVersions,
+  usageEntitlements,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -1027,6 +1029,28 @@ export const completeOrganizationDeletion = async ({
   pagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  const hostedEntitlement = await tx
+    .select({ id: usageEntitlements.id })
+    .from(usageEntitlements)
+    .where(
+      and(
+        eq(usageEntitlements.organizationId, organizationId),
+        or(
+          eq(usageEntitlements.source, "hosted"),
+          sql`${usageEntitlements.hostedAccountRef} IS NOT NULL`,
+        ),
+      ),
+    )
+    .limit(1);
+  if (hostedEntitlement.length > 0) {
+    await tx
+      .insert(hostedCustomerErasures)
+      .values({ externalCustomerRef: `stella_org_${organizationId}` })
+      .onConflictDoNothing({
+        target: hostedCustomerErasures.externalCustomerRef,
+      });
+  }
+
   const teardown = await recordOrganizationStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),

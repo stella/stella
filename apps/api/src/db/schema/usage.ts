@@ -1117,4 +1117,49 @@ export const hostedUsageWebhookEvents = p.pgTable(
   ],
 );
 
+export const HOSTED_CUSTOMER_ERASURE_STATUSES = [
+  "pending",
+  "erased",
+  "failed",
+] as const;
+const HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES =
+  HOSTED_CUSTOMER_ERASURE_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+/** Reference-free provider deletion intents which survive the organization cascade. */
+export const hostedCustomerErasures = p.pgTable(
+  "hosted_customer_erasures",
+  {
+    id: p.uuid().primaryKey().defaultRandom(),
+    externalCustomerRef: p.text("external_customer_ref").notNull().unique(),
+    status: p
+      .text({ enum: HOSTED_CUSTOMER_ERASURE_STATUSES })
+      .notNull()
+      .default("pending"),
+    attempts: p.integer().notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    lastErrorCode: p.varchar("last_error_code", { length: 64 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("hosted_customer_erasures_due_idx")
+      .on(table.status, table.nextAttemptAt),
+    p.check(
+      "hosted_customer_erasures_status_domain",
+      sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "hosted_customer_erasures_attempts_nonnegative",
+      sql`attempts >= 0`,
+    ),
+    p.pgPolicy("hosted_customer_erasures_no_stella_access", {
+      for: "all",
+      to: stella,
+      using: sql`false`,
+      withCheck: sql`false`,
+    }),
+  ],
+);
+
 // -- Relations --

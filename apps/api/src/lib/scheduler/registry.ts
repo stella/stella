@@ -113,6 +113,10 @@ import {
   reconcileFlowRunOrphans,
 } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import {
+  ERASE_HOSTED_CUSTOMERS_TASK,
+  eraseHostedCustomers,
+} from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
+import {
   REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
   redactHostedUsageWebhookEvents,
 } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
@@ -226,6 +230,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,

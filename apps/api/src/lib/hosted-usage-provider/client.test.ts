@@ -7,6 +7,7 @@ import {
   createHostedSetupSession,
   createPolarManagementSession,
   createPolarSetupSession,
+  eraseHostedCustomer,
   HostedUsageProviderApiError,
 } from "@/api/lib/hosted-usage-provider/client";
 import { POLAR_API_VERSIONS } from "@/api/lib/hosted-usage-provider/polar/contract";
@@ -66,6 +67,51 @@ const installFetch = (handler: FetchHandler): void => {
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
+});
+
+describe("eraseHostedCustomer", () => {
+  for (const status of [204, 404]) {
+    test(`treats ${status} as erased without reading the response body`, async () => {
+      let calledUrl: string | URL | Request | undefined;
+      let calledInit: RequestInit | undefined;
+      installFetch(async (url, init) => {
+        calledUrl = url;
+        calledInit = init;
+        return new Response(null, { status });
+      });
+
+      const result = await eraseHostedCustomer({
+        credentials,
+        externalCustomerRef: "stella_org_org/test",
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+      expect(urlToString(calledUrl)).toBe(
+        "https://sandbox.provider.test/v1/customers/external/stella_org_org%2Ftest?anonymize=true",
+      );
+      expect(calledInit?.method).toBe("DELETE");
+      expect(new Headers(calledInit?.headers).get("authorization")).toBe(
+        "Bearer provider_test_apikey",
+      );
+    });
+  }
+
+  test("returns only a short status error for provider failures", async () => {
+    installFetch(
+      async () => new Response("sensitive provider body", { status: 500 }),
+    );
+    const result = await eraseHostedCustomer({
+      credentials,
+      externalCustomerRef: "stella_org_org_test",
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toBe("Hosted customer erasure returned 500");
+      expect(JSON.stringify(result.error)).not.toContain(
+        "sensitive provider body",
+      );
+    }
+  });
 });
 
 afterEach(() => {

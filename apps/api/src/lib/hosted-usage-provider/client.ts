@@ -83,29 +83,80 @@ const sessionExpirySchema = v.nullish(
   null,
 );
 
+type ProviderRequest =
+  | { method: "POST"; path: string; body: Record<string, unknown> }
+  | { method: "DELETE"; path: string };
+
 /**
- * POST a JSON body to the provider API. The one outbound boundary of this
- * client: every endpoint is a path under the configured base URL.
+ * The one outbound boundary of this client: every endpoint is a path under
+ * the configured base URL, with the same credentials, version pin and
+ * timeout.
  */
+const sendProviderRequest = async (
+  credentials: HostedUsageProviderApiCredentials,
+  request: ProviderRequest,
+): Promise<Response> => {
+  const headers = {
+    authorization: `Bearer ${credentials.apiKey}`,
+    "Polar-Version": getHostedUsageProviderApiVersion(),
+  };
+  return await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
+    `${credentials.baseUrl}/v1/${request.path}`,
+    request.method === "POST"
+      ? {
+          method: request.method,
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify(request.body),
+          timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+        }
+      : {
+          method: request.method,
+          headers,
+          timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+        },
+  );
+};
+
+/** POST a JSON body to the provider API. */
 const postProviderJson = async (
   credentials: HostedUsageProviderApiCredentials,
   path: string,
   body: Record<string, unknown>,
 ): Promise<Response> =>
-  await fetchWithTimeout(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-    `${credentials.baseUrl}/v1/${path}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${credentials.apiKey}`,
-        "content-type": "application/json",
-        "Polar-Version": getHostedUsageProviderApiVersion(),
-      },
-      body: JSON.stringify(body),
-      timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+  await sendProviderRequest(credentials, { method: "POST", path, body });
+
+export const eraseHostedCustomer = async ({
+  credentials,
+  externalCustomerRef,
+}: {
+  credentials: HostedUsageProviderApiCredentials;
+  externalCustomerRef: string;
+}): Promise<Result<void, HostedUsageProviderApiError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      // Deletes the customer, cancels its subscriptions and anonymizes its
+      // personal data; the provider keeps historic orders and subscriptions.
+      const response = await sendProviderRequest(credentials, {
+        method: "DELETE",
+        path: `customers/external/${encodeURIComponent(externalCustomerRef)}?anonymize=true`,
+      });
+      if (response.status === 204 || response.status === 404) {
+        return;
+      }
+      throw new HostedUsageProviderApiError({
+        message: `Hosted customer erasure returned ${response.status}`,
+        status: response.status,
+      });
     },
-  );
+    catch: (cause) =>
+      cause instanceof HostedUsageProviderApiError
+        ? cause
+        : new HostedUsageProviderApiError({
+            message: "Hosted customer erasure failed",
+            cause,
+          }),
+  });
 
 const createNeutralSetupSession = async ({
   credentials,
