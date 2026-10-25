@@ -199,7 +199,7 @@ describe("composed API cache policy", () => {
       expect(response.headers.get("Cache-Control")).toEqual(
         PUBLIC_CACHE_HEADERS.get(
           "GET /v1/public/knowledge/playbook-starters" satisfies ApiRouteKey,
-        ) ?? null,
+        ),
       );
     } finally {
       env.FEATURE_PUBLIC_KNOWLEDGE = previous;
