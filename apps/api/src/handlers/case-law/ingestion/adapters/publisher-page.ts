@@ -1,9 +1,15 @@
+// parser-output-unchanged: failure stop kinds classify rejected pages only; accepted page validation and parsed records are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
+
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   isExcludedHtmlTag,
@@ -18,6 +24,14 @@ type PublisherPageReason =
   | "invalid-syntax"
   | "invalid-shape";
 
+const PUBLISHER_PAGE_STOP_KIND = {
+  "too-small": INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+  "content-type": INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+  interstitial: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+  "invalid-syntax": INGESTION_STOP_KIND.ADAPTER_ERROR,
+  "invalid-shape": INGESTION_STOP_KIND.ADAPTER_ERROR,
+} as const satisfies Record<PublisherPageReason, IngestionStopKind>;
+
 export class PublisherPageError extends AdapterFetchError {
   override readonly name = "PublisherPageError";
   readonly reason: PublisherPageReason;
@@ -30,7 +44,11 @@ export class PublisherPageError extends AdapterFetchError {
     adapterKey: string;
     cursor: string | null;
   }) {
-    super({ ...context, message: `Publisher page rejected: ${reason}` });
+    super({
+      ...context,
+      message: `Publisher page rejected: ${reason}`,
+      stopKind: PUBLISHER_PAGE_STOP_KIND[reason],
+    });
     this.reason = reason;
   }
 }
@@ -215,6 +233,9 @@ export const validatePublisherPage = ({
 }: ValidatePublisherPageOptions): Result<unknown, PublisherPageError> => {
   const reject = (reason: PublisherPageReason) =>
     Result.err(new PublisherPageError({ adapterKey, cursor, reason }));
+  if (headers?.has("retry-after")) {
+    return reject("interstitial");
+  }
   const bytes =
     typeof body === "string" ? new TextEncoder().encode(body) : body;
   if (bytes.byteLength < (expectation.minBytes ?? 1)) {
@@ -222,9 +243,6 @@ export const validatePublisherPage = ({
   }
   if (!matchesContentType(headers, expectation.kind)) {
     return reject("content-type");
-  }
-  if (headers?.has("retry-after")) {
-    return reject("interstitial");
   }
   const text =
     typeof body === "string"
