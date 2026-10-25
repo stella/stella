@@ -1995,19 +1995,19 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
       "!turbo.json",
       "!scripts/",
       "scripts/*",
-      "!scripts/oxlint.config.ts",
+      "!oxlint.config.ts",
       "",
     ].join("\n"),
   );
   writeFileSync(path.join(fixtureRoot, "turbo.json"), '{"tasks":{}}\n');
-  writeFileSync(path.join(fixtureScripts, "oxlint.config.ts"), "");
+  writeFileSync(path.join(fixtureRoot, "oxlint.config.ts"), "");
   const git = Bun.which("git");
   if (git === null) {
     throw new Error("CLI execution fixture requires Git");
   }
   for (const args of [
     ["init", "--quiet"],
-    ["add", "turbo.json", "scripts/oxlint.config.ts"],
+    ["add", "turbo.json", "oxlint.config.ts"],
   ]) {
     const result = Bun.spawnSync([git, ...args], {
       cwd: fixtureRoot,
