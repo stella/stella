@@ -210,7 +210,7 @@ type MoveKeylessOrganizationsOptions = {
 };
 
 export const moveKeylessOrganizationsToFree = async (
-  db: Pick<Transaction, "update" | "select" | "insert">,
+  db: Transaction,
   { now, actor }: MoveKeylessOrganizationsOptions,
 ): Promise<SafeId<"organization">[]> => {
   const moved = await db

@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261025100000_keyless_organization_free_floor",
+    form: "add-constraint",
+    reason:
+      "The widened access-state shape check is added NOT VALID, so it scans no rows under the lock; the online phase validates it, with 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:
