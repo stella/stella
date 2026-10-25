@@ -16,6 +16,8 @@ import { Result } from "better-result";
 import { parseArgs } from "node:util";
 import * as v from "valibot";
 
+import { printError } from "@stll/errors";
+
 import {
   changePartnerOAuthClient,
   createPartnerOAuthClient,
@@ -23,26 +25,10 @@ import {
 import { PARTNER_CLIENT_SECRET_SHA256_PATTERN } from "@/api/lib/db/partner-client-contract";
 import { PartnerClientOperatorError } from "@/api/lib/db/partner-client-operator";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
-
-const { positionals, values } = parseArgs({
-  args: Bun.argv.slice(2),
-  allowPositionals: true,
-  options: {
-    name: { type: "string" },
-    "redirect-uri": { type: "string", multiple: true },
-    "client-id": { type: "string" },
-    "secret-sha256": { type: "string" },
-  },
-});
-if (positionals.length !== 1) {
-  throw new PartnerClientOperatorError({
-    message: "Specify exactly one operation: create, rotate, or disable.",
-  });
-}
-const operation = v.parse(
-  v.picklist(["create", "rotate", "disable"]),
-  positionals.at(0),
-);
+import {
+  describeFailure,
+  PARTNER_CLIENT_USAGE,
+} from "@/api/scripts/partner-oauth-client.logic";
 
 /** A partner's fixed https callback: no credentials, fragment, or loopback. */
 const redirectUriSchema = v.pipe(
@@ -73,6 +59,25 @@ const secretDigestSchema = v.pipe(
 const clientIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
 
 const result = await Result.tryPromise(async () => {
+  const { positionals, values } = parseArgs({
+    args: Bun.argv.slice(2),
+    allowPositionals: true,
+    options: {
+      name: { type: "string" },
+      "redirect-uri": { type: "string", multiple: true },
+      "client-id": { type: "string" },
+      "secret-sha256": { type: "string" },
+    },
+  });
+  if (positionals.length !== 1) {
+    throw new PartnerClientOperatorError({
+      message: `Specify exactly one operation: create, rotate, or disable. ${PARTNER_CLIENT_USAGE}`,
+    });
+  }
+  const operation = v.parse(
+    v.picklist(["create", "rotate", "disable"]),
+    positionals.at(0),
+  );
   if (operation === "create") {
     const input = v.parse(
       v.strictObject({
@@ -117,8 +122,7 @@ const result = await Result.tryPromise(async () => {
   });
 });
 if (Result.isError(result)) {
-  // Database errors are not printed: their parameters may carry the digest.
-  process.stderr.write("Partner client operation failed.\n");
+  printError(describeFailure(result.error));
   process.exitCode = 1;
 } else {
   process.stdout.write(`${JSON.stringify(result.value)}\n`);
