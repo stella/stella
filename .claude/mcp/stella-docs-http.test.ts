@@ -334,7 +334,11 @@ describe("shared documentation MCP HTTP server", () => {
     // drops the connection after its linger window, while the client is still
     // uploading. The test awaits that close itself; a server that kept the
     // upload open never closes it and fails on the test's default timeout.
-    await socketClosed;
+    try {
+      await socketClosed;
+    } finally {
+      clearInterval(keepUploading);
+    }
   });
 
   test("answers every repeated unbounded upload with a 413 status line first", async () => {
