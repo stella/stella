@@ -8,6 +8,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
+
+import { contextFromNested, evaluate } from "./github-expression";
 
 const script = path.join(import.meta.dir, "release-staging-proof-status.sh");
 const repository = "stella/stella";
@@ -124,6 +127,14 @@ const stagingRun = (status: string, conclusion: string | null = null) => ({
   repository: { full_name: repository },
 });
 
+// The status body the script POSTs; any other field fails the test.
+const postedStatus = v.strictObject({
+  state: v.string(),
+  context: v.string(),
+  description: v.string(),
+  target_url: v.optional(v.string()),
+});
+
 const run = (args: readonly string[], env: Record<string, string> = {}) => {
   const result = Bun.spawnSync(["bash", script, ...args], {
     env: {
@@ -144,12 +155,7 @@ const run = (args: readonly string[], env: Record<string, string> = {}) => {
       const [endpoint = "", ...body] = line.split(" ");
       return {
         sha: endpoint.split("/").at(-1),
-        ...(JSON.parse(body.join(" ")) as {
-          state: string;
-          context: string;
-          description: string;
-          target_url?: string;
-        }),
+        ...v.parse(postedStatus, JSON.parse(body.join(" "))),
       };
     });
   return {
@@ -481,4 +487,71 @@ test("malformed arguments are refused before any request", () => {
     expect(result.exitCode).toBe(2);
     expect(result.posted).toEqual([]);
   }
+});
+
+describe("release-proof.yml records the status on every head that needs it", () => {
+  const workflow = v.parse(
+    v.object({
+      jobs: v.object({ dispatch: v.object({ if: v.string() }) }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(import.meta.dir, "../.github/workflows/release-proof.yml"),
+        "utf-8",
+      ),
+    ),
+  );
+  const runsFor = (event: object) =>
+    evaluate(
+      workflow.jobs.dispatch.if,
+      contextFromNested({
+        github: {
+          event_name: "pull_request_target",
+          ref: "refs/heads/main",
+          event,
+        },
+      }),
+    );
+
+  test("a pull request retargeted to main is recorded", () => {
+    expect(
+      runsFor({
+        action: "edited",
+        changes: {
+          title: null,
+          base: { ref: { from: "next" }, sha: { from: "e".repeat(40) } },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("a title edit is recorded", () => {
+    expect(
+      runsFor({
+        action: "edited",
+        changes: { title: { from: "feat: x" }, base: null },
+      }),
+    ).toBe(true);
+  });
+
+  test("a body-only edit is not", () => {
+    // GitHub reads an absent property as null; the evaluator needs it spelled.
+    expect(
+      runsFor({
+        action: "edited",
+        changes: { body: { from: "old" }, title: null, base: null },
+      }),
+    ).toBe(false);
+  });
+
+  test("other pull request events are recorded", () => {
+    for (const action of [
+      "opened",
+      "synchronize",
+      "reopened",
+      "ready_for_review",
+    ]) {
+      expect(runsFor({ action })).toBe(true);
+    }
+  });
 });

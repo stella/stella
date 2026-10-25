@@ -36,11 +36,12 @@ defaults:
 jobs:
   dispatch:
     name: Record the release staging proof
-    # A body edit cannot change what a pull request is; a title edit can. A
-    # dispatch writes statuses, so it runs only as main's workflow.
+    # A body edit cannot change what a pull request is or which head needs the
+    # status; a title edit or a retarget (a base change, such as onto main)
+    # can. A dispatch writes statuses, so it runs only as main's workflow.
     if: >-
       (github.event_name != 'workflow_dispatch' && github.event_name != 'push' || github.ref == 'refs/heads/main') &&
-      (github.event.action != 'edited' || github.event.changes.title != null)
+      (github.event.action != 'edited' || github.event.changes.title != null || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
