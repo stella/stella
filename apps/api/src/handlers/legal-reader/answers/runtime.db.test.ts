@@ -50,10 +50,14 @@ const userId = mintAuthProviderId<"user">();
 const decisionId = createSafeId<"caseLawDecision">();
 const relatedId = createSafeId<"caseLawDecision">();
 const anchor = {
-  paragraphId: "p-1",
-  quote: "The holding",
-  startOffset: 0,
-  endOffset: 11,
+  spans: [
+    {
+      paragraphId: "p-1",
+      quote: "The holding",
+      startOffset: 0,
+      endOffset: 11,
+    },
+  ],
 };
 let database: TestDatabase;
 
@@ -274,7 +278,7 @@ describe("reader answer turn lifecycle", () => {
           body: {
             kind: "explain",
             decisionId,
-            anchor: invalidAnchor,
+            anchor: { spans: [invalidAnchor] },
             locale: "cs-CZ",
           },
         },
@@ -294,6 +298,98 @@ describe("reader answer turn lifecycle", () => {
           message: "Selection does not match the decision paragraph",
         });
       }
+    }
+  });
+
+  test("a selection over several paragraphs, past any length cap, persists and reloads every span", async () => {
+    const long = "Reasoning ".repeat(500);
+    const paragraphs = [
+      { paragraphId: "p-1", text: "The facts. The holding" },
+      { paragraphId: "p-2", text: long },
+      { paragraphId: "p-3", text: "follows here." },
+    ];
+    const spans = [
+      {
+        paragraphId: "p-1",
+        quote: "The holding",
+        startOffset: 11,
+        endOffset: 22,
+      },
+      {
+        paragraphId: "p-2",
+        quote: long,
+        startOffset: 0,
+        endOffset: long.length,
+      },
+      { paragraphId: "p-3", quote: "follows", startOffset: 0, endOffset: 7 },
+    ];
+    const result = await prepareReaderAnswer({
+      ...scope(),
+      command: {
+        type: "create",
+        body: {
+          kind: "explain",
+          decisionId,
+          anchor: { spans },
+          locale: "cs-CZ",
+        },
+      },
+      readDecision: async () =>
+        Result.ok({
+          decisionId,
+          court: "Test court",
+          decisionDate: "2026-01-01",
+          paragraphs,
+        }),
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.anchor).toEqual(spans);
+    expect((await reloadThread(result.value))?.anchor).toEqual({ spans });
+  });
+
+  test("refuses spans that repeat a paragraph, run against reading order or are empty", async () => {
+    const paragraphs = [
+      { paragraphId: "p-1", text: "The holding" },
+      { paragraphId: "p-2", text: "follows here." },
+    ];
+    const first = {
+      paragraphId: "p-1",
+      quote: "The holding",
+      startOffset: 0,
+      endOffset: 11,
+    };
+    const second = {
+      paragraphId: "p-2",
+      quote: "follows",
+      startOffset: 0,
+      endOffset: 7,
+    };
+    for (const spans of [[second, first], [first, first], []]) {
+      const result = await prepareReaderAnswer({
+        ...scope(),
+        command: {
+          type: "create",
+          body: {
+            kind: "explain",
+            decisionId,
+            anchor: { spans },
+            locale: "cs-CZ",
+          },
+        },
+        readDecision: async () =>
+          Result.ok({
+            decisionId,
+            court: "Test court",
+            decisionDate: "2026-01-01",
+            paragraphs,
+          }),
+      });
+      expect(Result.isError(result) && result.error).toMatchObject({
+        status: 400,
+        code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
+      });
     }
   });
 

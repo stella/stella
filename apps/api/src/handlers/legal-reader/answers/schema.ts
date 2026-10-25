@@ -1,10 +1,7 @@
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
-import {
-  READER_ANSWER_QUESTION_MAX_LENGTH,
-  READER_ANSWER_QUOTE_MAX_LENGTH,
-} from "@stll/api-contract/reader-answers";
+import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 
 import {
   paginationCursorSchema,
@@ -32,15 +29,20 @@ const createFields = {
   ...modelOptions,
   decisionId: resourceIdSchema("caseLawDecision"),
   locale,
-  anchor: v.object({
-    paragraphId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-    quote: v.pipe(
-      v.string(),
+  // A selection is bounded by the decision it must match, not by a length:
+  // every span is checked against its paragraph before anything is stored.
+  anchor: v.strictObject({
+    spans: v.pipe(
+      v.array(
+        v.strictObject({
+          paragraphId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+          quote: v.pipe(v.string(), v.minLength(1)),
+          startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
+          endOffset: v.pipe(v.number(), v.integer(), v.minValue(1)),
+        }),
+      ),
       v.minLength(1),
-      v.maxLength(READER_ANSWER_QUOTE_MAX_LENGTH),
     ),
-    startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    endOffset: v.pipe(v.number(), v.integer(), v.minValue(1)),
   }),
 };
 

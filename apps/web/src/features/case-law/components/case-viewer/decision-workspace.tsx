@@ -5,7 +5,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
-import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import {
@@ -113,10 +112,7 @@ import {
   openReaderAnswerFromMark,
   readerAnswerAnchors,
 } from "./reader-answer-navigation";
-import {
-  ReaderAnswerFailure,
-  readerAnswerFailureKind,
-} from "./reader-answers.logic";
+import { readerAnswerFailureKind } from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 import { useReaderAnswers } from "./use-reader-answers";
 
@@ -445,7 +441,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
     kind: "answer",
     id: answer.id,
-    startAnchorId: answer.anchor.paragraphId,
+    startAnchorId: answer.anchor.spans[0].paragraphId,
     answer,
     generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
@@ -515,32 +511,24 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         },
       ),
   }));
+  // A selection over any number of paragraphs is explained as a whole; the
+  // API checks every span against the decision text.
   const explain = async (spans: SelectionAnchor[]) => {
-    const span = spans.at(0);
-    if (
-      spans.length !== 1 ||
-      span === undefined ||
-      span.quote.length > READER_ANSWER_QUOTE_MAX_LENGTH
-    ) {
-      notifyUserError(
-        new ReaderAnswerFailure({
-          kind: "request",
-          message: "Selection is outside the reader answer anchor limits",
-        }),
-        t("readerAnswers.selectionError"),
-      );
-      return;
-    }
-    if (props.aiMode !== "enabled" || !(await props.ensureAIAvailable())) {
-      return;
-    }
-    setNotesFilter("all");
-    await answers.createExplain({
+    const [first, ...rest] = spans.map((span) => ({
       paragraphId: span.blockAnchorId,
       quote: span.quote,
       startOffset: span.startOffset,
       endOffset: span.endOffset,
-    });
+    }));
+    if (
+      first === undefined ||
+      props.aiMode !== "enabled" ||
+      !(await props.ensureAIAvailable())
+    ) {
+      return;
+    }
+    setNotesFilter("all");
+    await answers.createExplain({ spans: [first, ...rest] });
   };
   // Only an account may start a run, so only this branch polls. Everything
   // below reads `analysisState` alone: a gated reader never starts a run, so
