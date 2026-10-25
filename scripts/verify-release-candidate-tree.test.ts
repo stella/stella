@@ -236,13 +236,11 @@ const GITHUB_SIGNATURE = {
 };
 
 // Answers the verifier's signature query from the recorded fixture, as the
-// GitHub CLI would.
-const FAKE_GITHUB_CLI = `#!/usr/bin/env node
+// GitHub CLI would. The fixture's path is written into the stub itself.
+const fakeGithubCli = (signaturesPath: string) => `#!/usr/bin/env node
 const { readFileSync } = require("node:fs");
 const query = process.argv.find((arg) => arg.startsWith("query=")) ?? "";
-const signatures = JSON.parse(
-  readFileSync(process.env.FAKE_GITHUB_SIGNATURES, "utf8"),
-);
+const signatures = JSON.parse(readFileSync(${JSON.stringify(signaturesPath)}, "utf8"));
 const repository = {};
 for (const match of query.matchAll(/(c[0-9]+): object\\(oid: "([0-9a-f]{40})"\\)/g)) {
   repository[match[1]] = { oid: match[2], signature: signatures[match[2]] ?? null };
@@ -356,7 +354,9 @@ const withReleaseRange = (
     writeFileSync(signaturesPath, JSON.stringify(signatures));
     const fakeBin = path.join(directory, ".git", "fake-bin");
     mkdirSync(fakeBin);
-    writeFileSync(path.join(fakeBin, "gh"), FAKE_GITHUB_CLI, { mode: 0o755 });
+    writeFileSync(path.join(fakeBin, "gh"), fakeGithubCli(signaturesPath), {
+      mode: 0o755,
+    });
     const { GH_RETRY_SCRIPT: _retry, ...environment } = process.env;
     verify(
       Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
@@ -364,7 +364,6 @@ const withReleaseRange = (
         env: {
           ...environment,
           PATH: `${fakeBin}:${process.env["PATH"] ?? ""}`,
-          FAKE_GITHUB_SIGNATURES: signaturesPath,
         },
       }),
     );
