@@ -22,7 +22,7 @@ and external service SDKs (AI providers, email, analytics, storage).
 
 1. **License compatibility.** New dependencies must carry a
    permissive license compatible with Apache-2.0 distribution.
-   The `dependency-review.yml` workflow enforces a deny list of
+   The `ci.yml` workflow enforces a deny list of
    27 SPDX identifiers covering GPL, AGPL, LGPL, SSPL, BUSL,
    Elastic, and CPAL license families. Absorbing copyleft
    dependencies would force their terms onto stella as a whole

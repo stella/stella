@@ -3,8 +3,8 @@
  * record, its severity, whether it is captured, and what it counts.
  *
  * A sink passes a handle, never a severity. The handle's `legacy` pin keeps a
- * migrated site's output exactly as it was until data backs a change; without
- * one, the grade's policy decides. The record is composed here, owned fields
+ * migrated site's log severity until data backs a change; the grade always
+ * decides exception capture. The record is composed here, owned fields
  * last, so a context key can override neither the grade nor the identity.
  *
  * Returns nothing: retry, park and exit decisions keep their own predicates.
@@ -27,6 +27,7 @@ import {
   gradeFailure,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
   countFailureObservation,
   legacyChannelOf,
@@ -40,18 +41,6 @@ import {
   recordRequestFailure,
 } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
-
-type GradePolicy = OutputPolicy & {
-  /** A sustained episode, as a queue adapter judges it, raises the severity. */
-  readonly escalation?: "sustained";
-};
-
-const GRADE_POLICY = {
-  anticipated: { severity: "WARN", capture: false },
-  transient: { severity: "WARN", capture: false, escalation: "sustained" },
-  client: { severity: "WARN", capture: false },
-  defect: { severity: "ERROR", capture: true },
-} as const satisfies Record<FailureGrade, GradePolicy>;
 
 /**
  * Context keys a failure record may carry: correlation ids and reviewed,
@@ -129,10 +118,14 @@ const resolvePolicy = (
   grade: FailureGrade,
   escalation: "sustained" | undefined,
 ): ResolvedPolicy => {
+  const policy = failureOutputPolicy(grade);
   if (sink.legacy !== undefined) {
-    return { ...sink.legacy, source: "legacy" };
+    return {
+      severity: sink.legacy.severity,
+      capture: policy.capture && sink.legacy.capture,
+      source: "legacy",
+    };
   }
-  const policy: GradePolicy = GRADE_POLICY[grade];
   const escalated =
     escalation !== undefined && policy.escalation === escalation;
   return {

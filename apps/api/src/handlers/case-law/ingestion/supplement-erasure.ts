@@ -38,12 +38,11 @@ import type {
   StoredRawResultReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
-import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { acquireReplayLease } from "@/api/handlers/case-law/ingestion/replay";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
@@ -224,8 +223,10 @@ const recomposeHolder = async ({
         return { type: "withheld" as const, reason: rebuilt.error.message };
       }
       await lease.beforeDatabaseMark();
-      const written = await processDecision({
+      const written = await processStoredDecision({
         input: rebuilt.result,
+        decisionId: judgmentId,
+        sourceRawS3Key: rebuilt.sourceRawS3Key,
         sourceId,
         scopedDb,
         observedAt: new Date(),
@@ -234,7 +235,6 @@ const recomposeHolder = async ({
           scopedDb,
           sourceId,
         }),
-        refresh: DECISION_REFRESH.ALWAYS,
       });
       if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
         return {

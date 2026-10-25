@@ -105,6 +105,23 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "failure-tags",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/observability/failure-tags.gen.ts"],
+    inputs: [
+      "apps/api/src/**/*.ts",
+      "apps/api/src/**/*.tsx",
+      "packages/*/src/**/*.ts",
+      "packages/*/src/**/*.tsx",
+      "scripts/failure-tags.ts",
+      "scripts/generate-failure-tags.ts",
+    ],
+    write: ["bun", "scripts/generate-failure-tags.ts", "--write"],
+    check: ["bun", "scripts/generate-failure-tags.ts"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "migration-lock-baseline",
     outputKind: "committed",
     outputs: ["scripts/migration-lock-baseline.ts"],

@@ -81,7 +81,7 @@ and container base images used in the Stella monorepo.
 
 ### License compliance
 
-10. **Dependency review.** The `dependency-review.yml` workflow
+10. **Dependency review.** The `ci.yml` workflow
     blocks PRs that introduce dependencies under copyleft or
     proprietary licenses incompatible with stella's Apache-2.0
     distribution and commercial-license arrangements. The deny
