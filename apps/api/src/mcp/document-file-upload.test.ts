@@ -94,9 +94,13 @@ describe("document file upload surface", () => {
     });
 
     expect(listedUpload?.annotations?.destructiveHint).toBe(true);
-    expect(pickerDefinition).toMatchObject({
-      nonDestructiveReason: expect.stringContaining("without modifying"),
-    });
+    if (!("nonDestructiveReason" in pickerDefinition)) {
+      panic("Canonical upload picker must state its non-modifying behavior");
+    }
+    expect(typeof pickerDefinition.nonDestructiveReason).toBe("string");
+    expect(pickerDefinition.nonDestructiveReason).toContain(
+      "without modifying",
+    );
     const listedPicker = toMcpTools([pickerDefinition]).at(0);
     expect(listedPicker?.annotations?.destructiveHint).toBe(false);
     const parsedUi = McpUiToolMetaSchema.safeParse(listedPicker?._meta?.["ui"]);
