@@ -6,7 +6,9 @@ import { readFailureBrand } from "@stll/errors";
 
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -74,21 +76,16 @@ if (!databaseUrl || !runPostgres) {
       ).toBe(1);
     });
 
-    test("a statement timeout the request clamped is the budget's, even before the deadline", async () => {
-      // The clamped statement_timeout floors to whole milliseconds, so its
-      // cancel can land while a fraction of the budget remains. A shorter
-      // timeout inside the same read stands in for that early cancel, with
-      // budget plainly left: provenance, not the clock, names it.
+    test("a statement timeout the request clamped is the budget's", async () => {
+      // A 500 ms budget shortens the read's 30 s statement cap, so the cancel
+      // is the budget's, wherever in the last millisecond it lands.
       const outcome = await runWithinRequestLatencyBudget(
-        { label: "read_statute", budgetMs: BUDGET_MS },
+        { label: "read_statute", budgetMs: 500 },
         async () =>
           await Result.tryPromise({
             try: async () =>
               await publicLawReadDb(async (tx) => {
-                await tx.execute(
-                  sql`SELECT set_config('statement_timeout', '100ms', true)`,
-                );
-                await tx.execute(sql`SELECT pg_sleep(1)`);
+                await tx.execute(sql`SELECT pg_sleep(2)`);
                 return "answered late";
               }),
             catch: (cause) => cause,
@@ -100,6 +97,32 @@ if (!databaseUrl || !runPostgres) {
         reason: "timeout_budgeted",
         source: "instance",
       });
+    });
+
+    test("a statement cap of the read's own keeps its own error inside the budget", async () => {
+      // The route's 100 ms cap is shorter than what the 2000 ms budget leaves,
+      // so the budget shortened nothing: the cancel is the read's own and
+      // keeps the grade monitoring sees for it.
+      const outcome = await runWithinRequestLatencyBudget(
+        { label: "read_statute", budgetMs: BUDGET_MS },
+        async () =>
+          await runWithPublicReadStatementTimeout(
+            100,
+            async () =>
+              await Result.tryPromise({
+                try: async () =>
+                  await publicLawReadDb(async (tx) => {
+                    await tx.execute(sql`SELECT pg_sleep(1)`);
+                    return "answered late";
+                  }),
+                catch: (cause) => cause,
+              }),
+          ),
+      );
+      const error = Result.isError(outcome) ? outcome.error : undefined;
+      expect(error).not.toBeInstanceOf(TimeoutError);
+      expect(getPgErrorCode(error)).toBe(PG_ERROR.QUERY_CANCELED);
+      expect(readFailureBrand(error)?.reason).not.toBe("timeout_budgeted");
     });
 
     test("a read inside its budget answers, and a read outside a scope keeps no deadline", async () => {

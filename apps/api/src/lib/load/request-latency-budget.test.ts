@@ -105,12 +105,23 @@ describe("request budget expiry", () => {
     );
   });
 
-  test("reports any failure after the deadline as the budget's, cause kept", () => {
+  test("keeps a failure the caller does not attribute to the budget, even past the deadline", () => {
+    runWithinRequestLatencyBudget(
+      { label: "read_statute", budgetMs: 0 },
+      () => {
+        expect(
+          requestBudgetExpiry(cause, { clampedTimeout: false }),
+        ).toBeUndefined();
+      },
+    );
+  });
+
+  test("reports a clamped timeout as the budget's, cause kept", () => {
     const ended = new Error("connection ended by the server");
     runWithinRequestLatencyBudget(
       { label: "read_statute", budgetMs: 0 },
       () => {
-        const expiry = requestBudgetExpiry(ended, { clampedTimeout: false });
+        const expiry = requestBudgetExpiry(ended, { clampedTimeout: true });
         expect(expiry).toBeInstanceOf(TimeoutError);
         expect(expiry).toMatchObject({
           label: "read_statute",

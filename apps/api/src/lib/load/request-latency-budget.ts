@@ -83,21 +83,19 @@ export const requestBoundedTimeoutMs = (timeoutMs: number): number => {
  * undefined outside a scope and for any other failure.
  *
  * A dependency the request clamped to its deadline fails in its own terms (a
- * cancelled statement, a session the server ended). The caller says which of
- * its failures are that clamped timeout (`clampedTimeout`), so one surfacing
- * a hair before the deadline (the clamp floors to whole milliseconds) is
- * still the budget's. A failure once the budget is spent is the budget's too:
- * it can only be the clamped dependency giving way in some other form.
+ * cancelled statement, a session the server ended). Only the caller knows
+ * whether the timeout that fired was the one the request's budget shortened
+ * (`clampedTimeout`, recorded when it installed the timeout), so only then is
+ * the failure the budget's, even a hair before the deadline (the clamp floors
+ * to whole milliseconds). Any other failure, a timeout of its own or an
+ * explicit cancel among them, keeps its own grade.
  */
 export const requestBudgetExpiry = (
   cause: unknown,
   { clampedTimeout }: { clampedTimeout: boolean },
 ): TimeoutError | undefined => {
   const scope = requestLatencyScope.getStore();
-  if (
-    scope === undefined ||
-    (!clampedTimeout && remainingRequestBudgetMs() !== 0)
-  ) {
+  if (scope === undefined || !clampedTimeout) {
     return undefined;
   }
   return classifyFailure(

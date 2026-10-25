@@ -590,7 +590,7 @@ const CENSUS: readonly CensusEntry[] = [
     why: "The public-law statement guard; a transaction inside a tool call sets the shorter of it and what is left of the tool's budget, and ends at the deadline as a whole.",
   },
   {
-    site: "apps/api/src/lib/public-law-read-db.ts#requestBoundedTimeoutMs( requestTimeoutMs === undefined ? statementTimeoutMs : Math.min(statementTimeoutMs, requestTimeoutMs), )",
+    site: "apps/api/src/lib/public-law-read-db.ts#requestStatementTimeoutMs",
     path: "request",
     tools: PUBLIC_LAW_READ_TOOLS,
     bound: "request",
