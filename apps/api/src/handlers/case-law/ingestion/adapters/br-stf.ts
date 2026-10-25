@@ -72,6 +72,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -89,6 +90,7 @@ import type {
   SourceFieldDisposition,
   SourceRawParts,
   SourceTotalCount,
+  StoredRawReparseInput,
   SyncPage,
   UnreadListedItem,
   UnreadOutcome,
@@ -295,6 +297,8 @@ type SearchBody = {
   size: number;
   from?: number;
   search_after?: SortKey;
+  /** The `_source` fields to return, where the whole record is not needed. */
+  _source?: readonly string[];
 };
 
 const search = async (
@@ -953,23 +957,26 @@ export const assembleBrStfDecision = async ({
   document,
   hit,
 }: AssembleOptions): Promise<AssembleOutcome> => {
-  const id = hit["_id"];
   const source = hit["_source"];
-  if (typeof id !== "string" || !isPersistableSourceDocumentId(id)) {
-    return { type: "unkeyable", reason: "the hit states no persistable _id" };
-  }
-  if (!isRecord(source) || !isBrStfBase(source["base"])) {
+  const keyed = brStfIdentityOf(hit);
+  if (
+    keyed === undefined ||
+    !isRecord(source) ||
+    !isBrStfBase(source["base"])
+  ) {
     return {
       type: "unkeyable",
       reason: "the hit's _source names no read base",
     };
   }
+  const id = keyed.sourceDocumentId;
   const base = source["base"];
   const docket = brStfDocketOf(source);
   const caseNumber = docket?.caseNumber ?? id;
   const decisionType = DECISION_TYPE_BY_BASE[base];
   const decisionDate = isoDateOf(source["julgamento_data"]);
-  const sourceUrl = decisionPageOf(id);
+  const sourceUrl =
+    keyed.pageKey === undefined ? undefined : decisionPageOf(keyed.pageKey);
   const statedDocumentUrl = stringOf(source["inteiro_teor_url"]);
   const documentUrl =
     statedDocumentUrl === undefined
@@ -982,7 +989,7 @@ export const assembleBrStfDecision = async ({
     court,
     decisionDate,
     decisionType,
-    sourceUrl,
+    sourceUrl: sourceUrl ?? MANIFEST.publicHomeUrl,
     documentUrl,
   };
   const read = await parsedDocumentOf(document, identity);
@@ -990,7 +997,7 @@ export const assembleBrStfDecision = async ({
   const unreadDocument = documentReadOf(document, read);
 
   const { sourceRaw, sourceRawObjects } = storedRawOf(hit, document);
-  const aliases = aliasesOf(id, source);
+  const { aliases, repairAliases } = keyed;
   const judges = judgesOf(source);
 
   return {
@@ -1000,6 +1007,9 @@ export const assembleBrStfDecision = async ({
       ...(docket === undefined ? { caseNumberIsPlaceholder: true } : {}),
       sourceDocumentId: id,
       ...(aliases.length === 0 ? {} : { sourceDocumentIdAliases: aliases }),
+      ...(repairAliases.length === 0
+        ? {}
+        : { sourceDocumentIdRepairAliases: repairAliases }),
       court,
       country: MANIFEST.country,
       language: "pt",
@@ -1008,7 +1018,7 @@ export const assembleBrStfDecision = async ({
       ...(parsed === undefined
         ? { isListingOnly: true }
         : { fulltext: parsed.fulltext }),
-      sourceUrl,
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
       ...(documentUrl === undefined ? {} : { documentUrl }),
       ...(judges.length === 0 ? {} : { judges }),
       textFields: textFieldsOf(source),
@@ -1029,6 +1039,9 @@ export const assembleBrStfDecision = async ({
         },
         // Brazil has no ECLI, and the record states none.
         ecliAvailability: { status: "not_published" },
+        ...(keyed.type === BR_STF_IDENTITY.PUBLISHER
+          ? {}
+          : { identitySource: keyed.type }),
         ...documentReadMetadataOf(unreadDocument),
       }),
       rawHash: sourceFingerprint({
@@ -1070,14 +1083,112 @@ const storedRawOf = (hit: Record<string, unknown>, document: BrStfDocument) => {
   };
 };
 
-/** The other exact identity a record states, where it differs from `_id`. */
-const aliasesOf = (id: string, source: Record<string, unknown>): string[] => {
+/** Which publisher key a row is stored under. */
+export const BR_STF_IDENTITY = {
+  /** The engine's `_id`, which the record's own page is keyed by. */
+  PUBLISHER: "publisher",
+  /** `_source.dg_unique`, namespaced, where `_id` is unusable. */
+  DG_UNIQUE: "dg-unique",
+  /** Neither key: the hit's content, addressed by its digest (rule 20). */
+  QUARANTINE: "quarantine",
+} as const;
+
+const DG_UNIQUE_IDENTITY_PREFIX = "dg_unique:";
+const QUARANTINE_IDENTITY_PREFIX = "br-stf-quarantine:";
+
+/** The fields that name a hit rather than describe it. */
+const HIT_IDENTITY_FIELDS = new Set(["_id", "_index", "_ignored"]);
+const SOURCE_IDENTITY_FIELDS = new Set(["id", "dg_unique"]);
+
+/**
+ * The content address a hit is quarantined under. Built from everything but
+ * the identity fields and the index's bookkeeping, so the same record hashes
+ * the same once its keys are back, and the recovered observation can name the
+ * quarantined row as a repair-only alias.
+ */
+const quarantineIdentityOf = (
+  hit: Record<string, unknown>,
+  source: Record<string, unknown>,
+): string =>
+  `${QUARANTINE_IDENTITY_PREFIX}${sha256Hex(
+    JSON.stringify({
+      hit: Object.fromEntries(
+        Object.entries(storedHitOf(hit)).filter(
+          ([key]) => key !== "_source" && !HIT_IDENTITY_FIELDS.has(key),
+        ),
+      ),
+      source: Object.fromEntries(
+        Object.entries(source).filter(
+          ([key]) => !SOURCE_IDENTITY_FIELDS.has(key),
+        ),
+      ),
+    }),
+  )}`;
+
+export type BrStfIdentity = {
+  type: (typeof BR_STF_IDENTITY)[keyof typeof BR_STF_IDENTITY];
+  sourceDocumentId: string;
+  /** The other exact keys the hit states, for the pipeline to reserve. */
+  aliases: string[];
+  /** Keys that may adopt a row stored under them but are never reserved. */
+  repairAliases: string[];
+  /** What the publisher's page for the record is keyed by, if anything. */
+  pageKey: string | undefined;
+};
+
+const persistable = (value: string | undefined): string | undefined =>
+  value !== undefined && isPersistableSourceDocumentId(value)
+    ? value
+    : undefined;
+
+/**
+ * The identity a hit is stored and listed under, the one resolution the
+ * crawl, the slice listing and its verification all use. `_id` first; the
+ * namespaced `dg_unique` where `_id` is missing or too long, and stated as an
+ * alias whenever both are there, so the two observations converge on one
+ * row; the content address only where neither key is usable.
+ */
+export const brStfIdentityOf = (
+  hit: Record<string, unknown>,
+): BrStfIdentity | undefined => {
+  const source = hit["_source"];
+  if (!isRecord(source)) {
+    return undefined;
+  }
+  const rawId = hit["_id"];
+  const id = persistable(typeof rawId === "string" ? rawId : undefined);
   const dgUnique = stringOf(source["dg_unique"]);
-  return dgUnique !== undefined &&
-    dgUnique !== id &&
-    isPersistableSourceDocumentId(dgUnique)
-    ? [dgUnique]
-    : [];
+  const dgUniqueIdentity = persistable(
+    dgUnique === undefined
+      ? undefined
+      : `${DG_UNIQUE_IDENTITY_PREFIX}${dgUnique}`,
+  );
+  const quarantine = quarantineIdentityOf(hit, source);
+  if (id !== undefined) {
+    return {
+      type: BR_STF_IDENTITY.PUBLISHER,
+      sourceDocumentId: id,
+      aliases: dgUniqueIdentity === undefined ? [] : [dgUniqueIdentity],
+      repairAliases: [quarantine],
+      pageKey: id,
+    };
+  }
+  if (dgUniqueIdentity !== undefined) {
+    return {
+      type: BR_STF_IDENTITY.DG_UNIQUE,
+      sourceDocumentId: dgUniqueIdentity,
+      aliases: [],
+      repairAliases: [quarantine],
+      pageKey: dgUnique,
+    };
+  }
+  return {
+    type: BR_STF_IDENTITY.QUARANTINE,
+    sourceDocumentId: quarantine,
+    aliases: [],
+    repairAliases: [],
+    pageKey: undefined,
+  };
 };
 
 /**
@@ -1384,8 +1495,8 @@ const collectHits = async (
         unreadItems.push(built.item);
         break;
       case "unkeyable":
-        // ES always states `_id`; a hit without one is a contract change,
-        // reported rather than stored under an invented identity.
+        // A hit with no `_source` object has no content to store or key; the
+        // search contract guarantees one, so this is reported, not guessed.
         logger.warn("case_law.ingestion.br_stf_unkeyable_hit", {
           adapterKey: KEY,
           reason: built.reason,
@@ -1758,10 +1869,10 @@ const sliceQuery = (month: string, base: BrStfBase) => {
 export const brStfListingIdentity = (
   hit: Record<string, unknown>,
 ): ListingIdentity => {
-  const id = hit["_id"];
-  return typeof id === "string" && isPersistableSourceDocumentId(id)
-    ? { type: "document", sourceDocumentId: id }
-    : { type: "unidentifiable" };
+  const identity = brStfIdentityOf(hit);
+  return identity === undefined
+    ? { type: "unidentifiable" }
+    : { type: "document", sourceDocumentId: identity.sourceDocumentId };
 };
 
 /**
@@ -1814,13 +1925,158 @@ const listBrStfSlicePage = async ({
       ),
     );
   }
+  const totalPages = Math.ceil(total / SLICE_PAGE_SIZE);
+  const walked = walkedSliceDigest({ slice, page, total, hits });
+  if (Result.isError(walked)) {
+    return await Promise.reject(walked.error);
+  }
+  if (totalPages > 0 && page + 1 >= totalPages) {
+    sliceWalks.delete(slice);
+    const verified = await verifiedSliceDigest(parsed, slice, signal);
+    if (Result.isError(verified)) {
+      return await Promise.reject(verified.error);
+    }
+    if (
+      verified.value.digest !== walked.value ||
+      verified.value.total !== total
+    ) {
+      return await Promise.reject(
+        searchError(
+          slice,
+          `slice changed while it was listed: its ${total} records no longer list as the walk saw them; walk it again`,
+        ),
+      );
+    }
+  }
   return {
     items: hits.map(({ hit }) => ({
       identity: brStfListingIdentity(hit),
       payload: hit,
     })),
-    totalPages: Math.ceil(total / SLICE_PAGE_SIZE),
+    totalPages,
   };
+};
+
+// ── Slice verification ───────────────────────────────────
+
+/**
+ * What a slice listing pages by offset can lose: a record that leaves the
+ * slice behind the consumed offset and one that enters it there keep the
+ * count and every page full, and the newcomer is never listed. So the walk
+ * keeps a digest of the exact identities it listed, in order, and the last
+ * page is accepted only when a listing-only pass, walked with `search_after`
+ * over the same order, lists the same identities (rule 19). A slice that
+ * moved is refused; the ledger keeps its last row and the slice is walked
+ * again.
+ */
+const VERIFY_PAGE_SIZE = 250;
+
+const VERIFY_DIGEST_START = "br-stf-slice-verification";
+
+/** The key a hit is compared under; both passes can read it. */
+const verificationKeyOf = (hit: Record<string, unknown>): string => {
+  const rawId = hit["_id"];
+  const id = persistable(typeof rawId === "string" ? rawId : undefined);
+  if (id !== undefined) {
+    return `id:${id}`;
+  }
+  const source = hit["_source"];
+  const dgUnique = isRecord(source) ? stringOf(source["dg_unique"]) : undefined;
+  return dgUnique === undefined ? "unidentified" : `dg_unique:${dgUnique}`;
+};
+
+const extendDigest = (
+  digest: string,
+  hits: readonly BrStfListedHit[],
+): string => {
+  let extended = digest;
+  for (const { hit } of hits) {
+    extended = sha256Hex(`${extended}\n${verificationKeyOf(hit)}`);
+  }
+  return extended;
+};
+
+/** The walk of one slice in progress: the next page and what it listed. */
+const sliceWalks = new Map<
+  string,
+  { nextPage: number; total: number; digest: string }
+>();
+
+type WalkedSliceOptions = {
+  slice: string;
+  page: number;
+  total: number;
+  hits: readonly BrStfListedHit[];
+};
+
+/**
+ * The digest of everything this walk of the slice has listed through `page`.
+ * A walk starts at page 0; a page out of order or a count that moved between
+ * pages is refused, since neither digest could then stand for the slice.
+ */
+const walkedSliceDigest = ({
+  slice,
+  page,
+  total,
+  hits,
+}: WalkedSliceOptions): Result<string, AdapterFetchError> => {
+  const walk =
+    page === 0
+      ? { nextPage: 0, total, digest: VERIFY_DIGEST_START }
+      : sliceWalks.get(slice);
+  if (walk === undefined || walk.nextPage !== page || walk.total !== total) {
+    sliceWalks.delete(slice);
+    return Result.err(
+      searchError(
+        slice,
+        `page ${page} is not the next page of a walk that started at 0 with the same count; walk it again`,
+      ),
+    );
+  }
+  const digest = extendDigest(walk.digest, hits);
+  sliceWalks.set(slice, { nextPage: page + 1, total, digest });
+  return Result.ok(digest);
+};
+
+/** The listing-only pass: every identity of the slice, in walk order. */
+const verifiedSliceDigest = async (
+  { month, base }: { month: string; base: BrStfBase },
+  slice: string,
+  signal: AbortSignal | undefined,
+): Promise<Result<{ digest: string; total: number }, AdapterFetchError>> => {
+  let digest = VERIFY_DIGEST_START;
+  let seen = 0;
+  let after: SortKey | undefined;
+  for (let pages = 0; pages <= OFFSET_CEILING / VERIFY_PAGE_SIZE; pages += 1) {
+    const answer = await search(
+      {
+        ...sliceQuery(month, base),
+        size: VERIFY_PAGE_SIZE,
+        _source: ["dg_unique"],
+        ...(after === undefined ? {} : { search_after: after }),
+      },
+      slice,
+      signal,
+    );
+    if (Result.isError(answer)) {
+      return answer;
+    }
+    const { hits } = answer.value;
+    digest = extendDigest(digest, hits);
+    seen += hits.length;
+    if (hits.length < VERIFY_PAGE_SIZE) {
+      return Result.ok({ digest, total: seen });
+    }
+    after = hits.at(-1)?.sort;
+    if (after === undefined) {
+      return Result.err(
+        searchError(slice, "a full verification page ended with no sort key"),
+      );
+    }
+  }
+  return Result.err(
+    searchError(slice, "the verification pass listed past the offset ceiling"),
+  );
 };
 
 /**
@@ -1898,6 +2154,44 @@ const buildBrStfFromPayload = async ({
       return panic(`Unhandled STF build: ${JSON.stringify(built)}`);
   }
 };
+
+/**
+ * Rebuild a held textless row from the hit it stored, reading its PDF anew.
+ * The publisher's answer for a file can change at the same address (a file
+ * restored, re-uploaded, given a text layer), so a settled reason is a state
+ * of the file, not of the record, and is asked about again on a long cadence.
+ */
+const rebuildTextlessFromStored = async (
+  stored: StoredRawReparseInput,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  const read = readStoredRawListing({
+    stored,
+    part: "hit",
+    identityOf: (listing) => brStfIdentityOf(listing)?.sourceDocumentId,
+  });
+  if (read.type === "rejected") {
+    return { type: "unkeyable" };
+  }
+  return await buildBrStfFromPayload({
+    payload: read.listing,
+    breaker: createBrStfDocumentBreaker(),
+    signal,
+  });
+};
+
+/** The settled reasons whose file may still change at the same address. */
+const TEXTLESS_HELD_RECHECK = {
+  metadataKey: DOCUMENT_READ_REASON_KEY,
+  values: [
+    BR_STF_DOCUMENT_MISSING.ABSENT,
+    BR_STF_DOCUMENT_MISSING.NOT_A_PDF,
+    BR_STF_DOCUMENT_MISSING.UNREADABLE_PDF,
+  ],
+  minimumAgeDays: 30,
+  perWorkUnitLimit: 50,
+  buildDecisionFromStored: rebuildTextlessFromStored,
+} as const;
 
 const brStfTotalCount = async (
   signal: AbortSignal,
@@ -2175,6 +2469,7 @@ export const brStfAdapter = defineSourceAdapter({
     listSlicePage: listBrStfSlicePage,
     heldRequiresDetail: true,
     heldWithoutDocument: HELD_WITHOUT_DOCUMENT,
+    textlessHeldRecheck: TEXTLESS_HELD_RECHECK,
     // A reader outside a slice walk is a scope of its own.
     buildDecision: async (payload, signal) =>
       await buildBrStfFromPayload({

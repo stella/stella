@@ -249,11 +249,20 @@ export const parseBrStfPdf = async (
   ];
   return {
     documentAst: brStfDocumentAst(identity, paragraphs),
-    fulltext: body
-      .map((line) =>
-        line.type === "blank" ? "" : line.runs.map(({ text }) => text).join(""),
+    // The notes are the court's text as much as the body is, so search reads
+    // them too, after the body as the document prints them.
+    fulltext: [body, notes]
+      .map((lines) =>
+        lines
+          .map((line) =>
+            line.type === "blank"
+              ? ""
+              : line.runs.map(({ text }) => text).join(""),
+          )
+          .join("\n")
+          .trim(),
       )
-      .join("\n")
-      .trim(),
+      .filter((text) => text.length > 0)
+      .join("\n\n"),
   };
 };

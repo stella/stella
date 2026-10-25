@@ -337,10 +337,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.BR_STF]: {
-    version: 1,
+    version: 2,
     scope: {
       type: "all",
-      reason: "the source's first parser; there are no stored rows to narrow",
+      reason:
+        "PDF footnotes join the fulltext; the source has no stored rows yet to narrow",
     },
   },
 } as const satisfies ParserVersionScopes<

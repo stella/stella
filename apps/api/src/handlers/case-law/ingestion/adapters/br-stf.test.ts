@@ -27,7 +27,10 @@ import {
   readBrStfSearchAnswer,
 } from "@/api/handlers/case-law/ingestion/adapters/br-stf";
 import type { BrStfCursor } from "@/api/handlers/case-law/ingestion/adapters/br-stf";
-import { brStfTextParagraphs } from "@/api/handlers/case-law/ingestion/parsers/br-stf";
+import {
+  brStfTextParagraphs,
+  parseBrStfPdf,
+} from "@/api/handlers/case-law/ingestion/parsers/br-stf";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -873,9 +876,17 @@ describe("reconciliation slices", () => {
   test("a slice's pages must add up to the count the publisher states", async () => {
     const records = monthOf("s", 150);
     stubFetch(({ body }) => {
-      const from =
-        isRecord(body) && typeof body["from"] === "number" ? body["from"] : 0;
-      return searchAnswer(150, records.slice(from, from + 100));
+      if (!isRecord(body) || typeof body["size"] !== "number") {
+        return new Response(null, { status: 400 });
+      }
+      const after = body["search_after"];
+      const offset = typeof body["from"] === "number" ? body["from"] : 0;
+      const from = Array.isArray(after)
+        ? records.findIndex(
+            ({ sort }) => JSON.stringify(sort) === JSON.stringify(after),
+          ) + 1
+        : offset;
+      return searchAnswer(150, records.slice(from, from + body["size"]));
     });
     const first = await reconciliation.listSlicePage({
       slice: "2020-03-acordaos",
@@ -922,5 +933,156 @@ describe("reconciliation slices", () => {
         ),
       ),
     ).toContain("no readable result");
+  });
+});
+
+describe("review fixes", () => {
+  const { reconciliation } = brStfAdapter;
+
+  /** A slice the stub serves by offset and by `search_after`, as the engine does. */
+  const sliceSource = (records: { id: string; sort: number }[]) =>
+    stubFetch(({ body }) => {
+      if (!isRecord(body) || typeof body["size"] !== "number") {
+        return new Response(null, { status: 400 });
+      }
+      const size = body["size"];
+      const ordered = records.toSorted((left, right) => left.sort - right.sort);
+      const after = body["search_after"];
+      const from = typeof body["from"] === "number" ? body["from"] : 0;
+      const start = Array.isArray(after)
+        ? ordered.findIndex(({ sort }) => sort > Number(after[0]))
+        : from;
+      const page = start < 0 ? [] : ordered.slice(start, start + size);
+      return searchAnswer(
+        ordered.length,
+        page.map(({ id, sort }) => ({
+          hit: inlineHit(id),
+          sort: [sort, sort, id],
+        })),
+      );
+    });
+
+  test("a slice that changed behind the consumed offset fails its verification pass", async () => {
+    const records = Array.from({ length: 150 }, (_, index) => ({
+      id: `v${String(index + 1).padStart(3, "0")}`,
+      sort: (index + 1) * 10,
+    }));
+    sliceSource(records);
+    const first = await reconciliation.listSlicePage({
+      slice: "2020-03-acordaos",
+      page: 0,
+    });
+    expect(first.items).toHaveLength(100);
+    // Record 50 leaves the slice and X lands among the pages already read.
+    records.splice(49, 1, { id: "vX", sort: 55 });
+    const rejected = await rejectionOf(
+      reconciliation.listSlicePage({ slice: "2020-03-acordaos", page: 1 }),
+    );
+    expect(String(rejected)).toContain("changed while it was listed");
+  });
+
+  test("an unchanged slice passes its verification pass", async () => {
+    const records = Array.from({ length: 150 }, (_, index) => ({
+      id: `u${String(index + 1).padStart(3, "0")}`,
+      sort: index + 1,
+    }));
+    sliceSource(records);
+    const first = await reconciliation.listSlicePage({
+      slice: "2020-03-decisoes",
+      page: 0,
+    });
+    const second = await reconciliation.listSlicePage({
+      slice: "2020-03-decisoes",
+      page: 1,
+    });
+    expect([...first.items, ...second.items]).toHaveLength(150);
+  });
+
+  test("a hit without a usable _id is keyed by its dg_unique, and one with neither is quarantined", async () => {
+    stubFetch(() => new Response(null, { status: 500 }));
+    const { _id: _dropped, ...withoutId } = inlineHit("sjur999007");
+    const byDgUnique = await buildBrStfDecision(withoutId);
+    expect(byDgUnique.type).toBe("built");
+    if (byDgUnique.type === "built") {
+      expect(byDgUnique.decision.sourceDocumentId).toBe("dg_unique:sjur999007");
+    }
+    const anonymous = {
+      ...withoutId,
+      _source: { ...withoutId._source, dg_unique: null, id: null },
+    };
+    const quarantined = await buildBrStfDecision(anonymous);
+    const recovered = await buildBrStfDecision({
+      ...anonymous,
+      _id: "sjur999008",
+    });
+    expect([quarantined.type, recovered.type]).toEqual(["built", "built"]);
+    if (quarantined.type === "built" && recovered.type === "built") {
+      expect(String(quarantined.decision.sourceDocumentId)).toStartWith(
+        "br-stf-quarantine:",
+      );
+      expect(recovered.decision.sourceDocumentId).toBe("sjur999008");
+      expect(recovered.decision.sourceDocumentIdRepairAliases).toContain(
+        quarantined.decision.sourceDocumentId,
+      );
+    }
+  });
+
+  test("a PDF once stated absent is asked for again by the bounded textless recheck", async () => {
+    const [listed] = await recordedHits(
+      "br-stf-search-decisoes-2020-03-03.json.gz",
+    );
+    const hit = {
+      ...listed!,
+      _source: { ...sourceOf(listed!), decisao_texto: null },
+    };
+    stubFetch(() => new Response(null, { status: 404 }));
+    const absent = await decisionOf(hit);
+    expect(String(absent.metadata["documentReadReason"])).toBe(
+      BR_STF_DOCUMENT_MISSING.ABSENT,
+    );
+    const recheck = reconciliation.textlessHeldRecheck;
+    expect(recheck?.values).toEqual(["absent", "not-a-pdf", "unreadable-pdf"]);
+    const pdf = await Bun.file(
+      new URL("br-stf-decisao-despacho1077076.pdf", FIXTURES),
+    ).bytes();
+    stubFetch(() => new Response(pdf));
+    const rebuilt = await recheck?.buildDecisionFromStored({
+      raw: new TextEncoder().encode(absent.sourceRaw ?? ""),
+      contentType: absent.sourceRawContentType ?? null,
+      caseNumber: absent.caseNumber,
+      sourceDocumentId: absent.sourceDocumentId ?? null,
+      language: absent.language,
+      court: absent.court,
+      ecli: null,
+      decisionDate: absent.decisionDate ?? null,
+      decisionType: absent.decisionType ?? null,
+      sourceUrl: absent.sourceUrl ?? null,
+      documentUrl: absent.documentUrl ?? null,
+      metadata: absent.metadata,
+    });
+    expect(rebuilt?.type).toBe("built");
+    if (rebuilt?.type === "built") {
+      expect(rebuilt.decision.fulltext).toContain("PERDA SUPERVENIENTE");
+    }
+  });
+
+  test("a PDF's footnotes are searchable text", async () => {
+    const bytes = await Bun.file(
+      new URL("cz-uohs-2026-R0137.pdf", FIXTURES),
+    ).bytes();
+    const parsed = await parseBrStfPdf(bytes, {
+      title: undefined,
+      caseNumber: "fixture",
+      court: "Supremo Tribunal Federal",
+      decisionDate: undefined,
+      decisionType: "decisão monocrática",
+      sourceUrl: "https://jurisprudencia.stf.jus.br/pages/search/x/false",
+      documentUrl: undefined,
+    });
+    const note = "Ve správním spise se nachází pod položkou č. 16.";
+    expect(
+      parsed.documentAst.blocks.some(({ plainText }) => plainText === note),
+    ).toBe(true);
+    expect(parsed.fulltext.replaceAll(/\s+/gu, " ")).toContain(note);
   });
 });
