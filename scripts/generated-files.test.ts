@@ -595,7 +595,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["module-ownership", "route-tree"]);
+  ).toEqual(["tailwind-class-cache", "module-ownership", "route-tree"]);
   // api-typecheck-projects declares the derived CLI and capability runtimes,
   // which a clean checkout lacks, so they are planned with it.
   expect(
@@ -951,6 +951,15 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
       ).toBe("true");
     }
   }
+});
+
+test.each([
+  "apps/api/src/mcp/web-handoff-link-contract.ts",
+  "apps/api/src/mcp/write-result-omission.ts",
+])("app contracts follow their advertised output owner %s", (file) => {
+  expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
+    "mcp-app-contracts",
+  );
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {

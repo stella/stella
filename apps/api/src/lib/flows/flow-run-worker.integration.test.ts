@@ -81,10 +81,11 @@ import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -711,7 +712,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
             value: "Reviewed",
           });
         } else {
-          const mcpContext = {
+          const mcpContext = authorizedMcpContextForTest({
             accessibleWorkspaceIds: [workspaceId],
             accessibleWorkspaceIdSet: new Set([workspaceId]),
             accessibleWorkspaceStatusById: new Map([
@@ -723,12 +724,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
             organizationId,
             recordAuditEvent: context.recordAuditEvent,
             safeDb,
-            scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(
+            scopedDb: asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
               context.scopedDb,
             ),
             userId,
             userEmail: `${userId}@example.com`,
-          } satisfies McpRequestContext;
+          });
           const result = await handleMcpToolCall({
             toolName: "save_task",
             args: { task_id: taskEntityId, status, name: "Reviewed task" },

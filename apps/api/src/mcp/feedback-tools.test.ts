@@ -3,21 +3,22 @@ import * as v from "valibot";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   FEEDBACK_TOOL_DEFINITIONS,
   FEEDBACK_TOOL_HANDLERS,
 } from "@/api/mcp/feedback-tools";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const scopedDb = asTestRaw<
-  McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+  AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>
 >(mock(async () => []));
 
-const context: McpRequestContext = {
+const context: AuthorizedMcpRequestContext = authorizedMcpContextForTest({
   accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
   accessibleWorkspaceIdSet: new Set(["ws_1"]),
   accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
@@ -32,7 +33,7 @@ const context: McpRequestContext = {
   scopedDb,
   userId: toSafeId<"user">("user_1"),
   userEmail: "standard@example.test",
-};
+});
 
 const prepare = async (args: Record<string, unknown>) => {
   const result = await FEEDBACK_TOOL_HANDLERS.prepare_feedback({

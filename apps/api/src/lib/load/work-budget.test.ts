@@ -1,7 +1,6 @@
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
 import { createWorkBudget, type WorkBudgetResult } from "./work-budget";
@@ -142,7 +141,7 @@ const budgetStep = fc.oneof(
 );
 
 type Held = { slots: number; bytes: number; release: () => void };
-type Tracked = { held: Held[]; unsettled: number };
+type Tracked = { held: Held[] };
 
 const trackAcquire = async ({
   tracked,
@@ -156,7 +155,6 @@ const trackAcquire = async ({
   result: Promise<WorkBudgetResult>;
 }) => {
   const settled = await result;
-  tracked.unsettled -= 1;
   if (settled.type === "admitted") {
     tracked.held.push({ slots, bytes, release: settled.release });
   }
@@ -166,87 +164,102 @@ test("overlapping holds, aborts, timeouts and memory pressure keep exact account
   await assertProperty(
     "overlapping holds, aborts, timeouts and memory pressure keep exact accounting",
     fc.asyncProperty(fc.array(budgetStep, { maxLength: 30 }), async (steps) => {
-      let memoryOpen = true;
-      const budget = createWorkBudget({
-        slots: SLOT_CAPACITY,
-        bytes: BYTE_CAPACITY,
-        maxWaiters: 4,
-        maxWaitMs: 2,
-        memoryOpen: () => memoryOpen,
-        memoryRecheckMs: 1,
-      });
-      const tracked: Tracked = { held: [], unsettled: 0 };
-      const expectExactAccounting = () => {
-        const stats = budget.stats();
-        expect(stats.inFlight).toBe(
-          tracked.held.reduce((sum, item) => sum + item.slots, 0),
-        );
-        expect(stats.bytesInFlight).toBe(
-          tracked.held.reduce((sum, item) => sum + item.bytes, 0),
-        );
-        // Only a single item admitted while the pool was idle may exceed it.
-        expect(
-          tracked.held.length <= 1 ||
-            (stats.inFlight <= SLOT_CAPACITY &&
-              stats.bytesInFlight <= BYTE_CAPACITY),
-        ).toBe(true);
-      };
+      jest.useFakeTimers();
+      try {
+        let memoryOpen = true;
+        const budget = createWorkBudget({
+          slots: SLOT_CAPACITY,
+          bytes: BYTE_CAPACITY,
+          maxWaiters: 4,
+          maxWaitMs: 2,
+          memoryOpen: () => memoryOpen,
+          memoryRecheckMs: 1,
+        });
+        const tracked: Tracked = { held: [] };
+        const acquisitions: Promise<void>[] = [];
+        const expectExactAccounting = () => {
+          const stats = budget.stats();
+          expect(stats.inFlight).toBe(
+            tracked.held.reduce((sum, item) => sum + item.slots, 0),
+          );
+          expect(stats.bytesInFlight).toBe(
+            tracked.held.reduce((sum, item) => sum + item.bytes, 0),
+          );
+          // Only a single item admitted while the pool was idle may exceed it.
+          expect(
+            tracked.held.length <= 1 ||
+              (stats.inFlight <= SLOT_CAPACITY &&
+                stats.bytesInFlight <= BYTE_CAPACITY),
+          ).toBe(true);
+        };
 
-      for (const step of steps) {
-        switch (step.type) {
-          case "acquire": {
-            const controller = new AbortController();
-            if (step.abort === "before") {
-              controller.abort();
+        for (const step of steps) {
+          switch (step.type) {
+            case "acquire": {
+              const controller = new AbortController();
+              if (step.abort === "before") {
+                controller.abort();
+              }
+              acquisitions.push(
+                trackAcquire({
+                  tracked,
+                  slots: step.slots,
+                  bytes: step.bytes,
+                  result: budget.acquire({
+                    slots: step.slots,
+                    bytes: step.bytes,
+                    signal: controller.signal,
+                  }),
+                }),
+              );
+              if (step.abort === "while-queued") {
+                controller.abort();
+              }
+              break;
             }
-            tracked.unsettled += 1;
-            void trackAcquire({
-              tracked,
-              slots: step.slots,
-              bytes: step.bytes,
-              result: budget.acquire({
-                slots: step.slots,
-                bytes: step.bytes,
-                signal: controller.signal,
-              }),
-            });
-            if (step.abort === "while-queued") {
-              controller.abort();
+            case "release": {
+              const index = step.pick % Math.max(tracked.held.length, 1);
+              const [item] = tracked.held.splice(index, 1);
+              item?.release();
+              break;
             }
-            break;
+            case "memory":
+              memoryOpen = step.open;
+              break;
+            case "tick":
+              jest.advanceTimersByTime(3);
+              break;
+            default:
+              step satisfies never;
           }
-          case "release": {
-            const index = step.pick % Math.max(tracked.held.length, 1);
-            const [item] = tracked.held.splice(index, 1);
-            item?.release();
-            break;
+          // Queue resolution, acquire's returned promise, and the tracking
+          // continuation each enqueue a microtask; no clock progress is needed.
+          for (let continuation = 0; continuation < 3; continuation += 1) {
+            await Promise.resolve();
           }
-          case "memory":
-            memoryOpen = step.open;
-            break;
-          case "tick":
-            await sleep(3);
-            break;
-          default:
-            step satisfies never;
+          expectExactAccounting();
         }
-        await sleep(0);
-        expectExactAccounting();
-      }
 
-      memoryOpen = true;
-      while (tracked.unsettled > 0 || tracked.held.length > 0) {
+        memoryOpen = true;
         for (const item of tracked.held.splice(0)) {
           item.release();
         }
-        await sleep(3);
+        // Every remaining queue request either receives a released slot or
+        // reaches its two-millisecond deadline under the controlled clock.
+        jest.advanceTimersByTime(3);
+        await Promise.all(acquisitions);
         expectExactAccounting();
+        for (const item of tracked.held.splice(0)) {
+          item.release();
+        }
+        expect(budget.stats()).toEqual({
+          inFlight: 0,
+          queued: 0,
+          bytesInFlight: 0,
+        });
+      } finally {
+        jest.useRealTimers();
       }
-      expect(budget.stats()).toEqual({
-        inFlight: 0,
-        queued: 0,
-        bytesInFlight: 0,
-      });
     }),
     { numRuns: 60 },
   );

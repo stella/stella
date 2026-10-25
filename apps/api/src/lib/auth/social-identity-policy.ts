@@ -1,6 +1,8 @@
 import type { MicrosoftEntraIDProfile } from "@better-auth/core/social-providers";
 import type { BetterAuthOptions } from "better-auth";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+
 const MICROSOFT_CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
 type MicrosoftIdentityOptions = {
@@ -52,9 +54,10 @@ export const isVerifiedMicrosoftIdentity = ({
   if (!isAllowedMicrosoftTenant({ profile, tenantId }) || !profile || !email) {
     return false;
   }
+  const account = normalizeEmail(email);
   if (
     typeof profile["email"] !== "string" ||
-    profile["email"].toLowerCase() !== email.toLowerCase()
+    normalizeEmail(profile["email"]) !== account
   ) {
     return false;
   }
@@ -72,8 +75,7 @@ export const isVerifiedMicrosoftIdentity = ({
       Array.isArray(addresses) &&
       addresses.some(
         (address: unknown) =>
-          typeof address === "string" &&
-          address.toLowerCase() === email.toLowerCase(),
+          typeof address === "string" && normalizeEmail(address) === account,
       ),
   );
 };
