@@ -1,7 +1,7 @@
 /**
- * The whole HTTP lifecycle, through a real Elysia app: the safe handler, the
- * error hook and the completion hook, with every record, capture and metric
- * line they produce, and the exact bytes of every answer.
+ * The whole HTTP lifecycle, through a real `Bun.serve`: the safe handler, the
+ * error boundary and the completion stage, with every record, capture and
+ * metric line they produce, and the exact bytes of every answer.
  *
  * The response fixtures were recorded against the request pipeline as it
  * answered before failures were graded, so shadow grading is proven not to
@@ -17,10 +17,22 @@ import {
 } from "better-auth/api";
 import { Result } from "better-result";
 import { SQL } from "bun";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
-import { Elysia, status, t } from "elysia";
+import * as v from "valibot";
 
+import { createHttpApp } from "@/api/http/app";
+import type { HttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { Middleware, RouteDefinition } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import { resetCaptureWindows } from "@/api/lib/analytics/capture";
 import {
   resetAnalyticsForTesting,
@@ -31,10 +43,12 @@ import {
   createSafePublicHandler,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { AUTH_API_PATH } from "@/api/lib/auth/auth-paths";
 import {
   createAuthRefusalLogPlugin,
   markAuthRequestRoute,
 } from "@/api/lib/auth/auth-request-observability";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -45,12 +59,11 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import type { LogRecord } from "@/api/lib/observability/logger";
-import { initRequestContext } from "@/api/lib/observability/request-context";
+import { openRequestContext } from "@/api/lib/observability/request-context";
 import {
-  answerRequestError,
-  completeRequest,
+  errorBoundary,
   flushAnalytics,
-  withFinalResponseCompletion,
+  requestCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import {
   resetMetricLineSinkForTesting,
@@ -58,7 +71,7 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { ActionSizeError } from "@/api/lib/rate-limit/action-size-limits";
-import { runTenantHttpAction } from "@/api/lib/rate-limit/tenant-action-boundary";
+import { tenantActionAdmission } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -67,6 +80,8 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 
 const config = {
   contract: "patch",
@@ -113,28 +128,86 @@ const databaseFailover = createSafePublicHandler(config, async function* () {
 
 const driftedBody = (): { ok: string } => JSON.parse('{"unexpected":true}');
 
+/**
+ * The request scope and receipt id, opened outside the completion stage as
+ * the production pipeline opens them.
+ */
+const requestScope: Middleware = async (_ctx, inner) =>
+  await runWithRequestScope(async () => {
+    openRequestContext();
+    return await inner();
+  });
+
+/** The lifecycle stages in their production order. */
+const LIFECYCLE: readonly Middleware[] = [
+  requestScope,
+  requestCompletion,
+  errorBoundary,
+];
+
+const servers: TestServer[] = [];
+const serve = (app: HttpApp): TestServer => {
+  const server = serveForTest(app);
+  servers.push(server);
+  return server;
+};
+afterAll(async () => {
+  await Promise.all(servers.map(async (server) => await server.stop()));
+});
+
+const failoverEndpoint = (): RouteDefinition =>
+  defineEndpoint.public({}, () => {
+    throw pgFailover();
+  });
+
 // Use registered CRUD patterns so these fixture handlers also cross the
 // production classification boundary. Their responses remain test-owned.
-const buildApp = () =>
-  new Elysia()
-    .onRequest(({ request }) => {
-      initRequestContext(request);
-    })
-    .onError((context) => answerRequestError(context))
-    .onAfterHandle(async (context) => await completeRequest(context))
-    .get("/v1/contacts/", rlsDenied.handler)
-    .get("/v1/notifications/", upstreamDown.handler)
-    .get("/v1/signals/", databaseFailover.handler)
-    .get("/v1/signals/count", () => status(502, { message: "Bad gateway" }))
-    .get("/v1/contacts/search", () => {
-      throw pgFailover();
-    })
-    .post("/v1/signals/requests", () => "ok", {
-      body: t.Object({ name: t.String() }),
-    })
-    .get("/v1/auth/capabilities", () => driftedBody(), {
-      response: t.Object({ ok: t.String() }),
-    });
+const lifecycleServer = serve(
+  createHttpApp({
+    middleware: LIFECYCLE,
+    routes: routes({
+      "/v1/contacts/": { GET: rlsDenied },
+      "/v1/notifications/": { GET: upstreamDown },
+      "/v1/signals/": { GET: databaseFailover },
+      "/v1/signals/count": {
+        GET: defineEndpoint.public({}, () =>
+          status(502, { message: "Bad gateway" }),
+        ),
+      },
+      "/v1/contacts/search": { GET: failoverEndpoint() },
+      "/v1/signals/requests": {
+        POST: defineEndpoint.public(
+          { body: v.object({ name: v.string() }) },
+          () => "ok",
+        ),
+      },
+      "/v1/auth/capabilities": {
+        GET: defineEndpoint.public(
+          { response: { 200: v.object({ ok: v.string() }) } },
+          () => driftedBody(),
+        ),
+      },
+    }),
+  }),
+);
+
+type AuthHandler = { handler: (request: Request) => Promise<Response> };
+
+/** Better Auth mounted the way the API mounts it: one wildcard route. */
+const serveAuth = (auth: AuthHandler): TestServer =>
+  serve(
+    createHttpApp({
+      middleware: LIFECYCLE,
+      routes: routes({
+        [`${AUTH_API_PATH}/*`]: {
+          GET: defineEndpoint.public(
+            { bodyMode: "none" },
+            async ({ request }) => await auth.handler(request),
+          ),
+        },
+      }),
+    }),
+  );
 
 type LifecycleCase = {
   readonly name: string;
@@ -165,12 +238,6 @@ const shadow = (grade: string, reason: string) => ({
   "failure.reason": reason,
   "failure.shadow": "true",
 });
-
-const ungraded = {
-  "failure.grade": undefined,
-  "failure.reason": undefined,
-  "failure.shadow": undefined,
-};
 
 const CASES: readonly LifecycleCase[] = [
   {
@@ -233,7 +300,7 @@ const CASES: readonly LifecycleCase[] = [
     metricReasons: [],
   },
   {
-    name: "a failover thrown past the safe handler reaches the error hook",
+    name: "a failover thrown past the safe handler reaches the error boundary",
     request: get("/v1/contacts/search"),
     status: 500,
     body: '{"message":"Internal server error"}',
@@ -283,10 +350,9 @@ const CASES: readonly LifecycleCase[] = [
     request: get("/v1/auth/capabilities"),
     status: 500,
     body: '{"message":"Internal server error"}',
-    // The completion hook runs before the response schema is checked, so the
-    // handler's 200 is recorded first; that ordering predates grading.
+    // The answer is checked against its schema inside the error boundary, so
+    // the request has one record, the failure, and never a 200 before it.
     records: [
-      ["request.completed", "INFO", ungraded],
       ["request.failed", "ERROR", shadow("defect", "response_invalid")],
     ],
     captures: 1,
@@ -308,6 +374,14 @@ const failureView = (record: LogRecord): FailureView => {
     },
   ];
 };
+
+const metricRecords = (
+  lines: readonly string[],
+  metric: string,
+): Record<string, unknown>[] =>
+  lines
+    .map((line): Record<string, unknown> => JSON.parse(line))
+    .filter((record) => metric in record);
 
 describe("the request lifecycle", () => {
   let analytics: RecordingAnalytics;
@@ -368,18 +442,10 @@ describe("the request lifecycle", () => {
     const nestedCall = async (): Promise<void> => {
       await auth.api.getSession({ headers: new Headers() });
     };
-    const app = new Elysia()
-      .wrap(
-        (handleRequest) => (request: Request) =>
-          runWithRequestScope(() => handleRequest(request)),
-      )
-      .onRequest(({ request }) => initRequestContext(request))
-      .onError((context) => answerRequestError(context))
-      .onAfterHandle(async (context) => await completeRequest(context))
-      .mount(auth.handler);
+    const server = serveAuth(auth);
 
-    const response = await app.handle(
-      new Request("http://localhost:3001/api/auth/outer/fixture-id"),
+    const response = await server.fetch(
+      "http://localhost/api/auth/outer/fixture-id",
     );
     expect(response.status).toBe(400);
     expect(visitedPaths).toEqual(["/outer/:id", "/get-session"]);
@@ -388,13 +454,11 @@ describe("the request lifecycle", () => {
         ?.attributes?.["http.route"],
     ).toBe("/api/auth/outer/:id");
     expect(
-      metricLines
-        .map((line) => JSON.parse(line))
-        .find((record) => "RequestDuration" in record)?.["http.route"],
+      metricRecords(metricLines, "RequestDuration").at(0)?.["http.route"],
     ).toBe("/api/auth/outer/:id");
 
     logs.records.length = 0;
-    await app.handle(new Request("http://localhost:3001/api/auth/get-session"));
+    await server.fetch("http://localhost/api/auth/get-session");
     expect(
       logs.records.find(({ message }) => message === "request.completed")
         ?.attributes?.["http.route"],
@@ -438,19 +502,9 @@ describe("the request lifecycle", () => {
           },
         ],
       });
-      const app = new Elysia()
-        .wrap(
-          (handleRequest) => (request: Request) =>
-            runWithRequestScope(() => handleRequest(request)),
-        )
-        .onRequest(({ request }) => initRequestContext(request))
-        .onError((context) => answerRequestError(context))
-        .onAfterHandle(async (context) => await completeRequest(context))
-        .mount(auth.handler);
-      const response = await app.handle(
-        new Request(
-          "http://localhost:3001/api/auth/fixture/private-id?token=private-token",
-        ),
+      const server = serveAuth(auth);
+      const response = await server.fetch(
+        "http://localhost/api/auth/fixture/private-id?token=private-token",
       );
       expect(response.status).toBe(400);
       const completion = logs.records.find(
@@ -475,18 +529,18 @@ describe("the request lifecycle", () => {
       expect(serialized).not.toContain("private-id");
       expect(serialized).not.toContain("private-token");
       expect(
-        metricLines
-          .map((line) => JSON.parse(line))
-          .find((record) => "RequestDuration" in record)?.["http.route"],
+        metricRecords(metricLines, "RequestDuration").at(0)?.["http.route"],
       ).toBe("/api/auth/fixture/:id");
+
+      // A path no auth endpoint registers is named by the mounted wildcard.
       logs.records.length = 0;
-      await app.handle(
-        new Request("http://localhost:3001/unregistered/private-other"),
+      await server.fetch(
+        "http://localhost/api/auth/unregistered/private-other",
       );
       expect(
         logs.records.find(({ message }) => message === "request.completed")
           ?.attributes?.["http.route"],
-      ).toBe("/*");
+      ).toBe(`${AUTH_API_PATH}/*`);
       expect(JSON.stringify(logs.records)).not.toContain("private-other");
     },
   );
@@ -500,34 +554,45 @@ describe("the request lifecycle", () => {
     ] as const) {
       logs.records.length = 0;
       metricLines.length = 0;
-      const method = mode === "read" ? "GET" : "POST";
-      const request = new Request("http://localhost/v1/mcp/connections", {
-        method,
-        ...(mode === "request_refusal" ? { body: "body" } : {}),
-      });
-      const app = new Elysia()
-        .onRequest(({ request: received }) => initRequestContext(received))
-        .onAfterHandle(async (context) => await completeRequest(context))
-        .all("/v1/mcp/connections", () => ({ value: "é".repeat(300) }));
-      const response = await withFinalResponseCompletion(request, async () =>
-        runTenantHttpAction(request, {
-          enabled: true,
-          isTenantAction: () => true,
-          policy: () =>
-            mode === "configuration"
-              ? Result.err(
-                  new ActionSizeError({
-                    message: "Unconfigured",
-                    reason: "configuration",
-                  }),
-                )
-              : Result.ok({ requestBytes: 1, responseBytes: 512, pageSize: 3 }),
-          handleRequest: async (received) => app.handle(received),
-          decorateRefusal: (refusal, received) => {
-            initRequestContext(received);
-            return refusal;
-          },
+      // A member route is a tenant action; the fixture answers without a
+      // caller check, so only the admission boundary decides.
+      const connections: RouteDefinition = {
+        access: "member",
+        config: {},
+        run: async () => await Promise.resolve({ value: "é".repeat(300) }),
+      };
+      const server = serve(
+        createHttpApp({
+          middleware: [
+            ...LIFECYCLE,
+            tenantActionAdmission({
+              enabled: () => true,
+              policy: () =>
+                mode === "configuration"
+                  ? Result.err(
+                      new ActionSizeError({
+                        message: "Unconfigured",
+                        reason: "configuration",
+                      }),
+                    )
+                  : Result.ok({
+                      requestBytes: 1,
+                      responseBytes: 512,
+                      pageSize: 3,
+                    }),
+            }),
+          ],
+          routes: routes({
+            "/v1/mcp/connections": { GET: connections, POST: connections },
+          }),
         }),
+      );
+      const response = await server.fetch(
+        "http://localhost/v1/mcp/connections",
+        {
+          method: mode === "read" ? "GET" : "POST",
+          ...(mode === "request_refusal" ? { body: "body" } : {}),
+        },
       );
       const expectedByMode = {
         read: 413,
@@ -544,18 +609,12 @@ describe("the request lifecycle", () => {
       expect(completions.at(0)?.attributes?.["http.status_code"]).toBe(
         expected,
       );
-      const metrics = metricLines.map((line) => JSON.parse(line));
-      expect(
-        metrics.filter((record) => "RequestDuration" in record),
-      ).toHaveLength(1);
-      expect(
-        metrics.find((record) => "RequestDuration" in record)?.[
-          "http.status_code"
-        ],
-      ).toBe(expected);
-      expect(
-        metrics.filter((record) => "ActionResponseOversize" in record),
-      ).toHaveLength(mode === "mutation" ? 1 : 0);
+      const durations = metricRecords(metricLines, "RequestDuration");
+      expect(durations).toHaveLength(1);
+      expect(durations.at(0)?.["http.status_code"]).toBe(expected);
+      expect(metricRecords(metricLines, "ActionResponseOversize")).toHaveLength(
+        mode === "mutation" ? 1 : 0,
+      );
       if (mode === "mutation") {
         expect(await response.json()).toEqual({ value: "é".repeat(300) });
       }
@@ -565,7 +624,7 @@ describe("the request lifecycle", () => {
   test.each(CASES.map((lifecycle) => [lifecycle.name, lifecycle] as const))(
     "%s",
     async (_name, lifecycle) => {
-      const response = await buildApp().handle(lifecycle.request());
+      const response = await lifecycleServer.fetch(lifecycle.request());
 
       expect(response.status).toBe(lifecycle.status);
       expect(await response.text()).toBe(lifecycle.body);
@@ -578,10 +637,9 @@ describe("the request lifecycle", () => {
       );
       expect(analytics.exceptions()).toHaveLength(lifecycle.captures);
       expect(
-        metricLines
-          .map((line) => JSON.parse(line))
-          .filter((record) => "RequestTransientFailures" in record)
-          .map((record) => record.reason),
+        metricRecords(metricLines, "RequestTransientFailures").map(
+          (record) => record["reason"],
+        ),
       ).toEqual([...lifecycle.metricReasons]);
       for (const record of logs.records) {
         expect(record.attributes?.["observability.unowned"]).toBeUndefined();
@@ -590,10 +648,9 @@ describe("the request lifecycle", () => {
   );
 
   test("the aggregate counts each observation under the channel it used", async () => {
-    const app = buildApp();
-    await app.handle(get("/v1/contacts/")());
-    await app.handle(get("/v1/notifications/")());
-    await app.handle(get("/v1/signals/count")());
+    await lifecycleServer.fetch(get("/v1/contacts/")());
+    await lifecycleServer.fetch(get("/v1/notifications/")());
+    await lifecycleServer.fetch(get("/v1/signals/count")());
     logs.records.length = 0;
 
     flushFailureObservations();
@@ -627,7 +684,7 @@ describe("the request lifecycle", () => {
       flush: async () => await Promise.resolve(),
     });
     try {
-      const response = await buildApp().handle(get("/v1/contacts/")());
+      const response = await lifecycleServer.fetch(get("/v1/contacts/")());
 
       expect(response.status).toBe(400);
       expect(await response.text()).toBe(
@@ -645,36 +702,32 @@ describe("the request lifecycle", () => {
   });
 
   test("measures a declared route under its class on the completion and error paths", async () => {
-    // Mounted the way the server mounts it: a `/v1` group around a prefixed
-    // plugin, so the hooks see the same full route pattern the class map keys.
-    const app = new Elysia()
-      .onRequest(({ request }) => {
-        initRequestContext(request);
-      })
-      .onError((context) => answerRequestError(context))
-      .onAfterHandle(async (context) => await completeRequest(context))
-      .group("/v1", (versioned) =>
-        versioned.use(
-          new Elysia({ prefix: "/case" })
-            .get("/decisions/:decisionId/citations/summary", () => "ok")
-            .get("/sitemap/shards", () => {
-              throw pgFailover();
-            }),
+    // Mounted the way the API mounts it, under a prefix, so the stages see the
+    // same full route pattern the class map keys.
+    const server = serve(
+      createHttpApp({
+        middleware: LIFECYCLE,
+        routes: routes(
+          {
+            "/decisions/:decisionId/citations/summary": {
+              GET: defineEndpoint.public({}, () => "ok"),
+            },
+            "/sitemap/shards": { GET: failoverEndpoint() },
+          },
+          { prefix: "/v1/case" },
         ),
-      );
+      }),
+    );
 
-    await app.handle(get("/v1/case/decisions/d1/citations/summary")());
-    await app.handle(get("/v1/case/sitemap/shards")());
+    await server.fetch(get("/v1/case/decisions/d1/citations/summary")());
+    await server.fetch(get("/v1/case/sitemap/shards")());
 
     expect(
-      metricLines
-        .map((line) => JSON.parse(line))
-        .filter((record) => "RequestDuration" in record)
-        .map((record) => [
-          record["http.route"],
-          record.class,
-          "_aws" in record,
-        ]),
+      metricRecords(metricLines, "RequestDuration").map((record) => [
+        record["http.route"],
+        record["class"],
+        "_aws" in record,
+      ]),
     ).toEqual([
       ["/v1/case/decisions/:decisionId/citations/summary", "search", true],
       ["/v1/case/sitemap/shards", "batch", false],

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
 
@@ -32,7 +32,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -40,17 +40,18 @@ import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-
 
 // The reviewed row plus the caller-generated id. The field set itself lives in
 // `contact-import-schema.ts`, shared with the validate handler.
-const importContactRowSchema = t.Composite([
-  t.Object({ id: tSafeId("contact") }),
+const importContactRowSchema = v.intersect([
+  v.object({ id: resourceIdSchema("contact") }),
   contactImportCandidateSchema,
 ]);
 
-const importContactsBodySchema = t.Object({
-  importRequestId: tSafeId("contactImportRequest"),
+const importContactsBodySchema = v.object({
+  importRequestId: resourceIdSchema("contactImportRequest"),
   taxIdScheme: taxIdSchemeSchema,
-  rows: t.Array(importContactRowSchema, {
-    maxItems: LIMITS.contactsImportRowsMax,
-  }),
+  rows: v.pipe(
+    v.array(importContactRowSchema),
+    v.maxLength(LIMITS.contactsImportRowsMax),
+  ),
 });
 
 type ImportSkipReason =

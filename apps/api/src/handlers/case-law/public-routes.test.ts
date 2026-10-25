@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import {
   PUBLIC_COUNTRIES,
@@ -7,11 +7,21 @@ import {
 } from "@stll/api-contract/public-country-capability";
 
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import { createHttpApp } from "@/api/http/app";
 import {
   DECISION_PAGE_BEYOND_DEPTH_MESSAGE,
   DECISION_PAGE_CURSOR_AND_OFFSET_MESSAGE,
 } from "@/api/lib/case-law/decision-page-offset";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const server = serveForTest(
+  createHttpApp({ routes: publicCaseLawRoute, middleware: [errorBoundary] }),
+);
+afterAll(async () => {
+  await server.stop();
+});
 
 describe("public case-law routes", () => {
   test.each(
@@ -21,7 +31,7 @@ describe("public case-law routes", () => {
   )(
     "advertised %s reports its capability before reading data",
     async (country) => {
-      const response = await publicCaseLawRoute.handle(
+      const response = await server.fetch(
         new Request(`http://localhost/case/decisions?country=${country}`),
       );
       expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
@@ -34,7 +44,7 @@ describe("public case-law routes", () => {
   );
 
   test("rejects invalid public search source IDs before handler execution", async () => {
-    const response = await publicCaseLawRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/case/decisions/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +62,7 @@ describe("public case-law routes", () => {
   test("rejects a portrait request for an unreadable judge id before data access", async () => {
     // Same shape as the cursor case above: the answer arrives before any
     // database or object-store access, so a malformed id never reaches them.
-    const response = await publicCaseLawRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/case/judges/not-a-uuid/portrait"),
     );
 
@@ -61,7 +71,7 @@ describe("public case-law routes", () => {
 
   test("rejects invalid list cursor IDs before handler execution", async () => {
     const cursor = encodeURIComponent("2026-06-06T00:00:00.000Z_not-a-uuid");
-    const response = await publicCaseLawRoute.handle(
+    const response = await server.fetch(
       new Request(
         `http://localhost/case/decisions?country=CZE&cursor=${cursor}`,
       ),
@@ -73,7 +83,7 @@ describe("public case-law routes", () => {
 
   describe("a page addressed by offset stays within the result depth", () => {
     const search = async (body: Record<string, unknown>) =>
-      await publicCaseLawRoute.handle(
+      await server.fetch(
         new Request("http://localhost/case/decisions/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -85,7 +95,7 @@ describe("public case-law routes", () => {
         }),
       );
     const list = async (query: string) =>
-      await publicCaseLawRoute.handle(
+      await server.fetch(
         new Request(`http://localhost/case/decisions?country=CZE&${query}`),
       );
     // The deepest page a 25-row page size reaches ends exactly on the bound,
@@ -150,7 +160,7 @@ describe("public case-law routes", () => {
       }),
     );
     for (const request of requests) {
-      const response = await publicCaseLawRoute.handle(request);
+      const response = await server.fetch(request);
       expect(response.status, request.url).toBe(
         PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       );
@@ -165,7 +175,7 @@ describe("public case-law routes", () => {
   });
 
   test("unadvertised countries remain a miss", async () => {
-    const response = await publicCaseLawRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/case/decisions?country=Germany"),
     );
     expect(response.status).toBe(404);
@@ -178,7 +188,7 @@ describe("public case-law routes", () => {
     const cursor = encodeURIComponent("2026-06-06T00:00:00.000Z_not-a-uuid");
 
     for (const country of ["CZE", "CZ", "cze", "Česko", "Czech Republic"]) {
-      const response = await publicCaseLawRoute.handle(
+      const response = await server.fetch(
         new Request(
           `http://localhost/case/decisions?country=${encodeURIComponent(country)}&cursor=${cursor}`,
         ),
@@ -209,7 +219,7 @@ describe("public case-law routes", () => {
     ];
 
     for (const request of requests) {
-      const response = await publicCaseLawRoute.handle(request);
+      const response = await server.fetch(request);
 
       // The answer is the reader's own ask, so it names the notations
       // ("CZE", the country's name) and the countries there is law for.

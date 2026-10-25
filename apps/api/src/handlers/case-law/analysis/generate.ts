@@ -8,7 +8,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type {
   CaseLawAnalysisFailureCode as AnalysisFailureCode,
@@ -17,6 +17,7 @@ import type {
 import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
 import type { AiDisclosure } from "@stll/api-contract/ai-disclosure";
 import type { CaseLawIncompleteReason } from "@stll/api-contract/case-law-answer-completeness";
+import { booleanFromString } from "@stll/api-contract/http-input";
 import type {
   AnalysisGenerating,
   DecisionAnalysis,
@@ -57,7 +58,7 @@ import {
 } from "@/api/lib/case-law/analysis-store";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
@@ -804,8 +805,8 @@ const config = {
   // Writes a "generating" sentinel and kicks off background AI generation
   // that updates the decision row.
   access: "write",
-  params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
-  query: t.Object({ retry: t.Optional(t.BooleanString()) }),
+  params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
+  query: v.object({ retry: v.optional(booleanFromString()) }),
 } satisfies HandlerConfig;
 
 const generateDecisionAnalysis = createSafeRootHandler(

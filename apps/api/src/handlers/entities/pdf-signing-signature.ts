@@ -12,7 +12,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
@@ -35,19 +35,24 @@ import {
 } from "@/api/lib/files/pdf-signing/finalize-attempts";
 import type { AuthorizedPdfSigningSession } from "@/api/lib/files/pdf-signing/sessions";
 import { verifyDesktopSignature } from "@/api/lib/files/pdf-signing/verify-signature";
-import {
-  permissiveBodySchema,
-  permissiveRouteSchema,
-  validatePostAuth,
-} from "@/api/lib/permissive-route-schema";
 
-import { authorizePdfSigningFinalizeCredentials } from "./pdf-signing-credentials";
+import {
+  authorizePdfSigningFinalizeCredentials,
+  pdfSigningRawCredentials,
+  pdfSigningSessionParamsSchema,
+  pdfSigningSessionTokenSchema,
+} from "./pdf-signing-credentials";
 
 /** An RSA-8192 PKCS#1 signature is 1024 bytes; base64 of it is under 2 KiB. */
 const SIGNATURE_BASE64_MAX_LENGTH = 4096;
 
-const signaturePayloadSchema = t.Object({
-  signature: t.String({ minLength: 1, maxLength: SIGNATURE_BASE64_MAX_LENGTH }),
+const signaturePayloadSchema = v.object({
+  sessionToken: pdfSigningSessionTokenSchema,
+  signature: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(SIGNATURE_BASE64_MAX_LENGTH),
+  ),
 });
 
 const decodeBase64 = (value: string): Uint8Array | null => {
@@ -248,8 +253,8 @@ const config = {
     reason: "Applies a signature without returning stored-file bytes.",
   },
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({ keys: ["sessionToken", "signature"] }),
-  params: permissiveRouteSchema({ keys: ["sessionId"] }),
+  body: signaturePayloadSchema,
+  params: pdfSigningSessionParamsSchema,
 } satisfies TokenHandlerConfig;
 
 /**
@@ -273,13 +278,8 @@ export const createSubmitPdfSigningSignatureHandler = ({
 }: SubmitPdfSigningSignatureDependencies = DEFAULT_DEPENDENCIES) =>
   createSafeTokenHandler(
     config,
-    async function* ({ body, params, request, server }) {
-      const credentials = yield* Result.await(
-        authorize({
-          sessionId: params.sessionId,
-          sessionToken: body?.sessionToken,
-        }),
-      );
+    async (raw) => await authorize(pdfSigningRawCredentials(raw)),
+    async function* ({ body, caller: credentials, request, server }) {
       if (credentials.kind === "finalized") {
         return Result.ok({
           versionId: credentials.versionId,
@@ -288,13 +288,7 @@ export const createSubmitPdfSigningSignatureHandler = ({
       }
       const { session } = credentials;
 
-      const payload = validatePostAuth(signaturePayloadSchema, body);
-      if (!payload.ok) {
-        return Result.err(
-          new HandlerError({ status: 400, message: payload.message }),
-        );
-      }
-      const signature = decodeBase64(payload.value.signature);
+      const signature = decodeBase64(body.signature);
       if (signature === null) {
         return Result.err(
           new HandlerError({

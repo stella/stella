@@ -57,7 +57,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -121,7 +121,7 @@ export type ClauseRewrite = (
 ) => Promise<ClauseParagraph[]>;
 
 const rewriteClause: ClauseRewrite = async (request) =>
-  unwrapEden(await api.clauses["ai-rewrite"].post(request)).body;
+  unwrapApiResponse(await api.clauses["ai-rewrite"].post(request)).body;
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];

@@ -41,7 +41,7 @@ type TemplateCategorySidebarProps = {
 
 // ── Template ops + labels ───────────────────────────
 
-/** Template-categories CRUD wired to the api treaty. Each op surfaces its own
+/** Template-categories CRUD wired to the API client. Each op surfaces its own
  *  error toast and resolves to the shared `CategoryOps` contract (created
  *  category or `null`; success boolean). */
 const useTemplateCategoryOps = (): CategoryOps => {

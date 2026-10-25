@@ -23,7 +23,7 @@ import type {
 } from "@/features/avt/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -110,7 +110,7 @@ export const useClaimReviewActions = (scope: RunScope) => {
     // A run's review actions reach the server in the order they were taken.
     scope: { id: mutationKey.join(":") },
     mutationFn: async ({ targetIds: [claimId], event }: RecordVariables) =>
-      unwrapEden(
+      unwrapApiResponse(
         await lists()["claim-reviews"].post({ runId, claimId, event }),
       ),
     onMutate: async ({ targetIds, event }) =>
@@ -131,7 +131,9 @@ export const useClaimReviewActions = (scope: RunScope) => {
     mutationKey,
     scope: { id: mutationKey.join(":") },
     mutationFn: async ({ targetIds: claimIds }: BulkVariables) =>
-      unwrapEden(await lists()["claim-reviews"].bulk.post({ runId, claimIds })),
+      unwrapApiResponse(
+        await lists()["claim-reviews"].bulk.post({ runId, claimIds }),
+      ),
     onMutate: async ({ targetIds }) =>
       await applyOptimistic(targetIds, (review) =>
         predictBulkReviewed(review, { at: now(), actorId }),

@@ -1,17 +1,17 @@
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import { toAgentSkillResponse } from "@/api/handlers/skills/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const getSkillParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const getSkillParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
 const config = {

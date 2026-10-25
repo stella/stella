@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -11,7 +11,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import type {
   ManualOcrSource,
   PersistedDocumentProcessingRun,
@@ -22,12 +22,10 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const createOcrParams = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: resourceIdSchema("entity"),
 });
 
-const createOcrBody = t.Object({
-  fieldId: tSafeId("field"),
-});
+const createOcrBody = v.object({ fieldId: resourceIdSchema("field") });
 
 const config = {
   contract: "patch",

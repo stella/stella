@@ -8,8 +8,8 @@
         {
           "path": "apps/api/src/lib/auth.ts",
           "contains": [
-            "export const authMacro",
-            "export const workspaceAccessMacro"
+            "export const authenticateSession",
+            "export const authorizeWorkspace"
           ]
         },
         {

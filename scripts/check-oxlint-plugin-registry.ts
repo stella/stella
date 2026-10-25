@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
@@ -15,7 +15,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
-  "eden-client.ts",
+  "api-client-chain.ts",
   "icon-ownership.ts",
   "module-id.ts",
   "physical-properties.ts",
@@ -23,8 +23,6 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "restricted-import.ts",
   "utils.ts",
 ]);
-const TYPEBOX_UNSAFE_RULE_ID =
-  "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)
   .filter((file) => file.endsWith(".ts") && !NON_PLUGIN_MODULES.has(file))
@@ -43,63 +41,6 @@ const enabledRuleIds = new Set(
 const readme = readFileSync(README_PATH, "utf-8");
 const errors: string[] = [];
 let ruleCount = 0;
-
-export const approvedAdapterPaths = (lintConfig: unknown): string[] => {
-  const paths: string[] = [];
-  if (typeof lintConfig !== "object" || lintConfig === null) {
-    return paths;
-  }
-  const overrides = Reflect.get(lintConfig, "overrides");
-  const ruleOwners = [
-    lintConfig,
-    ...(Array.isArray(overrides) ? overrides : []),
-  ];
-  for (const ruleOwner of ruleOwners) {
-    if (typeof ruleOwner !== "object" || ruleOwner === null) {
-      continue;
-    }
-    const rules = Reflect.get(ruleOwner, "rules");
-    if (typeof rules !== "object" || rules === null) {
-      continue;
-    }
-    const rule = Reflect.get(rules, TYPEBOX_UNSAFE_RULE_ID);
-    if (!Array.isArray(rule)) {
-      continue;
-    }
-    const options = rule.at(1);
-    if (typeof options !== "object" || options === null) {
-      continue;
-    }
-    const adapters = Reflect.get(options, "approvedAdapters");
-    if (!Array.isArray(adapters)) {
-      continue;
-    }
-    for (const adapter of adapters) {
-      if (typeof adapter !== "object" || adapter === null) {
-        continue;
-      }
-      const adapterPath = Reflect.get(adapter, "path");
-      if (typeof adapterPath === "string") {
-        paths.push(adapterPath);
-      }
-    }
-  }
-  return [...new Set(paths)];
-};
-
-const isFile = (file: string): boolean =>
-  statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
-
-export const approvedAdapterPathErrors = (
-  lintConfig: unknown,
-  pathIsFile = isFile,
-): string[] =>
-  approvedAdapterPaths(lintConfig)
-    .filter((approvedAdapterPath) => !pathIsFile(approvedAdapterPath))
-    .map(
-      (approvedAdapterPath) =>
-        `${CONFIG_PATH}: approved TypeBox adapter path does not exist: ${approvedAdapterPath}`,
-    );
 
 export const ruleNamesFromSource = (source: string): string[] => {
   const tree = parseSource({ fileName: "plugin.ts", text: source });
@@ -326,8 +267,6 @@ for (const file of pluginFiles) {
     }
   }
 }
-
-errors.push(...approvedAdapterPathErrors(oxlintConfig));
 
 for (const match of readme.matchAll(/\]\(\.\/(?<file>[a-z0-9-]+\.ts)\)/gu)) {
   const file = match.groups?.["file"];

@@ -26,7 +26,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -71,7 +71,7 @@ export const useCompanyFormatLibrary = ({
     queryKey,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"].get({
           query: {
             registry,
@@ -133,7 +133,7 @@ export const useCompanyFormatLibrary = ({
   };
   const create = useMutation({
     mutationFn: async (draft: { name: string; format: string }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"].post({ registry, ...draft }),
       ),
     onSuccess: async (item) => {
@@ -147,7 +147,7 @@ export const useCompanyFormatLibrary = ({
   });
   const setDefault = useMutation({
     mutationFn: async (formatId: NonNullable<typeof selected>["id"] | null) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"].default.post({
           registry,
           formatId,
@@ -162,7 +162,7 @@ export const useCompanyFormatLibrary = ({
   // No permission gate: a personal default changes nothing a colleague sees.
   const setMyDefault = useMutation({
     mutationFn: async (formatId: NonNullable<typeof selected>["id"] | null) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"]["my-default"].post({
           registry,
           formatId,

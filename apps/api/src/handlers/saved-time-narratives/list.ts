@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { savedTimeNarratives } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
@@ -58,9 +63,9 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    limit: t.Optional(tPaginationLimit(100)),
-    cursor: t.Optional(tPaginationCursor()),
+  query: v.object({
+    limit: v.optional(numberFromString(paginationLimitSchema(100))),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 
