@@ -20,6 +20,7 @@ import {
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
   observeShadow,
   reportEmitFailure,
@@ -422,6 +423,10 @@ const captureErrorWithOptions = (
   // Before the throttle: dev sinks are local and unmetered, and a developer
   // reproducing a tight failure loop needs every occurrence.
   logServerDevError(safeError, properties);
+
+  if (grading !== undefined && !failureOutputPolicy(grading.grade).capture) {
+    return;
+  }
 
   const suppressed = admitCapture(
     captureWindowKey(properties),
