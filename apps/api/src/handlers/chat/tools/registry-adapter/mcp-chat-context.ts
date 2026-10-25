@@ -10,18 +10,18 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 
 /**
- * Everything a chat request has already resolved that an `McpRequestContext`
+ * Everything a chat request has already resolved that an `McpRequestResources`
  * needs. These are the same values `getChatTools` threads into the execution
  * tools today (`chat-tools.ts`), just gathered into one shape. Typed against the
  * adapter's own contract (not chat's live types) so this step can widen inputs
  * without touching live chat.
  */
 export type ChatRegistryContextDeps = {
-  testDependencies?: McpRequestContext["testDependencies"];
+  testDependencies?: McpRequestResources["testDependencies"];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   userEmail: string;
@@ -82,7 +82,7 @@ const deriveWorkspaceStatusMap = ({
 
 /**
  * Project a chat request's already-resolved session/workspace state onto the
- * `McpRequestContext` the registry handlers expect. A thin mapping, not a new
+ * `McpRequestResources` the registry handlers expect. A thin mapping, not a new
  * resolution path: no DB query, no membership lookup.
  *
  * Scope/feature gating is deliberately NOT applied here. MCP dispatch gates a
@@ -96,7 +96,7 @@ const deriveWorkspaceStatusMap = ({
  */
 export const buildMcpContextFromChat = (
   deps: ChatRegistryContextDeps,
-): McpRequestContext => {
+): McpRequestResources => {
   const accessibleWorkspaceIds = [...deps.toolWorkspaceIds];
   const workspaceAccessBoundary = createWorkspaceAccessBoundary(
     accessibleWorkspaceIds,

@@ -60,8 +60,8 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -1362,7 +1362,9 @@ describe("confirming a timer in a matter shared by several members", () => {
 
 // ── MCP tools ──────────────────────────────────────────
 
-const mcpContextFor = async (name: ActorName): Promise<McpRequestContext> => {
+const mcpContextFor = async (
+  name: ActorName,
+): Promise<AuthorizedMcpRequestContext> => {
   const actor = actors[name];
   const workspaceIds = [workspaceId];
   const accessibleWorkspaces = workspaceIds.map((id) => ({
@@ -1380,7 +1382,7 @@ const mcpContextFor = async (name: ActorName): Promise<McpRequestContext> => {
   if (Result.isError(snapshot)) {
     throw snapshot.error;
   }
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     featureAccessSnapshot: snapshot.value,
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),

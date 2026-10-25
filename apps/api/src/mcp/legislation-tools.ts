@@ -101,6 +101,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /**
  * The stella legislation corpus as agent-facing tools: find a statute, read
@@ -399,6 +400,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
     },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
@@ -431,6 +433,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -465,6 +468,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       },
     },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -492,6 +496,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",

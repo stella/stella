@@ -81,7 +81,6 @@ import type {
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { plainRecord } from "@/api/mcp/input-schemas";
 import {
@@ -124,6 +123,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type KnowledgeToolName =
   | "list_clauses"
@@ -717,7 +717,7 @@ const readClauseDetail = async ({
   versionId,
 }: {
   clauseId: SafeId<"clause">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   versionId: string | undefined;
 }): Promise<
   TypedMcpToolResponse<v.InferInput<typeof LIST_CLAUSES_PROJECTION>>
@@ -1430,7 +1430,7 @@ const readPlaybookDetail = async ({
   context,
   playbookId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   playbookId: SafeId<"playbookDefinition">;
 }): Promise<
   TypedMcpToolResponse<v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>>
@@ -1798,7 +1798,7 @@ const savePlaybookFailureResult = (error: unknown) => {
   return internalFailureResult(error);
 };
 
-const loadOrgSettings = async (context: McpRequestContext) => {
+const loadOrgSettings = async (context: AuthorizedMcpRequestContext) => {
   const reader = {
     organizationId: context.organizationId,
     userId: context.userId,
@@ -1808,7 +1808,7 @@ const loadOrgSettings = async (context: McpRequestContext) => {
 };
 
 type SavePlaybookUpdateFailureOptions = {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   error: unknown;
   playbookId: ReturnType<typeof brandPersistedPlaybookDefinitionId>;
 };
@@ -1845,7 +1845,7 @@ const readSavePlaybookSources = async ({
   positions,
   stored,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   positions: readonly PlaybookPositionInput[];
   stored: readonly Position[];
 }) => {
@@ -1872,7 +1872,7 @@ const readSavePlaybookSources = async ({
 };
 
 /** A playbook save's ask derivations, admitted inside the tool call's action. */
-const playbookDerivationAdmitter = (context: McpRequestContext) =>
+const playbookDerivationAdmitter = (context: AuthorizedMcpRequestContext) =>
   createModelActionAdmitter({
     organizationId: context.organizationId,
     userId: context.userId,
@@ -2243,6 +2243,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2333,6 +2334,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "pagination dependency; it remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
