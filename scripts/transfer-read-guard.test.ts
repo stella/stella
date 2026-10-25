@@ -569,3 +569,33 @@ test("a relocated contributor read retains its original budget without permittin
     ),
   ).toHaveLength(1);
 });
+
+test("computed keys count only when they name a static timeout or response method", () => {
+  for (const [key, expected] of [
+    ["timeoutMs", ["numeric-timeout", "total-timeout-body"]],
+    ['["timeoutMs"]', ["numeric-timeout", "total-timeout-body"]],
+    ["[timeoutMs]", []],
+  ] as const) {
+    const source = `export const work = async () => {
+      const response = await fetch(url, { ${key}: 1000 });
+      return response?.json();
+    };`;
+    expect(findTransferReads(file, source).map(({ kind }) => kind)).toEqual(
+      expected,
+    );
+  }
+  for (const [member, expected] of [
+    ['["json"]', ["numeric-timeout", "total-timeout-body"]],
+    ["[json]", ["numeric-timeout"]],
+  ] as const) {
+    expect(
+      findTransferReads(
+        file,
+        `export const work = async () => {
+          const response = await fetch(url, { timeoutMs: 1000 });
+          return response${member}();
+        };`,
+      ).map(({ kind }) => kind),
+    ).toEqual(expected);
+  }
+});
