@@ -156,9 +156,9 @@ const isWeekend = (date: string) =>
   Temporal.PlainDate.from(date).dayOfWeek >= 6;
 
 /**
- * A day-before source must hold its publication for `required`: while that day
+ * A rate source must hold its publication for `required`: while that day
  * is ahead, or is a weekday today whose rate is not out yet, the latest
- * observation is the wrong one. ECB and NBP never publish at weekends, so a
+ * observation is the wrong one. ČNB, ECB and NBP never publish at weekends, so a
  * weekend `required` is final at once, and a passed day's gap is final too. A
  * weekday holiday is refused only on the holiday itself, until it has passed.
  */
@@ -223,6 +223,19 @@ const fetchCnbRate = async ({
   if (!effective || !row[2] || !row[4] || !/^\d+$/u.test(row[2])) {
     return malformed("ČNB returned a malformed daily-rate file");
   }
+  const effectiveDate = effective.split(".").toReversed().join("-");
+  // ČNB methodology: a rate announced on a working day (after 14:30) applies
+  // to that day and the non-working days after it; before then, today's rate
+  // does not exist yet and the file still carries the previous one.
+  if (
+    publicationPending({
+      required: referenceDate,
+      latest: effectiveDate,
+      today,
+    })
+  ) {
+    return notPublished(referenceDate);
+  }
   const normalized = normalizeRate({
     quote: row[4].replace(",", "."),
     foreignUnits: Number(row[2]),
@@ -234,7 +247,7 @@ const fetchCnbRate = async ({
   return Result.ok({
     rate: normalized.value,
     source: "CNB",
-    effectiveDate: effective.split(".").toReversed().join("-"),
+    effectiveDate,
     sourceReference: null,
   });
 };

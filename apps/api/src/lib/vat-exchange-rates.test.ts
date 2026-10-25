@@ -162,6 +162,34 @@ describe("official VAT exchange rates", () => {
     },
   );
 
+  test("CZ: before today's ČNB publication, a tax point today waits instead of taking yesterday's rate", async () => {
+    const pending = await fetchVatExchangeRate({
+      country: "CZ",
+      currency: "EUR",
+      referenceDate: "2026-10-26",
+      today: "2026-10-26",
+      fetcher: fixtureFetch(
+        "23.10.2026 #205\nzemě|měna|množství|kód|kurz\nEMU|euro|1|EUR|24,330",
+      ),
+    });
+    expect(Result.isError(pending) && pending.error).toBeInstanceOf(
+      VatRateNotPublishedError,
+    );
+    // A Sunday tax point takes Friday's rate, which ČNB applies to the weekend.
+    const weekend = valueOf(
+      await fetchVatExchangeRate({
+        country: "CZ",
+        currency: "EUR",
+        referenceDate: "2026-10-25",
+        today: "2026-10-25",
+        fetcher: fixtureFetch(
+          "23.10.2026 #205\nzemě|měna|množství|kód|kurz\nEMU|euro|1|EUR|24,330",
+        ),
+      }),
+    );
+    expect(weekend.effectiveDate).toBe("2026-10-23");
+  });
+
   test("SK: on a Sunday, a Monday tax point takes Friday's ECB rate at once", async () => {
     // Required: Sunday 2026-10-25, a non-publication day; Friday's rate is final.
     const rate = valueOf(
