@@ -1355,7 +1355,7 @@ describe("documents.compare capability contract", () => {
         validate_only: true,
       },
       context: createContext({
-        credentialPermissions: {},
+        credentialPermissions: { searchHistory: ["read"] },
         grantedScopes: ["stella:documents_write"],
         scopedDb: database.scopedDb,
         workspaceIds: [MATTER_ID],
