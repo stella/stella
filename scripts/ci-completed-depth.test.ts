@@ -1786,6 +1786,7 @@ type PatchIdStepOptions = {
   head: string;
   groupRef?: string;
   targetBase?: string;
+  retryScript?: string;
 };
 const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
 const runPatchIdStep = ({
@@ -2154,8 +2155,8 @@ test("armed proof counts only when ci-result uploaded it after every other job",
 });
 
 test("armed evidence requires one successful publisher of its exact payload", async () => {
-  const group = (options: LookupOptions = {}) =>
-    decide({
+  const group = async (options: LookupOptions = {}) =>
+    await decide({
       event: "merge_group",
       queueDepth: "thin",
       artifacts: [armedArtifact],
