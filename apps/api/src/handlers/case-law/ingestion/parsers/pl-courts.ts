@@ -2,6 +2,7 @@
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 // parser-output-unchanged: the `superscripts` input is opt-in and only the Supreme Court reader passes it; every other caller parses `<sup>` as before.
+// parser-output-unchanged: [cz-uohs] uses only the PDF line assembly of pl-sn and never calls this HTML reader, so its output is unchanged.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -15,7 +16,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
@@ -28,6 +29,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -244,16 +246,116 @@ const textInline = (text: string, anonymized = false): Inline[] =>
       ]
     : [];
 
+/**
+ * An element's inlines as a browser renders them. The source's own line
+ * breaks and indentation are markup: a word processor's export wraps every
+ * paragraph at a fixed width, and those wraps must not reach the text.
+ */
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
   state: ParserState,
 ): Inline[] =>
-  walkInlinesShared($, el, {
-    sanitizeHref: sanitizeUrl,
-    anonymized: false,
-    superscripts: state.superscripts,
-  });
+  collapseHtmlWhitespace(
+    walkInlinesShared($, el, {
+      sanitizeHref: sanitizeUrl,
+      anonymized: false,
+      superscripts: state.superscripts,
+    }),
+  );
+
+const alphabeticOrdinal = (ordinal: number): string => {
+  let rest = ordinal;
+  let text = "";
+  while (rest > 0) {
+    rest -= 1;
+    text = String.fromCodePoint(97 + (rest % 26)) + text;
+    rest = Math.floor(rest / 26);
+  }
+  return text;
+};
+
+const ROMAN_DIGITS = [
+  [1000, "M"],
+  [900, "CM"],
+  [500, "D"],
+  [400, "CD"],
+  [100, "C"],
+  [90, "XC"],
+  [50, "L"],
+  [40, "XL"],
+  [10, "X"],
+  [9, "IX"],
+  [5, "V"],
+  [4, "IV"],
+  [1, "I"],
+] as const;
+
+const romanOrdinal = (ordinal: number): string => {
+  let rest = ordinal;
+  let text = "";
+  for (const [value, digits] of ROMAN_DIGITS) {
+    while (rest >= value) {
+      text += digits;
+      rest -= value;
+    }
+  }
+  return text;
+};
+
+/** `<ol type>` values and how each counts. */
+const ORDERED_LIST_STYLE = {
+  "1": String,
+  a: alphabeticOrdinal,
+  A: (ordinal: number): string =>
+    alphabeticOrdinal(ordinal).toLocaleUpperCase("pl-PL"),
+  i: (ordinal: number): string => romanOrdinal(ordinal).toLowerCase(),
+  I: romanOrdinal,
+} as const;
+
+const ORDERED_LIST_STYLE_KEYS = ["1", "a", "A", "i", "I"] as const;
+
+const integerAttribute = (value: string | undefined): number | undefined => {
+  if (value === undefined || !/^\s*-?\d+\s*$/u.test(value)) {
+    return undefined;
+  }
+  return Number.parseInt(value, 10);
+};
+
+/**
+ * The number a browser prints before an `<li>` of an `<ol>`: the list's
+ * `start` (or its length, `reversed`), stepped once per item, reset by an
+ * item's own `value`, set in the list's `type`. A list item outside an
+ * ordered list prints no number.
+ */
+const orderedListMarker = (item: Element): string | undefined => {
+  const list = item.parent;
+  if (list === null || !isTag(list) || list.tagName.toLowerCase() !== "ol") {
+    return undefined;
+  }
+  const items = list.children.filter(
+    (child): child is Element =>
+      isTag(child) && child.tagName.toLowerCase() === "li",
+  );
+  const reversed = list.attribs["reversed"] !== undefined;
+  const step = reversed ? -1 : 1;
+  let ordinal =
+    integerAttribute(list.attribs["start"]) ?? (reversed ? items.length : 1);
+  for (const sibling of items) {
+    ordinal = integerAttribute(sibling.attribs["value"]) ?? ordinal;
+    if (sibling === item) {
+      break;
+    }
+    ordinal += step;
+  }
+  const type = list.attribs["type"] ?? "1";
+  const style = includes(ORDERED_LIST_STYLE_KEYS, type)
+    ? ORDERED_LIST_STYLE[type]
+    : ORDERED_LIST_STYLE["1"];
+  // Alphabetic and Roman counting has no zero or negatives; a browser prints
+  // those in decimal.
+  return `${ordinal > 0 ? style(ordinal) : String(ordinal)}.`;
+};
 
 const inferParagraphRole = (
   state: ParserState,
@@ -343,6 +445,7 @@ const parseParagraphElement = (
   $: cheerio.CheerioAPI,
   state: ParserState,
   node: cheerio.Cheerio<AnyNode>,
+  marker?: string,
 ): void => {
   const inlines = walkInlines($, node, state);
   const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
@@ -355,6 +458,8 @@ const parseParagraphElement = (
     return;
   }
 
+  // The role is read from the item's own words; the number its list prints
+  // before it is the list's, not a holding marker the item states.
   const role = inferParagraphRole(
     state,
     plainText,
@@ -365,7 +470,20 @@ const parseParagraphElement = (
     state.section = "holding";
   }
 
-  pushParagraph(state, plainText, inlines, role);
+  if (marker === undefined) {
+    pushParagraph(state, plainText, inlines, role);
+    return;
+  }
+  const marked: Inline[] = [];
+  appendTextInline(marked, `${marker} `);
+  for (const inline of inlines) {
+    if (inline.type === "text" && inline.anonymized !== true) {
+      appendTextInline(marked, inline.text);
+    } else {
+      marked.push(inline);
+    }
+  }
+  pushParagraph(state, `${marker} ${plainText}`, marked, role);
 };
 
 const parseTableElement = (
@@ -414,17 +532,13 @@ const parseChildren = (
 ): void => {
   root.contents().each((_, node) => {
     if (isText(node)) {
-      const text = normalizeWhitespace(node.data);
+      const inlines = collapseHtmlWhitespace(textInline(node.data));
+      const text = normalizeWhitespace(inlinesToPlainText(inlines));
       if (!text) {
         return;
       }
 
-      pushParagraph(
-        state,
-        text,
-        textInline(text),
-        inferParagraphRole(state, text),
-      );
+      pushParagraph(state, text, inlines, inferParagraphRole(state, text));
       return;
     }
 
@@ -440,8 +554,13 @@ const parseChildren = (
       return;
     }
 
-    if (tag === "p" || tag === "li") {
+    if (tag === "p") {
       parseParagraphElement($, state, $node);
+      return;
+    }
+
+    if (tag === "li") {
+      parseParagraphElement($, state, $node, orderedListMarker(node));
       return;
     }
 

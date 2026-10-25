@@ -254,6 +254,132 @@ describe("parsePlDecisionContent", () => {
   });
 });
 
+describe("markup whitespace", () => {
+  const ADAPTER_FIXTURES = new URL(
+    "../adapters/__fixtures__/",
+    import.meta.url,
+  );
+  const gunzipText = async (name: string): Promise<string> =>
+    new TextDecoder().decode(
+      Bun.gunzipSync(
+        new Uint8Array(
+          await Bun.file(new URL(name, ADAPTER_FIXTURES)).arrayBuffer(),
+        ),
+      ),
+    );
+  // Captured HTML of the publishers this reader serves, each pretty-printed
+  // or wrapped by its exporter.
+  const CAPTURED_HTML = [
+    "pl-ncourt-content-155020000001003_II_Ca_000236_2018_Uz_2018-03-22_001.html.gz",
+    "pl-ncourt-content-151020200002521_V_P_000335_2013_Uz_2015-11-02_001.html.gz",
+    "pl-kio-content-30308.html.gz",
+  ];
+
+  const leavesOf = (blocks: readonly Block[]): string[] => {
+    const leaves: string[] = [];
+    const walk = (inlines: readonly Inline[]): void => {
+      for (const inline of inlines) {
+        if (inline.type === "text") {
+          leaves.push(inline.text);
+        } else if (hasInlineChildren(inline)) {
+          walk(inline.children);
+        }
+      }
+    };
+    for (const block of blocks) {
+      if (block.type === "table") {
+        for (const cell of block.rows.flat()) {
+          walk(cell.inlines);
+        }
+      } else if ("inlines" in block) {
+        walk(block.inlines);
+      }
+    }
+    return leaves;
+  };
+
+  test.each(CAPTURED_HTML)(
+    "%s: no line break, tab or run of spaces of the markup reaches the text",
+    async (name) => {
+      const html = await gunzipText(name);
+      // The capture reaches the fault: whitespace runs inside its elements.
+      expect(html).toMatch(/[^\s>][ \t]*\n\s*[^\s<]|[^\s>] {2,}[^\s<]/u);
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(html, { decisionType: undefined }),
+      );
+      const leaves = leavesOf(documentAst.blocks);
+      expect(leaves.length).toBeGreaterThan(0);
+      expect(leaves.filter((text) => /[\t\n\r\f]| {2}/u.test(text))).toEqual(
+        [],
+      );
+    },
+  );
+
+  test("a source line break inside a paragraph reads as a space", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        '<p>Przewodniczący: <span class="underline">\n<!-- -->SSO A. B.</span>\n</p>',
+        {
+          decisionType: undefined,
+        },
+      ),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Przewodniczący: SSO A. B.",
+    ]);
+  });
+});
+
+describe("ordered list items print the number a browser gives them", () => {
+  const itemsOf = (html: string): string[] =>
+    parsePlDecisionContent(
+      baseInput(html, { decisionType: undefined }),
+    ).documentAst.blocks.map((block) => block.plainText);
+
+  test.each([
+    ["<ol><li>a</li><li>b</li></ol>", ["1. a", "2. b"]],
+    ['<ol start="4"><li>a</li><li>b</li></ol>', ["4. a", "5. b"]],
+    [
+      '<ol><li>a</li><li value="7">b</li><li>c</li></ol>',
+      ["1. a", "7. b", "8. c"],
+    ],
+    [
+      "<ol reversed><li>a</li><li>b</li><li>c</li></ol>",
+      ["3. a", "2. b", "1. c"],
+    ],
+    ['<ol type="a"><li>a</li><li>b</li></ol>', ["a. a", "b. b"]],
+    ['<ol type="A" start="27"><li>a</li></ol>', ["AA. a"]],
+    ['<ol type="i" start="4"><li>a</li></ol>', ["iv. a"]],
+    ['<ol type="I" start="9"><li>a</li><li>b</li></ol>', ["IX. a", "X. b"]],
+    ['<ol type="I" start="0"><li>a</li></ol>', ["0. a"]],
+    ["<ol><li>a</li><li> </li><li>c</li></ol>", ["1. a", "3. c"]],
+    ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
+  ])("%s", (html, expected) => {
+    expect(itemsOf(html)).toEqual(expected);
+  });
+
+  test("the number does not decide the item's role", () => {
+    // A list in the reasons stays argumentation; a number the item states
+    // itself would read as an operative point.
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<h2>UZASADNIENIE</h2><ol><li>Pytanie pierwsze?</li></ol>"),
+    );
+    expect(documentAst.blocks.at(-1)).toMatchObject({
+      plainText: "1. Pytanie pierwsze?",
+      role: "argumentation",
+    });
+    const preamble = parsePlDecisionContent(
+      baseInput("<ol><li>Wnioskodawca zapytał.</li></ol>", {
+        decisionType: undefined,
+      }),
+    );
+    expect(preamble.documentAst.blocks.at(-1)).toMatchObject({
+      plainText: "1. Wnioskodawca zapytał.",
+      role: "intro",
+    });
+  });
+});
+
 describe("table caption retention", () => {
   test("keeps caption text once before its row in source order", () => {
     const { documentAst } = parsePlDecisionContent(
