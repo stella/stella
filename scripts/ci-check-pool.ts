@@ -417,22 +417,27 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
-// A nested group would end the check's own group in the job log.
-const NESTED_GROUP = /^(::(?:end)?group::|##\[(?:end)?group\])/gmu;
+// The runner reads a workflow command after leading whitespace, so a command
+// is neutralized by removing it or by a non-blank prefix, never by indenting.
+// A nested group would end the check's own group in the job log: its title
+// stays as a plain line (Bun's per-file header) and its end is dropped.
+const NESTED_GROUP_START = /^[ \t]*(?:::group::|##\[group\])/gmu;
+const NESTED_GROUP_END =
+  /^[ \t]*(?:::endgroup::|##\[endgroup\]).*(?:\r?\n|$)/gmu;
 // An error command printed by a check that passed comes from a fixture or a
 // refusal the check exercises, never from this run's failure; left active it
 // becomes a job annotation that failure digests then report as the cause.
-const ERROR_COMMAND = /^(::error\b)/gmu;
+const ERROR_COMMAND = /^([ \t]*(?:::error\b|##\[error\]))/gmu;
 
 /** A check's log as the job log shows it, so the check cannot drive the job's commands. */
 export const checkLogText = (
   output: string,
   outcome: CheckResult["outcome"],
 ): string => {
-  const grouped = output.replace(NESTED_GROUP, " $1");
-  return outcome === "failure"
-    ? grouped
-    : grouped.replace(ERROR_COMMAND, " $1");
+  const flat = output
+    .replace(NESTED_GROUP_END, "")
+    .replace(NESTED_GROUP_START, "");
+  return outcome === "failure" ? flat : flat.replace(ERROR_COMMAND, "| $1");
 };
 const escapeProperty = (value: string) =>
   value
@@ -568,11 +573,9 @@ const writeOut = (text: string) => {
       offset += writeSync(1, bytes, offset);
     } catch (error) {
       // A non-blocking pipe that is full: wait briefly and retry.
-      if (!(
-        error instanceof Error &&
-        "code" in error &&
-        error.code === "EAGAIN"
-      )) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "EAGAIN")
+      ) {
         throw error;
       }
       Atomics.wait(pause, 0, 0, 5);
