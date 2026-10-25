@@ -484,9 +484,12 @@ const startAuthorization = async (
     scope,
   });
   const authorized = await getAuth().handler(
-    new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${query}`, {
-      headers: { cookie: browser.cookieHeader() },
-    }),
+    new Request(
+      `${getAuthEndpointUrl("oauth2/authorize")}?${query.toString()}`,
+      {
+        headers: { cookie: browser.cookieHeader() },
+      },
+    ),
   );
   expect(authorized.status).toBe(302);
   const location = new URL(

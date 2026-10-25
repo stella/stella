@@ -149,9 +149,14 @@ const ERROR_CASES = [
     destination: "server",
   },
   {
+    // Unoffered scopes are dropped, so the remaining invalid_scope is a held
+    // scope the requested resource does not allow.
     name: "invalid scope",
     error: "invalid_scope",
-    changes: { scope: "unknown:scope" },
+    changes: {
+      scope: "stella:documents_write",
+      resource: getMcpResourceUrl("law"),
+    },
   },
   {
     name: "claims without identity scope",

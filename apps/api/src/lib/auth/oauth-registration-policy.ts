@@ -264,8 +264,8 @@ export const grantableScopes = (
   policy: OAuthScopePolicyContext,
 ): string[] => {
   const offered = client.scopes ?? policy.providerScopes;
-  const kept = requested?.filter((scope) => offered.includes(scope)) ?? [];
-  const candidates = kept.length > 0 ? kept : offered;
+  const kept = requested?.filter((scope) => offered.includes(scope));
+  const candidates = kept !== undefined && kept.length > 0 ? kept : offered;
   const mayHoldElevated =
     Boolean(client.clientDiscoveryId) &&
     isVerifiedClientMetadataDocument(client.clientId, policy.verifiedOrigins);
