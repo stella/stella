@@ -249,6 +249,7 @@ export const TAGGED_FAILURE_REASON = {
   InvoicingInputError: "tagged_failure",
   JustificationDataError: "tagged_failure",
   JustificationTextError: "tagged_failure",
+  KsefError: "tagged_failure",
   LatestDecisionsError: "tagged_failure",
   LegacyChatContentError: "tagged_failure",
   LegacyWordParseError: "tagged_failure",
