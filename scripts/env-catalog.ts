@@ -1599,14 +1599,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
-  // Tailwind lint worker liveness tuning. The test hooks are confined to the
-  // plugin regression suite and are inert unless explicitly set.
+  // Tailwind lint cache configuration.
   "OXLINT_TAILWINDCSS_CACHE_DIR",
-  "OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS",
-  "OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_CACHE_READ_ONLY",
   "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
-  "OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS",
-  "OXLINT_TAILWINDCSS_WORKER_TEST_HOOK",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
@@ -1649,9 +1645,13 @@ export const TOOLING_ENV_KEYS = new Set([
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_GATE_DIR",
-  // Release pull request refresh: open release numbers and the release to update.
+  // Release pull request refresh: open release numbers, the release to update,
+  // its branch, whether main merges in, and the versioned staging tip.
   "RELEASE_NUMBERS",
   "RELEASE_PULL_REQUEST",
+  "RELEASE_BRANCH",
+  "MERGE_MAIN",
+  "STAGED_HEAD",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",

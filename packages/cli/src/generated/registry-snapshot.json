@@ -3273,7 +3273,7 @@
       "scope": "read"
     },
     "name": "lookup_business_registry",
-    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
+    "description": "Look up a company in a public business register. Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where supported; KRS matches are verified. Result IDs belong to the external registry, not stella's contact directory. Create a contact with save_contact before using read_contact.",
     "inputSchema": {
       "type": "object",
       "required": ["registry", "query"],
@@ -3301,7 +3301,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Canonical identifier (e.g. company number, VAT number) or company name"
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)"
         },
         "detail": {
           "enum": ["standard", "full"],

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import statuteFixture from "./__fixtures__/cz-262-2006-section-51.json";
+import { parseDocumentAst } from "./document-ast";
 import type { Block, HeadingLevel } from "./document-ast";
 import { headingPathsByAnchor } from "./heading-path";
 
@@ -127,4 +129,62 @@ test("heading paths preserve whitespace and cover table and image anchors", () =
   for (const block of blocks.slice(1)) {
     expect(paths.get(block.anchorId)).toEqual([{ anchorId: "heading", title }]);
   }
+});
+
+test("blocks sharing a heading stack share one frozen path", () => {
+  const paths = headingPathsByAnchor([
+    paragraph("intro-a"),
+    paragraph("intro-b"),
+    heading("outer", 1, "Odůvodnění"),
+    paragraph("outer-a"),
+    paragraph("outer-b"),
+    heading("inner", 2, "Posouzení"),
+    paragraph("inner-a"),
+    paragraph("inner-b"),
+    heading("sibling", 2, "Závěr"),
+    paragraph("sibling-a"),
+    paragraph("sibling-b"),
+  ]);
+  expect(paths.get("intro-a")).toBe(paths.get("intro-b"));
+  expect(paths.get("intro-a")).toBe(paths.get("outer"));
+  expect(paths.get("outer-a")).toBe(paths.get("outer-b"));
+  expect(paths.get("outer-a")).toBe(paths.get("inner"));
+  expect(paths.get("inner-a")).toBe(paths.get("inner-b"));
+  expect(paths.get("sibling-a")).toBe(paths.get("sibling-b"));
+  expect(paths.get("sibling-a")).not.toBe(paths.get("inner-a"));
+  for (const path of paths.values()) {
+    expect(Object.isFrozen(path)).toBe(true);
+    for (const entry of path) {
+      expect(Object.isFrozen(entry)).toBe(true);
+    }
+  }
+});
+
+test("parsed statute wording carries the publisher's Část Hlava Díl and provision path", () => {
+  const ast = parseDocumentAst(statuteFixture);
+  expect(ast).not.toBeNull();
+  if (ast === null) {
+    throw new Error("Statute document fixture does not parse");
+  }
+  const wording = ast.blocks.find(
+    (block) => block.anchorId === "par_51-odst_1",
+  );
+  expect(wording?.type).toBe("paragraph");
+  expect(wording?.plainText).toStartWith("(1) Byla-li dána výpověď");
+  const paths = headingPathsByAnchor(ast.blocks);
+  const ancestors = [
+    { anchorId: "cast_druha", title: "ČÁST DRUHÁ\nPRACOVNÍ POMĚR" },
+    { anchorId: "hlava_iv", title: "HLAVA IV\nSKONČENÍ PRACOVNÍHO POMĚRU" },
+    {
+      anchorId: "dil_3",
+      title: "Díl 3\nVýpověď, výpovědní doba a výpovědní důvody",
+    },
+    { anchorId: "oddil_1", title: "Oddíl 1\nVýpověď" },
+  ];
+  expect(paths.get("par_51")).toEqual(ancestors);
+  expect(paths.get("par_51-odst_1")).toEqual([
+    ...ancestors,
+    { anchorId: "par_51", title: "§ 51" },
+  ]);
+  expect(paths.get("par_51-odst_3")).toBe(paths.get("par_51-odst_1"));
 });
