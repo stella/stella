@@ -4,8 +4,10 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   assemblePlSnParagraphs,
+  extractPlPdfSeparatedContent,
   extractPlSnLines,
-  PL_PDF_PAGE_FURNITURE,
+  parsePlSnDecisionPdf,
+  PL_PDF_PARAGRAPH_START,
   plSnParagraphsToHtml,
   withoutRaisedReferenceMarkers,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
@@ -192,11 +194,12 @@ describe("reading recorded PDF lines", () => {
     );
   });
 
-  test("the opt-in reader retains the UOKiK footnote zone as typed lines", async () => {
+  test("the separated reader retains the UOKiK footnote zone as typed lines", async () => {
     const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
-    const lines = await extractPlSnLines(bytes, undefined, {
-      pageFurniture: PL_PDF_PAGE_FURNITURE.SEPARATE,
-    });
+    const { notes: lines } = await extractPlPdfSeparatedContent(
+      bytes,
+      PL_PDF_PARAGRAPH_START.INDENT,
+    );
     const notes = lines.filter(
       (line): line is PlSnTextLine =>
         line.type === "text" && line.footnote !== undefined,
@@ -209,5 +212,92 @@ describe("reading recorded PDF lines", () => {
     expect(notes.every(({ footnote }) => footnote?.label.length !== 0)).toBe(
       true,
     );
+  });
+});
+
+const SN_FIXTURE = (name: string): URL =>
+  new URL(`__fixtures__/${name}.pdf`, import.meta.url);
+
+/** The decision's stored paragraphs, as the reader and search see them. */
+const supremeCourtParagraphs = async (
+  name: string,
+  caseNumber: string,
+): Promise<string[]> => {
+  const { fulltext } = await parsePlSnDecisionPdf({
+    pdfBytes: new Uint8Array(await Bun.file(SN_FIXTURE(name)).arrayBuffer()),
+    caseNumber,
+    court: "Sąd Najwyższy",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: undefined,
+    documentUrl: undefined,
+    documentId: name,
+  });
+  return fulltext.split("\n\n");
+};
+
+describe("reading recorded Supreme Court PDFs", () => {
+  test("an operative point set as an indented block stays one paragraph", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-i-csk-2892-23",
+      "I CSK 2892/23",
+    );
+
+    expect(paragraphs).toContain(
+      "1. odmawia przyjęcia skargi kasacyjnej do rozpoznania;",
+    );
+    expect(
+      paragraphs.find((paragraph) => paragraph.startsWith("2. zasądza od")),
+    ).toEndWith("złotych kosztów postępowania kasacyjnego.");
+  });
+
+  test("the running header is dropped and a paragraph runs on over the page break", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-i-csk-2892-23",
+      "I CSK 2892/23",
+    );
+
+    expect(
+      paragraphs.filter((paragraph) => /I CSK 2892\/23\s+\d/u.test(paragraph)),
+    ).toEqual([]);
+    expect(
+      paragraphs.some((paragraph) =>
+        paragraph.includes(
+          "sprowadzają się do polemiki z zaskarżonym orzeczeniem, nie zaś wykazania",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test("a hanging-indent list point stays whole and opens its own paragraph", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-iii-kk-499-19",
+      "III KK 499/19",
+    );
+
+    expect(
+      paragraphs.find((paragraph) => paragraph.startsWith("2. czynów")),
+    ).toStartWith(
+      "2. czynów zarzucanych mu w punktach 2-9 oskarżenia, stanowiących występki z art. 286 § 1 k.k. i ustalając",
+    );
+    expect(
+      paragraphs.some((paragraph) => /;\s*2\. czynów/u.test(paragraph)),
+    ).toBe(false);
+  });
+
+  test("a sentence ending near the margin still ends its paragraph", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-sno-17-17",
+      "SNO 17/17",
+    );
+
+    expect(paragraphs).toContain(
+      "Zażalenia są niezasadne i jako takie nie zasługują na uwzględnienie.",
+    );
+    expect(
+      paragraphs.some((paragraph) =>
+        paragraph.startsWith("Istotnie, jak argumentuje się w tych środkach"),
+      ),
+    ).toBe(true);
   });
 });
