@@ -1640,6 +1640,11 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
+    "id": "no-real-time-wait::scripts/oxlint-tailwind-design-system.test.ts::<module>::Bun.sleep",
+    "count": 1,
+    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
+  },
+  {
     "id": "no-real-time-wait::scripts/pre-push-affected.test.ts::<module>::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -4932,11 +4937,6 @@
   {
     "id": "no-unreasoned-timeout::scripts/oxlint-safe-fixers.test.ts::<module>::setDefaultTimeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::scripts/oxlint-tailwind-design-system.test.ts::<module>::test timeout",
-    "count": 7,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
