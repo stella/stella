@@ -55,8 +55,7 @@ export type PlSnLine =
       readonly runs: readonly PlSnRun[];
       readonly indented: boolean;
       readonly footnote?:
-        | { readonly label: string; readonly noteId: string }
-        | undefined;
+        { readonly label: string; readonly noteId: string } | undefined;
     }
   | { readonly type: "blank" };
 
