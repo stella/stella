@@ -72,10 +72,11 @@ const requiredAgeSource = (
 };
 
 /**
- * How many queued rows one report reads, at most. The report is a gauge: past
- * this many the backlog is reported as this many, already far past any
- * threshold a reader acts on, and the read stays a bounded walk of the queue
- * index however large the queue grows.
+ * How many queued rows one report reads, at most, across every generation it
+ * measures. The report is a gauge: past this many the backlog is reported as
+ * this many, already far past any threshold a reader acts on, and the read
+ * stays a bounded walk of the queue index however large the queue grows and
+ * however many jurisdictions were moved to another generation.
  */
 export const CASE_LAW_FRESHNESS_SCAN_CAP = 10_000;
 
@@ -83,8 +84,9 @@ export const CASE_LAW_FRESHNESS_SCAN_CAP = 10_000;
  * The serving generation's unpublished backlog: its projection states that
  * still owe the engine work, walked in the projector's own queue order off
  * `corpus_index_projection_states_pending_idx` (the predicate is the index's
- * own, so the plan never falls back to the table), and capped one past the
- * cap so a full window is distinguishable from an exact count.
+ * own, so the plan never falls back to the table), and limited to one past
+ * the rows the report may still read, so a full window is distinguishable
+ * from an exact count.
  *
  * The states queue is the whole backlog. The projector reserves a revision
  * only for a state it claimed from this queue, and the state leaves the queue
@@ -92,10 +94,11 @@ export const CASE_LAW_FRESHNESS_SCAN_CAP = 10_000;
  * counted through its state. Cleanup of a superseded revision changes nothing
  * readers are served; the convergence status reports it.
  */
-export const caseLawFreshnessPendingStatesQuery = (target: {
-  family: CorpusFamily;
-  generation: string;
-}) => {
+export const caseLawFreshnessPendingStatesQuery = (
+  target: { family: CorpusFamily; generation: string },
+  /** Rows the report may still read; the walk reads at most one more. */
+  remaining: number = CASE_LAW_FRESHNESS_SCAN_CAP,
+) => {
   const states = corpusIndexProjectionStates;
   return sql`
     SELECT count(*)::int AS count,
@@ -113,7 +116,7 @@ export const caseLawFreshnessPendingStatesQuery = (target: {
         AND ${corpusIndexProjectionNeedsWork(states)}
       ORDER BY coalesce(${states.retryNotBefore}, ${states.updatedAt}),
         ${states.entityId}
-      LIMIT ${CASE_LAW_FRESHNESS_SCAN_CAP + 1}
+      LIMIT ${remaining + 1}
     ) AS pending
   `;
 };
@@ -132,46 +135,49 @@ const NO_BACKLOG: GenerationBacklog = { count: 0, age: 0, ageSource: "none" };
  * to, the set the read path resolves (`readServedCorpusIndexGenerationsTx`).
  * A building or retired generation nobody reads is not counted; counting
  * every generation's history is what made the report read the projection
- * tables whole. Each generation is one bounded walk of its queue, so the
- * report reads at most the cap per served generation.
+ * tables whole.
+ *
+ * One cap for the whole report: the generations are walked in turn, each
+ * limited to what the cap leaves, and the walk stops at the first one that
+ * fills it. A run reads at most `CASE_LAW_FRESHNESS_SCAN_CAP + 1` queue rows
+ * however many generations are served. `rowsRead` is that number.
  */
-const readServedBacklog = async (
+export const readServedCaseLawBacklogTx = async (
   tx: Transaction,
   generations: readonly string[],
-): Promise<GenerationBacklog & { capped: boolean }> => {
-  const backlogs = await Promise.all(
-    generations.map(async (generation): Promise<GenerationBacklog> => {
-      const row = executedRows(
-        // db-await-in-loop: one bounded walk per served generation; a family has the serving generation plus a handful of flipped ones
-        await tx.execute(
-          caseLawFreshnessPendingStatesQuery({
-            family: "case_law",
-            generation,
-          }),
-        ),
-      ).at(0);
-      return {
-        count: requiredNumber(row, "count"),
-        age: requiredNumber(row, "age"),
-        ageSource: requiredAgeSource(row, "age_source"),
-      };
-    }),
-  );
+): Promise<GenerationBacklog & { capped: boolean; rowsRead: number }> => {
   let count = 0;
   let oldest = NO_BACKLOG;
-  for (const backlog of backlogs) {
+  for (const generation of generations) {
+    const remaining = CASE_LAW_FRESHNESS_SCAN_CAP - count;
+    const row = executedRows(
+      // db-await-in-loop: ordered on purpose, each walk is limited by what the previous ones left of the one cap
+      await tx.execute(
+        caseLawFreshnessPendingStatesQuery(
+          { family: "case_law", generation },
+          remaining,
+        ),
+      ),
+    ).at(0);
+    const backlog: GenerationBacklog = {
+      count: requiredNumber(row, "count"),
+      age: requiredNumber(row, "age"),
+      ageSource: requiredAgeSource(row, "age_source"),
+    };
     count += backlog.count;
     if (backlog.ageSource !== "none" && backlog.age >= oldest.age) {
       oldest = backlog;
+    }
+    if (count > CASE_LAW_FRESHNESS_SCAN_CAP) {
+      break;
     }
   }
   return {
     count,
     age: oldest.age,
     ageSource: oldest.ageSource,
-    capped:
-      count > CASE_LAW_FRESHNESS_SCAN_CAP ||
-      backlogs.some((backlog) => backlog.count > CASE_LAW_FRESHNESS_SCAN_CAP),
+    capped: count > CASE_LAW_FRESHNESS_SCAN_CAP,
+    rowsRead: count,
   };
 };
 
@@ -209,7 +215,7 @@ export const readCaseLawFreshnessReportTx = async (
   const backlog =
     served === null
       ? { ...NO_BACKLOG, capped: false }
-      : await readServedBacklog(tx, [
+      : await readServedCaseLawBacklogTx(tx, [
           ...new Set([
             served.serving.generation,
             ...served.flipped.map(([, generation]) => generation),

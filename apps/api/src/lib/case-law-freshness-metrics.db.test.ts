@@ -24,6 +24,7 @@ import {
 import {
   CASE_LAW_FRESHNESS_SCAN_CAP,
   readCaseLawFreshnessReportTx,
+  readServedCaseLawBacklogTx,
 } from "@/api/lib/observability/case-law-freshness-metrics";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -32,6 +33,7 @@ const GENERATION = "case_law_v5";
 const OTHER_GENERATION = "case_law_v6";
 /** A partial generation: it holds Czech decisions only. */
 const PARTIAL_GENERATION = "case_law_v9";
+const THIRD_GENERATION = "case_law_v7";
 const FLIPPED_PENDING_ID = "0198e331-e578-7000-c000-000000000001";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OLDEST_PENDING_ID = "0198e331-e578-7000-b000-000000000001";
@@ -327,4 +329,45 @@ test("a queue past the scan cap reports the cap and says so", async () => {
   // The month-old state is now beyond the window the report reads: the age
   // is reported as unknown, never as the window's younger oldest.
   expect(report.oldestUnpublishedAge).toEqual({ type: "incomplete" });
+});
+
+test("one cap covers every served generation", async () => {
+  // Three generations, each under the cap and over it together.
+  const perGeneration = 4000;
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: THIRD_GENERATION,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v7,
+    ),
+    status: "building",
+  });
+  for (const [index, generation] of [
+    OTHER_GENERATION,
+    PARTIAL_GENERATION,
+    THIRD_GENERATION,
+  ].entries()) {
+    // db-await-in-loop: three fixture generations
+    await db.execute(sql`
+      INSERT INTO ${corpusIndexProjectionStates}
+        (family, generation, entity_id, desired_action, desired_epoch)
+      SELECT 'case_law', ${generation},
+        ('0198e331-e578-7000-d00' || ${String(index)} || '-' || lpad(n::text, 12, '0'))::uuid,
+        'erase', 1
+      FROM generate_series(1, ${perGeneration}) AS generated(n)
+    `);
+  }
+  const backlog = await db.transaction(
+    async (tx) =>
+      await readServedCaseLawBacklogTx(asTestRaw<Transaction>(tx), [
+        OTHER_GENERATION,
+        PARTIAL_GENERATION,
+        THIRD_GENERATION,
+      ]),
+  );
+
+  expect(backlog.capped).toBe(true);
+  // Every walk is limited by what the earlier ones left of the one cap.
+  expect(backlog.rowsRead).toBe(CASE_LAW_FRESHNESS_SCAN_CAP + 1);
 });
