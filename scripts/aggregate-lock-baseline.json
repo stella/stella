@@ -115,12 +115,6 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "05923ddd5f8106e51039b9d903d87139095d4e99e30b8ca54ff3b2c9858ab6f4",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "0a7aee4081f07cd35a056cb0084a95707ba41bcc2afd246684852d091b2f9272",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -166,6 +160,12 @@
     "fingerprint": "16df1e7d9316f44be06f9c0018148e25b7b8449a66ce30261538c6071412f95f",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "20d8754dafa48dc04be8480a7b47cb2b74b7e5b38d8eaae0887442cca1b5549f",
+    "count": 1,
+    "reason": "Existing seed issuing-setup transaction; reading the seller profile and VAT rates from the locale content pack changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
@@ -236,12 +236,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "5251b07f424eac17e0071b1ffec0e3680c17103deb8f2fb7cbe57d2c9b0f0eba",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "55f8a7bf075b8c3b6cb0b153f8d5e72419e16e92195d1b12425b5bcbf0292fd8",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -332,12 +326,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "d3f159105a9a94d9a8f799ff1d72311c587d417a3aa1aeb4d1fc5a8c4845e4b8",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "20d8754dafa48dc04be8480a7b47cb2b74b7e5b38d8eaae0887442cca1b5549f",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -489,17 +477,11 @@
     "file": "apps/api/scripts/seed-templates.ts",
     "fingerprint": "50dba6cbdaed9a24c027d70cf2f6c38395936dc99aa76e0871df13a1a9f5a1ef",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-templates.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "Existing seed template insert transaction; reading names from the locale content pack changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-templates.ts",
     "fingerprint": "6f8c56856cf6faddd27896a2bee44976f60188b743ab819257ce2e0f51b99df0",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-templates.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-templates.ts",
-    "fingerprint": "fd4162922e93a331f728a0cebb86836d387d0324c19d0285fa1a803312d55fdf",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-templates.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -514,6 +496,12 @@
     "fingerprint": "d5ea75becb4da8290a1025fd5a9830a5d78c59be0417e4f2dff95be62967eb35",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-templates.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/scripts/seed-templates.ts",
+    "fingerprint": "fd4162922e93a331f728a0cebb86836d387d0324c19d0285fa1a803312d55fdf",
+    "count": 1,
+    "reason": "Existing seed template insert transaction; reading names from the locale content pack changes its fingerprint without changing the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-test-user.ts",
@@ -547,15 +535,15 @@
   },
   {
     "file": "apps/api/scripts/seed-test-user.ts",
-    "fingerprint": "af1c74b0ea77106d50f76ccaf78a73acbef8fc38b75abd3890f799bbe093be68",
+    "fingerprint": "ac1fb42437c81817c61afa9547974f963ce6c826d331cfd61223dec8b1a3ea6c",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-test-user.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/scripts/seed-test-user.ts",
-    "fingerprint": "ac1fb42437c81817c61afa9547974f963ce6c826d331cfd61223dec8b1a3ea6c",
+    "fingerprint": "af1c74b0ea77106d50f76ccaf78a73acbef8fc38b75abd3890f799bbe093be68",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-test-user.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "Existing time-billing enrolment transaction, extracted into a helper the marketing locale seed reuses; the transaction boundary is unchanged."
   },
   {
     "file": "apps/api/scripts/seed-test-user.ts",

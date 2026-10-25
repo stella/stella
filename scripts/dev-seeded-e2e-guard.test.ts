@@ -1,14 +1,13 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const SEED_PATHS = [
-  "apps/api/scripts/seed-templates.ts",
-  "apps/api/scripts/seed-dev.ts",
-  "apps/api/scripts/seed-test-user.ts",
-] as const;
+const TEST_USER_SEED_PATH = "apps/api/scripts/seed-test-user.ts";
 const E2E_SPECS_GLOB = new Bun.Glob("apps/web/e2e/specs/**/*.spec.ts");
 
 const readSourceFile = (relativePath: string): ts.SourceFile =>
@@ -68,6 +67,190 @@ const findVariableInitializer = (
   return initializers.length === 1 ? initializers[0] : undefined;
 };
 
+type SeedSourceExpression = {
+  expression: ts.Expression;
+  file: ts.SourceFile;
+  visited: ReadonlySet<string>;
+};
+type ResolveSeedSourceOptions = {
+  expression: ts.Expression | undefined;
+  file: ts.SourceFile;
+  visited?: ReadonlySet<string>;
+  files: Map<string, ts.SourceFile>;
+};
+
+const resolveSeedSource = ({
+  expression,
+  file,
+  visited = new Set(),
+  files,
+}: ResolveSeedSourceOptions): SeedSourceExpression[] => {
+  if (!expression) {
+    return [];
+  }
+  if (
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isParenthesizedExpression(expression)
+  ) {
+    return resolveSeedSource({
+      expression: expression.expression,
+      file,
+      visited,
+      files,
+    });
+  }
+  if (ts.isIdentifier(expression)) {
+    const name = expression.text;
+    const identity = `${file.fileName}:${name}`;
+    if (visited.has(identity)) {
+      return [];
+    }
+    const nextVisited = new Set(visited).add(identity);
+    const local = findVariableInitializer(file, name);
+    if (local) {
+      return resolveSeedSource({
+        expression: local,
+        file,
+        visited: nextVisited,
+        files,
+      });
+    }
+    for (const statement of file.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        continue;
+      }
+      const binding = bindings.elements.find(
+        (element) => element.name.text === name,
+      );
+      if (!binding) {
+        continue;
+      }
+      const specifier = statement.moduleSpecifier.text;
+      if (!specifier.startsWith(".") && !specifier.startsWith("@stll/")) {
+        return [];
+      }
+      const resolved = Bun.resolveSync(
+        specifier,
+        path.dirname(path.join(REPO_ROOT, file.fileName)),
+      );
+      if (!isPathInside(REPO_ROOT, resolved)) {
+        panic(`Seed source must remain in the repository: ${specifier}`);
+      }
+      const relative = repoRelativePath(REPO_ROOT, resolved);
+      let imported = files.get(relative);
+      if (!imported) {
+        imported = readSourceFile(relative);
+        files.set(relative, imported);
+      }
+      return resolveSeedSource({
+        expression: findVariableInitializer(
+          imported,
+          binding.propertyName?.text ?? binding.name.text,
+        ),
+        file: imported,
+        visited: nextVisited,
+        files,
+      });
+    }
+    return [];
+  }
+  if (
+    ts.isPropertyAccessExpression(expression) ||
+    ts.isElementAccessExpression(expression)
+  ) {
+    let property: string | undefined;
+    if (ts.isPropertyAccessExpression(expression)) {
+      property = expression.name.text;
+    } else if (ts.isStringLiteral(expression.argumentExpression)) {
+      property = expression.argumentExpression.text;
+    }
+    return resolveSeedSource({
+      expression: expression.expression,
+      file,
+      visited,
+      files,
+    }).flatMap((source) => {
+      if (!ts.isObjectLiteralExpression(source.expression)) {
+        return [];
+      }
+      return source.expression.properties.flatMap((candidate) => {
+        if (!ts.isPropertyAssignment(candidate)) {
+          return [];
+        }
+        const key =
+          ts.isIdentifier(candidate.name) || ts.isStringLiteral(candidate.name)
+            ? candidate.name.text
+            : undefined;
+        if (property !== undefined && key !== property) {
+          return [];
+        }
+        return resolveSeedSource({
+          expression: candidate.initializer,
+          file: source.file,
+          visited: source.visited,
+          files,
+        });
+      });
+    });
+  }
+  return [{ expression, file, visited }];
+};
+
+const collectSeedStrings = ({
+  expression,
+  file,
+  visited = new Set(),
+  files,
+}: ResolveSeedSourceOptions): Set<string> => {
+  const values = new Set<string>();
+  for (const source of resolveSeedSource({
+    expression,
+    file,
+    visited,
+    files,
+  })) {
+    if (ts.isStringLiteral(source.expression)) {
+      values.add(source.expression.text);
+      continue;
+    }
+    const children: ts.Expression[] = [];
+    if (ts.isArrayLiteralExpression(source.expression)) {
+      for (const element of source.expression.elements) {
+        children.push(
+          ts.isSpreadElement(element) ? element.expression : element,
+        );
+      }
+    } else if (ts.isObjectLiteralExpression(source.expression)) {
+      for (const property of source.expression.properties) {
+        if (ts.isPropertyAssignment(property)) {
+          children.push(property.initializer);
+        } else if (ts.isSpreadAssignment(property)) {
+          children.push(property.expression);
+        }
+      }
+    }
+    for (const child of children) {
+      for (const value of collectSeedStrings({
+        expression: child,
+        file: source.file,
+        visited: source.visited,
+        files,
+      })) {
+        values.add(value);
+      }
+    }
+  }
+  return values;
+};
+
 const resolveStringValues = (
   expression: ts.Expression | undefined,
   file: ts.SourceFile,
@@ -121,40 +304,61 @@ const readSeededNames = (): Set<string> => {
   const devDocumentNames = new Set<string>();
   const testUserNames = new Set<string>();
 
-  const templateFile = readSourceFile(SEED_PATHS[0]);
-  const templates = findVariableInitializer(templateFile, "TEMPLATES");
-  if (templates && ts.isArrayLiteralExpression(templates)) {
-    for (const entry of templates.elements) {
-      if (!ts.isObjectLiteralExpression(entry)) {
-        continue;
-      }
-      for (const property of ["name", "fileName"]) {
-        for (const name of resolveStringValues(
-          propertyValue(entry, property),
-          templateFile,
-        )) {
-          templateNames.add(name);
-        }
-      }
+  const files = new Map<string, ts.SourceFile>();
+  const localeFile = readSourceFile("apps/api/scripts/seed-content/locales.ts");
+  const locales = findVariableInitializer(localeFile, "SEED_CONTENT_BY_LOCALE");
+  const packs = resolveSeedSource({
+    expression: locales,
+    file: localeFile,
+    files,
+  });
+  for (const packMap of packs) {
+    if (!ts.isObjectLiteralExpression(packMap.expression)) {
+      continue;
     }
-  }
-
-  const devFile = readSourceFile(SEED_PATHS[1]);
-  const workspaceDocs = findVariableInitializer(devFile, "workspaceDocNames");
-  if (workspaceDocs && ts.isObjectLiteralExpression(workspaceDocs)) {
-    for (const workspace of workspaceDocs.properties) {
-      if (!ts.isPropertyAssignment(workspace)) {
+    for (const locale of packMap.expression.properties) {
+      if (!ts.isPropertyAssignment(locale)) {
         continue;
       }
-      for (const name of resolveStringValues(workspace.initializer, devFile)) {
-        devDocumentNames.add(name);
+      for (const pack of resolveSeedSource({
+        expression: locale.initializer,
+        file: packMap.file,
+        files,
+      })) {
+        if (!ts.isObjectLiteralExpression(pack.expression)) {
+          continue;
+        }
+        for (const name of collectSeedStrings({
+          expression: propertyValue(pack.expression, "matterDocuments"),
+          file: pack.file,
+          files,
+        })) {
+          devDocumentNames.add(name);
+        }
+        for (const templates of resolveSeedSource({
+          expression: propertyValue(pack.expression, "templates"),
+          file: pack.file,
+          files,
+        })) {
+          if (!ts.isObjectLiteralExpression(templates.expression)) {
+            continue;
+          }
+          const names = propertyValue(templates.expression, "templates");
+          for (const value of collectSeedStrings({
+            expression: names,
+            file: templates.file,
+            files,
+          })) {
+            templateNames.add(value);
+          }
+        }
       }
     }
   }
   expect(templateNames.size).toBeGreaterThan(0);
   expect(devDocumentNames.size).toBeGreaterThan(0);
 
-  const testUserFile = readSourceFile(SEED_PATHS[2]);
+  const testUserFile = readSourceFile(TEST_USER_SEED_PATH);
   collectStringProperties(testUserFile, "name", testUserNames);
   collectStringProperties(testUserFile, "fileName", testUserNames);
 

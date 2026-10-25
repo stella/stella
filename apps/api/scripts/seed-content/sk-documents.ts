@@ -8,7 +8,7 @@ import type { SeedEmail, StandardMatterLabel } from "./types";
 
 export const SK_SPA_DOCUMENT_NAME = "Zmluva_o_prevode_obchodneho_podielu.pdf";
 
-export const SK_EMAIL_FILE_NAMES = [
+const SK_EMAIL_FILE_NAMES = [
   "Zajtra_podpis_zaverecny_checklist.eml",
   "Fwd_URSO_podmienka_c_7.eml",
   "Informacia_pre_klienta_Zilina.eml",

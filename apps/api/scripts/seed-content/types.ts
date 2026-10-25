@@ -39,7 +39,7 @@ export type SeedOrganizationContact = {
   color: string;
 };
 
-export type SeedPersonContact = {
+type SeedPersonContact = {
   id: ContactId;
   type: "person";
   displayName: string;
@@ -74,7 +74,7 @@ export type MainMatterLabel = (typeof MAIN_MATTER_LABELS)[number];
 /** Main matters whose documents a content pack writes by hand. */
 export type StandardMatterLabel = Exclude<MainMatterLabel, "ws-export-review">;
 
-export type SeedMatter = {
+type SeedMatter = {
   name: string;
   /** Org-unique matter number, e.g. "2024/003". */
   reference: string;
@@ -83,7 +83,7 @@ export type SeedMatter = {
   billingReference?: string;
 };
 
-export type SeedExtraMatter = {
+type SeedExtraMatter = {
   name: string;
   reference: string;
   /** The seedId label of the client contact. */
@@ -135,7 +135,7 @@ export const supplierAgreementHeading = (
  * The negotiated supplier agreement the editor still films: real tracked
  * changes and margin comments by a seeded colleague.
  */
-export type SupplierAgreementContent = {
+type SupplierAgreementContent = {
   fileName: string;
   /** File name of the first version, before the redline. */
   baseFileName: string;
@@ -156,7 +156,7 @@ export type SupplierAgreementContent = {
 };
 
 /** Default document-type keys (apps/api/src/lib/document-types/defaults.ts). */
-export type DocumentTypeKey =
+type DocumentTypeKey =
   | "nda"
   | "spa"
   | "apa"
@@ -202,8 +202,8 @@ export const ACTIVITY_CODE_KEYS = [
   "CORRESPOND",
 ] as const;
 
-export type TaskCodeKey = (typeof TASK_CODE_KEYS)[number];
-export type ActivityCodeKey = (typeof ACTIVITY_CODE_KEYS)[number];
+type TaskCodeKey = (typeof TASK_CODE_KEYS)[number];
+type ActivityCodeKey = (typeof ACTIVITY_CODE_KEYS)[number];
 
 /** Template category and template labels (apps/api/scripts/seed-templates.ts). */
 export type TemplateCategoryLabel =

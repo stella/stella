@@ -3219,7 +3219,8 @@ export async function seed(organizationId?: string, userId?: string) {
     );
   }
   for (const e of supplierAgreementEntities) {
-    await db.transaction(
+    await withAggregateTransaction(
+      db,
       async (tx) =>
         await tx
           .insert(entityVersions)
@@ -3228,14 +3229,18 @@ export async function seed(organizationId?: string, userId?: string) {
             workspaceId: toWs(e.workspaceId),
             entityId: e.entityId,
             versionNumber: 2,
-            label: "Negotiated draft",
+            label: SUPPLIER_AGREEMENT.currentVersionLabel,
           })
           .onConflictDoUpdate({
             target: entityVersions.id,
-            set: { versionNumber: 2, label: "Negotiated draft" },
+            set: {
+              versionNumber: 2,
+              label: SUPPLIER_AGREEMENT.currentVersionLabel,
+            },
           }),
     );
-    await db.transaction(
+    await withAggregateTransaction(
+      db,
       async (tx) =>
         await tx
           .insert(entityVersions)
@@ -3244,11 +3249,14 @@ export async function seed(organizationId?: string, userId?: string) {
             workspaceId: toWs(e.workspaceId),
             entityId: e.entityId,
             versionNumber: 1,
-            label: "Initial draft",
+            label: SUPPLIER_AGREEMENT.baseVersionLabel,
           })
           .onConflictDoUpdate({
             target: entityVersions.id,
-            set: { versionNumber: 1, label: "Initial draft" },
+            set: {
+              versionNumber: 1,
+              label: SUPPLIER_AGREEMENT.baseVersionLabel,
+            },
           }),
     );
   }
@@ -3421,7 +3429,7 @@ export async function seed(organizationId?: string, userId?: string) {
           version: 1,
           type: "file",
           id: baseFileId,
-          fileName: "Supplier_Agreement_v3.docx",
+          fileName: SUPPLIER_AGREEMENT.baseFileName,
           mimeType: DOCX_MIME,
           sizeBytes: baseIdentity.sizeBytes,
           encrypted: false,
