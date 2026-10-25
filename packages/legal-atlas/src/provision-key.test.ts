@@ -325,6 +325,8 @@ describe("provision identity construction", () => {
     for (const invalid of [
       { ...ref, unit: "article" as const },
       { ...ref, section: -1 },
+      // The shared schema admits zero for the codes that number from it.
+      { ...ref, section: 0 },
       { ...ref, letter: "two" },
       { ...ref, subsection: "\0" },
     ]) {

@@ -250,6 +250,11 @@ const referenceOf = (
           return null;
         }
         reference.section = Number.parseInt(number, 10);
+        // A statute numbers its sections from 1; the shared schema admits 0
+        // only for the codes that use it.
+        if (reference.section < 1) {
+          return null;
+        }
         const suffix = parts?.["suffix"];
         reference.sectionSuffix =
           suffix === undefined || suffix.length === 0 ? null : suffix;
@@ -511,7 +516,7 @@ export const createProvisionCitationGrammar = <
   const gazetteInput = new RegExp(`^(?:${gazette.source})$`, "iu");
   return {
     normalizeReference: (reference) => {
-      if (reference.unit !== unit) {
+      if (reference.unit !== unit || reference.section < 1) {
         return null;
       }
       const values: (string | null)[] = [];

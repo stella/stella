@@ -331,6 +331,48 @@ const FORMS = [
   // The Federal Acquisition Regulation is title 48.
   ["FAR 52.212-5(b)", [["48 C.F.R. 52.212-5(b)", "FAR 52.212-5(b)"]]],
   ["48 C.F.R. § 52.212-5", [["48 C.F.R. 52.212-5", "48 C.F.R. § 52.212-5"]]],
+  // A one-digit section with letters is continued by a one-digit tail.
+  ["16 U.S.C. § 1a-2(h)", [["16 U.S.C. 1a-2(h)", "16 U.S.C. § 1a-2(h)"]]],
+  [
+    "16 U.S.C. §§ 1-4",
+    [
+      ["16 U.S.C. 1", "16 U.S.C. §§ 1"],
+      ["16 U.S.C. 4", "4"],
+    ],
+  ],
+  // A citation of several sections keeps its last one before prose.
+  [
+    "28 U.S.C. §§ 1331 and 1343 confer jurisdiction",
+    [
+      ["28 U.S.C. 1331", "28 U.S.C. §§ 1331"],
+      ["28 U.S.C. 1343", "1343"],
+    ],
+  ],
+  [
+    "28 U.S.C. Sections 1331 and 1343 confer jurisdiction",
+    [
+      ["28 U.S.C. 1331", "28 U.S.C. Sections 1331"],
+      ["28 U.S.C. 1343", "1343"],
+    ],
+  ],
+  ["42 U.S.C. §§ 1983 and 12 days", [["42 U.S.C. 1983", "42 U.S.C. §§ 1983"]]],
+  // A range of paragraphs ends inside the same section.
+  [
+    "8 U.S.C. § 1229a(c)(6)–(7)",
+    [
+      ["8 U.S.C. 1229a(c)(6)", "8 U.S.C. § 1229a(c)(6)"],
+      ["8 U.S.C. 1229a(c)(7)", "(7)"],
+    ],
+  ],
+  [
+    "12 C.F.R. § 1026.18(c)(1)-(3)",
+    [
+      ["12 C.F.R. 1026.18(c)(1)", "12 C.F.R. § 1026.18(c)(1)"],
+      ["12 C.F.R. 1026.18(c)(3)", "(3)"],
+    ],
+  ],
+  // The Department of Justice's regulations open with part 0.
+  ["28 C.F.R. § 0.85(a)", [["28 C.F.R. 0.85(a)", "28 C.F.R. § 0.85(a)"]]],
 ] as const satisfies readonly Case[];
 
 /** Text that is not a citation of a section of either code. */

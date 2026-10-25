@@ -108,6 +108,23 @@ describe("US provision keys", () => {
     }
   });
 
+  test("a regulation of part 0 mints its key; grammars that start at 1 refuse it", () => {
+    const { located, provision } = keyOf("28 C.F.R. § 0.85(a)");
+    expect(provision).toMatchObject({
+      workIdentifier: "28 C.F.R. 0.85",
+      anchor: "s0.85/a",
+    });
+    expect(
+      PROVISION_CITATION_GRAMMARS.EU.normalizeReference({
+        ...located.reference,
+        unit: "article",
+        section: 0,
+        sectionSuffix: null,
+        subsection: null,
+      }),
+    ).toBeNull();
+  });
+
   test("labels read in the codes' own printed form", () => {
     const { provision } = keyOf("12 C.F.R. § 1026.18(c)(1)");
     expect(usa.citationForm).toMatchObject({ type: "printed" });

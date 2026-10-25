@@ -68,7 +68,7 @@ const canonicalSection = (code: UsCode, raw: string): string => {
 
 const USC_SECTION = /^[1-9]\d{0,4}[a-z]{0,4}(?:-\d{1,4}[a-z]{0,3}){0,2}$/u;
 const CFR_SECTION =
-  /^\d{1,4}[a-zA-Z]?\.\d{1,5}[a-zA-Z0-9]*(?:(?:\((?:[a-zA-Z]{1,3}|\d{1,2})\))*-\d{1,4}[a-zA-Z]?)?$/u;
+  /^(?:0|[1-9]\d{0,3})[a-zA-Z]?\.\d{1,5}[a-zA-Z0-9]*(?:(?:\((?:[a-zA-Z]{1,3}|\d{1,2})\))*-\d{1,4}[a-zA-Z]?)?$/u;
 const SECTION_PATTERNS = {
   usc: USC_SECTION,
   cfr: CFR_SECTION,
@@ -239,7 +239,8 @@ const pathLabels = (printed: string): string[] =>
  * an inserted section's number is shorter than the one it follows
  * (`2000e-2`, `78j-1`, `300gg-11`, typeset with an en dash too), so a dash
  * before an equally long number opens a range (`1981-1983`,
- * `2000e-2000e-17`). A CFR number continues only with the short tail a
+ * `2000e-2000e-17`). A one-digit section with letters has no shorter number
+ * to insert, so its one-digit tail continues it (`1a-2`). A CFR number continues only with the short tail a
  * Treasury, FAR or temporary rule carries, never with another section
  * (`1026.18-1026.20`).
  */
@@ -259,11 +260,11 @@ const readDesignator = (
     for (let parts = 0; parts < 2; parts += 1) {
       const continuation = matchAt(USC_CONTINUATION, text, end);
       const digits = continuation?.groups?.["digits"];
-      if (
-        continuation === null ||
-        digits === undefined ||
-        digits.length >= lead
-      ) {
+      const inserted =
+        digits !== undefined &&
+        (digits.length < lead ||
+          (lead === 1 && digits.length === 1 && /[a-zA-Z]$/u.test(value)));
+      if (continuation === null || !inserted) {
         break;
       }
       value += continuation[0];
@@ -393,37 +394,67 @@ const readCoordinated = (text: string, last: Element): Element | null => {
       };
 };
 
-/** The far end of a range after `last`, if one follows. */
+/**
+ * The far end of a range after `last`, if one follows: another section
+ * (`1981-1983`), or a path inside the same one, read against the path it
+ * continues (`1229a(c)(6)-(7)` ends on `(c)(7)`).
+ */
 const readRangeEnd = (
   code: UsCode,
   text: string,
   last: Element,
 ): Element | null => {
   const range = matchAt(RANGE, text, last.end);
-  const end = range === null ? null : readElement(code, text, endOf(range));
+  if (range === null) {
+    return null;
+  }
+  const subdivision =
+    last.path.length === 0 ? null : matchAt(PATH, text, endOf(range));
+  if (subdivision !== null) {
+    const path = coordinatedPath(last.path, pathLabels(subdivision[0]));
+    return path === null
+      ? null
+      : {
+          section: last.section,
+          path,
+          openEnded: false,
+          start: subdivision.index,
+          end: endOf(subdivision),
+        };
+  }
+  const end = readElement(code, text, endOf(range));
   return end !== null && closesRange(code, last, end) ? end : null;
 };
 
-/** A further listed section after `last`, if the list goes on. */
+/**
+ * A further listed section after `last`, if the list goes on. Prose right
+ * after a number usually means it counts something (`§ 1983 and 12 days`),
+ * but a citation that announced several sections (`§§`, `Sections`) keeps
+ * a number as long as the one before it (`§§ 1331 and 1343 confer`).
+ */
 const readListed = (
   code: UsCode,
   text: string,
   last: Element,
+  plural: boolean,
 ): Element | null => {
   const list = matchAt(LIST, text, last.end);
   if (list === null || list[0].trim() === "") {
     return null;
   }
   const next = readElement(code, text, endOf(list));
-  if (
-    next === null ||
-    matchAt(NEXT_CITATION, text, next.end) !== null ||
-    matchAt(PROSE_AFTER, text, next.end) !== null
-  ) {
+  if (next === null || matchAt(NEXT_CITATION, text, next.end) !== null) {
     return null;
   }
-  return next;
+  const listed = plural && leadDigits(next.section) >= leadDigits(last.section);
+  return matchAt(PROSE_AFTER, text, next.end) === null || listed ? next : null;
 };
+
+/** A marker that announces more than one section: `§§`, `Sections`, `secs.`. */
+const PLURAL_MARKER = new RegExp(
+  String.raw`§${GAP}{0,2}§|[Ss]ec(?:tion)?s(?![\p{L}])`,
+  "u",
+);
 
 /** The sections a code token is followed by, read from `index`. */
 const readSections = (code: UsCode, text: string, index: number): Element[] => {
@@ -436,6 +467,7 @@ const readSections = (code: UsCode, text: string, index: number): Element[] => {
   if (first === null) {
     return [];
   }
+  const plural = marker !== null && PLURAL_MARKER.test(marker[0]);
   const elements: Element[] = [first];
   let last = first;
   for (;;) {
@@ -448,7 +480,7 @@ const readSections = (code: UsCode, text: string, index: number): Element[] => {
     const next =
       readCoordinated(text, last) ??
       readRangeEnd(code, text, last) ??
-      readListed(code, text, last);
+      readListed(code, text, last, plural);
     if (next === null) {
       break;
     }
@@ -559,7 +591,7 @@ export const locateUsCodeCitations = (
 // --- Identity -------------------------------------------------------------
 
 /** The section a reference carries: its leading number and the rest. */
-const SECTION_SPLIT = /^(?<number>[1-9]\d*)(?<suffix>\D.*)?$/u;
+const SECTION_SPLIT = /^(?<number>0|[1-9]\d*)(?<suffix>\D.*)?$/u;
 
 /**
  * A located citation as the jurisdiction-neutral reference: the section's
@@ -663,7 +695,7 @@ export const normalizeUsCodeReference = (
 };
 
 const REFERENCE = new RegExp(
-  String.raw`^(?:§§?${GAP}*)?(?<section>[1-9][\p{L}\p{N}.()\-\u2010\u2011\u2013]*?)(?<path>(?:\((?:[a-zA-Z]{1,5}|\d{1,3}[a-zA-Z]?)\))*)$`,
+  String.raw`^(?:§§?${GAP}*)?(?<section>(?:0(?=\.)|[1-9])[\p{L}\p{N}.()\-\u2010\u2011\u2013]*?)(?<path>(?:\((?:[a-zA-Z]{1,5}|\d{1,3}[a-zA-Z]?)\))*)$`,
   "u",
 );
 
