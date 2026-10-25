@@ -364,7 +364,7 @@ const listedToolNames = (
   mode: McpMode,
   context: ResourceContext | undefined,
 ): ReadonlySet<string> => {
-  if (context === undefined || context.grantedScopes === undefined) {
+  if (context?.grantedScopes === undefined) {
     return surfaceToolVocabulary(mode, context).listed;
   }
   return usableStaticMcpToolNames(

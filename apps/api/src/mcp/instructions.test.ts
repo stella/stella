@@ -25,7 +25,7 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 // The server `instructions` ride on every initialize response, so they are a
 // per-session token cost. These budgets are hard ceilings: growth past them
 // must be a deliberate, reviewed constant bump, not silent drift.
-describe("MCP server instructions", async () => {
+describe("MCP server instructions", () => {
   test("maximum instructions include every resource with deployment gates closed", async () => {
     // Re-import in a fresh process so the maximum is computed after gates close.
     const child = Bun.spawn({
