@@ -6,11 +6,10 @@ import type {
   ReaderAnswerCitation,
 } from "@stll/api-contract/reader-answers";
 
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
+import type { AnchoredNote } from "@/components/legal-reader/margin-notes.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-import type { MarginItem } from "./analysis/margin-notes";
-import type { AnchoredNote } from "./analysis/margin-notes.logic";
 
 GlobalRegistrator.register();
 const { cleanup, render, fireEvent, act, waitFor } =
@@ -208,7 +207,8 @@ test("IME confirmation does not send a follow-up until composition ends", () => 
 });
 
 test("IME confirmation does not send a margin comment until composition ends", async () => {
-  const { MarginNotes } = await import("./analysis/margin-notes");
+  const { MarginNotes } =
+    await import("@/components/legal-reader/margin-notes");
   const onSubmit = mock(
     (_body: string, _visibility: "private" | "shared") => undefined,
   );
@@ -410,8 +410,10 @@ test("opening another answer leaves this minimised card closed", () => {
 });
 
 test("answer and comment share the canonical gutter placement without overlapping", async () => {
-  const { MarginNotes } = await import("./analysis/margin-notes");
-  const { placeGutterNotes } = await import("./analysis/margin-notes.logic");
+  const { MarginNotes } =
+    await import("@/components/legal-reader/margin-notes");
+  const { placeGutterNotes } =
+    await import("@/components/legal-reader/margin-notes.logic");
   const originalBounds = HTMLElement.prototype.getBoundingClientRect;
   const originalHeight = Object.getOwnPropertyDescriptor(
     HTMLElement.prototype,

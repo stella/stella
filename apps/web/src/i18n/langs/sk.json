@@ -4813,6 +4813,8 @@
     "recentDocuments": "Nedávne dokumenty",
     "recentSearches": "Nedávne vyhľadávania",
     "recentlyOpenedFiles": "Nedávno otvorené súbory",
+    "registryCandidateNameMismatch": "Oficiálny názov „{officialName}“ sa nezhoduje",
+    "registryCandidateNoOfficialRecord": "Oficiálny register pre toto číslo neobsahuje žiadny záznam",
     "registryChoose": "Vyberte obchodný register",
     "registryCredentialAskAdmin": "Požiadajte správcu organizácie o nastavenie prístupu k tomuto registru.",
     "registryCredentialSaved": "Prístup k registru bol uložený",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Údaje z obchodného registra sú dočasne nedostupné"
     },
     "registryKrsHint": "KRS vyhľadáva podľa registračného čísla, nie podľa názvu spoločnosti. Zadajte desaťmiestne číslo KRS vrátane úvodných núl (napr. 0000006865).",
+    "registryNameSearchNotFound": "Tomuto názvu nezodpovedá žiadna overená spoločnosť. Nasledujúci kandidáti boli zamietnutí:",
     "registryVatHint": "VIES overuje IČ DPH, nie názvy spoločností. Zadajte IČ DPH vrátane kódu krajiny (napr. CZ27082440); formát závisí od krajiny.",
     "renameSearchTitle": "Premenovať uložené vyhľadávanie",
     "requestCountry": "Požiadať o pridanie novej krajiny",

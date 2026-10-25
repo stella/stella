@@ -401,7 +401,7 @@ test("public page limits are bounded before the shared operation runs", async ()
   });
 });
 
-test.each(["Freedonia", "SVK"])(
+test.each(["Freedonia", "AUT"])(
   "unadmitted public country %s never reaches retrieval",
   async (country) => {
     const calls: Parameters<typeof searchLegislationHandler>[] = [];
@@ -415,7 +415,7 @@ test.each(["Freedonia", "SVK"])(
       ),
     );
     expect(response.status).toBe(
-      country === "SVK" ? PUBLIC_COUNTRY_UNAVAILABLE_STATUS : 400,
+      country === "AUT" ? PUBLIC_COUNTRY_UNAVAILABLE_STATUS : 400,
     );
     expect(calls).toHaveLength(0);
   },

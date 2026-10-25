@@ -1,5 +1,17 @@
-/** Which document a reader's mark sits on. */
-export const READER_ANNOTATION_TARGET_TYPES = ["decision", "statute"] as const;
+/** The public-law documents a reader marks: their text, open to every reader. */
+export const READER_DOCUMENT_TARGET_TYPES = ["decision", "statute"] as const;
+export type ReaderDocumentTargetType =
+  (typeof READER_DOCUMENT_TARGET_TYPES)[number];
+
+/**
+ * What a reader's mark sits on: a public-law document, or one claim of a
+ * matter's document verification. A claim's notes belong to the matter and
+ * are read and written only through the verification routes.
+ */
+export const READER_ANNOTATION_TARGET_TYPES = [
+  ...READER_DOCUMENT_TARGET_TYPES,
+  "verification-claim",
+] as const;
 export type ReaderAnnotationTargetType =
   (typeof READER_ANNOTATION_TARGET_TYPES)[number];
 

@@ -1,12 +1,6 @@
 import type { PropsWithChildren } from "react";
 
-/**
- * Where the bar's band ends, in pixels from the top of the box it floats
- * in: its inset and height, with a gap. A hover control that shares the
- * bar's edge (the outline rail) starts below it, so a pointer reaching for
- * the zoom controls never opens that control on the way.
- */
-export const VIEWER_OVERLAY_BAR_BAND_PX = 48;
+import { cn } from "@stll/ui/utils";
 
 /**
  * The glass bar a viewer's controls float in, pinned to the top inline-end
@@ -19,8 +13,16 @@ export const VIEWER_OVERLAY_BAR_BAND_PX = 48;
  * the annotation toolbar and the chat composer, which anchor to the opposite
  * edge and win any overlap.
  */
-export const ViewerOverlayBar = ({ children }: PropsWithChildren) => (
-  <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
+export const ViewerOverlayBar = ({
+  children,
+  className,
+}: PropsWithChildren<{ className?: string | undefined }>) => (
+  <div
+    className={cn(
+      "bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur",
+      className,
+    )}
+  >
     {children}
   </div>
 );

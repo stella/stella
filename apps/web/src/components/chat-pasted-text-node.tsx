@@ -5,27 +5,19 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { CommandIcon, XIcon } from "@stll/ui/icons";
+import { XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { contentDir } from "@stll/ui/use-content-dir";
-import { cn } from "@stll/ui/utils";
 
 import type {
   PastedTextAttrs,
   PastedTextSource,
 } from "@/components/chat-pasted-text-extension";
-import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
+import {
+  ChatAttachmentChip,
+  ChatCommandChip,
+} from "@/components/chat/chat-draft-attachment-chips";
 import { ReferenceChip } from "@/components/references/reference-chip";
-
-const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
-
-// Shared chip shell so the interactive paste trigger and the
-// static command chip stay visually identical.
-const CHIP_BASE_CLASS = cn(
-  "inline-flex max-w-full items-center gap-1 align-middle",
-  "bg-muted/60 rounded-md border px-1.5 py-0.5",
-  "text-foreground text-xs font-medium",
-);
 
 const PASTED_TEXT_SOURCE_VALUES: readonly string[] = [
   "paste",
@@ -96,14 +88,8 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   if (attrs.source === "command") {
     return (
       <NodeViewWrapper className="inline" data-source="command">
-        <span
-          className={cn(CHIP_BASE_CLASS, "select-none")}
-          contentEditable={false}
-        >
-          <CommandIcon className="text-muted-foreground size-3 shrink-0" />
-          <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
-            {chipLabel}
-          </span>
+        <span className="select-none" contentEditable={false}>
+          <ChatCommandChip label={chipLabel} />
         </span>
       </NodeViewWrapper>
     );

@@ -392,6 +392,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
   ]),
+  fixtureRuleOverride("no-hand-built-step-marker.fixture.tsx", [
+    "no-hand-built-step-marker/no-hand-built-step-marker",
+  ]),
   fixtureRuleOverride("no-decorative-heading-accent.fixture.tsx", [
     "no-decorative-heading-accent/no-decorative-heading-accent",
   ]),
@@ -1193,6 +1196,7 @@ const config = defineConfig({
       "error",
     "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
+    "no-domain-enum/no-domain-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
@@ -1543,6 +1547,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -1660,6 +1665,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-domain-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/provider-call-error-message.ts",
@@ -2451,6 +2457,12 @@ const config = defineConfig({
       files: [
         "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
       ],
+      rules: { "no-bare-error/no-bare-error": "off" },
+    },
+    {
+      // This helper serializes its boundary into the page before modules load,
+      // so it cannot import `panic()` there.
+      files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
@@ -3314,6 +3326,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item": "error",
+      },
+    },
+    {
+      // Only a semantic ordered list may own a procedure, timeline, or
+      // ranking number. Decorative labels imply an order that is not there.
+      files: [
+        "apps/landing/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-hand-built-step-marker.fixture.tsx",
+      ],
+      rules: {
+        "no-hand-built-step-marker/no-hand-built-step-marker": "error",
       },
     },
     {
