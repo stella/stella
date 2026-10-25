@@ -2,7 +2,7 @@
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
     "from": "a0846317815e79f4371155bc4ca39ca1c3330db81bc4e223f99cdd5155ee297a",
-    "to": "8d1883c81fef31f307ca9a0830a2e9fa855f9c0e14d930bab4c725ae413f8781",
+    "to": "5053b51266e2ec18443d1c18b231b6d42d0d008c1e87da72717a11b49175b93f",
     "reason": "The personal key root transaction first holds the live session credential fence for issuance; the transaction boundary, organization lock and owner predicates are unchanged."
   }
 ]

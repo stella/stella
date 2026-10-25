@@ -67,10 +67,11 @@ type Principal = {
 /**
  * Issuing a key needs the caller's session to be live under the account's
  * credential fence, so an access reset cannot miss a key minted concurrently.
+ * A credential without a browser session (`null`) cannot issue one.
  * Revocation and policy changes only manage existing keys.
  */
 type KeyMutationAuthority =
-  { type: "issue"; sessionId: string } | { type: "manage" };
+  { type: "issue"; sessionId: string | null } | { type: "manage" };
 const MANAGE = { type: "manage" } as const satisfies KeyMutationAuthority;
 type MutationOptions = Principal & {
   recordAuditEvent: AuditRecorder;
@@ -92,10 +93,11 @@ const mutatePersonalKeys = async <T>(
         // The account fence ranks before the organization row.
         if (
           options.authority.type === "issue" &&
-          !(await holdLiveSessionCredentialFence(tx, {
-            userId: options.userId,
-            sessionId: options.authority.sessionId,
-          }))
+          (options.authority.sessionId === null ||
+            !(await holdLiveSessionCredentialFence(tx, {
+              userId: options.userId,
+              sessionId: options.authority.sessionId,
+            })))
         ) {
           return abortTransaction(
             new HandlerError({
@@ -152,7 +154,7 @@ export const readPersonalApiKeyPolicy = async (
 };
 
 type MintPersonalKeyOptions = MutationOptions & {
-  sessionId: string;
+  sessionId: string | null;
   name: string;
   scopes?: PersonalApiKeyScope[] | undefined;
   expiresInDays?: number | undefined;
@@ -367,7 +369,7 @@ export const revokePersonalApiKey = async (
 
 export const rotatePersonalApiKey = async (
   options: KeyOptions & {
-    sessionId: string;
+    sessionId: string | null;
     expiresInDays?: number | undefined;
   },
 ) =>

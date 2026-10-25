@@ -268,6 +268,27 @@ describe("personal key persistence and receipts", () => {
     });
   });
 
+  test("a credential without a browser session can neither mint nor rotate a key", async () => {
+    await withFixture(async ({ own }) => {
+      const key = requireKey(await createPersonalApiKey(own));
+      const sessionless = { ...own, sessionId: null };
+
+      const minted = await createPersonalApiKey(sessionless);
+      const rotated = await rotatePersonalApiKey({
+        ...sessionless,
+        keyId: key.id,
+      });
+
+      expect(minted.isErr() && minted.error.status).toBe(401);
+      expect(rotated.isErr() && rotated.error.status).toBe(401);
+      const page = await listPersonalApiKeys(
+        { ...own, access: "own", limit: 20 },
+        database,
+      );
+      expect(page.items.map((item) => item.id)).toEqual([key.id]);
+    });
+  });
+
   test("expired keys cannot be rotated into fresh credentials", async () => {
     await withFixture(async ({ own }) => {
       const key = requireKey(await createPersonalApiKey(own));

@@ -7,6 +7,7 @@ import { rootDb } from "@/api/db/root";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { getAuth } from "@/api/lib/auth";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 // timeout: a real email-code sign-in and key routes run against the migrated server.
 setDefaultTimeout(120_000);
@@ -15,7 +16,11 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 let createdUserId: string | undefined;
 
+// The key routes over a real socket, behind the API's own pipeline.
+const server = serveRoutesForTest(apiKeysRoute);
+
 afterAll(async () => {
+  await server.stop();
   if (createdUserId === undefined) {
     return;
   }
@@ -23,7 +28,7 @@ afterAll(async () => {
 });
 
 const createPersonalKey = async (cookie: string, name: string) =>
-  await apiKeysRoute.handle(
+  await server.fetch(
     new Request("http://localhost/api-keys/personal", {
       method: "POST",
       headers: {
