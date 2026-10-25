@@ -160,7 +160,11 @@ test.each([
     }
     if (status === 500) {
       // A failure that is not a refusal keeps the retry feedback.
-      expect(screen.getByText("Something went wrong")).toBeDefined();
+      expect(
+        screen.getByText(
+          "Something went wrong. Try again, or reload the page if it keeps happening.",
+        ),
+      ).toBeDefined();
       expect(
         screen.queryByText(
           "Only an organization admin can connect an AI provider.",
