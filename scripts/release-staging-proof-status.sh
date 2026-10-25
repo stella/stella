@@ -3,12 +3,12 @@
 # candidate staging proof into a pull request and the merge queue.
 #
 # Every pull request head and merge group gets the status. A non-release
-# pull request passes at once. A release pull request head carries the
+# pull request passes at once. A release pull request head mirrors the
 # staging proof of that exact head (deploy-staging.yml with
-# release_candidate=true): reconciliations record it as pending or missing,
-# and only the proof run's own last job (finished-run) records its success or
-# failure. Per head the status never moves back to an older or the same run's
-# earlier state. Its merge group passes only when it lands exactly
+# release_candidate=true); a head with no proof fails with the step that
+# starts one. A run's result always ends up last on the head: a pending
+# write for that run puts the result back. Its merge group passes only when
+# it lands exactly
 # the proven tree on exactly the main the proof deployed with, which is what
 # lets the version commit reuse the proof after merge instead of deploying a
 # different tree.
@@ -59,54 +59,40 @@ latest_proof() {
   '
 }
 
-# The newest release/staging-proof status a GitHub Actions run wrote on a head.
-current_status() {
-  api --paginate --slurp "repos/$repo/commits/$1/statuses?per_page=100" | jq -c --arg context "$context" '
-    [.[][] | select(.context == $context)][0] // {} |
-    if .creator.login == "github-actions[bot]" and .creator.type == "Bot" then . else {} end
-  '
+# Writers of one head are not serialized: a pending write for a run can land
+# after that run's last job recorded its result. So after writing pending for
+# a run, the result that run already recorded is written again, and the
+# result is the last status in every interleaving.
+post_pending() {
+  local head="$1" description="$2" url="${3:-}" result
+  post "$head" pending "$description" "$url"
+  [[ -n "$url" ]] || return 0
+  result=$(api --paginate --slurp "repos/$repo/commits/$head/statuses?per_page=100" | jq -c --arg context "$context" --arg url "$url" '
+    [.[][] | select(.context == $context and .target_url == $url and .creator.login == "github-actions[bot]" and
+      (.state == "success" or .state == "failure" or .state == "error"))][0] // empty')
+  if [[ -n "$result" ]]; then
+    post "$head" "$(jq -r '.state' <<< "$result")" "$(jq -r '.description' <<< "$result")" "$url"
+  fi
 }
 
-# The workflow run id a status links to, or nothing.
-run_id_of() {
-  jq -r '(.target_url // "") | (capture("/actions/runs/(?<id>[1-9][0-9]*)").id // "")' <<< "$1"
-}
-
-# A reconciliation writes only non-terminal states and states about a missing
-# run; terminal states of a proof run come from finished_run alone. Right
-# before posting it re-reads the head, and it never replaces a success or
-# failure that names the same or a newer proof run, nor one that names a run
-# with a status that names none, so a stale read cannot undo a finished proof.
-reconcile_post() {
-  local head="$1" state="$2" description="$3" url="${4:-}" current current_run new_run
-  current=$(current_status "$head")
-  current_run=$(run_id_of "$current")
-  new_run=$(run_id_of "$(jq -n --arg url "$url" '{target_url: $url}')")
-  case "$(jq -r '.state // ""' <<< "$current")" in
-    success | failure | error)
-      if [[ -n "$current_run" ]] && { [[ -z "$new_run" ]] || ((new_run <= current_run)); }; then
-        echo "Kept $context $(jq -r '.state' <<< "$current") from run $current_run on $head."
-        return
-      fi
-      ;;
-  esac
-  post "$head" "$state" "$description" "$url"
-}
-
-# Reconcile a release head with the proof run GitHub records now. A run that
-# ended leaves its terminal state to its own finished_run job.
+# Reconcile a release head with the proof GitHub records now.
 release_head() {
-  local head="$1" proof runs run state run_url run_id
+  local head="$1" proof runs run state run_url run_id main
   proof=$(latest_proof "$head")
   state=$(jq -r '.state // ""' <<< "$proof")
   run_url=$(jq -r '.target_url // ""' <<< "$proof")
   case "$state" in
-    success | failure | error)
-      echo "Staging proof on $head ended $state; its run records release/staging-proof."
+    success)
+      if main=$(jq -er '.description | capture("; main=(?<main>[0-9a-f]{40})$").main' <<< "$proof"); then
+        post "$head" success "Staging proof passed; main=$main" "$run_url"
+      else
+        post "$head" failure "Staging proof is not bound to the main it deployed with" "$run_url"
+      fi
       return
       ;;
-    pending) reconcile_post "$head" pending "Staging proof running" "$run_url"; return ;;
+    failure | error) post "$head" failure "Staging proof failed; re-run the staging proof run" "$run_url"; return ;;
   esac
+  # A pending staging/verified names no run, so the run listing names it.
   runs=$(api "repos/$repo/actions/workflows/deploy-staging.yml/runs?event=workflow_dispatch&branch=main&per_page=100")
   run=$(jq -c --arg repo "$repo" --arg title "Staging release proof $head" '
     [.workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
@@ -114,15 +100,14 @@ release_head() {
   ' <<< "$runs")
   run_id=$(jq -r '.id // ""' <<< "$run")
   if [[ -z "$run_id" && "${PROOF_DISPATCHED:-}" == true ]]; then
-    # The run listing can trail a dispatch that just succeeded; the run's own
-    # last job settles the status.
-    reconcile_post "$head" pending "Staging proof dispatched; waiting for its run to start"
+    # The run listing can trail a dispatch that just succeeded.
+    post "$head" pending "Staging proof dispatched; waiting for its run to start"
   elif [[ -z "$run_id" ]]; then
-    reconcile_post "$head" failure "${NO_PROOF_REASON:-No staging proof was started for this head; push to the release branch to start one}"
+    post "$head" failure "${NO_PROOF_REASON:-No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=$head}"
   elif [[ "$(jq -r '.status' <<< "$run")" != completed ]]; then
-    reconcile_post "$head" pending "Staging proof running: run $run_id" "$(jq -r '.html_url' <<< "$run")"
+    post_pending "$head" "Staging proof running: run $run_id" "$(jq -r '.html_url' <<< "$run")"
   else
-    echo "Staging proof run $run_id on $head ended $(jq -r '.conclusion' <<< "$run"); its own last job records release/staging-proof."
+    post "$head" failure "Staging proof run $run_id ended $(jq -r '.conclusion' <<< "$run") before staging verified it" "$(jq -r '.html_url' <<< "$run")"
   fi
 }
 
@@ -205,7 +190,7 @@ merge_group() {
 finished_run() {
   local head="$1" run_id="$2"
   [[ "$head" =~ $sha_pattern && "$run_id" =~ ^[1-9][0-9]*$ ]] || usage
-  local pulls run_url proof main current_run
+  local pulls run_url proof main
   pulls=$(api --paginate --slurp "repos/$repo/commits/$head/pulls?per_page=100")
   if ! jq -e --arg repo "$repo" --arg head "$head" '
     [.[][] | select(.head.sha == $head and .state == "open" and .draft == false and
@@ -216,12 +201,6 @@ finished_run() {
     return
   fi
   run_url="$server/$repo/actions/runs/$run_id"
-  # A newer proof run's result stands; an older run never replaces it.
-  current_run=$(run_id_of "$(current_status "$head")")
-  if [[ -n "$current_run" ]] && ((current_run > run_id)); then
-    echo "Kept $context from newer run $current_run on $head."
-    return
-  fi
   proof=$(latest_proof "$head")
   if jq -e --arg url "$run_url" '.state == "success" and .target_url == $url' <<< "$proof" > /dev/null &&
     main=$(jq -er '.description | capture("; main=(?<main>[0-9a-f]{40})$").main' <<< "$proof"); then

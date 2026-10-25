@@ -30,7 +30,8 @@ beforeEach(() => {
   responses = path.join(directory, "responses");
   mkdirSync(responses);
   // Serves GET responses from files named after the endpoint and records
-  // every POSTed status body.
+  // every POSTed status body; a posted status becomes the commit's newest, as
+  // on GitHub.
   writeFileSync(
     path.join(directory, "gh-retry.sh"),
     `#!/usr/bin/env bash
@@ -40,7 +41,12 @@ for argument in "$@"; do
   case "$argument" in repos/*) endpoint="$argument" ;; esac
 done
 if [[ " $* " == *" --method POST "* ]]; then
-  printf '%s %s\\n' "$endpoint" "$(jq -c .)" >> "$STATUS_LOG"
+  body="$(jq -c .)"
+  printf '%s %s\\n' "$endpoint" "$body" >> "$STATUS_LOG"
+  listing="$RESPONSES/repos_stella_stella_commits_\${endpoint##*/}_statuses_per_page_100"
+  [[ -f "$listing" ]] || printf '[[]]' > "$listing"
+  jq -c --argjson status "$body" '.[0] |= [$status + {creator: {login: "github-actions[bot]", type: "Bot"}}] + .' "$listing" > "$listing.next"
+  mv "$listing.next" "$listing"
   exit 0
 fi
 key="\${endpoint//[\\/?&=]/_}"
@@ -201,24 +207,41 @@ describe("pull request heads", () => {
     expect(result.posted).toEqual([]);
   });
 
-  for (const [name, entry] of [
-    [
-      "passed",
+  test("a release head mirrors its passing staging proof and the main it deployed with", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, [
       stagingVerified(
         "success",
         `Staging smoke success: run ${runId}; main=${mainBase}`,
       ),
-    ],
-    ["failed", stagingVerified("failure", "Staging smoke failure")],
-  ] as const) {
-    test(`a reconciliation leaves a ${name} proof's state to its own run`, () => {
-      respond(`repos/${repository}/pulls/7`, pull());
-      statuses(head, [entry]);
-      const result = run(["pull-request", "7"]);
-      expect(result.exitCode).toBe(0);
-      expect(result.posted).toEqual([]);
-    });
-  }
+      stagingVerified("failure", "an older run"),
+    ]);
+    const result = run(["pull-request", "7"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.posted).toEqual([
+      {
+        sha: head,
+        state: "success",
+        context: "release/staging-proof",
+        description: `Staging proof passed; main=${mainBase}`,
+        target_url: runUrl,
+      },
+    ]);
+  });
+
+  test("a passing proof without its main binding fails", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, [stagingVerified("success", "Staging smoke success")]);
+    expect(run(["pull-request", "7"]).posted[0]?.state).toBe("failure");
+  });
+
+  test("a failed staging proof fails the head", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, [stagingVerified("failure", "Staging smoke failure")]);
+    const result = run(["pull-request", "7"]);
+    expect(result.posted[0]?.state).toBe("failure");
+    expect(result.posted[0]?.target_url).toBe(runUrl);
+  });
 
   test("a staging/verified status written outside GitHub Actions is ignored", () => {
     respond(`repos/${repository}/pulls/7`, pull());
@@ -232,7 +255,7 @@ describe("pull request heads", () => {
     const result = run(["pull-request", "7"]);
     expect(result.posted[0]?.state).toBe("failure");
     expect(result.posted[0]?.description).toStartWith(
-      "No staging proof was started",
+      "No staging proof for this head",
     );
   });
 
@@ -252,59 +275,79 @@ describe("pull request heads", () => {
     ]);
   });
 
-  test("a reconciliation leaves an ended run's state to that run", () => {
+  test("a staging run that ended before verifying fails the head", () => {
     respond(`repos/${repository}/pulls/7`, pull());
     statuses(head, []);
     runs([
       { ...stagingRun("completed", "failure"), display_title: "other" },
       stagingRun("completed", "failure"),
     ]);
-    expect(run(["pull-request", "7"]).posted).toEqual([]);
-  });
-
-  const recorded = (state: string, url: string) => ({
-    context: "release/staging-proof",
-    state,
-    description: "Staging proof passed",
-    creator: bot,
-    target_url: url,
-  });
-  const olderRunUrl = `https://github.com/${repository}/actions/runs/1`;
-
-  test("a reconciliation that read a running proof before it finished leaves success in place", () => {
-    // It read no staging/verified and an unfinished run; the run's own last
-    // job then recorded success before this reconciliation posted.
-    respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [recorded("success", runUrl)]);
-    runs([stagingRun("in_progress")]);
     const result = run(["pull-request", "7"]);
-    expect(result.exitCode).toBe(0);
-    expect(result.posted).toEqual([]);
+    expect(result.posted[0]?.state).toBe("failure");
+    expect(result.posted[0]?.description).toBe(
+      `Staging proof run ${runId} ended failure before staging verified it`,
+    );
   });
 
-  test("a newer proof run replaces an older run's result", () => {
+  test("concurrent writers for one head end on the finished run's result", () => {
+    // The run's last job recorded success after this reconciliation read the
+    // head (no staging/verified yet, the run unfinished), so its pending write
+    // lands after that result.
     respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [recorded("failure", olderRunUrl)]);
-    runs([stagingRun("in_progress")]);
-    expect(run(["pull-request", "7"]).posted).toEqual([
+    statuses(head, [
       {
-        sha: head,
-        state: "pending",
         context: "release/staging-proof",
-        description: `Staging proof running: run ${runId}`,
+        state: "success",
+        description: `Staging proof passed; main=${mainBase}`,
+        creator: bot,
         target_url: runUrl,
       },
     ]);
+    runs([stagingRun("in_progress")]);
+    const result = run(["pull-request", "7"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.posted.map(({ state }) => state)).toEqual([
+      "pending",
+      "success",
+    ]);
+    expect(result.posted.at(-1)).toEqual({
+      sha: head,
+      state: "success",
+      context: "release/staging-proof",
+      description: `Staging proof passed; main=${mainBase}`,
+      target_url: runUrl,
+    });
   });
 
-  test("a state that names no run never replaces a proof run's result", () => {
+  test("a pending write for a newer run keeps that run pending", () => {
     respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [recorded("success", runUrl)]);
+    statuses(head, [
+      {
+        context: "release/staging-proof",
+        state: "failure",
+        description: "Staging proof failed: run 1",
+        creator: bot,
+        target_url: `https://github.com/${repository}/actions/runs/1`,
+      },
+    ]);
+    runs([stagingRun("in_progress")]);
+    expect(run(["pull-request", "7"]).posted.map(({ state }) => state)).toEqual(
+      ["pending"],
+    );
+  });
+
+  test("a head with no proof gets an actionable failure", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, []);
     runs([]);
-    expect(
-      run(["pull-request", "7"], { PROOF_DISPATCHED: "true" }).posted,
-    ).toEqual([]);
-    expect(run(["pull-request", "7"]).posted).toEqual([]);
+    expect(run(["pull-request", "7"]).posted).toEqual([
+      {
+        sha: head,
+        state: "failure",
+        context: "release/staging-proof",
+        description: `No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=${head}`,
+      },
+    ]);
   });
 
   test("a head with no proof fails with the reason the dispatcher gives", () => {
@@ -544,21 +587,6 @@ describe("finished staging runs", () => {
         target_url: runUrl,
       },
     ]);
-  });
-
-  test("an older run's finish never replaces a newer run's result", () => {
-    pulls([pull()]);
-    statuses(head, [
-      {
-        context: "release/staging-proof",
-        state: "success",
-        description: "Staging proof passed",
-        creator: bot,
-        target_url: `https://github.com/${repository}/actions/runs/${String(runId + 1)}`,
-      },
-      stagingVerified("failure", "an older run"),
-    ]);
-    expect(run(["finished-run", head, String(runId)]).posted).toEqual([]);
   });
 
   test("a commit that heads no open release pull request records nothing", () => {

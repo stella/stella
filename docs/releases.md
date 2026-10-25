@@ -190,9 +190,11 @@ The steps in full:
    head's staging proof: pending while the run is going, `success` once
    `staging/verified` passed (the description names the `main` it deployed
    with), and `failure` when the candidate was refused, the run ended before
-   staging verified it, or main moved past the head before a proof started
-   (update the release branch to start one). The staging run settles the
-   status itself when it ends, whatever ended it. In the merge queue the
+   staging verified it, main moved past the head before a proof started
+   (update the release branch to start one), or the head has no proof at all
+   (the description names the dispatch that starts one). The staging run
+   settles the status itself when it ends, whatever ended it, and its result
+   stays last on the head. In the merge queue the
    release passes only when its merge group has exactly the proven head's tree
    on exactly the proven `main`; that is the tree the version commit gets, so
    its staging proof after merge is reuse, never a second deploy. If `main`
