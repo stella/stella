@@ -82,6 +82,7 @@ import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
+  withPublicFieldNames,
 } from "@/api/mcp/public-field-names";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -144,6 +145,7 @@ type CatalogEntry = {
   access: "read" | "write";
   readClass?: McpReadClass;
   destructive: boolean;
+  confirmation?: "required";
   scope: string;
   additionalScopes?: readonly string[];
   /**
@@ -176,6 +178,10 @@ type CatalogEntry = {
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
   mcp: CapabilityMcpDisposition;
 };
+
+const requiresCapabilityConfirmation = (
+  entry: Pick<CatalogEntry, "destructive" | "confirmation">,
+) => entry.destructive || entry.confirmation === "required";
 
 const HANDLER_KIND_SET = new Set<string>(HANDLER_KINDS);
 
@@ -276,6 +282,8 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
         value["readClass"] === "public" ||
         value["readClass"] === "both"))) &&
   typeof value["destructive"] === "boolean" &&
+  (value["confirmation"] === undefined ||
+    value["confirmation"] === "required") &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&
@@ -794,6 +802,7 @@ const LIST_CAPABILITIES_OUTPUT_SCHEMA = v.strictObject({
       description: v.nullable(v.string()),
       access: v.picklist(["read", "write"]),
       destructive: v.boolean(),
+      confirmation: v.picklist(["required", "not-required"]),
       handlerKind: v.picklist(HANDLER_KINDS),
       transport: CAPABILITY_TRANSPORT_OUTPUT_SCHEMA,
       scope: v.string(),
@@ -810,6 +819,7 @@ const DESCRIBE_CAPABILITY_OUTPUT_SCHEMA = v.strictObject({
   domain: v.string(),
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
+  confirmation: v.picklist(["required", "not-required"]),
   handlerKind: v.picklist(HANDLER_KINDS),
   scope: v.string(),
   additionalScopes: v.array(v.string()),
@@ -965,7 +975,7 @@ const listCapabilitiesHandler: McpToolHandler<
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       capabilityFeatureEnabled(entry, context) &&
-      (confirmable || !entry.destructive) &&
+      (confirmable || !requiresCapabilityConfirmation(entry)) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
@@ -994,6 +1004,9 @@ const listCapabilitiesHandler: McpToolHandler<
             : scopeMcpDescriptorProse(entry.description, hiddenIds),
         access: entry.access,
         destructive: entry.destructive,
+        confirmation: requiresCapabilityConfirmation(entry)
+          ? "required"
+          : "not-required",
         handlerKind: entry.handlerKind,
         transport: renderTransport(entry.transport),
         scope: entry.scope,
@@ -1162,7 +1175,7 @@ const describeCapabilityHandler: McpToolHandler<
   );
   const schema = advertisedSchemas(endpoint.config);
   const requirement = endpoint.config.featureAccess;
-  const inputSchema =
+  const callerSchema =
     requirement?.type === "conditional" &&
     !isMcpDescriptorFeatureEnabled({
       context,
@@ -1172,6 +1185,13 @@ const describeCapabilityHandler: McpToolHandler<
     })
       ? requirement.projectInputSchema(schema)
       : schema;
+  // The executors read `matterId` and refuse the internal spelling, so the
+  // description names the field the same way the catalog does.
+  const inputSchema = {
+    body: withPublicFieldNames(callerSchema.body),
+    params: withPublicFieldNames(callerSchema.params),
+    query: withPublicFieldNames(callerSchema.query),
+  };
 
   return structuredEgressPlan({
     payload: projectionPayload(DESCRIBE_CAPABILITY_OUTPUT_SCHEMA, {
@@ -1183,6 +1203,9 @@ const describeCapabilityHandler: McpToolHandler<
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,
+      confirmation: requiresCapabilityConfirmation(entry)
+        ? "required"
+        : "not-required",
       handlerKind: entry.handlerKind,
       scope: entry.scope,
       additionalScopes: additionalScopesOf(entry),
@@ -1339,7 +1362,7 @@ const writeCapabilityArgsSchema = nullAsAbsent(
   v.strictObject({
     ...CAPABILITY_ARGUMENTS,
     confirm: invokeFlagSchema(
-      "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
+      "Must be true to run a capability that requires confirmation. Set it only after a human user approved this operation.",
     ),
   }),
 );
@@ -1378,8 +1401,7 @@ const CAPABILITY_ARGUMENT_SCHEMAS = {
  * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
  */
 type FieldProjection =
-  | { ok: true; value: unknown }
-  | { ok: false; issues: McpValidationIssue[] };
+  { ok: true; value: unknown } | { ok: false; issues: McpValidationIssue[] };
 
 const internalNameRefusal = (
   path: string,
@@ -1712,7 +1734,7 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  const unconfirmable = entry.destructive
+  const unconfirmable = requiresCapabilityConfirmation(entry)
     ? confirmationUnavailableResult({
         toolConfirmation: context.toolConfirmation,
         subject: `Capability "${id}"`,
@@ -1739,7 +1761,7 @@ const invokeCapabilityHandler = async ({
 
   try {
     return await executeInvoke({
-      context: entry.destructive
+      context: requiresCapabilityConfirmation(entry)
         ? bindApprovedMcpAuditContext(context)
         : context,
       entry,
@@ -1946,7 +1968,7 @@ const capabilityReferenceRefusal = async ({
   body: unknown;
   params: unknown;
   query: unknown;
-  entry: Pick<CatalogEntry, "id" | "destructive">;
+  entry: Pick<CatalogEntry, "id" | "destructive" | "confirmation">;
   confirm: boolean | undefined;
 }) => {
   if (
@@ -1962,12 +1984,12 @@ const capabilityReferenceRefusal = async ({
     return notFoundResult("Not found");
   }
 
-  // 5. Destructive confirm gate.
-  if (entry.destructive && confirm !== true) {
+  // 5. Per-capability confirmation gate.
+  if (requiresCapabilityConfirmation(entry) && confirm !== true) {
     return structuredErrorResult({
       code: "confirmation_required",
-      message: `Capability "${entry.id}" is an irreversible operation and was called without confirmation`,
-      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+      message: `Capability "${entry.id}" requires confirmation and was called without it`,
+      hint: "Confirm this operation with the human user, then retry with confirm: true.",
     });
   }
 
@@ -2350,7 +2372,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "matter-scoped capabilities take input.params.matterId. " +
       "Required scopes and member permissions are checked per capability. " +
       "Set validate_only: true to check input without running it; " +
-      "destructive capabilities require confirm: true after human approval. " +
+      "Capabilities declaring confirmation require confirm: true after human approval. " +
       "Read capabilities must use read_capability.",
     inputSchema: writeCapabilityArgsSchema,
   }),

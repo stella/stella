@@ -172,9 +172,11 @@ export const ROUTE_TREE_INPUTS = [
   "apps/web/src/routes/*",
   "apps/web/vite.config.ts",
   "apps/web/route-tree.config.ts",
+  "apps/web/scripts/route-template-manifest.ts",
   "apps/web/scripts/generate-route-tree.ts",
   "apps/web/package.json",
   "apps/web/src/routeTree.gen.ts",
+  "apps/web/src/route-templates.gen.ts",
   "packages/scripts/src/prepared-generated-sources.ts",
   "packages/scripts/src/generated-input-identity.ts",
   "packages/scripts/src/generated-files.ts",
@@ -201,6 +203,7 @@ export const STACK_REDACTION_BROWSER_INPUTS = [
 ] as const;
 
 export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
+  "VERSION",
   "apps/desktop/*",
   "scripts/desktop-*",
   "scripts/*tauri*",
@@ -296,6 +299,13 @@ const desktopRustRequired = (files: readonly string[]) =>
 
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
+  const desktopWindowsDryRun =
+    input.eventName !== "merge_group" ||
+    input.scopeUnknown ||
+    input.changedFiles.some(
+      (file) =>
+        !/\.mdx?$/u.test(file) && matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+    );
   const releaseTypecheck =
     input.heavyOnly &&
     (PERIODIC_RELEASE_TYPECHECK_EVENTS.some(
@@ -352,7 +362,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     web_build_required: TRUE,
     web_image_smoke_required: TRUE,
     windows_scripts_required: TRUE,
-    desktop_windows_dry_run_required: TRUE,
+    desktop_windows_dry_run_required: bool(desktopWindowsDryRun),
   };
 };
 
@@ -1003,14 +1013,18 @@ export const OUTPUT_RULES = {
       ),
     ),
   desktop_windows_dry_run_required: (facts) =>
-    scopeRule(facts, "desktop_windows_dry_run_required", ({ files }) =>
-      bool(
-        files.some(
-          (file) =>
-            !/\.mdx?$/u.test(file) &&
-            matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+    scopeRule(
+      facts,
+      "desktop_windows_dry_run_required",
+      ({ input, files, full }) =>
+        bool(
+          (full && input.eventName !== "merge_group") ||
+            files.some(
+              (file) =>
+                !/\.mdx?$/u.test(file) &&
+                matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+            ),
         ),
-      ),
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;
 

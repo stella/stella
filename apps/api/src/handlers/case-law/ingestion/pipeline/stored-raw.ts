@@ -3,6 +3,13 @@ import { Result } from "better-result";
 import { envBase } from "@/api/env-base";
 import { StoredRawReadError } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawResultReader } from "@/api/handlers/case-law/ingestion/adapter";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+} from "@/api/lib/legal-search/ingestion-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   isMissingS3ObjectError,
@@ -44,4 +51,46 @@ export const readStoredRawFromS3: StoredRawResultReader = async (key) => {
       permanent: read.error instanceof S3ObjectBudgetError,
     }),
   );
+};
+
+/** Rebuild a fingerprint input from the raw payload and files stored for it. */
+export const sourceFingerprintFromStoredRaw = async (
+  key: string,
+): Promise<ReturnType<typeof sourceFingerprint>> => {
+  const payload = await readS3ObjectBounded({
+    bucket: envBase.S3_BUCKET,
+    key,
+    maxBytes: LIMITS.corpusPayloadMaxDecompressedBytes,
+    signal: AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+  });
+  const storedEnvelope = new TextDecoder().decode(payload);
+  const parts = decodeSourceRawEnvelope(storedEnvelope);
+  const references = decodeSourceRawEnvelopeObjects(storedEnvelope);
+  const sourceRaw =
+    parts === null ? storedEnvelope : encodeSourceRawEnvelope(parts);
+  const sourceRawObjects = Object.fromEntries(
+    await Promise.all(
+      Object.entries(references).map(async ([part, reference]) => {
+        const location = parseCorpusLocation(reference.location);
+        if (location.type !== "object") {
+          return await Promise.reject(
+            new StoredRawReadError({
+              message: `Stored raw object is not independently readable: ${reference.location}`,
+              key: reference.location,
+              cause: null,
+              permanent: true,
+            }),
+          );
+        }
+        const bytes = await readS3ObjectBounded({
+          bucket: envBase.S3_BUCKET,
+          key: location.key,
+          maxBytes: LIMITS.corpusPayloadMaxDecompressedBytes,
+          signal: AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+        });
+        return [part, { bytes, contentType: reference.contentType }] as const;
+      }),
+    ),
+  );
+  return sourceFingerprint({ sourceRaw, sourceRawObjects });
 };

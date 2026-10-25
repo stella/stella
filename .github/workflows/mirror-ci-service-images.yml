@@ -15,6 +15,15 @@ concurrency:
   group: mirror-ci-service-images
   cancel-in-progress: false
 
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
 jobs:
   mirror:
     if: github.repository == 'stella/stella'
@@ -59,7 +68,7 @@ jobs:
           set -euo pipefail
           bash scripts/ci-mirror-service-images.sh "$RUNNER_TEMP/ci-mirror-digests"
       - name: Upload image digests
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-service-image-digests
           path: ${{ runner.temp }}/ci-mirror-digests/digests.tsv

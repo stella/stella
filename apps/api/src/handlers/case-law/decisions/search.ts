@@ -450,11 +450,7 @@ export const searchDecisionsHandler = async ({
 };
 
 type CaseLawSearchFacet =
-  | "court"
-  | "year"
-  | "decisionType"
-  | "source"
-  | "language";
+  "court" | "year" | "decisionType" | "source" | "language";
 
 export const CASE_LAW_SEARCH_FACETS = [
   "court",
@@ -3458,6 +3454,7 @@ export const listCaseLawProvisionDecisions = async ({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
       queryUsed: "",
+      relaxedHitCount: 0,
       warnings: [],
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),

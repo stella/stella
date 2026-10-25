@@ -1,4 +1,5 @@
 import {
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
@@ -318,9 +319,7 @@ const TIME_TIMER_ADMIN_ROLE_SQL_VALUES = ORGANIZATION_MANAGEMENT_ROLES.map(
 
 const timerOrganizationAdminCheck = (
   tableName:
-    | "time_timers"
-    | "time_timer_confirmations"
-    | "time_entry_timer_states",
+    "time_timers" | "time_timer_confirmations" | "time_entry_timer_states",
 ) => sql`(
   ${sql.identifier(tableName)}."organization_id" = (SELECT current_setting('app.organization_id', true))
   AND EXISTS (
@@ -630,7 +629,10 @@ export const sellerProfiles = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     legalName: p.varchar("legal_name", { length: 512 }).notNull(),
     registrationId: p.varchar("registration_id", { length: 64 }),
+    taxId: p.varchar("tax_id", { length: 64 }),
     vatId: p.varchar("vat_id", { length: 64 }),
+    registerEntry: p.text("register_entry"),
+    barRegistration: p.text("bar_registration"),
     // Whether the issuer charges VAT. A VAT ID alone does not decide it: a
     // registered person who is not a payer has one and must not charge VAT.
     vatPayer: p.boolean("vat_payer").notNull().default(false),
@@ -670,6 +672,7 @@ export const sellerProfiles = p.pgTable(
       "seller_profiles_vat_payer_check",
       sql`NOT ${table.vatPayer} OR btrim(coalesce(${table.vatId}, '')) <> ''`,
     ),
+    ...reviewResetOwnerPolicies("seller_profiles"),
     ...orgPolicies(),
   ],
 );
@@ -737,6 +740,7 @@ export const numberSeries = p.pgTable(
       "number_series_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
     ),
+    ...reviewResetOwnerPolicies("number_series"),
     ...orgPolicies(),
   ],
 );
@@ -763,6 +767,7 @@ export const numberSeriesCounters = p.pgTable(
       "number_series_counters_positive_check",
       sql`${table.lastValue} > 0`,
     ),
+    ...reviewResetOwnerPolicies("number_series_counters"),
     ...orgPolicies(),
   ],
 );
@@ -795,6 +800,7 @@ export const numberSeriesAllocations = p.pgTable(
       "number_series_allocations_document_type_check",
       sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
     ),
+    ...reviewResetOwnerPolicies("number_series_allocations"),
     ...orgPolicies(),
   ],
 );
@@ -974,6 +980,8 @@ export const invoices = p.pgTable(
     taxableSupplyDate: p.date("taxable_supply_date"),
     dueDate: p.date("due_date"),
     currency: p.varchar({ length: 3 }).notNull(),
+    /** Language frozen onto the invoice so every reader sees the same document. */
+    language: p.text({ enum: INVOICE_LANGUAGES }).notNull().default("en"),
     sellerProfileId: safeUuid<"sellerProfile">("seller_profile_id").references(
       () => sellerProfiles.id,
     ),
@@ -981,6 +989,7 @@ export const invoices = p.pgTable(
     // contact edit does not rewrite an invoice.
     buyerName: p.varchar("buyer_name", { length: 512 }),
     buyerRegistrationId: p.varchar("buyer_registration_id", { length: 64 }),
+    buyerTaxId: p.varchar("buyer_tax_id", { length: 64 }),
     buyerVatId: p.varchar("buyer_vat_id", { length: 64 }),
     buyerAddressLine1: p.varchar("buyer_address_line_1", { length: 512 }),
     buyerAddressLine2: p.varchar("buyer_address_line_2", { length: 512 }),
@@ -1002,6 +1011,13 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "invoices_language_check",
+      sql`${table.language} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "invoices_billing_mode_check",
       sql`${table.billingMode} IN (${sql.join(
@@ -1087,6 +1103,8 @@ export const invoiceLines = p.pgTable(
     unitPrice: centsColumn("unit_price").notNull(),
     vatRateBps: p.integer("vat_rate_bps").notNull(),
     vatTreatment: p.text("vat_treatment", { enum: VAT_TREATMENTS }).notNull(),
+    // The statutory basis printed for exempt and non-VAT-payer invoice lines.
+    exemptionReason: p.text("exemption_reason"),
     netAmount: centsColumn("net_amount").notNull(),
     vatAmount: centsColumn("vat_amount").notNull(),
     grossAmount: centsColumn("gross_amount").notNull(),
@@ -1161,6 +1179,7 @@ export const invoiceLines = p.pgTable(
       "invoice_lines_description_check",
       sql`length(${table.description}) between 1 and 10000`,
     ),
+    ...reviewResetOwnerPolicies("invoice_lines"),
     ...wsOrganizationPolicies("invoice_lines", { columns: table }),
   ],
 );
@@ -1195,6 +1214,7 @@ export const vatRates = p.pgTable(
       "vat_rates_validity_check",
       sql`${table.validTo} IS NULL OR ${table.validTo} > ${table.validFrom}`,
     ),
+    ...reviewResetOwnerPolicies("vat_rates"),
     ...orgPolicies(),
   ],
 );

@@ -1,416 +1,235 @@
-import { panic } from "better-result";
-import { afterEach, expect, mock, test } from "bun:test";
+import {
+  API_KEY_TABLE_NAME,
+  apiKey,
+  defaultKeyHasher,
+} from "@better-auth/api-key";
+import type { ApiKey } from "@better-auth/api-key/types";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
 
+import { errorOutputLogger } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { Temporal } from "@stll/time";
 
-import { rlsDb } from "@/api/db/root";
+import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
+import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import {
-  API_KEY_REFUSAL_REASON,
-  type ApiKeyRefusalReason,
-  describeApiKeyRefusal,
-} from "@/api/lib/auth/api-key-refusal-log";
-import { createDesktopCredentialAuthorizers } from "@/api/lib/business-registries/desktop/auth";
-import {
-  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX,
-  DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
-} from "@/api/lib/business-registries/desktop/request-contract";
-import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
-import {
-  type LogRecord,
-  resetLogSinkForTesting,
-  setLogSinkForTesting,
-} from "@/api/lib/observability/logger";
-import {
-  getCurrentRequestId,
-  initRequestContext,
-  runWithRequestIdScope,
-} from "@/api/lib/observability/request-context";
-import {
-  resolveMachineApiKeyCredential,
-  resolveOwnMachineApiKeyCredential,
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
 } from "@/api/mcp/api-key-auth";
+import { authenticateMcpRequest } from "@/api/mcp/auth";
+import {
+  McpAuthenticationError,
+  McpTokenVerificationError,
+} from "@/api/mcp/errors";
 
-const START = "stella_mk_abcdef";
-const SECRET = "private-tail-for-test";
-const PRESENTED = `${START}${SECRET}`;
-const genericMessage = "Invalid or expired API key";
-const createKey = () => ({
-  id: "key-one",
-  start: START,
-  enabled: true,
-  name: "Test",
-  referenceId: "user-one",
-  metadata: {
-    organizationId: "org-one",
-    scopes: ["stella:read"],
-    kind: API_KEY_KIND.machine,
-  },
-  permissions: { workspace: ["read"] },
-  createdAt: new Date("2026-09-01"),
-  expiresAt: new Date("2026-09-02"),
-});
-const cases = {
-  invalid: { resolved: false, message: genericMessage },
-  disabled: { resolved: true, message: genericMessage },
-  invalid_metadata: { resolved: true, message: genericMessage },
-  audience_mismatch: {
-    resolved: true,
-    message: "This API key is bound to the law audience. Use /mcp-law.",
-  },
-  invalid_permissions: { resolved: true, message: genericMessage },
-  inactive_member: { resolved: true, message: genericMessage },
-  role_permissions: { resolved: true, message: genericMessage },
-  personal_policy: { resolved: true, message: genericMessage },
-  expired: { resolved: false, message: genericMessage },
-} as const satisfies Record<
-  ApiKeyRefusalReason,
-  { resolved: boolean; message: string }
->;
+const OWNER_ID = "stream-key-owner";
+const ORGANIZATION_ID = "stream-key-organization";
+const REQUEST_LIMIT = 3;
+const INITIAL_REMAINING = 20;
 
-const dependenciesFor = (reason?: ApiKeyRefusalReason) => {
-  const key = createKey();
-  const verifyApiKey = mock();
-  const resolveAuthorization = mock();
-  resolveAuthorization.mockResolvedValue({
-    role: "member",
-    memberId: "member-one",
-    email: "test@example.test",
-    workspace: null,
-  });
-  switch (reason) {
-    case API_KEY_REFUSAL_REASON.invalid:
-    case API_KEY_REFUSAL_REASON.expired:
-      verifyApiKey.mockResolvedValue({
-        valid: false,
-        key: null,
-        error: {
-          code:
-            reason === API_KEY_REFUSAL_REASON.expired
-              ? "KEY_EXPIRED"
-              : "KEY_NOT_FOUND",
-        },
-      });
-      return { verifyApiKey, resolveAuthorization };
-    case API_KEY_REFUSAL_REASON.disabled:
-      key.enabled = false;
-      break;
-    case API_KEY_REFUSAL_REASON.invalidMetadata:
-      verifyApiKey.mockResolvedValue({
-        valid: true,
-        key: { ...key, metadata: null },
-        error: null,
-      });
-      return { verifyApiKey, resolveAuthorization };
-    case API_KEY_REFUSAL_REASON.audienceMismatch:
-      verifyApiKey.mockResolvedValue({
-        valid: true,
-        key: { ...key, metadata: { ...key.metadata, audience: "law" } },
-        error: null,
-      });
-      return { verifyApiKey, resolveAuthorization };
-    case API_KEY_REFUSAL_REASON.invalidPermissions:
-      key.permissions = { workspace: ["unknown"] };
-      break;
-    case API_KEY_REFUSAL_REASON.inactiveMember:
-      resolveAuthorization.mockResolvedValue(null);
-      break;
-    case API_KEY_REFUSAL_REASON.rolePermissions:
-      verifyApiKey.mockResolvedValue({
-        valid: true,
-        key: { ...key, permissions: { organizationSettings: ["update"] } },
-        error: null,
-      });
-      return { verifyApiKey, resolveAuthorization };
-    case API_KEY_REFUSAL_REASON.personalPolicy:
-      verifyApiKey.mockResolvedValue({
-        valid: true,
-        key: {
-          ...key,
-          metadata: {
-            ...key.metadata,
-            kind: API_KEY_KIND.personal,
-            audience: "default",
+const createCredential = async () => {
+  const auth = betterAuth({
+    baseURL: "http://localhost:3001",
+    secret: "stream-key-test-secret-at-least-32-characters",
+    logger: errorOutputLogger,
+    database: memoryAdapter({
+      user: [],
+      session: [],
+      account: [],
+      verification: [],
+      apikey: [],
+    }),
+    plugins: [
+      apiKey(
+        API_KEY_PLUGIN_CONFIGS.map((config) => ({
+          ...config,
+          rateLimit: {
+            enabled: true,
+            maxRequests: REQUEST_LIMIT,
+            timeWindow: 3_600_000,
           },
-        },
-        error: null,
-      });
-      return {
-        verifyApiKey,
-        resolveAuthorization,
-        resolvePersonalPolicy: async () => "disabled" as const,
-      };
-    case undefined:
-      break;
-    default: {
-      const exhaustive: never = reason;
-      return exhaustive;
-    }
-  }
-  verifyApiKey.mockResolvedValue({ valid: true, key, error: null });
-  return { verifyApiKey, resolveAuthorization };
+        })),
+      ),
+    ],
+  });
+  const context = await auth.$context;
+  await context.adapter.create({
+    model: "user",
+    data: {
+      id: OWNER_ID,
+      email: "stream@example.test",
+      name: "Stream owner",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    forceAllowId: true,
+  });
+  const issued = await auth.api.createApiKey({
+    body: {
+      configId: MACHINE_API_KEY_CONFIG_ID,
+      userId: OWNER_ID,
+      name: "Stream credential",
+      remaining: INITIAL_REMAINING,
+      metadata: { organizationId: ORGANIZATION_ID, scopes: ["stella:read"] },
+      permissions: { organizationSettings: ["update"] },
+    },
+  });
+  const membership: { role: string | null } = { role: "owner" };
+  const clock = { current: Temporal.Instant.from("2026-10-08T00:00:00Z") };
+  const resolveAuthorization = async () =>
+    membership.role === null
+      ? null
+      : {
+          memberId: "stream-member",
+          email: "stream@example.test",
+          role: membership.role,
+          workspace: null,
+          emailVerified: true,
+          userDeleted: false,
+          enrolledFeatureIds: [],
+          professionalUse: { status: "required" as const },
+        };
+  const admit = async () =>
+    await resolveMachineApiKeySession(issued.key, {
+      verifyApiKey: auth.api.verifyApiKey,
+      resolveAuthorization,
+    });
+  const revalidate = async () =>
+    await revalidateMachineApiKeySession(issued.key, {
+      getAuthContext: async () => context,
+      clock: { instant: () => clock.current },
+      resolveAuthorization,
+    });
+  const stored = async () => {
+    const row = await context.adapter.findOne<ApiKey>({
+      model: API_KEY_TABLE_NAME,
+      where: [{ field: "id", value: issued.id }],
+    });
+    return row ?? expect.unreachable("The issued credential is stored");
+  };
+  return {
+    auth,
+    context,
+    issued,
+    membership,
+    clock,
+    admit,
+    revalidate,
+    stored,
+    resolveAuthorization,
+  };
 };
 
-afterEach(resetLogSinkForTesting);
+describe("machine credential stream revalidation", () => {
+  test.each([1, 3, 8])(
+    "%i revalidations preserve the stored budget while admissions consume it",
+    async (repetitions) => {
+      const credential = await createCredential();
+      await credential.admit();
+      const admitted = await credential.stored();
+      expect(admitted.key).toBe(await defaultKeyHasher(credential.issued.key));
+      expect(admitted.requestCount).toBe(1);
+      expect(admitted.lastRequest).toBeInstanceOf(Date);
+      expect(admitted.remaining).toBe(INITIAL_REMAINING - 1);
 
-for (const reason of Object.values(API_KEY_REFUSAL_REASON)) {
-  test(`logs one bounded refusal without the presented secret: ${reason}`, async () => {
-    const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => {
-      records.push(record);
-    });
-    await runWithRequestIdScope(async () => {
-      initRequestContext(new Request("https://example.test/mcp"));
-      const requestId =
-        getCurrentRequestId() ?? panic("Expected an initialized request id");
-      const error = await rejectionOf(
-        resolveMachineApiKeyCredential(PRESENTED, dependenciesFor(reason)),
+      for (let index = 0; index < repetitions; index++) {
+        expect((await credential.revalidate()).userId).toBe(OWNER_ID);
+        expect(await credential.stored()).toEqual(admitted);
+      }
+      for (let count = 2; count <= REQUEST_LIMIT; count++) {
+        await credential.admit();
+        const spent = await credential.stored();
+        expect(spent.requestCount).toBe(count);
+        expect(spent.remaining).toBe(INITIAL_REMAINING - count);
+      }
+      expect(await rejectionOf(credential.admit())).toBeInstanceOf(
+        McpAuthenticationError,
       );
-      expect(error).toMatchObject({ message: cases[reason].message });
-      const serialized = JSON.stringify(records);
-      expect(serialized).not.toContain(SECRET);
-      expect(serialized.includes(START)).toBe(cases[reason].resolved);
-      expect(records).toEqual([
-        {
-          message: "auth.api_key_refused",
-          severityText: "WARN",
-          attributes: {
-            "auth.refusal_reason": reason,
-            "auth.mode": "default",
-            "request.id": requestId,
-            ...(cases[reason].resolved ? { "key.start": START } : {}),
-            ...(cases[reason].resolved &&
-            reason !== API_KEY_REFUSAL_REASON.invalidMetadata
-              ? {
-                  "key.kind":
-                    reason === API_KEY_REFUSAL_REASON.personalPolicy
-                      ? API_KEY_KIND.personal
-                      : API_KEY_KIND.machine,
-                }
-              : {}),
-          },
-        },
-      ]);
-    });
-  });
-}
-
-test("builds only bounded attributes without request context", () => {
-  for (const reason of Object.values(API_KEY_REFUSAL_REASON)) {
-    expect(describeApiKeyRefusal({ reason, mode: "desktop" })).toEqual({
-      "auth.refusal_reason": reason,
-      "auth.mode": "desktop",
-    });
-    expect(
-      describeApiKeyRefusal({
-        reason,
-        mode: "law",
-        key: { start: PRESENTED, kind: API_KEY_KIND.personal },
-      }),
-    ).toEqual({
-      "auth.refusal_reason": reason,
-      "auth.mode": "law",
-      "key.start": START,
-      "key.kind": API_KEY_KIND.personal,
-    });
-  }
-});
-
-test("successful resolution emits no refusal", async () => {
-  const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => {
-    records.push(record);
-  });
-  const credential = await resolveMachineApiKeyCredential(
-    PRESENTED,
-    dependenciesFor(),
+      const exhausted = await credential.stored();
+      for (let index = 0; index < repetitions; index++) {
+        expect((await credential.revalidate()).userId).toBe(OWNER_ID);
+        expect(await credential.stored()).toEqual(exhausted);
+      }
+    },
   );
-  expect(credential.session.credential?.type).toBe("machine_api_key");
-  expect(records).toEqual([]);
-});
 
-test("self inspection records its own mode without a request id", async () => {
-  const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => {
-    records.push(record);
-  });
-  expect(
-    await rejectionOf(
-      resolveOwnMachineApiKeyCredential(
-        PRESENTED,
-        dependenciesFor(API_KEY_REFUSAL_REASON.disabled),
-      ),
-    ),
-  ).toMatchObject({ message: genericMessage });
-  expect(records).toEqual([
-    {
-      message: "auth.api_key_refused",
-      severityText: "WARN",
-      attributes: {
-        "auth.refusal_reason": "disabled",
-        "auth.mode": "self_inspection",
-        "key.start": START,
-        "key.kind": "machine",
-      },
-    },
-  ]);
-});
-
-test.each([
-  { permissions: null },
-  { permissions: {} },
-  { permissions: { unknown: ["read"] } },
-])(
-  "records malformed or unsupported stored permissions: %o",
-  async (override) => {
-    const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => {
-      records.push(record);
-    });
-    const dependencies = dependenciesFor();
-    dependencies.verifyApiKey.mockResolvedValue({
-      valid: true,
-      key: { ...createKey(), ...override },
-      error: null,
-    });
-    expect(
-      await rejectionOf(
-        resolveMachineApiKeyCredential(PRESENTED, dependencies),
-      ),
-    ).toMatchObject({ message: genericMessage });
-    expect(
-      records.map((record) => record.attributes?.["auth.refusal_reason"]),
-    ).toEqual([API_KEY_REFUSAL_REASON.invalidPermissions]);
-  },
-);
-
-test.each([
-  { expiresAt: null },
-  { expiresAt: new Date("2027-09-01") },
-  { permissions: { organizationSettings: ["update"] } },
-])("records personal policy refusal: %o", async (override) => {
-  const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => {
-    records.push(record);
-  });
-  const dependencies = dependenciesFor();
-  const key = createKey();
-  dependencies.verifyApiKey.mockResolvedValue({
-    valid: true,
-    key: {
-      ...key,
-      ...override,
-      metadata: {
-        ...key.metadata,
-        kind: API_KEY_KIND.personal,
-        audience: "default",
-      },
-    },
-    error: null,
-  });
-  expect(
-    await rejectionOf(
-      resolveMachineApiKeyCredential(PRESENTED, {
-        ...dependencies,
-        resolvePersonalPolicy: async () => "enabled",
-      }),
-    ),
-  ).toMatchObject({ message: genericMessage });
-  expect(
-    records.map((record) => record.attributes?.["auth.refusal_reason"]),
-  ).toEqual([API_KEY_REFUSAL_REASON.personalPolicy]);
-});
-
-test.each([
-  { code: "KEY_EXPIRED", reason: API_KEY_REFUSAL_REASON.expired },
-  { code: "KEY_DISABLED", reason: API_KEY_REFUSAL_REASON.disabled },
-  { code: "KEY_NOT_FOUND", reason: API_KEY_REFUSAL_REASON.invalid },
-])(
-  "records plugin refusal without a resolved key: %o",
-  async ({ code, reason }) => {
-    const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => {
-      records.push(record);
-    });
-    const dependencies = dependenciesFor();
-    dependencies.verifyApiKey.mockResolvedValue({
-      valid: false,
-      key: null,
-      error: { code },
-    });
-    expect(
-      await rejectionOf(
-        resolveMachineApiKeyCredential(PRESENTED, dependencies),
-      ),
-    ).toMatchObject({ message: genericMessage });
-    expect(records).toEqual([
-      {
-        message: "auth.api_key_refused",
-        severityText: "WARN",
-        attributes: {
-          "auth.mode": "default",
-          "auth.refusal_reason": reason,
-        },
-      },
-    ]);
-  },
-);
-
-test.each([
-  { reason: API_KEY_REFUSAL_REASON.invalid, valid: false, key: null },
-  {
-    reason: API_KEY_REFUSAL_REASON.disabled,
-    valid: true,
-    key: { ...createKey(), enabled: false },
-  },
-  {
-    reason: API_KEY_REFUSAL_REASON.invalidMetadata,
-    valid: true,
-    key: createKey(),
-  },
-  {
-    reason: API_KEY_REFUSAL_REASON.invalidMetadata,
-    valid: true,
-    key: { ...createKey(), expiresAt: null, metadata: null },
-  },
-])(
-  "desktop key refusal uses the shared bounded record: %o",
-  async ({ reason, valid, key }) => {
-    const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => {
-      records.push(record);
-    });
-    const verifyApiKey = mock();
-    verifyApiKey.mockResolvedValue({ valid, key, error: null });
-    const authorizers = createDesktopCredentialAuthorizers({
-      membershipDb: rlsDb,
-      verifyApiKey: () => verifyApiKey,
-      resolveMember: mock(),
-    });
-    const result = await authorizers.authorizeDesktopAccount(
-      new Request("https://example.test/desktop", {
-        headers: {
-          authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}${SECRET}`,
-        },
-      }),
-    );
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.status).toBe(401);
-      expect(result.error.message).toBe(
-        DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body.message,
-      );
+  test.each([
+    "disabled",
+    "expired",
+    "membership_removed",
+    "role_changed",
+    "wrong_configuration",
+  ] as const)("revalidation refuses a credential after %s", async (change) => {
+    const credential = await createCredential();
+    await credential.admit();
+    switch (change) {
+      case "disabled":
+        await credential.context.adapter.update({
+          model: API_KEY_TABLE_NAME,
+          where: [{ field: "id", value: credential.issued.id }],
+          update: { enabled: false },
+        });
+        break;
+      case "expired":
+        await credential.context.adapter.update({
+          model: API_KEY_TABLE_NAME,
+          where: [{ field: "id", value: credential.issued.id }],
+          update: {
+            expiresAt: new Date(credential.clock.current.epochMilliseconds),
+          },
+        });
+        expect((await credential.revalidate()).userId).toBe(OWNER_ID);
+        credential.clock.current = credential.clock.current.add({
+          milliseconds: 1,
+        });
+        break;
+      case "membership_removed":
+        credential.membership.role = null;
+        break;
+      case "role_changed":
+        credential.membership.role = "intern";
+        break;
+      case "wrong_configuration":
+        await credential.context.adapter.update({
+          model: API_KEY_TABLE_NAME,
+          where: [{ field: "id", value: credential.issued.id }],
+          update: { configId: "desktop_registry" },
+        });
+        break;
+      default: {
+        change satisfies never;
+        panic("Unhandled credential change");
+      }
     }
-    expect(JSON.stringify(records)).not.toContain(SECRET);
-    expect(records).toEqual([
-      {
-        message: "auth.api_key_refused",
-        severityText: "WARN",
-        attributes: {
-          "auth.refusal_reason": reason,
-          "auth.mode": "desktop",
-          ...(key ? { "key.start": START } : {}),
-        },
-      },
-    ]);
-  },
-);
+    const before = await credential.stored();
+    expect(await rejectionOf(credential.revalidate())).toBeInstanceOf(
+      McpAuthenticationError,
+    );
+    expect(await credential.stored()).toEqual(before);
+  });
+
+  test("store failures remain retryable verification failures", async () => {
+    const credential = await createCredential();
+    await credential.admit();
+    const outage = new Error("Credential store unavailable");
+    const result = await authenticateMcpRequest(credential.issued.key, {
+      resolveApiKeySession: async (key, options) =>
+        await revalidateMachineApiKeySession(key, {
+          ...options,
+          getAuthContext: async () => ({
+            adapter: { findOne: async () => await Promise.reject(outage) },
+          }),
+          resolveAuthorization: credential.resolveAuthorization,
+        }),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(McpTokenVerificationError);
+      expect(result.error.cause).toBe(outage);
+    }
+  });
+});

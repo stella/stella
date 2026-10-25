@@ -243,8 +243,7 @@ export function checkedDecisionMetadata(
 export function checkedDecisionMetadata<Value extends Record<string, unknown>>(
   metadata: Value,
   schema?:
-    | NoInfer<MetadataUrlSchema<Value>>
-    | StoredDecisionMetadataProjectionOptions,
+    NoInfer<MetadataUrlSchema<Value>> | StoredDecisionMetadataProjectionOptions,
 ): Value | Record<string, unknown> {
   checkDecisionTextMetadata(metadata);
   if (isStoredMetadataProjection(schema)) {

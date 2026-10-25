@@ -117,9 +117,7 @@ type AddedSource = {
 };
 
 type EditorOperation =
-  | { type: "idle" }
-  | { type: "transforming" }
-  | { type: "uploading" };
+  { type: "idle" } | { type: "transforming" } | { type: "uploading" };
 
 type PDFPageOrganizerProps = {
   canSaveVersion: boolean;
@@ -237,7 +235,11 @@ const loadAddedSources = async ({
 
   const bytes = await file.arrayBuffer();
   const sourceId = createUuid();
-  const result = await loadPDF({ fileId: sourceId, buffer: bytes });
+  const result = await loadPDF({
+    fileId: sourceId,
+    buffer: bytes,
+    pageSource: "portfolio",
+  });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -1284,7 +1286,7 @@ export const PDFPageOrganizer = ({
   );
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: sourceDocumentResult } = usePDFDocument({
-    key: { fileId: fieldId },
+    key: { fileId: fieldId, pageSource: "portfolio" },
     context: { buffer: originalFile.buffer },
   });
   const sourceDocument = resolveOrganizerSourceDocument({

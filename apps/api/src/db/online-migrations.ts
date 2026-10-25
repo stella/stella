@@ -25,6 +25,7 @@ import {
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
 } from "./chat-content-v3-backfill";
+import { CONTACT_VAT_ID_REPAIR } from "./contact-vat-id-repair";
 import {
   CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
@@ -38,6 +39,10 @@ import {
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import {
+  INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  INVOICE_LANGUAGE_CONSTRAINTS,
+} from "./invoice-language-constraint-validation";
 import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
@@ -66,6 +71,10 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import {
+  READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
+  READER_ANNOTATION_CLAIM_CONSTRAINTS,
+} from "./reader-annotation-claim-constraint-validation";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
@@ -212,6 +221,17 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "legislation_documents_legacy_current_lang_idx",
     tableName: "legislation_documents",
   },
+  {
+    // Serves the matter key's cascade and the claim cleanup trigger; both
+    // still work, by a scan, until it exists.
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legal_reader_annotations_verification_claim_idx" ON public."legal_reader_annotations" (workspace_id, verification_claim_id) WHERE workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.legal_reader_annotations USING btree (workspace_id, verification_claim_id) WHERE (workspace_id IS NOT NULL)",
+    isUnique: false,
+    name: "legal_reader_annotations_verification_claim_idx",
+    tableName: "legal_reader_annotations",
+  },
   ...MONITORING_SESSION_INDEXES,
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
@@ -229,6 +249,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
+  },
+  // A provision's subtree of citing rows as one byte-ordered anchor range.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C")`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C")',
+    isUnique: false,
+    name: "case_law_provision_citations_work_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C") WHERE "work_eli" IS NOT NULL`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C") WHERE (work_eli IS NOT NULL)',
+    isUnique: false,
+    name: "case_law_provision_citations_eli_subtree_idx",
+    tableName: "case_law_provision_citations",
   },
   // Bounded cross-publisher ruling lookup before a decision insert.
   {
@@ -709,6 +746,16 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
       "case_law_decisions_source_case_lang_null_idx",
     ],
   },
+  // A provision's citing rows are its whole subtree, which the exact-anchor
+  // walks cannot seek under the database collation.
+  {
+    legacyName: "case_law_provision_citations_work_anchor_idx",
+    replacementNames: ["case_law_provision_citations_work_subtree_idx"],
+  },
+  {
+    legacyName: "case_law_provision_citations_eli_anchor_idx",
+    replacementNames: ["case_law_provision_citations_eli_subtree_idx"],
+  },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
   // replacement is proven ready before this retires the legacy index, so no
@@ -750,6 +797,9 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
+  ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
@@ -772,6 +822,8 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
+    ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 
@@ -831,8 +883,7 @@ export const runOnlineMigrations = async (
   );
 
 type OnlineValidationOutcome =
-  | { type: "validated" }
-  | { type: "migrator_active" };
+  { type: "validated" } | { type: "migrator_active" };
 
 const VALIDATED = {
   type: "validated",
@@ -1467,6 +1518,9 @@ export const ensureOnlineIndexValid = async ({
         // DROP before CREATE would let a duplicate commit in between.
         await session.run(reindexIndexConcurrently(index));
         return;
+      }
+      if (!declaresOnlineBuild(index)) {
+        panic(`Required migration index ${index.name} is missing`);
       }
       await session.run(createIndexConcurrently(index));
     },

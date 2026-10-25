@@ -51,7 +51,10 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
-import type { S3PresignError } from "@/api/lib/s3-presign";
+import type {
+  S3ObjectMissingError,
+  S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -348,7 +351,10 @@ type CopyFileObjectOptions = FileCopySource & {
 export const copyFileObject = async (
   options: CopyFileObjectOptions,
 ): Promise<
-  Result<FileMapping, S3PresignError | OrganizationFileUsageError>
+  Result<
+    FileMapping,
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
 > => {
   const copied = await stageAndCopyFiles({
     sources: [options],
@@ -384,7 +390,10 @@ const stageAndCopyFiles = async ({
   targetWorkspaceId,
   copiedS3Keys,
 }: CopyFileObjectsOptions): Promise<
-  Result<FileMapping[], S3PresignError | OrganizationFileUsageError>
+  Result<
+    FileMapping[],
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
 > => {
   const mappings = sources.map((source) => {
     const newFileId = allocateFileObject();
@@ -659,8 +668,7 @@ type CopyEntitiesProps = {
         sourceSnapshot: EntitySnapshot[];
       };
   fieldMapping:
-    | { type: "omit" }
-    | { type: "single"; sourceFieldId: SafeId<"field"> };
+    { type: "omit" } | { type: "single"; sourceFieldId: SafeId<"field"> };
   dependencies?: CopyEntitiesDependencies | undefined;
 };
 
@@ -1703,10 +1711,10 @@ export const copyEntities = async ({
 
   // Written here, inside the copy transaction: the mark commits or rolls back
   // with the copies themselves, so a lost post-commit flush costs nothing.
-  await dependencies.enqueueEntitySearchRepairs(
-    tx,
-    plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-  );
+  await dependencies.enqueueEntitySearchRepairs(tx, [
+    ...plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+    ...plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.durableExtraction],
+  ]);
   const nativeExtractionRunIds = await dependencies.requestNativeExtractionRuns(
     {
       requests: plan.nativeExtractionRequests,

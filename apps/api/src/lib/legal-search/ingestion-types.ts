@@ -7,6 +7,7 @@
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: a page may also report listed items whose read did not produce them; built decisions are unchanged.
+// parser-output-unchanged: adapter definitions keep their declared reconciliation types; parsed output is unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -260,8 +261,7 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    | Readonly<Record<string, SourceRawObjectPayload>>
-    | undefined;
+    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -300,8 +300,7 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  | { type: "accepted" }
-  | { type: "item_build_failed"; error: PlainTextError };
+  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -879,6 +878,8 @@ export type StoredRawListing =
       parts: SourceRawParts;
       /** The listing row, verified to name the decision the database holds. */
       listing: Record<string, unknown>;
+      /** The decoded envelope, reusable when replay preserves it verbatim. */
+      sourceRaw: string;
     }
   | StoredRawReparseRejected;
 
@@ -914,7 +915,8 @@ export const readStoredRawListing = ({
     };
   }
 
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const sourceRaw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(sourceRaw);
   const listingRaw = parts?.[part];
   if (parts === null || listingRaw === undefined) {
     return {
@@ -945,7 +947,7 @@ export const readStoredRawListing = ({
     };
   }
 
-  return { type: "listing", parts, listing };
+  return { type: "listing", parts, listing, sourceRaw };
 };
 
 /**
@@ -1228,8 +1230,7 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    | (() => SourceReconciliation["buildDecision"])
-    | undefined;
+    (() => SourceReconciliation["buildDecision"]) | undefined;
 };
 
 /**
@@ -1421,9 +1422,7 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  | StoredSourceSurface
-  | ExcludedSourceSurface
-  | BacklogSourceSurface;
+  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({
@@ -1617,9 +1616,17 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
 };
 
 /** Build an adapter from the source facts declared for its registry key. */
-export const defineSourceAdapter = <const TKey extends AdapterKey>(
-  adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => {
+export const defineSourceAdapter = <
+  const TKey extends AdapterKey,
+  const TAdapter extends SourceAdapterDefinition<TKey>,
+>(
+  // `key` names TKey for inference; the constraint then binds documentStage to
+  // that key's manifest instead of the union of every manifest's stage.
+  adapter: TAdapter & { readonly key: TKey },
+): SourceAdapter & {
+  readonly key: TAdapter["key"];
+  readonly reconciliation: TAdapter["reconciliation"];
+} => {
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
   ) => await withDocumentStageWindow({ ...options, source: adapter.key });
