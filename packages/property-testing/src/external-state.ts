@@ -26,7 +26,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
  *
  * State this process owns has a milestone to await instead (a promise the
  * code under test resolves, an event it emits, a store subscription), and the
- * `bun-test-hygiene/no-polling-loop` lint rule rejects polling it in tests.
+ * `test-timing/no-polling-loop` lint rule rejects polling it in tests.
  * This module is the one place such a loop lives.
  */
 export const waitForExternalState = async <T, Fallback = never>({

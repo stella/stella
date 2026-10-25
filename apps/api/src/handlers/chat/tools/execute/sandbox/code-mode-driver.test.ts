@@ -246,7 +246,7 @@ describe("createStellaIsolateDriver", () => {
 
     // Once the second run is visibly parked in the admission queue, it was
     // definitively denied the single per-key slot the first still holds.
-    await whenSandboxAdmissionQueued(1);
+    await whenSandboxAdmissionQueued(key);
     expect(started).toEqual(["first"]);
 
     gateOf(releaseGates, "first").resolve();

@@ -207,6 +207,7 @@ afterAll(async () => {
 // exists and never awaited by one. Each tick resumes after a real timer.
 const runBackgroundQueries = async (signal: AbortSignal): Promise<void> => {
   try {
+    // real-time: exercise detached query work while requests are processed.
     for await (const _tick of setInterval(BACKGROUND_QUERY_WAIT_MS, undefined, {
       signal,
     })) {

@@ -466,10 +466,9 @@ export const createApprovalHarness = ({
       // The run owns every terminal path, including checkpoint restoration and
       // failures that produce no onFinish event. Its notification only wakes
       // the persisted-row oracle; it does not replace that oracle.
-      runSettlements.set(props.threadId, [
-        ...(runSettlements.get(props.threadId) ?? []),
-        props.run.settled,
-      ]);
+      const settlements = runSettlements.get(props.threadId) ?? [];
+      settlements.push(props.run.settled);
+      runSettlements.set(props.threadId, settlements);
       void props.run.settled.then(
         () => notifyTurnSettlement(props.threadId),
         (error: unknown) => {

@@ -5,8 +5,6 @@
 // separates each case description from a disabled-test case, because a
 // comment directly above a `.skip` counts as its reason.
 
-import { nextMacrotask } from "@stll/concurrency/event-loop";
-import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 import * as bun from "bun";
 import { SQL, SQL as PgClient } from "bun";
 import * as bt from "bun:test";
@@ -22,7 +20,6 @@ import {
   xtest,
 } from "bun:test";
 import { drizzle } from "drizzle-orm/bun-sql";
-import { setTimeout as delay } from "node:timers/promises";
 
 declare const local: { only: (title: string, fn: () => void) => void };
 declare const flag: string | undefined;
@@ -218,96 +215,3 @@ const _awaited = async () => expect(await pending).toBe(1);
 // a framework whose `expect` is not from `bun:test`
 // expect-clean: bun-test-hygiene/no-promise-matchers
 const _playwright = playwrightExpect(pending).rejects.toThrow();
-
-// --- no-polling-loop ---
-
-declare const done: () => boolean;
-declare const schedule: (work: () => Promise<void>) => void;
-declare const chunks: AsyncIterable<string>;
-const pause = async (milliseconds: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-
-const _pollingLoops = async () => {
-  // a predicate in the loop test
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  while (!done()) {
-    await Bun.sleep(10);
-  }
-  // a deadline with a conditional exit
-  const deadline = Date.now() + 1000;
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  while (Date.now() < deadline) {
-    if (done()) {
-      return;
-    }
-    await bun.sleep(5);
-  }
-  // a counter bound with a conditional exit
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (done()) {
-      break;
-    }
-    await ownerSleep(5);
-  }
-  // a counter bound joined with a predicate
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  for (let attempt = 0; attempt < 100 && !done(); attempt += 1) {
-    await delay(5);
-  }
-  // a timer promise, a microtask tick and the next macrotask
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  while (!done()) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 5);
-    });
-  }
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  do {
-    await Promise.resolve();
-  } while (!done());
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  while (!done()) {
-    await nextMacrotask();
-  }
-  // a local helper that only waits
-  // oxlint-disable-next-line bun-test-hygiene/no-polling-loop
-  while (!done()) {
-    await pause(5);
-  }
-};
-
-const _fixedLoops = async () => {
-  // a counter the loop advances flushes a fixed number of ticks
-  // expect-clean: bun-test-hygiene/no-polling-loop
-  for (let tick = 0; tick < 3; tick += 1) {
-    await Bun.sleep(0);
-  }
-  // a bound read from a call is still a fixed count
-  // expect-clean: bun-test-hygiene/no-polling-loop
-  for (let tick = 0; tick < Number(flag); tick += 1) {
-    await Bun.sleep(1);
-  }
-  // a wait inside a callback runs on the callback's schedule
-  // expect-clean: bun-test-hygiene/no-polling-loop
-  while (!done()) {
-    schedule(async () => {
-      await Bun.sleep(1);
-    });
-  }
-  // a loop that awaits only the work itself
-  // expect-clean: bun-test-hygiene/no-polling-loop
-  while (!done()) {
-    await Promise.all([]);
-  }
-  // stepping through a sequence
-  // expect-clean: bun-test-hygiene/no-polling-loop
-  for await (const chunk of chunks) {
-    if (chunk === "end") {
-      break;
-    }
-    await Bun.sleep(1);
-  }
-};

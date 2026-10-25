@@ -109,6 +109,7 @@ describe("x-request-id response header", () => {
     const backgroundIds: (string | undefined)[] = [];
     const backgroundLoop = async () => {
       try {
+        // real-time: exercise a timer continuation while a request is active.
         for await (const _tick of setInterval(BACKGROUND_WAIT_MS, undefined, {
           signal: controller.signal,
         })) {

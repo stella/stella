@@ -230,22 +230,26 @@ const raceHostWorkAgainstDeadline = async (
 };
 
 /**
- * Test-only: resolves once exactly `count` runs wait in the admission queue.
- * Concurrency tests use it to observe "a run is QUEUED behind the cap" as the
- * state transition itself, instead of sleeping or polling the counters. The
- * waiter push and the admission flush both happen synchronously inside
- * `runSandbox`'s first await, and every queue change notifies the listeners,
+ * Test-only: resolves once a run for `concurrencyKey` waits in the admission
+ * queue. Concurrency tests use it to observe "this run is QUEUED behind the
+ * cap" as the state transition itself, instead of sleeping or polling the
+ * counters. The waiter push and admission flush both happen synchronously
+ * inside `runSandbox`'s first await, and every queue change notifies listeners,
  * so the promise settles in the same task as the transition.
  */
 export const whenSandboxAdmissionQueued = async (
-  count: number,
+  concurrencyKey: string,
 ): Promise<void> => {
-  if (sandboxAdmissionQueue.length === count) {
+  const isQueued = () =>
+    sandboxAdmissionQueue.some(
+      (waiter) => waiter.concurrencyKey === concurrencyKey,
+    );
+  if (isQueued()) {
     return;
   }
   const reached = Promise.withResolvers<undefined>();
   const listener = () => {
-    if (sandboxAdmissionQueue.length === count) {
+    if (isQueued()) {
       reached.resolve(undefined);
     }
   };

@@ -385,7 +385,7 @@ const contendedGate = (
     await waitForExternalState({
       description: `backend ${String(pid)} waits on the contender`,
       intervalMs: 5,
-      timeoutMs: 2000,
+      timeoutMs: 2000, // timeout: bound observation before checking gate behavior
       read: async () =>
         signal.aborted ||
         (

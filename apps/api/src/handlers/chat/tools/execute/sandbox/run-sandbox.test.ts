@@ -822,7 +822,7 @@ describe("runSandbox", () => {
 
     // Once the second run is visibly parked in the admission queue, it was
     // definitively denied a slot while the first still holds the per-key slot.
-    await whenSandboxAdmissionQueued(1);
+    await whenSandboxAdmissionQueued(concurrencyKey);
     expect(gate.startedLabels).toEqual(["first"]);
 
     gate.release("first");
@@ -882,7 +882,7 @@ describe("runSandbox", () => {
     await Promise.all(admitted.map(async (label) => gate.whenStarted(label)));
     // e being visibly parked in the queue proves it was denied a slot while
     // all four admitted runs are still holding theirs.
-    await whenSandboxAdmissionQueued(1);
+    await whenSandboxAdmissionQueued(`${concurrencyKeyPrefix}-e`);
     expect(new Set(gate.startedLabels)).toEqual(new Set(admitted));
     expect(gate.startedLabels).not.toContain("e");
 
@@ -920,7 +920,7 @@ describe("runSandbox", () => {
       concurrencyKey,
       limits: { maxDurationMs: secondBudgetMs },
     });
-    await whenSandboxAdmissionQueued(1);
+    await whenSandboxAdmissionQueued(concurrencyKey);
 
     // Keep the second run queued for strictly longer than its entire execution
     // budget. The property is inherently about wall-clock, but the wait only
