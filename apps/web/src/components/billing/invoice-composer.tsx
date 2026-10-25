@@ -131,6 +131,8 @@ type PrefillExpense = InvoicePrefill["expenses"][number];
 
 type IssuedInvoice = {
   id: string;
+  /** The matter the invoice was saved under, fixed when it was submitted. */
+  workspaceId: string;
   invoiceNumber: string | null;
   issued: boolean;
   totalAmount: number;
@@ -254,7 +256,7 @@ export const InvoiceComposer = ({
       <IssuedState
         buyerName={prefill.buyer.buyerName}
         invoice={issued}
-        workspaceId={invoiceWorkspaceId}
+        workspaceId={issued.workspaceId}
       />
     );
   }
@@ -479,6 +481,7 @@ const useComposerSubmit = ({
           );
           return {
             id: invoice.id,
+            workspaceId,
             invoiceNumber: invoice.invoiceNumber,
             issued: invoice.status !== "draft",
             totalAmount: invoice.totalAmount,
@@ -490,6 +493,7 @@ const useComposerSubmit = ({
           notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
           return {
             id: created.id,
+            workspaceId,
             invoiceNumber: null,
             issued: false,
             totalAmount: created.totalAmount,

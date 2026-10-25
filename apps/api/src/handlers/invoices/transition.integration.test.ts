@@ -115,6 +115,40 @@ describe("invoice transition integration", () => {
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
   });
 
+  test("finalizes a reverse charge only with the buyer's VAT ID", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId,
+      position: 0,
+      description: "Legal advice",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(10_000),
+      vatRateBps: 0,
+      vatTreatment: "reverse_charge",
+      netAmount: cents(10_000),
+      vatAmount: cents(0),
+      grossAmount: cents(10_000),
+      source: "manual",
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toMatchObject({
+      code: 400,
+      response: { message: "Reverse charge requires a buyer VAT ID" },
+    });
+    await testDb
+      .update(invoices)
+      .set({ buyerVatId: "DE123456789" })
+      .where(eq(invoices.id, invoiceId));
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      id: invoiceId,
+    });
+    expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
   test("keeps a foreign-currency Slovak invoice in draft when the official rate is unavailable", async () => {
     const sellerProfileId = createSafeId<"sellerProfile">();
     await testDb.insert(sellerProfiles).values({
