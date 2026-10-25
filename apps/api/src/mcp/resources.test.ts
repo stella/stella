@@ -136,6 +136,31 @@ describe("MCP resources", () => {
     ).toBeInstanceOf(ProtocolError);
   });
 
+  test("a shipped skill the model may not start uninvoked is not served", async () => {
+    // No shipped skill is manual today, so the catalog is replaced with the
+    // playbook builder under each invocation; the auto run is the control.
+    const shippedAs = (invocation: "auto" | "manual") => ({
+      testDependencies: {
+        listShippedSkillMetadata: () =>
+          listSkillMetadata()
+            .filter(({ name }) => name === "playbook-builder")
+            .map((metadata) => ({ ...metadata, invocation })),
+      },
+    });
+    const servedUris = async (invocation: "auto" | "manual") =>
+      (
+        await listMcpResources("default", { context: shippedAs(invocation) })
+      ).map(({ uri }) => uri);
+
+    expect(await servedUris("auto")).toContain(PLAYBOOK_SKILL_URI);
+    expect(await servedUris("manual")).not.toContain(PLAYBOOK_SKILL_URI);
+    expect(
+      await rejectionOf(
+        readMcpResource(PLAYBOOK_SKILL_URI, "default", shippedAs("manual")),
+      ),
+    ).toBeInstanceOf(ProtocolError);
+  });
+
   test("an enabled tenant skill shadows the shipped resource with the same slug", async () => {
     const installed = {
       id: toSafeId<"agentSkill">("skill_shadow"),

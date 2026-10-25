@@ -28,6 +28,8 @@ import {
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import {
   CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
@@ -413,14 +415,17 @@ const isResourceServedInMode = ({
   });
 };
 
+/**
+ * A resource is read with nothing invoked, so only a shipped skill the model
+ * may start on its own is served; a `manual` one stays a prompt the user
+ * starts. Taking the offer, not a list of names, makes that rule the only way
+ * in.
+ */
 const shippedSkillResources = (
-  visibleNames: ReadonlySet<string>,
+  offered: ModelOfferedSkills<{ name: string }>,
 ): StaticResource[] =>
-  listSkillMetadata().flatMap((metadata) => {
-    if (!visibleNames.has(metadata.name)) {
-      return [];
-    }
-    const skill = loadSkill(metadata.name);
+  offered.flatMap(({ name }) => {
+    const skill = loadSkill(name);
     const rootUri = `stella://skills/${skill.name}`;
     const requiredTools = sameRequiredTools(
       readSkillRequiredTools(skill.metadata),
@@ -458,32 +463,43 @@ const shippedSkillResources = (
     ];
   });
 
-const visibleShippedSkillNames = async (
+/**
+ * The shipped skills this caller is offered: without a tenant, every shipped
+ * skill; with one, the catalog's built-ins, so an enabled tenant skill with
+ * the same slug shadows the shipped one. Either way through the invocation
+ * rule.
+ */
+const offeredShippedSkills = async (
   context: ResourceContext | undefined,
-): Promise<ReadonlySet<string>> => {
+): Promise<ModelOfferedSkills<{ name: string }>> => {
   if (
     context?.safeDb === undefined ||
     context.organizationId === undefined ||
     context.userId === undefined
   ) {
-    return new Set(listSkillMetadata().map(({ name }) => name));
+    const listShipped =
+      context?.testDependencies?.listShippedSkillMetadata ?? listSkillMetadata;
+    return offerSkillsToModel({
+      invokedSkillNames: new Set(),
+      skills: listShipped(),
+    });
   }
   const catalog = await listAvailableChatSkillMetadata({
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     userId: context.userId,
   });
-  const skills = catalog.unwrap("Failed to load shipped skill resources");
-  return new Set(
-    skills
-      .filter(({ source }) => source === CHAT_SKILL_SOURCE.builtIn)
-      .map(({ name }) => name),
-  );
+  return offerSkillsToModel({
+    invokedSkillNames: new Set(),
+    skills: catalog
+      .unwrap("Failed to load shipped skill resources")
+      .filter(({ source }) => source === CHAT_SKILL_SOURCE.builtIn),
+  });
 };
 
 const resourcesFor = async (context: ResourceContext | undefined) => [
   ...STATIC_RESOURCES,
-  ...shippedSkillResources(await visibleShippedSkillNames(context)),
+  ...shippedSkillResources(await offeredShippedSkills(context)),
 ];
 
 type ListMcpResourcesOptions = Pick<
