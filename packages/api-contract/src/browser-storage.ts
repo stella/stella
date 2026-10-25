@@ -17,6 +17,21 @@ export const ownerStorageKey = (base: string, owner: StorageOwner): string =>
     ? `${base}${USER_SEGMENT}${owner.userId}`
     : `${base}${VISITOR_SUFFIX}`;
 
+export const INSPECTOR_STORAGE = {
+  state: { prefix: "stella:inspector-state:v1", version: 1 },
+  minimized: { prefix: "stella:inspector-minimized:v1", version: 1 },
+  restorePending: { prefix: "stella:inspector-restore-pending:v1", version: 1 },
+} as const;
+
+type InspectorStorageDescriptor =
+  (typeof INSPECTOR_STORAGE)[keyof typeof INSPECTOR_STORAGE];
+
+/** The organization base; the account owner adds and validates its user scope. */
+export const inspectorStorageBaseKey = (
+  entry: InspectorStorageDescriptor,
+  organizationId: string,
+): string => `${entry.prefix}:${organizationId}:`;
+
 export const getStorageKey = (key: string) => `stella-${key}`;
 
 export const RECENT_FILES_STORAGE_KEY = getStorageKey("search-recent-files");

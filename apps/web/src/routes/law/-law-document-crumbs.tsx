@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { CourtName } from "@stll/decision-reader/court-name";
-import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-identity";
+import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-title";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   BreadcrumbEllipsis,

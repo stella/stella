@@ -44,6 +44,8 @@ import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
 } from "./scripts/sql-perf-scope.ts";
+// Defaults every lint to the committed, read-only Tailwind cache.
+import "./scripts/tailwind-lint-cache.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -368,6 +370,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
     "no-direct-error-toast/no-direct-error-toast",
   ]),
+  fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
+    "no-rendered-error-translation/no-rendered-error-translation",
+  ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
@@ -391,6 +396,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
     "no-banned-glyph/no-banned-glyph",
+  ]),
+  fixtureRuleOverride("no-hand-built-step-marker.fixture.tsx", [
+    "no-hand-built-step-marker/no-hand-built-step-marker",
   ]),
   fixtureRuleOverride("no-decorative-heading-accent.fixture.tsx", [
     "no-decorative-heading-accent/no-decorative-heading-accent",
@@ -483,6 +491,11 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
     "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
+  ]),
+  fixtureRuleOverride("test-timing.fixture.ts", [
+    "test-timing/no-real-time-wait",
+    "test-timing/no-polling-loop",
+    "test-timing/no-unreasoned-timeout",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1544,6 +1557,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -1574,6 +1588,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
+    "./.oxlint-plugins/no-rendered-error-translation.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -1719,6 +1734,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-adhoc-email-fold.ts",
     "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
@@ -1751,6 +1767,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
+    "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
     "./.oxlint-plugins/result-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
@@ -1963,6 +1980,25 @@ const config = defineConfig({
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
+      },
+    },
+    {
+      // Tests wait on the work's own completion signal, not on the clock.
+      // Existing sites are budgeted in scripts/test-timing-ledger.json,
+      // which only shrinks.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      rules: {
+        "test-timing/no-real-time-wait": "error",
+        "test-timing/no-polling-loop": "error",
+      },
+    },
+    {
+      // A raised timeout or retry needs its reason. The custom lint rule
+      // tests take theirs from scripts/check-oxlint-test-timeouts.ts.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      excludeFiles: [".oxlint-plugins/__tests__/**"],
+      rules: {
+        "test-timing/no-unreasoned-timeout": "error",
       },
     },
     {
@@ -2456,6 +2492,12 @@ const config = defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
+      // This helper serializes its boundary into the page before modules load,
+      // so it cannot import `panic()` there.
+      files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
+      rules: { "no-bare-error/no-bare-error": "off" },
+    },
+    {
       // Playwright end-to-end tests. They run outside the app process
       // (no env module, no `panic()` plumbing) and talk to a live HTTP
       // API where bare `throw new Error(...)` is the right signal.
@@ -2722,6 +2764,24 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Email addresses fold through apps/api/src/lib/email/normalized-email.ts,
+      // the form Better Auth stores and looks accounts up by. The API is where
+      // identity is decided; the web app lowercases only for local substring
+      // search and the API normalizes whatever it receives. Tests compute
+      // expected values independently of the owner.
+      files: [
+        "apps/api/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-adhoc-email-fold.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/email/normalized-email.ts",
+        "apps/api/**/*.test.ts",
+      ],
+      rules: {
+        "no-adhoc-email-fold/no-adhoc-email-fold": "error",
       },
     },
     {
@@ -3319,6 +3379,18 @@ const config = defineConfig({
       },
     },
     {
+      // Only a semantic ordered list may own a procedure, timeline, or
+      // ranking number. Decorative labels imply an order that is not there.
+      files: [
+        "apps/landing/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-hand-built-step-marker.fixture.tsx",
+      ],
+      rules: {
+        "no-hand-built-step-marker/no-hand-built-step-marker": "error",
+      },
+    },
+    {
       files: [
         "apps/**/*.{jsx,tsx}",
         "packages/**/*.{jsx,tsx}",
@@ -3795,6 +3867,7 @@ const config = defineConfig({
         "no-optional-mutation-command/no-optional-mutation-command": "error",
         "no-discarded-toast-error/no-discarded-toast-error": "error",
         "no-direct-error-toast/no-direct-error-toast": "error",
+        "no-rendered-error-translation/no-rendered-error-translation": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "require-matter-option-label/require-matter-option-label": "error",

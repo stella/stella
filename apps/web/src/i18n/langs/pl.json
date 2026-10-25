@@ -4813,6 +4813,8 @@
     "recentDocuments": "Ostatnie dokumenty",
     "recentSearches": "Ostatnie wyszukiwania",
     "recentlyOpenedFiles": "Ostatnio otwarte pliki",
+    "registryCandidateNameMismatch": "Oficjalna nazwa to „{officialName}” i nie jest zgodna",
+    "registryCandidateNoOfficialRecord": "W oficjalnym rejestrze nie ma wpisu dla tego numeru",
     "registryChoose": "Wybierz rejestr przedsiębiorstw",
     "registryCredentialAskAdmin": "Poproś administratora organizacji o skonfigurowanie dostępu do tego rejestru.",
     "registryCredentialSaved": "Zapisano dostęp do rejestru",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Dane z rejestru przedsiębiorstw są tymczasowo niedostępne"
     },
     "registryKrsHint": "KRS wyszukuje według numeru rejestrowego, a nie nazwy firmy. Wpisz 10-cyfrowy numer KRS, włącznie z zerami na początku (np. 0000006865).",
+    "registryNameSearchNotFound": "Żadna zweryfikowana firma nie odpowiada tej nazwie. Odrzucono następujących kandydatów:",
     "registryVatHint": "VIES sprawdza numery VAT, a nie nazwy firm. Wpisz numer VAT z prefiksem kraju (np. CZ27082440); format zależy od kraju.",
     "renameSearchTitle": "Zmień nazwę zapisanego wyszukiwania",
     "requestCountry": "Poproś o dodanie nowego kraju",

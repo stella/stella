@@ -4813,6 +4813,8 @@
     "recentDocuments": "Documents récents",
     "recentSearches": "Recherches récentes",
     "recentlyOpenedFiles": "Fichiers ouverts récemment",
+    "registryCandidateNameMismatch": "Le nom officiel « {officialName} » ne correspond pas",
+    "registryCandidateNoOfficialRecord": "Le registre officiel ne contient aucune inscription pour ce numéro",
     "registryChoose": "Choisir un registre du commerce",
     "registryCredentialAskAdmin": "Demandez à un administrateur de votre organisation de configurer l’accès à ce registre.",
     "registryCredentialSaved": "Accès au registre enregistré",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Les informations du registre du commerce sont temporairement indisponibles"
     },
     "registryKrsHint": "KRS recherche par numéro d’immatriculation, et non par nom de société. Saisissez un numéro KRS à 10 chiffres, avec les zéros initiaux (par ex. 0000006865).",
+    "registryNameSearchNotFound": "Aucune entreprise vérifiée ne correspond à ce nom. Les candidats suivants ont été écartés :",
     "registryVatHint": "VIES vérifie les numéros de TVA, pas les noms de sociétés. Saisissez un numéro de TVA avec son préfixe pays (p. ex. CZ27082440) ; le format dépend du pays.",
     "renameSearchTitle": "Renommer la recherche enregistrée",
     "requestCountry": "Demander l’ajout d’un pays",
