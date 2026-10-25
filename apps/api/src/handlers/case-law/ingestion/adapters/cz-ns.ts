@@ -4,6 +4,7 @@ import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
@@ -75,7 +76,13 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  isQuarantineSourceDocumentId,
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -566,25 +573,6 @@ export type CzNsListingRow = {
 };
 
 /**
- * The two fields a row must state for this adapter to keep it: the docket it
- * is stored under and the universal id its document is keyed on.
- *
- * Stated once, because the crawl, the identity rule and the listing walk must
- * agree exactly on which rows exist — a row one of them keeps and another
- * drops is either a decision nothing ever stores or a slice that can never be
- * filled. The id is bounded here rather than at the pipeline, since it is the
- * stored identity: one the column cannot hold would key a row nothing can
- * write.
- */
-const czNsIdentityFields = ({
-  caseNumber,
-  unid,
-}: CzNsListingRow): CzNsListingRow | null =>
-  caseNumber.length === 0 || !CZ_NS_DOCUMENT_ID_PATTERN.test(unid)
-    ? null
-    : { caseNumber, unid };
-
-/**
  * The Domino view and older parked rows can carry a joined docket label;
  * HTML listings carry separate aliases. Preserve every docket while the
  * publisher's universal id continues to identify the document.
@@ -598,6 +586,91 @@ const caseNumbersOf = ({
       ? caseNumber.split(CASE_NUMBER_SEPARATOR)
       : [caseNumber, ...additionalCaseNumbers];
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+};
+
+/**
+ * What a listed row is stored under.
+ *
+ * `document` is a row stating a Domino universal id. `quarantined` is a row
+ * the publisher lists with a docket but no usable id: it is kept as its
+ * listing (case-law AGENTS.md rule 20) under the quarantine identity of its
+ * dockets.
+ */
+type CzNsRowIdentity =
+  | {
+      type: "document";
+      unid: string;
+      /** The quarantine id this row would have had without its id. */
+      repairAlias: string | undefined;
+    }
+  | {
+      type: "quarantined";
+      sourceDocumentId: string;
+      dockets: readonly [string, ...string[]];
+    };
+
+/**
+ * The quarantine identity of a row's dockets, or undefined for a row that
+ * states none.
+ *
+ * The dockets are the one stable field both listings state. Beside the
+ * `znacka`, a Domino view entry carries only its position, its universal id
+ * (twice) and a replica-local note id; the day listing adds the court name
+ * and category letter, which the view the crawl walks does not state, so a
+ * keyed view entry could never reproduce a fingerprint over them. Position
+ * moves, and the ids are the identity that is missing. A docket names a
+ * docket rather than a document, so two id-less documents of one docket share
+ * a quarantine row: nothing either listing states tells them apart.
+ */
+const czNsDocketQuarantine = (dockets: readonly string[]) =>
+  dockets.length === 0
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.CZ_NS,
+        stableFields: { dockets: dockets.join(CASE_NUMBER_SEPARATOR) },
+      });
+
+/**
+ * How this adapter keys a row, or `null` for a row stating neither a
+ * universal id nor a docket, which has nothing to key on.
+ *
+ * Stated once, because the crawl, the identity rule and the listing walk must
+ * agree exactly on which rows exist and what each is stored under. The id is
+ * checked against the publisher's own grammar here rather than at the
+ * pipeline, since it is the stored identity: a malformed or over-long one
+ * would key a row nothing can write, so that row is quarantined instead. A
+ * row with an id and no docket is still the publisher's document and keys on
+ * the id.
+ */
+const czNsRowIdentity = (row: CzNsListingRow): CzNsRowIdentity | null => {
+  const dockets = caseNumbersOf(row);
+  const quarantine = czNsDocketQuarantine(dockets);
+  if (CZ_NS_DOCUMENT_ID_PATTERN.test(row.unid)) {
+    return {
+      type: "document",
+      unid: row.unid,
+      repairAlias: quarantine?.sourceDocumentId,
+    };
+  }
+  const [firstDocket, ...otherDockets] = dockets;
+  return quarantine === undefined || firstDocket === undefined
+    ? null
+    : {
+        type: "quarantined",
+        sourceDocumentId: quarantine.sourceDocumentId,
+        dockets: [firstDocket, ...otherDockets],
+      };
+};
+
+/** Further dockets a decision settles, as its publisher identifiers. */
+const docketIdentifiers = (
+  additionalCaseNumbers: readonly string[],
+): { identifiers?: DecisionIdentifiers } => {
+  const [first, ...others] = additionalCaseNumbers.map((value) => ({
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value,
+  }));
+  return first === undefined ? {} : { identifiers: [first, ...others] };
 };
 
 /**
@@ -642,22 +715,16 @@ const buildCzNsDecisionFromPages = ({
   webHtml,
   printHtml,
 }: BuildCzNsDecisionFromPagesOptions): IngestionResult | null => {
-  const fields = czNsIdentityFields(row);
-  if (fields === null) {
+  const identity = czNsRowIdentity(row);
+  if (identity?.type !== "document") {
     return null;
   }
-  const { unid } = fields;
-  const caseNumbers = caseNumbersOf(row);
-  const [caseNumber, ...additionalCaseNumbers] = caseNumbers;
-  if (caseNumber === undefined) {
-    return null;
-  }
-  const publisherIdentifiers = additionalCaseNumbers.map((value) => ({
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value,
-  }));
-  const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
-    publisherIdentifiers;
+  const { unid, repairAlias } = identity;
+  const [listedCaseNumber, ...additionalCaseNumbers] = caseNumbersOf(row);
+  // A row listed with an id and no docket is still the publisher's document,
+  // so it is kept under its id, which also stands in for the missing label.
+  const listingDocketMissing = listedCaseNumber === undefined;
+  const caseNumber = listedCaseNumber ?? unid;
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
   const meta = parseDetailPage(webHtml);
@@ -702,12 +769,14 @@ const buildCzNsDecisionFromPages = ({
 
   return plainTextIngestionResult({
     caseNumber,
-    ...(firstPublisherIdentifier === undefined
-      ? {}
-      : {
-          identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
-        }),
+    ...(listingDocketMissing ? { caseNumberIsPlaceholder: true } : {}),
+    ...docketIdentifiers(additionalCaseNumbers),
     sourceDocumentId: unid,
+    // So the listing row the crawl kept for this document while its id was
+    // unusable is taken over by it rather than left beside it.
+    ...(repairAlias === undefined
+      ? {}
+      : { sourceDocumentIdRepairAliases: [repairAlias] }),
     legacySourceUrls: [webUrl],
     ecli: meta["ecli"],
     court,
@@ -751,10 +820,71 @@ const buildCzNsDecisionFromPages = ({
       }),
       additionalCaseNumbers:
         additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
+      // Read back by the stored-raw replay, which sees only the stand-in.
+      ...(listingDocketMissing ? { listingDocketMissing: true } : {}),
     }),
     rawHash: sourceFingerprint({ sourceRaw }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
     documentAst,
+    sourceRaw,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
+
+/** Why a quarantined row is stored as its listing alone. */
+const CZ_NS_QUARANTINE_REASON = "missing-record-identity";
+
+type CzNsQuarantinedDecisionOptions = {
+  row: CzNsListingRow;
+  identity: Extract<CzNsRowIdentity, { type: "quarantined" }>;
+};
+
+/**
+ * The listing-only row for a record the publisher lists with no usable id.
+ *
+ * Nothing is fetched for it: every detail and print address is the universal
+ * id the row lacks. Its stored raw is the listing row in the same envelope
+ * part a read row keeps it in, so the crawl and the reconciliation store the
+ * same bytes for it, and it is held until the id recovers and the keyed
+ * observation takes the row over by its repair alias.
+ */
+const czNsQuarantinedDecision = ({
+  row,
+  identity,
+}: CzNsQuarantinedDecisionOptions): IngestionResult => {
+  const { sourceDocumentId } = identity;
+  const [caseNumber, ...additionalCaseNumbers] = identity.dockets;
+  const court = czDecisionCourt({
+    adapterKey: ADAPTER_KEYS.CZ_NS,
+    ecli: undefined,
+    publisherCourt: CZ_NS_PUBLISHER_COURT,
+    sourceDocumentId,
+    statedCourt: undefined,
+  });
+  const sourceRaw = encodeSourceRawEnvelope({
+    [CZ_NS_RAW_PART.LISTING]: storedListingRow(row),
+  });
+  return plainTextIngestionResult({
+    caseNumber,
+    ...docketIdentifiers(additionalCaseNumbers),
+    isListingOnly: true,
+    sourceDocumentId,
+    court,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,
+    language: CZ_NS_LANGUAGE,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      court,
+      additionalCaseNumbers:
+        additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: CZ_NS_QUARANTINE_REASON,
+    }),
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
+    documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
@@ -778,16 +908,33 @@ const buildCzNsDecisionFromPages = ({
  * reported unread like a failed detail read rather than stored without its
  * AST. A refusal is reported with its typed `ReadRefusal` and does not stop
  * the crawl.
+ *
+ * A row with no usable id is built from its listing alone, with no request:
+ * it is the whole record until its id recovers, so the reconciliation counts
+ * it held (`isQuarantineListingIdentity`) rather than waiting on a detail
+ * page nothing can address.
  */
 export const buildCzNsDecision = async (
   row: CzNsListingRow,
   signal?: AbortSignal,
 ): Promise<CzNsBuildResult> => {
-  const fields = czNsIdentityFields(row);
-  if (fields === null) {
+  const identity = czNsRowIdentity(row);
+  if (identity === null) {
     return { type: "unkeyable" };
   }
-  const { unid } = fields;
+  switch (identity.type) {
+    case "document":
+      break;
+    case "quarantined":
+      return {
+        type: "built",
+        decision: czNsQuarantinedDecision({ row, identity }),
+      };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled cz-ns row identity: ${JSON.stringify(identity)}`);
+  }
+  const { unid } = identity;
 
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
@@ -927,6 +1074,18 @@ const reparseStoredRaw = (
       detail: "missing source document id",
     };
   }
+  if (
+    isQuarantineSourceDocumentId(
+      QUARANTINE_NAMESPACE.CZ_NS,
+      stored.sourceDocumentId,
+    )
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "a quarantined listing row holds no decision pages",
+    };
+  }
   if (!CZ_NS_DOCUMENT_ID_PATTERN.test(stored.sourceDocumentId)) {
     return {
       type: "rejected",
@@ -955,7 +1114,12 @@ const reparseStoredRaw = (
   const result = buildCzNsDecisionFromPages({
     row: {
       unid: stored.sourceDocumentId,
-      caseNumber: stored.caseNumber,
+      // The stored docket of a row listed without one is the id standing in
+      // for it, which must not come back as a docket the publisher stated.
+      caseNumber:
+        stored.metadata["listingDocketMissing"] === true
+          ? ""
+          : stored.caseNumber,
       additionalCaseNumbers:
         additionalCaseNumbers.type === "valid"
           ? additionalCaseNumbers.value
@@ -1155,15 +1319,27 @@ const parseListingRows = (html: string): CzNsListingRow[] =>
  * from the ingest would read stored decisions as missing and re-fetch them
  * forever.
  *
- * A row missing either half is unidentifiable rather than keyed on what is
- * left: the crawl drops such an entry, so a slice that counted it would stay
- * short forever.
+ * A row with no usable id keys on the quarantine identity of its dockets,
+ * which is what the build stores its listing row under. `null` is a row
+ * stating neither an id nor a docket: nothing about it is stable, so it is
+ * keyed on nothing rather than on an invented identity.
  */
-export const czNsListingIdentity = (row: CzNsListingRow): ListingIdentity => {
-  const fields = czNsIdentityFields(row);
-  return fields === null
-    ? { type: "unidentifiable" }
-    : { type: "document", sourceDocumentId: fields.unid };
+export const czNsListingIdentity = (
+  row: CzNsListingRow,
+): ListingIdentity | null => {
+  const identity = czNsRowIdentity(row);
+  if (identity === null) {
+    return null;
+  }
+  switch (identity.type) {
+    case "document":
+      return { type: "document", sourceDocumentId: identity.unid };
+    case "quarantined":
+      return { type: "document", sourceDocumentId: identity.sourceDocumentId };
+    default:
+      identity satisfies never;
+      return panic(`Unhandled cz-ns row identity: ${JSON.stringify(identity)}`);
+  }
 };
 
 /**
@@ -1272,10 +1448,21 @@ const listCzNsSlicePage = async ({
   }
 
   return {
-    items: rows.map((row) => ({
-      identity: czNsListingIdentity(row),
-      payload: row,
-    })),
+    // `LISTING_ROW_PATTERN` only matches an anchor addressed by a universal
+    // id, so every row here keys; the warning names the case if the pattern
+    // ever loosens.
+    items: rows.flatMap((row) => {
+      const identity = czNsListingIdentity(row);
+      if (identity === null) {
+        logger.warn("case_law.ingestion.listing_row_without_stable_field", {
+          adapterKey: ADAPTER_KEYS.CZ_NS,
+          slice,
+          reason: "no-universal-id-and-no-docket",
+        });
+        return [];
+      }
+      return [{ identity, payload: row }];
+    }),
     totalPages: 1,
   };
 };
@@ -1305,6 +1492,8 @@ const buildCzNsFromPayload = async (
   }
   const built = await buildCzNsDecision(payload, signal);
   switch (built.type) {
+    // A quarantined row's listing-only decision is built too: it has no
+    // detail to wait for, so parking it would park it forever.
     case "built":
       return { type: "built", decision: built.decision };
     case "unkeyable":
@@ -1604,6 +1793,8 @@ export const czNsAdapter = defineSourceAdapter({
             const built = attempted.value;
 
             switch (built.type) {
+              // An entry with no usable `@unid` comes back built as its
+              // listing-only quarantine row, and is stored like any other.
               case "built": {
                 decisions.push(built.decision);
                 break;
@@ -1625,6 +1816,8 @@ export const czNsAdapter = defineSourceAdapter({
                 break;
               }
               case "unkeyable": {
+                // Neither an id nor a docket: beside them an entry states only
+                // its position, so there is nothing stable to keep it under.
                 refused += 1;
                 observeFailure(
                   classifyFailure(

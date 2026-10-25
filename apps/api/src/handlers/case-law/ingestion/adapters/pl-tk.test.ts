@@ -35,7 +35,6 @@ import {
   parsePlTkCursor,
   parsePlTkListingPage,
   PL_TK_PAGE_SIZE,
-  PL_TK_QUARANTINE_PREFIX,
   PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
   plTkAdapter,
   plTkBatchWindow,
@@ -51,10 +50,17 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { parsePlTkPage } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineSourceDocumentId,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const ADAPTER_FIXTURES = new URL("__fixtures__/", import.meta.url);
+
+/** The audit id of a row with no usable document id. */
+const QUARANTINE_ID = /^pl-tk-quarantine:[0-9a-f]{64}$/u;
 const PARSER_FIXTURES = new URL("../parsers/__fixtures__/", import.meta.url);
 
 const gunzipText = async (url: URL): Promise<string> =>
@@ -911,6 +917,47 @@ describe("a year slice", () => {
     expect(listingReads).toBeLessThan(totalPages / 4);
   });
 
+  test("a ruling listed with an over-long id is listed and built under its audit id", async () => {
+    const target = rulings.find(({ date }) => date.startsWith("2005-"));
+    if (target === undefined) {
+      throw new Error("no ruling in 2005");
+    }
+    const oversized = "9".repeat(400);
+    installPortal({
+      listingPage: (index) =>
+        pageAt(index)?.replace(
+          `dokument=${target.id}&amp;`,
+          () => `dokument=${oversized}&amp;`,
+        ),
+    });
+
+    const listed = await plTkAdapter.reconciliation.listSlicePage({
+      slice: "2005",
+      page: 2,
+    });
+
+    const ids = listed.items.map((item) =>
+      item.identity.type === "document" ? item.identity.sourceDocumentId : "",
+    );
+    expect(ids).toHaveLength(36);
+    const at = ids.findIndex((id) => QUARANTINE_ID.test(id));
+    expect(ids.filter((id) => QUARANTINE_ID.test(id))).toHaveLength(1);
+    expect(ids).not.toContain(target.id);
+
+    const seen = installPortal({ listingPage: () => undefined });
+    const built = await plTkAdapter.reconciliation.buildDecision(
+      listed.items[at]?.payload,
+    );
+    if (built.type !== "built") {
+      throw new Error(`the quarantined row built ${built.type}`);
+    }
+    expect(built.decision.sourceDocumentId).toBe(ids[at]);
+    expect(built.decision.isListingOnly).toBe(true);
+    expect(seen.some((request) => request.url.pathname === "/ipo/Sprawa")).toBe(
+      false,
+    );
+  });
+
   test("the slice's pages are the three stages", async () => {
     const seen = installPortal({ listingPage: pageAt });
 
@@ -1187,7 +1234,7 @@ describe("a listed row the parser cannot read", () => {
     // total is not read one short.
     expect(page?.rows).toHaveLength(18);
     expect(broken?.defect).toBe("unparseable-row");
-    expect(broken?.documentId).toStartWith(PL_TK_QUARANTINE_PREFIX);
+    expect(broken?.documentId ?? "").toMatch(QUARANTINE_ID);
     expect(broken?.caseNumber).toBe("Ts 10/97");
     expect(broken?.rowHtml).toContain('href="#"');
     // The same markup is the same identity on every walk.
@@ -1211,8 +1258,13 @@ describe("a listed row the parser cannot read", () => {
       rawParts: plTkRawPartsOf(row, undefined),
     });
 
-    // Held back rather than built: the engine refuses a detail-less row.
-    expect(built.type).toBe("detail-unavailable");
+    // Built as its listing-only row: there is no case page to wait for, so
+    // holding it back would park it forever.
+    if (built.type !== "built") {
+      throw new Error(`the quarantined row built ${built.type}`);
+    }
+    expect(built.decision.sourceDocumentId).toBe(row.documentId);
+    expect(built.decision.isListingOnly).toBe(true);
     expect(seen.some((request) => request.url.pathname === "/ipo/Sprawa")).toBe(
       false,
     );
@@ -1232,7 +1284,10 @@ describe("a listed row the parser cannot read", () => {
   test("a row stating no docket is stored under a placeholder docket", () => {
     const built = assemblePlTkDecision({
       row: rowFor({
-        documentId: `${PL_TK_QUARANTINE_PREFIX}abc`,
+        documentId: quarantineSourceDocumentId(
+          QUARANTINE_NAMESPACE.PL_TK,
+          "abc",
+        ),
         caseNumber: undefined,
         decisionForm: undefined,
         defect: "unparseable-row",
@@ -1434,7 +1489,7 @@ describe("an unreadable row pushed down the listing", () => {
     const before = parsePlTkListingPage(atThree, "preliminary")?.rows[3];
     const after = parsePlTkListingPage(atTen, "preliminary")?.rows[3];
 
-    expect(before?.documentId).toStartWith(PL_TK_QUARANTINE_PREFIX);
+    expect(before?.documentId ?? "").toMatch(QUARANTINE_ID);
     expect(after?.documentId).toBe(before?.documentId);
     expect(after?.rowHtml).not.toBe(before?.rowHtml);
     expect(after?.rowHtml).toContain('data-ri="10360"');

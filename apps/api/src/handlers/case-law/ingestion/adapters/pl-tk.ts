@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-tk] quarantine ids keep their digest under the shared prefix owner; reconciliation writes the listing-only row the crawl already writes.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
 // parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
@@ -127,6 +128,11 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  isQuarantineSourceDocumentId,
+  QUARANTINE_NAMESPACE,
+  quarantineSourceDocumentId,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -532,7 +538,7 @@ export type PlTkListingRow = {
   stage: PlTkStage;
   /**
    * The portal's document id, or a content-addressed audit id for a row
-   * that states none (see {@link PL_TK_QUARANTINE_PREFIX}).
+   * that states none (see {@link plTkQuarantineId}).
    */
   documentId: string;
   caseId: string | undefined;
@@ -545,14 +551,6 @@ export type PlTkListingRow = {
   /** Set where the row lacked a field every ruling's row states. */
   defect: "unparseable-row" | undefined;
 };
-
-/**
- * The identity of a listed row the adapter could not read an id from: the
- * row's own markup, hashed. It is counted and stored like any other row, so
- * a markup change the parser does not know shows up as held rows with this
- * prefix rather than as rulings that were never listed.
- */
-export const PL_TK_QUARANTINE_PREFIX = "pl-tk-quarantine:";
 
 export type PlTkListingPage = {
   /** 1-based, as the portal prints it. */
@@ -608,6 +606,25 @@ const positionFreeRow = ($: cheerio.CheerioAPI, row: AnyNode): string => {
   }
   return collapse($.html(copy));
 };
+
+/**
+ * The identity of a listed row the adapter could not read an id from: the
+ * row's own markup, hashed. It is counted and stored like any other row, so
+ * a markup change the parser does not know shows up as held rows with this
+ * prefix rather than as rulings that were never listed.
+ *
+ * The digest predates `quarantineIdentity` and stored rows carry it: it
+ * hashes the position-free markup itself, not a record of stable fields, so
+ * it cannot be re-expressed through that helper and is kept byte for byte.
+ * Only the prefix comes from the shared namespace, which is the same string.
+ * A recovered row cannot name this id as a repair alias: its markup gains the
+ * very link whose absence made it unreadable.
+ */
+const plTkQuarantineId = ($: cheerio.CheerioAPI, row: AnyNode): string =>
+  quarantineSourceDocumentId(
+    QUARANTINE_NAMESPACE.PL_TK,
+    hashContent(positionFreeRow($, row)),
+  );
 
 /**
  * One print-view page, or `null` for a page that is not one: the portal
@@ -670,9 +687,7 @@ export const parsePlTkListingPage = (
       // back one row short would read as the end of the listing.
       return {
         stage,
-        documentId:
-          persistableId ??
-          `${PL_TK_QUARANTINE_PREFIX}${hashContent(positionFreeRow($, row))}`,
+        documentId: persistableId ?? plTkQuarantineId($, row),
         caseId: params?.get("sprawa") ?? undefined,
         caseNumber: caseNumber.length === 0 ? undefined : caseNumber,
         decisionForm: form,
@@ -905,13 +920,14 @@ export const plTkDecidingCourt = ({
 /**
  * The identity the ingest stores a listed ruling under: the portal's own
  * document id. A docket names a case, and a case holds several rulings.
+ *
+ * Always keyable: {@link parsePlTkListingPage} gives a row whose id is
+ * missing, empty or too long for the identity column its audit id instead.
  */
-export const plTkListingIdentity = (
-  row: PlTkListingRow | null,
-): ListingIdentity =>
-  row !== null && isPersistableSourceDocumentId(row.documentId)
-    ? { type: "document", sourceDocumentId: row.documentId }
-    : { type: "unidentifiable" };
+export const plTkListingIdentity = (row: PlTkListingRow): ListingIdentity => ({
+  type: "document",
+  sourceDocumentId: row.documentId,
+});
 
 const casePagePath = (row: PlTkListingRow): string =>
   row.caseId === undefined
@@ -1244,7 +1260,9 @@ export const buildPlTkDecision = async ({
         rawParts: plTkRawPartsOf(row, undefined),
       }),
     );
-  if (row.documentId.startsWith(PL_TK_QUARANTINE_PREFIX)) {
+  if (
+    isQuarantineSourceDocumentId(QUARANTINE_NAMESPACE.PL_TK, row.documentId)
+  ) {
     // No id to address a case page by: the verbatim row is what is kept.
     return listingOnly();
   }
@@ -1872,7 +1890,15 @@ const buildPlTkFromPayload = async (
     case "unkeyable":
       return { type: "unkeyable" };
     case "detail-unavailable":
-      return { type: "detail-unavailable" };
+      // A quarantined row names no case page to wait for: its listing-only
+      // row is the whole record (case-law AGENTS.md rule 20), and the walk
+      // counts it held. Any other row waits for its detail.
+      return isQuarantineSourceDocumentId(
+        QUARANTINE_NAMESPACE.PL_TK,
+        row.documentId,
+      )
+        ? { type: "built", decision: built.decision }
+        : { type: "detail-unavailable" };
     default: {
       built satisfies never;
       return panic(`Unhandled pl-tk build result: ${JSON.stringify(built)}`);

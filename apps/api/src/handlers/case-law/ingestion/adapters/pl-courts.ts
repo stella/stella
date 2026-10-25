@@ -7,6 +7,7 @@ import * as v from "valibot";
 import { vApiDate } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { compareCodeUnit } from "@stll/collation";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
@@ -73,6 +74,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -84,8 +86,13 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import { isKeyableListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1272,28 +1279,226 @@ const primaryCaseNumber = ({
   );
 
 /**
- * The identity the ingest would store for this listing item.
- *
- * Stated once, here, rather than restated by every caller that has to decide
- * whether a listed item is already held: the crawl and the reconciliation loop
- * key rows the same way, and a second copy of the rule would let them disagree
- * about which rows exist. Both halves are the same expressions the build path
- * uses, so the two cannot drift apart.
+ * Why an item is kept under its quarantine identity: it states no SAOS id,
+ * and either no docket or one the case-number column and the ledger key
+ * cannot hold. Stored on the row as `listedOnlyReason`.
  */
-export const plCourtsListingIdentity = (item: SaosItem): ListingIdentity => {
+export const PL_COURTS_QUARANTINE_REASON = {
+  NO_IDENTITY: "no-publisher-identity",
+  DOCKET_UNPERSISTABLE: "docket-unpersistable",
+} as const;
+
+type PlCourtsQuarantineReason =
+  (typeof PL_COURTS_QUARANTINE_REASON)[keyof typeof PL_COURTS_QUARANTINE_REASON];
+
+/** What the ingest keys a listed item on. */
+type PlCourtsItemIdentity =
+  | { type: "document"; sourceDocumentId: string }
+  | { type: "case-number"; caseNumber: string }
+  | {
+      type: "quarantine";
+      sourceDocumentId: string;
+      reason: PlCourtsQuarantineReason;
+      /** The docket the item states, where it states one too long to key. */
+      docket: string | undefined;
+    }
+  /** No id, no keyable docket and no stable field: nothing can name it. */
+  | { type: "no-stable-field" };
+
+const presentValue = (value: string | null | undefined): string | undefined =>
+  value === null || value === undefined || value.trim().length === 0
+    ? undefined
+    : value;
+
+/**
+ * The quarantine identity of an item stating no SAOS id, or `undefined` for
+ * one stating none of the fields.
+ *
+ * The fields are what SAOS states identically for the record in the dump the
+ * crawl reads and in the date-filtered search the reconciliation reads, and
+ * keeps stating once the id comes back: the docket, the judgment date and
+ * type, the court type, the division and the bench. The text is not one (the
+ * search serves an excerpt, the dump the whole), nor the division's name or
+ * court (only the search states them), nor `href` or `source.judgmentId`
+ * (they come with the id, or only in the dump). The bench is sorted because
+ * nothing says either listing keeps one order for it.
+ */
+const plCourtsQuarantineId = (
+  item: SaosItem,
+  docket: string | undefined,
+): string | undefined => {
+  // Sorted by code unit: one order on every host and for every listing order
+  // the publisher states the bench in.
+  const bench = item.judges
+    ?.flatMap((judge) => {
+      const name = presentValue(judge.name);
+      return name === undefined ? [] : [name];
+    })
+    .toSorted(compareCodeUnit);
+  const divisionId = item.division?.id;
+  const stableFields = {
+    docket,
+    judgmentDate: presentValue(item.judgmentDate),
+    judgmentType: presentValue(item.judgmentType),
+    courtType: presentValue(item.courtType),
+    divisionId:
+      divisionId === null || divisionId === undefined
+        ? undefined
+        : String(divisionId),
+    bench:
+      bench === undefined || bench.length === 0 ? undefined : bench.join(" | "),
+  };
+  return Object.values(stableFields).every((value) => value === undefined)
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.PL_COURTS,
+        stableFields,
+      }).sourceDocumentId;
+};
+
+/** A docket the case-number column and the ledger's identity key both hold. */
+const isKeyableDocket = (docket: string): boolean =>
+  fitsCitationStorageField("caseNumber", docket) &&
+  isKeyableListingIdentity({
+    type: "case-number",
+    caseNumber: docket,
+    language: PL_COURTS_LANGUAGE,
+  });
+
+/**
+ * The identity a listed item is stored under: its SAOS id, its docket where
+ * it states no id, its quarantine identity where it states neither usably.
+ *
+ * Read off the listing item alone, never the detail: an item without an id
+ * has no detail to read, and the crawl, the reconciliation listing and the
+ * build all hold the listing item, so the three cannot key it differently.
+ */
+const plCourtsItemIdentity = (item: SaosItem): PlCourtsItemIdentity => {
   const sourceDocumentId = plCourtsSourceDocumentId(item.id);
   if (sourceDocumentId !== undefined) {
     return { type: "document", sourceDocumentId };
   }
-  const caseNumber = primaryCaseNumber({ preferred: item });
-  if (caseNumber === undefined) {
-    return { type: "unidentifiable" };
+  const docket = primaryCaseNumber({ preferred: item });
+  if (docket !== undefined && isKeyableDocket(docket)) {
+    return { type: "case-number", caseNumber: docket };
+  }
+  const quarantined = plCourtsQuarantineId(item, docket);
+  if (quarantined === undefined) {
+    return { type: "no-stable-field" };
   }
   return {
-    type: "case-number",
-    caseNumber,
-    language: PL_COURTS_LANGUAGE,
+    type: "quarantine",
+    sourceDocumentId: quarantined,
+    reason:
+      docket === undefined
+        ? PL_COURTS_QUARANTINE_REASON.NO_IDENTITY
+        : PL_COURTS_QUARANTINE_REASON.DOCKET_UNPERSISTABLE,
+    docket,
   };
+};
+
+/**
+ * The quarantine identities a keyed observation of a record names, so the
+ * row its id-less listing was stored under is taken over once the id comes
+ * back. Both with and without its docket: a record quarantined for having no
+ * docket may state one by the time it states its id.
+ */
+const plCourtsRepairAliases = (item: SaosItem): string[] => {
+  const docket = primaryCaseNumber({ preferred: item });
+  return [
+    ...new Set(
+      [
+        plCourtsQuarantineId(item, docket),
+        plCourtsQuarantineId(item, undefined),
+      ].filter((alias) => alias !== undefined),
+    ),
+  ];
+};
+
+/**
+ * The identity the ingest would store for this listing item, or `undefined`
+ * for an item stating no stable field, which no identity can name.
+ *
+ * Stated once, here, rather than restated by every caller that has to decide
+ * whether a listed item is already held: the crawl and the reconciliation loop
+ * key rows the same way, and a second copy of the rule would let them disagree
+ * about which rows exist. It reads {@link plCourtsItemIdentity}, as the build
+ * path does, so the two cannot drift apart.
+ */
+export const plCourtsListingIdentity = (
+  item: SaosItem,
+): ListingIdentity | undefined => {
+  const identity = plCourtsItemIdentity(item);
+  switch (identity.type) {
+    case "document":
+    case "quarantine":
+      return { type: "document", sourceDocumentId: identity.sourceDocumentId };
+    case "case-number":
+      return {
+        type: "case-number",
+        caseNumber: identity.caseNumber,
+        language: PL_COURTS_LANGUAGE,
+      };
+    case "no-stable-field":
+      return undefined;
+    default: {
+      identity satisfies never;
+      return panic(`Unhandled pl-courts identity: ${JSON.stringify(identity)}`);
+    }
+  }
+};
+
+/** The court a quarantined row is filed under where the item names none. */
+const PL_COURTS_UNNAMED_COURT = "SAOS";
+
+/**
+ * The listing-only row of an item stated without a usable identity (case-law
+ * AGENTS.md rule 20): unpublished, under its quarantine identity and a
+ * placeholder docket, with every discriminator the listing states and the
+ * verbatim listing row as its raw. No detail exists to ask for: SAOS
+ * addresses a record only by the id this item lacks.
+ */
+const buildPlCourtsQuarantined = ({
+  identity,
+  listingItem,
+  rawParts,
+}: {
+  identity: Extract<PlCourtsItemIdentity, { type: "quarantine" }>;
+  listingItem: SaosItem;
+  rawParts: SourceRawParts;
+}): IngestionResult => {
+  const decisionType = normalizeDecisionType(listingItem.judgmentType, null);
+  return plainTextIngestionResult({
+    sourceDocumentId: identity.sourceDocumentId,
+    caseNumber: identity.sourceDocumentId,
+    caseNumberIsPlaceholder: true,
+    isListingOnly: true,
+    court: courtNameForItem(listingItem) ?? PL_COURTS_UNNAMED_COURT,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
+    language: PL_COURTS_LANGUAGE,
+    decisionDate: normalizeDecisionDate({
+      stated: listingItem.judgmentDate,
+      upstreamId: toOptionalValue(listingItem.source?.judgmentId),
+      saosId: undefined,
+    }),
+    ...(decisionType === undefined ? {} : { decisionType }),
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: checkedDecisionMetadata({
+      identityQuarantined: true,
+      listedOnlyReason: identity.reason,
+      statedCaseNumber: identity.docket,
+      courtType: toOptionalValue(listingItem.courtType),
+      judgmentType: toOptionalValue(listingItem.judgmentType),
+      judgmentDate: toOptionalValue(listingItem.judgmentDate),
+      divisionId: toOptionalValue(listingItem.division?.id),
+      judges: listingItem.judges?.map((judge) => judge.name),
+    }),
+    rawHash: hashContent(JSON.stringify(listingItem)),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
+    documentAst: EMPTY_AST,
+    sourceRaw: encodeSourceRawEnvelope(rawParts),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
 };
 
 /**
@@ -1402,6 +1607,22 @@ type BuildPlDecisionOptions = {
 };
 
 /**
+ * The repair aliases of a keyed observation, read off its listing item as
+ * the quarantine identity was; none for a row stored by its docket, which
+ * the pipeline cannot let adopt a row.
+ */
+const repairAliasesOf = (
+  sourceDocumentId: string | undefined,
+  listingItem: SaosItem,
+): { sourceDocumentIdRepairAliases?: string[] } => {
+  if (sourceDocumentId === undefined) {
+    return {};
+  }
+  const aliases = plCourtsRepairAliases(listingItem);
+  return aliases.length === 0 ? {} : { sourceDocumentIdRepairAliases: aliases };
+};
+
+/**
  * Build one decision from a listing item and whatever detail was read for it.
  *
  * Kept as one function so the crawl, the reconciliation walk and a replay of
@@ -1422,6 +1643,15 @@ export const buildPlDecision = ({
   // half under this name in some sixty places, none of which changed.
   const dumpItem = listingItem;
   const item = detail ?? dumpItem;
+
+  const listedIdentity = plCourtsItemIdentity(dumpItem);
+  if (listedIdentity.type === "quarantine") {
+    return buildPlCourtsQuarantined({
+      identity: listedIdentity,
+      listingItem: dumpItem,
+      rawParts,
+    });
+  }
 
   const caseNumber = primaryCaseNumber({ preferred: item, fallback: dumpItem });
   const courtName =
@@ -1587,6 +1817,7 @@ export const buildPlDecision = ({
       documentRole,
       fulltext,
       sourceDocumentId: plCourtsSourceDocumentId(saosId),
+      ...repairAliasesOf(plCourtsSourceDocumentId(saosId), dumpItem),
       sourceUrl: publicSourceUrl(saosId),
       documentUrl,
       publisherCitedCases,
@@ -1779,6 +2010,15 @@ const parseItemWithDetail = async (
   }
 
   const listingItem = normalizeSaosDumpItem(raw);
+  if (plCourtsItemIdentity(listingItem).type === "no-stable-field") {
+    // Nothing to name the row by, and inventing an identity would mint a new
+    // row each time it is listed (case-law AGENTS.md rule 20): logged, so the
+    // item is not lost without a trace.
+    logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+    });
+    return null;
+  }
   const fetched = await fetchDetailForItem(listingItem, signal);
   // An item whose detail request the publisher refused is not stored on this
   // pass: its identity stays unheld, and the reconciliation walk of its
@@ -1983,10 +2223,19 @@ const listPlCourtsSlicePage = async ({
     ...(signal === undefined ? {} : { signal }),
   });
   return {
-    items: records.map((record) => ({
-      identity: plCourtsListingIdentity(normalizeSaosDumpItem(record)),
-      payload: record,
-    })),
+    items: records.flatMap((record) => {
+      const identity = plCourtsListingIdentity(normalizeSaosDumpItem(record));
+      if (identity === undefined) {
+        // No stable field to name it by (case-law AGENTS.md rule 20).
+        logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
+          adapterKey: ADAPTER_KEYS.PL_COURTS,
+          slice,
+          page,
+        });
+        return [];
+      }
+      return [{ identity, payload: record }];
+    }),
     totalPages,
   };
 };

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 /**
  * The sk-courts listing reconciliation capability.
@@ -21,6 +22,7 @@ import {
   parseDecisionTextAbsence,
 } from "@stll/api-contract/case-law-text-field";
 
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SkApiItem } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {
   buildSkCourtsDecision,
@@ -41,6 +43,8 @@ import {
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skCourtsAdapter);
+
+const QUARANTINE_ID = /^sk-courts-quarantine:[0-9a-f]{64}$/u;
 
 const LIST_PATH = "/v1/rozhodnutie";
 const SLICE = "2026-06-10";
@@ -276,34 +280,105 @@ describe("sk-courts listing identity", () => {
     });
   });
 
-  test("an item the crawl would drop is unidentifiable", () => {
-    // The crawl keeps neither of these, so a slice that counted them would
-    // stay short forever.
+  test("a guid keys the record even where the listing states no docket or court", () => {
+    // The guid is the record (rule 17); the docket is only its label.
     expect(
       skCourtsListingIdentity({ ...GALANTA_ITEM, spisovaZnacka: "" }),
-    ).toEqual({ type: "unidentifiable" });
+    ).toEqual({ type: "document", sourceDocumentId: GALANTA_ITEM.guid });
     expect(skCourtsListingIdentity({ ...GALANTA_ITEM, sud: null })).toEqual({
-      type: "unidentifiable",
+      type: "document",
+      sourceDocumentId: GALANTA_ITEM.guid,
     });
-    // A payload no current shape recognises: the crawl drops it at the same
-    // validator rather than storing a row from it.
-    expect(skCourtsListingIdentity({ guid: 42 })).toEqual({
-      type: "unidentifiable",
-    });
-    expect(skCourtsListingIdentity(null)).toEqual({ type: "unidentifiable" });
   });
 
-  test("every keyable identity round-trips through its stored key", () => {
+  test("a record with no publisher id and no docket key is quarantined", () => {
+    const { guid: _guid, ...withoutGuid } = GALANTA_ITEM;
+    const quarantined = skCourtsListingIdentity({ ...withoutGuid, sud: null });
+    expect(quarantined).toEqual({
+      type: "document",
+      sourceDocumentId: expect.stringMatching(QUARANTINE_ID),
+    });
+    // The malformed id is no stable field: an over-long guid is the same
+    // record as an absent one.
+    expect(
+      skCourtsListingIdentity({
+        ...GALANTA_ITEM,
+        guid: "x".repeat(257),
+        sud: null,
+      }),
+    ).toEqual(quarantined);
+    // A docket past the key column cannot be the fallback key either.
+    expect(
+      skCourtsListingIdentity({
+        ...withoutGuid,
+        spisovaZnacka: "1".repeat(400),
+      }),
+    ).toEqual({
+      type: "document",
+      sourceDocumentId: expect.stringMatching(QUARANTINE_ID),
+    });
+  });
+
+  test("a payload that fails the listing shape is quarantined, its guid untrusted", () => {
+    const malformed = { ...GALANTA_ITEM, povaha: "not a list" };
+    const identity = skCourtsListingIdentity(malformed);
+    expect(identity).toEqual({
+      type: "document",
+      sourceDocumentId: expect.stringMatching(QUARANTINE_ID),
+    });
+    expect(identity).not.toEqual({
+      type: "document",
+      sourceDocumentId: GALANTA_ITEM.guid,
+    });
+  });
+
+  test("a quarantine fingerprint survives a re-rendered listing", () => {
+    const { guid: _guid, ...withoutGuid } = GALANTA_ITEM;
+    const listed = { ...withoutGuid, sud: null };
+    // Whitespace reflowed, a search highlight added and the fields reordered:
+    // the same record, so the same row.
+    const { spisovaZnacka, ...rest } = listed;
+    const rerendered = {
+      zvyraznenie: ["<em>32Ps</em>"],
+      ...rest,
+      spisovaZnacka: `  ${spisovaZnacka}\n`,
+      formaRozhodnutia: "Uznesenie  bez\todôvodnenia",
+    };
+    expect(skCourtsListingIdentity(rerendered)).toEqual(
+      skCourtsListingIdentity(listed),
+    );
+    // A different docket is a different record.
+    expect(
+      skCourtsListingIdentity({ ...listed, spisovaZnacka: "32Ps/11/2026" }),
+    ).not.toEqual(skCourtsListingIdentity(listed));
+  });
+
+  test("a record stating nothing that names it gets no invented identity", () => {
+    expect(skCourtsListingIdentity({ guid: 42 })).toBeNull();
+    expect(skCourtsListingIdentity(null)).toBeNull();
+    expect(
+      skCourtsListingIdentity({
+        ...GALANTA_ITEM,
+        guid: null,
+        spisovaZnacka: null,
+        identifikacneCislo: null,
+      }),
+    ).toBeNull();
+  });
+
+  test("every identity round-trips through its stored key", () => {
     const { guid: _guid, ...withoutGuid } = GALANTA_ITEM;
     for (const identity of [
       skCourtsListingIdentity(GALANTA_ITEM),
       skCourtsListingIdentity(withoutGuid),
+      skCourtsListingIdentity({ ...withoutGuid, sud: null }),
     ]) {
-      const key = listingIdentityKey(identity);
-      expect(key).not.toBeNull();
+      if (identity === null) {
+        throw new TypeError("Expected a listing identity");
+      }
       // The compound guid carries a colon, which is also this key's own
       // separator; the round trip is what proves it survives that.
-      expect(key === null ? null : parseListingIdentityKey(key)).toEqual(
+      expect(parseListingIdentityKey(listingIdentityKey(identity))).toEqual(
         identity,
       );
     }
@@ -363,18 +438,23 @@ describe("sk-courts listSlicePage", () => {
   });
 
   test("one malformed item does not make the whole date unwalkable", async () => {
+    const malformed = { ...BARDEJOV_ITEM, povaha: "not a list" };
     mockJustice({
-      list: { body: listBody([GALANTA_ITEM, { guid: 42 }], 2) },
+      list: { body: listBody([GALANTA_ITEM, malformed, { guid: 42 }], 3) },
     });
 
     const page = await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
 
-    // Counted as listed but unkeyable, exactly as the crawl drops it. Refusing
-    // the page instead would leave the date permanently unreconcilable.
+    // The malformed record is keyed on its quarantine identity, as the crawl
+    // stores it; the one stating nothing that names it is left out, since no
+    // walk could ever hold it. Refusing the page instead would leave the date
+    // permanently unreconcilable.
     expect(page.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: GALANTA_ITEM.guid },
-      { type: "unidentifiable" },
+      skCourtsListingIdentity(malformed) ??
+        panic("the malformed record has no listing identity"),
     ]);
+    expect(page.items.at(1)?.payload).toEqual(malformed);
   });
 
   test("a payload without a count is refused, not read as an empty date", async () => {
@@ -459,12 +539,103 @@ describe("sk-courts buildDecision", () => {
     });
     // The one identity rule: what the walk keyed this item on is what the
     // decision it builds actually stores.
-    expect(listingIdentityKey(skCourtsListingIdentity(GALANTA_ITEM))).toBe(
-      listingIdentityKey({
+    expect(skCourtsListingIdentity(GALANTA_ITEM)).toEqual({
+      type: "document",
+      sourceDocumentId:
+        built.decision.sourceDocumentId ?? panic("the decision has no id"),
+    });
+  });
+
+  test("a keyed observation can take over the row its degraded listing quarantined", async () => {
+    mockJustice({ detail: { body: JSON.stringify(GALANTA_DETAIL) } });
+
+    const built = await reconciliation.buildDecision(GALANTA_ITEM);
+    const degraded = skCourtsListingIdentity({
+      ...GALANTA_ITEM,
+      povaha: "not a list",
+    });
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built" || degraded?.type !== "document") {
+      throw new TypeError("Expected a built decision and a quarantine id");
+    }
+    expect(built.decision.sourceDocumentIdRepairAliases).toEqual([
+      degraded.sourceDocumentId,
+    ]);
+  });
+
+  test("a quarantined payload is built listing-only, with nothing asked of the publisher", async () => {
+    mockJustice({});
+    const { guid: _guid, ...withoutGuid } = GALANTA_ITEM;
+    for (const payload of [
+      { ...withoutGuid, sud: null },
+      { ...GALANTA_ITEM, povaha: "not a list" },
+    ]) {
+      const built = await reconciliation.buildDecision(payload);
+      expect(built.type).toBe("built");
+      if (built.type !== "built") {
+        return;
+      }
+      expect(skCourtsListingIdentity(payload)).toEqual({
         type: "document",
-        sourceDocumentId: built.decision.sourceDocumentId ?? "",
-      }),
+        sourceDocumentId:
+          built.decision.sourceDocumentId ?? panic("the decision has no id"),
+      });
+      expect(built.decision).toMatchObject({
+        caseNumber: GALANTA_ITEM.spisovaZnacka,
+        isListingOnly: true,
+        decisionDate: "2026-06-10",
+      });
+      expect(built.decision.metadata).toMatchObject({
+        identityQuarantined: true,
+        identifikacneCislo: GALANTA_ITEM.identifikacneCislo,
+      });
+      expect(built.decision.sourceDocumentIdRepairAliases).toBeUndefined();
+      expect(
+        decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.["listing"],
+      ).toBe(JSON.stringify(payload));
+    }
+    expect(requestedUrls).toEqual([]);
+  });
+
+  test("a quarantined record with no docket is labelled with a placeholder", async () => {
+    mockJustice({});
+
+    const built = await reconciliation.buildDecision({
+      ...GALANTA_ITEM,
+      guid: null,
+      spisovaZnacka: null,
+    });
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.sourceDocumentId).toMatch(QUARANTINE_ID);
+    expect<string | undefined>(built.decision.caseNumber).toBe(
+      built.decision.sourceDocumentId,
     );
+    expect(built.decision.caseNumberIsPlaceholder).toBe(true);
+  });
+
+  test("a guid-keyed record with no docket is built under its guid", async () => {
+    mockJustice({ detail: { body: JSON.stringify(GALANTA_DETAIL) } });
+
+    const built = await reconciliation.buildDecision({
+      ...GALANTA_ITEM,
+      spisovaZnacka: null,
+    });
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision).toMatchObject({
+      sourceDocumentId: GALANTA_ITEM.guid,
+      caseNumber: GALANTA_ITEM.guid,
+      caseNumberIsPlaceholder: true,
+      documentUrl: GALANTA_DETAIL.dokument.url,
+    });
   });
 
   test("a record nothing came back for is unavailable, never built empty", async () => {
@@ -525,7 +696,7 @@ describe("sk-courts buildDecision", () => {
     });
   });
 
-  test("a payload no current shape recognises is unkeyable", async () => {
+  test("a payload stating nothing that names a record is unkeyable", async () => {
     mockJustice({});
 
     expect(await reconciliation.buildDecision(GALANTA_ITEM.guid)).toEqual({
@@ -537,12 +708,13 @@ describe("sk-courts buildDecision", () => {
     expect(await reconciliation.buildDecision({ guid: 42 })).toEqual({
       type: "unkeyable",
     });
-    // A record the validator accepts but the adapter refuses to key: no docket
-    // to store it under.
+    // A record the validator accepts that states nothing naming it.
     expect(
       await reconciliation.buildDecision({
         ...GALANTA_ITEM,
+        guid: null,
         spisovaZnacka: null,
+        identifikacneCislo: null,
       }),
     ).toEqual({ type: "unkeyable" });
     // Nothing was asked of the publisher for any of these.

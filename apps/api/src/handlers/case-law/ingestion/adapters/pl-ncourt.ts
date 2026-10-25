@@ -135,6 +135,10 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1280,9 +1284,14 @@ const ROW_FINGERPRINT_FIELDS = [
 
 /**
  * The content-addressed identity of a listed row that states no usable id,
- * or `undefined` for a row stating none of the fields. Every listed row
+ * or `undefined` for a row stating no stable field at all. Every listed row
  * emits its own as a repair alias, so a row whose id is later corrected
  * enriches its audit row instead of doubling it.
+ *
+ * `ncourt-listed:` predates the shared quarantine identity and stored rows
+ * carry it, so a row stating any of {@link ROW_FINGERPRINT_FIELDS} keeps that
+ * digest byte for byte. Only a row stating none of them, which used to have
+ * no identity at all, is keyed through `quarantineIdentity`.
  */
 export const plNcourtRowFingerprintId = (
   row: PlNcourtListingRow,
@@ -1291,10 +1300,35 @@ export const plNcourtRowFingerprintId = (
     const value = row[field];
     return value === undefined ? [] : [[field, value] as const];
   });
-  return stated.length === 0
-    ? undefined
-    : `${LISTED_ID_PREFIX}${hashContent(JSON.stringify(stated))}`;
+  if (stated.length > 0) {
+    return `${LISTED_ID_PREFIX}${hashContent(JSON.stringify(stated))}`;
+  }
+  // What such a row can still state about the judgment: the day the portal
+  // published it and its thesis, both read off the record and unchanged when
+  // its id comes back. `lastUpdate` moves with every edit of the record and
+  // the id is the malformed part, so neither is a stable field.
+  if (row.publicationDate === undefined && row.thesis === undefined) {
+    return undefined;
+  }
+  return quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
+    stableFields: {
+      publicationDate: row.publicationDate,
+      thesis: row.thesis,
+    },
+  }).sourceDocumentId;
 };
+
+/**
+ * The identity a listed row is stored and listed under: its id where the
+ * identity column can hold it, its content fingerprint otherwise. One
+ * function, so the crawl, the reconciliation listing and its build cannot
+ * key a row differently. `undefined` only for a row stating no stable field.
+ */
+const plNcourtRowIdentity = (row: PlNcourtListingRow): string | undefined =>
+  row.id !== undefined && isPersistableSourceDocumentId(row.id)
+    ? row.id
+    : plNcourtRowFingerprintId(row);
 
 /**
  * An unpublished row naming no decision. The court it records is this
@@ -1382,7 +1416,7 @@ const buildUnkeyedRow = ({
 }): IngestionResult | null => {
   const idUsable =
     row.id !== undefined && isPersistableSourceDocumentId(row.id);
-  const sourceDocumentId = idUsable ? row.id : plNcourtRowFingerprintId(row);
+  const sourceDocumentId = plNcourtRowIdentity(row);
   if (sourceDocumentId === undefined) {
     return null;
   }
@@ -1397,8 +1431,14 @@ const buildUnkeyedRow = ({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
+  // Kept under its id, the row still names the audit row it was stored as
+  // while its id was unusable, as a judgment built from it would.
+  const repairAlias = idUsable ? plNcourtRowFingerprintId(row) : undefined;
   return plainTextIngestionResult({
     sourceDocumentId,
+    ...(repairAlias === undefined
+      ? {}
+      : { sourceDocumentIdRepairAliases: [repairAlias] }),
     ...(documentRole === undefined ? {} : { documentRole }),
     caseNumber: signature ?? sourceDocumentId,
     ...(signature === undefined ? { caseNumberIsPlaceholder: true } : {}),
@@ -2017,6 +2057,22 @@ const buildRows = async (
         aborted: true,
       });
     }
+    const reading = readPlNcourtListingRow(row.fragment);
+    if (
+      reading !== null &&
+      plNcourtRowIdentity(normalizePlNcourtListingRow(reading)) === undefined
+    ) {
+      // A row stating no stable field has no identity to store it under,
+      // and inventing one would mint a new row each time it is listed
+      // (case-law AGENTS.md rule 20). Logged and passed, not a page failure:
+      // failing would hold every later row of the lane behind it.
+      logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+        index,
+      });
+      continue;
+    }
     const captured = await buildPlainTextItem({
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
 
@@ -2347,14 +2403,16 @@ const sliceQuery = (slice: string): Record<string, string> => ({
   sort: SORT_BY_SIGNATURE,
 });
 
-/** How the ingest keys a listed row: its id, or its content fingerprint. */
-const plNcourtListingIdentity = (row: PlNcourtListingRow): ListingIdentity => {
-  const sourceDocumentId =
-    row.id !== undefined && isPersistableSourceDocumentId(row.id)
-      ? row.id
-      : plNcourtRowFingerprintId(row);
+/**
+ * How the ingest keys a listed row: its id, or its content fingerprint;
+ * `undefined` for a row stating no stable field, which no identity can name.
+ */
+const plNcourtListingIdentity = (
+  row: PlNcourtListingRow,
+): ListingIdentity | undefined => {
+  const sourceDocumentId = plNcourtRowIdentity(row);
   return sourceDocumentId === undefined
-    ? { type: "unidentifiable" }
+    ? undefined
     : { type: "document", sourceDocumentId };
 };
 
@@ -2402,17 +2460,27 @@ const listSliceWindow = async ({
     }
     return Result.ok({
       total: listing.total,
-      items: listing.fragments.map((listingXml, index) => {
+      items: listing.fragments.flatMap((listingXml, index) => {
+        const identity = plNcourtListingIdentity(
+          listing.rows[index] ?? panic("a listed row lost its reading"),
+        );
+        // Unreachable while the stray check above holds: a row dated the
+        // slice states its date, a fingerprint field. Logged, not keyed, if
+        // that ever changes: a row with no stable field has no identity to
+        // invent (case-law AGENTS.md rule 20).
+        if (identity === undefined) {
+          logger.warn("case_law.ingestion.listing_row_without_stable_fields", {
+            adapterKey: ADAPTER_KEYS.PL_NCOURT,
+            slice,
+            offset: offset + index,
+          });
+          return [];
+        }
         const payload: SlicePayload = {
           listingXml,
           positionAlias: positionAliasOf(query, listing.rows, index),
         };
-        return {
-          identity: plNcourtListingIdentity(
-            listing.rows[index] ?? panic("a listed row lost its reading"),
-          ),
-          payload,
-        };
+        return [{ identity, payload }];
       }),
     });
   }
@@ -2427,15 +2495,15 @@ const listSliceWindow = async ({
       return quarantine;
     }
     const payload: SlicePayload = { quarantine: quarantine.value };
-    const { sourceDocumentId } = buildPlNcourtQuarantine(quarantine.value);
     return Result.ok({
       total: undefined,
       items: [
         {
-          identity:
-            sourceDocumentId === undefined
-              ? { type: "unidentifiable" }
-              : { type: "document", sourceDocumentId },
+          // The id its audit row is stored under, by the same function.
+          identity: {
+            type: "document",
+            sourceDocumentId: plNcourtPositionId(positionOf(quarantine.value)),
+          },
           payload,
         },
       ],

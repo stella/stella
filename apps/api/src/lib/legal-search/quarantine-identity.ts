@@ -71,7 +71,8 @@ type QuarantineIdentityOptions = {
   stableFields: QuarantineStableFields;
 };
 
-const quarantinePrefix = (namespace: QuarantineNamespace): string =>
+/** What every quarantine id of a namespace starts with, for a SQL prefix match. */
+export const quarantinePrefix = (namespace: QuarantineNamespace): string =>
   `${namespace}-quarantine:`;
 
 const QUARANTINE_PREFIXES =

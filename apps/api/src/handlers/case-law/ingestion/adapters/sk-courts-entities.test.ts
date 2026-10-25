@@ -170,7 +170,16 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       panic("stated labels must reach quarantine");
     expect(decision.plainTextOutcome.type).toBe("item_build_failed");
     expect(decision.caseNumber.toString()).not.toBe(item.spisovaZnacka);
-    expect(skCourtsListingIdentity(item)).toEqual({ type: "unidentifiable" });
+    // Quarantined at the boundary, and stored under that same identity: the
+    // plain-text fallback keeps a persistable id rather than minting its own.
+    expect(decision.sourceDocumentId).toMatch(
+      /^sk-courts-quarantine:[0-9a-f]{64}$/u,
+    );
+    expect(skCourtsListingIdentity(item)).toEqual({
+      type: "document",
+      sourceDocumentId:
+        decision.sourceDocumentId ?? panic("the decision has no id"),
+    });
   });
 
   test("stored raw replay preserves the same decoded fields", () => {

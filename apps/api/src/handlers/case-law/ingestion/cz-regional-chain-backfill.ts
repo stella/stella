@@ -27,7 +27,7 @@
 
 import { panic, Result } from "better-result";
 import type { UnhandledException } from "better-result";
-import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, notLike, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
@@ -49,7 +49,12 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { escapeLike } from "@/api/lib/escape-like";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantinePrefix,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -165,6 +170,12 @@ const backfillPageReader =
             eq(caseLawDecisions.sourceId, sourceId),
             isNotNull(caseLawDecisions.sourceRawS3Key),
             isNotNull(caseLawDecisions.sourceDocumentId),
+            // A quarantined row names no publisher document: its id would
+            // answer 404 on every run and keep the row selected forever.
+            notLike(
+              caseLawDecisions.sourceDocumentId,
+              `${escapeLike(quarantinePrefix(QUARANTINE_NAMESPACE.CZ_REGIONAL))}%`,
+            ),
             eq(
               caseLawDecisions.sourceRawContentType,
               SOURCE_RAW_ENVELOPE_CONTENT_TYPE,

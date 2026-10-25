@@ -1,4 +1,5 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: quarantine ids keep their digest under the shared prefix owner; an id-less row the census lists is built rather than parked, with the same decision.
 import { panic, Result } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
@@ -137,6 +138,11 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  isQuarantineSourceDocumentId,
+  QUARANTINE_NAMESPACE,
+  quarantineSourceDocumentId,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -607,8 +613,6 @@ const readView = async ({
 
 // ── Identity ─────────────────────────────────────────────
 
-const QUARANTINE_PREFIX = "pl-uokik-quarantine:";
-
 /** A link's target inside the view column, whatever it addresses. */
 const LINK_TARGET = /HREF=[^\s>]*/gu;
 
@@ -617,35 +621,43 @@ const LINK_TARGET = /HREF=[^\s>]*/gu;
  * column, which holds the decision number, date, parties and practice and
  * stays the same once the register states the UNID again. Undefined for a
  * row with no column either, which nothing could tell apart.
+ *
+ * The digest is over the column's bytes rather than `quarantineIdentity`'s
+ * field record: stored rows carry it, and that helper's JSON form cannot
+ * reproduce it. Only the prefix is the shared owner's.
  */
 export const plUokikQuarantineId = (row: PlUokikViewRow): string | undefined =>
   row.column === undefined
     ? undefined
-    : `${QUARANTINE_PREFIX}${hashContent(
-        // The link's target is the identity that went missing, so the digest
-        // is taken without it and still names the row once it is back.
-        row.column.replaceAll(LINK_TARGET, "HREF="),
-      )}`;
+    : quarantineSourceDocumentId(
+        QUARANTINE_NAMESPACE.PL_UOKIK,
+        hashContent(
+          // The link's target is the identity that went missing, so the digest
+          // is taken without it and still names the row once it is back.
+          row.column.replaceAll(LINK_TARGET, "HREF="),
+        ),
+      );
 
 const isQuarantineId = (sourceDocumentId: string): boolean =>
-  sourceDocumentId.startsWith(QUARANTINE_PREFIX);
+  isQuarantineSourceDocumentId(QUARANTINE_NAMESPACE.PL_UOKIK, sourceDocumentId);
 
-/** The identity a row is stored under, for the crawl and the census alike. */
+/**
+ * The identity a row is stored under, for the crawl and the census alike.
+ * Undefined for a row with neither a UNID nor a column: all it states is its
+ * view position and note id, and a position moves while the record does not,
+ * so nothing stable is left to fingerprint (case-law AGENTS.md rule 20).
+ */
 export const plUokikListingIdentity = (
   row: PlUokikViewRow,
-): ListingIdentity => {
+): ListingIdentity | undefined => {
   if (row.unid !== undefined) {
     return { type: "document", sourceDocumentId: row.unid };
   }
   const quarantineId = plUokikQuarantineId(row);
   return quarantineId === undefined
-    ? { type: "unidentifiable" }
+    ? undefined
     : { type: "document", sourceDocumentId: quarantineId };
 };
-
-/** A quarantined row can hold nothing more until the register states its UNID. */
-export const plUokikHeldWithoutDetail = (identity: ListingIdentity): boolean =>
-  identity.type === "document" && isQuarantineId(identity.sourceDocumentId);
 
 // ── The decision page ────────────────────────────────────
 
@@ -1069,10 +1081,11 @@ export const plUokikRawPartsOf = (
 });
 
 export type PlUokikBuildResult =
+  /** Read whole, or quarantined: a row with no UNID has no page to wait for. */
   | { type: "built"; decision: IngestionResult }
   /** No UNID and no column to fingerprint; nothing can store this row. */
   | { type: "unkeyable" }
-  /** Listed, and stored on its view row alone. */
+  /** Listed, and stored on its view row alone while its page stays unread. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
 type MissingDetailOptions = {
@@ -1409,7 +1422,7 @@ export const assemblePlUokikDecision = async ({
 }: AssemblePlUokikDecisionOptions): Promise<PlUokikBuildResult> => {
   const row = normalizePlUokikRow(entry);
   const identity = plUokikListingIdentity(row);
-  if (identity.type !== "document") {
+  if (identity?.type !== "document") {
     return { type: "unkeyable" };
   }
   const id = identity.sourceDocumentId;
@@ -1571,7 +1584,9 @@ export const assemblePlUokikDecision = async ({
     },
     PL_UOKIK_METADATA_URL_SCHEMA,
   );
-  return listingOnly
+  // A quarantined row is complete as its view row: with no UNID there is no
+  // page to wait for, so the census stores it rather than parking it forever.
+  return listingOnly && !quarantined
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
 };
@@ -1878,7 +1893,7 @@ const reparsePlUokikStoredRaw = async (
     part: RAW_PART.LISTING,
     identityOf: (listing) => {
       const identity = plUokikListingIdentity(normalizePlUokikRow(listing));
-      return identity.type === "document"
+      return identity?.type === "document"
         ? identity.sourceDocumentId
         : undefined;
     },
@@ -2633,10 +2648,21 @@ const listPlUokikSlicePage = async ({
     );
   }
   return {
-    items: inside.map(({ entry, row }) => ({
-      identity: plUokikListingIdentity(row),
-      payload: entry,
-    })),
+    items: inside.flatMap(({ entry, row }) => {
+      const identity = plUokikListingIdentity(row);
+      if (identity === undefined) {
+        // No UNID and no column: nothing but a view position, which is not
+        // an identity. Left out rather than keyed on a guess; the crawl
+        // reports the same row as unidentifiable.
+        logger.warn("case_law.ingestion.record_unidentifiable", {
+          adapterKey: ADAPTER_KEYS.PL_UOKIK,
+          slice,
+          reason: "no-stable-field",
+        });
+        return [];
+      }
+      return [{ identity, payload: entry }];
+    }),
     totalPages,
   };
 };
@@ -2738,8 +2764,9 @@ export const plUokikAdapter = defineSourceAdapter({
     tipWindowDays: 2,
     // A decision whose page failed leaves a row-only stub; unset, it would
     // count as held and its page would never be asked for again.
+    // A quarantined row is complete as its view row; the engine counts every
+    // quarantine identity held without detail.
     heldRequiresDetail: true,
-    heldWithoutDetail: plUokikHeldWithoutDetail,
     // A decision whose files are scans, or which has none, is complete on its
     // page: asking again would read the same images.
     // An appeal still before the courts gets its rulings attached to the

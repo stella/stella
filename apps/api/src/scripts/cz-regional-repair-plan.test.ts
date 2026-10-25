@@ -167,17 +167,25 @@ describe("czRegionalListingIdentity", () => {
     expect(czRegionalListingIdentity(withoutLink)).toEqual(fallback);
   });
 
-  test("an item the adapter would drop is unidentifiable", () => {
+  test("a court's item with no usable docket or court keys on its quarantine id", () => {
     for (const overrides of [
       { jednaciCislo: null },
       { jednaciCislo: "" },
       { soud: null },
       { soud: "" },
     ] satisfies Partial<CzRegionalApiItem>[]) {
-      expect(czRegionalListingIdentity(listingItem(overrides))).toEqual({
-        type: "unidentifiable",
-      });
+      const identity = czRegionalListingIdentity(listingItem(overrides));
+      expect(identity.type).toBe("document");
+      expect(
+        identity.type === "document" ? identity.sourceDocumentId : "",
+      ).toMatch(/^cz-regional-quarantine:[0-9a-f]{64}$/u);
     }
+  });
+
+  test("the ministry's own record is not one the source stores", () => {
+    expect(
+      czRegionalListingIdentity(listingItem({ soud: "(nezadán)" })),
+    ).toEqual({ type: "not-a-court-decision" });
   });
 });
 
@@ -191,12 +199,23 @@ describe("czRegionalListingKeys", () => {
         odkaz: null,
       }),
       listingItem({ jednaciCislo: "31 Cm 8/2024-115", odkaz: null }),
-      listingItem({ soud: null }),
+      listingItem({ soud: "(nezadán)" }),
     ]);
     expect(keys).toEqual({
       documentIds: ["2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23"],
       // Both sheets of one docket ask the same question.
       caseNumbers: ["31 Cm 8/2024"],
+    });
+  });
+
+  test("a quarantined item is looked up under its quarantine id", () => {
+    const quarantined = listingItem({ soud: null });
+    const identity = czRegionalListingIdentity(quarantined);
+    expect(czRegionalListingKeys([quarantined])).toEqual({
+      documentIds: [
+        identity.type === "document" ? identity.sourceDocumentId : "",
+      ],
+      caseNumbers: [],
     });
   });
 });
@@ -276,26 +295,45 @@ describe("diffCzRegionalListing", () => {
       }),
       listingItem({ jednaciCislo: "31 Cm 8/2024-102", odkaz: null }),
       listingItem({ jednaciCislo: "44 Co 91/2023-7", odkaz: null }),
+      // A court's row with no court stated is quarantined, so it is a row the
+      // source keys like any other and not yet holds…
       listingItem({ soud: null }),
+      // …while the ministry's own record is not one it stores at all.
+      listingItem({ soud: "(nezadán)" }),
     ];
     const diff = diffCzRegionalListing({ items, held });
     expect(
       diff.missing.length +
         diff.held.length +
         diff.duplicate.length +
-        diff.unidentifiable.length,
+        diff.notStored.length,
     ).toBe(items.length);
-    expect(diff.missing.length).toBe(2);
+    expect(diff.missing.length).toBe(3);
     expect(diff.held.length).toBe(2);
     expect(diff.duplicate.length).toBe(1);
-    expect(diff.unidentifiable.length).toBe(1);
+    expect(diff.notStored).toEqual([listingItem({ soud: "(nezadán)" })]);
+  });
+
+  test("a stored quarantine row holds its quarantined item", () => {
+    const quarantined = listingItem({ jednaciCislo: null });
+    const identity = czRegionalListingIdentity(quarantined);
+    const diff = diffCzRegionalListing({
+      items: [quarantined],
+      held: {
+        documentIds: new Set([
+          identity.type === "document" ? identity.sourceDocumentId : "",
+        ]),
+        caseNumbers: new Set(),
+      },
+    });
+    expect(diff.held).toEqual([quarantined]);
   });
 
   test("an empty page diffs to empty buckets", () => {
     expect(diffCzRegionalListing({ items: [], held })).toEqual({
       missing: [],
       held: [],
-      unidentifiable: [],
+      notStored: [],
       duplicate: [],
     });
   });

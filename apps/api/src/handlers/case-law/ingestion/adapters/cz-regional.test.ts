@@ -418,12 +418,44 @@ describe("records no court decided are refused at the boundary", () => {
     expect(item.soud).toBe("(nezadán)");
     expect(item.ecli).not.toMatch(/^ECLI:/u);
 
+    // Not a court's record with a broken identity: a record this source does
+    // not store, so it is neither keyed nor quarantined.
     expect(czRegionalListingIdentity(item)).toEqual({
-      type: "unidentifiable",
+      type: "not-a-court-decision",
     });
     expect(
       assembleCzRegionalDecision({ item, document: null, chain: null }).type,
     ).toBe("unkeyable");
+    expect((await buildCzRegionalDecision(item)).type).toBe("unkeyable");
+  });
+
+  test("the reconciliation does not report it as listed", async () => {
+    const ministry = await itemByDocket(MINISTRY_LISTING, MINISTRY_DOCKET);
+    const court = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const listedCourt = czRegionalListingIdentity(court);
+    const courtIdentity =
+      listedCourt.type === "not-a-court-decision" ||
+      listedCourt.type === "no-stable-field"
+        ? panic("the court's record has no listing identity")
+        : listedCourt;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(
+          JSON.stringify({ items: [ministry, court], totalPages: 1 }),
+        ),
+    );
+    try {
+      const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+        slice: "2022-05-05",
+        page: 0,
+      });
+      expect(slice.items).toEqual([
+        { identity: courtIdentity, payload: court },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   test("a document stating no court code is refused too", async () => {
@@ -436,6 +468,269 @@ describe("records no court decided are refused at the boundary", () => {
     });
 
     expect(built.type).toBe("unkeyable");
+  });
+});
+
+/**
+ * A court's listed record whose docket or court cannot key it is still the
+ * publisher's statement that the record exists: it keys on a quarantine
+ * identity and is kept listing-only, and the keyed observation that follows
+ * once the identity recovers takes the row over by its repair alias.
+ */
+describe("a court's record with no usable identity is quarantined", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const QUARANTINE_ID = /^cz-regional-quarantine:[0-9a-f]{64}$/u;
+  const OVERLONG_DOCKET = `1 C ${"9".repeat(400)}/2024-3`;
+  const OVERLONG_LINK = `https://rozhodnuti.justice.cz/api/finaldoc/${"a".repeat(300)}`;
+  /** A link the publisher would serve, so a request for it is observable. */
+  const QUARANTINED_LINK =
+    "https://rozhodnuti.justice.cz/api/finaldoc/0f0e0d0c-0b0a-4908-8706-050403020100";
+
+  const district = async (): Promise<CzRegionalApiItem> =>
+    await itemByDocket(LISTING, DISTRICT_DOCKET);
+
+  const quarantineIdOf = (raw: unknown): string => {
+    const identity = czRegionalListingIdentity(raw);
+    return identity.type === "document" &&
+      QUARANTINE_ID.test(identity.sourceDocumentId)
+      ? identity.sourceDocumentId
+      : panic(`not quarantined: ${JSON.stringify(identity)}`);
+  };
+
+  test("a row lacking a usable docket or court keys on its quarantine id", async () => {
+    const item = await district();
+    for (const overrides of [
+      { jednaciCislo: null },
+      { jednaciCislo: "" },
+      { jednaciCislo: "   " },
+      { jednaciCislo: null, odkaz: null },
+      { jednaciCislo: OVERLONG_DOCKET, odkaz: null },
+      { jednaciCislo: OVERLONG_DOCKET, odkaz: OVERLONG_LINK },
+      { soud: null },
+      { soud: "" },
+      { soud: null, jednaciCislo: null },
+    ] satisfies Partial<CzRegionalApiItem>[]) {
+      expect(quarantineIdOf({ ...item, ...overrides })).toMatch(QUARANTINE_ID);
+    }
+    // A docket that only lacks its link, or carries an over-long one, keys
+    // on the docket as before: the docket is a usable identity.
+    expect(
+      czRegionalListingIdentity({ ...item, odkaz: OVERLONG_LINK }),
+    ).toEqual({
+      type: "case-number",
+      caseNumber: "18 C 130/2024",
+      language: "cs",
+    });
+  });
+
+  test("the three missing forms of one record are three identities", async () => {
+    const item = await district();
+    const ids = new Set([
+      quarantineIdOf({ ...item, jednaciCislo: null }),
+      quarantineIdOf({ ...item, soud: null }),
+      quarantineIdOf({ ...item, jednaciCislo: null, soud: null }),
+    ]);
+    expect(ids.size).toBe(3);
+  });
+
+  test("the fingerprint survives a re-rendered listing and tells records apart", async () => {
+    const item = await district();
+    const quarantined = { ...item, jednaciCislo: null };
+    const rerendered = {
+      ...quarantined,
+      autor: `  ${item.autor ?? ""}\n`,
+      predmetRizeni: (item.predmetRizeni ?? "").replaceAll(" ", "  "),
+      klicovaSlova: [...(item.klicovaSlova ?? [])].toReversed(),
+      zminenaUstanoveni: [...(item.zminenaUstanoveni ?? [])].toReversed(),
+      // Neither the publication day nor the identifiers are stable fields.
+      datumZverejneni: "2031-01-01",
+      ecli: null,
+      odkaz: QUARANTINED_LINK,
+    };
+    expect(quarantineIdOf(rerendered)).toBe(quarantineIdOf(quarantined));
+    expect(
+      quarantineIdOf({ ...quarantined, datumVydani: "2001-01-01" }),
+    ).not.toBe(quarantineIdOf(quarantined));
+  });
+
+  test("the crawl stores it listing-only under that id, asking for no document", async () => {
+    const item = await district();
+    const quarantined = {
+      ...item,
+      jednaciCislo: null,
+      odkaz: QUARANTINED_LINK,
+    };
+    const document = await readFixture(DISTRICT_DOCUMENT);
+    const quarantinedFetch = mock(async () => new Response(document));
+    const listing = JSON.stringify({
+      items: [quarantined, item],
+      totalPages: 1,
+    });
+    globalThis.fetch = asFetchMock(async (input: string) => {
+      if (input === QUARANTINED_LINK) {
+        return await quarantinedFetch();
+      }
+      return new Response(input === item.odkaz ? document : listing);
+    });
+
+    const page = (
+      await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+    ).unwrap();
+
+    expect(quarantinedFetch).not.toHaveBeenCalled();
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 0,
+    });
+    const stored =
+      page.decisions.find((decision) =>
+        QUARANTINE_ID.test(decision.sourceDocumentId ?? ""),
+      ) ?? panic("the quarantined row was not stored");
+    expect(stored.sourceDocumentId).toBe(quarantineIdOf(quarantined));
+    expect(stored.isListingOnly).toBe(true);
+    expect(stored.caseNumberIsPlaceholder).toBe(true);
+    expect<string>(stored.court).toBe(item.soud ?? "");
+    expect(stored.decisionDate).toBe(item.datumVydani ?? undefined);
+    expect(stored.metadata).toMatchObject({
+      identityQuarantined: true,
+      listedOnlyReason: "docket-not-usable",
+      author: item.autor,
+      subjectOfProceeding: item.predmetRizeni,
+    });
+    expect(
+      JSON.parse(
+        decodeSourceRawEnvelope(stored.sourceRaw ?? "")?.["listing"] ?? "null",
+      ),
+    ).toEqual(quarantined);
+    // The keyed sibling is untouched by its neighbour's quarantine.
+    expect(
+      page.decisions.filter((decision) => decision !== stored),
+    ).toHaveLength(1);
+  });
+
+  test("the reconciliation lists and builds it as the crawl stores it", async () => {
+    const item = await district();
+    const quarantined = { ...item, soud: null };
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(JSON.stringify({ items: [quarantined], totalPages: 1 })),
+    );
+
+    const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+      slice: "2025-06-11",
+      page: 0,
+    });
+    expect(slice.items).toEqual([
+      {
+        identity: {
+          type: "document",
+          sourceDocumentId: quarantineIdOf(quarantined),
+        },
+        payload: quarantined,
+      },
+    ]);
+
+    // There is no document to wait for, so the build is complete as listed:
+    // `detail-unavailable` would park the record forever.
+    const built =
+      await czRegionalAdapter.reconciliation.buildDecision(quarantined);
+    expect(built.type).toBe("built");
+    const decision = built.type === "built" ? built.decision : undefined;
+    expect(decision?.sourceDocumentId).toBe(quarantineIdOf(quarantined));
+    expect(decision?.isListingOnly).toBe(true);
+    // The docket is usable here, so it labels the row as itself.
+    expect<string | undefined>(decision?.caseNumber).toBe("18 C 130/2024");
+    expect(decision?.caseNumberIsPlaceholder).toBeUndefined();
+    expect<unknown>(decision?.metadata["listedOnlyReason"]).toBe(
+      "court-not-stated",
+    );
+
+    const replayed = await czRegionalAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(decision?.sourceRaw ?? ""),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      sourceDocumentId: decision?.sourceDocumentId ?? null,
+      caseNumber: decision?.caseNumber ?? "",
+      language: "cs",
+      court: decision?.court ?? "",
+      ecli: null,
+      decisionDate: decision?.decisionDate ?? null,
+      decisionType: null,
+      sourceUrl: decision?.sourceUrl ?? null,
+      documentUrl: null,
+      metadata: decision?.metadata ?? {},
+    });
+    expect(replayed).toEqual({
+      type: "parsed",
+      result: decision ?? panic("no decision built"),
+    });
+  });
+
+  test("a keyed observation emits each quarantined form as a repair alias", async () => {
+    const item = await district();
+    const built = assembleCzRegionalDecision({
+      item,
+      document: readCzRegionalDocument(await readFixture(DISTRICT_DOCUMENT)),
+      chain: null,
+    });
+    const decision =
+      built.type === "built" ? built.decision : panic("district did not build");
+
+    expect(decision.sourceDocumentId).not.toMatch(QUARANTINE_ID);
+    expect(decision.sourceDocumentIdRepairAliases?.toSorted()).toEqual(
+      [
+        quarantineIdOf({ ...item, jednaciCislo: null }),
+        quarantineIdOf({ ...item, soud: null }),
+        quarantineIdOf({ ...item, jednaciCislo: null, soud: null }),
+      ].toSorted(),
+    );
+    // A row keyed on its docket states no publisher id, and the pipeline
+    // adopts by repair alias only for one that does.
+    const docketKeyed = assembleCzRegionalDecision({
+      item: { ...item, odkaz: null },
+      document: null,
+      chain: null,
+    });
+    expect(
+      docketKeyed.type === "built"
+        ? docketKeyed.decision.sourceDocumentIdRepairAliases
+        : "unbuilt",
+    ).toBeUndefined();
+  });
+
+  test("a row stating nothing to fingerprint is left out, and named", async () => {
+    const bare = { soud: "Okresní soud v Hradci Králové", ecli: null };
+    expect(czRegionalListingIdentity(bare)).toEqual({
+      type: "no-stable-field",
+    });
+    expect((await buildCzRegionalDecision(bare)).type).toBe("unkeyable");
+
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(JSON.stringify({ items: [bare], totalPages: 1 })),
+    );
+    const logs = installRecordingLogger();
+    try {
+      const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+        slice: "2025-06-11",
+        page: 0,
+      });
+      expect(slice.items).toEqual([]);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) =>
+              message === "case_law.ingestion.listing_row_unidentifiable",
+          ),
+      ).toHaveLength(1);
+    } finally {
+      logs.restore();
+    }
   });
 });
 
@@ -1235,24 +1530,26 @@ describe("the crawl keeps a refused row as its listing", () => {
     expect(page.unwrap().nextCursor).toBe("2025-06-12:0");
   });
 
-  test("a day of unkeyable rows counts failures without empty-day gap skipping", async () => {
+  test("a day of ministry records is skipped as out of scope, not failed or gap-skipped", async () => {
     const item = await itemByDocket(MINISTRY_LISTING, MINISTRY_DOCKET);
-    expect(
-      assembleCzRegionalDecision({ item, document: null, chain: null }).type,
-    ).toBe("unkeyable");
-    globalThis.fetch = asFetchMock(
-      async () =>
-        new Response(JSON.stringify({ items: [item], totalPages: 1 })),
+    const documentFetch = mock(async () => new Response("{}"));
+    globalThis.fetch = asFetchMock(async (input: string) =>
+      input === item.odkaz
+        ? await documentFetch()
+        : new Response(JSON.stringify({ items: [item], totalPages: 1 })),
     );
 
     const page = (
       await czRegionalAdapter.fetchPage("2025-06-11:0:30", {})
     ).unwrap();
     expect(page.decisions).toHaveLength(0);
+    // A record outside the source's scope is not a row it failed to read,
+    // and nothing is asked of the publisher about it.
     expect(page.itemBuildFailures).toEqual({
       type: "item_build_failed",
-      count: 1,
+      count: 0,
     });
+    expect(documentFetch).not.toHaveBeenCalled();
     expect(page.nextCursor).toBe("2025-06-12:0");
   });
 

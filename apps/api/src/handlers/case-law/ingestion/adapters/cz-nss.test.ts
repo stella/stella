@@ -7,7 +7,7 @@
  * predecessor came to assert a citation pattern the adapter no longer had.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -71,6 +71,8 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 const reconciliation = requireReconciliation(czNssAdapter);
 
 const BASE_URL = "https://vyhledavac.nssoud.cz";
+
+const QUARANTINE_ID_PATTERN = /^cz-nss-quarantine:[0-9a-f]{64}$/u;
 
 /** One backslash, for fixtures that must carry a literal escape. */
 const BACKSLASH = String.fromCodePoint(92);
@@ -575,15 +577,105 @@ describe("cz-nss listing rows", () => {
     expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026 - 79");
   });
 
-  test("applies the reference length guard to the visible field", () => {
-    const rows = parseResultRows(
+  test("a row with an id and no usable reference is kept under its id", () => {
+    // Over the length guard, or empty: no reference a court writes, but the
+    // row is still a listed document.
+    for (const displayedCaseNumber of ["X".repeat(101), ""]) {
+      const rows = parseResultRows(
+        rowBlock({ ...OPTIONAL_CITATION_ROW, displayedCaseNumber }),
+      );
+
+      expect(rows).toEqual([
+        {
+          caseNumber: "",
+          publishedCaseNumber: undefined,
+          decisionDate: OPTIONAL_CITATION_ROW.date,
+          decisionType: "Rozsudek",
+          outcome: undefined,
+          documentUrl: `${BASE_URL}/DokumentDetail/Index/${OPTIONAL_CITATION_ROW.documentId}`,
+          documentId: OPTIONAL_CITATION_ROW.documentId,
+        },
+      ]);
+      expect(czNssListingIdentity(rows[0] ?? panic("row"))).toEqual({
+        type: "document",
+        sourceDocumentId: OPTIONAL_CITATION_ROW.documentId,
+      });
+    }
+  });
+
+  test("a row with no usable id keeps its reference and keys on its quarantine identity", () => {
+    const idLess = parseResultRows(
+      rowBlock({ ...MUNICIPAL_ROW, documentId: "" }),
+    );
+    expect(idLess).toHaveLength(1);
+    const row = idLess[0] ?? panic("row");
+    expect(row).toMatchObject({
+      caseNumber: "1 Az 4/2026",
+      publishedCaseNumber: "1 Az 4/2026 - 79",
+      documentId: undefined,
+      documentUrl: undefined,
+    });
+    const identity = czNssListingIdentity(row);
+    expect(identity).toEqual({
+      type: "document",
+      sourceDocumentId: expect.stringMatching(QUARANTINE_ID_PATTERN),
+    });
+    // An id the column cannot hold, or one that is not the portal's numeric
+    // id, is the same record without one: the malformed id is not hashed.
+    for (const documentId of [
+      "9".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      "abc",
+    ]) {
+      expect(
+        czNssListingIdentity(
+          parseResultRows(rowBlock({ ...MUNICIPAL_ROW, documentId }))[0] ??
+            panic("row"),
+        ),
+      ).toEqual(identity);
+    }
+  });
+
+  test("the quarantine identity survives a re-rendered listing", () => {
+    const keyOf = (html: string) =>
+      czNssListingIdentity(parseResultRows(html)[0] ?? panic("row"));
+    const first = keyOf(rowBlock({ ...MUNICIPAL_ROW, documentId: "" }));
+    // Another position on the page and other whitespace around the cells.
+    const moved = keyOf(
       rowBlock({
-        ...OPTIONAL_CITATION_ROW,
-        displayedCaseNumber: "X".repeat(101),
+        ...MUNICIPAL_ROW,
+        documentId: "",
+        index: 17,
+        displayedCaseNumber: `  ${MUNICIPAL_ROW.displayedCaseNumber}\n `,
       }),
     );
+    expect(moved).toEqual(first);
+    // Another decision date is another record.
+    expect(
+      keyOf(rowBlock({ ...MUNICIPAL_ROW, documentId: "", date: "11.06.2026" })),
+    ).not.toEqual(first);
+  });
 
-    expect(rows).toEqual([]);
+  test("a row with neither an id nor a reference is dropped with a warning", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        parseResultRows(
+          rowBlock({
+            ...MUNICIPAL_ROW,
+            documentId: "",
+            displayedCaseNumber: "",
+          }),
+        ),
+      ).toEqual([]);
+      expect(
+        recording.records.filter(
+          ({ message }) =>
+            message === "case_law.ingestion.listing_row_without_stable_field",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      recording.restore();
+    }
   });
 
   test("keeps a visible docket with no sheet number", () => {
@@ -655,9 +747,9 @@ describe("cz-nss listing rows", () => {
       type: "document",
       sourceDocumentId: "784237",
     });
-    expect(listingIdentityKey(czNssListingIdentity(row))).toBe(
-      "document:784237",
-    );
+    expect(
+      listingIdentityKey(czNssListingIdentity(row) ?? panic("identity")),
+    ).toBe("document:784237");
   });
 
   test("two courts' decisions under one docket are two keys", () => {
@@ -678,12 +770,12 @@ describe("cz-nss listing rows", () => {
       return;
     }
     expect(regional.caseNumber).toBe(municipal.caseNumber);
-    expect(listingIdentityKey(czNssListingIdentity(regional))).not.toBe(
-      listingIdentityKey(czNssListingIdentity(municipal)),
+    expect(czNssListingIdentity(regional)).not.toEqual(
+      czNssListingIdentity(municipal),
     );
   });
 
-  test("a legacy payload without a document link has nothing to key on", () => {
+  test("a legacy payload with neither a document link nor a reference keys on nothing", () => {
     const row: ParsedRow = {
       caseNumber: "1 Az 4/2026",
       publishedCaseNumber: undefined,
@@ -693,16 +785,14 @@ describe("cz-nss listing rows", () => {
       documentUrl: undefined,
       documentId: undefined,
     };
-    // Nothing can be read for it, now or later, so counting it as missing
-    // would keep its slice short forever.
-    expect(czNssListingIdentity(row)).toEqual({ type: "unidentifiable" });
-    expect(listingIdentityKey(czNssListingIdentity(row))).toBeNull();
+    // A docket alone names a file, not a document, so it is no fingerprint.
+    expect(czNssListingIdentity(row)).toBeNull();
     expect(
       czNssListingIdentity({
         ...row,
         documentId: "9".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
       }),
-    ).toEqual({ type: "unidentifiable" });
+    ).toBeNull();
   });
 });
 
@@ -1140,6 +1230,128 @@ describe("cz-nss fetchPage", () => {
     setSystemTime();
   });
 
+  test("a listed row with no usable id is stored listing-only under its quarantine identity", async () => {
+    const ID_LESS = { ...REGIONAL_ROW, documentId: "" } as const;
+    const { requests } = installStub({
+      search: [
+        htmlResponse(
+          searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW, ID_LESS] }),
+        ),
+      ],
+    });
+
+    const page = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+
+    const identity =
+      czNssListingIdentity(
+        parseResultRows(rowBlock(ID_LESS))[0] ?? panic("row"),
+      ) ?? panic("identity");
+    const quarantinedId =
+      identity.type === "document"
+        ? identity.sourceDocumentId
+        : panic("document identity");
+    expect(quarantinedId).toMatch(QUARANTINE_ID_PATTERN);
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual([MUNICIPAL_ROW.documentId, quarantinedId]);
+    expect(page.itemBuildFailures?.count ?? 0).toBe(0);
+    const quarantined = page.decisions[1] ?? panic("decision");
+    expect(quarantined.isListingOnly).toBe(true);
+    expect<string>(quarantined.caseNumber).toBe("52 Af 4/2026");
+    expect(quarantined.metadata).toMatchObject({
+      identityQuarantined: true,
+      listedOnly: true,
+      listedOnlyReason: "missing-record-identity",
+      publishedCaseNumber: "52 Af 4/2026 - 66",
+    });
+    expect(quarantined.sourceUrl).toBeUndefined();
+    expect(quarantined.legacySourceUrls).toBeUndefined();
+    const parts = decodeSourceRawEnvelope(quarantined.sourceRaw ?? "");
+    expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(
+      throughJsonb(parseResultRows(rowBlock(ID_LESS))[0]),
+    );
+    expect(parts?.["detail"]).toBeUndefined();
+    // Only the keyed row's document is asked for: nothing addresses the other.
+    const documentRequests = requests.filter(({ url }) =>
+      new URL(url).pathname.startsWith("/Dokument"),
+    );
+    expect(documentRequests.length).toBeGreaterThan(0);
+    expect(
+      documentRequests.every(({ url }) =>
+        url.endsWith(`/${MUNICIPAL_ROW.documentId}`),
+      ),
+    ).toBe(true);
+
+    // The reconciliation stores the same row for the parked payload, built
+    // rather than parked, and asks the portal for nothing.
+    const reconciled = installStub({});
+    const built = await reconciliation.buildDecision(
+      throughJsonb(parseResultRows(rowBlock(ID_LESS))[0]),
+    );
+    expect(built.type).toBe("built");
+    if (built.type === "built") {
+      expect(built.decision.sourceDocumentId).toBe(quarantinedId);
+      expect(built.decision.rawHash).toBe(quarantined.rawHash);
+      expect(built.decision.isListingOnly).toBe(true);
+    }
+    expect(reconciled.requests).toEqual([]);
+
+    // The same row once its id is back names the quarantine row it replaces.
+    installStub({
+      search: [
+        htmlResponse(searchPage({ statedCount: 1, rows: [REGIONAL_ROW] })),
+      ],
+    });
+    const recovered = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+    expect(recovered.decisions.at(0)?.sourceDocumentId).toBe(
+      REGIONAL_ROW.documentId,
+    );
+    expect(recovered.decisions.at(0)?.sourceDocumentIdRepairAliases).toEqual([
+      quarantinedId,
+    ]);
+  });
+
+  test("a listed row with an id and no reference is read and labelled by its id", async () => {
+    const UNLABELLED = { ...MUNICIPAL_ROW, displayedCaseNumber: "" } as const;
+    installStub({
+      search: [
+        htmlResponse(searchPage({ statedCount: 1, rows: [UNLABELLED] })),
+      ],
+    });
+
+    const page = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+
+    const decision = page.decisions.at(0) ?? panic("decision");
+    expect(decision.sourceDocumentId).toBe(MUNICIPAL_ROW.documentId);
+    expect(decision.isListingOnly).toBeUndefined();
+    expect<string>(decision.caseNumber).toBe(MUNICIPAL_ROW.documentId);
+    expect(decision.caseNumberIsPlaceholder).toBe(true);
+    expect(decision.metadata["listingDocketMissing"]).toBe(true);
+    expect(decision.metadata["publishedCaseNumber"]).toBeUndefined();
+    expect(decision.sourceDocumentIdRepairAliases).toBeUndefined();
+
+    // The replay keeps the stand-in a stand-in.
+    const reparse = czNssAdapter.reparseStoredRaw ?? panic("reparse");
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+    const outcome = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    });
+    expect(outcome).toEqual({ type: "parsed", result: decision });
+  });
+
   test("an uncounted search checkpoints its retry and refreshes the session", async () => {
     const { requests } = installStub({
       search: [
@@ -1236,9 +1448,11 @@ describe("cz-nss fetchPage", () => {
   test("short parsed pages account for their gaps and advance across the whole stated day", async () => {
     const recording = installRecordingLogger();
     try {
+      // Neither an id nor a reference: the one row the parser cannot keep.
       const malformed = rowBlock({
         ...MUNICIPAL_ROW,
-        displayedCaseNumber: "X".repeat(101),
+        documentId: "",
+        displayedCaseNumber: "",
       });
       expect(parseResultRows(malformed)).toHaveLength(0);
       installStub({
@@ -2231,17 +2445,37 @@ describe("cz-nss buildDecision", () => {
     expect(built.decision.court === "Nejvyšší správní soud").toBe(true);
   });
 
-  test("refuses a row that names no document at all", async () => {
-    installStub({ search: [] });
+  test("a row with neither a document id nor a reference is unkeyable, unasked", async () => {
+    const { requests } = installStub({ search: [] });
 
+    // A docket alone names a file rather than a document, so it is no
+    // identity to build or park under.
     expect(
-      (
-        await reconciliation.buildDecision({
-          caseNumber: "1 Az 4/2026",
-          decisionDate: "10.06.2026",
-        })
-      ).type,
-    ).toBe("detail-unavailable");
+      await reconciliation.buildDecision({
+        caseNumber: "1 Az 4/2026",
+        decisionDate: "10.06.2026",
+      }),
+    ).toEqual({ type: "unkeyable" });
+    expect(requests).toEqual([]);
+  });
+
+  test("a row with a reference and no document id is built listing-only, unasked", async () => {
+    const { requests } = installStub({ search: [] });
+    const payload = {
+      caseNumber: "1 Az 4/2026",
+      publishedCaseNumber: "1 Az 4/2026 - 79",
+      decisionDate: "10.06.2026",
+    };
+
+    const built = await reconciliation.buildDecision(payload);
+
+    expect(built.type).toBe("built");
+    if (built.type === "built") {
+      expect(built.decision.sourceDocumentId).toMatch(QUARANTINE_ID_PATTERN);
+      expect(built.decision.isListingOnly).toBe(true);
+      expect<string | undefined>(built.decision.sheetNumber).toBe("79");
+    }
+    expect(requests).toEqual([]);
   });
 
   test("reports a payload it no longer recognises as unkeyable", async () => {

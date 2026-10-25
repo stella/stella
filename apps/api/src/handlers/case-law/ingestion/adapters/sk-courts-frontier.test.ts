@@ -8,6 +8,7 @@
  * collect must spend nothing, and a cycle with a closed day must spend one
  * listing plus one detail per row it takes.
  */
+import { panic } from "better-result";
 import {
   afterEach,
   beforeEach,
@@ -18,8 +19,13 @@ import {
 } from "bun:test";
 
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import {
+  skCourtsAdapter,
+  skCourtsListingIdentity,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const QUARANTINE_ID = /^sk-courts-quarantine:[0-9a-f]{64}$/u;
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
 const YESTERDAY = "2026-09-16";
@@ -36,9 +42,15 @@ const listItem = (index: number) => ({
 
 type Recorded = { listings: URL[]; details: URL[] };
 
+const poisonDocket = (item: ReturnType<typeof listItem>): unknown => ({
+  ...item,
+  spisovaZnacka: "\\rtf1 rejected",
+});
+
 const stubPublisher = (
   dayHoldings: Record<string, number>,
   poisonIndex?: number,
+  poison: (item: ReturnType<typeof listItem>) => unknown = poisonDocket,
 ): Recorded => {
   const recorded: Recorded = { listings: [], details: [] };
 
@@ -77,9 +89,7 @@ const stubPublisher = (
       { length: Math.max(0, Math.min(size, total - start)) },
       (_, offset) => {
         const item = listItem(start + offset);
-        return start + offset === poisonIndex
-          ? { ...item, spisovaZnacka: "\\rtf1 rejected" }
-          : item;
+        return start + offset === poisonIndex ? poison(item) : item;
       },
     );
     return Promise.resolve(
@@ -137,6 +147,55 @@ describe("the sk-courts steady-state frontier", () => {
     ).toBe(true);
     expect(page.nextCursor).toBe(`frontier:${YESTERDAY}:0`);
   });
+
+  test.each([
+    {
+      // Without a court the docket keys nothing either.
+      name: "states no guid and no court",
+      poison: ({
+        guid: _guid,
+        sud: _sud,
+        ...item
+      }: ReturnType<typeof listItem>) => item,
+    },
+    {
+      name: "fails the listing shape",
+      poison: (item: ReturnType<typeof listItem>) => ({
+        ...item,
+        povaha: "not a list",
+      }),
+    },
+  ])(
+    "a record that $name is stored listing-only under the identity the walk keys it on",
+    async ({ poison }) => {
+      const recorded = stubPublisher({ [YESTERDAY]: 2 }, 0, poison);
+      const page = await fetchAt(`frontier:${TWO_DAYS_BACK}:0`);
+      const listed = poison(listItem(0));
+
+      const quarantined = page.decisions.find(
+        (decision) => decision.metadata["identityQuarantined"] === true,
+      );
+      expect(quarantined?.sourceDocumentId).toMatch(QUARANTINE_ID);
+      // Stored under exactly what the listing walk keys the same row on.
+      expect(skCourtsListingIdentity(listed)).toEqual({
+        type: "document",
+        sourceDocumentId:
+          quarantined?.sourceDocumentId ??
+          panic("the quarantined row has no id"),
+      });
+      expect(quarantined?.isListingOnly).toBe(true);
+      expect<string | undefined>(quarantined?.caseNumber).toBe(
+        listItem(0).spisovaZnacka,
+      );
+      expect(
+        decodeSourceRawEnvelope(quarantined?.sourceRaw ?? "")?.["listing"],
+      ).toBe(JSON.stringify(listed));
+      // No guid to ask about: only the healthy sibling's record is read.
+      expect(recorded.details).toHaveLength(1);
+      expect(page.decisions).toHaveLength(2);
+      expect(page.nextCursor).toBe(`frontier:${YESTERDAY}:0`);
+    },
+  );
 
   test("a cycle with no day closed since the last one spends nothing", async () => {
     const recorded = stubPublisher({ [YESTERDAY]: 400 });

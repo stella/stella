@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 /**
  * The pl-courts listing reconciliation capability.
@@ -15,6 +16,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
@@ -24,7 +26,10 @@ import {
   plCourtsAdapter,
   plCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  requireReconciliation,
+  throughLedgerJson,
+} from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import {
@@ -71,6 +76,41 @@ const SUPREME_COURT_ITEM = {
 } as const satisfies SaosItem;
 
 const SLICE = "2015-03-05";
+
+/** The id a record stated without a usable identity is stored under. */
+const QUARANTINE_ID = /^pl-courts-quarantine:[0-9a-f]{64}$/u;
+
+/**
+ * The common-court record as SAOS would list it with no id and no docket:
+ * the search row, which names the division and its court.
+ */
+const UNKEYED_SEARCH_ITEM = {
+  courtType: "COMMON",
+  courtCases: [],
+  judgmentType: "DECISION",
+  judgmentDate: SLICE,
+  division: COMMON_COURT_ITEM.division,
+  judges: [{ name: "Anna Nowak" }, { name: "Jan Kowalski" }],
+} as const satisfies SaosItem;
+
+/** The same record as the dump lists it: its division by id alone, and its text. */
+const UNKEYED_DUMP_ITEM = {
+  courtType: "COMMON",
+  courtCases: [],
+  judgmentType: "DECISION",
+  judgmentDate: SLICE,
+  division: { id: 203 },
+  judges: [{ name: "Jan  Kowalski" }, { name: "Anna Nowak" }],
+  textContent: "<p>Sąd Rejonowy postanawia oddalić wniosek.</p>",
+} as const satisfies SaosItem;
+
+const quarantineIdOf = (item: SaosItem): string => {
+  const identity = plCourtsListingIdentity(item);
+  if (identity?.type !== "document") {
+    throw new Error(`the item keyed as ${identity?.type ?? "nothing"}`);
+  }
+  return identity.sourceDocumentId;
+};
 
 type MockRoute = {
   pattern: string;
@@ -229,24 +269,50 @@ describe("pl-courts listing identity", () => {
     });
   });
 
-  test("an item with nothing to key on is unidentifiable", () => {
-    expect(plCourtsListingIdentity({})).toEqual({ type: "unidentifiable" });
-    expect(plCourtsListingIdentity({ courtCases: [] })).toEqual({
-      type: "unidentifiable",
-    });
-    expect(plCourtsListingIdentity({ id: null, judgmentDate: SLICE })).toEqual({
-      type: "unidentifiable",
-    });
+  test("an item with no id and no docket keys on its quarantine identity", () => {
+    expect(quarantineIdOf({ id: null, judgmentDate: SLICE })).toMatch(
+      QUARANTINE_ID,
+    );
+    expect(quarantineIdOf(UNKEYED_SEARCH_ITEM)).toMatch(QUARANTINE_ID);
+    // Two records of one day are told apart by what else they state.
+    expect(quarantineIdOf({ id: null, judgmentDate: SLICE })).not.toBe(
+      quarantineIdOf(UNKEYED_SEARCH_ITEM),
+    );
   });
 
-  test("every keyable identity round-trips through its stored key", () => {
+  test("a docket too long to key quarantines the item, apart from its docket-less form", () => {
+    const docket = `II Co ${"1".repeat(300)}/15`;
+    const overlong = quarantineIdOf({
+      ...UNKEYED_SEARCH_ITEM,
+      courtCases: [{ caseNumber: docket }],
+    });
+    expect(overlong).toMatch(QUARANTINE_ID);
+    expect(overlong).not.toBe(quarantineIdOf(UNKEYED_SEARCH_ITEM));
+  });
+
+  test("the dump and the search key one record alike, however they render it", () => {
+    // The dump names the division by id alone, lists the bench in another
+    // order, spaces a name differently and carries the whole text.
+    expect(quarantineIdOf(UNKEYED_DUMP_ITEM)).toBe(
+      quarantineIdOf(UNKEYED_SEARCH_ITEM),
+    );
+  });
+
+  test("an item stating nothing at all keys as nothing", () => {
+    expect(plCourtsListingIdentity({})).toBeUndefined();
+    expect(plCourtsListingIdentity({ courtCases: [] })).toBeUndefined();
+  });
+
+  test("every identity round-trips through its stored key", () => {
     for (const identity of [
       plCourtsListingIdentity(COMMON_COURT_ITEM),
       plCourtsListingIdentity({ courtCases: [{ caseNumber: "V CSK 293/14" }] }),
+      plCourtsListingIdentity(UNKEYED_SEARCH_ITEM),
     ]) {
-      const key = listingIdentityKey(identity);
-      expect(key).not.toBeNull();
-      expect(key === null ? null : parseListingIdentityKey(key)).toEqual(
+      if (identity === undefined) {
+        throw new Error("a listed item keyed as nothing");
+      }
+      expect(parseListingIdentityKey(listingIdentityKey(identity))).toEqual(
         identity,
       );
     }
@@ -527,7 +593,12 @@ describe("pl-courts buildDecision", () => {
     expect(built.decision.metadata).not.toHaveProperty("summary");
     // The one identity rule: what the walk keyed this item on is what the
     // decision it builds actually stores.
-    expect(listingIdentityKey(plCourtsListingIdentity(COMMON_COURT_ITEM))).toBe(
+    expect(
+      listingIdentityKey(
+        plCourtsListingIdentity(COMMON_COURT_ITEM) ??
+          panic("the common-court item has no listing identity"),
+      ),
+    ).toBe(
       listingIdentityKey({
         type: "document",
         sourceDocumentId: built.decision.sourceDocumentId ?? "",
@@ -684,12 +755,92 @@ describe("pl-courts buildDecision", () => {
     expect(await reconciliation.buildDecision(null)).toEqual({
       type: "unkeyable",
     });
-    // A record with nothing to key on: no id to fetch a detail for and no
-    // docket to fall back to.
-    expect(await reconciliation.buildDecision({ judgmentDate: SLICE })).toEqual(
+  });
+});
+
+describe("pl-courts quarantined items", () => {
+  test("a listed item with no id and no docket is built listing-only under its listed identity", async () => {
+    mockFetchWithBodies([
       {
-        type: "unkeyable",
+        pattern: SEARCH_PATTERN,
+        body: searchBody([COMMON_COURT_ITEM, UNKEYED_SEARCH_ITEM], 2),
       },
+    ]);
+    const page = await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
+    const listed = page.items[1];
+    const quarantineId = quarantineIdOf(UNKEYED_SEARCH_ITEM);
+    expect(listed?.identity).toEqual({
+      type: "document",
+      sourceDocumentId: quarantineId,
+    });
+    requestedUrls.length = 0;
+
+    const built = await reconciliation.buildDecision(listed?.payload);
+
+    if (built.type !== "built") {
+      throw new Error(`the quarantined item built ${built.type}`);
+    }
+    // Built, not held back: SAOS addresses a record only by the id this one
+    // lacks, so there is no detail to wait for.
+    expect(requestedUrls).toEqual([]);
+    expect(built.decision.sourceDocumentId).toBe(quarantineId);
+    expect(built.decision.isListingOnly).toBe(true);
+    expect(built.decision.caseNumberIsPlaceholder).toBe(true);
+    expect<string>(built.decision.court).toBe("Sąd Rejonowy w Białymstoku");
+    expect(built.decision.decisionDate).toBe(SLICE);
+    expect(built.decision.metadata).toMatchObject({
+      identityQuarantined: true,
+      listedOnlyReason: "no-publisher-identity",
+      judgmentType: "DECISION",
+      divisionId: 203,
+    });
+    const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+    expect(JSON.parse(parts?.["listing-search"] ?? "null")).toEqual(
+      throughLedgerJson(UNKEYED_SEARCH_ITEM),
+    );
+  });
+
+  test("the crawl stores the dump's id-less item listing-only under the same identity", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: "/api/dump/judgments",
+        body: JSON.stringify({ items: [UNKEYED_DUMP_ITEM] }),
+      },
+    ]);
+
+    const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+
+    expect(requestedUrls.some((url) => url.includes(DETAIL_PATTERN))).toBe(
+      false,
+    );
+    expect(page.decisions).toHaveLength(1);
+    const [stored] = page.decisions;
+    expect(stored?.sourceDocumentId).toBe(quarantineIdOf(UNKEYED_SEARCH_ITEM));
+    expect(stored?.isListingOnly).toBe(true);
+    const parts = decodeSourceRawEnvelope(stored?.sourceRaw ?? "");
+    expect(JSON.parse(parts?.["listing-dump"] ?? "null")).toEqual(
+      throughLedgerJson(UNKEYED_DUMP_ITEM),
+    );
+  });
+
+  test("the record listed with its id names its quarantine row as a repair alias", async () => {
+    mockFetchWithBodies([
+      { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },
+    ]);
+
+    const built = await reconciliation.buildDecision({
+      ...UNKEYED_SEARCH_ITEM,
+      id: COMMON_COURT_ITEM.id,
+      courtCases: [{ caseNumber: "II Co 433/15" }],
+    });
+
+    if (built.type !== "built") {
+      throw new Error(`the keyed item built ${built.type}`);
+    }
+    expect(built.decision.sourceDocumentId).toBe(String(COMMON_COURT_ITEM.id));
+    // It now states a docket it did not: the docket-less form still names it.
+    expect(built.decision.sourceDocumentIdRepairAliases).toContain(
+      quarantineIdOf(UNKEYED_SEARCH_ITEM),
     );
   });
 });

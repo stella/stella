@@ -19,12 +19,14 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import type { ListingIdentity } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleHuBhgyDecision,
   encodeHuBhgyCursor,
   huBhgyAdapter,
   huBhgyCoveredByFrontier,
   huBhgyDocumentOf,
+  huBhgyIdentityOf,
   huBhgyListingIdentity,
   huBhgyRawPartsOf,
   huBhgySearchBody,
@@ -40,6 +42,7 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import {
   rejectionOf,
   requireReconciliation,
+  throughLedgerJson,
 } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
@@ -166,6 +169,10 @@ const stubPublisher = (
 
 const isSearch = (call: Call): boolean => call.url.includes("/Search");
 
+/** The id a document identity names, so a mismatch fails as a value. */
+const storedIdOf = (identity: ListingIdentity | undefined): string =>
+  identity?.type === "document" ? identity.sourceDocumentId : "";
+
 // ── The search envelope ──────────────────────────────────
 
 describe("reading the search envelope", () => {
@@ -212,21 +219,109 @@ describe("identity", () => {
     }
   });
 
-  test("a row with no publisher key falls back to its docket and language", () => {
+  test("a row with no usable publisher key is quarantined, never keyed on its docket", () => {
+    // The docket recurs across courts (rule 17), so a missing or over-long
+    // `IndexId` keys the row on its content: docket, court and decision year.
+    // The digest is pinned so a change to the stable fields, which would
+    // orphan every stored quarantine row, cannot pass unnoticed.
+    const listed = {
+      Azonosito: "Gfv.30000/2025/4",
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+    };
+    const expected: ListingIdentity = {
+      type: "document",
+      sourceDocumentId:
+        "hu-bhgy-quarantine:590fc38ec1175b2543dc1bd46b66adeb447bff04f5bf9edc14857cb0d2dcbf24",
+    };
+    expect(huBhgyListingIdentity(normalizeHuBhgyRow(listed))).toEqual(expected);
     expect(
       huBhgyListingIdentity(
-        normalizeHuBhgyRow({ Azonosito: "Gfv.30091/2025/4" }),
+        normalizeHuBhgyRow({ ...listed, IndexId: "x".repeat(300) }),
       ),
-    ).toEqual({
-      type: "case-number",
-      caseNumber: "Gfv.30091/2025/4",
-      language: "hu",
+    ).toEqual(expected);
+    expect(
+      huBhgyIdentityOf(normalizeHuBhgyRow({ ...listed, IndexId: "" })),
+    ).toMatchObject({ type: "quarantined", reason: "missing-publisher-id" });
+    expect(
+      huBhgyIdentityOf(
+        normalizeHuBhgyRow({ ...listed, IndexId: "x".repeat(300) }),
+      ),
+    ).toMatchObject({
+      type: "quarantined",
+      reason: "unpersistable-publisher-id",
     });
   });
 
-  test("a row stating neither is unidentifiable rather than keyed on a guess", () => {
-    expect(huBhgyListingIdentity(normalizeHuBhgyRow({}))).toEqual({
-      type: "unidentifiable",
+  test("the quarantine identity survives a re-rendered and re-indexed listing", () => {
+    const listed = {
+      Azonosito: "Gfv.30000/2025/4",
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+      IndexelesIdeje: "2026-09-19T13:30:00+02:00",
+      Rezume: "A felülvizsgálati kérelem alaptalan.",
+    };
+    expect(
+      huBhgyListingIdentity(
+        normalizeHuBhgyRow({
+          ...listed,
+          Azonosito: " Gfv.30000/2025/4\n",
+          MeghozoBirosag: "Kúria ",
+          IndexelesIdeje: "2026-10-01T08:00:00+02:00",
+          Rezume: "A felülvizsgálati kérelem részben alapos.",
+        }),
+      ),
+    ).toEqual(huBhgyListingIdentity(normalizeHuBhgyRow(listed)));
+    // A different court's decision under the same docket is another row.
+    expect(
+      huBhgyListingIdentity(
+        normalizeHuBhgyRow({
+          ...listed,
+          MeghozoBirosag: "Fővárosi Törvényszék",
+        }),
+      ),
+    ).not.toEqual(huBhgyListingIdentity(normalizeHuBhgyRow(listed)));
+  });
+
+  test("without a docket the summary is what tells one decision from the next", () => {
+    const listed = {
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+      JogTerulet: "Társasági jog",
+    };
+    const first = huBhgyListingIdentity(
+      normalizeHuBhgyRow({ ...listed, Rezume: "Az első határozat." }),
+    );
+    const second = huBhgyListingIdentity(
+      normalizeHuBhgyRow({ ...listed, Rezume: "A második határozat." }),
+    );
+    expect(first?.type).toBe("document");
+    expect(first).not.toEqual(second);
+  });
+
+  test("a row stating no key, no docket and no summary is not given an identity", () => {
+    // Court, year and college name thousands of decisions: a fingerprint over
+    // them would merge unrelated ones into one row.
+    expect(
+      huBhgyListingIdentity(
+        normalizeHuBhgyRow({ MeghozoBirosag: "Kúria", HatarozatEve: 2025 }),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("a keyed row names its quarantine identity as a repair alias", () => {
+    const listed = {
+      Azonosito: "Gfv.30000/2025/4",
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+    };
+    const quarantined = huBhgyListingIdentity(normalizeHuBhgyRow(listed));
+    expect(
+      huBhgyIdentityOf(normalizeHuBhgyRow({ ...listed, IndexId: "id-0" })),
+    ).toEqual({
+      type: "keyed",
+      sourceDocumentId: "id-0",
+      repairAliases: [storedIdOf(quarantined)],
     });
   });
 
@@ -1001,13 +1096,74 @@ describe("a listed decision the download will not serve", () => {
     },
   );
 
-  test("a row with no publisher key does not poison the page around it", async () => {
+  test.each([
+    { name: "no publisher key", IndexId: undefined },
+    { name: "an over-long publisher key", IndexId: "x".repeat(300) },
+  ])(
+    "a row with $name is kept listing-only under its quarantine identity (rule 20)",
+    async ({ IndexId }) => {
+      const keyless = {
+        Azonosito: "Gfv.30000/2025/4",
+        MeghozoBirosag: "Kúria",
+        HatarozatEve: 2025,
+        IndexelesIdeje: "2026-09-19T13:30:00+02:00",
+        ...(IndexId === undefined ? {} : { IndexId }),
+      };
+      const quarantineId = huBhgyListingIdentity(normalizeHuBhgyRow(keyless));
+      const stub = stubPublisher((call) =>
+        isSearch(call)
+          ? searchResponse(
+              [keyless, rowAt(6, "2026-09-19T13:00:00+02:00")],
+              10_000,
+            )
+          : new Response(DOCX_BYTES),
+      );
+      try {
+        const page = (
+          await huBhgyAdapter.fetchPage(
+            "tip|head|2026-09-19T12:00:00+02:00",
+            {},
+          )
+        ).unwrap();
+        expect(quarantineId?.type).toBe("document");
+        const quarantined = page.decisions.at(0);
+        expect(
+          page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+        ).toEqual([storedIdOf(quarantineId), "id-6"]);
+        expect(quarantined?.sourceDocumentId).toMatch(
+          /^hu-bhgy-quarantine:[0-9a-f]{64}$/u,
+        );
+        expect(quarantined?.isListingOnly).toBe(true);
+        expect(quarantined?.caseNumber === "Gfv.30000/2025/4").toBe(true);
+        expect(quarantined?.caseNumberIsPlaceholder).toBeUndefined();
+        expect(quarantined?.metadata).toMatchObject({
+          identityQuarantined: true,
+          listedOnly: true,
+          listedOnlyReason:
+            IndexId === undefined
+              ? "missing-publisher-id"
+              : "unpersistable-publisher-id",
+        });
+        expect(
+          decodeSourceRawEnvelope(quarantined?.sourceRaw ?? "")?.["listing"],
+        ).toBe(JSON.stringify(keyless));
+        // The download is addressed by the key the row lacks: only the keyed
+        // row asks for one.
+        expect(stub.calls.filter((call) => !isSearch(call))).toHaveLength(1);
+      } finally {
+        stub.restore();
+      }
+    },
+  );
+
+  test("a row with no key, no docket and no summary is left out with a warning", async () => {
+    const logs = installRecordingLogger();
     const stub = stubPublisher((call) =>
       isSearch(call)
         ? searchResponse(
             [
               {
-                Azonosito: "Gfv.30000/2025/4",
+                MeghozoBirosag: "Kúria",
                 IndexelesIdeje: "2026-09-19T13:30:00+02:00",
               },
               rowAt(6, "2026-09-19T13:00:00+02:00"),
@@ -1017,17 +1173,138 @@ describe("a listed decision the download will not serve", () => {
         : new Response(DOCX_BYTES),
     );
     try {
-      const page = await huBhgyAdapter.fetchPage(
-        "tip|head|2026-09-19T12:00:00+02:00",
-        {},
-      );
+      const page = (
+        await huBhgyAdapter.fetchPage("tip|head|2026-09-19T12:00:00+02:00", {})
+      ).unwrap();
       expect(
-        Result.isOk(page)
-          ? page.value.decisions.map(({ sourceDocumentId }) => sourceDocumentId)
-          : [],
+        page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
       ).toEqual(["id-6"]);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) =>
+              message === "case_law.ingestion.listed_row_without_stable_fields",
+          )
+          .map(({ attributes }) => attributes),
+      ).toEqual([
+        expect.objectContaining({
+          adapterKey: "hu-bhgy",
+          reason: "missing-publisher-id",
+        }),
+      ]);
     } finally {
       stub.restore();
+      logs.restore();
+    }
+  });
+});
+
+describe("a listed decision with no usable publisher key", () => {
+  const reconciliation = requireReconciliation(huBhgyAdapter);
+  const keyless = {
+    Azonosito: "Gfv.30000/2025/4",
+    MeghozoBirosag: "Kúria",
+    Kollegium: "gazdasági",
+    HatarozatEve: 2025,
+    IndexelesIdeje: "2026-09-19T13:30:00+02:00",
+  };
+
+  test("the slice walk lists it, and its build is the listing-only row under the same id", async () => {
+    const stub = stubPublisher((call) =>
+      isSearch(call) ? searchResponse([keyless], 1) : new Response(DOCX_BYTES),
+    );
+    try {
+      const page = await reconciliation.listSlicePage({
+        slice: "2025-b-gazd",
+        page: 0,
+      });
+      const [item] = page.items;
+      expect(item?.identity.type).toBe("document");
+      const listedId = storedIdOf(item?.identity);
+      expect(listedId).toMatch(/^hu-bhgy-quarantine:[0-9a-f]{64}$/u);
+
+      // Through JSON, as the loop parks a payload and replays it.
+      const payload = throughLedgerJson(item?.payload);
+      const outcome = await reconciliation.buildDecision(payload);
+      if (outcome.type !== "built") {
+        throw new TypeError(`Expected built, got ${outcome.type}`);
+      }
+      expect(outcome.decision.sourceDocumentId).toBe(listedId);
+      expect(outcome.decision.isListingOnly).toBe(true);
+      expect(outcome.decision.metadata["identityQuarantined"]).toBe(true);
+      expect(
+        decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "")?.["listing"],
+      ).toBe(JSON.stringify(keyless));
+      expect(stub.calls.filter((call) => !isSearch(call))).toHaveLength(0);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  test("its keyed observation names the quarantine row as a repair alias", async () => {
+    const quarantineId = huBhgyListingIdentity(normalizeHuBhgyRow(keyless));
+    const keyed = { ...keyless, IndexId: "id-30000" };
+    const built = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(keyed),
+      document: undefined,
+      rawParts: huBhgyRawPartsOf(keyed, undefined),
+    });
+    expect(built.type).toBe("detail-unavailable");
+    const decision =
+      built.type === "detail-unavailable" ? built.decision : undefined;
+    expect(decision?.sourceDocumentId).toBe("id-30000");
+    expect(decision?.sourceDocumentIdRepairAliases).toEqual([
+      storedIdOf(quarantineId),
+    ]);
+  });
+
+  test("a docket-less quarantined row carries a placeholder label", async () => {
+    const summarised = {
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+      Rezume: "A felülvizsgálati kérelem alaptalan.",
+    };
+    const built = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(summarised),
+      document: undefined,
+      rawParts: huBhgyRawPartsOf(summarised, undefined),
+    });
+    expect(built.type).toBe("quarantined");
+    const decision = built.type === "quarantined" ? built.decision : undefined;
+    expect(decision?.caseNumberIsPlaceholder).toBe(true);
+    expect(decision?.isListingOnly).toBe(true);
+  });
+
+  test("a stored quarantined row replays under the id it was stored by", async () => {
+    const built = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(keyless),
+      document: undefined,
+      rawParts: huBhgyRawPartsOf(keyless, undefined),
+    });
+    const stored = built.type === "quarantined" ? built.decision : undefined;
+    expect(stored).toBeDefined();
+    if (stored === undefined) {
+      return;
+    }
+    const replayed = await huBhgyAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(stored.sourceRaw ?? ""),
+      contentType: stored.sourceRawContentType ?? null,
+      caseNumber: stored.caseNumber,
+      sourceDocumentId: stored.sourceDocumentId ?? null,
+      language: stored.language,
+      court: stored.court,
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: stored.sourceUrl ?? null,
+      documentUrl: null,
+      metadata: stored.metadata,
+    });
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result.sourceDocumentId).toBe(stored.sourceDocumentId);
+      expect(replayed.result.rawHash).toBe(stored.rawHash);
     }
   });
 });

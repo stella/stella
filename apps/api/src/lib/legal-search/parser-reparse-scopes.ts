@@ -109,27 +109,27 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
@@ -141,35 +141,35 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 12,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 7,
+    version: 8,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
@@ -196,11 +196,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -289,19 +289,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Store listed records with no usable publisher id under their quarantine identity, and emit that identity as a repair alias on keyed records.",
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {

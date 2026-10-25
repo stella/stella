@@ -37,7 +37,6 @@ import type {
   DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
-  ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
@@ -107,6 +106,12 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  isQuarantineSourceDocumentId,
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import type { QuarantineIdentity } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -629,8 +634,8 @@ const ecjRowLanguage = (language: EcjLanguage): string =>
  * Stated once so the crawl's writes and the reconciliation's held-lookup
  * cannot key the same variant differently: a second copy would let the loop
  * read stored decisions as missing and re-fetch them forever. `undefined` is
- * the CELEX no store can hold, which is keyed on the docket instead and is
- * therefore not an identity a walk may hunt.
+ * the CELEX no store can hold, whose variant {@link ecjVariantIdentity}
+ * quarantines instead.
  */
 export const ecjSourceDocumentId = (
   celex: string,
@@ -643,15 +648,102 @@ export const ecjSourceDocumentId = (
   return isPersistableSourceDocumentId(identity) ? identity : undefined;
 };
 
-/** The identity the ingest would store for one listed variant. */
-export const ecjListingIdentity = ({
+/**
+ * The content-addressed identity of one language variant: its ECLI and the
+ * row language.
+ *
+ * The ECLI is the one field of the listed binding that names one decision
+ * and is not its CELEX: the listing pattern requires it, so it is bound on
+ * every row whether or not the CELEX is malformed, and it stays the same when
+ * the CELEX recovers. The date and the CDM class add nothing the ECLI does not
+ * already fix and can bind twice for one work, and the manifestation is a
+ * Cellar id that changes on every re-publication. `undefined` for a blank
+ * ECLI, which names no decision.
+ */
+const ecjQuarantineOf = (
+  ecli: string,
+  rowLanguage: string,
+): QuarantineIdentity | undefined =>
+  ecli.trim() === ""
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.EU_ECJ,
+        stableFields: { ecli, language: rowLanguage },
+      });
+
+/** The fields of one listed binding that decide how its variant is keyed. */
+export type EcjListedVariant = {
+  celex: string;
+  ecli: string;
+  language: EcjLanguage;
+};
+
+/**
+ * How a listed variant is keyed, read once so the crawl, the slice walk and
+ * the reconciliation build cannot key one variant two ways.
+ *
+ * A CELEX no store can hold quarantines the variant under its ECLI rather
+ * than keying it on the docket the CELEX would yield: that docket is derived
+ * from the malformed value itself. A keyed variant names its quarantine
+ * identity as a repair alias, so it takes over the quarantined row once the
+ * CELEX recovers (rule 20).
+ */
+export type EcjVariantIdentity =
+  | {
+      type: "keyed";
+      sourceDocumentId: string;
+      repairAliases: readonly string[];
+    }
+  | { type: "quarantined"; sourceDocumentId: string; fingerprint: string }
+  /** No usable CELEX and a blank ECLI: nothing names this variant. */
+  | { type: "no-stable-field" };
+
+export const ecjVariantIdentity = ({
   celex,
+  ecli,
   language,
-}: EcjCelexVariant): ListingIdentity => {
-  const sourceDocumentId = ecjSourceDocumentId(celex, ecjRowLanguage(language));
-  return sourceDocumentId === undefined
-    ? { type: "unidentifiable" }
-    : { type: "document", sourceDocumentId };
+}: EcjListedVariant): EcjVariantIdentity => {
+  const rowLanguage = ecjRowLanguage(language);
+  const quarantine = ecjQuarantineOf(ecli, rowLanguage);
+  const sourceDocumentId = ecjSourceDocumentId(celex, rowLanguage);
+  if (sourceDocumentId !== undefined) {
+    return {
+      type: "keyed",
+      sourceDocumentId,
+      repairAliases:
+        quarantine === undefined ? [] : [quarantine.sourceDocumentId],
+    };
+  }
+  return quarantine === undefined
+    ? { type: "no-stable-field" }
+    : {
+        type: "quarantined",
+        sourceDocumentId: quarantine.sourceDocumentId,
+        fingerprint: quarantine.fingerprint,
+      };
+};
+
+/** The variant fields a listed binding states, for one it can publish. */
+const listedVariantOf = (
+  binding: SparqlResult,
+): EcjListedVariant | undefined => {
+  const language = toEcjLanguage(binding.language.value);
+  return language === undefined
+    ? undefined
+    : { celex: binding.celex.value, ecli: binding.ecli.value, language };
+};
+
+/** The structured warning for a listed variant nothing can name. */
+const warnNoStableField = (
+  where: { slice: string } | { cursor: string },
+  binding: SparqlResult,
+): void => {
+  logger.warn("case_law.ingestion.listed_row_without_stable_fields", {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
+    ...where,
+    reason: "unpersistable-celex-and-blank-ecli",
+    language: binding.language.value,
+  });
 };
 
 /**
@@ -1118,11 +1210,21 @@ const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
 /** First day the Court sat; the widest range a CELEX lookup can need. */
 const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
 
+/**
+ * The bindings of one stored row each. A quarantined variant groups by its
+ * quarantine identity rather than by the malformed CELEX, so two decisions
+ * Cellar lists under one unusable CELEX stay two rows, as the slice walk
+ * lists them.
+ */
 const groupEcjVariants = (bindings: readonly SparqlResult[]) =>
-  Map.groupBy(
-    bindings,
-    ({ celex, language }) => `${celex.value}:${language.value}`,
-  ).values();
+  Map.groupBy(bindings, (binding) => {
+    const variant = listedVariantOf(binding);
+    const identity =
+      variant === undefined ? undefined : ecjVariantIdentity(variant);
+    return identity?.type === "quarantined"
+      ? identity.sourceDocumentId
+      : `${binding.celex.value}:${binding.language.value}`;
+  }).values();
 
 type BuildPendingVariantOptions = {
   bindings: readonly SparqlResult[];
@@ -1568,10 +1670,20 @@ const ecjDecisionFromParts = ({
             ),
           ),
         );
+  const sourceDocumentId = ecjSourceDocumentId(celex, language);
+  // Only a keyed row may take over a quarantined one; a legacy row replayed
+  // with an unusable CELEX is no recovered identity.
+  const repairAlias =
+    sourceDocumentId === undefined
+      ? undefined
+      : ecjQuarantineOf(ecli, language)?.sourceDocumentId;
   return plainTextIngestionResult(
     {
       caseNumber,
-      sourceDocumentId: ecjSourceDocumentId(celex, language),
+      sourceDocumentId,
+      ...(repairAlias === undefined
+        ? {}
+        : { sourceDocumentIdRepairAliases: [repairAlias] }),
       // What every row this adapter wrote before it stated an id was stored
       // under: one row per docket and language, carrying the EUR-Lex URL of
       // whichever of the docket's documents was written last. That URL names one
@@ -1655,6 +1767,77 @@ const ecjDecisionFromParts = ({
   );
 };
 
+type QuarantinedEcjOptions = {
+  binding: SparqlResult;
+  language: EcjLanguage;
+  identity: Extract<EcjVariantIdentity, { type: "quarantined" }>;
+};
+
+/** Why a quarantined row holds no decision text. */
+const ECJ_QUARANTINE_REASON = "unpersistable-celex";
+
+/**
+ * The listing-only row of a variant Cellar lists under a CELEX no store can
+ * hold (rule 20): what the binding states, the binding verbatim as the raw
+ * listing, stored under the quarantine identity the slice walk reports.
+ *
+ * Nothing is fetched: the notice is addressed by the CELEX, and a document
+ * filed under a docket derived from a malformed CELEX would publish a
+ * decision under a number nobody cites. The label is a placeholder for the
+ * same reason.
+ */
+const quarantinedEcjDecision = ({
+  binding,
+  identity,
+  language,
+}: QuarantinedEcjOptions): IngestionResult => {
+  const ecli = binding.ecli.value;
+  const decisionDate = binding.date.value;
+  const decisionType =
+    CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
+  const manifestationId = toCellarManifestationId(binding.manifestation.value);
+  const sourceRaw = encodeSourceRawEnvelope({
+    [RAW_PART.LISTING]: JSON.stringify(binding),
+  });
+  return plainTextIngestionResult(
+    {
+      caseNumber: `CJEU listing ${identity.fingerprint}`,
+      caseNumberIsPlaceholder: true,
+      isListingOnly: true,
+      sourceDocumentId: identity.sourceDocumentId,
+      ecli,
+      court: ecli.includes(":T:") ? "General Court" : "Court of Justice",
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
+      language: ecjRowLanguage(language),
+      decisionDate,
+      decisionType,
+      // The manifestation is addressed by its own validated Cellar id, never
+      // by the CELEX this row lacks.
+      ...(manifestationId === undefined
+        ? {}
+        : { sourceUrl: `${CELLAR_CONTENT_BASE}/${manifestationId}` }),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata(
+        {
+          ecli,
+          decisionDate,
+          decisionType,
+          identityQuarantined: true,
+          listedOnly: true,
+          listedOnlyReason: ECJ_QUARANTINE_REASON,
+        },
+        { type: "stored", schema: EU_ECJ_METADATA_URL_SCHEMA },
+      ),
+      rawHash: hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+      documentAst: EMPTY_AST,
+      sourceRaw,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
+};
+
 /**
  * Media types a stored payload may carry for this adapter.
  *
@@ -1692,6 +1875,55 @@ const ecjStoredRawParts = (
     : { [RAW_PART.DOCUMENT]: raw };
 };
 
+/**
+ * Rebuild a quarantined row from the binding it stored, which is all such a
+ * row holds; the binding has to name the identity the row is stored under.
+ */
+const reparseQuarantinedEcj = (
+  stored: StoredRawReparseInput,
+  storedId: string,
+): Exclude<StoredRawReparseOutcome, { type: "supplement" }> => {
+  const listing = decodeSourceRawEnvelope(
+    new TextDecoder().decode(stored.raw),
+  )?.[RAW_PART.LISTING];
+  const binding =
+    listing === undefined
+      ? undefined
+      : Result.try({
+          try: (): unknown => JSON.parse(listing),
+          catch: () => undefined,
+        }).unwrapOr(undefined);
+  if (!isSparqlResult(binding)) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the quarantined row holds no listing binding",
+    };
+  }
+  const variant = listedVariantOf(binding);
+  const identity =
+    variant === undefined ? undefined : ecjVariantIdentity(variant);
+  if (
+    variant === undefined ||
+    identity?.type !== "quarantined" ||
+    identity.sourceDocumentId !== storedId
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `the stored binding does not name ${storedId}`,
+    };
+  }
+  return {
+    type: "parsed",
+    result: quarantinedEcjDecision({
+      binding,
+      identity,
+      language: variant.language,
+    }),
+  };
+};
+
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
 
@@ -1716,6 +1948,16 @@ const reparseStoredRaw = (
       rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
       detail: `stored content type ${stored.contentType}`,
     };
+  }
+
+  if (
+    stored.sourceDocumentId !== null &&
+    isQuarantineSourceDocumentId(
+      QUARANTINE_NAMESPACE.EU_ECJ,
+      stored.sourceDocumentId,
+    )
+  ) {
+    return reparseQuarantinedEcj(stored, stored.sourceDocumentId);
   }
 
   // CELEX, ECLI and the decision date are the result's identity and feed its
@@ -2110,10 +2352,32 @@ export const buildDecision = async (
   const date = binding.date.value;
   const decisionType =
     CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
-  const lang = toEcjLanguage(binding.language.value);
+  const variant = listedVariantOf(binding);
+  if (variant === undefined) {
+    return undefined;
+  }
+  const identity = ecjVariantIdentity(variant);
+  switch (identity.type) {
+    case "keyed":
+      break;
+    // The notice and the EUR-Lex page are addressed by the CELEX, which is
+    // what this variant lacks, so the listed binding is the record (rule 20).
+    case "quarantined":
+      return quarantinedEcjDecision({
+        binding,
+        identity,
+        language: variant.language,
+      });
+    case "no-stable-field":
+      return undefined;
+    default:
+      identity satisfies never;
+      return panic(`Unhandled eu-ecj identity: ${JSON.stringify(identity)}`);
+  }
+  const lang = variant.language;
   const manifestationId = toCellarManifestationId(binding.manifestation.value);
 
-  if (!lang || !manifestationId) {
+  if (!manifestationId) {
     return undefined;
   }
 
@@ -2315,6 +2579,71 @@ const ecjSlicePageRange = (slice: string, page: number): EcjSliceRange => {
 };
 
 /**
+ * The reconciliation payload of a quarantined variant: the binding itself,
+ * since the CELEX a keyed payload re-lists by is what this variant lacks.
+ */
+type EcjQuarantinedPayload = { quarantinedBinding: SparqlResult };
+
+const isEcjQuarantinedPayload = (
+  value: unknown,
+): value is EcjQuarantinedPayload =>
+  isRecord(value) && isSparqlResult(value["quarantinedBinding"]);
+
+/**
+ * One item per variant a set of bindings names, keyed as the crawl stores
+ * it: the re-published manifestations of one variant are one item, and a
+ * language this adapter does not publish is none.
+ */
+const listedEcjItems = (
+  bindings: readonly SparqlResult[],
+  slice: string,
+): ReconciliationSlicePage["items"] => {
+  const items: ReconciliationSlicePage["items"] = [];
+  const seen = new Set<string>();
+  for (const binding of bindings) {
+    const variant = listedVariantOf(binding);
+    if (variant === undefined) {
+      continue;
+    }
+    const identity = ecjVariantIdentity(variant);
+    switch (identity.type) {
+      case "keyed":
+      case "quarantined": {
+        if (seen.has(identity.sourceDocumentId)) {
+          break;
+        }
+        seen.add(identity.sourceDocumentId);
+        items.push({
+          identity: {
+            type: "document",
+            sourceDocumentId: identity.sourceDocumentId,
+          },
+          payload:
+            identity.type === "keyed"
+              ? ({
+                  celex: variant.celex,
+                  language: variant.language,
+                } satisfies EcjCelexVariant)
+              : ({
+                  quarantinedBinding: binding,
+                } satisfies EcjQuarantinedPayload),
+        });
+        break;
+      }
+      case "no-stable-field":
+        // Nothing the binding states could name the variant again, so it is
+        // not invented an identity; the warning records the listing.
+        warnNoStableField({ slice }, binding);
+        break;
+      default:
+        identity satisfies never;
+        panic(`Unhandled eu-ecj identity: ${JSON.stringify(identity)}`);
+    }
+  }
+  return items;
+};
+
+/**
  * One page of what the publisher lists for a slice, with no manifestation
  * fetched.
  *
@@ -2340,12 +2669,8 @@ const listEcjSlicePage = async ({
     truncation: SPARQL_TRUNCATION.REFUSE,
     signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
-  const variants = distinctVariants(bindings);
   return {
-    items: variants.map((variant) => ({
-      identity: ecjListingIdentity(variant),
-      payload: variant,
-    })),
+    items: listedEcjItems(bindings, slice),
     // Structural, not reported: the publisher answers a date range, so the
     // months of the year are the pages whether or not it decided anything in
     // them.
@@ -2379,6 +2704,24 @@ const buildEcjVariant = async (
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<ReconciliationBuildOutcome> => {
+  if (isEcjQuarantinedPayload(payload)) {
+    // The binding is the whole record until the CELEX recovers: the row the
+    // crawl stores for it, built without re-listing what cannot be queried.
+    const binding = payload.quarantinedBinding;
+    const variant = listedVariantOf(binding);
+    const identity =
+      variant === undefined ? undefined : ecjVariantIdentity(variant);
+    return variant !== undefined && identity?.type === "quarantined"
+      ? {
+          type: "built",
+          decision: quarantinedEcjDecision({
+            binding,
+            identity,
+            language: variant.language,
+          }),
+        }
+      : { type: "unkeyable" };
+  }
   if (!isEcjCelexVariant(payload)) {
     return { type: "unkeyable" };
   }
@@ -3106,13 +3449,26 @@ export const euEcjAdapter = defineSourceAdapter({
    */
   reconciliation: {
     // CELEX and language identify a manifestation; the listing exposes no content change signal.
-    revisionOf: (payload) =>
-      isRecord(payload)
+    // A quarantined variant has no CELEX to name it, so its binding's own
+    // statements are its revision; the manifestation is left out because it
+    // moves on every re-publication.
+    revisionOf: (payload) => {
+      if (isEcjQuarantinedPayload(payload)) {
+        const { quarantinedBinding: binding } = payload;
+        return {
+          ecli: binding.ecli.value,
+          date: binding.date.value,
+          type: binding.type.value,
+          language: binding.language.value,
+        };
+      }
+      return isRecord(payload)
         ? {
             celex: payload["celex"],
             language: payload["language"],
           }
-        : null,
+        : null;
+    },
     firstSlice: COURT_EPOCH_YEAR,
     sliceOf: ecjYearOf,
     nextSlice: ecjNextSlice,
@@ -3188,6 +3544,19 @@ export const euEcjAdapter = defineSourceAdapter({
         for (const variantBindings of groupEcjVariants(bindings)) {
           if (abortSignal.aborted) {
             break;
+          }
+          const [first] = variantBindings;
+          const listed =
+            first === undefined ? undefined : listedVariantOf(first);
+          if (
+            first !== undefined &&
+            listed !== undefined &&
+            ecjVariantIdentity(listed).type === "no-stable-field"
+          ) {
+            // Nothing the binding states could name the variant again, so it
+            // is not invented an identity; the warning records the listing.
+            warnNoStableField({ cursor: dateFrom }, first);
+            continue;
           }
 
           const attempted = await buildPlainTextItem({

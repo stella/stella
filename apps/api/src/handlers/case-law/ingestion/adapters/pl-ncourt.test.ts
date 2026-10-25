@@ -1968,6 +1968,107 @@ describe("the walk", () => {
     );
   });
 
+  test("a listed row stating no fingerprint field is quarantined on what it still states", async () => {
+    const rows = await servableRows();
+    const stated = {
+      publicationDate: "2019-02-28 18:26:16.0 CET",
+      thesis: "Teza o czymś.",
+    };
+    const bare = rowXml({ ...stated, lastUpdate: "2019-02-28 14:38:12.0 CET" });
+    const oversized = rowXml({
+      id: "x".repeat(400),
+      ...stated,
+      lastUpdate: "2020-01-01 10:00:00.0 CET",
+    });
+    const ids: string[] = [];
+    for (const broken of [bare, oversized]) {
+      const stub: WalkStub = {
+        rows: new Map([...rows, [165_992, broken]]),
+        poisoned: new Set(),
+        total: 166_002,
+        requests: [],
+      };
+      installWalkStub(stub);
+      const { decisions } = await walkToTip(WALK_START);
+      expect(decisions).toHaveLength(rows.size);
+      const kept =
+        decisions[165_992 - 165_990] ?? panic("no row at the broken offset");
+      expect(kept.sourceDocumentId ?? "").toMatch(
+        /^pl-ncourt-quarantine:[0-9a-f]{64}$/u,
+      );
+      expect(kept.isListingOnly).toBe(true);
+      expect(kept.caseNumberIsPlaceholder).toBe(true);
+      expect(kept.metadata["detailStatus"] === "publisher-id-unavailable").toBe(
+        true,
+      );
+      expect(decodeSourceRawEnvelope(kept.sourceRaw ?? "")?.["listing"]).toBe(
+        broken,
+      );
+      // Nothing to ask the record for: no request names the unusable id.
+      expect(
+        stub.requests.some((request) => request.includes("x".repeat(400))),
+      ).toBe(false);
+      ids.push(kept.sourceDocumentId ?? "");
+
+      // The reconciliation builds the same row from the parked payload.
+      const outcome = await plNcourtAdapter.reconciliation.buildDecision({
+        listingXml: broken,
+      });
+      const reconciled =
+        outcome.type === "built" ? outcome.decision : panic(outcome.type);
+      expect(reconciled.sourceDocumentId).toBe(kept.sourceDocumentId);
+      expect(reconciled.isListingOnly).toBe(true);
+    }
+    // Neither the unusable id nor the update stamp is part of the identity.
+    expect(ids[1]).toBe(ids[0]);
+
+    // A re-rendered row, its thesis reflowed, keys alike.
+    const reflowed = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ ...stated, thesis: "  Teza  o\n czymś. " }),
+        detailXml: undefined,
+        contentXml: undefined,
+      }),
+    );
+    expect(reflowed.sourceDocumentId).toBe(ids[0]);
+
+    // Once the row states its id, the judgment names the audit row.
+    const recovered = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ id: PAIR, ...stated }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml: undefined,
+      }),
+    );
+    expect(recovered.sourceDocumentId).toBe(PAIR);
+    expect(recovered.sourceDocumentIdRepairAliases).toContain(ids[0]);
+  });
+
+  test("a listed row stating no stable field is logged and passed, not keyed", async () => {
+    const rows = await servableRows();
+    const empty = rowXml({ lastUpdate: "2019-02-28 14:38:12.0 CET" });
+    installWalkStub({
+      rows: new Map([...rows, [165_992, empty]]),
+      poisoned: new Set(),
+      total: 166_002,
+      requests: [],
+    });
+    const warned: unknown[] = [];
+    setLogSinkForTesting(({ message, attributes }) => {
+      if (message === "case_law.ingestion.listing_row_without_stable_fields") {
+        warned.push(attributes?.["adapterKey"]);
+      }
+    });
+    try {
+      const { decisions } = await walkToTip(WALK_START);
+      // Every other row is stored; the lane is not held behind this one.
+      expect(decisions).toHaveLength(rows.size - 1);
+      expect(warned).toEqual(["pl-ncourt"]);
+    } finally {
+      resetLogSinkForTesting();
+    }
+  });
+
   test("a listed row with an id but no court is kept under its id, unpublished", async () => {
     const rows = await servableRows();
     const listed = rows.get(165_992) ?? panic("no row");
