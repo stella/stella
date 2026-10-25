@@ -5867,6 +5867,14 @@ const config = defineConfig({
       },
     },
     {
+      // In-memory test doubles keep production Promise contracts without
+      // artificial awaits. no-test-support-import isolates this helper tree.
+      files: ["apps/api/src/tests/helpers/**/*.{ts,tsx}"],
+      rules: {
+        "typescript/require-await": "off",
+      },
+    },
+    {
       files: [
         "**/*.{test,spec}.{ts,tsx,js,jsx}",
         "**/__tests__/**/*.{ts,tsx,js,jsx}",

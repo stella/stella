@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { classifyOAuthDestination } from "@/components/oauth-consent/oauth-destination.logic";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 
-const info = (redirectHosts: string[]): OAuthConsentInfo => ({
+const info = (redirectTargets: string[]): OAuthConsentInfo => ({
   client_name: "Example app",
-  redirectHosts,
+  redirectTargets,
   clientIdHost: null,
   unverified: false,
   verifiedBrand: null,

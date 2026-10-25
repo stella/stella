@@ -188,6 +188,8 @@ type ConsentAndExchangeOptions = {
   client: RegisteredOAuthClient;
   codeVerifier: string;
   consentPage: URL;
+  /** The callback the authorization used, when not the default one. */
+  redirectUri?: string;
 };
 
 /** Accept on the consent page the provider sent the browser to, then exchange the code. */
@@ -196,6 +198,7 @@ export const consentAndExchange = async ({
   client,
   codeVerifier,
   consentPage,
+  redirectUri = REDIRECT_URI,
 }: ConsentAndExchangeOptions): Promise<OAuthGrant> => {
   const auth = getAuth();
   if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {
@@ -223,6 +226,7 @@ export const consentAndExchange = async ({
     client,
     codeVerifier,
     redirect: new URL(consented.url),
+    redirectUri,
   });
 };
 
@@ -231,6 +235,7 @@ type ExchangeOAuthCodeOptions = {
   codeVerifier: string;
   /** The redirect back to the client that carries the code. */
   redirect: URL;
+  redirectUri?: string;
 };
 
 /** Exchange the code a redirect back to the client carries. */
@@ -238,6 +243,7 @@ export const exchangeOAuthCode = async ({
   client,
   codeVerifier,
   redirect,
+  redirectUri = REDIRECT_URI,
 }: ExchangeOAuthCodeOptions): Promise<OAuthGrant> => {
   const tokens = await readJson(
     await getAuth().handler(
@@ -249,7 +255,7 @@ export const exchangeOAuthCode = async ({
         code: readCode(redirect.href),
         code_verifier: codeVerifier,
         grant_type: "authorization_code",
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: redirectUri,
         resource: getMcpResourceUrl(),
       }),
     ),

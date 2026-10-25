@@ -21,12 +21,15 @@ import type {
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
-import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
+import {
+  PROVISION_CITATION_GRAMMARS,
+  provisionAnchorSeparatorFor,
+} from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
 import type { ProvisionRow } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
-import { formatProvisionReference } from "@/features/case-law/provision-label";
+import { formatProvisionLabel } from "@/features/case-law/provision-label";
 import { resolveProvisionDocument } from "@/features/case-law/provision-placement";
 import {
   allowsLegacyProvisionFallback,
@@ -373,12 +376,19 @@ export const useDecisionProvisionAnchors = ({
             court === null || caseNumber === null
               ? undefined
               : { court, caseNumber, appliedDocumentId: document.id },
-          anchorId: provisionHeadingAnchor(row.anchor),
+          anchorId: provisionHeadingAnchor(
+            row.anchor,
+            provisionAnchorSeparatorFor(row.jurisdiction),
+          ),
           highlightAnchorId: row.anchor,
           documentId: document.id,
           eli: row.workEli ?? panic("Placed provision has no work ELI"),
           jurisdiction: row.jurisdiction,
-          provisionLabel: formatProvisionReference(row, renderPart),
+          provisionLabel: formatProvisionLabel(
+            row.jurisdiction,
+            row,
+            renderPart,
+          ),
           statuteTitle: document.title,
           versionCount,
           versionValidFrom: document.versionValidFrom,
@@ -426,12 +436,16 @@ export const useDecisionProvisionAnchors = ({
             court === null || caseNumber === null
               ? undefined
               : { court, caseNumber, appliedDocumentId: document.id },
-          anchorId: provisionHeadingAnchor(reference.anchor),
+          anchorId: provisionHeadingAnchor(
+            reference.anchor,
+            provisionAnchorSeparatorFor(reference.jurisdiction),
+          ),
           highlightAnchorId: reference.anchor,
           documentId: document.id,
           eli,
           jurisdiction: reference.jurisdiction,
-          provisionLabel: formatProvisionReference(
+          provisionLabel: formatProvisionLabel(
+            reference.jurisdiction,
             reference.reference,
             renderPart,
           ),

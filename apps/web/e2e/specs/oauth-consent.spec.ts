@@ -310,6 +310,112 @@ test("account switching preserves the signed OAuth query through auth routing", 
     .toBeNull();
 });
 
+test("organization picker names the signed-in account and switches it without losing the OAuth request", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  const id = token();
+  const redirectUri = loopbackRedirectUriFor(id);
+  const clientId = await registerClient({
+    request: context.request,
+    id,
+    redirectUri,
+  });
+  const sessionResponse = await context.request.get(
+    `${AUTH_BASE_URL}/get-session`,
+  );
+  const session: unknown = await sessionResponse.json();
+  const email =
+    typeof session === "object" &&
+    session !== null &&
+    "user" in session &&
+    typeof session.user === "object" &&
+    session.user !== null &&
+    "email" in session.user &&
+    typeof session.user.email === "string"
+      ? session.user.email
+      : null;
+  expect(email).not.toBeNull();
+
+  // The fixture belongs to one organization, which the picker selects on its
+  // own; a second membership in the list keeps the picker on screen.
+  await page.route(`${AUTH_BASE_URL}/organization/list`, async (route) => {
+    const response = await route.fetch();
+    const organizations: unknown = await response.json();
+    expect(Array.isArray(organizations)).toBe(true);
+    await route.fulfill({
+      response,
+      json: [
+        ...(Array.isArray(organizations) ? organizations : []),
+        {
+          id: `second-organization-${id}`,
+          name: `Second organization ${id}`,
+          slug: `second-organization-${id}`,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+  });
+
+  // Clear this browser session without revoking the shared authenticated fixture.
+  let signOutWasIntercepted = false;
+  await page.route(`${AUTH_BASE_URL}/sign-out`, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    signOutWasIntercepted = true;
+    await context.clearCookies();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
+  // The server sends a single-membership account straight to consent; take
+  // the signed request from there and open the picker with it, as the
+  // organization step of a multi-membership account receives it.
+  await openConsent({ page, clientId, id, redirectUri });
+  const signedHash = new URL(page.url()).hash;
+  const signedQuery = new URLSearchParams(signedHash.slice(1)).get(
+    "oauth_query",
+  );
+  expect(signedQuery).not.toBeNull();
+  await page.goto(`${WEB_BASE_URL}/auth/organization${signedHash}`, {
+    waitUntil: "commit",
+  });
+  await expect(
+    page.getByText(`Second organization ${id}`, { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByText("Select an organization", { exact: true }),
+  ).toBeVisible();
+
+  const account = page.getByRole("definition").filter({ hasText: email ?? "" });
+  await expect(
+    page.getByRole("term").filter({ hasText: "Account" }),
+  ).toBeVisible();
+  await expect(account).toBeVisible();
+  await account.getByRole("button", { name: "Use another account" }).click();
+
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/auth" &&
+      new URLSearchParams(url.hash.slice(1)).get("oauth_query") === signedQuery,
+  );
+  expect(signOutWasIntercepted).toBe(true);
+  await expect
+    .poll(
+      async () =>
+        await (
+          await context.request.get(`${AUTH_BASE_URL}/get-session`)
+        ).json(),
+    )
+    .toBeNull();
+});
+
 test("consent discloses permissions on demand and brands only verified locations", async ({
   context,
   page,

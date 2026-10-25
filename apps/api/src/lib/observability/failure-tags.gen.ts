@@ -239,6 +239,7 @@ export const FAILURE_TAGS = [
   "InvoicingInputError",
   "JustificationDataError",
   "JustificationTextError",
+  "KsefError",
   "LatestDecisionsError",
   "LegacyChatContentError",
   "LegacyWordParseError",
