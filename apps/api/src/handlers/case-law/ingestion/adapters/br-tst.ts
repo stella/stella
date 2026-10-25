@@ -64,6 +64,7 @@ import { panic, Result, TaggedError } from "better-result";
  */
 import * as v from "valibot";
 
+import { vApiDate } from "@stll/api-contract/api-date";
 import {
   DECISION_DOCKET_GRAMMARS,
   formatDecisionDocket,
@@ -1640,7 +1641,7 @@ const windowSchema = v.variant("type", [
   v.strictObject({ type: v.literal("precedents") }),
   v.strictObject({
     type: v.literal("day"),
-    day: v.pipe(v.string(), v.isoDate()),
+    day: vApiDate,
     part: v.picklist(["all", ...DAY_PARTS]),
   }),
 ]);
@@ -1674,7 +1675,7 @@ const cursorSchema = v.variant("phase", [
   v.strictObject({
     phase: v.literal("parked"),
     /** The last closed day walked. */
-    through: v.pipe(v.string(), v.isoDate()),
+    through: vApiDate,
   }),
 ]);
 
