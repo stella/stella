@@ -104,7 +104,12 @@ const stellaToast: ToastApi = Object.assign(
     addToast(title, undefined, options),
   {
     add: (options: ToastAddOptions) =>
-      toastManager.add(normalizeToastAddOptions(options)),
+      toastManager.add(
+        normalizeToastAddOptions({
+          ...options,
+          id: options.id ?? toastDedupeId(options),
+        }),
+      ),
     close: (id?: string) => {
       toastManager.close(id);
     },
@@ -173,6 +178,11 @@ const ToastProvider = ({
 const Toasts = ({ position }: { position: ToastPosition }) => {
   const { toasts } = Toast.useToastManager<ToastData>();
   const isTop = position.startsWith("top");
+  const windowFocused = React.useSyncExternalStore(
+    subscribeWindowFocus,
+    readWindowFocus,
+    readServerWindowFocus,
+  );
 
   return (
     <Toast.Portal data-slot="toast-portal">
@@ -191,6 +201,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
         )}
         data-position={position}
         data-slot="toast-viewport"
+        data-window-blurred={windowFocused ? undefined : ""}
       >
         {toasts.map((toastItem) => (
           <Toast.Root
@@ -288,11 +299,41 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
                   <XIcon className="size-4" />
                 </Toast.Close>
               </div>
+              <ToastCountdown toast={toastItem} />
             </Toast.Content>
           </Toast.Root>
         ))}
       </Toast.Viewport>
     </Toast.Portal>
+  );
+};
+
+/**
+ * A faint line along the bottom edge that shrinks over the toast's lifetime
+ * and holds still whenever Base UI holds the timer (hover, focus, blurred
+ * window). Keyed on `updateKey`, so a refreshed toast starts it again.
+ */
+const ToastCountdown = ({
+  toast,
+}: {
+  toast: {
+    timeout?: number | undefined;
+    type?: string | undefined;
+    updateKey?: number | undefined;
+  };
+}) => {
+  const countdownMs = toastCountdownMs(toast);
+  if (countdownMs === undefined) {
+    return null;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-foreground/10 animate-toast-countdown pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full in-data-expanded:[animation-play-state:paused] in-data-window-blurred:[animation-play-state:paused] motion-reduce:hidden ltr:origin-left rtl:origin-right"
+      data-slot="toast-countdown"
+      key={toast.updateKey ?? 0}
+      style={{ animationDuration: `${String(countdownMs)}ms` }}
+    />
   );
 };
 
@@ -401,14 +442,74 @@ function addToast(
   type: ToastType | undefined,
   options?: ToastOptions,
 ) {
+  const addOptions = { ...options, title, type };
   return toastManager.add(
     normalizeToastAddOptions({
-      ...options,
-      title,
-      type,
+      ...addOptions,
+      id: addOptions.id ?? toastDedupeId(addOptions),
     }),
   );
 }
+
+/**
+ * The same message raised again refreshes the toast already on screen (and
+ * restarts its timer) instead of stacking a copy. Only plain-text messages
+ * without an action merge: an action belongs to the call that raised it, and
+ * a loading toast is owned by the promise that will settle it.
+ */
+function toastDedupeId({
+  action,
+  actionProps,
+  description,
+  title,
+  type,
+}: Pick<
+  ToastAddOptions,
+  "action" | "actionProps" | "description" | "title" | "type"
+>): string | undefined {
+  if (
+    type === "loading" ||
+    action !== undefined ||
+    actionProps !== undefined ||
+    typeof title !== "string" ||
+    (description !== undefined &&
+      description !== null &&
+      typeof description !== "string")
+  ) {
+    return undefined;
+  }
+  return `toast-dedupe:${JSON.stringify([type ?? "neutral", title, description ?? ""])}`;
+}
+
+/**
+ * How long the countdown runs, or `undefined` when the toast stays until
+ * dismissed (errors, loading, timeout 0).
+ */
+function toastCountdownMs({
+  timeout,
+  type,
+}: {
+  timeout?: number | undefined;
+  type?: string | undefined;
+}): number | undefined {
+  return type === "loading" || timeout === undefined || timeout <= 0
+    ? undefined
+    : timeout;
+}
+
+// Base UI pauses toast timers while the window is blurred; the countdown bar
+// pauses with them. The viewport's hover and focus pause shows as
+// `data-expanded` on each toast.
+const subscribeWindowFocus = (onChange: () => void) => {
+  window.addEventListener("focus", onChange);
+  window.addEventListener("blur", onChange);
+  return () => {
+    window.removeEventListener("focus", onChange);
+    window.removeEventListener("blur", onChange);
+  };
+};
+const readWindowFocus = () => document.hasFocus();
+const readServerWindowFocus = () => true;
 
 function normalizeToastAddOptions({
   action,
@@ -588,4 +689,6 @@ export {
   TOAST_RIGHT_OFFSET_VAR,
   stellaToast,
   AnchoredToastProvider,
+  toastCountdownMs,
+  toastDedupeId,
 };

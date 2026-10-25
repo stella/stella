@@ -9,10 +9,10 @@ import {
   assertPostgresWorkerBudget,
   planPostgresWorkers,
   POSTGRES_IDENTIFIER_BYTES,
+  type PostgresAdmin,
   PostgresTemplateConnectionError,
   PostgresWorkerBudgetError,
   runPostgresWorkers,
-  type PostgresAdmin,
   workerDatabaseName,
 } from "./postgres-test-workers";
 import { runTestBatches } from "./run-gated-tests";
@@ -258,6 +258,78 @@ const adminFixture = (): AdminFixture => {
   };
 };
 
+test.each([0, 7])(
+  "cluster-wide migrations drain every worker, remain serial and preserve failure %s",
+  async (ordinaryFailure) => {
+    const fixture = adminFixture();
+    const ordinaryReady = Promise.withResolvers<undefined>();
+    const firstClusterReady = Promise.withResolvers<undefined>();
+    const secondClusterReady = Promise.withResolvers<undefined>();
+    const ordinary = new Map<string, (status: number) => void>();
+    const firstCluster = Promise.withResolvers<number>();
+    const secondCluster = Promise.withResolvers<number>();
+    const started: string[] = [];
+    const result = runPostgresWorkers({
+      files: ["ordinary-one", "ordinary-two", "migration-one", "migration-two"],
+      durations: {},
+      exclusivePaths: new Set(),
+      clusterExclusivePaths: new Set(["migration-one", "migration-two"]),
+      workers: 2,
+      databaseUrl: "postgres://localhost/template_db",
+      admin: fixture.admin,
+      registerSignal: () => () => {},
+      runWorker: ({ files }) => {
+        expect(files).toHaveLength(1);
+        const file = files.at(0);
+        if (file === undefined) {
+          throw new Error("The runner must supply one fixture file");
+        }
+        started.push(file);
+        let exited: Promise<number>;
+        if (file.startsWith("ordinary")) {
+          const completion = Promise.withResolvers<number>();
+          ordinary.set(file, completion.resolve);
+          if (ordinary.size === 2) {
+            ordinaryReady.resolve(undefined);
+          }
+          exited = completion.promise;
+        } else if (file === "migration-one") {
+          firstClusterReady.resolve(undefined);
+          exited = firstCluster.promise;
+        } else {
+          expect(file).toBe("migration-two");
+          secondClusterReady.resolve(undefined);
+          exited = secondCluster.promise;
+        }
+        return { exited, exitCode: null, signalCode: null, kill: () => {} };
+      },
+      log: () => {},
+    });
+
+    await ordinaryReady.promise;
+    expect(new Set(started)).toEqual(new Set(["ordinary-one", "ordinary-two"]));
+    const finishOrdinary = (file: string, status: number) => {
+      const complete = ordinary.get(file);
+      if (complete === undefined) {
+        throw new Error(`The ordinary fixture ${file} must have started`);
+      }
+      complete(status);
+    };
+    finishOrdinary("ordinary-one", ordinaryFailure);
+    expect(started).toHaveLength(2);
+    finishOrdinary("ordinary-two", 0);
+    await firstClusterReady.promise;
+    expect(started.slice(2)).toEqual(["migration-one"]);
+    firstCluster.resolve(9);
+    await secondClusterReady.promise;
+    expect(started.slice(2)).toEqual(["migration-one", "migration-two"]);
+    secondCluster.resolve(0);
+
+    expect(await result).toBe(ordinaryFailure === 0 ? 9 : ordinaryFailure);
+    expect(fixture.calls.at(-1)).toBe("CLOSE");
+  },
+);
+
 const runWorkerFixture = async ({
   exitCode = 0,
   signal,
@@ -307,7 +379,7 @@ test("template cloning precedes workers and databases drop in cleanup on success
   const create = calls.findIndex((call) => call.startsWith("CREATE DATABASE"));
   const terminate = calls.findIndex((call) =>
     call.startsWith(
-      'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 ["template_db_test_',
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend' [\"template_db_test_",
     ),
   );
   const drop = calls.findIndex((call) =>

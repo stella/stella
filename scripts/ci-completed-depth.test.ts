@@ -18,6 +18,7 @@ import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
 import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 import { prDepthJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
 
@@ -53,8 +54,8 @@ const workflow = v.parse(
 const jobs = workflow.jobs;
 const prDepth = prDepthJobs({ jobs });
 const patchId = "d".repeat(40);
-// The patch-id step's fingerprint of the planning configuration.
-const planConfig = "c".repeat(64);
+// The patch-id step's fingerprint of the planning variables.
+const planVars = "c".repeat(64);
 const planner = jobs["ci-plan"];
 const result = jobs["ci-result"];
 if (!planner || !result) {
@@ -104,6 +105,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   version: 7,
   marker: marker(depth, profile),
   event: "pull_request",
+  plan_config: scope,
   run_id: 99,
   run_attempt: 1,
   pr_number: 123,
@@ -112,7 +114,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   base_sha: pr.base.sha,
   patch_id: patchId,
   workflow_version: pr.head.sha,
-  plan_config: planConfig,
+  plan_vars: planVars,
   pr_depth_jobs: prDepth,
   suite_depth: depth,
   coverage_profile: profile,
@@ -212,6 +214,9 @@ const decide = async ({
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
+  // Metadata events mirror the head's earlier code run; one exists here.
+  const listWorkflowRuns = () => {};
+  const listJobsForWorkflowRun = () => {};
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
     Buffer,
     require: (name: string) => {
@@ -237,7 +242,7 @@ const decide = async ({
         PATCH_ID: currentPatchId,
         MERGE_PARENT: mergeParent,
         WORKFLOW_VERSION: pr.head.sha,
-        PLAN_CONFIG: planConfig,
+        PLAN_VARS: planVars,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
     },
@@ -256,6 +261,18 @@ const decide = async ({
       info: () => {},
     },
     github: {
+      paginate: async (method: unknown) =>
+        method === listWorkflowRuns
+          ? [
+              {
+                id: 50,
+                head_sha: pull.head.sha,
+                status: "completed",
+                conclusion: "success",
+                pull_requests: [{ number: pull.number }],
+              },
+            ]
+          : [{ name: "ci-plan" }, { name: "ci-result" }],
       rest: {
         pulls: {
           get: async (request: unknown) => {
@@ -276,6 +293,8 @@ const decide = async ({
           },
         },
         actions: {
+          listWorkflowRuns,
+          listJobsForWorkflowRun,
           downloadArtifact: async (request: unknown) => {
             requests.push(request);
             if (downloadFailure) {
@@ -556,10 +575,20 @@ const recordEvidence = (
     head = pr.head.sha,
     script = evidenceBlock,
     runRequired = "true",
+    env = {},
   } = {},
 ) => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
   const output = nodePath.join(directory, "output");
+  // The gate's prelude writes the plan outputs to PLAN_FILE; this block runs on its own.
+  const planFile = nodePath.join(directory, "plan.json");
+  writeFileSync(
+    planFile,
+    JSON.stringify({
+      ci_tests_required: "true",
+      package_checks_required: "true",
+    }),
+  );
   try {
     const child = Bun.spawnSync(["bash", "-eu", "-c", script], {
       env: {
@@ -570,6 +599,7 @@ const recordEvidence = (
         EVENT: "pull_request",
         RUN_REQUIRED: runRequired,
         COMPLETION_MARKER: marker(depth),
+        PLAN_CONFIG: scope,
         PR_NUMBER: "123",
         HEAD_REPO_ID: "456",
         HEAD_SHA: head,
@@ -578,15 +608,12 @@ const recordEvidence = (
         COVERAGE_PROFILE: "normal-v1",
         PATCH_ID: patchId,
         WORKFLOW_VERSION: pr.head.sha,
-        PLAN_CONFIG: planConfig,
+        PLAN_VARS: planVars,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({
-          ci_tests_required: "true",
-          package_checks_required: "true",
-        }),
+        PLAN_FILE: planFile,
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -595,6 +622,7 @@ const recordEvidence = (
             ]),
           ),
         ),
+        ...env,
       },
     });
     expect(child.exitCode, child.stderr.toString()).toBe(0);
@@ -616,6 +644,21 @@ const allSucceeded = Object.fromEntries([
   ...fastRequired.map((job) => [job, "success"]),
   ["web-build", "skipped"],
 ]);
+
+test("completion evidence inputs contain exactly one JSON document", () => {
+  for (const [name, value] of [
+    ["FAST_REQUIRED", "[] []"],
+    ["PR_DEPTH_JOBS", "[] []"],
+    ["JOB_SCOPES", "{} {}"],
+    ["FAST_JOB_SCOPES", "{} {}"],
+    ["NEEDS", "{} {}"],
+  ] as const) {
+    expect(
+      recordEvidence(allSucceeded, { env: { [name]: value } }),
+      name,
+    ).toBeUndefined();
+  }
+});
 
 test("a superseded, cancelled or failed run records no completion evidence", () => {
   expect(recordEvidence(allSucceeded)).toBeDefined();
@@ -644,7 +687,7 @@ test("recorded evidence lets an unchanged head skip, and only that head", async 
   const recorded: unknown = JSON.parse(text);
   expect(recorded).toMatchObject({
     version: 7,
-    plan_config: planConfig,
+    plan_vars: planVars,
     run_id: 99,
     head_sha: pr.head.sha,
     marker: marker("fast"),
@@ -679,7 +722,7 @@ test("only exact green PR-depth evidence reuses checks", async () => {
     patch: { ...valid, patch_id: "e".repeat(40) },
     workflow: { ...valid, workflow_version: "e".repeat(40) },
     // A planning variable changed since: its planned suites may differ.
-    planConfig: { ...valid, plan_config: "e".repeat(64) },
+    planVars: { ...valid, plan_vars: "e".repeat(64) },
     run: { ...valid, run_id: 98 },
     emptySet: { ...valid, pr_depth_jobs: [] },
     otherSet: { ...valid, pr_depth_jobs: prDepth.slice(1) },
@@ -759,6 +802,8 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["bad attempt", { ...valid, run_attempt: 0 }],
     ["other patch", { ...valid, patch_id: "e".repeat(40) }],
     ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
+    ["other plan config", { ...valid, plan_config: "e".repeat(64) }],
+    ["no plan config", { ...valid, plan_config: undefined }],
     [
       "failed PR-depth job",
       {
@@ -1104,6 +1149,7 @@ test("thin groups certify only normal-profile completion on a head included in t
   }
 });
 
+// Measured p95 is 33.8 s; this test must evaluate every queued job through the real aggregator.
 test("thin groups require queued code checks regardless of normal PR completion", async () => {
   const admitted = queueAdmittedJobs(workflow);
   expect(admitted).toContain("ci-browser");
@@ -1161,6 +1207,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.queue_depth": "thin",
           "needs.ci-plan.result": "success",
           "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
@@ -1210,32 +1257,41 @@ test("thin groups require queued code checks regardless of normal PR completion"
     );
     dependencies["ci-plan"] = { result: "success" };
     const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
-      Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
-        env: {
-          ...process.env,
-          ...env,
-          EVENT: "merge_group",
-          QUEUE_DEPTH: "thin",
-          SUITE_DEPTH: "full",
-          HEAVY_ONLY: "false",
-          COVERAGE_PROFILE: "normal-v1",
-          PATCH_ID: patchId,
-          WORKFLOW_VERSION: pr.head.sha,
-          PLAN_CONFIG: planConfig,
-          PR_DEPTH_JOBS: JSON.stringify(prDepth),
-          GITHUB_STEP_SUMMARY: "/dev/null",
-          PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
-          PR_DEPTH_SOURCE_RUN_ID:
-            evidence.outputs.get("pr_depth_source_run_id") ?? "",
-          QUEUE_VALIDATION: "false",
-          PLAN_RESULT: "success",
-          TRUSTED: "true",
-          THIN_JOBS: JSON.stringify(thin),
-          QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(plan),
-          NEEDS: JSON.stringify(needs),
+      Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          renderResultInputs(aggregation.run ?? "", {
+            needs: JSON.stringify(needs),
+            plan: JSON.stringify(plan),
+          }),
+        ],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            EVENT: "merge_group",
+            QUEUE_DEPTH: "thin",
+            SUITE_DEPTH: "full",
+            HEAVY_ONLY: "false",
+            COVERAGE_PROFILE: "normal-v1",
+            PATCH_ID: patchId,
+            WORKFLOW_VERSION: pr.head.sha,
+            PLAN_VARS: planVars,
+            PR_DEPTH_JOBS: JSON.stringify(prDepth),
+            GITHUB_STEP_SUMMARY: "/dev/null",
+            PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
+            PR_DEPTH_SOURCE_RUN_ID:
+              evidence.outputs.get("pr_depth_source_run_id") ?? "",
+            QUEUE_VALIDATION: "false",
+            PLAN_RESULT: "success",
+            TRUSTED: "true",
+            THIN_JOBS: JSON.stringify(thin),
+            QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
+          },
         },
-      });
+      );
     const successfulAggregation = runAggregation(dependencies);
     expect(
       successfulAggregation.exitCode,
@@ -1267,7 +1323,7 @@ test("thin groups require queued code checks regardless of normal PR completion"
       }
     }
   }
-}, 35_000);
+}, 70_000);
 
 test("a metadata event without completed evidence starts no suites", async () => {
   for (const action of ["labeled", "unlabeled", "auto_merge_enabled"]) {
@@ -1375,7 +1431,7 @@ type PatchIdStepOptions = {
   event?: string;
   base: string;
   head: string;
-  /** Repository variables the step fingerprints, as PLAN_<name>. */
+  /** Repository variables the step fingerprints, as PLAN_VAR_<name>. */
   planVariables?: Record<string, string>;
 };
 const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
@@ -1396,10 +1452,10 @@ test("the planning fingerprint covers every repository variable the planner read
   expect(read.length).toBeGreaterThan(0);
   const step = planner.steps.find(({ id }) => id === "patch-id");
   const fingerprinted = Object.entries(step?.env ?? {})
-    .filter(([name]) => name.startsWith("PLAN_"))
+    .filter(([name]) => name.startsWith("PLAN_VAR_"))
     .map(([name, value]) => {
-      expect(value).toBe(`\${{ vars.${name.slice("PLAN_".length)} }}`);
-      return name.slice("PLAN_".length);
+      expect(value).toBe(`\${{ vars.${name.slice("PLAN_VAR_".length)} }}`);
+      return name.slice("PLAN_VAR_".length);
     })
     .toSorted(byName);
   expect(fingerprinted).toEqual(read);
@@ -1442,6 +1498,8 @@ const runPatchIdStep = ({
   );
 };
 
+// Every case runs the real step against a real repository, so the case list
+// spawns many git processes; the budget covers that, not a wait.
 test("the patch-id step names the parent only of a merge of the base, with the parent's patch id when the merge is clean", () => {
   const repository = mkdtempSync(nodePath.join(tmpdir(), "ci-merge-parent-"));
   const git = (...args: string[]) => {
@@ -1507,18 +1565,18 @@ test("the patch-id step names the parent only of a merge of the base, with the p
     ).toBe("");
     git("reset", "--quiet", "--hard", merged);
 
-    // The planning configuration is fingerprinted: any variable change moves it.
-    expect(after["plan_config"]).toMatch(/^[0-9a-f]{64}$/u);
+    // The planning variables are fingerprinted: any variable change moves it.
+    expect(after["plan_vars"]).toMatch(/^[0-9a-f]{64}$/u);
     const configured = (value: string) =>
       runPatchIdStep({
         repository,
         base: far,
         head: merged,
-        planVariables: { PLAN_CI_POSTGRES_PR_SELECTION: value },
-      })["plan_config"];
+        planVariables: { PLAN_VAR_CI_POSTGRES_PR_SELECTION: value },
+      })["plan_vars"];
     expect(configured("on")).toBe(configured("on"));
     expect(configured("on")).not.toBe(configured("off"));
-    expect(configured("off")).not.toBe(after["plan_config"]);
+    expect(configured("off")).not.toBe(after["plan_vars"]);
 
     // A merge-queue run never names a parent.
     expect(

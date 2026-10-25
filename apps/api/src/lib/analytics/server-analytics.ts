@@ -5,6 +5,7 @@ import type {
   FeedbackVia,
 } from "@stll/api-contract/feedback";
 
+import type { CustomerDistinctId } from "@/api/lib/auth/principal-audience";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReleaseFailureEventProperties } from "@/api/lib/observability/release-failure-contract";
 import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
@@ -115,10 +116,7 @@ export type McpSessionInitializedProperties = {
  * are three different facts.
  */
 export type FeedbackDeliveryOutcome =
-  | "delivered"
-  | "failed"
-  | "not_configured"
-  | "skipped_duplicate";
+  "delivered" | "failed" | "not_configured" | "skipped_duplicate";
 
 /**
  * One filed report, as telemetry. Content never appears here: the event says
@@ -187,6 +185,9 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
         properties: FeedbackReportSubmittedProperties;
       }
     | {
+        // Product usage: only a principal classified as a customer may send
+        // it (`principal-audience.ts`).
+        distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
       }

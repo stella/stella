@@ -26,12 +26,12 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
-  SEARCH_PAGE_REACH,
-  SEARCH_PAGINATION_COMPLETE,
-  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
   FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -88,7 +88,8 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { readPresent } from "@/api/lib/errors/read-outcome";
+import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -139,8 +140,8 @@ import {
 } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  CASE_LAW_COVERAGE_FIXTURE,
   CASE_LAW_COVERAGE_EXPECTED,
+  CASE_LAW_COVERAGE_FIXTURE,
 } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -593,6 +594,7 @@ const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 2,
   identifiers: [
     { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
   ],
@@ -852,6 +854,7 @@ type MockProcessingRunQueryInput = {
 };
 
 type MockMcpTransaction = {
+  selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
@@ -888,6 +891,7 @@ type MockMcpTransaction = {
     };
     extractedContent: {
       findFirst: () => Promise<ExtractedContentRow | null>;
+      findMany: () => Promise<unknown[]>;
     };
     fields: {
       findMany: () => Promise<
@@ -1047,6 +1051,83 @@ const createScopedDb = (
             },
             extractedContent: {
               findFirst: async () => extractedContentRow,
+              findMany: async () =>
+                extractedContentRow
+                  ? [
+                      {
+                        ...extractedContentRow,
+                        entity: {
+                          ...extractedContentRow.entity,
+                          workspace: { status: "active" },
+                          versions: [
+                            {
+                              id:
+                                processingState.latestVersionId ??
+                                "entity_version_1",
+                            },
+                          ],
+                          currentVersion: {
+                            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                            deletedAt: null,
+                            id: "entity_version_1",
+                            fields: currentVersionFields.map(
+                              (content, index) => ({
+                                id: `field_${index + 1}`,
+                                content,
+                              }),
+                            ),
+                          },
+                        },
+                      },
+                    ]
+                  : rows.flatMap((row) => {
+                      if (
+                        typeof row !== "object" ||
+                        row === null ||
+                        !("entityId" in row) ||
+                        typeof row.entityId !== "string" ||
+                        !("workspaceId" in row) ||
+                        typeof row.workspaceId !== "string" ||
+                        !("fieldId" in row) ||
+                        typeof row.fieldId !== "string"
+                      ) {
+                        return [];
+                      }
+                      const sourceFileId = `file_${row.entityId}`;
+                      const sourceSha256Hex = "a".repeat(64);
+                      return [
+                        {
+                          ...createExtractedContentRow({
+                            entityId: row.entityId,
+                            workspaceId: row.workspaceId,
+                            sourceEntityVersionId: "entity_version_1",
+                            sourceFieldId: row.fieldId,
+                            sourceFileId,
+                            sourceSha256Hex,
+                          }),
+                          entity: {
+                            name: "Document",
+                            workspace: { status: "active" },
+                            versions: [{ id: "entity_version_1" }],
+                            currentVersion: {
+                              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                              deletedAt: null,
+                              id: "entity_version_1",
+                              fields: [
+                                {
+                                  id: row.fieldId,
+                                  content: {
+                                    type: "file",
+                                    id: sourceFileId,
+                                    sha256Hex: sourceSha256Hex,
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ];
+                    }),
             },
             documentProcessingRuns: {
               findFirst: findNoDocumentProcessingRun,
@@ -1111,6 +1192,7 @@ const createScopedDb = (
             },
           },
           select: () => createSelectBuilder(rows),
+          selectDistinct: () => createSelectBuilder([{ id: WORKSPACE_ID }]),
         }),
     ),
   );
@@ -1766,7 +1848,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("narrows the registry enum to the org's enabled registries", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: ["orsr", "vies"],
+        loadEnabledRegistrySlugs: async () =>
+          await Promise.resolve(readPresent(["orsr", "vies"])),
       });
 
       expect(tool?.inputSchema.properties?.["registry"]).toEqual({
@@ -1779,7 +1862,8 @@ describe("OpenAI-compatible MCP tools", () => {
     test("drops the tool when the org can reach no registry", async () => {
       const tool = await registryTool({
         ...createContext(),
-        enabledRegistrySlugs: [],
+        loadEnabledRegistrySlugs: async () =>
+          await Promise.resolve(readPresent([])),
       });
 
       expect(tool).toBeUndefined();
@@ -1789,8 +1873,13 @@ describe("OpenAI-compatible MCP tools", () => {
       const tool = await registryTool(createContext());
 
       // A context that never resolved its reachable registries (test/synthetic
-      // or a bootstrap read fault) keeps the full advertisement.
-      expect(tool?.inputSchema.properties?.["registry"]).toMatchObject({
+      // or a bootstrap read fault) keeps the full advertisement. The served
+      // schema is shared with later sessions, and Bun's `toMatchObject` swaps
+      // a matched property for its asymmetric matcher (frozen or not), so the
+      // assertion reads a copy.
+      expect(
+        structuredClone(tool?.inputSchema.properties?.["registry"]),
+      ).toMatchObject({
         enum: expect.arrayContaining(["ares", "vies"]),
       });
     });
@@ -1808,7 +1897,8 @@ describe("OpenAI-compatible MCP tools", () => {
         args: { registry: "krs", query: "0000123456" },
         context: {
           ...baseContext,
-          enabledRegistrySlugs: ["ares"],
+          loadEnabledRegistrySlugs: async () =>
+            await Promise.resolve(readPresent(["ares"])),
           testDependencies: {
             ...baseContext.testDependencies,
             executeRegistryLookup: executeRegistryLookupMock,
@@ -1827,6 +1917,27 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(executeRegistryLookupMock.mock.calls.at(0)?.at(0)).toMatchObject({
         handler: { slug: "krs" },
         query: "0000123456",
+      });
+    });
+
+    test("reports registry settings read failures instead of provider absence", async () => {
+      let providerLoads = 0;
+      const cause = new DatabaseError({ message: "Settings read unavailable" });
+      const result = await handleMcpToolCall({
+        args: { registry: "krs", query: "Company name" },
+        context: {
+          ...createContext(),
+          loadWebSearchProvider: async () => {
+            providerLoads += 1;
+            return Result.err(cause);
+          },
+        },
+        toolName: "lookup_business_registry",
+      });
+      expect(providerLoads).toBe(1);
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: { code: "internal_error" },
       });
     });
 
@@ -3182,12 +3293,12 @@ describe("OpenAI-compatible MCP tools", () => {
     const calls = [
       {
         toolName: "search_case_law",
-        args: { country: "SVK", queries: ["synthetic"] },
+        args: { country: "AUT", queries: ["synthetic"] },
         expectedDomain: "caseLaw",
       },
       {
         toolName: "search_legislation",
-        args: { country: "SVK", query: "synthetic" },
+        args: { country: "AUT", query: "synthetic" },
         expectedDomain: "legislation",
       },
     ];
@@ -3201,8 +3312,8 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(result.structuredContent).toMatchObject({
         status: "unavailable",
         domain: expectedDomain,
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
       });
       expect(result.content).toContainEqual({
         type: "text",
@@ -4671,6 +4782,8 @@ describe("OpenAI-compatible MCP tools", () => {
       items: [
         {
           anchor: PROVISION_ANCHOR,
+          // A source list names the reader link by it, not by the host.
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           eli: STATUTE_ELI,
           status: "found",
@@ -5071,6 +5184,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -5084,6 +5198,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_PRIOR_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
@@ -5149,6 +5264,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2014-01-01#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
@@ -5162,6 +5278,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           url: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik/v/2012-03-22#${PROVISION_ANCHOR}`,
           source_url: "https://www.e-sbirka.cz/sb/2012/89",
+          citation: "§ 1729 89/2012 Sb.",
           documentId: STATUTE_PRIOR_ID,
           message:
             "The source licence does not permit AI use of this wording. Read it at the statute's url instead.",
@@ -6409,16 +6526,16 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
     test.each([null, createCitationDigest()])(
-      "identity-only countries report unavailable citations on MCP and CLI (%#)",
+      "unlaunched countries report unavailable citations on MCP and CLI (%#)",
       async (digest) => {
         const base = createReadDecisionResult();
         readGatedDecisionMock.mockResolvedValue({
           ...base,
           id: toSafeId<"caseLawDecision">(DECISION_ID),
-          country: "EU",
+          country: "AUT",
           decisionDate: "2024-02-01",
           documentAst: null,
-          fulltext: "Synthetic EU decision.",
+          fulltext: "Synthetic Austrian decision.",
           identifiers: [
             {
               type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -6443,6 +6560,7 @@ describe("OpenAI-compatible MCP tools", () => {
           languageAlternates: [],
           citationsFrom: [],
           citationsTo: [],
+          citationCount: 0,
         } satisfies ReadCaseLawDecisionSuccess);
         readGatedDecisionCitationDigestMock.mockResolvedValue(digest);
         const result = await handleMcpToolCall({
@@ -6459,7 +6577,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 citations: {
                   status: "unavailable",
                   reason: "country_not_search_admitted",
-                  country: "EU",
+                  country: "AUT",
                 },
               },
             },

@@ -9,8 +9,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 import {
   ActionAdmissionError,
-  withActionAdmission,
   reserveQueuedKickoffPeriod,
+  withActionAdmission,
 } from "./action-admission";
 import type {
   ConcurrencyOnlyActionKind,
@@ -123,7 +123,9 @@ export const runScheduledBackgroundWork = async <T>({
         signal: leaseSignal,
         run: async (modelAdmission) => await run(leaseSignal, modelAdmission),
       }),
-  });
+  }).then((outcome) =>
+    Result.isError(outcome) ? Result.err(outcome.error) : outcome.value,
+  );
 
 type BackgroundJobOptions<T> = {
   actionKind: ConcurrencyOnlyActionKind;
@@ -180,7 +182,9 @@ export const runBackgroundJob = async <T>({
           await run(AbortSignal.any([signal, leaseSignal]), modelAdmission),
       });
     },
-  });
+  }).then((outcome) =>
+    Result.isError(outcome) ? Result.err(outcome.error) : outcome.value,
+  );
   if (Result.isOk(result)) {
     return result.value;
   }

@@ -1,5 +1,6 @@
 import { TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
 import { errorTag } from "@/api/lib/errors/utils";
@@ -8,7 +9,7 @@ import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 type RedisLike = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -138,8 +139,15 @@ const consumeRedis = async ({
     commandTimeoutMs,
     label: "mcp-gateway-redis-command",
   });
-  const count = Number(rawCount);
-  if (!Number.isFinite(count)) {
+  let count: number | null = null;
+  if (typeof rawCount === "number") {
+    if (Number.isSafeInteger(rawCount) && rawCount >= 0) {
+      count = rawCount;
+    }
+  } else {
+    count = parseIntegerToken(rawCount, { sign: "unsigned" }).unwrapOr(null);
+  }
+  if (count === null) {
     throw new McpGatewayRedisReplyError({
       message: "Redis returned a non-numeric rate-limit count",
       reply: rawCount,

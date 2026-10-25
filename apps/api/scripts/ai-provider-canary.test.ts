@@ -7,10 +7,10 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  resolveDefaultModel,
-  MODEL_TASK_OVERRIDE_GROUP,
   isBYOKProviderRoleSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
   MODEL_TASKS,
+  resolveDefaultModel,
 } from "@stll/ai-catalog";
 import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 
@@ -26,12 +26,12 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
+  canaryCapabilityProbeTimeout,
   CanaryCredentialRejectedError,
   CanaryError,
-  CanaryProviderUnavailableError,
   CanaryProviderRunError,
+  CanaryProviderUnavailableError,
   CATALOG_SWEEP_BUDGET_MS,
-  canaryCapabilityProbeTimeout,
   catalogModelIds,
   classifyCanaryFailure,
   createCanaryConfig,

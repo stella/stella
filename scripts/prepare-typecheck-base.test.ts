@@ -26,6 +26,7 @@ test("base recordings require the exact main SHA and authoritative successful wo
       "typecheck-base.json": "{}",
       "api-routes.gen.ts": "api",
       "routeTree.gen.ts": "routes",
+      "route-templates.gen.ts": "templates",
     })) {
       writeFileSync(path.join(data, name), content);
     }
@@ -40,6 +41,7 @@ test("base recordings require the exact main SHA and authoritative successful wo
           "typecheck-base.json",
           "api-routes.gen.ts",
           "routeTree.gen.ts",
+          "route-templates.gen.ts",
         ],
         { cwd: data },
       ).exitCode,

@@ -296,10 +296,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
         </ResponsiveActionToolbarItem>
 
         {addAction !== undefined && (
-          <ResponsiveActionToolbarItem
-            className="ms-auto sm:ms-0"
-            slot="action"
-          >
+          <ResponsiveActionToolbarItem slot="action">
             {addAction}
           </ResponsiveActionToolbarItem>
         )}
