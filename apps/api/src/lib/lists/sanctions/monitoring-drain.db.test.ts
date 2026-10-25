@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
-import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { deepStrictEqual } from "node:assert/strict";
@@ -37,6 +37,7 @@ import {
   systemAuditRuns,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { advanceSanctionsMonitoringBackfill } from "@/api/lib/lists/sanctions/monitoring-backfill";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
 import {
@@ -938,6 +939,219 @@ test(
     expect(denied.isErr()).toBe(true);
     if (denied.isErr()) {
       expect(errorMessages(denied.error)).toContain("permission denied");
+    }
+  },
+  TIMEOUT,
+);
+
+test(
+  "edition replacement and repeated freshness transitions converge without duplicate fanout work",
+  async () => {
+    try {
+      await db.transaction(async (tx) => {
+        const systemDb = asTestRaw<SchedulerDb>({
+          select: tx.select.bind(tx),
+          transaction: async (run: (nested: Transaction) => Promise<unknown>) =>
+            await tx.transaction(
+              async (nested) => await run(productionTransaction(nested)),
+            ),
+        });
+        const readFreshness = async (now: Date) =>
+          await readSanctionsFreshness({
+            now,
+            db: async (run) => await run(productionTransaction(tx)),
+          });
+        const alignOtherFanouts = async (now: Date) => {
+          const desired = (await readFreshness(now)).filter(
+            ({ source }) => source !== "eu",
+          );
+          await tx
+            .insert(sanctionsEditionFanouts)
+            .values(
+              desired.map(({ source, status, edition }) => ({
+                sourceId: source,
+                editionId: edition?.id ?? null,
+                freshnessStatus: status,
+                status: "complete" as const,
+              })),
+            )
+            .onConflictDoUpdate({
+              target: sanctionsEditionFanouts.sourceId,
+              set: {
+                editionId: sql`excluded.edition_id`,
+                cursorOrganizationId: null,
+                freshnessStatus: sql`excluded.freshness_status`,
+                status: "complete",
+              },
+            });
+        };
+        const euFanout = async () =>
+          (
+            await tx
+              .select()
+              .from(sanctionsEditionFanouts)
+              .where(eq(sanctionsEditionFanouts.sourceId, "eu"))
+          ).at(0) ?? panic("EU fanout missing");
+        const now = futureNow();
+        const source =
+          (
+            await tx
+              .select()
+              .from(sanctionsSources)
+              .where(eq(sanctionsSources.id, "eu"))
+          ).at(0) ?? panic("EU source missing");
+        const previousEditionId =
+          source.activeEditionId ?? panic("EU active edition missing");
+        const organizationId = toSafeId<"organization">(
+          "zz-edition-fanout-regression",
+        );
+        const replacementEditionId = toSafeId<"sanctionsEdition">(
+          Bun.randomUUIDv7(),
+        );
+        const replacementHash = hashSha256Hex(replacementEditionId);
+
+        await tx.insert(organization).values({
+          id: organizationId,
+          name: "Edition fanout regression",
+          slug: organizationId,
+          createdAt: now,
+        });
+        await tx
+          .delete(sanctionsOrganizationMarks)
+          .where(eq(sanctionsOrganizationMarks.organizationId, organizationId));
+        await tx.insert(sanctionsMonitoringBackfills).values({
+          organizationId,
+          sourceId: "eu",
+          editionId: previousEditionId,
+          generation: 7n,
+          status: "complete",
+        });
+        await alignOtherFanouts(now);
+        await tx
+          .insert(sanctionsEditionFanouts)
+          .values({
+            sourceId: "eu",
+            editionId: previousEditionId,
+            freshnessStatus: "fresh",
+            status: "complete",
+          })
+          .onConflictDoUpdate({
+            target: sanctionsEditionFanouts.sourceId,
+            set: {
+              editionId: previousEditionId,
+              cursorOrganizationId: null,
+              freshnessStatus: "fresh",
+              status: "complete",
+            },
+          });
+        await tx.insert(sanctionsEditions).values({
+          id: replacementEditionId,
+          sourceId: "eu",
+          markerKey: replacementHash,
+          contentHash: replacementHash,
+          state: "ready",
+          publishedAt: "2026-10-23",
+          entryCount: 0,
+        });
+        await tx
+          .update(sanctionsSources)
+          .set({
+            activeEditionId: replacementEditionId,
+            lastSuccessfulVerifiedAt: now,
+          })
+          .where(eq(sanctionsSources.id, "eu"));
+
+        expect(await euFanout()).toMatchObject({
+          editionId: replacementEditionId,
+          cursorOrganizationId: null,
+          freshnessStatus: "unknown",
+          status: "pending",
+        });
+
+        // Recreate the persisted state that a missed trigger or interrupted
+        // repair leaves behind; scheduler reconciliation must still recover.
+        await tx
+          .update(sanctionsEditionFanouts)
+          .set({
+            editionId: previousEditionId,
+            cursorOrganizationId: organizationId,
+            freshnessStatus: "fresh",
+            status: "complete",
+          })
+          .where(eq(sanctionsEditionFanouts.sourceId, "eu"));
+
+        let run = 0;
+        const queue = async (at: Date) =>
+          await queueSanctionsMonitoringBackfills({
+            db: systemDb,
+            now: at,
+            runId: toSafeId<"schedulerJobRun">(
+              `edition-fanout-${run++}-${Bun.randomUUIDv7()}`,
+            ),
+          });
+        const settle = async (
+          at: Date,
+          freshnessStatus: "fresh" | "unavailable",
+        ) => {
+          for (let attempt = 0; attempt < 10; attempt++) {
+            await queue(at);
+            const fanout = await euFanout();
+            if (
+              fanout.editionId === replacementEditionId &&
+              fanout.freshnessStatus === freshnessStatus &&
+              fanout.status === "complete"
+            ) {
+              return;
+            }
+          }
+          panic("EU fanout did not converge within its bounded test budget");
+        };
+        const targetJob = async () =>
+          (
+            await tx
+              .select()
+              .from(sanctionsMonitoringBackfills)
+              .where(
+                and(
+                  eq(
+                    sanctionsMonitoringBackfills.organizationId,
+                    organizationId,
+                  ),
+                  eq(sanctionsMonitoringBackfills.sourceId, "eu"),
+                ),
+              )
+          ).at(0) ?? panic("Edition replacement backfill missing");
+
+        await settle(now, "fresh");
+        expect(await targetJob()).toMatchObject({
+          editionId: replacementEditionId,
+          generation: 8n,
+          status: "pending",
+          cursorContactId: null,
+        });
+        await queue(now);
+        expect((await targetJob()).generation).toBe(8n);
+
+        const unavailableAt = new Date(
+          now.getTime() + SANCTIONS_SOURCE_CONFIG.eu.freshnessMs + 1,
+        );
+        await alignOtherFanouts(unavailableAt);
+        await settle(unavailableAt, "unavailable");
+        expect((await targetJob()).generation).toBe(9n);
+        await queue(unavailableAt);
+        expect((await targetJob()).generation).toBe(9n);
+
+        await alignOtherFanouts(now);
+        await settle(now, "fresh");
+        expect((await targetJob()).generation).toBe(10n);
+        await queue(now);
+        expect((await targetJob()).generation).toBe(10n);
+        tx.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
     }
   },
   TIMEOUT,
@@ -2209,6 +2423,7 @@ test(
   TIMEOUT,
 );
 
+// timeout: Builds and drains every sanctions source against the shared PGlite engine.
 test(
   "source-scoped backfills build only their source and preserve complete outcomes; drain screens every source",
   async () => {

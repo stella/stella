@@ -718,6 +718,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
   },
   {
+    migration: "20261025091000_case_law_redacted_inline_raw",
+    form: "add-constraint",
+    reason:
+      "The complete redaction CHECK is added NOT VALID without scanning decisions, under 5s lock_timeout and 30s statement_timeout; the bounded tombstone backfill clears legacy rows before a later validation.",
+  },
+  {
     migration: "20261025090100_style_set_deletion_cleanup",
     form: "add-column",
     reason:

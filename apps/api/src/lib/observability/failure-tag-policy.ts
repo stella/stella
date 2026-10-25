@@ -331,6 +331,7 @@ export const TAGGED_FAILURE_REASON = {
   ProvisionBackfillUnitError: "tagged_failure",
   PublisherGateReplyError: "tagged_failure",
   PublisherPacingStopped: "tagged_failure",
+  PublisherResponseTooLargeError: "tagged_failure",
   PublisherTargetError: "tagged_failure",
   QueueJobFailedError: "tagged_failure",
   RawDocumentErasureIncompleteError: "tagged_failure",

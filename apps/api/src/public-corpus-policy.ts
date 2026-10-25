@@ -48,6 +48,23 @@ const ROUTE_POLICY: ReadonlyMap<string, PublicCorpusClass> = new Map(
   Object.entries(PUBLIC_CORPUS_ROUTE_POLICY),
 );
 
+/**
+ * Listings whose class depends on the request: a non-empty value of the named
+ * query parameter makes the listing do a search's work, so it is metered as
+ * one.
+ */
+type QueryUpgrade = { parameter: string; class: PublicCorpusClass };
+const QUERY_UPGRADE_ENTRIES = [
+  ["GET /law/statutes", { parameter: "query", class: "search" }],
+] as const satisfies readonly (readonly [
+  keyof typeof PUBLIC_CORPUS_ROUTE_POLICY,
+  QueryUpgrade,
+])[];
+
+const QUERY_UPGRADES: ReadonlyMap<string, QueryUpgrade> = new Map(
+  QUERY_UPGRADE_ENTRIES,
+);
+
 /** A mounted route as the policy table names it: its method and full path pattern. */
 type MountedRoute = { readonly method: string; readonly path: string };
 
@@ -61,6 +78,7 @@ type MountedRoute = { readonly method: string; readonly path: string };
  */
 export const publicCorpusClassOf = (
   route: MountedRoute | undefined,
+  url: URL,
 ): PublicCorpusClass | undefined => {
   if (
     route === undefined ||
@@ -69,7 +87,15 @@ export const publicCorpusClassOf = (
     return undefined;
   }
   const method = route.method === "HEAD" ? "GET" : route.method;
-  return ROUTE_POLICY.get(
-    `${method} ${route.path.slice(STELLA_API_VERSION_PREFIX.length)}`,
-  );
+  const key = `${method} ${route.path.slice(STELLA_API_VERSION_PREFIX.length)}`;
+  const upgrade = QUERY_UPGRADES.get(key);
+  if (
+    upgrade !== undefined &&
+    url.searchParams
+      .getAll(upgrade.parameter)
+      .some((value) => value.trim() !== "")
+  ) {
+    return upgrade.class;
+  }
+  return ROUTE_POLICY.get(key);
 };

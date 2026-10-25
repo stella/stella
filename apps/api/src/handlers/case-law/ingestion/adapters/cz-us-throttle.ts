@@ -1,3 +1,4 @@
+// parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: Refusal results carry typed read outcomes; successful responses are parsed unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
@@ -25,6 +26,7 @@ import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { unreadPublisherError } from "./publisher-read";
+import { limitPublisherResponse } from "./publisher-response-limit";
 
 /**
  * What one NALUS request costs the crawl in waiting, read off the policy map
@@ -179,7 +181,7 @@ export const createNalusFetch = (
         }),
       );
     }
-    return Result.ok(response);
+    return Result.ok(limitPublisherResponse(response));
   };
 };
 

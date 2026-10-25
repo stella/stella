@@ -444,7 +444,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Backfill durable case-law redaction tombstones and search cleanup",
-    id: "caseLaw.backfillRedactionTombstones.v2",
+    id: "caseLaw.backfillRedactionTombstones.v3",
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,

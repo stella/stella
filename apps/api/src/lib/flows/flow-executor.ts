@@ -36,14 +36,16 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
-import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
@@ -240,6 +242,22 @@ export const executeFlowStep = async (
 
   // Mark the step (and run) running. Broadcast so the UI shows progress.
   const startedPayload = await scopedDb(async (tx) => {
+    const currentlyAuthorized = await hasCurrentActiveWorkspaceMemberPermission(
+      {
+        db: tx,
+        organizationId: scope.organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+        permissions: { flow: ["run"] },
+      },
+    );
+    if (!currentlyAuthorized) {
+      abortTransaction(
+        new FlowStepError({
+          message: "The workflow actor is no longer authorized in this matter.",
+        }),
+      );
+    }
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
       runId,
@@ -253,21 +271,6 @@ export const executeFlowStep = async (
       current.step?.status === "awaiting_review"
     ) {
       return null;
-    }
-    const workspace = await resolveWorkspaceMemberAccess(
-      {
-        organizationId: scope.organizationId,
-        workspaceId: run.workspaceId,
-        userId: actorUserId,
-      },
-      tx,
-    );
-    if (workspace === null) {
-      abortTransaction(
-        new FlowStepError({
-          message: "The workflow actor is no longer a member of this matter.",
-        }),
-      );
     }
     await tx
       .update(flowRunSteps)
@@ -513,6 +516,22 @@ const runAiStep = async ({
       workspaceId: run.workspaceId,
     },
   });
+
+  // Inputs and configuration can take time to assemble. Recheck immediately
+  // before the model boundary so a committed role, matter-access, or lifecycle
+  // change since step claim prevents new model work.
+  unwrapOrFlowStepError(
+    await safeDb(async (tx) => {
+      await requireCurrentActiveWorkspaceMemberPermission({
+        db: tx,
+        organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+        permissions: { flow: ["run"] },
+      });
+    }),
+    "The workflow actor is no longer authorized in this matter.",
+  );
 
   // `generateTanStackTextForTask` throws on provider/config failure; that is
   // exactly the retry signal the worker wants, so we let it propagate. Works
@@ -871,7 +890,6 @@ const runCreateDocumentStep = async ({
   const created = await Result.tryPromise({
     try: async () =>
       await createEntity({
-        authority: CALLER_AUTHORIZED,
         scopedDb,
         organizationId,
         workspaceId: run.workspaceId,
@@ -886,6 +904,18 @@ const runCreateDocumentStep = async ({
         fileName: `${stepDef.documentTitle}.docx`,
         mimeType: DOCX_MIME_TYPE,
         encryption: serverBuiltFileEncryption(),
+        authority: {
+          type: "current-member",
+          authorize: async (tx) => {
+            await requireCurrentActiveWorkspaceMemberPermission({
+              db: tx,
+              organizationId,
+              workspaceId: run.workspaceId,
+              userId: actorUserId,
+              permissions: { entity: ["create"] },
+            });
+          },
+        },
         afterCreate: async (tx, document) => {
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation

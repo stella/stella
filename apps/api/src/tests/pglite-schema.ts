@@ -1203,6 +1203,34 @@ export const installPgliteFileObjectReconciliationFill = async (
   }
 };
 
+/** Install the trigger that turns a legacy payload clear into a redaction. */
+export const installPgliteCaseLawLegacyRedactionFence = async (
+  db: PgliteSchemaDb,
+) => {
+  // The current function body, attached by the trigger its first migration
+  // created.
+  const statementsFrom = (migration: string, prefix: string) =>
+    readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+    ).filter((statement) => executableSql(statement).startsWith(prefix));
+  const statements = [
+    ...statementsFrom(
+      "20261025091000_case_law_redacted_inline_raw",
+      "CREATE OR REPLACE FUNCTION fence_legacy_case_law_redaction()",
+    ),
+    ...statementsFrom(
+      "20260731220000_case_law_redaction_fence",
+      "CREATE TRIGGER case_law_decisions_legacy_redaction_fence",
+    ),
+  ];
+  if (statements.length !== 2) {
+    panic("Case-law legacy redaction fence migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install the trigger that derives a playbook's document type key from scope. */
 export const installPglitePlaybookDocumentTypeKey = async (
   db: PgliteSchemaDb,

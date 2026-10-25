@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
@@ -15,6 +15,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+
+import { lockRateTableWorkspace } from "./rate-table-lock";
 
 const createRateTableBodySchema = v.object({
   name: defaultVarcharSchema,
@@ -42,16 +44,13 @@ export const createRateTableHandler = async function* ({
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
       // Row locks cannot serialize the first table in an empty matter.
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-      );
+      await lockRateTableWorkspace(tx, workspaceId);
       // Lock rows then count to serialize concurrent adds.
       // PG rejects FOR UPDATE with aggregate functions.
       const lockedRows = await tx
         .select({ id: rateTables.id })
         .from(rateTables)
-        .where(eq(rateTables.workspaceId, workspaceId))
-        .for("update");
+        .where(eq(rateTables.workspaceId, workspaceId));
 
       if (lockedRows.length >= LIMITS.rateTablesPerWorkspace) {
         throw new HandlerError({

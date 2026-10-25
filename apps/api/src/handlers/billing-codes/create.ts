@@ -7,6 +7,7 @@ import { billingCodeRealtimeUpdates } from "@/api/handlers/realtime-resource-set
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockBillingCodeCapacity } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -38,58 +39,54 @@ const config = {
 const createBillingCode = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
-    const totalCodes = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(billingCodes, eq(billingCodes.workspaceId, workspaceId)),
-      ),
-    );
+    const insertResult = yield* Result.ok(
+      await safeDb(async (tx) => {
+        await lockBillingCodeCapacity(tx, workspaceId);
+        const totalCodes = await tx.$count(
+          billingCodes,
+          eq(billingCodes.workspaceId, workspaceId),
+        );
+        if (totalCodes >= LIMITS.billingCodesPerWorkspace) {
+          return { status: "limit" as const };
+        }
 
-    if (totalCodes >= LIMITS.billingCodesPerWorkspace) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Billing codes limit reached for this workspace",
-        }),
-      );
-    }
+        const inserted = await tx
+          .insert(billingCodes)
+          .values({
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            type: body.type,
+            code: body.code,
+            label: body.label,
+            active: body.active ?? true,
+            sortOrder: body.sortOrder ?? 0,
+          })
+          .returning({ id: billingCodes.id });
 
-    const insertResult = await safeDb(async (tx) => {
-      const inserted = await tx
-        .insert(billingCodes)
-        .values({
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          type: body.type,
-          code: body.code,
-          label: body.label,
-          active: body.active ?? true,
-          sortOrder: body.sortOrder ?? 0,
-        })
-        .returning({ id: billingCodes.id });
-
-      const created = inserted[0];
-      if (created) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.BILLING_CODE,
-          resourceId: created.id,
-          changes: {
-            created: {
-              old: null,
-              new: {
-                type: body.type,
-                code: body.code,
-                label: body.label,
-                active: body.active ?? true,
-                sortOrder: body.sortOrder ?? 0,
+        const created = inserted[0];
+        if (created) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.BILLING_CODE,
+            resourceId: created.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  type: body.type,
+                  code: body.code,
+                  label: body.label,
+                  active: body.active ?? true,
+                  sortOrder: body.sortOrder ?? 0,
+                },
               },
             },
-          },
-        });
-      }
+          });
+        }
 
-      return inserted;
-    });
+        return { status: "inserted" as const, inserted };
+      }),
+    );
 
     if (Result.isError(insertResult)) {
       if (
@@ -106,7 +103,16 @@ const createBillingCode = createSafeHandler(
       return Result.err(insertResult.error);
     }
 
-    const code = insertResult.value[0];
+    if (insertResult.value.status === "limit") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Billing codes limit reached for this workspace",
+        }),
+      );
+    }
+
+    const code = insertResult.value.inserted.at(0);
     if (!code) {
       panic("Failed to create billing code");
     }

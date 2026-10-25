@@ -16,6 +16,7 @@ import {
   minorUnitAmountSchema,
   resourceIdSchema,
 } from "@/api/lib/custom-schema";
+import { lockExpenseCapacity } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -90,44 +91,29 @@ const createExpense = createSafeHandler(
       );
     }
 
-    const matter = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
+    const outcome = yield* Result.await(
+      safeDb(async (tx) => {
+        await lockExpenseCapacity(tx, workspaceId);
+
+        const matter = await tx.query.entities.findFirst({
           where: {
             id: { eq: body.matterId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true },
-        }),
-      ),
-    );
+        });
+        if (!matter) {
+          return { status: "matter-not-found" as const };
+        }
 
-    if (!matter) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Matter not found in this workspace",
-        }),
-      );
-    }
+        const totalExpenses = await tx.$count(
+          expenses,
+          eq(expenses.workspaceId, workspaceId),
+        );
+        if (totalExpenses >= LIMITS.expensesPerWorkspace) {
+          return { status: "limit" as const };
+        }
 
-    const totalExpenses = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(expenses, eq(expenses.workspaceId, workspaceId)),
-      ),
-    );
-
-    if (totalExpenses >= LIMITS.expensesPerWorkspace) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Expenses limit reached for this workspace",
-        }),
-      );
-    }
-
-    const entry = yield* Result.await(
-      safeDb(async (tx) => {
         const inserted = await tx
           .insert(expenses)
           .values({
@@ -168,11 +154,27 @@ const createExpense = createSafeHandler(
             },
           });
         }
-        return created;
+        return { status: "created" as const, entry: created };
       }),
     );
 
-    if (!entry) {
+    if (outcome.status === "matter-not-found") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Matter not found in this workspace",
+        }),
+      );
+    }
+    if (outcome.status === "limit") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Expenses limit reached for this workspace",
+        }),
+      );
+    }
+    if (!outcome.entry) {
       return Result.err(
         new HandlerError({
           status: 500,
@@ -180,7 +182,7 @@ const createExpense = createSafeHandler(
         }),
       );
     }
-    return Result.ok({ id: entry.id });
+    return Result.ok({ id: outcome.entry.id });
   },
 );
 

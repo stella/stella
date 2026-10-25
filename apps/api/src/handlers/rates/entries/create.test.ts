@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { cents } from "@stll/money";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -47,7 +49,10 @@ afterAll(async () => await releaseTestDb());
 const scopedSafeDb = () =>
   asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
 type CreateContext = Parameters<typeof createRateEntry.handler>[0];
-const create = async (body: CreateContext["body"], tableId = rateTableId) =>
+const create = async (
+  body: Omit<CreateContext["body"], "currency">,
+  tableId = rateTableId,
+) =>
   await createRateEntry.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<CreateContext>({
@@ -58,13 +63,13 @@ const create = async (body: CreateContext["body"], tableId = rateTableId) =>
         user: { id: ids.userA1 },
         safeDb: scopedSafeDb(),
         params: { rateTableId: tableId },
-        body,
+        body: { ...body, currency: "USD" },
       }),
     ),
   );
 
 type UpdateContext = Parameters<typeof updateRateEntry.handler>[0];
-const update = async (body: UpdateContext["body"]) =>
+const update = async (body: Omit<UpdateContext["body"], "currency">) =>
   await updateRateEntry.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateContext>({
@@ -75,7 +80,7 @@ const update = async (body: UpdateContext["body"]) =>
         user: { id: ids.userA1 },
         safeDb: scopedSafeDb(),
         params: { rateTableId },
-        body,
+        body: { ...body, currency: "USD" },
       }),
     ),
   );
@@ -86,7 +91,7 @@ const clearEntries = async () =>
     .where(eq(rateEntries.rateTableId, rateTableId));
 
 const window = {
-  hourlyRate: 12_000,
+  hourlyRate: cents(12_000),
   effectiveFrom: "2025-01-01",
   effectiveTo: "2025-01-31",
 };
@@ -204,5 +209,55 @@ describe("effective-dated rate selectors", () => {
         eq(rateEntries.rateTableId, rateTableId),
       ),
     ).toBe(0);
+  });
+
+  test("refuses rate values submitted in a stale table currency", async () => {
+    await clearEntries();
+    try {
+      await testDb
+        .update(rateTables)
+        .set({ currency: "JPY" })
+        .where(eq(rateTables.id, rateTableId));
+      expect(await create({ ...window })).toMatchObject({
+        code: 409,
+        response: { code: "rate_table_currency_changed" },
+      });
+      expect(
+        await testDb.$count(
+          rateEntries,
+          eq(rateEntries.rateTableId, rateTableId),
+        ),
+      ).toBe(0);
+
+      await testDb
+        .update(rateTables)
+        .set({ currency: "USD" })
+        .where(eq(rateTables.id, rateTableId));
+      const created = await create({ ...window });
+      expect(created).toHaveProperty("id");
+      if (!("id" in created)) {
+        return;
+      }
+      await testDb
+        .update(rateTables)
+        .set({ currency: "JPY" })
+        .where(eq(rateTables.id, rateTableId));
+      expect(
+        await update({ id: created.id, hourlyRate: 25_000 }),
+      ).toMatchObject({
+        code: 409,
+        response: { code: "rate_table_currency_changed" },
+      });
+      const row = await testDb.query.rateEntries.findFirst({
+        where: { id: { eq: created.id } },
+        columns: { hourlyRate: true },
+      });
+      expect(row?.hourlyRate).toBe(window.hourlyRate);
+    } finally {
+      await testDb
+        .update(rateTables)
+        .set({ currency: "USD" })
+        .where(eq(rateTables.id, rateTableId));
+    }
   });
 });

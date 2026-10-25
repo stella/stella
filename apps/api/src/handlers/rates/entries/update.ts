@@ -1,11 +1,11 @@
-import { Result } from "better-result";
-import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, gte, isNull, lte, ne, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { rateEntries } from "@/api/db/schema";
-import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -18,8 +18,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
+import {
+  lockLegacyRateEntryTable,
+  lockRateTableWorkspace,
+} from "../rate-table-lock";
+
 const updateRateEntryBodySchema = v.object({
   id: resourceIdSchema("rateEntry"),
+  currency: currencyCodeSchema,
   hourlyRate: v.optional(minorUnitAmountSchema(0)),
   effectiveFrom: v.optional(apiDateSchema),
   effectiveTo: v.optional(v.nullable(apiDateSchema)),
@@ -34,9 +40,9 @@ const updateRateEntry = createSafeHandler(
     contract: "patch",
     description:
       "Change one rate line's hourly rate or effective dates in a rate " +
-      "table. Changing the dates re-checks for overlap against the other " +
+      "table, naming the table currency its minor units use. Changing the dates re-checks for overlap against the other " +
       "lines for the same person, role, or table default and is refused on a conflict; the selector a line " +
-      "applies to cannot be changed here.",
+      "applies to cannot be changed here. A stale currency is refused; call rates.list and retry with the table's current currency.",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -50,15 +56,6 @@ const updateRateEntry = createSafeHandler(
     body: updateRateEntryBodySchema,
   },
   async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
-    const existing = yield* Result.await(
-      loadRateEntry({
-        safeDb,
-        workspaceId,
-        rateTableId: params.rateTableId,
-        entryId: body.id,
-      }),
-    );
-
     const updates = {
       ...pickDefined(body, ["effectiveFrom", "effectiveTo"]),
       ...(body.hourlyRate !== undefined
@@ -66,41 +63,53 @@ const updateRateEntry = createSafeHandler(
         : {}),
     };
 
-    if (Object.keys(updates).length === 0) {
-      return Result.ok({ id: body.id });
-    }
-
     const datesChanged =
       body.effectiveFrom !== undefined || body.effectiveTo !== undefined;
 
-    const txResult = yield* Result.await(
+    const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        if (datesChanged) {
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
+        await lockRateTableWorkspace(tx, workspaceId);
+        // Previous builds create entries under this lock alone.
+        await lockLegacyRateEntryTable(tx, params.rateTableId);
+        const table = await tx.query.rateTables.findFirst({
+          where: {
+            id: { eq: params.rateTableId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { currency: true },
+        });
+        if (!table) {
+          return { status: "table-not-found" as const };
+        }
+        if (table.currency !== body.currency) {
+          return { status: "currency-changed" as const };
+        }
+
+        const lockedRows = await tx
+          .select({
+            userId: rateEntries.userId,
+            role: rateEntries.role,
+            hourlyRate: rateEntries.hourlyRate,
+            effectiveFrom: rateEntries.effectiveFrom,
+            effectiveTo: rateEntries.effectiveTo,
+          })
+          .from(rateEntries)
+          .where(
+            and(
+              eq(rateEntries.id, body.id),
+              eq(rateEntries.rateTableId, params.rateTableId),
+            ),
           );
+        const locked = lockedRows.at(0);
+        if (!locked) {
+          return { status: "entry-not-found" as const };
+        }
 
-          const locked = await tx.query.rateEntries.findFirst({
-            where: {
-              id: { eq: body.id },
-              rateTableId: { eq: params.rateTableId },
-            },
-            columns: {
-              userId: true,
-              role: true,
-              effectiveFrom: true,
-              effectiveTo: true,
-            },
-          });
+        if (Object.keys(updates).length === 0) {
+          return { status: "updated" as const };
+        }
 
-          if (!locked) {
-            return {
-              ok: false as const,
-              status: 404 as const,
-              message: "Rate entry not found",
-            };
-          }
-
+        if (datesChanged) {
           const resolvedFrom = body.effectiveFrom ?? locked.effectiveFrom;
           const resolvedTo =
             body.effectiveTo !== undefined
@@ -108,11 +117,7 @@ const updateRateEntry = createSafeHandler(
               : locked.effectiveTo;
 
           if (resolvedTo && resolvedTo < resolvedFrom) {
-            return {
-              ok: false as const,
-              status: 400 as const,
-              message: "effectiveTo must be >= effectiveFrom",
-            };
+            return { status: "invalid-range" as const };
           }
 
           const userCondition = locked.userId
@@ -149,12 +154,7 @@ const updateRateEntry = createSafeHandler(
           const overlap = overlapRows.at(0);
 
           if (overlap) {
-            return {
-              ok: false as const,
-              status: 400 as const,
-              message:
-                "Date range overlaps with an existing entry for this person, role, or table default",
-            };
+            return { status: "overlap" as const };
           }
         }
 
@@ -176,7 +176,7 @@ const updateRateEntry = createSafeHandler(
         ] as const) {
           const next = updates[field];
           if (next !== undefined) {
-            changes[field] = { old: existing[field] ?? null, new: next };
+            changes[field] = { old: locked[field] ?? null, new: next };
           }
         }
 
@@ -187,20 +187,50 @@ const updateRateEntry = createSafeHandler(
           changes,
         });
 
-        return { ok: true as const };
+        return { status: "updated" as const };
       }),
     );
 
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
+    switch (outcome.status) {
+      case "table-not-found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Rate table not found" }),
+        );
+      case "currency-changed":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            code: "rate_table_currency_changed",
+            hint: "Call rates.list, then retry rates.entries.update with the table's current currency.",
+            message: "Rate table currency changed; reload and try again",
+          }),
+        );
+      case "entry-not-found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Rate entry not found" }),
+        );
+      case "invalid-range":
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "effectiveTo must be >= effectiveFrom",
+          }),
+        );
+      case "overlap":
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "Date range overlaps with an existing entry for this person, role, or table default",
+          }),
+        );
+      case "updated":
+        return Result.ok({ id: body.id });
+      default: {
+        outcome satisfies never;
+        return panic("Unknown rate-entry update outcome");
+      }
     }
-
-    return Result.ok({ id: body.id });
   },
 );
 

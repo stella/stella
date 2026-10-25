@@ -16,6 +16,7 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -47,7 +48,7 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
   if (typeof completed !== "boolean") {
     panic("Agent client storage completion setting must be boolean");
   }
-  if (paused || completed) {
+  if (paused) {
     return;
   }
   const result = await Result.tryPromise({
@@ -73,14 +74,16 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
     return;
   }
   const remainingCount = await countPreviousAgentClientValues(db);
+  // Completion is a record, not a stop: the job stays enabled to repair later
+  // legacy writes, and boot registration re-asserts the declared enablement,
+  // which resumes rows an earlier build disabled at completion.
   if (!Result.isError(batch) && remainingCount === 0) {
-    await db.transaction(async (tx) => {
+    await withAggregateTransaction(db, async (tx) => {
       await setSharedStatementTimeout(tx, AGENT_CLIENT_STATEMENT_BUDGET_MS);
       await setSharedLockTimeout(tx, AGENT_CLIENT_LOCK_BUDGET_MS);
       await tx
         .update(schedulerJobs)
         .set({
-          enabled: false,
           payload: sql`coalesce(${schedulerJobs.payload}, '{}'::jsonb) || '{"completed":true}'::jsonb`,
         })
         .where(
@@ -100,6 +103,7 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
       ...(!Result.isError(batch) && { "migration.updated_count": batch.value }),
       "migration.remaining_count": remainingCount,
       "migration.paused": paused,
+      "migration.previously_completed": completed,
     }),
   );
 };

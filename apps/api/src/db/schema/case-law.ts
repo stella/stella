@@ -760,7 +760,7 @@ export const caseLawDecisions = p.pgTable(
     ),
     p.check(
       "case_law_decisions_redacted_payload_erased",
-      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL AND ${t.sourceRaw} IS NULL)`,
     ),
     // The bounds `canonicalDecisionDate` enforces on the write path,
     // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`,

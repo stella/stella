@@ -27,6 +27,8 @@ const routeLabels = (entries: readonly RouteEntry[]): string[] =>
   entries.map(routeLabel).toSorted();
 
 const versioned = (path: string) => `${STELLA_API_VERSION_PREFIX}${path}`;
+// A request without query parameters, so only the route decides the class.
+const PLAIN_URL = new URL("https://example.test/");
 
 /** A policy key as the mounted route it names, version prefix included. */
 const mountedRouteOf = (key: string) => {
@@ -135,7 +137,10 @@ describe("public corpus admission policy", () => {
       ),
     });
     for (const entry of served) {
-      expect(publicCorpusClassOf(entry), routeLabel(entry)).toBeDefined();
+      expect(
+        publicCorpusClassOf(entry, PLAIN_URL),
+        routeLabel(entry),
+      ).toBeDefined();
     }
   });
 
@@ -235,9 +240,27 @@ describe("public corpus admission policy", () => {
       "GET /case/sitemap/decisions/shard": "sitemap",
     } as const;
     for (const [key, admissionClass] of Object.entries(expected)) {
-      expect(publicCorpusClassOf(mountedRouteOf(key)), key).toBe(
+      expect(publicCorpusClassOf(mountedRouteOf(key), PLAIN_URL), key).toBe(
         admissionClass,
       );
+    }
+  });
+
+  test("query-bearing statute lists use search admission", () => {
+    for (const method of ["GET", "HEAD"] as const) {
+      const route = { ...mountedRouteOf("GET /law/statutes"), method };
+      for (const query of ["constitution", " constitution ", "&query=law"]) {
+        const url = new URL(
+          `https://example.test${versioned("/law/statutes")}?query=${query}`,
+        );
+        expect(publicCorpusClassOf(route, url), query).toBe("search");
+      }
+      for (const query of ["", " "]) {
+        const url = new URL(
+          `https://example.test${versioned("/law/statutes")}?query=${query}`,
+        );
+        expect(publicCorpusClassOf(route, url), query).toBe("browse");
+      }
     }
   });
 
@@ -249,9 +272,10 @@ describe("public corpus admission policy", () => {
       if (route.method !== "GET") {
         continue;
       }
-      expect(publicCorpusClassOf({ ...route, method: "HEAD" }), key).toBe(
-        admissionClass,
-      );
+      expect(
+        publicCorpusClassOf({ ...route, method: "HEAD" }, PLAIN_URL),
+        key,
+      ).toBe(admissionClass);
     }
   });
 
@@ -260,16 +284,28 @@ describe("public corpus admission policy", () => {
     // read off the pattern the router matched, never off a concrete path that
     // an identifier pattern would also match.
     expect(
-      publicCorpusClassOf(mountedRouteOf("GET /case/decisions/facets")),
+      publicCorpusClassOf(
+        mountedRouteOf("GET /case/decisions/facets"),
+        PLAIN_URL,
+      ),
     ).toBe("aggregate");
     expect(
-      publicCorpusClassOf(mountedRouteOf("GET /law/statutes/facets")),
+      publicCorpusClassOf(
+        mountedRouteOf("GET /law/statutes/facets"),
+        PLAIN_URL,
+      ),
     ).toBe("aggregate");
     expect(
-      publicCorpusClassOf(mountedRouteOf("GET /case/decisions/:decisionId")),
+      publicCorpusClassOf(
+        mountedRouteOf("GET /case/decisions/:decisionId"),
+        PLAIN_URL,
+      ),
     ).toBe("browse");
     expect(
-      publicCorpusClassOf(mountedRouteOf("GET /law/statutes/:documentId")),
+      publicCorpusClassOf(
+        mountedRouteOf("GET /law/statutes/:documentId"),
+        PLAIN_URL,
+      ),
     ).toBe("browse");
     for (const key of [
       "GET /law/statutes/facets",
@@ -279,16 +315,21 @@ describe("public corpus admission policy", () => {
       "GET /case/decisions/status",
       "GET /case/decisions/latest",
     ] as const) {
-      expect(publicCorpusClassOf(mountedRouteOf(key)), key).toBe(
+      expect(publicCorpusClassOf(mountedRouteOf(key), PLAIN_URL), key).toBe(
         PUBLIC_CORPUS_ROUTE_POLICY[key],
       );
     }
     // A concrete path is not a pattern: it names no route of the table.
     expect(
-      publicCorpusClassOf({
-        method: "GET",
-        path: versioned("/case/decisions/0190f2c4-0000-7000-8000-000000000001"),
-      }),
+      publicCorpusClassOf(
+        {
+          method: "GET",
+          path: versioned(
+            "/case/decisions/0190f2c4-0000-7000-8000-000000000001",
+          ),
+        },
+        PLAIN_URL,
+      ),
     ).toBeUndefined();
   });
 
@@ -302,7 +343,7 @@ describe("public corpus admission policy", () => {
       { method: "GET", path: "/case/decisions" },
       undefined,
     ]) {
-      expect(publicCorpusClassOf(route)).toBeUndefined();
+      expect(publicCorpusClassOf(route, PLAIN_URL)).toBeUndefined();
     }
   });
 });

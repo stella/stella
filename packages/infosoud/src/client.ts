@@ -24,6 +24,7 @@ import {
   InfoSoudParseError,
   InfoSoudPragueCourtResolutionError,
   InfoSoudRequestError,
+  InfoSoudResponseIdentityError,
 } from "./errors.js";
 import { enrichCaseEventWithDetail } from "./event-details.js";
 import { parseSpisZn, toInfoSoudRequestBody } from "./spis-zn.js";
@@ -442,6 +443,79 @@ const inferPrimaryCourtCode = (result: CaseSearchResult): string | null =>
     )
     ?.znackaId.organizace.trim() ?? null;
 
+const assertResultMatchesCaseMark = (
+  result: Pick<CaseSearchResult, "bcVec" | "cislo" | "druh" | "rocnik">,
+  requested: SpisZn,
+  endpoint: string,
+): void => {
+  if (
+    result.bcVec === requested.bcVec &&
+    result.cislo === requested.cisloSenatu &&
+    result.druh.trim().toUpperCase() ===
+      requested.druhVeci.trim().toUpperCase() &&
+    result.rocnik === requested.rocnik
+  ) {
+    return;
+  }
+
+  throw new InfoSoudResponseIdentityError({
+    type: "case",
+    endpoint,
+    expected: requested,
+    received: {
+      bcVec: result.bcVec,
+      cisloSenatu: result.cislo,
+      druhVeci: result.druh,
+      rocnik: result.rocnik,
+    },
+  });
+};
+
+const assertCaseCourtMatchesRequest = (
+  result: CaseSearchResult,
+  requestedCourtCode: string | undefined,
+): void => {
+  const resultCourtCode = inferPrimaryCourtCode(result);
+  if (requestedCourtCode === undefined || resultCourtCode === null) {
+    return;
+  }
+
+  const requested = resolveCourtCodeAlias(requestedCourtCode);
+  const observed = resolveCourtCodeAlias(resultCourtCode);
+  const matches =
+    requested === "OSPHA" || requested === "OSPHA0"
+      ? PRAGUE_DISTRICT_CODES.some(
+          (districtCode) => resolveCourtCodeAlias(districtCode) === observed,
+        )
+      : requested === observed;
+  if (!matches) {
+    throw new InfoSoudResponseIdentityError({
+      type: "court",
+      endpoint: "CaseSearchResult",
+      expected: requested,
+      received: observed,
+    });
+  }
+};
+
+const assertCombinedCourtMatches = (
+  caseResult: CaseSearchResult,
+  hearingsResult: HearingsSearchResult,
+): void => {
+  const expected = caseResult.organizace.trim();
+  const received = hearingsResult.organizace.trim();
+  if (expected === received) {
+    return;
+  }
+
+  throw new InfoSoudResponseIdentityError({
+    type: "court",
+    endpoint: "HearingsSearchResult",
+    expected,
+    received,
+  });
+};
+
 const createEmptyHearingsResult = (
   result: CaseSearchResult,
 ): HearingsSearchResult => ({
@@ -529,18 +603,23 @@ export class InfoSoudClient {
     const parsed = this.#parseInput(spisZn);
     const resolvedCourtCode = this.#resolveCourtCode(parsed, courtCode);
     const requestBody = toInfoSoudRequestBody(parsed, resolvedCourtCode);
+    const parseMatchingResult = (value: unknown) => {
+      const result = parseCaseSearchResult(value);
+      assertResultMatchesCaseMark(result, parsed, "CaseSearchResult");
+      assertCaseCourtMatchesRequest(result, resolvedCourtCode);
+      return result;
+    };
 
     if (resolvedCourtCode && this.#isAmbiguousPragueCode(resolvedCourtCode)) {
-      const pragueResult = await this.#searchAcrossPragueDistricts({
-        parse: parseCaseSearchResult,
+      return await this.#searchAcrossPragueDistricts({
+        parse: parseMatchingResult,
         path: "/rizeni/vyhledej",
         signal,
         spisZn: parsed,
       });
-      return pragueResult;
     }
 
-    const result = await this.#request({
+    return await this.#request({
       body: requestBody,
       cacheKey: this.#buildRequestCacheKey({
         body: requestBody,
@@ -548,11 +627,10 @@ export class InfoSoudClient {
         path: "/rizeni/vyhledej",
       }),
       cacheTtlMs: this.#cacheConfig.caseTtlMs,
-      parse: parseCaseSearchResult,
+      parse: parseMatchingResult,
       path: "/rizeni/vyhledej",
       signal,
     });
-    return result;
   }
 
   async searchHearings({
@@ -566,19 +644,23 @@ export class InfoSoudClient {
       ...toInfoSoudRequestBody(parsed, resolvedCourtCode),
       typHledani: "SPZN",
     };
+    const parseMatchingResult = (value: unknown) => {
+      const result = parseHearingsSearchResult(value);
+      assertResultMatchesCaseMark(result, parsed, "HearingsSearchResult");
+      return result;
+    };
 
     if (resolvedCourtCode && this.#isAmbiguousPragueCode(resolvedCourtCode)) {
-      const pragueResult = await this.#searchAcrossPragueDistricts({
+      return await this.#searchAcrossPragueDistricts({
         extraBody: { typHledani: "SPZN" },
-        parse: parseHearingsSearchResult,
+        parse: parseMatchingResult,
         path: "/jednani/vyhledej",
         signal,
         spisZn: parsed,
       });
-      return pragueResult;
     }
 
-    const result = await this.#request({
+    return await this.#request({
       body: requestBody,
       cacheKey: this.#buildRequestCacheKey({
         body: requestBody,
@@ -586,11 +668,10 @@ export class InfoSoudClient {
         path: "/jednani/vyhledej",
       }),
       cacheTtlMs: this.#cacheConfig.hearingsTtlMs,
-      parse: parseHearingsSearchResult,
+      parse: parseMatchingResult,
       path: "/jednani/vyhledej",
       signal,
     });
-    return result;
   }
 
   async searchCaseWithHearings({
@@ -607,6 +688,7 @@ export class InfoSoudClient {
         signal,
         spisZn,
       });
+      assertCombinedCourtMatches(caseResult, hearingsResult);
 
       return {
         case: caseResult,
@@ -638,8 +720,13 @@ export class InfoSoudClient {
       druhUdalosti: eventType,
       poradiUdalosti: String(eventOrder),
     };
+    const parseMatchingResult = (value: unknown) => {
+      const result = parseEventDetailResult(value);
+      assertResultMatchesCaseMark(result, parsed, "EventDetailResult");
+      return result;
+    };
 
-    const result = await this.#request({
+    return await this.#request({
       body: requestBody,
       cacheKey: this.#buildRequestCacheKey({
         body: requestBody,
@@ -647,11 +734,10 @@ export class InfoSoudClient {
         path: "/udalost/vyhledej",
       }),
       cacheTtlMs: this.#cacheConfig.eventDetailTtlMs,
-      parse: parseEventDetailResult,
+      parse: parseMatchingResult,
       path: "/udalost/vyhledej",
       signal,
     });
-    return result;
   }
 
   async getCaseEventDetail({

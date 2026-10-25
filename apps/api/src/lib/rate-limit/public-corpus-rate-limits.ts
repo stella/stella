@@ -22,8 +22,8 @@ export const createPublicCorpusAddressRateLimitOptions = (
       failurePolicy: "fail_open_local",
       scope: `public-corpus-${routeClass}`,
     }),
-    skip: (_request: Request, entry: RouteEntry | undefined) =>
-      publicCorpusClassOf(entry) !== routeClass,
+    skip: (request: Request, entry: RouteEntry | undefined) =>
+      publicCorpusClassOf(entry, new URL(request.url)) !== routeClass,
   }) as const satisfies RateLimitOptions;
 
 export const createPublicCorpusGlobalRateLimitOptions = (
@@ -58,8 +58,8 @@ export const createPublicCorpusGlobalRateLimitOptions = (
         max,
       });
     },
-    skip: (_request: Request, entry: RouteEntry | undefined) =>
-      publicCorpusClassOf(entry) !== routeClass,
+    skip: (request: Request, entry: RouteEntry | undefined) =>
+      publicCorpusClassOf(entry, new URL(request.url)) !== routeClass,
   } as const satisfies RateLimitOptions;
 };
 

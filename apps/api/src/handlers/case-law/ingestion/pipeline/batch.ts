@@ -2,10 +2,6 @@ import { panic, Result } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
-import {
-  INGESTION_STOP_KIND,
-  type IngestionStopKind,
-} from "@stll/legal-atlas/ingestion-cycle";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
@@ -41,7 +37,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ConcurrentModificationError,
-  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -56,12 +51,6 @@ import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { pgErrorFields } from "@/api/lib/pg-error";
-
-/**
- * Consecutive rejected decisions after which a batch stops: past this many,
- * the source is more likely broken than any one record.
- */
-export const MAX_CONSECUTIVE_FAILURES = 10;
 
 /** How many unsettled records an apply error names. */
 const MAX_REPORTED_RECORDS = 20;
@@ -228,12 +217,6 @@ export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
   | { type: "insert-limit" }
-  | {
-      type: "failure-streak";
-      tag: string;
-      message: string;
-      stopKind: IngestionStopKind;
-    }
   | { type: "aborted" };
 
 /**
@@ -252,8 +235,6 @@ type DecisionBatchApplication = {
   searchVectorFailures: number;
   /** Raw and corpus writes that did not land, pack flush included. */
   corpusWriteFailures: number;
-  /** Consecutive rejected decisions at the batch's end. */
-  failureStreak: number;
   halt: DecisionBatchHalt | null;
   failureLedger: FailureLedgerWrite;
   /** One per reached record, in batch order. */
@@ -265,7 +246,6 @@ type BatchTally = {
   skipped: number;
   searchVectorFailures: number;
   corpusWriteFailures: number;
-  failureStreak: number;
   settlements: RecordSettlement[];
   failures: IngestionFailureRow[];
   /** The records whose failure rows are in `failures`. */
@@ -288,7 +268,6 @@ const settleDecision = (
   } else {
     tally.skipped++;
   }
-  tally.failureStreak = 0;
   switch (outcome.status) {
     case PROCESS_DECISION_STATUS.COMPLETE:
       if (outcome.searchVectorFailed) {
@@ -344,7 +323,6 @@ const rejectDecision = ({
   sourceId,
   context: { adapterKey, cursor },
 }: RejectDecisionOptions): DecisionBatchHalt | null => {
-  tally.failureStreak++;
   const tag = errorTag(error);
   const message = error instanceof Error ? error.message : String(error);
 
@@ -360,7 +338,6 @@ const rejectDecision = ({
       // "error.detail" so the SQL/HTTP/SDK reason reaches
       // CloudWatch. Case-law data is public, no PII concern.
       "error.detail": wrappedErrorDetail(error),
-      consecutiveFailures: tally.failureStreak,
     }),
   );
   captureError(error, {
@@ -397,14 +374,7 @@ const rejectDecision = ({
         : CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
 
-  return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? {
-        type: "failure-streak",
-        tag,
-        message,
-        stopKind: ingestionStopKindOf(error),
-      }
-    : null;
+  return null;
 };
 
 type RejectSourceRecordOptions = {
@@ -419,7 +389,6 @@ const rejectSourceRecord = ({
   record,
   sourceId,
 }: RejectSourceRecordOptions): DecisionBatchHalt | null => {
-  tally.failureStreak++;
   tally.ledgerIndexes.push(tally.settlements.length);
   tally.failures.push({
     sourceId,
@@ -437,14 +406,7 @@ const rejectSourceRecord = ({
     type: "unsettled",
     reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
-  return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? {
-        type: "failure-streak",
-        tag: record.reason,
-        message: record.message,
-        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
-      }
-    : null;
+  return null;
 };
 
 type SettlePackOptions = {
@@ -533,8 +495,6 @@ type ApplyDecisionBatchOptions = {
   corpus: CaseLawCorpusDependencies;
   polarityRules: RuleCache;
   context: BatchLogContext;
-  /** Consecutive rejected decisions carried in from earlier batches. */
-  failureStreak: number;
   /** Rows this batch may write before it stops, where the caller caps them. */
   insertLimit?: number | undefined;
   signal?: AbortSignal | undefined;
@@ -558,7 +518,6 @@ export const applyDecisionBatch = async (
     corpus,
     polarityRules,
     context,
-    failureStreak,
     insertLimit,
     signal,
   }: ApplyDecisionBatchOptions,
@@ -571,7 +530,6 @@ export const applyDecisionBatch = async (
     skipped: 0,
     searchVectorFailures: 0,
     corpusWriteFailures: 0,
-    failureStreak,
     settlements: [],
     failures: [],
     ledgerIndexes: [],
@@ -683,7 +641,6 @@ export const applyDecisionBatch = async (
     skipped: tally.skipped,
     searchVectorFailures: tally.searchVectorFailures,
     corpusWriteFailures: tally.corpusWriteFailures,
-    failureStreak: tally.failureStreak,
     halt,
     failureLedger,
     settlements: tally.settlements,
@@ -749,7 +706,6 @@ const underSourceLease = async <T>(
 /** A stop that no reached record's own settlement accounts for. */
 const stopFailure = (
   stop: DecisionBatchHalt | null,
-  unreached: number,
 ): CaseLawBatchFailureReason | null => {
   if (stop === null) {
     return null;
@@ -759,10 +715,6 @@ const stopFailure = (
     case "timeout":
       // The record that stopped the batch carries the reason.
       return null;
-    case "failure-streak":
-      // A rejection explains the records it reached, never the ones it did
-      // not: those were never attempted.
-      return unreached > 0 ? CASE_LAW_BATCH_FAILURE.FAILURE_STREAK : null;
     case "aborted":
       return CASE_LAW_BATCH_FAILURE.ABORTED;
     case "insert-limit":
@@ -797,7 +749,7 @@ const batchFailure = (
     unsettled.find(({ reason }) => matches(reason))?.reason ?? null;
   const reason =
     reasonWhere((found) => found === CASE_LAW_BATCH_FAILURE.FAILURE_WRITE) ??
-    stopFailure(halt, records.length - settlements.length) ??
+    stopFailure(halt) ??
     reasonWhere((found) => found !== CASE_LAW_BATCH_FAILURE.RECORD_REJECTED) ??
     unsettled.at(0)?.reason ??
     null;
@@ -930,7 +882,6 @@ export const applyCaseLawIngestionBatch = async ({
     corpus,
     polarityRules: new Map(),
     context: { adapterKey: source.adapterKey, cursor: null },
-    failureStreak: 0,
     signal,
   });
   const failure = batchFailure(batchRecords, application);

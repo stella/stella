@@ -2,11 +2,16 @@ import { sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { statuteSitemapShards } from "@/api/db/schema";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { statuteWorksQuery } from "@/api/lib/legal-search/statute-sitemap-shard-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
 type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
+
+type RefreshOptions = {
+  signal?: AbortSignal;
+};
 
 // Leave room for Works added between hourly refreshes. A live shard read
 // still refuses to serve more than the URL limit.
@@ -15,8 +20,12 @@ export const STATUTE_SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
 );
 
 /** Replace the public index atomically from the same Work grouping as shard reads. */
-export const refreshStatuteSitemapShards = async (db: RefreshDb) =>
-  await db.transaction(async (tx) => {
+export const refreshStatuteSitemapShards = async (
+  db: RefreshDb,
+  { signal }: RefreshOptions = {},
+) =>
+  await withAggregateTransaction(db, async (tx) => {
+    signal?.throwIfAborted();
     await tx.delete(statuteSitemapShards).where(sql`true`);
     await tx.execute(sql`
       WITH works AS ${statuteWorksQuery(tx, [])},
@@ -41,6 +50,7 @@ export const refreshStatuteSitemapShards = async (db: RefreshDb) =>
       INNER JOIN countries ON countries.country = buckets.country
       WHERE countries.total > ${STATUTE_SITEMAP_SHARD_SPLIT_THRESHOLD}
     `);
+    signal?.throwIfAborted();
 
     const [summary] = await tx
       .select({
@@ -58,5 +68,6 @@ export const refreshStatuteSitemapShards = async (db: RefreshDb) =>
     ) {
       logger.error("legislation.sitemap.shard_refresh_over_capacity", outcome);
     }
+    signal?.throwIfAborted();
     return outcome;
   });

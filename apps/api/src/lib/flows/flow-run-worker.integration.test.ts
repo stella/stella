@@ -273,6 +273,7 @@ const SENTINEL_FOREIGN_TEXT = "foreign exception text must not be persisted";
 describe("flow run worker pipeline (ai -> review-gate -> create-document)", () => {
   let organizationId: SafeId<"organization">;
   let userId: SafeId<"user">;
+  let backupOwnerUserId: SafeId<"user">;
   let workspaceId: SafeId<"workspace">;
   let fake: FakeS3;
 
@@ -280,6 +281,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     fake = startFakeS3();
     organizationId = mintAuthProviderId<"organization">();
     userId = mintAuthProviderId<"user">();
+    backupOwnerUserId = mintAuthProviderId<"user">();
     workspaceId = createSafeId<"workspace">();
     const propertyId = createSafeId<"property">();
 
@@ -293,18 +295,34 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       organizationId,
       now: new Date(),
     });
-    await testDb.insert(user).values({
-      id: userId,
-      name: "Flow Worker Test User",
-      email: `${userId}@example.com`,
-    });
-    await testDb.insert(member).values({
-      id: Bun.randomUUIDv7(),
-      organizationId,
-      userId,
-      role: "owner",
-      createdAt: new Date(),
-    });
+    await testDb.insert(user).values([
+      {
+        id: userId,
+        name: "Flow Worker Test User",
+        email: `${userId}@example.com`,
+      },
+      {
+        id: backupOwnerUserId,
+        name: "Flow Worker Backup Owner",
+        email: `${backupOwnerUserId}@example.com`,
+      },
+    ]);
+    await testDb.insert(member).values([
+      {
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        userId,
+        role: "owner",
+        createdAt: new Date(),
+      },
+      {
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        userId: backupOwnerUserId,
+        role: "owner",
+        createdAt: new Date(),
+      },
+    ]);
     await testDb.insert(workspaces).values({
       id: workspaceId,
       organizationId,
@@ -2211,6 +2229,110 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
     expect(broadcasts).toEqual([workspaceId]);
   });
+
+  test.each(["role", "matter"] as const)(
+    "refuses a queued step after its %s authority is revoked",
+    async (revocation) => {
+      const definitionId = createSafeId<"flowDefinition">();
+      await testDb.insert(flowDefinitions).values({
+        id: definitionId,
+        organizationId,
+        name: "Revoked authority flow",
+        steps: [AI_STEP],
+        trigger: MANUAL_TRIGGER,
+        enabled: true,
+        createdByUserId: userId,
+      });
+      const safeDb = asTestRaw<SafeDb>(
+        createSafeDb(testDb, [workspaceId], organizationId, userId),
+      );
+      const started = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
+        safeDb,
+        organizationId,
+        workspaceId,
+        definitionId,
+        triggerSource: { type: "manual", userId },
+        inputEntityIds: [],
+        enqueueStep: enqueueFlowStepMock,
+      });
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const job = enqueuedSteps.pop();
+      expect(job).toEqual({ runId: started.value.runId, stepIndex: 0 });
+      if (job === undefined) {
+        throw new Error("expected the run's first step to be enqueued");
+      }
+
+      if (revocation === "role") {
+        await testDb
+          .update(member)
+          .set({ role: "external" })
+          .where(
+            and(
+              eq(member.organizationId, organizationId),
+              eq(member.userId, userId),
+            ),
+          );
+      } else {
+        await testDb
+          .update(workspaces)
+          .set({ status: "archived" })
+          .where(eq(workspaces.id, workspaceId));
+      }
+
+      let stepError: unknown;
+      try {
+        stepError = await executeFlowStepWithTestModel(
+          job,
+          new AbortController().signal,
+        ).then(
+          () => null,
+          (error: unknown) => error,
+        );
+      } finally {
+        if (revocation === "role") {
+          await testDb
+            .update(member)
+            .set({ role: "owner" })
+            .where(
+              and(
+                eq(member.organizationId, organizationId),
+                eq(member.userId, userId),
+              ),
+            );
+        } else {
+          await testDb
+            .update(workspaces)
+            .set({ status: "active" })
+            .where(eq(workspaces.id, workspaceId));
+        }
+      }
+
+      expect(stepError).toBeInstanceOf(FlowStepError);
+      expect(generateTanStackTextForTaskMock).not.toHaveBeenCalled();
+      expect(
+        await testDb.query.flowRunSteps.findFirst({
+          where: {
+            runId: { eq: toSafeId<"flowRun">(job.runId) },
+            index: { eq: 0 },
+          },
+          columns: { status: true },
+        }),
+      ).toEqual({ status: "pending" });
+    },
+  );
 
   test.each([
     ["Panic", new Panic({ message: SENTINEL_FOREIGN_TEXT })],

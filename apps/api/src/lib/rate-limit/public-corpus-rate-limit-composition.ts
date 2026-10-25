@@ -36,7 +36,7 @@ export const createPublicCorpusRateLimitComposition = ({
     // A route with a dedicated budget, or a public corpus class with its own
     // buckets, is charged there instead.
     skip: async (request, entry) => {
-      const routeClass = publicCorpusClassOf(entry);
+      const routeClass = publicCorpusClassOf(entry, new URL(request.url));
       return (
         routeClass === "search" ||
         routeClass === "aggregate" ||

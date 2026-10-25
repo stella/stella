@@ -2846,6 +2846,70 @@ export const lockTimerMatterAccessRows = async ({
   }
 };
 
+type WorkspaceCapacityAggregate = "billingCodeCapacity" | "expenseCapacity";
+
+const lockWorkspaceCapacity = async (
+  tx: ExecuteTransaction,
+  aggregate: WorkspaceCapacityAggregate,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  const result = await withAggregateLock({
+    aggregate,
+    id: { workspaceId },
+    tx,
+  });
+  if (result.status !== "locked") {
+    panic("Blocking workspace capacity lock was not acquired");
+  }
+};
+
+/** Serialize the bounded billing-code count and insert for one matter. */
+export const lockBillingCodeCapacity = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> =>
+  await lockWorkspaceCapacity(tx, "billingCodeCapacity", workspaceId);
+
+/** Serialize the bounded expense count and insert for one matter. */
+export const lockExpenseCapacity = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> =>
+  await lockWorkspaceCapacity(tx, "expenseCapacity", workspaceId);
+
+/**
+ * Preserve the legacy one-key fence during rolling deploys, then register the
+ * rate-table lock in the shared aggregate order for all current callers.
+ */
+export const lockRateTableWorkspace = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  const result = await withAggregateLock({
+    aggregate: "rateTableWorkspace",
+    id: { workspaceId },
+    tx,
+  });
+  if (result.status !== "locked") {
+    panic("Blocking rate-table lock was not acquired");
+  }
+};
+
+/**
+ * Builds before the matter rate-table lock serialize rate-entry windows on
+ * this one-key lock alone, so every rate-entry writer takes it after the
+ * matter lock and overlap checks from either build exclude each other during
+ * a rolling deploy. Retire it once no running API build predates the matter
+ * rate-table lock.
+ */
+export const lockLegacyRateEntryTable = async (
+  tx: ExecuteTransaction,
+  rateTableId: SafeId<"rateTable">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${rateTableId}))`);
+};
+
 /**
  * The one-key organization object-intent lock that builds before the
  * registered fence take alone. Holders of the registered fence take it next,

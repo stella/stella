@@ -9,6 +9,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 
+import {
+  lockLegacyRateEntryTable,
+  lockRateTableWorkspace,
+} from "../rate-table-lock";
+
 const deleteRateEntryBodySchema = v.object({
   id: resourceIdSchema("rateEntry"),
 });
@@ -48,6 +53,8 @@ const deleteRateEntry = createSafeHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockRateTableWorkspace(tx, workspaceId);
+        await lockLegacyRateEntryTable(tx, params.rateTableId);
         await tx
           .delete(rateEntries)
           .where(

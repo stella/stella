@@ -157,6 +157,7 @@ describe("every publisher request goes through the gate", () => {
       expect(await sourceOf(entry)).toMatch(
         /createPublisherSlot|reservePublisherSlot|reservePublisherGateSlot|createPublisherRequestSlot|createPublisherGateSlot/u,
       );
+      expect(await sourceOf(entry)).toContain("limitPublisherResponse");
     }
   });
 

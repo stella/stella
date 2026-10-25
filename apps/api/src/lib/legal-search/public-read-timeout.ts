@@ -15,10 +15,10 @@ export const runPublicReadRequest = <T>(
   { request, route }: { request: Request; route: string },
   fn: () => T,
 ): T => {
-  const routeClass = publicCorpusClassOf({
-    method: request.method,
-    path: route,
-  });
+  const routeClass = publicCorpusClassOf(
+    { method: request.method, path: route },
+    new URL(request.url),
+  );
   if (routeClass === undefined) {
     return fn();
   }

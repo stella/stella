@@ -29,6 +29,7 @@ import {
 } from "@/api/tests/helpers/handler-context";
 
 import createRateTable from "./create";
+import deleteRateTable from "./delete";
 import updateRateTable from "./update";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -302,6 +303,23 @@ if (!databaseUrl || !runPostgres) {
             auditLogs,
             eq(auditLogs.workspaceId, workspaceId),
           );
+        type DeleteContext = Parameters<typeof deleteRateTable.handler>[0];
+        const remove = async (
+          safeDb: typeof firstSafe,
+          id: typeof firstTable.id,
+          recordAuditEvent: AuditRecorder,
+        ) =>
+          await deleteRateTable.handler(
+            createTestHandlerContext<DeleteContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb,
+              audit: recordAuditEvent,
+              body: { id },
+            }),
+          );
         const refusal = {
           code: 400,
           response: {
@@ -344,6 +362,30 @@ if (!databaseUrl || !runPostgres) {
         expect(pairedRemoval.second).toMatchObject(refusal);
         expect(await defaultIds()).toEqual([secondTable.id]);
         expect(await auditCount()).toBe(beforePairedRemoval + 1);
+
+        const beforePromoteDelete = await auditCount();
+        const promoteDelete = await compete(
+          async (gatedRecord) =>
+            await setDefault(firstSafe, firstTable.id, true, gatedRecord),
+          async () => await remove(secondSafe, firstTable.id, record),
+        );
+        expect(promoteDelete.first).toEqual({ id: firstTable.id });
+        expect(promoteDelete.second).toEqual({
+          code: 400,
+          response: {
+            message:
+              "Cannot delete the default rate table. " +
+              "Set another table as default first.",
+          },
+        });
+        expect(await defaultIds()).toEqual([firstTable.id]);
+        expect(
+          await firstDb.$count(
+            rateTables,
+            eq(rateTables.workspaceId, workspaceId),
+          ),
+        ).toBe(2);
+        expect(await auditCount()).toBe(beforePromoteDelete + 2);
       } finally {
         await firstDb
           .delete(organization)

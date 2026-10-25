@@ -226,7 +226,20 @@ const fixture = (count = 3) => {
   });
   const query = {
     from: () => query,
-    where: () => query,
+    innerJoin: (_table: unknown, condition: SQL) => {
+      const statement = new PgDialect().sqlToQuery(condition);
+      expect(statement.sql).toContain(
+        '"infosoud_tracked_cases"."workspace_id"',
+      );
+      expect(statement.sql).toContain('"workspaces"."id"');
+      return query;
+    },
+    where: (condition: SQL) => {
+      const statement = new PgDialect().sqlToQuery(condition);
+      expect(statement.sql).toContain('"workspaces"."status"');
+      expect(statement.params).toContain("active");
+      return query;
+    },
     orderBy: () => query,
     limit: async () => pages.shift() ?? [],
   };

@@ -57,8 +57,6 @@ await runScriptWithErrorOutput(async () => {
           return `Rebuilt decision ${holder.judgmentId} without the erased supplement.`;
         case "withheld":
           return `Withheld decision ${holder.judgmentId} until it is rebuilt without the erased supplement (${holder.reason}); the repair lane or a rerun rebuilds it.`;
-        case "withhold-incomplete":
-          return `Decision ${holder.judgmentId} still holds the erased supplement in a corpus object; run this again.`;
         default: {
           holder satisfies never;
           return panic(`Unhandled holder outcome: ${String(holder)}`);
@@ -66,11 +64,7 @@ await runScriptWithErrorOutput(async () => {
       }
     });
     return {
-      exitCode: redaction.value.holders.some(
-        (holder) => holder.type === "withhold-incomplete",
-      )
-        ? 1
-        : 0,
+      exitCode: 0,
       lines,
     };
   };

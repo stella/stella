@@ -77,7 +77,10 @@ export const publicCorpusConcurrencyLimit = ({
     if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
       return await inner();
     }
-    const routeClass = publicCorpusClassOf(ctx.routeEntry);
+    const routeClass = publicCorpusClassOf(
+      ctx.routeEntry,
+      new URL(ctx.request.url),
+    );
     if (routeClass === undefined || routeClass === "browse") {
       return await inner();
     }
