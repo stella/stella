@@ -364,7 +364,7 @@ const baseCancellationSource = new Bun.Transpiler({
 const baseCancellation = v.parse(
   v.object({ CANONICAL_CANCEL_STEP: v.record(v.string(), v.unknown()) }),
   await import(
-    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
+    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toBase64()}`
   ),
 ).CANONICAL_CANCEL_STEP;
 const readBaseCheckPool: ReadCheckPool = (pool) =>

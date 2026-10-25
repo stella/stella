@@ -1576,7 +1576,7 @@ const handleFillTemplateTool: McpToolHandler<
           ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
           : filled.text,
         truncated,
-        docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
+        docxBase64: Buffer.from(filled.file.bytes).toBase64(),
         unmatchedPlaceholders: filled.unmatchedPlaceholders,
         unusedValues: filled.unusedValues,
         clauseWarnings: filled.clauseWarnings,
