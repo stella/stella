@@ -51,7 +51,7 @@ type ToastOptions = Omit<
   ToastManagerAddOptions<ToastData>,
   "actionProps" | "title" | "type"
 > & {
-  action?: ToastAction;
+  action?: ToastAction | undefined;
   actionProps?: ToastActionProps;
 };
 
@@ -606,7 +606,8 @@ function getDefaultToastTimeout({
 }: Pick<
   ToastManagerAddOptions<ToastData>,
   "title" | "description" | "type" | "actionProps"
-> & { action?: ToastAction }) {
+> &
+  Pick<ToastOptions, "action">) {
   if (type === "loading") {
     return 0;
   }
