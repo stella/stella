@@ -35,6 +35,10 @@ export type BackgroundReplayBatch = {
   decisionId: SafeId<"caseLawDecision">;
   parserVersionFrom: number | null;
   targetParserVersion: number;
+  /** Captured immutable input; null is an unknown legacy reservation. */
+  sourceRawS3Key: string | null;
+  /** Persisted readmission epoch captured by the reservation owner. */
+  claimReadmission: number;
 };
 
 export type BackgroundReplayReservation =

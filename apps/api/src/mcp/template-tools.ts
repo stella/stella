@@ -703,17 +703,12 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   description:
-    "Configure an existing template's fields: who fills each one, its input " +
-    "control, options and validation. The configuration lives in the " +
-    "document, so this rewrites what carries each field (its markers at " +
-    "every occurrence, the {% if %} tags a rule replaces, the keyed markers " +
-    "that render a registry hit) and publishes the result. Pass " +
-    "template_id and one entry per field path; every path must be one the " +
-    "document already carries, and a " +
-    "property you leave out keeps what the marker says. Read " +
-    `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full ` +
-    "field configuration afterwards, plus the entries that could not be " +
-    "applied.",
+    "Configure an existing template's field owner, input control, options and " +
+    "validation. This rewrites its field markers and affected {% if %} or " +
+    "registry markers, then publishes the result. Pass template_id and entries " +
+    "for existing field paths; omitted properties keep their marker settings. " +
+    `Read ${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the full configuration ` +
+    "and entries that could not be applied.",
   inputSchema: configureTemplateFieldsArgsSchema,
   inputNormalization: {
     "fields[].date_format": {

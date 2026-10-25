@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { settleCaseLawCorpusMirrorTx } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { withSourceRawRetry } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
+import { recordParsedGenerationTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { processResultForCorpusOutcome } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -116,6 +117,7 @@ export const enqueueCorpusMirror = async ({
                   subject: { family: "case_law", entityId: decisionId },
                 });
               }
+              await recordParsedGenerationTx(tx, { write, phase: "mirror" });
               return { type: "applied" };
             },
             decisionId,

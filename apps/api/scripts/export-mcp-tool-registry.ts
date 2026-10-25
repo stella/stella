@@ -28,6 +28,7 @@ import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { connectToolWeights } from "@/api/mcp/connect-tool-weights";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -134,6 +135,16 @@ await Bun.write(snapshotPath, `${JSON.stringify(listings, null, 2)}\n`);
 process.stderr.write(
   `Wrote ${listings.length} tool listings to ${snapshotPath.pathname}\n`,
 );
+
+const connectWeightPath = new URL(
+  "../mcp-connect-tool-weights.json",
+  import.meta.url,
+);
+await Bun.write(
+  connectWeightPath,
+  `${JSON.stringify(connectToolWeights(listings), null, 2)}\n`,
+);
+process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
 
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
