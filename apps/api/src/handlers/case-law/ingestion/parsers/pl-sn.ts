@@ -202,6 +202,11 @@ const isRunningHeader = (
 };
 
 const PAGE_MARGIN_RATIO = 0.06;
+/**
+ * How far down the page a running header may sit. The Supreme Court prints it
+ * about 6% down and starts the body near 12%; a tenth keeps the two apart.
+ */
+const RUNNING_HEADER_ZONE_RATIO = 0.1;
 const FOOTNOTE_ZONE_RATIO = 0.25;
 const SMALL_TYPE_RATIO = 0.86;
 
@@ -398,6 +403,13 @@ const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
 /** A list point's own number or bullet: `2.`, `IV.`, `a)`, `–`. */
 const LIST_MARKER = /^(?:(?:\d{1,3}|[IVXLC]{1,6}|\p{Ll})[.)]|[-–•])\s/u;
 
+/** A point numbered in a way no wrapped sentence starts: `2.`, `2)`, `a)`. */
+const NUMBERED_POINT = /^(?:\d{1,3}[.)]|\p{Ll}\))\s/u;
+
+/** A line ending on a unit a number follows: `art.`, `ust.`, `pkt`, `§`, `nr`. */
+const TAKES_A_NUMBER =
+  /(?:(?:^|\s)(?:art|ust|pkt|lit|poz|nr|zd|par|rozdz|tom|str|s|k)\.?|§)$/iu;
+
 /** A line ending a sentence or a list point, closing quotes included. */
 const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
 /** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
@@ -439,8 +451,7 @@ const ranOutOfRoom = (
  * deeper than that line, or when that line is a list point's first line
  * set with a hanging indent. A short line above ended its paragraph, which
  * is what keeps two one-line points of an operative part apart. A list
- * point that starts at the margin opens a paragraph after a short line,
- * though nothing indents it.
+ * point opens a paragraph wherever it starts, though nothing indents it.
  */
 const opensBlockParagraph = (
   previous: ExtractedLine | undefined,
@@ -450,6 +461,16 @@ const opensBlockParagraph = (
 ): boolean => {
   if (previous === undefined || previous.text.length === 0) {
     return indented;
+  }
+  // A numbered point opens its own paragraph however full the line above
+  // ran, unless that line ended on a word the number belongs to (`art.`).
+  // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
+  // sentences, so only the full-line test reads those.
+  if (
+    NUMBERED_POINT.test(line.text.trimStart()) &&
+    !TAKES_A_NUMBER.test(previous.text.trimEnd())
+  ) {
+    return true;
   }
   const full = ranOutOfRoom(previous, line, rightEdge);
   if (!indented) {
@@ -858,9 +879,12 @@ const liftSuperscripts = (
       smallType(base) ||
       raised.bbox.y <= base.bbox.y ||
       raised.bbox.y - base.bbox.y >= bodySize ||
+      // An index after the line's last word starts past its box; one body
+      // size of room keeps `art. 398⁹` at a line's end over its line.
       characters.some(
         ({ bbox }) =>
-          bbox.x < base.bbox.x || bbox.x > base.bbox.x + base.bbox.width,
+          bbox.x < base.bbox.x ||
+          bbox.x > base.bbox.x + base.bbox.width + bodySize,
       )
     ) {
       return undefined;
@@ -912,10 +936,10 @@ export const extractPlSnLines = async (
   options: ExtractPlSnLinesOptions = {},
 ): Promise<PlSnLine[]> => {
   const pdf = await PDF.load(pdfBytes);
-  const textPages = pdf.getPages().map((page) => page.extractText().lines);
+  const textPages = pdf.getPages().map((page) => page.extractText());
   const { supremeCourt } = options;
   if (supremeCourt === undefined) {
-    return textPages.flatMap((lines) =>
+    return textPages.flatMap(({ lines }) =>
       readPage(
         lines.map((line) => extractedLineOf(line)),
         paragraphStart,
@@ -923,15 +947,28 @@ export const extractPlSnLines = async (
     );
   }
 
-  const bodySize = bodyFontSizeOf(textPages.flat());
-  const pages = textPages.map((lines) => liftSuperscripts(lines, bodySize));
-  const bodyPages = pages.map((lines, pageIndex) => {
-    const first = lines.findIndex(({ text }) => text.length > 0);
-    const start =
+  const bodySize = bodyFontSizeOf(textPages.flatMap(({ lines }) => lines));
+  const pages = textPages.map(({ height, lines }, pageIndex) => {
+    const first = lines.findIndex(({ text }) => text.trim().length > 0);
+    const header = lines[first];
+    // A header is the page's first line, printed in its top margin: the same
+    // number opening the body further down is text.
+    return liftSuperscripts(
       pageIndex > 0 &&
-      isRunningHeader(lines[first]?.text, supremeCourt.docket, pageIndex + 1)
-        ? lines.findIndex(({ text }, index) => index > first && text.length > 0)
-        : first;
+        header !== undefined &&
+        height - header.bbox.y <= height * RUNNING_HEADER_ZONE_RATIO &&
+        isRunningHeader(
+          normalizeSpanText(header.text),
+          supremeCourt.docket,
+          pageIndex + 1,
+        )
+        ? lines.toSpliced(first, 1)
+        : lines,
+      bodySize,
+    );
+  });
+  const bodyPages = pages.map((lines) => {
+    const start = lines.findIndex(({ text }) => text.length > 0);
     const end = lines.findLastIndex(({ text }) => text.length > 0);
     return start === -1
       ? []
