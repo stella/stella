@@ -52,7 +52,7 @@ test.each([
       status: 400,
       value: { message: "Selection does not match the decision paragraph" },
     }),
-    expected: messages.errors.api.badRequest,
+    expected: messages.errors.actionFailed,
   },
   {
     name: "5xx",
