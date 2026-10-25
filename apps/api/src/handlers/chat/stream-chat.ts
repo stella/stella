@@ -233,6 +233,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1224,11 +1225,14 @@ export const recordChatAttemptFinish = ({
   state.emptyCompletion = new ChatEmptyCompletionError({
     message: CHAT_EMPTY_COMPLETION_MESSAGE,
   });
-  captureAttemptError(state.emptyCompletion, {
-    modelId: modelInfo.modelId,
-    provider: modelInfo.provider,
-    threadId,
-  });
+  captureAttemptError(
+    state.emptyCompletion,
+    handlerErrorContext("recordChatAttemptFinish.state_emptyCompletion", {
+      modelId: modelInfo.modelId,
+      provider: modelInfo.provider,
+      threadId,
+    }),
+  );
 };
 
 const chatAttemptTerminalError = (
@@ -1367,10 +1371,13 @@ const resolveFallbackTextModel = async ({
     }
     return fallbackModel;
   } catch (error) {
-    captureError(error, {
-      feature: "chat.stream_fallback_resolution",
-      threadId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("chat.resolveFallbackTextModel", {
+        feature: "chat.stream_fallback_resolution",
+        threadId,
+      }),
+    );
     return null;
   }
 };
@@ -1617,10 +1624,13 @@ const runChatAttempts = async function* ({
   }
 };
 
+type ChatCompactionFeature =
+  "chat.step_compaction" | "chat.step_compaction_fallback";
+
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
-  compactionFeature: string;
+  compactionFeature: ChatCompactionFeature;
   /** A step's compaction left earlier history out of the request. */
   onHistoryTrimmed: (notice: ChatContextNotice) => void;
   /** Budget lane this turn's consumption settles against. */
@@ -1918,7 +1928,7 @@ type ChatRuntimeMiddlewareProps = {
   baseSystem: GuardedSystemPrompt;
   caching: CachingDecision;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
-  compactionFeature: string;
+  compactionFeature: ChatCompactionFeature;
   onHistoryTrimmed: (notice: ChatContextNotice) => void;
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
@@ -2023,12 +2033,15 @@ const createChatRuntimeMiddleware = ({
         task,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
-          captureError(error, {
-            feature: compactionFeature,
-            modelId: model.modelId,
-            provider: model.provider,
-            threadId,
-          });
+          captureError(
+            error,
+            handlerErrorContext(`chat.compactedMessages.${compactionFeature}`, {
+              feature: compactionFeature,
+              modelId: model.modelId,
+              provider: model.provider,
+              threadId,
+            }),
+          );
         },
       });
       if (Result.isError(compactedMessages)) {
@@ -2153,16 +2166,26 @@ export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // service raised for a configuration state the caller can act on; only an
 // unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
+type ReportStreamFailureOptions = {
+  scope: Parameters<typeof captureError>[1]["scope"];
+  kind: AIErrorKind;
+  fingerprintKey: `chat.${string}`;
+  providerMessage?: string | undefined;
+};
+
 const reportStreamFailure = (
   error: unknown,
-  kind: AIErrorKind,
-  providerMessage?: string,
+  { kind, scope, fingerprintKey, providerMessage }: ReportStreamFailureOptions,
 ): void => {
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
   classifyRejectedProviderRequest(error, kind);
-  captureError(error, { kind });
+  captureError(error, {
+    fingerprintKey: `${fingerprintKey}.${kind}`,
+    scope,
+    context: { kind },
+  });
   logger.error(
     "chat.stream_failed",
     sanitizeErrorAttributesForOutput({
@@ -2182,7 +2205,12 @@ const reportStreamFailure = (
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(error, kind, chunk.message);
+  reportStreamFailure(error, {
+    scope: { type: "handler", handlerId: "chat.runErrorChunk" },
+    kind,
+    fingerprintKey: "chat.runErrorChunk",
+    providerMessage: chunk.message,
+  });
   const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
     type: EventType.RUN_ERROR,
@@ -3179,6 +3207,37 @@ const createClientAssistantOwner = (responseMessageId: string) => {
   };
 };
 
+const finalizeCompletedSource = (
+  processor: ChatStreamProcessor,
+  finishedChunks: readonly PublicStreamChunk[],
+): void => {
+  for (const chunk of finishedChunks) {
+    processor.processChunk(chunk);
+  }
+  // The source is drained, so the turn is over. A finish that reports
+  // `tool_calls` leaves the processor waiting for the next iteration of the
+  // agent loop, and an iteration that never comes would leave the assistant
+  // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
+  // an approval is waiting on would read as an empty completion. Finalizing
+  // is what ends the message; it is the same call the SDK makes when it
+  // drives the stream itself, and repeating it later is a no-op.
+  processor.finalizeStream();
+};
+
+const reportCancelledStreamFailure = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  // Run control cancellation is expected; retain other upstream failures
+  // that arrive during cancellation.
+  if (AIGenerationCancelledError.is(error)) {
+    return;
+  }
+  captureError(
+    error,
+    handlerErrorContext(`chat.processServerChatStream.${kind}`, { kind }),
+  );
+};
 /** The approved client calls a resumed message holds. Their input completed
  *  in the run that asked for approval; the resumed run hands them to the
  *  client without streaming that input again. */
@@ -3340,17 +3399,7 @@ export const processServerChatStream = async function* ({
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
-    for (const chunk of finalRunFinishedChunks) {
-      processor.processChunk(chunk);
-    }
-    // The source is drained, so the turn is over. A finish that reports
-    // `tool_calls` leaves the processor waiting for the next iteration of the
-    // agent loop, and an iteration that never comes would leave the assistant
-    // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
-    // an approval is waiting on would read as an empty completion. Finalizing
-    // is what ends the message; it is the same call the SDK makes when it
-    // drives the stream itself, and repeating it later is a no-op.
-    processor.finalizeStream();
+    finalizeCompletedSource(processor, finalRunFinishedChunks);
     const outcome = drainedRunOutcome({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
@@ -3376,18 +3425,18 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // Run control cancellation is an expected exit. Keep telemetry for
-      // other upstream failures that arrive during cancellation.
-      if (!AIGenerationCancelledError.is(error)) {
-        captureError(error, { kind });
-      }
+      reportCancelledStreamFailure(error, kind);
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),
       });
       return;
     }
-    reportStreamFailure(error, kind);
+    reportStreamFailure(error, {
+      scope: { type: "handler", handlerId: "chat.streamRun" },
+      kind,
+      fingerprintKey: "chat.streamRun",
+    });
     await terminalize({
       flushProcessor: true,
       outcome: { type: "failed", error: kind },
@@ -3515,7 +3564,12 @@ const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {
   try {
     processor.finalizeStream();
   } catch (error) {
-    captureError(error, { kind: "aborted_stream_finish_failed" });
+    captureError(
+      error,
+      handlerErrorContext("chat.finalizeResponseProcessor", {
+        kind: "aborted_stream_finish_failed",
+      }),
+    );
   }
 };
 

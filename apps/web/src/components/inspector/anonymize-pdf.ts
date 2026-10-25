@@ -101,13 +101,13 @@ export const useFileAnonymizationPipeline = ({
     enabled,
   });
   const vocabularyQueryView = useQueryView(vocabularyQuery);
-  useQueryViewError(vocabularyQueryView);
+  useQueryViewError(vocabularyQueryView, "useFileAnonymizationPipeline:query");
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled,
   });
   const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  useQueryViewError(allowlistQueryView, "useFileAnonymizationPipeline:query-2");
   useQuery({
     enabled:
       enabled &&
@@ -122,7 +122,13 @@ export const useFileAnonymizationPipeline = ({
         queryClient,
       });
       if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
+        getAnalytics().captureError(result.error, {
+          fingerprintKey: "useFileAnonymizationPipeline.queryFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useFileAnonymizationPipeline.queryFn:failure",
+          },
+        });
       }
       readQueryResult(result);
       return "complete" as const;

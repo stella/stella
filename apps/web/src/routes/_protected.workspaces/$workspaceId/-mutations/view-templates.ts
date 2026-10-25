@@ -43,7 +43,10 @@ export const useCreateViewTemplate = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateViewTemplate:failure",
+        scope: { type: "handler", handlerId: "useCreateViewTemplate:failure" },
+      });
     },
   });
 };
@@ -83,7 +86,10 @@ export const useDeleteViewTemplate = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteViewTemplate:failure",
+        scope: { type: "handler", handlerId: "useDeleteViewTemplate:failure" },
+      });
     },
   });
 };

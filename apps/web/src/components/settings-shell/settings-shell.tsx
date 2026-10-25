@@ -26,7 +26,7 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 const NAV_ITEM_CLASS = cn(
   "hover:bg-sidebar-accent/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden",
@@ -47,6 +47,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
   const timeBilling = useTimeBillingPreviewEnabled();
   const roleQuery = useQuery(roleOptions);
   const roleView = useQueryView(roleQuery);
+  useQueryViewError(roleView, "SettingsShell.role:query");
   const role =
     roleView.type === "items" && roleView.refetchError === undefined
       ? roleView.items
