@@ -37,7 +37,7 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",

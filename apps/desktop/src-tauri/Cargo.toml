@@ -110,6 +110,7 @@ image = { version = "0.25", default-features = false, features = [
   "webp",
 ] }
 keyring-core = "1"
+minisign-verify = "0.3"
 opener = "0.9"
 notify = "8"
 ring = "0.17"

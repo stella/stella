@@ -50,7 +50,6 @@ const REVIEW_PENDING = new Set([
   "release-pr.yml#version",
   "release-tag.yml#marketing-freshness",
   "release.yml#dispatch-release-health",
-  "release.yml#promote",
   "user-journeys.yml#local-stack",
   "user-journeys.yml#staging",
 ]);
