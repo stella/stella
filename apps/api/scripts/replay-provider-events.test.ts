@@ -308,9 +308,10 @@ test("builds and copies the standalone replay command into the API image", () =>
     new URL("../Dockerfile", import.meta.url),
     "utf-8",
   );
-  // Script bundles share /app/bundles with their sidecars; the runner copies
-  // that directory to /app, so the command stays /app/replay-provider-events.js.
-  expect(dockerfile).toContain("--entry-naming replay-provider-events.js");
+  // The split script build names each output after its source in
+  // /app/bundles; the runner copies that directory to /app, so the command
+  // stays /app/replay-provider-events.js.
+  expect(dockerfile).toContain('--entry-naming "[name].js"');
   expect(dockerfile).toContain("apps/api/scripts/replay-provider-events.ts");
   expect(dockerfile).toContain(
     "COPY --chown=stella:stella --from=builder /app/bundles/ /app/",

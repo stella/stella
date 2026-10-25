@@ -291,19 +291,24 @@ await probe("no musl native addons", async () => {
 // /app/chunk-*.js. A script whose `import.meta.main` block lands in a chunk
 // loads, does nothing and exits 0. Started without configuration or
 // arguments, every script that loads a shared chunk must reach its own
-// environment or argument validation and say so.
-const SHARED_CHUNK_IMPORT = '"/app/chunk-';
+// environment or argument validation and say so. Chunks import each other, so
+// only the non-chunk files that import one are scripts.
+const SHARED_CHUNK_PREFIX = "chunk-";
+const SHARED_CHUNK_IMPORT = `"/app/${SHARED_CHUNK_PREFIX}`;
 await probe("every split script runs its main block", async () => {
   const names = await Array.fromAsync(
     new Bun.Glob("*.js").scan({ cwd: "/app", onlyFiles: true }),
   );
   const scripts: string[] = [];
   for (const name of names.toSorted()) {
-    const source = await Bun.file(path.join("/app", name)).text();
     if (
-      !name.startsWith("image-smoke") &&
-      source.includes(SHARED_CHUNK_IMPORT)
+      name.startsWith(SHARED_CHUNK_PREFIX) ||
+      name.startsWith("image-smoke")
     ) {
+      continue;
+    }
+    const source = await Bun.file(path.join("/app", name)).text();
+    if (source.includes(SHARED_CHUNK_IMPORT)) {
       scripts.push(path.join("/app", name));
     }
   }
@@ -332,7 +337,7 @@ await probe("every split script runs its main block", async () => {
     }
     if (output === "") {
       panic(
-        `${script} exited ${subprocess.exitCode} without output; its main block did not run`,
+        `${script} exited ${String(subprocess.exitCode)} without output; its main block did not run`,
       );
     }
   }
