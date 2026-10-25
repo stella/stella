@@ -10,7 +10,10 @@ import { decodeJwt } from "jose";
 
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
-import { signInHuman } from "@/api/tests/helpers/human-session";
+import {
+  signInHuman,
+  signInHumanFromOAuthPage,
+} from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -223,6 +226,54 @@ describe("OAuth organization picker", () => {
         "login",
       );
     }
+  });
+
+  test("signing in as another account on a fresh sign-in request grants to that account", async () => {
+    const first = await signInHuman(`picker-${Bun.randomUUIDv7()}@stella.dev`);
+    const firstOrganization = await createOrganization(first, "First");
+    await first.setActiveOrganization(firstOrganization.id);
+    const client = await registerOAuthClient();
+
+    const { codeVerifier, redirect: signIn } = await authorizeOAuthClient(
+      first,
+      client,
+      undefined,
+      "login",
+    );
+    expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+
+    // The browser still holds the first session when the other account
+    // signs in on that page.
+    const { browser: second, redirect: picker } =
+      await signInHumanFromOAuthPage({
+        email: `picker-${Bun.randomUUIDv7()}@stella.dev`,
+        oauthQuery: readSignedQuery(signIn),
+        prior: first,
+      });
+    expect(second.userId).not.toBe(first.userId);
+    expect(picker.pathname).toBe(OAUTH_ORGANIZATION_PAGE_PATH);
+    expect(new URLSearchParams(readSignedQuery(picker)).get("prompt")).toBe(
+      null,
+    );
+
+    const secondOrganization = await createOrganization(second, "Second");
+    await second.setActiveOrganization(secondOrganization.id);
+    const consentPage = await continueAfterPicking({
+      browser: second,
+      picker,
+      status: "created",
+    });
+    expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+
+    const grant = await consentAndExchange({
+      browser: second,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    const claims = decodeJwt(grant.accessToken);
+    expect(claims["sub"]).toBe(second.userId);
+    expect(claims["org_id"]).toBe(secondOrganization.id);
   });
 
   test("authorizing again without the continue step still asks for the organization", async () => {
