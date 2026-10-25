@@ -115,91 +115,169 @@ export const enforceWritePrecondition = (
  * Routes whose definitions no safe factory built declare their contract here,
  * by the method and path the route table mounts them at.
  */
-// oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- Only raw routes declare contracts here; safe handlers own their contracts.
-export const RAW_WRITE_CONTRACTS = {
-  "DELETE /mcp": {
-    contract: "patch",
-  },
-  "DELETE /mcp-anonymized": {
-    contract: "patch",
-  },
-  "DELETE /mcp-documents": {
-    contract: "patch",
-  },
-  "DELETE /mcp-law": {
-    contract: "patch",
-  },
-  "DELETE /mcp/advanced": {
-    contract: "patch",
-  },
-  "POST /api/auth/*": {
-    contract: "patch",
-  },
-  "POST /mcp": {
-    contract: "patch",
-  },
-  "POST /mcp-anonymized": {
-    contract: "patch",
-  },
-  "POST /mcp-documents": {
-    contract: "patch",
-  },
-  "POST /mcp-law": {
-    contract: "patch",
-  },
-  "POST /mcp/advanced": {
-    contract: "patch",
-  },
-  "POST /public/feedback": {
-    contract: "patch",
-  },
-  "POST /smoke/session": {
-    contract: "patch",
-  },
-  "POST /synthetic/session": {
-    contract: "patch",
-  },
-  "POST /usage/hosted/webhook": {
-    contract: "patch",
-  },
-  "POST /v1/desktop-edit-handoffs/:handoffId/opened": {
-    contract: "patch",
-  },
-  "POST /v1/desktop-edit-handoffs/redeem": {
-    contract: "patch",
-  },
-  "POST /v1/desktop-edit-sessions/:sessionId/checkpoint": {
-    contract: "replace",
-    precondition: {
-      type: "deferred",
-      baselineId: "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
-    },
-  },
-  "POST /v1/desktop-edit-sessions/:sessionId/finalize": {
-    contract: "patch",
-  },
-  "POST /v1/desktop-edit-sessions/:sessionId/respond-takeover": {
-    contract: "patch",
-  },
-  "POST /v1/dev/clean": {
-    contract: "patch",
-  },
-  "POST /v1/dev/clear-cache": {
-    contract: "patch",
-  },
-  "POST /v1/dev/public-law-connection": {
-    contract: "patch",
-  },
-  "POST /v1/dev/rebuild-search": {
-    contract: "patch",
-  },
-  "POST /v1/dev/seed": {
-    contract: "patch",
-  },
-  "POST /v1/dev/seed-firm-knowledge": {
-    contract: "patch",
-  },
-} as const satisfies Partial<Record<ApiRouteKey, WriteContract>>;
+export const RAW_WRITE_CONTRACTS: ReadonlyMap<ApiRouteKey, WriteContract> =
+  new Map([
+    [
+      "DELETE /mcp",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "DELETE /mcp-anonymized",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "DELETE /mcp-documents",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "DELETE /mcp-law",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "DELETE /mcp/advanced",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /api/auth/*",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /mcp",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /mcp-anonymized",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /mcp-documents",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /mcp-law",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /mcp/advanced",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /public/feedback",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /smoke/session",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /synthetic/session",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /usage/hosted/webhook",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/desktop-edit-handoffs/:handoffId/opened",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/desktop-edit-handoffs/redeem",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
+      {
+        contract: "replace",
+        precondition: {
+          type: "deferred",
+          baselineId: "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
+        },
+      },
+    ],
+    [
+      "POST /v1/desktop-edit-sessions/:sessionId/finalize",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/desktop-edit-sessions/:sessionId/respond-takeover",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/dev/clean",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/dev/clear-cache",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/dev/public-law-connection",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/dev/rebuild-search",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/dev/seed",
+      {
+        contract: "patch",
+      },
+    ],
+    [
+      "POST /v1/dev/seed-firm-knowledge",
+      {
+        contract: "patch",
+      },
+    ],
+  ]);
 
 const contracts = new WeakMap<object, WriteContract>();
 

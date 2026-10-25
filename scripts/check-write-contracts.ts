@@ -1471,7 +1471,7 @@ if (import.meta.main) {
       : undefined;
   const registrations = enumerateWriteContracts({
     routes: await servedWriteRoutes(),
-    raw: RAW_WRITE_CONTRACTS,
+    raw: Object.fromEntries(RAW_WRITE_CONTRACTS),
     load,
   });
   if (process.argv.includes("--generate")) {
