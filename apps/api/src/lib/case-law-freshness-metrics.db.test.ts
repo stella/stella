@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexJurisdictionServing,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
@@ -29,6 +30,9 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const GENERATION = "case_law_v5";
 const OTHER_GENERATION = "case_law_v6";
+/** A partial generation: it holds Czech decisions only. */
+const PARTIAL_GENERATION = "case_law_v9";
+const FLIPPED_PENDING_ID = "0198e331-e578-7000-c000-000000000001";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OLDEST_PENDING_ID = "0198e331-e578-7000-b000-000000000001";
 const INDEX_ID = "case_law_v5_cs_sk";
@@ -36,6 +40,7 @@ const NOW = new Date();
 const OLD = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
 const ONE_HOUR_OLD = new Date(NOW.getTime() - 60 * 60 * 1000);
 const MONTH_OLD = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000);
+const TWO_MONTHS_OLD = new Date(NOW.getTime() - 60 * 24 * 60 * 60 * 1000);
 const ids = Array.from(
   { length: 8 },
   (_, index) =>
@@ -252,6 +257,53 @@ test("the oldest pending state counts wherever its retry puts it in the queue", 
   );
 
   expect(measuredSeconds(report)).toBeGreaterThanOrEqual((29 * DAY_MS) / 1000);
+});
+
+test("a jurisdiction flipped to a partial generation counts that generation's queue", async () => {
+  const before = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: PARTIAL_GENERATION,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v9,
+    ),
+    status: "building",
+  });
+  // Pending in the partial generation before the flip: nobody reads it yet.
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: PARTIAL_GENERATION,
+    entityId: FLIPPED_PENDING_ID,
+    desiredAction: "erase",
+    desiredEpoch: 1n,
+    createdAt: TWO_MONTHS_OLD,
+    desiredAt: TWO_MONTHS_OLD,
+  });
+  const unflipped = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+  expect(unflipped.backlogItems).toBe(before.backlogItems);
+
+  await db.insert(corpusIndexJurisdictionServing).values({
+    family: "case_law",
+    jurisdiction: "CZE",
+    generation: PARTIAL_GENERATION,
+    fromGeneration: GENERATION,
+  });
+  const flipped = await db.transaction(
+    async (tx) =>
+      await readCaseLawFreshnessReportTx(asTestRaw<Transaction>(tx)),
+  );
+
+  // Czech readers are served from the partial generation now, so its pending
+  // state is their backlog, and it is the oldest one.
+  expect(flipped.backlogItems).toBe(before.backlogItems + 1);
+  expect(measuredSeconds(flipped)).toBeGreaterThanOrEqual((59 * DAY_MS) / 1000);
 });
 
 test("a queue past the scan cap reports the cap and says so", async () => {

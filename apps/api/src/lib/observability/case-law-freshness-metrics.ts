@@ -4,10 +4,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { caseLawSources, corpusIndexProjectionStates } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  readServingCorpusIndexGenerationTx,
-  type ServingCorpusIndexGeneration,
-} from "@/api/lib/legal-search/corpus-index-generation-store";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { readCorpusIndexProjectionConvergenceTx } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -94,9 +92,10 @@ export const CASE_LAW_FRESHNESS_SCAN_CAP = 10_000;
  * counted through its state. Cleanup of a superseded revision changes nothing
  * readers are served; the convergence status reports it.
  */
-export const caseLawFreshnessPendingStatesQuery = (
-  target: ServingCorpusIndexGeneration,
-) => {
+export const caseLawFreshnessPendingStatesQuery = (target: {
+  family: CorpusFamily;
+  generation: string;
+}) => {
   const states = corpusIndexProjectionStates;
   return sql`
     SELECT count(*)::int AS count,
@@ -119,28 +118,59 @@ export const caseLawFreshnessPendingStatesQuery = (
   `;
 };
 
-const NO_BACKLOG = { count: 0, age: 0, ageSource: "none" } as const;
+type GenerationBacklog = {
+  count: number;
+  age: number;
+  ageSource: PendingSinceSource | "none";
+};
+
+const NO_BACKLOG: GenerationBacklog = { count: 0, age: 0, ageSource: "none" };
 
 /**
- * What the serving generation still owes the engine. Only the serving
- * generation: a building or retired generation's queue is not what readers
- * are served, and counting every generation's history is what made the
- * report read the projection tables whole.
+ * What the generations readers are served from still owe the engine: the
+ * family's serving generation and every generation a jurisdiction was flipped
+ * to, the set the read path resolves (`readServedCorpusIndexGenerationsTx`).
+ * A building or retired generation nobody reads is not counted; counting
+ * every generation's history is what made the report read the projection
+ * tables whole. Each generation is one bounded walk of its queue, so the
+ * report reads at most the cap per served generation.
  */
-const readServingBacklog = async (
+const readServedBacklog = async (
   tx: Transaction,
-  serving: ServingCorpusIndexGeneration | null,
-) => {
-  if (serving === null) {
-    return NO_BACKLOG;
+  generations: readonly string[],
+): Promise<GenerationBacklog & { capped: boolean }> => {
+  const backlogs = await Promise.all(
+    generations.map(async (generation): Promise<GenerationBacklog> => {
+      const row = executedRows(
+        await tx.execute(
+          caseLawFreshnessPendingStatesQuery({
+            family: "case_law",
+            generation,
+          }),
+        ),
+      ).at(0);
+      return {
+        count: requiredNumber(row, "count"),
+        age: requiredNumber(row, "age"),
+        ageSource: requiredAgeSource(row, "age_source"),
+      };
+    }),
+  );
+  let count = 0;
+  let oldest = NO_BACKLOG;
+  for (const backlog of backlogs) {
+    count += backlog.count;
+    if (backlog.ageSource !== "none" && backlog.age >= oldest.age) {
+      oldest = backlog;
+    }
   }
-  const row = executedRows(
-    await tx.execute(caseLawFreshnessPendingStatesQuery(serving)),
-  ).at(0);
   return {
-    count: requiredNumber(row, "count"),
-    age: requiredNumber(row, "age"),
-    ageSource: requiredAgeSource(row, "age_source"),
+    count,
+    age: oldest.age,
+    ageSource: oldest.ageSource,
+    capped:
+      count > CASE_LAW_FRESHNESS_SCAN_CAP ||
+      backlogs.some((backlog) => backlog.count > CASE_LAW_FRESHNESS_SCAN_CAP),
   };
 };
 
@@ -172,19 +202,26 @@ export const readCaseLawFreshnessReportTx = async (
           inArray(caseLawSources.adapterKey, SCHEDULED_SOURCE_KEYS),
         ),
       ),
-    readServingCorpusIndexGenerationTx(tx, "case_law"),
+    readServedCorpusIndexGenerationsTx(tx, "case_law"),
   ]);
-  const servingTarget = Result.isOk(serving) ? serving.value : null;
-  const backlog = await readServingBacklog(tx, servingTarget);
+  const served = Result.isOk(serving) ? serving.value : null;
+  const backlog =
+    served === null
+      ? { ...NO_BACKLOG, capped: false }
+      : await readServedBacklog(tx, [
+          ...new Set([
+            served.serving.generation,
+            ...served.flipped.map(([, generation]) => generation),
+          ]),
+        ]);
   const convergence =
-    servingTarget === null
+    served === null
       ? null
-      : await readCorpusIndexProjectionConvergenceTx(tx, servingTarget);
-  const backlogCapped = backlog.count > CASE_LAW_FRESHNESS_SCAN_CAP;
+      : await readCorpusIndexProjectionConvergenceTx(tx, served.serving);
   return {
     backlogItems: Math.min(backlog.count, CASE_LAW_FRESHNESS_SCAN_CAP),
-    backlogCapped,
-    oldestUnpublishedAge: oldestUnpublishedAgeOf(backlog, backlogCapped),
+    backlogCapped: backlog.capped,
+    oldestUnpublishedAge: oldestUnpublishedAgeOf(backlog, backlog.capped),
     sourceAges: sourceRows,
     convergence,
   };

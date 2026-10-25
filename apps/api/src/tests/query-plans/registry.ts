@@ -625,7 +625,7 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["corpus-index.projection-erasure-claim"],
   },
   {
-    // Scheduler gauge: a bounded walk of the serving generation's queue
+    // Scheduler gauge: a bounded walk of one served generation's queue
     // index, never a count over the table.
     id: "case-law.freshness-pending-states",
     class: "page",
@@ -634,7 +634,6 @@ export const QUERY_PLAN_REGISTRY = [
       caseLawFreshnessPendingStatesQuery({
         family: "case_law",
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
-        cluster: "q09",
       }),
     seed: "case-law",
     contract: planContracts["case-law.freshness-pending-states"],
