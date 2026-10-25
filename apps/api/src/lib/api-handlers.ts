@@ -5,6 +5,7 @@ import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -188,6 +189,11 @@ export type { McpToolName };
  * - `personal_history`: the caller's own search history (list, delete one,
  *   clear). Recording a use and the one-time browser import stay `internal`
  *   under `search_ui`.
+ * - `assistant_memory`: the assistant memory the caller may read and write
+ *   (list, create, update). Firm-wide memory writes stay `internal` under
+ *   `assistant_chat`.
+ * - `notification_inbox`: the caller's own notifications (list, mark one
+ *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -206,7 +212,9 @@ type McpCapabilityReason =
   | "file_transport"
   | "contact_extraction_ui"
   | "correspondence"
-  | "personal_history";
+  | "personal_history"
+  | "assistant_memory"
+  | "notification_inbox";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -305,6 +313,7 @@ export type McpExposure =
       type: "capability";
       reason: McpCapabilityReason;
       consumesServices: ServiceClassification;
+      confirmation?: "required";
       readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };
@@ -690,6 +699,8 @@ type SafeErrorBody = {
   clause?: HandlerError["clause"];
   contactUrl?: string;
   retryable?: boolean;
+  /** Advised wait before retrying, in milliseconds. */
+  retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
   /**
@@ -909,6 +920,7 @@ function toSafeStatusResponse(
 type SafeHandlerLogContext = {
   request: Request;
   route: string;
+  set?: Context["set"];
 };
 
 type ErrorStatusBuilder<TErrorStatus> = (
@@ -927,6 +939,46 @@ type RunSafeHandlerWithOptions<
   toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
 };
 
+const getResponseHeader = (
+  headers: Context["set"]["headers"],
+  name: string,
+): unknown => {
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  return Object.entries(headers)
+    .find(([key]) => key.toLowerCase() === name.toLowerCase())
+    ?.at(1);
+};
+
+const setResponseHeader = (
+  headers: Context["set"]["headers"],
+  name: string,
+  value: string,
+): void => {
+  if (headers instanceof Headers) {
+    headers.set(name, value);
+    return;
+  }
+  headers[name] = value;
+};
+
+const applyRetryAfterHeader = (
+  ctx: SafeHandlerLogContext,
+  retryAfterMs: number | undefined,
+) => {
+  if (retryAfterMs === undefined || ctx.set === undefined) {
+    return;
+  }
+  setResponseHeader(
+    ctx.set.headers,
+    "Retry-After",
+    String(
+      Math.max(1, Math.ceil((retryAfterMs * (1 + Math.random() * 0.5)) / 1000)),
+    ),
+  );
+};
+
 const runSafeHandlerInDeliveryScope = async <
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
@@ -943,19 +995,9 @@ const runSafeHandlerInDeliveryScope = async <
 
     if (Result.isOk(result)) {
       const response = result.value;
-      const responseSet: unknown = Reflect.get(ctx, "set");
-      const headers: unknown =
-        typeof responseSet === "object" && responseSet !== null
-          ? Reflect.get(responseSet, "headers")
-          : undefined;
-      let disposition: unknown;
-      if (headers instanceof Headers) {
-        disposition = headers.get("Content-Disposition");
-      } else if (typeof headers === "object" && headers !== null) {
-        disposition = Object.entries(headers)
-          .find(([key]) => key.toLowerCase() === "content-disposition")
-          ?.at(1);
-      }
+      const disposition = ctx.set
+        ? getResponseHeader(ctx.set.headers, "Content-Disposition")
+        : undefined;
       if (
         (response instanceof Response &&
           response.ok &&
@@ -983,12 +1025,14 @@ const runSafeHandlerInDeliveryScope = async <
     if (handlerError !== null) {
       const statusCode = handlerError.status;
 
+      applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
+
       logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
         error: handlerError,
         statusCode,
-        telemetry: safeErrorTelemetryDisposition(statusCode),
+        telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
       return toErrorStatus(statusCode, safeErrorBody(handlerError));
@@ -1051,12 +1095,16 @@ const runSafeHandlerInDeliveryScope = async <
       publicReadTimeoutError(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
+      applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
       logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
         error: handlerError,
         statusCode: handlerError.status,
-        telemetry: safeErrorTelemetryDisposition(handlerError.status),
+        telemetry: safeErrorTelemetryDisposition(
+          handlerError.status,
+          handlerError.code,
+        ),
       });
       return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
     }
@@ -1184,7 +1232,7 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        const outcome = await admitModelDispatch({
+        const dispatch = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           userId: ctx.user.id,
           actionKind,
@@ -1199,6 +1247,9 @@ const runAdmittedFiniteHandler = async function* <
             return await Result.gen(() => handler(admitted));
           },
         });
+        const outcome = Result.isError(dispatch)
+          ? Result.err(dispatch.error)
+          : dispatch.value;
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -2007,6 +2058,9 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.clause ? { clause: error.clause } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
+  ...(error.retryAfterMs === undefined
+    ? {}
+    : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
@@ -2407,7 +2461,11 @@ type SafeErrorTelemetry = "capture" | "log-only";
 
 const safeErrorTelemetryDisposition = (
   statusCode: number,
-): SafeErrorTelemetry => (statusCode >= 500 ? "capture" : "log-only");
+  code?: string,
+): SafeErrorTelemetry =>
+  statusCode >= 500 && code !== ACTION_ADMISSION_CODES.featureDisabled
+    ? "capture"
+    : "log-only";
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;
@@ -2444,7 +2502,14 @@ const logAndCaptureSafeError = ({
 }: LogAndCaptureSafeErrorProps) => {
   const reqCtx = getRequestContext(request);
   const evidence = readEvidence(error);
-  const severity = statusCode >= 500 ? "ERROR" : "WARN";
+  const severity =
+    statusCode >= 500 &&
+    !(
+      HandlerError.is(error) &&
+      error.code === ACTION_ADMISSION_CODES.featureDisabled
+    )
+      ? "ERROR"
+      : "WARN";
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
@@ -2503,10 +2568,8 @@ const logAndCaptureSafeError = ({
   // The owner's grade rides along in shadow; it decides nothing here yet.
   Object.assign(attributes, shadowFields(grading));
 
-  // Severity follows the status class, as it does at the request-level
-  // `onError` sink that emits this same `request.failed` event. A 5xx is a
-  // server fault; a 4xx is an answered client outcome, and an access denial
-  // graded ERROR would sit in the same class as a panic.
+  // Operator feature refusals retain 503 on the wire while remaining an
+  // expected warning. Other server failures keep their error severity.
   if (severity === "ERROR") {
     logger.error("request.failed", attributes);
   } else {

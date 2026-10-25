@@ -58,22 +58,32 @@ RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
+# The server and collab are bundles run by the image's Bun, not --compile
+# binaries: each compiled binary embeds another full copy of the runtime.
+# Every bundle sets --public-path to the directory it lands in on the runner.
+# Without it Bun emits `with { type: "file" }` asset paths as "./name-hash.ext",
+# which resolve against the working directory instead of the bundle.
+# Long-running bundles ship a linked source map so error frames name source
+# positions; the strip step drops the embedded source text, which runtime
+# mapping never reads.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
-    --compile \
-    --no-compile-autoload-dotenv \
-    --sourcemap=inline \
+    --sourcemap=linked \
     --target bun \
-    --outfile /app/server \
-    apps/api/src/server.ts
-# Dedicated Hocuspocus collaboration service. The infrastructure runs this
-# binary from the same immutable image with command override ["/app/collab"].
+    --outdir /app/bundles \
+    --public-path /app/ \
+    --entry-naming server.js \
+    apps/api/src/server.ts && \
+    bun apps/api/scripts/strip-source-map-content.ts /app/bundles/server.js.map
+# Dedicated Hocuspocus collaboration service. The infrastructure runs it from
+# the same immutable image with command override ["/app/collab"], through the
+# apps/api/docker/collab launcher.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
-    --compile \
-    --no-compile-autoload-dotenv \
     --target bun \
-    --outfile /app/collab \
+    --outdir /app/bundles \
+    --public-path /app/ \
+    --entry-naming collab.js \
     apps/collab/src/index.ts
 # One-off maintenance tool: assigns public slugs to legacy case-law rows that
 # predate slug-at-ingest. Bundled to JS with sidecar assets (like the workers,
@@ -85,6 +95,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
 # Deployment-owned usage policy configuration; run explicitly after migrations:
@@ -93,6 +104,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming seed-usage-policies.js \
     apps/api/scripts/seed-usage-policies.ts
 # Replays one stored hosted-usage provider event at a time. Run with the API
@@ -104,6 +116,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming replay-provider-events.js \
     apps/api/scripts/replay-provider-events.ts
 # Better Auth migration rehearsal validator. It accepts only a database
@@ -117,6 +130,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming better-auth-migration-audit.js \
     apps/api/src/scripts/better-auth-migration-audit.ts
 # Trusted Microsoft identity-map derivation for the Better Auth rehearsal. It
@@ -126,6 +140,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming better-auth-microsoft-identity-map.js \
     apps/api/src/scripts/better-auth-microsoft-identity-map.ts
 # Bounded Better Auth bridge backfill. The command reproduces the private
@@ -134,6 +149,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming better-auth-17-backfill.js \
     apps/api/src/scripts/better-auth-17-backfill.ts
 # Whole-database census (counts, digests, foreign-key orphans) recorded before
@@ -142,6 +158,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming database-census.js \
     apps/api/src/scripts/database-census.ts
 # Replays stored sign-ins and sessions against a migrated database with the
@@ -150,6 +167,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming better-auth-sign-in-replay.js \
     apps/api/src/scripts/better-auth-sign-in-replay.ts
 # Case-law source replay: re-parses stored raw sources with the current
@@ -161,6 +179,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming replay-case-law-source.js \
     apps/api/src/scripts/replay-case-law-source.ts
 # Restricted review account commands: `provision` creates the account, its
@@ -172,6 +191,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming review-account.js \
     apps/api/src/scripts/review-account.ts
 # One bounded, load-aware background replay tick; enrolment is reviewed in code.
@@ -179,6 +199,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming replay-tick.js \
     apps/api/src/scripts/replay-tick.ts
 # Weekly Czech Constitutional Court roster import and load-aware relink.
@@ -186,6 +207,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming import-cz-us-roster.js \
     apps/api/src/scripts/import-cz-us-roster.ts
 # Bounded EU completion ticks and operator controls.
@@ -193,12 +215,14 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming eu-completion-tick.js \
     apps/api/src/scripts/eu-completion-tick.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming eu-completion-control.js \
     apps/api/src/scripts/eu-completion-control.ts
 # Case-law erasure and raw-storage operator passes. They delete from the
@@ -209,12 +233,14 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming redact-case-law-decision.js \
     apps/api/src/scripts/redact-case-law-decision.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming case-law-raw-layout.js \
     apps/api/src/scripts/case-law-raw-layout.ts
 # SK ÚS raw completion runs as its own one-off task with a scoped login rather
@@ -224,6 +250,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming complete-sk-us-raw.js \
     apps/api/src/scripts/complete-sk-us-raw.ts
 # Decision-analysis operator pass. Like replay above, these need the API env
@@ -237,18 +264,21 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming decision-analysis-candidates.js \
     apps/api/src/scripts/decision-analysis-candidates.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming decision-analysis-input.js \
     apps/api/src/scripts/decision-analysis-input.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming decision-analysis-save.js \
     apps/api/src/scripts/decision-analysis-save.ts
 # One-shot case-law repair passes over rows an earlier write path produced.
@@ -260,12 +290,14 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming repair-publisher-absent-text.js \
     apps/api/src/scripts/repair-publisher-absent-text.ts
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming repair-cz-ns-court.js \
     apps/api/src/scripts/repair-cz-ns-court.ts
 # Citation polarity pass. `--recheck` re-reads a language's labelled citations
@@ -277,6 +309,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming classify-citations.js \
     apps/api/scripts/classify-citations.ts
 # Reviewed citation polarities: stores them and applies them to the current
@@ -288,6 +321,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming apply-reviewed-citation-labels.js \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts
 # Corpus generation registry: status, register, and the serving flip, which
@@ -298,6 +332,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming corpus-generation.js \
     apps/api/src/scripts/corpus-generation.ts
 # Read-only snippet comparison over the serving corpus index. Reads its query
@@ -309,6 +344,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming corpus-snippet-compare.js \
     apps/api/src/scripts/corpus-snippet-compare.ts
 # Dedicated durable document-processing worker. Deploy the same image with
@@ -317,10 +353,12 @@ RUN bun build \
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
-    --sourcemap=inline \
+    --sourcemap=linked \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming document-processing-worker.js \
-    apps/api/src/scripts/document-processing-worker.ts
+    apps/api/src/scripts/document-processing-worker.ts && \
+    bun apps/api/scripts/strip-source-map-content.ts /app/bundles/document-processing-worker.js.map
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Mirror the source directory under the bundle tree
 # so its runtime `import.meta.dir`-relative migrationsFolder lookup resolves
@@ -329,6 +367,7 @@ RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles/apps/api/src/db \
+    --public-path /app/apps/api/src/db/ \
     --entry-naming migrate.js \
     apps/api/src/db/migrate.ts
 # All script bundles use --outdir so native addons can be emitted as sidecars.
@@ -341,36 +380,44 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming sanctions-matcher-worker.js \
       apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming pdf-worker.js \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming extraction-worker.js \
+      --external @firecrawl/anydoc-linux-arm64-musl \
+      --external @firecrawl/anydoc-linux-x64-musl \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming ocr-searchable-pdf-worker.js \
       apps/api/src/lib/ocr-searchable-pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming office-evidence-worker.js \
       apps/api/src/lib/files/office-evidence-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \
       --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming ocr-local-worker.js \
       apps/api/src/lib/ocr-local/ocr-local-worker.ts && \
     cp node_modules/@silurus/ooxml/dist/xlsx_parser_bg.wasm \
@@ -400,29 +447,31 @@ RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
     S3_REGION=eu-central-1 \
     bun apps/legal-atlas-runner/dist/index.js run eu-ecj-refetch --help
 # Exercise the model guard as a JS bundle on the runner filesystem, where
-# native addons must load from sidecars rather than the compiled binary.
+# native addons load from sidecars.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outdir /app/bundles \
+    --public-path /app/ \
     --entry-naming image-smoke-model-ingress.js \
     apps/api/src/scripts/image-smoke-model-ingress.ts
-# Runtime-asset smoke probe: initializes the compiled anonymize and QuickJS
-# runtimes, plus the external YARA rules, worker bundles, OCR model, and font.
-# Compiled like the server and run by the verification stage below.
+# Runtime-asset smoke probe: initializes the anonymize and QuickJS runtimes,
+# plus the external YARA rules, worker bundles, OCR model, and font. Bundled
+# like the server, so its native addons and WASM load from the same sidecar
+# layout, and run by the verification stage below.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
-    --compile \
-    --no-compile-autoload-dotenv \
     --target bun \
-    --outfile /app/image-smoke \
+    --outdir /app/bundles \
+    --public-path /app/ \
+    --entry-naming image-smoke.js \
     apps/api/src/scripts/image-smoke.ts
 
-# Run the compiled API as non-root. Built from the bare base image: every
-# entrypoint is either the compiled binary or a self-contained
-# `bun build --target bun` bundle, so the runtime image ships only those
-# outputs plus the asset trees they read at runtime; the workspace install
-# (node_modules, manifest tree) stays in the build stages.
+# Run the API as non-root. Built from the bare base image: every entrypoint is
+# a self-contained `bun build --target bun` bundle run by the image's Bun, so
+# the runtime image ships one runtime plus those outputs and the asset trees
+# they read at runtime; the workspace install (node_modules, manifest tree)
+# stays in the build stages.
 FROM base AS runner
 # Stamp the running container with the release version so the API can
 # return it from /health and tag PostHog events with build metadata.
@@ -442,13 +491,15 @@ ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
 ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
-COPY --chown=stella:stella --from=builder /app/server /app/server
-COPY --chown=stella:stella --from=builder /app/collab /app/collab
 COPY --chown=stella:stella --from=builder /app/bundles/ /app/
+# The collab task definition runs ["/app/collab"]: a launcher for the bundle.
+COPY --chown=stella:stella --from=install-inputs /app/apps/api/docker/collab /app/collab
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js.map /app/legal-atlas.js.map
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js.map /app/eu-ecj-refetch.js.map
 # The bundled entrypoint reads migration SQL from this external folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 # ONNX Runtime is the one native exception: its binding dynamically links a
@@ -472,16 +523,16 @@ WORKDIR /app/apps/api
 
 USER stella
 EXPOSE 3001 3002
-CMD ["/app/server"]
+# --no-env-file: a release never reads a .env from its working directory.
+CMD ["bun", "--no-env-file", "/app/server.js"]
 
 # Throwaway verification stage: run the runtime-asset probe on the exact
 # runner filesystem, so a missing or unloadable hand-copied asset fails the
-# image build instead of the first request that reaches it. The probe binary
-# never ships; the final stage below re-selects the runner and forces this
-# stage into the build by copying its marker.
+# image build instead of the first request that reaches it. The final stage
+# below re-selects the runner and forces this stage into the build by copying
+# its marker.
 FROM runner AS runtime-asset-smoke
-COPY --from=builder /app/image-smoke /tmp/image-smoke
-RUN /tmp/image-smoke && touch /tmp/image-smoke-ok
+RUN bun --no-env-file /app/image-smoke.js && touch /tmp/image-smoke-ok
 
 FROM runner
 COPY --chown=stella:stella --from=runtime-asset-smoke /tmp/image-smoke-ok /tmp/image-smoke-ok

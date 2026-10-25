@@ -26,6 +26,11 @@ import {
   runLockRetryLadder,
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
+import {
+  createMigrationLockTelemetry,
+  observeMigrationLockAttempt,
+} from "./migration-lock-observation";
+import type { MigrationLockTelemetry } from "./migration-lock-observation";
 import { withMigrationLockTimeout } from "./migration-lock-timeout";
 import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
@@ -332,19 +337,91 @@ const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
 
 type ApplyPendingOptions = {
   apply: (lockTimeoutMs: number) => Promise<void>;
-  /** Whether the ledger still equals the preflight read. */
-  ledgerUnchanged: () => Promise<boolean>;
+  classifyLedger: () => Promise<MigrationLedgerProgress>;
   retry: LockWaitRetry;
 };
 
+export type MigrationLedgerProgress =
+  | { status: "unchanged"; committedReceipts: 0 }
+  | { status: "own"; committedReceipts: number }
+  | { status: "foreign"; committedReceipts: 0 };
+
+type ClassifyMigrationLedgerOptions = {
+  preflightRows: readonly LedgerRow[];
+  currentRows: readonly LedgerRow[];
+  predicted: ReturnType<typeof getMigrationsToRun>;
+};
+
+const sameReceipt = (left: LedgerRow, right: LedgerRow) =>
+  left.id === right.id &&
+  left.hash === right.hash &&
+  String(left.created_at) === String(right.created_at) &&
+  left.name === right.name;
+
+export const classifyMigrationLedger = ({
+  preflightRows,
+  currentRows,
+  predicted,
+}: ClassifyMigrationLedgerOptions): MigrationLedgerProgress => {
+  const preflightById = new Map(preflightRows.map((row) => [row.id, row]));
+  const currentById = new Map(currentRows.map((row) => [row.id, row]));
+  if (
+    currentById.size !== currentRows.length ||
+    preflightRows.some((row) => {
+      const current = currentById.get(row.id);
+      return current === undefined || !sameReceipt(row, current);
+    })
+  ) {
+    return { status: "foreign", committedReceipts: 0 };
+  }
+
+  const inserted = currentRows.filter(({ id }) => !preflightById.has(id));
+  if (inserted.length === 0) {
+    return { status: "unchanged", committedReceipts: 0 };
+  }
+  if (
+    inserted.length > predicted.length ||
+    inserted.some(({ hash, name, created_at }, index) => {
+      const expected = predicted.at(index);
+      return (
+        expected === undefined ||
+        name !== expected.name ||
+        hash !== expected.hash ||
+        String(created_at) !== String(expected.folderMillis)
+      );
+    })
+  ) {
+    return { status: "foreign", committedReceipts: 0 };
+  }
+  return { status: "own", committedReceipts: inserted.length };
+};
+
+type MigrationLedgerClassifierOptions = {
+  preflightRows: readonly LedgerRow[];
+  predicted: ReturnType<typeof getMigrationsToRun>;
+  readLedger: () => Promise<readonly LedgerRow[]>;
+};
+
+const migrationLedgerClassifier =
+  ({
+    preflightRows,
+    predicted,
+    readLedger,
+  }: MigrationLedgerClassifierOptions) =>
+  async () =>
+    classifyMigrationLedger({
+      preflightRows,
+      currentRows: await readLedger(),
+      predicted,
+    });
+
 /**
- * Retry the whole transactional pending set. Split migrations may have committed
- * receipts before a lock failure; refusing a changed ledger keeps those retries
- * from replaying a different pending set.
+ * Retry the whole pending set, including after this run committed a prefix of its
+ * predicted receipts. Refuse a retry only when another writer added a receipt.
  */
 export const applyPendingRetryingLockWaits = async ({
   apply,
-  ledgerUnchanged,
+  classifyLedger,
   retry,
 }: ApplyPendingOptions): Promise<void> => {
   const outcome = await runLockRetryLadder({
@@ -354,7 +431,8 @@ export const applyPendingRetryingLockWaits = async ({
     random: retry.random,
     attempt: apply,
     beforeRetry: async ({ attempts, lockTimeoutMs, cause, pauseMs }) => {
-      if (!(await ledgerUnchanged())) {
+      const ledgerProgress = await classifyLedger();
+      if (ledgerProgress.status === "foreign") {
         throw new MigrationLockWaitError({
           message: `Migrations lost a lock wait after committing receipts on attempt ${String(attempts)}`,
           reason: MIGRATION_LOCK_WAIT_FAILURE.ledgerMoved,
@@ -370,6 +448,7 @@ export const applyPendingRetryingLockWaits = async ({
           attempt: attempts,
           attempts: retry.lockTimeoutsMs.length,
           lockTimeoutMs,
+          committedReceipts: ledgerProgress.committedReceipts,
           delayMs: pauseMs,
         })}\n`,
       );
@@ -388,6 +467,7 @@ export const applyPendingRetryingLockWaits = async ({
 };
 
 type ApplySchemaMigrationsOptions = ApplyPendingOptions & {
+  connectionState?: () => "open" | "terminated";
   connection: {
     unsafe: (query: string) => PromiseLike<unknown>;
   };
@@ -395,27 +475,132 @@ type ApplySchemaMigrationsOptions = ApplyPendingOptions & {
 
 export const applySchemaMigrationsRetryingLockWaits = async ({
   connection,
+  connectionState,
   ...options
 }: ApplySchemaMigrationsOptions): Promise<void> => {
   try {
     await applyPendingRetryingLockWaits(options);
   } finally {
-    await connection.unsafe("RESET lock_timeout");
+    if (connectionState?.() !== "terminated") {
+      await connection.unsafe("RESET lock_timeout");
+    }
   }
 };
 
-const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
-  rows
-    .map(
-      ({ id, hash, created_at, name }) =>
-        `${String(id)}:${hash}:${String(created_at)}:${String(name)}`,
-    )
-    .join(",");
+type PrepareSchemaPhaseOptions = {
+  connection: ReservedSQL;
+  migrationsFolder: string;
+  migrationsSchema: string;
+  migrationsTable: string;
+  onLaneAcquired: () => void;
+};
+
+const prepareSchemaPhase = async ({
+  connection,
+  migrationsFolder,
+  migrationsSchema,
+  migrationsTable,
+  onLaneAcquired,
+}: PrepareSchemaPhaseOptions) => {
+  await connection.unsafe(bootstrapRoleSql);
+  const [liftTimeout, takeLane, restoreTimeout] =
+    CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+  await connection.unsafe(liftTimeout);
+  await connection.unsafe(takeLane);
+  onLaneAcquired();
+  await connection.unsafe(restoreTimeout);
+
+  const bundle = readMigrationFiles({ migrationsFolder });
+  const schemaDatabase = createDatabase({ client: connection });
+  const adoption = await preflightAndAdopt({
+    database: schemaDatabase,
+    migrations: bundle,
+    migrationsSchema,
+    migrationsTable,
+  });
+
+  return {
+    preflight: adoption,
+    migrations: bundle,
+    database: schemaDatabase,
+  };
+};
+
+type VerifyMigrationReceiptsOptions = {
+  database: ReturnType<typeof createDatabase>;
+  readLedger: () => Promise<readonly LedgerRow[]>;
+  preflightRows: readonly LedgerRow[];
+  predicted: ReturnType<typeof getMigrationsToRun>;
+  migrationsFolder: string;
+  migrationsSchema: string;
+  migrationsTable: string;
+};
+
+const verifyMigrationReceipts = async ({
+  database,
+  readLedger,
+  preflightRows,
+  predicted,
+  migrationsFolder,
+  migrationsSchema,
+  migrationsTable,
+}: VerifyMigrationReceiptsOptions) => {
+  const postflightRows = await readLedger();
+  const priorIds = new Set(preflightRows.map(({ id }) => id));
+  const inserted = postflightRows.filter(({ id }) => !priorIds.has(id));
+  if (
+    inserted.length !== predicted.length ||
+    inserted.some(({ hash, name, created_at }, index) => {
+      const expected = predicted.at(index);
+      return (
+        expected === undefined ||
+        hash !== expected.hash ||
+        name !== expected.name ||
+        String(created_at) !== String(expected.folderMillis)
+      );
+    })
+  ) {
+    panic("Migration postflight receipts differ from Drizzle's prediction");
+  }
+  await assertMigrationHistory({
+    context: "migrate",
+    migrationsDir: migrationsFolder,
+    queryAppliedRows: async () =>
+      await database.execute<{ name: string | null; hash: string }>(sql`
+      SELECT name, hash
+      FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
+    `),
+    remedy: "Migration completion requires every bundled migration hash.",
+  });
+  return inserted;
+};
+
+const reportStalePreflight = (
+  preflight: Exclude<StaleBundleDecision, { status: "ready" }>,
+) => {
+  const event = {
+    event: `migrate.${preflight.status}`,
+    level: preflight.status === "stale_bundle_refused" ? "error" : "warn",
+    unknownCount: preflight.unknownCount,
+    newestUnknownName: preflight.newestUnknownName,
+    unknownNames: preflight.unknownNames,
+    mismatchCount: preflight.mismatchCount,
+    mismatchedNames: preflight.mismatchedNames,
+  };
+  if (preflight.status === "stale_bundle_refused") {
+    process.stderr.write(`${JSON.stringify(event)}\n`);
+    panic(
+      `Migration preflight: stale bundle has pending SQL${preflight.mismatchCount > 0 ? " (hash-mismatch)" : ""}`,
+    );
+  }
+  process.stdout.write(`${JSON.stringify(event)}\n`);
+};
 
 type MigrationPhaseClock = {
   phase: "schema" | "online" | "done";
   startedAt: number;
   laneWaitMs: number | null;
+  retriesSpent: number;
 };
 
 /** The duration of the phase a failed run was in, reported before the error propagates. */
@@ -430,6 +615,7 @@ const emitFailedPhase = (
         event: "migrate.phase_duration",
         phase: "schema",
         durationMs,
+        retriesSpent: clock.retriesSpent,
         outcome: "failed",
         laneWaitMs: clock.laneWaitMs,
         appliedCount: null,
@@ -440,6 +626,7 @@ const emitFailedPhase = (
         event: "migrate.phase_duration",
         phase: "online",
         durationMs,
+        retriesSpent: clock.retriesSpent,
         outcome: "failed",
       });
       return;
@@ -466,6 +653,46 @@ type RunMigrationsOptions = {
   lockWaitRetry?: LockWaitRetry;
   /** Where phase and online step durations go; JSON lines on stdout otherwise. */
   timing?: MigrationTiming;
+  lockTelemetry?: MigrationLockTelemetry;
+  reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
+};
+
+const migrationSessionCanUnlock = (
+  laneHeld: boolean,
+  sessionState: "open" | "terminated",
+) => laneHeld && sessionState === "open";
+
+type SchemaObservationOptions = {
+  observer: OnlineMigrationConnection;
+  connection: ReservedSQL;
+  telemetry: MigrationLockTelemetry;
+  cancelWork: () => Promise<void>;
+};
+
+const createSchemaObservation = async ({
+  observer,
+  connection,
+  telemetry,
+  cancelWork,
+}: SchemaObservationOptions) => {
+  const backend =
+    (
+      await connection.unsafe<{ pid: number }[]>(
+        "SELECT pg_backend_pid() AS pid",
+      )
+    ).at(0) ?? panic("Missing migration backend pid");
+  return async <T>(step: string, work: () => Promise<T>) =>
+    await observeMigrationLockAttempt({
+      observer,
+      pid: backend.pid,
+      phase: "schema",
+      step,
+      table: null,
+      telemetry,
+      work,
+      cancelWork,
+      outcome: () => "done",
+    });
 };
 
 export const runMigrations = async ({
@@ -479,60 +706,57 @@ export const runMigrations = async ({
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
+  lockTelemetry = createMigrationLockTelemetry(),
+  reserveSchemaObserver = async () =>
+    await openOnlineIndexObserver(databaseUrl),
 }: RunMigrationsOptions) => {
   let laneHeld = false;
-  // The phase in flight, so a failure reports the duration of the right one.
   const clock: MigrationPhaseClock = {
     phase: "schema",
     startedAt: timing.clock(),
     laneWaitMs: null,
+    retriesSpent: 0,
   };
   const elapsedMs = () =>
     Math.max(0, Math.round(timing.clock() - clock.startedAt));
-  // A terminated session already dropped its advisory locks; unlocking on the
-  // closed connection would replace the monitoring error with a close error.
   const session: { state: "open" | "terminated" } = { state: "open" };
+  let schemaObserver: OnlineMigrationConnection | undefined;
+  const schemaRetriesAtStart = lockTelemetry.retriesSpent;
+  let onlineRetriesAtStart = 0;
   try {
-    await connection.unsafe(bootstrapRoleSql);
-    const [liftTimeout, takeLane, restoreTimeout] =
-      CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-    await connection.unsafe(liftTimeout);
-    await connection.unsafe(takeLane);
-    laneHeld = true;
-    clock.laneWaitMs = elapsedMs();
-    await connection.unsafe(restoreTimeout);
-
-    const migrations = readMigrationFiles({ migrationsFolder });
-    const database = createDatabase({ client: connection });
-    const preflight = await preflightAndAdopt({
-      database,
-      migrations,
-      migrationsSchema,
-      migrationsTable,
+    schemaObserver = await reserveSchemaObserver();
+    const observeSchema = await createSchemaObservation({
+      observer: schemaObserver,
+      connection,
+      telemetry: lockTelemetry,
+      cancelWork: async () => {
+        session.state = "terminated";
+        await terminateReserved(connection);
+      },
     });
+    const { preflight, migrations, database } = await observeSchema(
+      "schema.preflight",
+      async () =>
+        await prepareSchemaPhase({
+          connection,
+          migrationsFolder,
+          migrationsSchema,
+          migrationsTable,
+          onLaneAcquired: () => {
+            laneHeld = true;
+            clock.laneWaitMs = elapsedMs();
+          },
+        }),
+    );
 
     if (preflight.status !== "ready") {
-      const event = {
-        event: `migrate.${preflight.status}`,
-        level: preflight.status === "stale_bundle_refused" ? "error" : "warn",
-        unknownCount: preflight.unknownCount,
-        newestUnknownName: preflight.newestUnknownName,
-        unknownNames: preflight.unknownNames,
-        mismatchCount: preflight.mismatchCount,
-        mismatchedNames: preflight.mismatchedNames,
-      };
-      if (preflight.status === "stale_bundle_refused") {
-        process.stderr.write(`${JSON.stringify(event)}\n`);
-        panic(
-          `Migration preflight: stale bundle has pending SQL${preflight.mismatchCount > 0 ? " (hash-mismatch)" : ""}`,
-        );
-      }
-      process.stdout.write(`${JSON.stringify(event)}\n`);
+      reportStalePreflight(preflight);
       clock.phase = "done";
       timing.emit({
         event: "migrate.phase_duration",
         phase: "schema",
         durationMs: elapsedMs(),
+        retriesSpent: clock.retriesSpent,
         outcome: preflight.status,
         laneWaitMs: clock.laneWaitMs,
         appliedCount: 0,
@@ -540,7 +764,6 @@ export const runMigrations = async ({
       return preflight;
     }
 
-    // rc.4's pending selector reads names only; its row type requires a string timestamp.
     const predicted = getMigrationsToRun({
       localMigrations: migrations,
       dbMigrations: preflight.rows.map(({ id, hash, created_at, name }) => ({
@@ -556,77 +779,64 @@ export const runMigrations = async ({
         FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
         ORDER BY id
       `);
-    const preflightFingerprint = ledgerFingerprint(preflight.rows);
-    // Attempts share this connection, which holds the lane until the finally
-    // below, so corpus writers stay drained between them.
     await applySchemaMigrationsRetryingLockWaits({
       connection,
-      // Keep original identities and hashes while the runner owns queue bounds.
+      connectionState: () => session.state,
       apply: async (lockTimeoutMs) => {
         await connection.unsafe(
           `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
         );
-        await pgCoreMigrate(
-          migrations.map((migration) => ({
-            ...migration,
-            sql: migration.sql.map((statement) =>
-              withMigrationLockTimeout(statement, lockTimeoutMs),
+        await observeSchema(
+          "schema.pending",
+          async () =>
+            await pgCoreMigrate(
+              migrations.map((migration) => ({
+                ...migration,
+                sql: migration.sql.map((statement) =>
+                  withMigrationLockTimeout(statement, lockTimeoutMs),
+                ),
+              })),
+              database,
+              { migrationsFolder, migrationsSchema, migrationsTable },
             ),
-          })),
-          database,
-          {
-            migrationsFolder,
-            migrationsSchema,
-            migrationsTable,
-          },
         );
       },
-      ledgerUnchanged: async () =>
-        ledgerFingerprint(await readLedger()) === preflightFingerprint,
+      classifyLedger: migrationLedgerClassifier({
+        preflightRows: preflight.rows,
+        predicted,
+        readLedger,
+      }),
       retry: lockWaitRetry,
     });
-    const postflightRows = await readLedger();
-    const priorIds = new Set(preflight.rows.map(({ id }) => id));
-    const inserted = postflightRows.filter(({ id }) => !priorIds.has(id));
-    if (
-      inserted.length !== predicted.length ||
-      inserted.some(({ hash, name, created_at }, index) => {
-        const expected = predicted.at(index);
-        return (
-          expected === undefined ||
-          hash !== expected.hash ||
-          name !== expected.name ||
-          String(created_at) !== String(expected.folderMillis)
-        );
-      })
-    ) {
-      panic("Migration postflight receipts differ from Drizzle's prediction");
-    }
-    await assertMigrationHistory({
-      context: "migrate",
-      migrationsDir: migrationsFolder,
-      queryAppliedRows: async () =>
-        await database.execute<{ name: string | null; hash: string }>(sql`
-          SELECT name, hash
-          FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
-        `),
-      remedy: "Migration completion requires every bundled migration hash.",
+    clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
+    await schemaObserver.release();
+    schemaObserver = undefined;
+    const inserted = await verifyMigrationReceipts({
+      database,
+      readLedger,
+      preflightRows: preflight.rows,
+      predicted,
+      migrationsFolder,
+      migrationsSchema,
+      migrationsTable,
     });
-    // The schema SQL is done. The online phase takes no ACCESS EXCLUSIVE lock
-    // (concurrent index builds, validations, batched repairs), and an index
-    // build on a corpus-sized table runs for many minutes: holding the lane
-    // through it would stop every corpus writer for that long.
     await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
     laneHeld = false;
     timing.emit({
       event: "migrate.phase_duration",
       phase: "schema",
       durationMs: elapsedMs(),
+      retriesSpent: clock.retriesSpent,
       outcome: "applied",
       laneWaitMs: clock.laneWaitMs,
       appliedCount: inserted.length,
     });
     clock.phase = "online";
+    onlineRetriesAtStart = lockTelemetry.retriesSpent;
+    const onlineTiming: MigrationTiming = {
+      ...timing,
+      retriesSpent: () => lockTelemetry.retriesSpent,
+    };
     clock.startedAt = timing.clock();
     const onlineConnection: OnlineMigrationConnection = {
       terminate: async () => {
@@ -643,16 +853,18 @@ export const runMigrations = async ({
     const online = await runOnline(
       { reserve: async () => await Promise.resolve(onlineConnection) },
       {
-        indexGate: { ebs, hold: onlineIndexHold },
+        indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
-        timing,
+        timing: onlineTiming,
       },
     );
+    clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
     clock.phase = "done";
     timing.emit({
       event: "migrate.phase_duration",
       phase: "online",
       durationMs: elapsedMs(),
+      retriesSpent: clock.retriesSpent,
       outcome: online.type,
     });
     const predictedNames = predicted.map(({ name }) => name);
@@ -668,11 +880,20 @@ export const runMigrations = async ({
     }
     return { status: "applied" as const, predictedNames, insertedNames };
   } catch (error: unknown) {
+    if (clock.phase === "online") {
+      clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
+    } else {
+      clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
+    }
     emitFailedPhase(timing, clock, elapsedMs());
     throw error;
   } finally {
-    if (laneHeld && session.state === "open") {
-      await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+    try {
+      if (migrationSessionCanUnlock(laneHeld, session.state)) {
+        await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+      }
+    } finally {
+      await schemaObserver?.release();
     }
   }
 };
@@ -700,9 +921,14 @@ type RunMigrationsUntilSettledOptions = RunMigrationsOptions & {
 export const runMigrationsUntilSettled = async ({
   sleep = Bun.sleep,
   onlineIndexHold = createOnlineIndexHold(),
+  lockTelemetry = createMigrationLockTelemetry(),
   ...options
 }: RunMigrationsUntilSettledOptions): Promise<SettledMigrationsResult> => {
-  const result = await runMigrations({ ...options, onlineIndexHold });
+  const result = await runMigrations({
+    ...options,
+    onlineIndexHold,
+    lockTelemetry,
+  });
   if (result.status !== "online_deferred") {
     return result;
   }
@@ -718,5 +944,6 @@ export const runMigrationsUntilSettled = async ({
     ...options,
     sleep,
     onlineIndexHold,
+    lockTelemetry,
   });
 };

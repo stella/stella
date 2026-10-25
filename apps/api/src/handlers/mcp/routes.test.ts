@@ -352,10 +352,19 @@ describe("MCP protected resource discovery routes", () => {
           new Request(`http://localhost${path}`, { method }),
         );
 
+        // One 405 for the endpoint, whichever layer refuses the method: the
+        // transport refuses DELETE with the same `Allow` and envelope.
         expect(response.status).toBe(405);
-        expect(response.headers.get("Allow")).toBe(
-          "OPTIONS, GET, POST, DELETE",
-        );
+        expect(response.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+        expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+        expect(await response.json()).toEqual({
+          error: {
+            code: -32_000,
+            message: "Method Not Allowed: this endpoint serves no session.",
+          },
+          id: null,
+          jsonrpc: "2.0",
+        });
       }
     }
 

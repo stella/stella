@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./api-date": "./src/api-date.ts",
     "./conversion-refusal": "./src/conversion-refusal.ts",
     "./mcp": "./src/mcp.ts",
     "./mcp-web-handoff": "./src/mcp-web-handoff.ts",
@@ -15,6 +16,7 @@
     "./search-history-title": "./src/search-history-title.ts",
     "./public-crawl-rules": "./src/public-crawl-rules.ts",
     "./provider-setup": "./src/provider-setup.ts",
+    "./organization-ai-availability": "./src/organization-ai-availability.ts",
     "./currency-code": "./src/currency-code.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-disclosure": "./src/ai-disclosure.ts",
@@ -59,6 +61,7 @@
     "./case-law-decision-types": "./src/case-law-decision-types.ts",
     "./case-law-decision-resolution": "./src/case-law-decision-resolution.ts",
     "./case-law-decision-route": "./src/case-law-decision-route.ts",
+    "./case-law-decision-summary": "./src/case-law-decision-summary.ts",
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",

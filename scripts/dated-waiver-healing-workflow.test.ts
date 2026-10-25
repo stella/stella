@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
 
 import { PROBE_PHASE_BUDGET_MS } from "./dated-waiver-probes";
@@ -281,15 +283,109 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   expect(trackedFiles?.run).toBe(
     'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
-  // Offline, over the tracked tree, scoped to the change when one is listed.
-  expect(check?.run).toMatch(
-    /^bun --preload \.\/scripts\/offline-network-preload\.ts scripts\/dated-waivers\.ts --check --tracked-files "\$RUNNER_TEMP\/dated-waiver-tracked-files" "\$\{scope\[@\]\}"$/mu,
-  );
-  expect(check?.run).toContain(
-    'scope=(--changed-files "$DATED_WAIVER_CHANGED_FILES")',
+  // Offline, over the tracked tree, always scoped to the run's change: an
+  // unset list fails the check instead of widening it to every waiver.
+  expect(check?.run).toBe(
+    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"',
   );
   for (const step of expiry.steps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
+  }
+});
+
+// A run lists the change it carries, so a waiver that elapses overnight fails
+// the change touching its file, never a main run that changed nothing.
+test("CI expiry runs list the files their change touched", () => {
+  const ci: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const quickChecks = v.parse(
+    v.object({
+      jobs: v.object({
+        "ci-quick-checks": v.object({
+          steps: v.array(
+            v.looseObject({ name: v.string(), run: v.optional(v.string()) }),
+          ),
+        }),
+      }),
+    }),
+    ci,
+  ).jobs["ci-quick-checks"].steps;
+  const list = quickChecks.find(
+    ({ name }) => name === "dated-waiver-expiry: List files the change touches",
+  )?.run;
+  if (list === undefined) {
+    throw new TypeError("Missing dated waiver change listing");
+  }
+  const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-scope-"));
+  const runnerTemp = mkdtempSync(path.join(tmpdir(), "dated-waiver-runner-"));
+  try {
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd: directory });
+      expect(result.exitCode).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const commit = (file: string) => {
+      writeFileSync(path.join(directory, file), `${file}\n`);
+      git("add", file);
+      git("commit", "--quiet", "--message", file);
+    };
+    git("init", "--quiet", "--initial-branch=main");
+    git("config", "user.email", "ci@example.invalid");
+    git("config", "user.name", "CI");
+    commit("readme.md");
+    const before = git("rev-parse", "HEAD");
+    // One push carries the waiver change and then an unrelated commit.
+    commit("waivers.ts");
+    commit("unrelated.ts");
+    git("update-ref", "refs/remotes/origin/main", before);
+
+    const listed = (event: string, env: Record<string, string> = {}) => {
+      const githubEnv = path.join(runnerTemp, `${event}.env`);
+      writeFileSync(githubEnv, "");
+      const run = Bun.spawnSync(["bash", "-euo", "pipefail", "-c", list], {
+        cwd: directory,
+        env: {
+          ...process.env,
+          GITHUB_ENV: githubEnv,
+          GITHUB_EVENT_NAME: event,
+          RUNNER_TEMP: runnerTemp,
+          TARGET_REF: "",
+          PUSH_BEFORE: "",
+          ...env,
+        },
+      });
+      expect(run.stderr.toString(), event).toBe("");
+      expect(run.exitCode, event).toBe(0);
+      const changed = path.join(runnerTemp, "dated-waiver-changed-files");
+      expect(readFileSync(githubEnv, "utf-8"), event).toBe(
+        `DATED_WAIVER_CHANGED_FILES=${changed}\n`,
+      );
+      return readFileSync(changed, "utf-8");
+    };
+
+    expect(listed("push", { PUSH_BEFORE: before })).toBe(
+      "unrelated.ts\0waivers.ts\0",
+    );
+    // A pushed-from commit outside the checkout lists every tracked file.
+    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe(
+      "readme.md\0unrelated.ts\0waivers.ts\0",
+    );
+    expect(listed("pull_request", { TARGET_REF: "main" })).toBe(
+      "unrelated.ts\0waivers.ts\0",
+    );
+    expect(listed("merge_group", { TARGET_REF: "refs/heads/main" })).toBe(
+      "unrelated.ts\0waivers.ts\0",
+    );
+    for (const event of ["schedule", "workflow_dispatch"]) {
+      expect(listed(event), event).toBe("");
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+    rmSync(runnerTemp, { force: true, recursive: true });
   }
 });

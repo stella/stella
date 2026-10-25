@@ -1,5 +1,27 @@
 # @stll/ui
 
+## 0.51.0
+
+### Minor Changes
+
+- [#6672](https://github.com/stella/stella/pull/6672) [`281665b`](https://github.com/stella/stella/commit/281665baa193e2ab2b3acba0da3a259ec16a770a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `MenuPreviewLayout` takes `previewWidth: "remaining"` for a menu whose width is set from outside: the preview takes the width the options leave and is hidden below 10rem, so it never paints past the menu. The default, `"fixed"`, keeps the fixed-width pane.
+
+- [#6488](https://github.com/stella/stella/pull/6488) [`a765cda`](https://github.com/stella/stella/commit/a765cdaeb5718de31b707958364dfde7b6c98594) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose controlled browser time for component and integration tests.
+
+- [#5825](https://github.com/stella/stella/pull/5825) [`2dd1699`](https://github.com/stella/stella/commit/2dd16994dfba74f35540d47b1582e428ba7b4bc1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `textMarkBoxClass` draws a text mark as a box over painted text, such as a PDF page, where no text decoration reaches the words: the hue, wash and ring of `textMarkClass`, with a line variant as the box's edge.
+
+- [#6110](https://github.com/stella/stella/pull/6110) [`85a56db`](https://github.com/stella/stella/commit/85a56dbbf73156b5b7e4a0e37c73db382aa02ada) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `useInspectorPaneWidth` takes its storage through an injected `persistence` option (`InspectorPaneWidthPersistence`); `parsePersistedPaneWidth`, `readStoredWidth` and `writeStoredWidth` are removed.
+
+### Patch Changes
+
+- [#6758](https://github.com/stella/stella/pull/6758) [`7835dfd`](https://github.com/stella/stella/commit/7835dfd514ad56fce2a4f00fd4bf0bd522188d34) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `LandingLayout` and `LandingSection` leave a 4px inset inside their scroll viewports, so the box's outer halo and a row's focus ring are no longer clipped at the sides.
+
+## 0.50.2
+
+### Patch Changes
+
+- [#6204](https://github.com/stella/stella/pull/6204) [`81f8075`](https://github.com/stella/stella/commit/81f80750038583d4b7377622cc93108c4c7c89ab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `HorizontalScroller`: a horizontal scroll area with a visible scrollbar, edge fades, previous and next buttons, vertical-wheel scrolling and focus scroll-into-view.
+
 ## 0.50.1
 
 ### Patch Changes

@@ -1,14 +1,13 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::{sync::PoisonError, time::Instant};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
-    ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat,
-    ClipboardEditorNameUpdate, ClipboardGroup, ClipboardGroupColor,
-    ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
-    HISTORY_EVENT,
+    ClipboardAppState, ClipboardCaptureStatus, ClipboardCaptureUpdate,
+    ClipboardCopyFormat, ClipboardEditorNameUpdate, ClipboardGroup,
+    ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
+    ClipboardSnapshot, HISTORY_EVENT,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{
@@ -80,6 +79,17 @@ pub fn clipboard_get_snapshot(
     }
   }
   Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_get_capture_update(
+  caller: ClipboardCaller,
+  revision: u32,
+  state: State<'_, ClipboardAppState>,
+) -> Result<Option<ClipboardCaptureUpdate>, String> {
+  let mut manager = state.lock().map_err(lock_error)?;
+  manager.prune_expired(chrono::Utc::now())?;
+  Ok(manager.capture_update_for_revision(&caller, revision))
 }
 
 #[tauri::command]
@@ -429,15 +439,17 @@ pub fn clipboard_get_image_preview(
   id: String,
   state: State<'_, ClipboardAppState>,
 ) -> Result<String, String> {
-  let preview = {
+  let (preview, cache) = {
     let manager = state.lock().map_err(lock_error)?;
-    manager.image_preview(&id, &caller)?
-  }
-  .load()?;
-  Ok(format!(
-    "data:image/png;base64,{}",
-    STANDARD.encode(preview)
-  ))
+    (
+      manager.image_preview(&id, &caller)?,
+      std::sync::Arc::clone(&manager.preview_cache),
+    )
+  };
+  let mut cache = cache.lock().map_err(crate::logging::with_cause_logged(
+    "clipboard preview cache lock is poisoned",
+  ))?;
+  cache.load_preview(&id, preview)
 }
 
 #[tauri::command]

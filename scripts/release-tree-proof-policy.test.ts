@@ -234,6 +234,11 @@ const dispatcherProblems = (source: string) => {
   ) {
     problems.push("dispatcher must verify the PR chain before dispatch");
   }
+  if (!script.includes('if [[ "$verified" -eq 3 ]]; then')) {
+    problems.push(
+      "dispatcher must skip, not fail, when main moved past the head",
+    );
+  }
   if (
     !script.includes("for workflow in deploy-staging main-heavy; do") ||
     !script.includes('--ref main -f sha="$PROOF_SHA" -f release_candidate=true')

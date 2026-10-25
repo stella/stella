@@ -2407,7 +2407,6 @@ const PositionConfirmStep = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 onChange={(next) => updateAt(index, next)}
                 onRemove={() =>
                   onChange(positions.filter((_, at) => at !== index))
@@ -2508,7 +2507,6 @@ const ProposalStreamView = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 passageTexts={passageTexts}
                 position={position}
                 referenceNames={referenceNames}
