@@ -218,3 +218,16 @@ describe("markup the parser does not classify", () => {
     expect(documentAst.blocks.at(0)?.type).toBe("paragraph");
   });
 });
+
+describe("a table's caption", () => {
+  test("is kept, before the rows it names", () => {
+    const { fulltext } = parse({
+      type: "html",
+      text: "<table><caption>Quadro de votação</caption><tr><td>Relator</td><td>Vencido</td></tr><tr><td>Revisor</td><td>Vencedor</td></tr></table>",
+    });
+    expect(fulltext).toContain("Quadro de votação");
+    expect(fulltext.indexOf("Quadro de votação")).toBeLessThan(
+      fulltext.indexOf("Relator"),
+    );
+  });
+});

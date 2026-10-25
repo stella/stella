@@ -367,6 +367,25 @@ const readTable = (
   table: Element,
   flowInto: (cell: Element) => void,
 ): void => {
+  // A caption is the table's own text, printed above its rows; anything
+  // else in the table that is neither a row nor a row group is read in place
+  // too, so no text the court put in a table is left out (rule 10).
+  for (const child of table.children) {
+    if (!isTag(child)) {
+      continue;
+    }
+    const tag = child.tagName.toLowerCase();
+    if (
+      tag !== "tr" &&
+      tag !== "thead" &&
+      tag !== "tbody" &&
+      tag !== "tfoot" &&
+      tag !== "colgroup" &&
+      tag !== "col"
+    ) {
+      flowInto(child);
+    }
+  }
   const rows = ownRows(table).map((row) =>
     cellsOf(row).map((cell) => ({ element: cell, cell: cellOf(cell) })),
   );
