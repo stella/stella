@@ -461,10 +461,33 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
     );
     await page.getByRole("tab", { name: "Original", exact: true }).click();
 
+    // A box sits over the words it was drawn for: the middle of a word of
+    // the claim, as the page's text layer lays it out, falls inside the box.
+    const expectBoxOverWord = async (claim: { id: string }, word: string) => {
+      const drawn = await box(claim).boundingBox();
+      const text = await page
+        .locator("[data-text-layer] span")
+        .filter({ hasText: word })
+        .first()
+        .boundingBox();
+      if (drawn === null || text === null) {
+        throw new Error(`The box or the text of "${word}" is not laid out`);
+      }
+      const middle = {
+        x: text.x + text.width / 2,
+        y: text.y + text.height / 2,
+      };
+      expect(middle.x).toBeGreaterThanOrEqual(drawn.x);
+      expect(middle.x).toBeLessThanOrEqual(drawn.x + drawn.width);
+      expect(middle.y).toBeGreaterThanOrEqual(drawn.y);
+      expect(middle.y).toBeLessThanOrEqual(drawn.y + drawn.height);
+    };
+
     // The first claim is selected and drawn over the words it was read from.
     await expect(box(signed)).toBeVisible();
     await expect(box(signed)).toHaveAttribute("data-active", "true");
     await expect(detail(signed)).toBeVisible();
+    await expectBoxOverWord(signed, "signed");
 
     // A click on another claim's box selects that claim.
     await box(deposit).click();
@@ -484,6 +507,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
     await expect(detail(delivered)).toBeVisible();
     await expect(box(delivered)).toHaveAttribute("data-active", "true");
     await expect(box(delivered)).toBeInViewport();
+    await expectBoxOverWord(delivered, "delivered");
     expect(forbiddenRequests).toEqual([]);
   } finally {
     await deleteTestWorkspace(request, workspace.id);
