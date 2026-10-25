@@ -85,12 +85,10 @@ import {
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import {
-  hardWrapJoins,
-  hardWrapMarginOf,
+  type ContinuingJoin,
   LINE_JOINS,
-  type LineJoin,
   printedLine,
-  typescriptText,
+  readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -379,9 +377,18 @@ type PrintedUsLine = {
   readonly run: number;
 };
 
+type UsDocumentLinesOptions = {
+  /**
+   * Trims a line's inlines. Each printed line is trimmed once and each
+   * paragraph once more; a test counts the work through it.
+   */
+  normalize?: typeof normalizeInlineLine;
+};
+
 /** Shared-model entry point, including nested tables and content controls. */
 export const usDocumentLinesOf = (
   document: ReturnType<typeof readRtfString>,
+  { normalize = normalizeInlineLine }: UsDocumentLinesOptions = {},
 ): ParsedLine[] => {
   const printed: PrintedUsLine[] = [];
   let run = 0;
@@ -418,7 +425,7 @@ export const usDocumentLinesOf = (
     }
   };
   visit(document.package.document.content);
-  return reflowUsLines(printed);
+  return reflowUsLines(printed, normalize);
 };
 
 const mapInlineText = (
@@ -434,48 +441,55 @@ const mapInlineText = (
       : node;
   });
 
-/** The inlines without their last character, wherever it is nested. */
-const withoutLastCharacter = (inlines: readonly Inline[]): Inline[] => {
-  const result = [...inlines];
-  for (let index = result.length - 1; index >= 0; index -= 1) {
-    const node = result[index];
+/**
+ * Drop the last character of the inlines, wherever it is nested. Touches
+ * only the trailing node, so it costs the same however long the paragraph.
+ */
+const dropLastCharacter = (inlines: Inline[]): void => {
+  for (let index = inlines.length - 1; index >= 0; index -= 1) {
+    const node = inlines[index];
     if (node === undefined || plainTextOf([node]).length === 0) {
       continue;
     }
     if (node.type === "text") {
-      result[index] = { ...node, text: node.text.slice(0, -1) };
-      return result;
+      inlines[index] = { ...node, text: node.text.slice(0, -1) };
+      return;
     }
     if (hasInlineChildren(node)) {
-      result[index] = {
-        ...node,
-        children: withoutLastCharacter(node.children),
-      };
-      return result;
+      const children = [...node.children];
+      dropLastCharacter(children);
+      inlines[index] = { ...node, children };
+      return;
     }
     // A line break: one character on the text axis, and the last one.
-    result.splice(index, 1);
-    return result;
+    inlines.splice(index, 1);
+    return;
   }
-  return result;
 };
 
-/** Two printed lines of one paragraph as one line. */
-const joinPrintedLines = (
-  above: readonly Inline[],
-  below: readonly Inline[],
-  join: Exclude<LineJoin, typeof LINE_JOINS.BREAK>,
-): Inline[] => {
-  const head = normalizeInlineLine(above).inlines;
-  const tail = normalizeInlineLine(below).inlines;
+/**
+ * Append the next printed line, already trimmed, to a paragraph whose lines
+ * were trimmed as they came, as the margin joined them.
+ */
+const appendPrintedLine = (
+  paragraph: Inline[],
+  line: readonly Inline[],
+  join: ContinuingJoin,
+): void => {
   switch (join) {
     case LINE_JOINS.SPACE:
-      return [...head, { type: "text", text: " " }, ...tail];
-    case LINE_JOINS.HYPHEN:
-      return [...withoutLastCharacter(head), ...tail];
+      paragraph.push({ type: "text", text: " " }, ...line);
+      return;
+    case LINE_JOINS.WORD:
+      dropLastCharacter(paragraph);
+      paragraph.push(...line);
+      return;
+    case LINE_JOINS.COMPOUND:
+      paragraph.push(...line);
+      return;
     default:
       join satisfies never;
-      return panic("Unhandled printed line join");
+      panic("Unhandled printed line join");
   }
 };
 
@@ -483,23 +497,26 @@ const joinPrintedLines = (
  * The printed lines as the court's paragraphs: letter-spaced words read as
  * words, and a typescript's margin-wrapped lines joined back together. See
  * `hard-wrapped-lines.ts` for when a document counts as one.
+ *
+ * Each line is trimmed once as it joins and each paragraph once when it
+ * closes, so the work grows with the text, not with a paragraph's length
+ * times its lines.
  */
-const reflowUsLines = (printed: readonly PrintedUsLine[]): ParsedLine[] => {
-  const layouts = printed.map(({ line }) =>
-    line.kind === "body" ? printedLine(plainTextOf(line.value)) : null,
+const reflowUsLines = (
+  printed: readonly PrintedUsLine[],
+  normalize: typeof normalizeInlineLine,
+): ParsedLine[] => {
+  const reading = readHardWrap(
+    printed.map(({ line }) =>
+      line.kind === "body" ? printedLine(plainTextOf(line.value)) : null,
+    ),
   );
-  const margin = hardWrapMarginOf(layouts.filter((layout) => layout !== null));
-  const joins =
-    margin === null
-      ? []
-      : hardWrapJoins(layouts, margin).map((join, index) =>
-          printed[index]?.run === printed[index + 1]?.run
-            ? join
-            : LINE_JOINS.BREAK,
-        );
+  const joins = (reading?.joins ?? []).map((join, index) =>
+    printed[index]?.run === printed[index + 1]?.run ? join : LINE_JOINS.BREAK,
+  );
   const finish = (inlines: readonly Inline[]): ParsedLineData =>
-    normalizeInlineLine(
-      margin === null ? [...inlines] : mapInlineText(inlines, typescriptText),
+    normalize(
+      reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
     mapInlineText(inlines, collapseLetterSpacing);
@@ -514,13 +531,21 @@ const reflowUsLines = (printed: readonly PrintedUsLine[]): ParsedLine[] => {
       });
       continue;
     }
-    const inlines = spelled(line.value);
+    const continues = (joins[index] ?? LINE_JOINS.BREAK) !== LINE_JOINS.BREAK;
     const join = joins[index - 1] ?? LINE_JOINS.BREAK;
-    paragraph =
-      paragraph === null || join === LINE_JOINS.BREAK
-        ? inlines
-        : joinPrintedLines(paragraph, inlines, join);
-    if ((joins[index] ?? LINE_JOINS.BREAK) === LINE_JOINS.BREAK) {
+    if (paragraph === null || join === LINE_JOINS.BREAK) {
+      // A paragraph of one line is trimmed when it closes.
+      paragraph = continues
+        ? [...normalize(spelled(line.value)).inlines]
+        : spelled(line.value);
+    } else {
+      appendPrintedLine(
+        paragraph,
+        normalize(spelled(line.value)).inlines,
+        join,
+      );
+    }
+    if (!continues) {
       lines.push({ kind: "body", value: finish(paragraph) });
       paragraph = null;
     }

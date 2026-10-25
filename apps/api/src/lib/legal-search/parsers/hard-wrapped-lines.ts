@@ -12,11 +12,13 @@ import { panic } from "better-result";
  * open with a number or a Roman numeral reads as a heading or a paragraph
  * number.
  *
- * The margin itself is the evidence. A document is hard-wrapped when most
- * of its lines end at one width; a line ending at that width continues on
- * the next one, unless the next line is indented as a new paragraph. Every
- * other line ends where the author ended it, and stays a line. A document
- * whose lines do not share a margin is never reflowed.
+ * Two things together make a text a typescript: most of its lines end at
+ * one width, and many of them end there mid-sentence, the next line going
+ * on in lowercase or the word split by a hyphen. Short paragraphs of
+ * similar length share a width too, but each ends its sentence. Only in a
+ * typescript are line ends read as wrapping, and even there a line that
+ * ends a sentence ends its paragraph unless the typewriter stretched it to
+ * the margin.
  */
 
 /** Where a printed line sits on the page, from its untrimmed text. */
@@ -35,11 +37,16 @@ export const LINE_JOINS = {
   BREAK: "break",
   /** The margin broke the line between two words. */
   SPACE: "space",
-  /** The margin broke a word, and the hyphen is the break's, not the word's. */
-  HYPHEN: "hyphen",
+  /** The margin broke a word: the hyphen is the break's and goes. */
+  WORD: "word",
+  /** The margin fell after the hyphen of a compound, which stays. */
+  COMPOUND: "compound",
 } as const;
 
 export type LineJoin = (typeof LINE_JOINS)[keyof typeof LINE_JOINS];
+
+/** A join that continues the paragraph. */
+export type ContinuingJoin = Exclude<LineJoin, typeof LINE_JOINS.BREAK>;
 
 const HARD_WRAP = {
   /** Fewest printed lines that can show a margin. */
@@ -50,6 +57,10 @@ const HARD_WRAP = {
   maxMarginWidth: 100,
   /** Share of the lines that must end at the margin. */
   minShare: 0.5,
+  /** Lines that must end at the margin mid-sentence, at least. */
+  minWrapped: 4,
+  /** Share of the lines that must end at the margin mid-sentence. */
+  minWrappedShare: 0.25,
   /**
    * A justified line ends at the margin; a ragged one (a bold ruling, a
    * line whose next word was long) up to a short word before it.
@@ -57,6 +68,11 @@ const HARD_WRAP = {
   slackBelow: 8,
   /** A line may overrun the margin by a character or two. */
   slackAbove: 2,
+  /**
+   * A line this close to the margin was filled to it: a document typed on
+   * two machines has two margins a character or two apart.
+   */
+  filledSlack: 2,
   /** An indent at least this deep centres a line: a heading, never prose. */
   centredIndent: 10,
 } as const;
@@ -71,17 +87,65 @@ export const printedLine = (raw: string): PrintedLine => {
   };
 };
 
+/** What a typescript's line ends are, once a text is known to be one. */
+export type HardWrapReading = {
+  /** The width the typescript's lines end at. */
+  readonly margin: number;
+  /** How each line continues into the next: one join per adjacent pair. */
+  readonly joins: readonly LineJoin[];
+  /**
+   * Typewriter residue removed from the text of a reflowed paragraph: the
+   * doubled spaces lines were justified with, and a hyphen a margin left
+   * inside a line when the text was rewrapped before it reached the
+   * publisher ("Ústavního sou- du"), where the text itself spells the word
+   * whole elsewhere.
+   */
+  readonly clean: (text: string) => string;
+};
+
 /**
- * The width most lines of a document end at, when they share one.
- *
- * `null` for a document whose paragraphs are each one line, which is every
- * decision written on a computer: their widths are as varied as their
- * paragraphs.
+ * A sentence ends here: a full stop, a question, an exclamation, a colon.
+ * Not after an initial ("proti žalovanému P." / "F. (dále jen …").
  */
-export const hardWrapMarginOf = (
-  lines: readonly PrintedLine[],
+const SENTENCE_END_RE = /(?<!(?:^|[\s(])\p{Lu})[.!?:]["'“”’)]*$/u;
+const OPENS_SENTENCE_RE = /^["'„“(]*\p{Lu}/u;
+/** A line ending in a hyphen the margin may have put there. */
+const LINE_END_HYPHEN_RE = /(?<stem>\p{L}+)(?<mark>[-\u00ad])$/u;
+const SOFT_HYPHEN = "\u00ad";
+/** The typewriter stretched the line: words apart by more than a space. */
+const JUSTIFIED_RE = /\S {2,}\S/u;
+
+const endsAtMargin = (line: PrintedLine, margin: number): boolean =>
+  line.width >= margin - HARD_WRAP.slackBelow &&
+  line.width <= margin + HARD_WRAP.slackAbove;
+
+/**
+ * A line the margin cut mid-sentence: it ends at the margin, and either its
+ * last word is hyphenated or it ends without punctuation and the next line
+ * goes on in lowercase.
+ */
+const wrapsMidSentence = (
+  above: PrintedLine | null,
+  line: PrintedLine | null,
+  margin: number,
+): boolean =>
+  above !== null &&
+  line !== null &&
+  line.text !== "" &&
+  endsAtMargin(above, margin) &&
+  (LINE_END_HYPHEN_RE.test(above.text) ||
+    (!SENTENCE_END_RE.test(above.text) && /^\p{Ll}/u.test(line.text)));
+
+/**
+ * The width most lines end at, when they share one and the text wraps at
+ * it mid-sentence often enough to be a typescript.
+ */
+const hardWrapMarginOf = (
+  lines: readonly (PrintedLine | null)[],
 ): number | null => {
-  const printed = lines.filter((line) => line.width > 0);
+  const printed = lines.filter(
+    (line): line is PrintedLine => line !== null && line.width > 0,
+  );
   if (printed.length < HARD_WRAP.minLines) {
     return null;
   }
@@ -103,12 +167,15 @@ export const hardWrapMarginOf = (
     return null;
   }
   const atMargin = printed.filter((line) => endsAtMargin(line, margin)).length;
-  return atMargin / printed.length >= HARD_WRAP.minShare ? margin : null;
+  const wrapped = lines.filter((line, index) =>
+    wrapsMidSentence(line, lines[index + 1] ?? null, margin),
+  ).length;
+  return atMargin / printed.length >= HARD_WRAP.minShare &&
+    wrapped >= HARD_WRAP.minWrapped &&
+    wrapped / printed.length >= HARD_WRAP.minWrappedShare
+    ? margin
+    : null;
 };
-
-const endsAtMargin = (line: PrintedLine, margin: number): boolean =>
-  line.width >= margin - HARD_WRAP.slackBelow &&
-  line.width <= margin + HARD_WRAP.slackAbove;
 
 /**
  * Where the text of a list item starts on its first line: continuation lines
@@ -129,17 +196,6 @@ const hangingIndentOf = (line: PrintedLine): number => {
 const SPACED_DISPLAY_LINE_RE = /^\S(?:\s+\S){3,}$/u;
 
 /**
- * A line indented deeper than the one above it opens a paragraph, unless it
- * is aligned under the text of the list item above it.
- */
-const opensParagraph = (above: PrintedLine, line: PrintedLine): boolean =>
-  line.indent >= HARD_WRAP.centredIndent ||
-  SPACED_DISPLAY_LINE_RE.test(above.text) ||
-  SPACED_DISPLAY_LINE_RE.test(line.text) ||
-  opensListItem(above, line) ||
-  (line.indent > above.indent && line.indent > hangingIndentOf(above));
-
-/**
  * The next item of a list: a marker opening a word, under a line that closed
  * the item before it. A marker before a digit is a date wrapped at the
  * margin (`7.` / `10. 1991`), a dash after an unfinished line is part of a
@@ -156,6 +212,43 @@ const opensListItem = (above: PrintedLine, line: PrintedLine): boolean =>
   !CITES_POINT_RE.test(above.text) &&
   LIST_ITEM_OPENING_RE.test(line.text);
 
+/**
+ * A sentence ending at a line end ends the paragraph when the next line
+ * opens a new sentence, unless the line is filled to the margin: the
+ * typewriter filled every line of a paragraph but its last, stretching it
+ * with doubled spaces where the words fell short. A colon is read the same
+ * way: short, it closes a lead-in ("… takto:" / the ruling); filled, it
+ * goes on into a citation or a quotation ("Ústavní soud ČR:" / "Sbírka
+ * nálezů …"). A line going on in lowercase or with a digit continues an
+ * abbreviation or a date (`sp. zn.` / `18 Co 140/2000`, `ze dne 7.` /
+ * `10. 1991`).
+ */
+const endsParagraph = (
+  above: PrintedLine,
+  line: PrintedLine,
+  margin: number,
+): boolean =>
+  SENTENCE_END_RE.test(above.text) &&
+  OPENS_SENTENCE_RE.test(line.text) &&
+  above.width < margin - HARD_WRAP.filledSlack &&
+  !JUSTIFIED_RE.test(above.text);
+
+/**
+ * A line indented deeper than the one above it opens a paragraph, unless it
+ * is aligned under the text of the list item above it.
+ */
+const opensParagraph = (
+  above: PrintedLine,
+  line: PrintedLine,
+  margin: number,
+): boolean =>
+  line.indent >= HARD_WRAP.centredIndent ||
+  SPACED_DISPLAY_LINE_RE.test(above.text) ||
+  SPACED_DISPLAY_LINE_RE.test(line.text) ||
+  opensListItem(above, line) ||
+  endsParagraph(above, line, margin) ||
+  (line.indent > above.indent && line.indent > hangingIndentOf(above));
+
 /** The sentence goes on: no closing punctuation above, a lowercase word below. */
 const continuesSentence = (
   above: PrintedLine,
@@ -171,75 +264,173 @@ const continuesSentence = (
  * Words a suspended hyphen stands before: in "dvou- a tříletý" the hyphen is
  * the author's, and a margin after it must not weld "dvoua".
  */
-const SUSPENDED_HYPHEN_NEXT_RE = /^(?:a|i|nebo|anebo|či|až|ani)(?=$|[\s,.])/u;
+const SUSPENDED_HYPHEN_NEXT = new Set([
+  "a",
+  "i",
+  "nebo",
+  "anebo",
+  "či",
+  "až",
+  "ani",
+]);
+/** Letters of the second half that must match a word the text spells whole. */
+const ATTESTED_PREFIX_LETTERS = 3;
 
 /**
- * How each line continues into the next, for a hard-wrapped document: one
- * join per adjacent pair, `null` lines (anything that is not body text at
- * this position) always breaking.
+ * The words a text spells, to tell a word the margin split ("dis-" /
+ * "kriminaci", spelled "diskriminace" elsewhere) from a compound whose
+ * hyphen is the author's ("česko-" / "slovenský"). Without the text's own
+ * evidence a hyphen is kept: a compound read as one word changes the word,
+ * a split word read with its hyphen does not.
  */
-export const hardWrapJoins = (
-  lines: readonly (PrintedLine | null)[],
-  margin: number,
-): LineJoin[] =>
-  lines.slice(0, -1).map((above, index) => {
-    const line = lines[index + 1] ?? null;
-    if (
-      above === null ||
-      line === null ||
-      above.text === "" ||
-      line.text === "" ||
-      opensParagraph(above, line) ||
-      !(endsAtMargin(above, margin) || continuesSentence(above, line, margin))
-    ) {
-      return LINE_JOINS.BREAK;
+type Vocabulary = {
+  /** Every word, lowercased and sorted, for prefix lookups. */
+  readonly words: readonly string[];
+  /** Hyphenated compounds the text spells within a line, lowercased. */
+  readonly compounds: ReadonlySet<string>;
+};
+
+const vocabularyOf = (texts: readonly string[]): Vocabulary => {
+  const words = new Set<string>();
+  const compounds = new Set<string>();
+  for (const text of texts) {
+    for (const [word] of text.matchAll(/\p{L}+/gu)) {
+      words.add(word.toLowerCase());
     }
-    return /\p{L}-$/u.test(above.text) &&
-      /^\p{Ll}/u.test(line.text) &&
-      !SUSPENDED_HYPHEN_NEXT_RE.test(line.text)
-      ? LINE_JOINS.HYPHEN
-      : LINE_JOINS.SPACE;
-  });
+    for (const [compound] of text.matchAll(/\p{L}+-\p{L}+/gu)) {
+      compounds.add(compound.toLowerCase());
+    }
+  }
+  return { words: [...words].toSorted(), compounds };
+};
+
+/** Whether the text spells a word starting with `prefix`. */
+const spellsWordStarting = ({ words }: Vocabulary, prefix: string): boolean => {
+  let low = 0;
+  let high = words.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((words[middle] ?? "") < prefix) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return words[low]?.startsWith(prefix) ?? false;
+};
+
+/** How the halves of a hyphenated word read: welded, or as a compound. */
+const hyphenatedJoin = (
+  vocabulary: Vocabulary,
+  stem: string,
+  next: string,
+): LineJoin => {
+  const rest = /^\p{L}+/u.exec(next)?.[0] ?? "";
+  if (SUSPENDED_HYPHEN_NEXT.has(rest)) {
+    return LINE_JOINS.SPACE;
+  }
+  const compound = `${stem}-${rest}`.toLowerCase();
+  if (vocabulary.compounds.has(compound)) {
+    return LINE_JOINS.COMPOUND;
+  }
+  const welded = `${stem}${rest.slice(0, ATTESTED_PREFIX_LETTERS)}`;
+  return spellsWordStarting(vocabulary, welded.toLowerCase())
+    ? LINE_JOINS.WORD
+    : LINE_JOINS.COMPOUND;
+};
+
+const joinOf = (
+  above: PrintedLine | null,
+  line: PrintedLine | null,
+  margin: number,
+  vocabulary: Vocabulary,
+): LineJoin => {
+  if (
+    above === null ||
+    line === null ||
+    above.text === "" ||
+    line.text === "" ||
+    opensParagraph(above, line, margin) ||
+    !(endsAtMargin(above, margin) || continuesSentence(above, line, margin))
+  ) {
+    return LINE_JOINS.BREAK;
+  }
+  const hyphen = LINE_END_HYPHEN_RE.exec(above.text)?.groups;
+  if (hyphen === undefined || !/^\p{Ll}/u.test(line.text)) {
+    return LINE_JOINS.SPACE;
+  }
+  return hyphen["mark"] === SOFT_HYPHEN
+    ? LINE_JOINS.WORD
+    : hyphenatedJoin(vocabulary, hyphen["stem"] ?? "", line.text);
+};
+
+const cleanTypescript =
+  (vocabulary: Vocabulary) =>
+  (text: string): string =>
+    text
+      .replaceAll(/ {2,}/gu, " ")
+      .replaceAll(
+        /(?<stem>\p{L}{2,})- (?<rest>\p{Ll}+)/gu,
+        (match, stem: string, rest: string) =>
+          hyphenatedJoin(vocabulary, stem, rest) === LINE_JOINS.WORD
+            ? `${stem}${rest}`
+            : match,
+      );
 
 /**
- * Typewriter residue inside a reflowed paragraph: the doubled spaces a line
- * was justified with, and a hyphen a margin left behind when the text was
- * once rewrapped before it reached the publisher ("Ústavního sou- du").
- * A hyphen before a conjunction is a suspended one, and stays.
+ * Read a text's printed lines as a typescript: `null` for a text that is
+ * not one, whose lines then stay as they are. `null` entries (anything that
+ * is not body text at that position) always break.
  */
-export const typescriptText = (text: string): string =>
-  text
-    .replaceAll(/ {2,}/gu, " ")
-    .replaceAll(
-      /(?<=\p{L}\p{Ll})- (?!(?:a|i|nebo|anebo|či|až|ani)(?:$|[\s,.]))(?=\p{Ll})/gu,
-      "",
-    );
+export const readHardWrap = (
+  lines: readonly (PrintedLine | null)[],
+): HardWrapReading | null => {
+  const margin = hardWrapMarginOf(lines);
+  if (margin === null) {
+    return null;
+  }
+  const vocabulary = vocabularyOf(
+    lines.flatMap((line) => (line === null ? [] : [line.text])),
+  );
+  return {
+    margin,
+    joins: lines
+      .slice(0, -1)
+      .map((above, index) =>
+        joinOf(above, lines[index + 1] ?? null, margin, vocabulary),
+      ),
+    clean: cleanTypescript(vocabulary),
+  };
+};
 
 /**
  * Plain-text lines (an abstract cell, one `<br>` per printed line) as
- * paragraphs. A text without a margin keeps its lines.
+ * paragraphs. A text that is not a typescript keeps its lines.
  */
 export const reflowPrintedText = (rawLines: readonly string[]): string[] => {
   const lines = rawLines.map(printedLine);
-  const margin = hardWrapMarginOf(lines);
-  if (margin === null) {
+  const reading = readHardWrap(lines);
+  if (reading === null) {
     return lines.map(({ text }) => text);
   }
-  const joins = hardWrapJoins(lines, margin);
   const paragraphs: string[] = [];
-  let current = lines[0]?.text ?? "";
-  for (const [index, join] of joins.entries()) {
+  let current: string[] = [lines[0]?.text ?? ""];
+  for (const [index, join] of reading.joins.entries()) {
     const next = lines[index + 1]?.text ?? "";
     switch (join) {
       case LINE_JOINS.BREAK:
-        paragraphs.push(typescriptText(current));
-        current = next;
+        paragraphs.push(reading.clean(current.join("")));
+        current = [next];
         break;
       case LINE_JOINS.SPACE:
-        current = `${current} ${next}`;
+        current.push(" ", next);
         break;
-      case LINE_JOINS.HYPHEN:
-        current = `${current.slice(0, -1)}${next}`;
+      case LINE_JOINS.WORD:
+        current[current.length - 1] = (current.at(-1) ?? "").slice(0, -1);
+        current.push(next);
+        break;
+      case LINE_JOINS.COMPOUND:
+        current.push(next);
         break;
       default: {
         join satisfies never;
@@ -247,6 +438,6 @@ export const reflowPrintedText = (rawLines: readonly string[]): string[] => {
       }
     }
   }
-  paragraphs.push(typescriptText(current));
+  paragraphs.push(reading.clean(current.join("")));
   return paragraphs;
 };

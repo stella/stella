@@ -44,15 +44,29 @@ const typeset = (words: readonly string[]): string[] => {
   ];
 };
 
-const word = fc
-  .tuple(
-    fc.constantFrom("", "", "", "S", "Ú", "Č"),
-    fc.stringMatching(/^[a-zěščřžýáíéůú]{2,7}$/u),
-  )
-  .map(([capital, rest]) => `${capital}${rest}`);
+const word = fc.stringMatching(/^[a-zěščřžýáíéůú]{2,7}$/u);
+const capitalised = (text: string): string =>
+  `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+/** One sentence: a capital, lowercase words, a full stop. */
 const sentence = fc
   .array(word, { minLength: 40, maxLength: 80 })
-  .map((words) => [...words.slice(0, -1), `${words.at(-1) ?? ""}.`]);
+  .map((words) => [
+    capitalised(words[0] ?? "soud"),
+    ...words.slice(1, -1),
+    `${words.at(-1) ?? ""}.`,
+  ]);
+
+/**
+ * A paragraph of a decision written on a computer: one line, a sentence or
+ * a lead-in, of the same order of length as a typescript's lines.
+ */
+const ordinaryParagraph = fc
+  .tuple(
+    fc.array(word, { minLength: 4, maxLength: 16 }),
+    fc.constantFrom(".", ".", ":"),
+  )
+  .map(([words, end]) => `${capitalised(words.join(" "))}${end}`)
+  .filter((text) => text.length >= 40 && text.length <= 100);
 
 describe("printed lines of a typescript", () => {
   test("wrapped at one margin are read back as the paragraphs printed", () => {
@@ -73,6 +87,40 @@ describe("printed lines of a typescript", () => {
       ),
       { numRuns: 100 },
     );
+  });
+
+  test("of ordinary paragraphs of similar length stay as printed", () => {
+    assertProperty(
+      "sentence paragraphs are not a typescript",
+      fc.property(
+        fc.array(
+          fc.tuple(ordinaryParagraph, fc.boolean(), fc.nat({ max: 3 })),
+          { minLength: 1, maxLength: 40 },
+        ),
+        (paragraphs) => {
+          const lines = paragraphs.flatMap(([text, blank, indent]) => [
+            `${" ".repeat(indent)}${text}`,
+            ...(blank ? [""] : []),
+          ]);
+          expect(reflowPrintedText(lines)).toEqual(
+            lines.map((line) => line.trim()),
+          );
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+
+  test("keep sentences of one width and the ruling after takto: apart", () => {
+    const lines = [
+      "Ústavní soud rozhodl o ústavní stížnosti takto:",
+      "Ústavní stížnost se zamítá.",
+      ...Array.from({ length: 4 }, () => [
+        "Ústavní soud posoudil návrh a neshledal jej důvodným.",
+        "Napadené rozhodnutí obecného soudu bylo řádně odůvodněno.",
+      ]).flat(),
+    ];
+    expect(reflowPrintedText(lines)).toEqual(lines);
   });
 
   test("that do not share a margin stay as printed", () => {
@@ -112,8 +160,9 @@ describe("printed lines of a typescript", () => {
     expect(paragraphs[0]).not.toMatch(/ {2}/u);
   });
 
-  // Pl. ÚS 36/93, verbatim: a hyphenated word, and a paragraph whose first
-  // line is indented with no blank line before it.
+  // Pl. ÚS 36/93, verbatim: a hyphenated word the decision spells whole
+  // elsewhere, and a paragraph whose first line is indented with no blank
+  // line before it.
   test("join a word the margin hyphenated, and break at an indent", () => {
     const paragraphs = reflowPrintedText([
       "u většiny  vědeckopedagogických  pracovníků  ke  změně  pracovních",
@@ -129,8 +178,10 @@ describe("printed lines of a typescript", () => {
       "založený na úctě k právům a svobodám člověka vylučuje, aby princip",
       "stejného zacházení v podmínkách  zákona byl porušován pro dosažení",
       "krátkodobých cílů.",
+      "",
+      "- s Úmluvou č. 111 o diskriminaci (zaměstnání a povolání),",
     ]);
-    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs).toHaveLength(4);
     expect(paragraphs[0]).toEndWith("cíle, které snad novela sledovala.");
     expect(paragraphs[1]).toStartWith(
       "Na základě výše uvedených argumentů zastávám stanovisko, že článek II. zákona č. 216/1993 Sb. je v rozporu s ustanovením čl. 1 Ústavy",
@@ -138,6 +189,62 @@ describe("printed lines of a typescript", () => {
     expect(paragraphs[1]).toContain(
       "s Úmluvou č. 111 o diskriminaci v zaměstnání a povolání.",
     );
+  });
+
+  describe("a hyphen at the margin", () => {
+    /** A typescript paragraph whose second line ends on `last`. */
+    const brokenAt = (last: string, next: string): string[] => [
+      justify(
+        ["Ústavní", "soud", "posoudil", "námitky", "stěžovatele", "ve", "věci"],
+        INDENT,
+      ),
+      justify(["podle", "zákona", "o", "státní", "příslušnosti", last], ""),
+      `${next} a neshledal je důvodnými, jak dále uvádí.`,
+    ];
+    const around = typeset(
+      "Stěžovatel se domáhal zrušení rozhodnutí krajského soudu a tvrdil, že soud nevzal v úvahu jeho námitky ani důkazy, které navrhl, a že tím porušil jeho právo na spravedlivý proces podle čl. 36 odst. 1 Listiny základních práv a svobod, neboť jej zbavil možnosti vyjádřit se k provedeným důkazům a navrhnout důkazy vlastní.".split(
+        " ",
+      ),
+    );
+    const typescriptAround = (paragraph: readonly string[]): string[] => [
+      ...paragraph,
+      "",
+      ...around,
+      "",
+      ...around,
+    ];
+
+    test("of a compound stays, with no space", () => {
+      const [first] = reflowPrintedText(
+        typescriptAround(brokenAt("česko-", "slovenské")),
+      );
+      expect(first).toContain("o státní příslušnosti česko-slovenské a");
+    });
+
+    test("of a compound the text spells elsewhere stays", () => {
+      const [first] = reflowPrintedText([
+        ...typescriptAround(brokenAt("vědecko-", "pedagogické")),
+        "",
+        "Jde o vědecko-pedagogické pracovníky.",
+      ]);
+      expect(first).toContain("příslušnosti vědecko-pedagogické a");
+    });
+
+    test("in a word the text spells whole elsewhere goes", () => {
+      const [first] = reflowPrintedText([
+        ...typescriptAround(brokenAt("stěžova-", "telovy")),
+        "",
+        "Ústavní soud námitky stěžovatelovy odmítl.",
+      ]);
+      expect(first).toContain("příslušnosti stěžovatelovy a");
+    });
+
+    test("marked as soft by the source goes", () => {
+      const [first] = reflowPrintedText(
+        typescriptAround(brokenAt("stěžova­", "telovy")),
+      );
+      expect(first).toContain("příslušnosti stěžovatelovy a");
+    });
   });
 
   test("keep a suspended hyphen before a conjunction", () => {

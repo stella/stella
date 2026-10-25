@@ -29,6 +29,11 @@ describe("letter-spaced emphasis", () => {
       "Poučení: Proti rozhodnutí Ústavního soudu se nelze odvolat.",
     ],
     ["J M É N E M   R E P U B L I K Y", "JMÉNEM REPUBLIKY"],
+    // Punctuation set against the last letter rather than spaced from it.
+    ["N á v r h   s e   z a m í t á.", "Návrh se zamítá."],
+    ["t a k t o:", "takto:"],
+    ["z těchto d ů v o d ů:", "z těchto důvodů:"],
+    ["O d ů v o d n ě n í :", "Odůvodnění:"],
   ])("reads %j as %j", (spaced, words) => {
     expect(collapseLetterSpacing(spaced)).toBe(words);
   });
@@ -38,9 +43,12 @@ describe("letter-spaced emphasis", () => {
       "spaced phrases collapse to their words",
       fc.property(
         fc.array(czechWord, { minLength: 1, maxLength: 5 }),
-        (words) => {
+        fc.constantFrom("", ".", " .", ":", " :"),
+        (words, end) => {
           fc.pre(words.some((word) => [...word].length >= 4));
-          expect(collapseLetterSpacing(spaceOut(words))).toBe(words.join(" "));
+          expect(collapseLetterSpacing(`${spaceOut(words)}${end}`)).toBe(
+            `${words.join(" ")}${end.trim()}`,
+          );
         },
       ),
       { numRuns: 200 },
@@ -51,6 +59,7 @@ describe("letter-spaced emphasis", () => {
     "odst. 1 a 2 písm. a) a b)",
     "v § 3 a 4 a v čl. 1",
     "A. M., bytem SRN, a O. M., bytem, SRN",
+    "společnosti s r. o. a a. s.",
     "Ústavní  soud  České  republiky",
   ])("leaves ordinary text %j as it is", (text) => {
     expect(collapseLetterSpacing(text)).toBe(text);

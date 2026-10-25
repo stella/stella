@@ -20,8 +20,11 @@ type Token = {
 };
 
 const LETTER_RE = /^\p{L}\p{M}*$/u;
-const TRAILING_MARK_RE = /^[.,:;!?]$/u;
-const SINGLE_GAP_RE = /^[ \t ]$/u;
+/** The last letter with the word's punctuation set against it ("á."). */
+const MARKED_LETTER_RE = /^\p{L}\p{M}*[.,:;!?]+$/u;
+/** Punctuation spaced like one more letter ("á ."). */
+const TRAILING_MARK_RE = /^[.,:;!?]+$/u;
+const SINGLE_GAP_RE = /^[ \t\u00a0]$/u;
 const STRONG_RUN_LETTERS = 4;
 const WEAK_RUN_LETTERS = 2;
 
@@ -68,12 +71,14 @@ const runsOf = (tokens: readonly Token[]): Run[] => {
       letters += 1;
       index += 1;
     }
-    if (
-      index < tokens.length &&
-      TRAILING_MARK_RE.test(tokens[index]?.text ?? "") &&
-      SINGLE_GAP_RE.test(tokens[index]?.gap ?? "")
-    ) {
-      index += 1;
+    const last = tokens[index];
+    if (last !== undefined && SINGLE_GAP_RE.test(last.gap)) {
+      if (MARKED_LETTER_RE.test(last.text)) {
+        letters += 1;
+        index += 1;
+      } else if (TRAILING_MARK_RE.test(last.text)) {
+        index += 1;
+      }
     }
     if (letters >= WEAK_RUN_LETTERS) {
       runs.push({ start, end: index, letters });
