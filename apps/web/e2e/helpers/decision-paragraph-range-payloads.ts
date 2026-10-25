@@ -48,6 +48,8 @@ const unavailable = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: true,
+  textIncompleteReason: null,
+  textWithheldReason: null,
 };
 
 export const decisionParagraphRangePayloads = { decision, unavailable };

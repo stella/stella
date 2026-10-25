@@ -17,6 +17,8 @@ import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
+const TEXT_ELIGIBILITY_FINGERPRINT = "synthetic-text-eligibility";
+
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -118,6 +120,8 @@ if (!databaseUrl || !enabled) {
           },
           followUp: async (metadata) => {
             const document = await readThroughDeferredDocument({
+              textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+              textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
               decision,
               adapterKey: ADAPTER_KEYS.SK_COURTS,
               recordDemand: false,

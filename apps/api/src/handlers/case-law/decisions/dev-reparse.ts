@@ -5,8 +5,8 @@
  * it was parsed when it was ingested, so parser work is invisible until a
  * re-ingestion runs elsewhere. In that mode, and only when the process is
  * a development one, a Czech NSS decision is fetched from the publisher
- * and parsed with the parser in this tree; the result replaces the stored
- * document for the response and is kept in memory for the process. Nothing
+ * and parsed with the parser in this tree; the result supplies the document
+ * for this response only. Nothing
  * is written anywhere, and a fetch that fails leaves the stored document.
  */
 
@@ -44,11 +44,6 @@ export type DevReparseDecision = {
   ecli: string | null;
   metadata: Record<string, unknown> | null;
 };
-
-const parsed = new Map<
-  SafeId<"caseLawDecision">,
-  Promise<DocumentAst | null>
->();
 
 const reparseNss = async (
   decision: DevReparseDecision,
@@ -105,18 +100,11 @@ export const reparseForDev = async (
   if (decision.adapterKey !== ADAPTER_KEYS.CZ_NSS) {
     return null;
   }
-  const pending = parsed.get(decision.id);
-  if (pending !== undefined) {
-    return await pending;
-  }
-  const attempt = reparseNss(decision).catch((error: unknown) => {
+  return await reparseNss(decision).catch((error: unknown) => {
     captureError(error, {
       source: "case-law-dev-reparse",
       decisionId: decision.id,
     });
-    parsed.delete(decision.id);
     return null;
   });
-  parsed.set(decision.id, attempt);
-  return await attempt;
 };
