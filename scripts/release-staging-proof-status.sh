@@ -3,13 +3,11 @@
 # candidate staging proof into a pull request and the merge queue.
 #
 # Every pull request head and merge group gets the status. A non-release
-# pull request passes at once. A release pull request head mirrors the
-# staging proof of that exact head (deploy-staging.yml with
-# release_candidate=true); a head with no proof fails with the step that
-# starts one. A run's result always ends up last on the head: a pending
-# write for that run puts the result back. Its merge group passes only when
-# it lands exactly
-# the proven tree on exactly the main the proof deployed with, which is what
+# pull request passes at once. A release pull request head carries the result
+# of its staging proof run (deploy-staging.yml with release_candidate=true),
+# written only by that run's own last job; a head with no proof run fails
+# with the dispatch that starts one. Its merge group passes only when it
+# lands exactly the proven tree on exactly the main the proof deployed with, which is what
 # lets the version commit reuse the proof after merge instead of deploying a
 # different tree.
 #
@@ -59,14 +57,12 @@ latest_proof() {
   '
 }
 
-# Writers of one head are not serialized: a pending write for a run can land
-# after that run's last job recorded its result. So after writing pending for
-# a run, the result that run already recorded is written again, and the
-# result is the last status in every interleaving.
-post_pending() {
-  local head="$1" description="$2" url="${3:-}" result
-  post "$head" pending "$description" "$url"
-  [[ -n "$url" ]] || return 0
+# Write back the result a proof run already recorded on the head, if any.
+# Writers of one head are not serialized, so a pending write for a run can
+# land after that run's result; writing the result back after it keeps the
+# result last in every interleaving.
+write_back() {
+  local head="$1" url="$2" result
   result=$(api --paginate --slurp "repos/$repo/commits/$head/statuses?per_page=100" | jq -c --arg context "$context" --arg url "$url" '
     [.[][] | select(.context == $context and .target_url == $url and .creator.login == "github-actions[bot]" and
       (.state == "success" or .state == "failure" or .state == "error"))][0] // empty')
@@ -75,39 +71,29 @@ post_pending() {
   fi
 }
 
-# Reconcile a release head with the proof GitHub records now.
+# Reconcile a release head. It never derives a result from a run: a run's
+# success or failure is written only by that run's own finished-run job. This
+# path writes pending for an unfinished run, the failure that names the
+# dispatch when the head has no proof run at all, and write-backs.
 release_head() {
-  local head="$1" proof runs run state run_url run_id main
-  proof=$(latest_proof "$head")
-  state=$(jq -r '.state // ""' <<< "$proof")
-  run_url=$(jq -r '.target_url // ""' <<< "$proof")
-  case "$state" in
-    success)
-      if main=$(jq -er '.description | capture("; main=(?<main>[0-9a-f]{40})$").main' <<< "$proof"); then
-        post "$head" success "Staging proof passed; main=$main" "$run_url"
-      else
-        post "$head" failure "Staging proof is not bound to the main it deployed with" "$run_url"
-      fi
-      return
-      ;;
-    failure | error) post "$head" failure "Staging proof failed; re-run the staging proof run" "$run_url"; return ;;
-  esac
-  # A pending staging/verified names no run, so the run listing names it.
+  local head="$1" runs run run_id url
   runs=$(api "repos/$repo/actions/workflows/deploy-staging.yml/runs?event=workflow_dispatch&branch=main&per_page=100")
   run=$(jq -c --arg repo "$repo" --arg title "Staging release proof $head" '
     [.workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
       .path == ".github/workflows/deploy-staging.yml" and .display_title == $title)][0] // {}
   ' <<< "$runs")
   run_id=$(jq -r '.id // ""' <<< "$run")
+  url=$(jq -r '.html_url // ""' <<< "$run")
   if [[ -z "$run_id" && "${PROOF_DISPATCHED:-}" == true ]]; then
     # The run listing can trail a dispatch that just succeeded.
     post "$head" pending "Staging proof dispatched; waiting for its run to start"
   elif [[ -z "$run_id" ]]; then
     post "$head" failure "${NO_PROOF_REASON:-No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=$head}"
   elif [[ "$(jq -r '.status' <<< "$run")" != completed ]]; then
-    post_pending "$head" "Staging proof running: run $run_id" "$(jq -r '.html_url' <<< "$run")"
+    post "$head" pending "Staging proof running: run $run_id" "$url"
+    write_back "$head" "$url"
   else
-    post "$head" failure "Staging proof run $run_id ended $(jq -r '.conclusion' <<< "$run") before staging verified it" "$(jq -r '.html_url' <<< "$run")"
+    write_back "$head" "$url"
   fi
 }
 

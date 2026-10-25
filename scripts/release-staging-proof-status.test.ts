@@ -207,18 +207,37 @@ describe("pull request heads", () => {
     expect(result.posted).toEqual([]);
   });
 
-  test("a release head mirrors its passing staging proof and the main it deployed with", () => {
+  const recordedResult = {
+    context: "release/staging-proof",
+    state: "success",
+    description: `Staging proof passed; main=${mainBase}`,
+    creator: bot,
+    target_url: runUrl,
+  };
+
+  test("a reconciliation never derives a result from a finished run", () => {
+    // Its own last job has not recorded a result yet.
     respond(`repos/${repository}/pulls/7`, pull());
     statuses(head, [
       stagingVerified(
         "success",
         `Staging smoke success: run ${runId}; main=${mainBase}`,
       ),
-      stagingVerified("failure", "an older run"),
     ]);
-    const result = run(["pull-request", "7"]);
-    expect(result.exitCode).toBe(0);
-    expect(result.posted).toEqual([
+    for (const conclusion of ["success", "failure"]) {
+      runs([stagingRun("completed", conclusion)]);
+      expect(run(["pull-request", "7"]).posted).toEqual([]);
+    }
+  });
+
+  test("a reconciliation writes back the result a finished run recorded", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, [recordedResult]);
+    runs([
+      { ...stagingRun("completed", "failure"), display_title: "other" },
+      stagingRun("completed", "success"),
+    ]);
+    expect(run(["pull-request", "7"]).posted).toEqual([
       {
         sha: head,
         state: "success",
@@ -227,36 +246,6 @@ describe("pull request heads", () => {
         target_url: runUrl,
       },
     ]);
-  });
-
-  test("a passing proof without its main binding fails", () => {
-    respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [stagingVerified("success", "Staging smoke success")]);
-    expect(run(["pull-request", "7"]).posted[0]?.state).toBe("failure");
-  });
-
-  test("a failed staging proof fails the head", () => {
-    respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [stagingVerified("failure", "Staging smoke failure")]);
-    const result = run(["pull-request", "7"]);
-    expect(result.posted[0]?.state).toBe("failure");
-    expect(result.posted[0]?.target_url).toBe(runUrl);
-  });
-
-  test("a staging/verified status written outside GitHub Actions is ignored", () => {
-    respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [
-      stagingVerified("success", `forged; main=${mainBase}`, {
-        login: "someone",
-        type: "User",
-      }),
-    ]);
-    runs([]);
-    const result = run(["pull-request", "7"]);
-    expect(result.posted[0]?.state).toBe("failure");
-    expect(result.posted[0]?.description).toStartWith(
-      "No staging proof for this head",
-    );
   });
 
   test("a running staging proof keeps the head pending", () => {
@@ -275,34 +264,11 @@ describe("pull request heads", () => {
     ]);
   });
 
-  test("a staging run that ended before verifying fails the head", () => {
+  test("a run that completes between the reconciliation's reads ends with finished_run's success", () => {
+    // The reconciliation listed the run unfinished; the run then completed and
+    // its last job recorded success before the pending write landed.
     respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, []);
-    runs([
-      { ...stagingRun("completed", "failure"), display_title: "other" },
-      stagingRun("completed", "failure"),
-    ]);
-    const result = run(["pull-request", "7"]);
-    expect(result.posted[0]?.state).toBe("failure");
-    expect(result.posted[0]?.description).toBe(
-      `Staging proof run ${runId} ended failure before staging verified it`,
-    );
-  });
-
-  test("concurrent writers for one head end on the finished run's result", () => {
-    // The run's last job recorded success after this reconciliation read the
-    // head (no staging/verified yet, the run unfinished), so its pending write
-    // lands after that result.
-    respond(`repos/${repository}/pulls/7`, pull());
-    statuses(head, [
-      {
-        context: "release/staging-proof",
-        state: "success",
-        description: `Staging proof passed; main=${mainBase}`,
-        creator: bot,
-        target_url: runUrl,
-      },
-    ]);
+    statuses(head, [recordedResult]);
     runs([stagingRun("in_progress")]);
     const result = run(["pull-request", "7"]);
     expect(result.exitCode).toBe(0);
