@@ -2,6 +2,7 @@ import { PDF } from "@libpdf/core";
 import type { APIRequestContext, Page } from "@playwright/test";
 
 import { apiGet } from "../helpers/api";
+import { waitForStableGeometry } from "../helpers/stable-geometry";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 import type { TestWorkspace } from "../helpers/workspace";
@@ -463,24 +464,39 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
 
     // A box sits over the words it was drawn for: the middle of a word of
     // the claim, as the page's text layer lays it out, falls inside the box.
+    // The page renders its text layer after the canvas and the boxes, so the
+    // check waits for both to appear and settle before it measures.
     const expectBoxOverWord = async (claim: { id: string }, word: string) => {
-      const drawn = await box(claim).boundingBox();
-      const text = await page
+      const drawn = box(claim);
+      const text = page
         .locator("[data-text-layer] span")
         .filter({ hasText: word })
-        .first()
-        .boundingBox();
-      if (drawn === null || text === null) {
-        throw new Error(`The box or the text of "${word}" is not laid out`);
-      }
-      const middle = {
-        x: text.x + text.width / 2,
-        y: text.y + text.height / 2,
-      };
-      expect(middle.x).toBeGreaterThanOrEqual(drawn.x);
-      expect(middle.x).toBeLessThanOrEqual(drawn.x + drawn.width);
-      expect(middle.y).toBeGreaterThanOrEqual(drawn.y);
-      expect(middle.y).toBeLessThanOrEqual(drawn.y + drawn.height);
+        .first();
+      await expect(drawn).toBeVisible();
+      await expect(text).toBeVisible();
+      await waitForStableGeometry(page, [drawn, text]);
+      await expect
+        .poll(
+          async () => {
+            const [outer, inner] = await Promise.all([
+              drawn.boundingBox(),
+              text.boundingBox(),
+            ]);
+            if (outer === null || inner === null) {
+              return false;
+            }
+            const x = inner.x + inner.width / 2;
+            const y = inner.y + inner.height / 2;
+            return (
+              x >= outer.x &&
+              x <= outer.x + outer.width &&
+              y >= outer.y &&
+              y <= outer.y + outer.height
+            );
+          },
+          { message: `The box is not drawn over the text of "${word}"` },
+        )
+        .toBe(true);
     };
 
     // The first claim is selected and drawn over the words it was read from.
