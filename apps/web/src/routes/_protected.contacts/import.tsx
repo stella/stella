@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Step, Steps } from "@stll/ui/steps";
 import {
   Table,
   TableBody,
@@ -51,7 +52,11 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useFormatter } from "@/i18n/formatting-context";
+import {
+  useFormatter,
+  useLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
@@ -185,7 +190,8 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
-  const format = useFormatter();
+  const formattingLocale = useLocale();
+  const markerStyle = useStepsMarkerStyle();
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
   });
@@ -313,27 +319,30 @@ function ContactImportStudio() {
               {t("contacts.importStudio.description")}
             </p>
           </div>
-          <ol
+          <Steps
+            lang={formattingLocale}
+            markerStyle={markerStyle}
             aria-label={t("contacts.importStudio.title")}
-            className="grid grid-cols-4 gap-2"
+            variant="progress"
           >
-            {STEP_KEYS.map((key, index) => (
-              <li
-                aria-current={index === step ? "step" : undefined}
-                className={cn(
-                  "border-muted border-t-2 pt-2 text-sm",
-                  index <= step && "border-foreground font-medium",
-                  index !== step && "text-muted-foreground",
-                )}
-                key={key}
-              >
-                <span className="me-1 tabular-nums">
-                  {format.number(index + 1)}.
-                </span>
-                {t(key)}
-              </li>
-            ))}
-          </ol>
+            {STEP_KEYS.map((key, index) => {
+              let status: "completed" | "current" | "upcoming" = "upcoming";
+              if (index === step) {
+                status = "current";
+              } else if (index < step) {
+                status = "completed";
+              }
+              return (
+                <Step
+                  aria-current={index === step ? "step" : undefined}
+                  key={key}
+                  status={status}
+                >
+                  {t(key)}
+                </Step>
+              );
+            })}
+          </Steps>
         </div>
       </header>
 

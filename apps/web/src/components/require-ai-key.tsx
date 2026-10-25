@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -58,7 +59,6 @@ import {
   aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
-import type { OrganizationAIAvailability } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 

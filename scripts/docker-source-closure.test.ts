@@ -222,6 +222,52 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("a packaged build output copied from another stage runs without a source closure", () => {
+    const stages = [
+      "FROM bun AS builder",
+      "FROM bun AS runner",
+      "COPY --from=builder /app/bundles/ /app/",
+    ];
+    expect(
+      checkDockerSource(
+        root,
+        [...stages, "FROM runner AS smoke", "RUN bun /app/smoke.js"].join("\n"),
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        [...stages, "RUN bun /opt/absent.js"].join("\n"),
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /opt/absent.js"]);
+  });
+
+  test.each(["/", "/./", "/nested/.."])(
+    "root-copied packaged artifacts retain a single separator: %s",
+    (destination) => {
+      for (const entry of ["/smoke.js", "/app/smoke.js"]) {
+        expect(
+          checkDockerSource(
+            root,
+            [
+              "FROM bun AS builder",
+              "FROM bun AS runner",
+              `COPY --from=builder /packaged/ ${destination}`,
+              "FROM runner AS smoke",
+              `RUN bun ${entry}`,
+            ].join("\n"),
+            new Map(),
+            new Map(),
+          ),
+        ).toEqual([]);
+      }
+    },
+  );
+
   test("source wrappers check their inner reads without splitting quoted arguments", () => {
     const entry = put("wrapper/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);

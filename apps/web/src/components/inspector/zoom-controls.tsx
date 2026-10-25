@@ -87,6 +87,7 @@ export const ZoomControls = ({
 type FloatingZoomControlsProps = ZoomControlsProps & {
   /** Controls that share the bar, placed before the zoom triad. */
   children?: ReactNode;
+  className?: string | undefined;
 };
 
 /**
@@ -97,9 +98,10 @@ type FloatingZoomControlsProps = ZoomControlsProps & {
  */
 export const FloatingZoomControls = ({
   children,
+  className,
   ...zoom
 }: FloatingZoomControlsProps) => (
-  <ViewerOverlayBar>
+  <ViewerOverlayBar className={className}>
     {children}
     <ZoomControls {...zoom} />
   </ViewerOverlayBar>

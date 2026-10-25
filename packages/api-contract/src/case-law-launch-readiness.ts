@@ -84,10 +84,10 @@ type CaseLawExplicitLaunch = {
 /** Countries launched to case-law search by an explicit decision; null means none. */
 export const CASE_LAW_EXPLICIT_LAUNCHES = {
   CZE: null,
-  EU: null,
-  HUN: null,
+  EU: { decidedBy: "project owner", decidedOn: "2026-10-23" },
+  HUN: { decidedBy: "project owner", decidedOn: "2026-10-23" },
   POL: { decidedBy: "project owner", decidedOn: "2026-10-20" },
-  SVK: null,
+  SVK: { decidedBy: "project owner", decidedOn: "2026-10-23" },
 } as const satisfies Record<
   CaseLawBrowserCountry,
   CaseLawExplicitLaunch | null

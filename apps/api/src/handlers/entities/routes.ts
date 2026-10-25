@@ -12,6 +12,7 @@ import createDesktopEditHandoff, {
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import listFiles from "@/api/handlers/entities/files/list";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import createFolderFromSelection from "@/api/handlers/entities/folder-from-selection/create";
 import listFolders from "@/api/handlers/entities/folders/list";
 import createFromLegalSource from "@/api/handlers/entities/from-legal-source/create";
 import readEntityById from "@/api/handlers/entities/get";
@@ -102,6 +103,7 @@ const entities = routes({
   "/folders": { GET: listFolders },
   "/files": { GET: listFiles },
   "/move": { PATCH: moveEntity },
+  "/folder-from-selection": { POST: createFolderFromSelection },
   "/rename": { PATCH: renameEntity },
   "/duplicate": { POST: duplicateEntity },
   "/copy-to-workspace": { POST: copyToWorkspace },

@@ -147,6 +147,13 @@ describe("literal targets", () => {
     ]);
   });
 
+  test("stops expanding at the cap", () => {
+    const expanded = expandBraces("{a,b,c}".repeat(40));
+    expect(expanded).toHaveLength(64);
+    expect(expanded.at(0)).toBe("a".repeat(40));
+    expect(expanded.at(1)).toBe(`${"a".repeat(39)}b`);
+  });
+
   test("reduces a glob to the tree it scans", () => {
     expect(literalTargets("{apps,packages}/**/*.test.ts")).toEqual([
       { fromGlob: true, path: "apps" },

@@ -182,6 +182,36 @@ test("fingerprint is stable across content-hashed chunk renames", () => {
   expect(a).not.toBe(c);
 });
 
+test("fingerprint is stable across content-hashed server chunk renames", () => {
+  const fingerprint = (filename: string) =>
+    fingerprintExceptionEvent({
+      entries: [
+        {
+          type: "Panic",
+          stacktrace: {
+            frames: [
+              { filename: "react-dom-server.bun.production.js", in_app: true },
+              { filename, in_app: true },
+            ],
+          },
+        },
+      ],
+    });
+
+  // One defect across two deploys must stay one issue.
+  expect(fingerprint("dist/server/assets/provider-BBVx0BBg.js")).toBe(
+    fingerprint("dist/server/assets/provider-B5cnvp1A.js"),
+  );
+  expect(fingerprint("dist/server/assets/provider-B5cnvp1A.js")).toBe(
+    "Panic||react-dom-server.bun.production.js;provider.js|",
+  );
+  // A dependency basename has no app-relative directory, so a hash-shaped
+  // suffix in it remains identity.
+  expect(fingerprint("document-12345678.js")).toBe(
+    "Panic||react-dom-server.bun.production.js;document-12345678.js|",
+  );
+});
+
 test("an API error carries its response identity as a trailing component", () => {
   const entries = [
     {

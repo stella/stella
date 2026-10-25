@@ -26,6 +26,7 @@ import {
   startDatabaseLoginProbe,
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
+import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
@@ -54,7 +55,6 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
@@ -105,7 +105,7 @@ const readProcessMemoryReport = () => {
     rssBytes: usage.rss,
     heapUsedBytes: usage.heapUsed,
     arrayBuffersBytes: usage.arrayBuffers,
-    uploadFinalizeInFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+    workPools: readWorkPoolMetrics(),
   };
 };
 

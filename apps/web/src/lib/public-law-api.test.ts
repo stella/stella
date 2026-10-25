@@ -89,7 +89,7 @@ describe("isSearchUnavailableError", () => {
   test("country admission is localized and never treated as a retryable engine outage or a miss", () => {
     const refusal = {
       status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-      value: publicCountryUnavailable("HUN", {
+      value: publicCountryUnavailable("USA", {
         domain: "caseLaw",
         surface: "search",
       }),

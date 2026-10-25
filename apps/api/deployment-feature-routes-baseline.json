@@ -1624,6 +1624,10 @@
     "reason": "pending gate classification"
   },
   {
+    "key": "unclassified-route:POST /v1/entities/:workspaceId/folder-from-selection",
+    "reason": "pending gate classification"
+  },
+  {
     "key": "unclassified-route:POST /v1/entities/:workspaceId/folio-collab-rooms/checkpoint",
     "reason": "pending gate classification"
   },

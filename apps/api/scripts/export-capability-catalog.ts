@@ -296,6 +296,7 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
   "entities.create": "stella:documents_write",
+  "entities.folder-from-selection.create": "stella:documents_write",
   "entities.blank-document.create": "stella:documents_write",
   "entities.delete": "stella:documents_write",
   "entities.versions.delete": "stella:documents_write",
@@ -569,7 +570,8 @@ const readDescription = (
 };
 
 type EntryScopeResult =
-  { status: "resolved"; scope: string } | { status: "error"; message: string };
+  | { status: "resolved"; scope: string }
+  | { status: "error"; message: string };
 
 /**
  * Final scope for a `tool`/`covered` entry: the entry must never advertise a
@@ -774,7 +776,8 @@ type BuildCatalogEntryOptions = {
   exposure: ParsedExposure;
   feature: string | undefined;
   featureAccess:
-    { featureId: string; type: "required" | "conditional" } | undefined;
+    | { featureId: string; type: "required" | "conditional" }
+    | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
   /** The route admits archived matters (`workspaceStatus: "active-or-archived"`). */

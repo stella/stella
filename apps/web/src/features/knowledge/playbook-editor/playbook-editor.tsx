@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Step, Steps } from "@stll/ui/steps";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -92,6 +93,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
+import { useLocale, useStepsMarkerStyle } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -1904,6 +1906,8 @@ const OutlineRail = ({
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
+  const formattingLocale = useLocale();
+  const markerStyle = useStepsMarkerStyle();
   return (
     <nav
       aria-label={t("knowledge.playbooks.outline")}
@@ -1912,11 +1916,15 @@ const OutlineRail = ({
       <p className="text-foreground-label mb-2 px-2 text-xs font-semibold">
         {t("knowledge.playbooks.outline")}
       </p>
-      <ol className="space-y-0.5">
-        {positions.map((position, index) => {
+      <Steps
+        lang={formattingLocale}
+        markerStyle={markerStyle}
+        variant="compact"
+      >
+        {positions.map((position) => {
           const issue = position.issue.trim();
           return (
-            <li key={position.sourceId}>
+            <Step key={position.sourceId}>
               <Button
                 className={cn(
                   "hover:bg-muted h-8 w-full items-center justify-start rounded-md px-2 text-start font-normal focus-visible:ring-offset-0 focus-visible:ring-inset sm:h-8",
@@ -1926,9 +1934,6 @@ const OutlineRail = ({
                 size="xs"
                 variant="ghost"
               >
-                <span className="text-foreground-ghost text-3xs w-5 shrink-0 font-semibold tracking-[0.04em] tabular-nums">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
                 <span
                   className={cn(
                     "min-w-0 flex-1 truncate text-sm leading-5",
@@ -1949,10 +1954,10 @@ const OutlineRail = ({
                   />
                 )}
               </Button>
-            </li>
+            </Step>
           );
         })}
-      </ol>
+      </Steps>
     </nav>
   );
 };
