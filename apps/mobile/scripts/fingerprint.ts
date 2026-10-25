@@ -13,9 +13,15 @@
 // check can name what moved it.
 
 import { createFingerprintAsync, SourceSkips } from "@expo/fingerprint";
-import type { Fingerprint, HashSource } from "@expo/fingerprint";
+import type {
+  Fingerprint,
+  FingerprintSource,
+  HashSource,
+} from "@expo/fingerprint";
 import { panic } from "better-result";
 import path from "node:path";
+
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { APP_VERSION } from "../app.config";
 
@@ -79,6 +85,9 @@ const createNativeFingerprint = async (
   const fingerprint = await createFingerprintAsync(projectRoot, {
     platforms: [platform],
     silent: true,
+    // Each directory's file tree, so its hash can be taken again under
+    // portable paths (portableFingerprint).
+    debug: true,
     sourceSkips: FINGERPRINT_SOURCE_SKIPS,
     extraSources: [
       {
@@ -97,12 +106,6 @@ const createNativeFingerprint = async (
   return fingerprint;
 };
 
-export const nativeFingerprint = async (
-  platform: NativePlatform,
-  projectRoot: string = APP_ROOT,
-): Promise<string> =>
-  (await createNativeFingerprint(platform, projectRoot)).hash;
-
 /** A source by the name the check reports: its file, or its id. */
 export type FingerprintSourceHash = {
   readonly source: string;
@@ -110,14 +113,130 @@ export type FingerprintSourceHash = {
   readonly hash: string | null;
 };
 
-export const sourceHashes = (
-  fingerprint: Pick<Fingerprint, "sources">,
-): FingerprintSourceHash[] =>
-  fingerprint.sources.map((source) => ({
-    source: source.type === "contents" ? source.id : source.filePath,
+export type NativeFingerprint = {
+  readonly hash: string;
+  readonly sources: readonly FingerprintSourceHash[];
+};
+
+/**
+ * Bun links every package through a store whose place depends on the machine
+ * and the install: `node_modules/.bun/…` in a full install,
+ * `~/.bun/install/cache/links/…` in CI's filtered one. `@expo/fingerprint`
+ * keeps those paths in its source names and in the autolinking config it
+ * hashes, so one commit would fingerprint differently on every machine, and
+ * an update published on one would never reach a build made on another.
+ * Each path is cut to its last `node_modules/`; the files' contents and the
+ * packages' versions still decide the hash.
+ */
+const STORE_PATH = /[^\s"'`]*\/node_modules\//gu;
+
+export const portablePath = (text: string): string =>
+  text.replaceAll(STORE_PATH, "node_modules/");
+
+const byCodeUnit = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+};
+
+const sortKey = ({ source, hash }: FingerprintSourceHash): string =>
+  `${source}\0${hash ?? ""}`;
+
+/** A file's content hash, or a directory's tree of them, as `debug` reports it. */
+type HashedTree = {
+  readonly path: string;
+  readonly hash: string;
+  readonly children?: readonly (HashedTree | undefined)[];
+};
+
+const isHashedTree = (value: unknown): value is HashedTree =>
+  typeof value === "object" &&
+  value !== null &&
+  "path" in value &&
+  typeof value.path === "string" &&
+  "hash" in value &&
+  typeof value.hash === "string";
+
+/**
+ * A directory's hash names each file by its path, which runs through the
+ * package store; it is taken again over portable paths and the files'
+ * contents, in a fixed order.
+ */
+const treeHash = (tree: HashedTree): string =>
+  tree.children === undefined
+    ? tree.hash
+    : sha256Hex(
+        tree.children
+          .filter((child): child is HashedTree => child !== undefined)
+          .map((child) => `${portablePath(child.path)}\0${treeHash(child)}`)
+          .toSorted(byCodeUnit)
+          .join("\n"),
+      );
+
+/**
+ * The modules Node loads while evaluating the app config are hashed as config
+ * plugins, but which helpers load depends on the Node version: Linux CI's
+ * strips TypeScript through a package macOS's does not need. The plugins
+ * this app uses ship in Expo's own native modules, whose versions the
+ * autolinking config hashes, so only the project's own files count here.
+ */
+const isPackageLoadedByConfig = (
+  source: Pick<FingerprintSource, "reasons">,
+  name: string,
+): boolean =>
+  source.reasons.includes("expoConfigPlugins") &&
+  name.startsWith("node_modules/");
+
+const portableSource = (
+  source: FingerprintSource,
+): FingerprintSourceHash | undefined => {
+  if (source.type === "contents") {
+    return {
+      source: source.id,
+      type: source.type,
+      hash:
+        source.hash === null
+          ? null
+          : sha256Hex(portablePath(source.contents.toString())),
+    };
+  }
+  const name = portablePath(source.filePath);
+  if (isPackageLoadedByConfig(source, name)) {
+    return undefined;
+  }
+  return {
+    source: name,
     type: source.type,
-    hash: source.hash,
-  }));
+    hash:
+      source.type === "dir" && isHashedTree(source.debugInfo)
+        ? treeHash(source.debugInfo)
+        : source.hash,
+  };
+};
+
+/**
+ * The fingerprint under portable source names, in a fixed order, hashed to
+ * the 40 hex characters a runtime version carries.
+ */
+export const portableFingerprint = (
+  fingerprint: Pick<Fingerprint, "sources">,
+): NativeFingerprint => {
+  const sources = fingerprint.sources
+    .flatMap((source) => portableSource(source) ?? [])
+    .toSorted((left, right) => byCodeUnit(sortKey(left), sortKey(right)));
+  const hashed = sources.flatMap(({ source, hash }) =>
+    hash === null ? [] : [`${source}\0${hash}`],
+  );
+  return { hash: sha256Hex(hashed.join("\n")).slice(0, 40), sources };
+};
+
+export const nativeFingerprint = async (
+  platform: NativePlatform,
+  projectRoot: string = APP_ROOT,
+): Promise<string> =>
+  portableFingerprint(await createNativeFingerprint(platform, projectRoot))
+    .hash;
 
 if (import.meta.main) {
   const [platform = "", format] = process.argv.slice(2);
@@ -127,10 +246,12 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
-  const fingerprint = await createNativeFingerprint(platform, APP_ROOT);
+  const fingerprint = portableFingerprint(
+    await createNativeFingerprint(platform, APP_ROOT),
+  );
   process.stdout.write(
     format === "--json"
-      ? `${JSON.stringify({ hash: fingerprint.hash, sources: sourceHashes(fingerprint) })}\n`
+      ? `${JSON.stringify(fingerprint)}\n`
       : `${fingerprint.hash}\n`,
   );
 }
