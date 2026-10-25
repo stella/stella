@@ -147,7 +147,8 @@ export const usagePolicies = p.pgTable(
     }),
     // Operator-seeded member bound, read through the
     // `organization_member_capacity` database function together with the
-    // seat count of a per-seat policy. Null = the policy sets no bound.
+    // seat count of a per-seat policy. Null = no bound beyond the seats of
+    // a per-seat policy; a flat policy is then unbounded.
     maxMembers: p.integer("max_members"),
     serviceActionsPerPeriod: p.integer("service_actions_per_period"),
     // Hidden by default: a seeded policy only appears in the catalog
