@@ -28,7 +28,11 @@ const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /** The text an RFC 4648 base32 authenticator secret encodes. */
 const decodeBase32Text = (encoded: string): string => {
-  const bitString = [...encoded.replaceAll("=", "").toUpperCase()]
+  // Base32 is ASCII, so each UTF-16 unit is one symbol.
+  const symbols = encoded.replaceAll("=", "").toUpperCase();
+  const bitString = Array.from({ length: symbols.length }, (_unused, at) =>
+    symbols.charAt(at),
+  )
     .map((symbol) => {
       const index = BASE32_ALPHABET.indexOf(symbol);
       return index === -1
