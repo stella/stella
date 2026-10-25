@@ -552,6 +552,18 @@ describe("test subject reachability", () => {
     ).toEqual([]);
   });
 
+  test("follows a subject passed through an awaited registered test harness", async () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget';\nconst registerCases = async (options: { run: () => string }) => { await Promise.resolve(); test('case', options.run); };\nawait registerCases({ run: () => reduceWidgetState() });\n",
+    );
+    expect(
+      await analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
   test("follows a dynamically imported component through a UI harness", async () => {
     const input = fixture(
       "const { WidgetPanel } = await import('./widget');\nconst mount = () => WidgetPanel();\ntest('ui', mount);\n",

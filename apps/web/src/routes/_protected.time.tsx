@@ -1,6 +1,7 @@
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -23,14 +24,17 @@ import {
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const Route = createFileRoute("/_protected/time")({
-  validateSearch: (search) => ({
-    date:
-      typeof search["date"] === "string" &&
-      parsePlainDate(search["date"]) !== null
-        ? search["date"]
-        : localISODate(),
+  validateSearch: routeSearchSchema({
+    date: v.optional(
+      v.pipe(
+        v.string(),
+        v.check((date) => parsePlainDate(date) !== null),
+      ),
+      () => localISODate(),
+    ),
   }),
   loaderDeps: ({ search }) => ({ date: search.date }),
   beforeLoad: async ({ context }) => {

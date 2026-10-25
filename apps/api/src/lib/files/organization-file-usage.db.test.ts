@@ -110,7 +110,8 @@ beforeAll(async () => {
     seats: 1,
     currentPeriodStart: new Date(now - 60_000),
     currentPeriodEnd: new Date(now + 60_000),
-    source: "manual",
+    // The suite walks provider statuses on this row: hosted semantics.
+    source: "hosted",
   });
   await testDb.insert(usageSeatAssignments).values({
     id: assignmentId,
