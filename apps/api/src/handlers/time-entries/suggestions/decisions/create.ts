@@ -35,6 +35,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
+import { resolveSuggestionBillingDefault } from "../billing-default";
+
 const SUGGESTION_UNAVAILABLE_HINT =
   "The suggestion was already accepted or dismissed, or the day's activity " +
   "regrouped it. Call time-entries.suggestions.list for the day again and " +
@@ -121,19 +123,27 @@ const acceptSuggestion = async function* ({
   const policy = yield* Result.await(
     readTimePolicy({ safeDb, organizationId }),
   );
+  const billingDefault = yield* resolveSuggestionBillingDefault({
+    safeDb,
+    workspaceId,
+    userId,
+    dateWorked: body.date,
+  });
+  const billable = body.decision.billable ?? billingDefault.billable;
   const prepared = yield* prepareTimeEntryInsert({
     safeDb,
     policy,
     canApprove: canApproveTimeEntries(memberRole),
     workspaceId,
     userId,
+    resolvedRate: billingDefault.rate,
     body: {
       dateWorked: body.date,
       timezoneId: body.timezoneId,
       durationMinutes: body.decision.durationMinutes,
       narrative: body.decision.narrative,
       narrativeLanguage: body.decision.narrativeLanguage,
-      billable: body.decision.billable,
+      billable,
       taskCode: body.decision.taskCode,
       activityCode: body.decision.activityCode,
     },

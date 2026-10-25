@@ -798,7 +798,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# działanie} few {# działania} many {# działań} other {# działania}}",
       "activeVsLogged": "Aktywność: {active} · Zarejestrowano: {logged}",
+      "alreadyCovered": "Już pokryte zarejestrowanym czasem",
       "chatEvidence": "{count, plural, one {# wiadomość} few {# wiadomości} many {# wiadomości} other {# wiadomości}} w rozmowie „{title}”",
+      "engagedTime": "{duration} aktywnej pracy",
       "keyboardHint": "Enter akceptuje, E edytuje przed akceptacją, Delete odrzuca",
       "privacyNote": "Widzisz je tylko Ty. Nic nie zostaje zapisane, dopóki nie zaakceptujesz sugestii.",
       "title": "Sugestie na podstawie Twojej aktywności",

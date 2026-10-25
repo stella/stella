@@ -6,6 +6,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   type ActivitySignal,
   clusterActivitySignals,
+  subtractRecordedTime,
   suggestionFingerprint,
 } from "./cluster";
 
@@ -257,6 +258,65 @@ describe("clusterActivitySignals", () => {
     });
     expect(only?.durationMinutes).toBe(5);
     expect(only?.signalCount).toBe(1);
+  });
+
+  test("removes recorded windows once, including partial overlaps", () => {
+    const [cluster] = clusterActivitySignals({
+      date: DATE,
+      signals: [signalAt(0, "a"), signalAt(15, "b")],
+      mergeGapMinutes: 20,
+      tailMinutes: 5,
+    });
+    if (!cluster) {
+      throw new Error("expected a cluster");
+    }
+    const partial = subtractRecordedTime(
+      [cluster],
+      [
+        {
+          durationMinutes: 10,
+          startedAt: new Date(DAY_START_MS + 5 * MS_PER_MINUTE),
+          endedAt: new Date(DAY_START_MS + 12 * MS_PER_MINUTE),
+        },
+        {
+          durationMinutes: 10,
+          startedAt: new Date(DAY_START_MS + 10 * MS_PER_MINUTE),
+          endedAt: new Date(DAY_START_MS + 17 * MS_PER_MINUTE),
+        },
+      ],
+    );
+    expect(partial.map(({ durationMinutes }) => durationMinutes)).toEqual([8]);
+
+    expect(
+      subtractRecordedTime(
+        [cluster],
+        [
+          {
+            durationMinutes: 20,
+            startedAt: new Date(DAY_START_MS),
+            endedAt: new Date(DAY_START_MS + 20 * MS_PER_MINUTE),
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  test("marks duration-only coverage without assigning it to a window", () => {
+    const [cluster] = clusterActivitySignals({
+      date: DATE,
+      signals: [signalAt(0, "a")],
+      mergeGapMinutes: 15,
+      tailMinutes: 5,
+    });
+    if (!cluster) {
+      throw new Error("expected a cluster");
+    }
+    expect(
+      subtractRecordedTime(
+        [cluster],
+        [{ durationMinutes: 5, startedAt: null, endedAt: null }],
+      ).at(0)?.alreadyCovered,
+    ).toBe(true);
   });
 
   test("folds repeated resource actions and backfills a missing name", () => {

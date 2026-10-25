@@ -144,7 +144,9 @@ export const PersonalTimesheetDay = ({
           durationMinutes: values.durationMinutes,
           narrative: values.narrative,
           narrativeLanguage: values.narrativeLanguage,
-          billable: values.billable,
+          ...(values.billable === suggestion.billableByDefault
+            ? {}
+            : { billable: values.billable }),
         },
       });
     } finally {
@@ -221,7 +223,7 @@ export const PersonalTimesheetDay = ({
           durationMinutes: dialog.suggestion.durationMinutes,
           narrative: dialog.narrative,
           narrativeLanguage: null,
-          billable: false,
+          billable: dialog.suggestion.billableByDefault,
         }
       : {
           dateWorked: editingEntry?.dateWorked ?? date,
@@ -254,14 +256,14 @@ export const PersonalTimesheetDay = ({
           activeMinutes={suggestions.activeMinutes}
           busyFingerprints={busySuggestions}
           items={suggestions.items}
-          loggedMinutes={summary.totalMinutes}
+          loggedMinutes={suggestions.loggedMinutes}
           onAccept={(suggestion, narrative) => {
             detached(
               acceptSuggestion(suggestion, {
                 durationMinutes: suggestion.durationMinutes,
                 narrative,
                 narrativeLanguage: null,
-                billable: false,
+                billable: suggestion.billableByDefault,
               }).catch(reportFailure),
               "personal-timesheet-day.accept-suggestion",
             );
@@ -289,10 +291,13 @@ export const PersonalTimesheetDay = ({
                 <BidiText as="p" className="truncate text-sm font-medium">
                   {entry.narrative}
                 </BidiText>
-                {(!entry.billable || entry.source === "suggested") && (
+                {(!entry.billable ||
+                  entry.source === "suggested" ||
+                  entry.source === "activity") && (
                   <span className="text-muted-foreground text-xs">
                     {[
-                      entry.source === "suggested"
+                      entry.source === "suggested" ||
+                      entry.source === "activity"
                         ? tCommon("suggested")
                         : null,
                       entry.billable ? null : tBilling("nonBillable"),

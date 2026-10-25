@@ -798,7 +798,9 @@
     "suggestions": {
       "actionCount": "{count, plural, zero {لا إجراءات} one {إجراء واحد} two {إجراءان} few {# إجراءات} many {# إجراءً} other {# إجراء}}",
       "activeVsLogged": "{active} نشاط · {logged} مُسجَّلة",
+      "alreadyCovered": "مغطى بالفعل بالوقت المسجل",
       "chatEvidence": "{count, plural, zero {لا رسائل} one {رسالة واحدة} two {رسالتان} few {# رسائل} many {# رسالة} other {# رسالة}} في دردشة «{title}»",
+      "engagedTime": "{duration} من العمل الفعلي",
       "keyboardHint": "مفتاح Enter يقبل، و E يحرّر قبل القبول، و Delete يستبعد",
       "privacyNote": "أنت وحدك من يرى هذه المقترحات. لا يُسجَّل أي شيء حتى تقبله.",
       "title": "مقترحات من نشاطك",

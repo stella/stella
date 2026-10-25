@@ -9,11 +9,13 @@ import {
   chatMessages,
   chatThreads,
   entities,
+  timeEntries,
   timeEntrySuggestions,
 } from "@/api/db/schema";
 import {
   type ActivitySignal,
   clusterActivitySignals,
+  subtractRecordedTime,
   type SuggestionCluster,
 } from "@/api/handlers/time-entries/suggestions/cluster";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -118,7 +120,8 @@ export type LoadTimeSuggestionsOptions = {
 type LoadedTimeSuggestions = {
   date: string;
   /** Clusters the timekeeper has not accepted or dismissed yet, in time order. */
-  pending: SuggestionCluster[];
+  pending: (SuggestionCluster & { alreadyCovered: boolean })[];
+  loggedMinutes: number;
 };
 
 // Recomputes the day's suggested entries from the timekeeper's own signals in
@@ -239,17 +242,39 @@ export const loadTimeSuggestions = async function* ({
           ),
         );
 
+      const recordedRows = await tx
+        .select({
+          durationMinutes: timeEntries.durationMinutes,
+          startedAt: timeEntries.timerStartedAt,
+          endedAt: timeEntries.timerStoppedAt,
+        })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.workspaceId, workspaceId),
+            eq(timeEntries.userId, userId),
+            eq(timeEntries.dateWorked, date),
+          ),
+        );
+
       return {
         auditRows,
         chatRows,
         decidedRows,
         entityNames: new Map(entityRows.map((row) => [row.id, row.name])),
         resourceEntityIds,
+        recordedRows,
       };
     }),
   );
-  const { auditRows, chatRows, decidedRows, entityNames, resourceEntityIds } =
-    reads;
+  const {
+    auditRows,
+    chatRows,
+    decidedRows,
+    entityNames,
+    resourceEntityIds,
+    recordedRows,
+  } = reads;
 
   const signals: ActivitySignal[] = [];
   for (const row of chatRows) {
@@ -290,19 +315,33 @@ export const loadTimeSuggestions = async function* ({
   });
 
   const decided = new Set(decidedRows.map((row) => row.fingerprint));
+  const uncovered = subtractRecordedTime(clusters, recordedRows);
 
   const loaded: LoadedTimeSuggestions = {
     date,
-    pending: clusters.filter((cluster) => !decided.has(cluster.fingerprint)),
+    pending: uncovered.filter((cluster) => !decided.has(cluster.fingerprint)),
+    loggedMinutes: recordedRows.reduce(
+      (sum, entry) => sum + entry.durationMinutes,
+      0,
+    ),
   };
   return loaded;
 };
 
-export const serializeSuggestion = (cluster: SuggestionCluster) => ({
+export const serializeSuggestion = (
+  cluster: SuggestionCluster & { alreadyCovered: boolean },
+  minimumUnitMinutes: number,
+  billableByDefault: boolean,
+) => ({
   fingerprint: cluster.fingerprint,
   startedAt: cluster.startedAt.toISOString(),
   endedAt: cluster.endedAt.toISOString(),
-  durationMinutes: cluster.durationMinutes,
+  durationMinutes:
+    Math.ceil(cluster.durationMinutes / minimumUnitMinutes) *
+    minimumUnitMinutes,
+  engagedMinutes: cluster.durationMinutes,
+  alreadyCovered: cluster.alreadyCovered,
+  billableByDefault,
   signalCount: cluster.signalCount,
   evidence: cluster.evidence,
 });

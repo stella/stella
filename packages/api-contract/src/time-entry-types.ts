@@ -85,6 +85,10 @@ export type TimeEntrySuggestion = {
   startedAt: string;
   endedAt: string;
   durationMinutes: number;
+  /** Raw activity remaining after recorded timer windows are removed. */
+  engagedMinutes: number;
+  alreadyCovered: boolean;
+  billableByDefault: boolean;
   signalCount: number;
   evidence: TimeEntrySuggestionEvidence[];
 };
@@ -93,6 +97,7 @@ export type TimeEntrySuggestionsResponse = {
   date: string;
   /** Sum of suggested minutes still awaiting a decision. */
   activeMinutes: number;
+  loggedMinutes: number;
   items: TimeEntrySuggestion[];
 };
 

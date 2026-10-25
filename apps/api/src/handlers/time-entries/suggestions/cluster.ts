@@ -125,6 +125,81 @@ const toCluster = (
   };
 };
 
+type RecordedTime = {
+  durationMinutes: number;
+  startedAt: Date | null;
+  endedAt: Date | null;
+};
+
+export type CoveredSuggestionCluster = SuggestionCluster & {
+  alreadyCovered: boolean;
+};
+
+/**
+ * Removes the union of recorded timer/activity windows from each candidate.
+ * Duration-only entries cannot be placed on the clock, so they are exposed as
+ * day-level coverage without being guessed into a particular window.
+ */
+export const subtractRecordedTime = (
+  clusters: readonly SuggestionCluster[],
+  entries: readonly RecordedTime[],
+): CoveredSuggestionCluster[] => {
+  let durationOnlyMinutes = 0;
+  for (const entry of entries) {
+    if (entry.startedAt === null || entry.endedAt === null) {
+      durationOnlyMinutes += entry.durationMinutes;
+    }
+  }
+  const windows = entries
+    .filter(
+      (entry): entry is RecordedTime & { startedAt: Date; endedAt: Date } =>
+        entry.startedAt !== null && entry.endedAt !== null,
+    )
+    .toSorted((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+
+  const uncovered: CoveredSuggestionCluster[] = [];
+  for (const cluster of clusters) {
+    const start = cluster.startedAt.getTime();
+    const end = start + cluster.durationMinutes * MS_PER_MINUTE;
+    const overlaps: [number, number][] = [];
+    for (const window of windows) {
+      const overlapStart = Math.max(start, window.startedAt.getTime());
+      const overlapEnd = Math.min(end, window.endedAt.getTime());
+      if (overlapEnd > overlapStart) {
+        overlaps.push([overlapStart, overlapEnd]);
+      }
+    }
+    let coveredMs = 0;
+    let current: [number, number] | null = null;
+    for (const overlap of overlaps) {
+      if (current === null) {
+        current = overlap;
+      } else if (overlap[0] <= current[1]) {
+        current[1] = Math.max(current[1], overlap[1]);
+      } else {
+        coveredMs += current[1] - current[0];
+        current = overlap;
+      }
+    }
+    if (current !== null) {
+      coveredMs += current[1] - current[0];
+    }
+    const durationMinutes = Math.max(
+      0,
+      cluster.durationMinutes - Math.ceil(coveredMs / MS_PER_MINUTE),
+    );
+    if (durationMinutes === 0) {
+      continue;
+    }
+    uncovered.push({
+      ...cluster,
+      durationMinutes,
+      alreadyCovered: durationOnlyMinutes >= durationMinutes,
+    });
+  }
+  return uncovered;
+};
+
 /**
  * Groups a day's signals into candidate entries. Signals closer than the
  * merge gap share a cluster; a cluster's duration is the observed span plus

@@ -384,6 +384,9 @@ const parseTimeEntrySuggestion = (
     typeof input.startedAt !== "string" ||
     typeof input.endedAt !== "string" ||
     !isInteger(input.durationMinutes) ||
+    !isInteger(input["engagedMinutes"]) ||
+    typeof input["alreadyCovered"] !== "boolean" ||
+    typeof input["billableByDefault"] !== "boolean" ||
     !isInteger(input.signalCount) ||
     !Array.isArray(input.evidence)
   ) {
@@ -402,6 +405,9 @@ const parseTimeEntrySuggestion = (
     startedAt: input.startedAt,
     endedAt: input.endedAt,
     durationMinutes: input.durationMinutes,
+    engagedMinutes: input["engagedMinutes"],
+    alreadyCovered: input["alreadyCovered"],
+    billableByDefault: input["billableByDefault"],
     signalCount: input.signalCount,
     evidence,
   };
@@ -414,6 +420,7 @@ export const parseTimeEntrySuggestionsResponse = (
     !isRecord(input) ||
     typeof input.date !== "string" ||
     !isInteger(input.activeMinutes) ||
+    !isInteger(input["loggedMinutes"]) ||
     !Array.isArray(input.items)
   ) {
     return null;
@@ -426,7 +433,12 @@ export const parseTimeEntrySuggestionsResponse = (
     }
     items.push(parsed);
   }
-  return { date: input.date, activeMinutes: input.activeMinutes, items };
+  return {
+    date: input.date,
+    activeMinutes: input.activeMinutes,
+    loggedMinutes: input["loggedMinutes"],
+    items,
+  };
 };
 
 export const parseTimeEntrySuggestionDecision = (

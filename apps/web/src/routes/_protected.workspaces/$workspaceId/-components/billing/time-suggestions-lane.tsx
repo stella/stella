@@ -120,9 +120,16 @@ export const TimeSuggestionsLane = ({
                     {EVIDENCE_SEPARATOR}
                     {evidence}
                   </BidiText>
+                  <span className="text-muted-foreground block text-xs tabular-nums">
+                    {suggestion.alreadyCovered
+                      ? t("alreadyCovered")
+                      : t("engagedTime", {
+                          duration: formatMinutes(suggestion.engagedMinutes),
+                        })}
+                  </span>
                 </span>
               </button>
-              <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
+              <span className="shrink-0 text-sm font-medium tabular-nums">
                 {formatMinutes(suggestion.durationMinutes)}
               </span>
               <Button

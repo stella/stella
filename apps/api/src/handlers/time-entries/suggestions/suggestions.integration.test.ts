@@ -17,6 +17,8 @@ import {
   chatMessages,
   chatThreads,
   featureEnrolments,
+  rateEntries,
+  rateTables,
   timeEntries,
   timeEntrySuggestions,
 } from "@/api/db/schema";
@@ -30,6 +32,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditAction, AuditResourceType } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -66,6 +69,8 @@ const messageIds = [
   createSafeId<"chatMessage">(),
 ];
 const auditIds: SafeId<"auditLog">[] = [];
+const rateTableId = createSafeId<"rateTable">();
+const rateEntryId = createSafeId<"rateEntry">();
 
 type SeedAuditRowOptions = {
   userId: SafeId<"user">;
@@ -219,6 +224,7 @@ afterAll(async () => {
       .delete(timeEntrySuggestions)
       .where(eq(timeEntrySuggestions.userId, ids.userA1));
     await testDb.delete(timeEntries).where(eq(timeEntries.source, "suggested"));
+    await testDb.delete(rateTables).where(eq(rateTables.id, rateTableId));
     await testDb.delete(auditLogs).where(inArray(auditLogs.id, auditIds));
     await testDb
       .delete(chatMessages)
@@ -308,8 +314,9 @@ describe("time entry suggestions integration", () => {
     expect(listed.date).toBe(DAY);
     expect(listed.items).toHaveLength(2);
     // 09:00 -> 09:15 span (15 min) + 5 min tail; 14:00 alone gets the tail.
-    expect(listed.items.map((item) => item.durationMinutes)).toEqual([20, 5]);
-    expect(listed.activeMinutes).toBe(25);
+    expect(listed.items.map((item) => item.durationMinutes)).toEqual([24, 6]);
+    expect(listed.items.map((item) => item.engagedMinutes)).toEqual([20, 5]);
+    expect(listed.activeMinutes).toBe(30);
     expect(listed.items[0]).toMatchObject({
       signalCount: 3,
       evidence: [
@@ -337,6 +344,22 @@ describe("time entry suggestions integration", () => {
   });
 
   test("accepting records a suggested entry once, then the fingerprint is spent", async () => {
+    await testDb.insert(rateTables).values({
+      id: rateTableId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      name: "Suggestion test rate",
+      currency: "USD",
+      isDefault: true,
+    });
+    await testDb.insert(rateEntries).values({
+      id: rateEntryId,
+      workspaceId: ids.wsA1,
+      rateTableId,
+      userId: ids.userA1,
+      hourlyRate: cents(20_000),
+      effectiveFrom: DAY,
+    });
     const listed = await listFor(ids.userA1);
     if (!isListResponse(listed)) {
       throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
@@ -351,7 +374,6 @@ describe("time entry suggestions integration", () => {
       durationMinutes: 18,
       narrative: "Lease negotiation: reviewed the draft and replied",
       narrativeLanguage: "cs-CZ",
-      billable: false,
     });
     if (!isDecisionResponse(accepted) || accepted.timeEntryId === null) {
       throw new Error(
@@ -372,6 +394,7 @@ describe("time entry suggestions integration", () => {
         billedMinutes: true,
         dateWorked: true,
         narrativeLanguage: true,
+        billable: true,
         userId: true,
       },
     });
@@ -381,6 +404,7 @@ describe("time entry suggestions integration", () => {
       billedMinutes: 18,
       dateWorked: DAY,
       narrativeLanguage: "cs-CZ",
+      billable: true,
       userId: ids.userA1,
     });
 

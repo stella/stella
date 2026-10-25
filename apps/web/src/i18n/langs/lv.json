@@ -798,7 +798,9 @@
     "suggestions": {
       "actionCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
       "activeVsLogged": "Aktivitāte: {active} · Reģistrēts: {logged}",
+      "alreadyCovered": "Jau ietverts reģistrētajā laikā",
       "chatEvidence": "{count, plural, zero {# ziņojumu} one {# ziņojums} other {# ziņojumi}} sarunā „{title}”",
+      "engagedTime": "{duration} aktīvā laika",
       "keyboardHint": "Enter pieņem, E ļauj rediģēt pirms pieņemšanas, Delete noraida",
       "privacyNote": "Šos ieteikumus redzat tikai jūs. Nekas netiek reģistrēts, kamēr to nepieņemat.",
       "title": "Ieteikumi, balstoti uz jūsu aktivitāti",
