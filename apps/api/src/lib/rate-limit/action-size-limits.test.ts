@@ -1,12 +1,14 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { connect } from "node:net";
 
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { sendServedRequest } from "@/api/tests/helpers/served-request";
 
 import {
   ActionSizeError,
@@ -123,92 +125,61 @@ describe("tenant action size boundaries", () => {
   test("re-framed bodies stream under Bun.serve routes when the body arrived with its headers", async () => {
     const body = JSON.stringify({ text: "Příloha § 🗂", id: 1 });
     const bytes = utf8.encode(body).byteLength;
-    const server = Bun.serve({
-      port: 0,
-      routes: {
+    const app = createHttpApp({
+      middleware: [
+        async (_ctx, inner) => {
+          // real-time: the awaited pipeline stages run before the body is
+          // touched, and only a real I/O gap lets the body sent with the
+          // headers arrive in full first, the state under test.
+          await Bun.sleep(5);
+          return await inner();
+        },
+      ],
+      routes: routes({
         "/v1/action": {
-          POST: async (request) => {
-            // real-time: the awaited pipeline stages run before the body is
-            // touched, and only a real I/O gap lets the body sent with the
-            // headers arrive in full first, the state under test.
-            await Bun.sleep(5);
-            const bounded = await reframeBoundedRequest(request, 1024);
-            if (Result.isError(bounded)) {
-              return new Response(bounded.error.reason, { status: 413 });
-            }
-            const reframed = bounded.value.request;
-            const stream: ReadableStream<Uint8Array> | null = reframed.body;
-            if (stream === null) {
-              return panic("The re-framed request lost its body");
-            }
-            const chunks: Uint8Array[] = [];
-            for await (const chunk of stream) {
-              chunks.push(chunk);
-            }
-            return Response.json({
-              body: Buffer.concat(chunks).toString("utf-8"),
-              contentLength: reframed.headers.get("content-length"),
-              transferEncoding: reframed.headers.get("transfer-encoding"),
-            });
+          POST: {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              const bounded = await reframeBoundedRequest(ctx.request, 1024);
+              if (Result.isError(bounded)) {
+                return new Response(bounded.error.reason, { status: 413 });
+              }
+              const reframed = bounded.value.request;
+              const stream: ReadableStream<Uint8Array> | null = reframed.body;
+              if (stream === null) {
+                return panic("The re-framed request lost its body");
+              }
+              const chunks: Uint8Array[] = [];
+              for await (const chunk of stream) {
+                chunks.push(chunk);
+              }
+              return {
+                body: Buffer.concat(chunks).toString("utf-8"),
+                contentLength: reframed.headers.get("content-length"),
+                transferEncoding: reframed.headers.get("transfer-encoding"),
+              };
+            },
           },
         },
-      },
-      fetch: () => new Response("Not found", { status: 404 }),
-      error: (error) => new Response(error.message, { status: 500 }),
+      }),
     });
-    const sendInOneWrite = async (framing: string[], payload: string) =>
-      await new Promise<string>((resolve, reject) => {
-        const socket = connect(server.port ?? 0, "127.0.0.1");
-        socket.setEncoding("utf-8");
-        let received = "";
-        socket.on("data", (chunk: string) => {
-          received += chunk;
-        });
-        socket.on("error", (error) => {
-          reject(error);
-        });
-        socket.on("close", () => {
-          resolve(received);
-        });
-        // Headers and body in ONE write, as a load balancer forwards them.
-        socket.write(
-          [
-            "POST /v1/action HTTP/1.1",
-            "Host: localhost",
-            "Content-Type: application/json",
-            ...framing,
-            "Connection: close",
-            "",
-            payload,
-          ].join("\r\n"),
-        );
+    for (const framing of ["content-length", "chunked"] as const) {
+      const response = await sendServedRequest(app, {
+        path: "/v1/action",
+        headers: { "Content-Type": "application/json" },
+        body,
+        framing,
       });
-    try {
-      for (const [framing, payload] of [
-        [[`Content-Length: ${bytes}`], body],
-        [
-          ["Transfer-Encoding: chunked"],
-          `${bytes.toString(16)}\r\n${body}\r\n0\r\n\r\n`,
-        ],
-      ] as const) {
-        const raw = await sendInOneWrite([...framing], payload);
-        const separator = raw.indexOf("\r\n\r\n");
-        expect({
-          framing,
-          status: raw.slice(0, raw.indexOf("\r\n")),
-          answer: raw.slice(separator + 4),
-        }).toEqual({
-          framing,
-          status: "HTTP/1.1 200 OK",
-          answer: JSON.stringify({
-            body,
-            contentLength: String(bytes),
-            transferEncoding: null,
-          }),
-        });
-      }
-    } finally {
-      await server.stop(true);
+      expect({
+        framing,
+        status: response.status,
+        answer: JSON.parse(response.body),
+      }).toEqual({
+        framing,
+        status: 200,
+        answer: { body, contentLength: String(bytes), transferEncoding: null },
+      });
     }
   });
 

@@ -75,6 +75,15 @@ const requestTooLarge = () =>
     reason: "request_too_large",
   });
 
+/**
+ * Whether an incoming request carries a body, asked without reading it. This
+ * module owns every look at an incoming request's body stream; readers take
+ * the bytes from {@link reframeBoundedRequest} or the request's own `text()`,
+ * `json()` and `arrayBuffer()`.
+ */
+export const hasRequestBody = (request: Request): boolean =>
+  request.body !== null;
+
 /** A request whose body was read once and re-framed from its metered bytes. */
 export type BoundedRequest = {
   readonly request: Request;

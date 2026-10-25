@@ -40,6 +40,7 @@ import {
   boundActionJsonResponse,
   getActionSizePolicy,
   getTenantActionSizePolicy,
+  hasRequestBody,
   recordActionResponseOversize,
   reframeBoundedRequest,
   withTenantActionSizePolicy,
@@ -707,7 +708,7 @@ const readInboundMessage = async (
 ): Promise<McpInboundMessage> => {
   if (
     request.method !== "POST" ||
-    request.body === null ||
+    !hasRequestBody(request) ||
     !isJsonContentType(request.headers.get("content-type"))
   ) {
     return { parsedBody: undefined, request, requestId: null, status: "read" };

@@ -1,6 +1,5 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
-import { connect } from "node:net";
 
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import { createHttpApp } from "@/api/http/app";
@@ -13,6 +12,7 @@ import {
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { sendServedRequest } from "@/api/tests/helpers/served-request";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">("served_org");
@@ -67,68 +67,6 @@ const awaitedStage: Middleware = async (_ctx, inner) => {
   return await inner();
 };
 
-type RawResponse = { status: number; body: string };
-
-const decodeChunked = (body: string): string => {
-  let decoded = "";
-  let rest = body;
-  while (true) {
-    const lineEnd = rest.indexOf("\r\n");
-    const size = Number.parseInt(rest.slice(0, lineEnd), 16);
-    if (!Number.isInteger(size) || size === 0) {
-      return decoded;
-    }
-    decoded += rest.slice(lineEnd + 2, lineEnd + 2 + size);
-    rest = rest.slice(lineEnd + 2 + size + 2);
-  }
-};
-
-/**
- * POST over a raw socket with the headers and the body in ONE write, the way
- * a load balancer forwards a small request. Bun's own fetch writes them
- * separately, which does not exercise a body that arrived before the handler.
- */
-const postInOneWrite = async (
-  port: number,
-  path: string,
-  body: string,
-): Promise<RawResponse> =>
-  await new Promise<RawResponse>((resolve, reject) => {
-    const socket = connect(port, "127.0.0.1");
-    socket.setEncoding("utf-8");
-    let received = "";
-    socket.on("data", (chunk: string) => {
-      received += chunk;
-    });
-    socket.on("error", (error) => {
-      reject(error);
-    });
-    socket.on("close", () => {
-      const separator = received.indexOf("\r\n\r\n");
-      const head = received.slice(0, separator);
-      const rawBody = received.slice(separator + 4);
-      resolve({
-        status: Number(head.split(" ")[1]),
-        body: /^transfer-encoding:\s*chunked/imu.test(head)
-          ? decodeChunked(rawBody)
-          : rawBody,
-      });
-    });
-    socket.write(
-      [
-        `POST ${path} HTTP/1.1`,
-        "Host: localhost",
-        "Accept: application/json, text/event-stream",
-        "Authorization: Bearer token",
-        "Content-Type: application/json",
-        `Content-Length: ${Buffer.byteLength(body, "utf-8")}`,
-        "Connection: close",
-        "",
-        body,
-      ].join("\r\n"),
-    );
-  });
-
 describe("MCP over a served socket", () => {
   test("answers initialize when the bounded body arrived with its headers", async () => {
     const observeTransportFailure = mock();
@@ -138,28 +76,27 @@ describe("MCP over a served socket", () => {
       }),
       middleware: [awaitedStage],
     });
-    const server = Bun.serve({ port: 0, ...app.serveOptions });
-    try {
-      const port = server.port;
-      if (port === undefined) {
-        panic("The test server did not bind a port");
-      }
-      const response = await postInOneWrite(port, "/mcp", initializeBody);
-      expect({
-        status: response.status,
-        observed: observeTransportFailure.mock.calls,
-      }).toEqual({ status: 200, observed: [] });
-      expect(JSON.parse(response.body)).toMatchObject({
-        id: 1,
-        jsonrpc: "2.0",
-        result: {
-          protocolVersion: "2025-06-18",
-          serverInfo: { name: expect.any(String) },
-        },
-      });
-    } finally {
-      await server.stop(true);
-    }
+    const response = await sendServedRequest(app, {
+      path: "/mcp",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: "Bearer token",
+        "Content-Type": "application/json",
+      },
+      body: initializeBody,
+    });
+    expect({
+      status: response.status,
+      observed: observeTransportFailure.mock.calls,
+    }).toEqual({ status: 200, observed: [] });
+    expect(JSON.parse(response.body)).toMatchObject({
+      id: 1,
+      jsonrpc: "2.0",
+      result: {
+        protocolVersion: "2025-06-18",
+        serverInfo: { name: expect.any(String) },
+      },
+    });
   });
 
   test("a transport fault answers 503 and is observed with its cause", async () => {
