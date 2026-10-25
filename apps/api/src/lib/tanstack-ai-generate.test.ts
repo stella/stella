@@ -15,6 +15,7 @@ import {
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { env } from "@/api/env";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
@@ -75,7 +76,11 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+testState.setConfig("OPENROUTER_API_KEY", "test-openrouter-instance-key");
 
 // The real `chat()` engine runs here; only the provider boundary is faked.
 // Replacing the engine instead lets a fixture invent public chunk shapes the
@@ -2627,7 +2632,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     expect(classifyAIError(caught)).toBe("output_invalid");
     expect(providerRequests).toHaveLength(2);
     expect(outcomeLogs()).toEqual([
-      { result: "failed", rung: "fallback_skipped", issueTypes: "number" },
+      { result: "failed", rung: "fallback_model", issueTypes: "number" },
     ]);
     // The outcome line carries paths and types, never the model's values.
     expect(JSON.stringify(logs.records)).not.toContain("three");

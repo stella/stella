@@ -440,6 +440,10 @@ describe("TanStack text model resolution", () => {
         task: "reasoning",
         dataClass: "customer",
         managedAIResidency: "eu",
+        managedOpenRouterCredential: {
+          type: "static",
+          apiKey: "test-openrouter-instance-key",
+        },
         organizationId: orgId,
         modelTier: MANAGED_MODEL_TIER.standard,
       },
@@ -482,6 +486,10 @@ describe("TanStack text model resolution", () => {
         managedAIResidency: "eu",
         organizationId: null,
         modelTier: MANAGED_MODEL_TIER.standard,
+        managedOpenRouterCredential: {
+          type: "static",
+          apiKey: "test-openrouter-instance-key",
+        },
       },
     );
 
@@ -1650,6 +1658,10 @@ describe("managed model tier", () => {
   const MANAGED_CUSTOMER = {
     dataClass: "customer",
     managedAIResidency: "eu",
+    managedOpenRouterCredential: {
+      type: "static",
+      apiKey: "test-openrouter-instance-key",
+    },
     organizationId: orgId,
   } as const;
   // The organization's own key: each task on its own catalog model, so a

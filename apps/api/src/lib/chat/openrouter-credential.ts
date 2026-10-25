@@ -19,6 +19,10 @@ import {
   emitManagedCredentialUnavailable,
   emitOpenRouterTokenExchange,
 } from "@/api/lib/observability/request-metrics";
+import {
+  MANAGED_MODEL_TIER,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -38,25 +42,40 @@ export type ManagedOpenRouterCredential =
   | { type: "static"; apiKey: string }
   | { type: "federated"; apiKey: string; invalidate: () => void };
 
-export const getManagedOpenRouterConfiguration =
-  (): ManagedOpenRouterConfiguration => {
-    if (env.OPENROUTER_API_KEY?.trim()) {
-      return { type: "static", apiKey: env.OPENROUTER_API_KEY };
-    }
-    if (
-      env.OPENROUTER_WIF_POLICY_ID &&
-      env.OPENROUTER_WIF_AUDIENCE &&
-      env.OPENROUTER_WIF_STS_REGION
-    ) {
-      return {
-        type: "federated",
-        policyId: env.OPENROUTER_WIF_POLICY_ID,
-        audience: env.OPENROUTER_WIF_AUDIENCE,
-        region: env.OPENROUTER_WIF_STS_REGION,
-      };
-    }
-    return { type: "unavailable" };
-  };
+export const getManagedOpenRouterConfiguration = (
+  tier: ManagedModelTier,
+): ManagedOpenRouterConfiguration => {
+  const configurations = {
+    [MANAGED_MODEL_TIER.standard]: {
+      apiKey: env.OPENROUTER_API_KEY,
+      policyId: env.OPENROUTER_WIF_POLICY_ID,
+    },
+    [MANAGED_MODEL_TIER.fast]: {
+      apiKey: env.OPENROUTER_FAST_TIER_API_KEY,
+      policyId: env.OPENROUTER_FAST_TIER_WIF_POLICY_ID,
+    },
+  } as const satisfies Record<
+    ManagedModelTier,
+    { apiKey: string | undefined; policyId: string | undefined }
+  >;
+  const configuration = configurations[tier];
+  if (configuration.apiKey?.trim()) {
+    return { type: "static", apiKey: configuration.apiKey };
+  }
+  if (
+    configuration.policyId &&
+    env.OPENROUTER_WIF_AUDIENCE &&
+    env.OPENROUTER_WIF_STS_REGION
+  ) {
+    return {
+      type: "federated",
+      policyId: configuration.policyId,
+      audience: env.OPENROUTER_WIF_AUDIENCE,
+      region: env.OPENROUTER_WIF_STS_REGION,
+    };
+  }
+  return { type: "unavailable" };
+};
 
 const exchangeSchema = v.object({
   access_token: v.pipe(
@@ -522,18 +541,33 @@ export const createManagedOpenRouterCredentialProvider = (
   options: CredentialProviderOptions,
 ) => new ManagedOpenRouterCredentialProvider(options);
 
-let provider:
-  ReturnType<typeof createManagedOpenRouterCredentialProvider> | undefined;
-export const getManagedOpenRouterCredentialProvider = () =>
-  (provider ??= createManagedOpenRouterCredentialProvider({
-    configuration: getManagedOpenRouterConfiguration,
-  }));
+const createProviderGetter = (tier: ManagedModelTier) => {
+  let provider:
+    ReturnType<typeof createManagedOpenRouterCredentialProvider> | undefined;
+  return () =>
+    (provider ??= createManagedOpenRouterCredentialProvider({
+      configuration: () => getManagedOpenRouterConfiguration(tier),
+    }));
+};
 
-export const getManagedOpenRouterCredential = async (): Promise<
-  Result<ManagedOpenRouterCredential, HandlerError<503>>
-> => {
-  const credentialProvider = getManagedOpenRouterCredentialProvider();
-  const configuration = getManagedOpenRouterConfiguration();
+const providerGetters = {
+  [MANAGED_MODEL_TIER.standard]: createProviderGetter(
+    MANAGED_MODEL_TIER.standard,
+  ),
+  [MANAGED_MODEL_TIER.fast]: createProviderGetter(MANAGED_MODEL_TIER.fast),
+} as const satisfies Record<
+  ManagedModelTier,
+  () => ManagedOpenRouterCredentialProvider
+>;
+export const getManagedOpenRouterCredentialProvider = (
+  tier: ManagedModelTier,
+) => providerGetters[tier]();
+
+export const getManagedOpenRouterCredential = async (
+  tier: ManagedModelTier,
+): Promise<Result<ManagedOpenRouterCredential, HandlerError<503>>> => {
+  const credentialProvider = getManagedOpenRouterCredentialProvider(tier);
+  const configuration = getManagedOpenRouterConfiguration(tier);
   const result = await credentialProvider.get();
   return result.map((apiKey) =>
     configuration.type === "federated"

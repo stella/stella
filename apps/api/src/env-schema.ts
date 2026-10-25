@@ -136,6 +136,10 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
   OPENROUTER_WIF_POLICY_ID: v.optional(
     v.pipe(v.string(), v.trim(), v.minLength(1)),
   ),
@@ -942,9 +946,12 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   APP_REVIEW_ORGANIZATION_ID?: string | undefined;
   AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
   FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
+  FEATURE_FREE_TIER?: boolean | undefined;
   MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
   OPENROUTER_API_KEY?: string | undefined;
+  OPENROUTER_FAST_TIER_API_KEY?: string | undefined;
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID?: string | undefined;
   OPENROUTER_WIF_POLICY_ID?: string | undefined;
   OPENROUTER_WIF_AUDIENCE?: string | undefined;
   OPENROUTER_WIF_STS_REGION?: string | undefined;
@@ -956,7 +963,6 @@ type EnvApiInvariantInput = InboundMailReceivingInput & {
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
   FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
   FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
-  FEATURE_FREE_TIER?: boolean | undefined;
   FEATURE_USAGE?: boolean | undefined;
   USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
   PAYMENT_RETRY_WINDOW_MS?: number | undefined;
@@ -982,9 +988,12 @@ type ManagedProviderCheckInvariantInput = Pick<
   EnvApiInvariantInput,
   | "AI_PROVIDER"
   | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "FEATURE_FREE_TIER"
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_FAST_TIER_API_KEY"
+  | "OPENROUTER_FAST_TIER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_AUDIENCE"
   | "OPENROUTER_WIF_STS_REGION"
@@ -993,27 +1002,57 @@ type ManagedProviderCheckInvariantInput = Pick<
 const managedProviderCheckInvariantViolation = ({
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
+  FEATURE_FREE_TIER,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
-  const configuredWifFields = [
-    OPENROUTER_WIF_POLICY_ID,
+  const configuredSharedWifFields = [
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
   ].filter((value) => value !== undefined).length;
-  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
-    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  if (configuredSharedWifFields === 1) {
+    return "OPENROUTER_WIF_AUDIENCE and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    configuredSharedWifFields === 2 &&
+    OPENROUTER_WIF_POLICY_ID === undefined &&
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID === undefined
+  ) {
+    return "An OpenRouter WIF policy ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    (OPENROUTER_WIF_POLICY_ID !== undefined ||
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined) &&
+    configuredSharedWifFields !== 2
+  ) {
+    return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+    if (
+      !OPENROUTER_API_KEY?.trim() &&
+      !(OPENROUTER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+    ) {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
+    }
+    if (
+      FEATURE_FREE_TIER &&
+      !OPENROUTER_FAST_TIER_API_KEY?.trim() &&
+      !(
+        OPENROUTER_FAST_TIER_WIF_POLICY_ID &&
+        OPENROUTER_WIF_AUDIENCE &&
+        OPENROUTER_WIF_STS_REGION
+      )
+    ) {
+      return "FEATURE_FREE_TIER with FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
     }
     if (
       MANAGED_PROVIDER_CHECK_INTERVAL_MS === undefined ||
@@ -1104,6 +1143,8 @@ export const envApiInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
@@ -1157,9 +1198,12 @@ export const envApiInvariantViolation = ({
     APP_REVIEW_ORGANIZATION_ID,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
+    FEATURE_FREE_TIER,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_FAST_TIER_API_KEY,
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID,
     OPENROUTER_WIF_POLICY_ID,
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
@@ -1168,7 +1212,6 @@ export const envApiInvariantViolation = ({
     INBOUND_MAIL_TOPIC_ARN,
     INBOUND_MAIL_BUCKET,
     INBOUND_MAIL_KEY_PREFIX,
-    FEATURE_FREE_TIER,
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,
