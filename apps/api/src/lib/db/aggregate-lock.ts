@@ -36,6 +36,7 @@ import {
   entities,
   entityVersions,
   fields,
+  organizationSettings,
   pdfSigningSessions,
   workspaceMembers,
   workspaces,
@@ -2402,6 +2403,30 @@ export const lockMemberAccessRow = async ({
       .limit(1)
       .for(mode)
   ).at(0);
+
+/**
+ * Holds off organization settings writes until the transaction ends: a first
+ * settings row's foreign key needs a key-share lock on the organization row,
+ * and a later write updates the settings row itself. A read after this lock
+ * is the state every such write serializes with.
+ */
+export const lockOrganizationSettingsWrites = async ({
+  tx,
+  organizationIds,
+}: {
+  tx: Transaction;
+  organizationIds: readonly SafeId<"organization">[];
+}): Promise<void> => {
+  if (organizationIds.length === 0) {
+    return;
+  }
+  await withAggregateParentBatch({ tx, organizationIds, mode: "update" });
+  await tx
+    .select({ organizationId: organizationSettings.organizationId })
+    .from(organizationSettings)
+    .where(inArray(organizationSettings.organizationId, [...organizationIds]))
+    .for("share");
+};
 
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];

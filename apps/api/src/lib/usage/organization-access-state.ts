@@ -7,7 +7,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, notExists, sql } from "drizzle-orm";
+import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -26,6 +26,7 @@ import {
   recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockOrganizationSettingsWrites } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -249,11 +250,11 @@ type MoveKeylessOrganizationsOptions = {
   actor: string;
 };
 
-export const moveKeylessOrganizationsToFree = async (
+const selectKeylessOrganizations = async (
   db: Transaction,
-  { now, actor }: MoveKeylessOrganizationsOptions,
-): Promise<SafeId<"organization">[]> => {
-  const candidates = await db
+  within?: readonly SafeId<"organization">[],
+) =>
+  await db
     .select({ id: organizationAccessStates.organizationId })
     .from(organizationAccessStates)
     .where(
@@ -262,6 +263,9 @@ export const moveKeylessOrganizationsToFree = async (
           organizationAccessStates.state,
           ORGANIZATION_ACCESS_STATE.selfManagedKeys,
         ),
+        within === undefined
+          ? undefined
+          : inArray(organizationAccessStates.organizationId, [...within]),
         notExists(
           db
             .select({ organizationId: organizationSettings.organizationId })
@@ -278,6 +282,23 @@ export const moveKeylessOrganizationsToFree = async (
         ),
       ),
     );
+
+export const moveKeylessOrganizationsToFree = async (
+  db: Transaction,
+  { now, actor }: MoveKeylessOrganizationsOptions,
+): Promise<SafeId<"organization">[]> => {
+  const preliminary = await selectKeylessOrganizations(db);
+  if (preliminary.length === 0) {
+    return [];
+  }
+  const preliminaryIds = preliminary.map(({ id }) => id);
+  // Configuration writes committed before the lock are seen by the re-read;
+  // later ones wait for this transaction.
+  await lockOrganizationSettingsWrites({
+    tx: db,
+    organizationIds: preliminaryIds,
+  });
+  const candidates = await selectKeylessOrganizations(db, preliminaryIds);
 
   const moved = await transitionScopedBatch({
     tx: db,
