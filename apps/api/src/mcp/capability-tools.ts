@@ -53,10 +53,8 @@ import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context"
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
 import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
-import {
-  bindApprovedMcpAuditContext,
-  type McpRequestContext,
-} from "@/api/mcp/context";
+import { bindApprovedMcpAuditContext } from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   projectMcpRefusal,
@@ -122,6 +120,8 @@ import {
   defineProjectedMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
 
@@ -924,7 +924,7 @@ export const featureOmittedCapabilityIds = async (
   isFeatureEnabled: (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
-  context?: McpRequestContext,
+  context?: AuthorizedMcpRequestContext,
 ): Promise<readonly string[]> =>
   (await getCatalog())
     .filter(
@@ -947,7 +947,7 @@ const listCapabilitiesHandler: McpToolHandler<
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => {
   const parsed = v.safeParse(listCapabilitiesArgsSchema, args);
   if (!parsed.success) {
@@ -1037,7 +1037,7 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 const notFoundWithHint = async (
   id: string,
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
 ): Promise<InternalToolErrorResult> =>
   notFoundResult(
     `No capability with id "${id}"`,
@@ -1060,7 +1060,7 @@ const featureDisabledResult = (
 
 const hintForUnknownId = async (
   id: string,
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
 ): Promise<string> => {
   const suggestions = closestToolNames(
     id,
@@ -1135,7 +1135,7 @@ const describeCapabilityHandler: McpToolHandler<
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => {
   const parsed = v.safeParse(describeCapabilityArgsSchema, args);
   if (!parsed.success) {
@@ -1527,7 +1527,7 @@ const resolveCapabilityWorkspace = ({
   entry,
   params,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entry: CatalogEntry;
   params: unknown;
 }):
@@ -1633,7 +1633,7 @@ export const invokedCapabilityConsumesServices = async ({
 
 type InvokeCapabilityOptions = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
 };
 
@@ -1963,7 +1963,7 @@ const capabilityReferenceRefusal = async ({
   entry,
   confirm,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   config: EndpointConfig;
   body: unknown;
   params: unknown;
@@ -2004,7 +2004,7 @@ const executeInvoke = async ({
   validateOnly,
   confirm,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
@@ -2288,6 +2288,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "list_capabilities",
     access: "read",
+    permissions: openMcpRead("reads the static capability catalog metadata"),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
@@ -2312,6 +2313,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "describe_capability",
     access: "read",
+    permissions: openMcpRead("reads the static capability catalog metadata"),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
@@ -2334,6 +2336,10 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: MCP_CAPABILITY_EXECUTORS.read,
     access: "read",
+    permissions: {
+      type: "delegated",
+      reason: "The resolved capability enforces its own declared authority",
+    },
     readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",

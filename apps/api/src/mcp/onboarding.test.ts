@@ -9,7 +9,8 @@ import {
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -80,7 +81,7 @@ const createScopedDb = ({
   matters = [],
   practiceJurisdictions = [],
 }: ScopedDbOptions = {}) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (callback: (tx: ScopedTx) => Promise<unknown>) => {
       // list_matters now uses the core query builder; the chain ignores its
       // column/where/order arguments and resolves to the seeded matters.
@@ -115,30 +116,31 @@ const createContext = ({
   recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
 }: {
-  memberRole?: McpRequestContext["memberRole"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
   recordAuditEvent?: AuditRecorder;
-  scopedDb?: McpRequestContext["scopedDb"];
-} = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-  accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent,
-  testDependencies: {
-    searchDecisionsHandler: searchDecisionsHandlerMock,
-    readGatedDecisionWithDocument: readDecisionHandlerMock,
-    readWorkspaceHandler: readWorkspaceHandlerMock,
-    readOverviewHandler: readOverviewHandlerMock,
-    readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-  },
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+    accessibleWorkspaceIdSet: new Set(["ws_1"]),
+    accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent,
+    testDependencies: {
+      searchDecisionsHandler: searchDecisionsHandlerMock,
+      readGatedDecisionWithDocument: readDecisionHandlerMock,
+      readWorkspaceHandler: readWorkspaceHandlerMock,
+      readOverviewHandler: readOverviewHandlerMock,
+      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+    },
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,

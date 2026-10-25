@@ -40,7 +40,7 @@ const buildDeps = (
 };
 
 describe("buildMcpContextFromChat", () => {
-  test("maps every McpRequestContext field from chat-resolved state", () => {
+  test("maps every AuthorizedMcpRequestContext field from chat-resolved state", () => {
     const deps = buildDeps();
     const context = buildMcpContextFromChat(deps);
 

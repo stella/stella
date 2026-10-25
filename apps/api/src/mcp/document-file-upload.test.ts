@@ -10,7 +10,6 @@ import { createSha256 } from "@stll/sha256/node";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
   uploadRemoteDocumentVersion,
@@ -22,21 +21,23 @@ import {
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getStaticMcpToolOutputContract } from "@/api/mcp/static-tool-definitions";
 import { errorResult, serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => await run({}),
 );
 const noopRecorder = asTestRaw<AuditRecorder>(async () => undefined);
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const workspaceId = toSafeId<"workspace">(
     "00000000-0000-4000-8000-000000000001",
   );
   const safeDb = toSafeDbMock(emptyScopedDb);
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [workspaceId],
     accessibleWorkspaceIdSet: new Set([workspaceId]),
     accessibleWorkspaceStatusById: new Map([[workspaceId, "active"]]),
@@ -57,7 +58,7 @@ const createContext = (): McpRequestContext => {
     scopedDb: emptyScopedDb,
     userId: toSafeId<"user">("00000000-0000-4000-8000-000000000003"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 describe("document file upload surface", () => {
@@ -93,9 +94,13 @@ describe("document file upload surface", () => {
     });
 
     expect(listedUpload?.annotations?.destructiveHint).toBe(true);
-    expect(pickerDefinition).toMatchObject({
-      nonDestructiveReason: expect.stringContaining("without modifying"),
-    });
+    if (!("nonDestructiveReason" in pickerDefinition)) {
+      panic("Canonical upload picker must state its non-modifying behavior");
+    }
+    expect(typeof pickerDefinition.nonDestructiveReason).toBe("string");
+    expect(pickerDefinition.nonDestructiveReason).toContain(
+      "without modifying",
+    );
     const listedPicker = toMcpTools([pickerDefinition]).at(0);
     expect(listedPicker?.annotations?.destructiveHint).toBe(false);
     const parsedUi = McpUiToolMetaSchema.safeParse(listedPicker?._meta?.["ui"]);
@@ -119,7 +124,7 @@ describe("document file upload surface", () => {
   test("returns the picker's next step in the result the model reads", async () => {
     const entityId = "00000000-0000-4000-8000-000000000010";
     const workspaceId = "00000000-0000-4000-8000-000000000001";
-    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+    const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
           query: {

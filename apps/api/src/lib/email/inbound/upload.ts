@@ -22,6 +22,7 @@ import {
   type EmailFileFormat,
   parseEmailFile,
 } from "@/api/lib/email/inbound/message";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -262,7 +263,7 @@ export const fileUploadedMail = async ({
           verifyOriginal,
         }),
       },
-      sender: file.uploaderEmail.toLowerCase(),
+      sender: normalizeEmail(file.uploaderEmail),
       receivedAt: file.createdAt.toISOString(),
     }),
     attachments: [],

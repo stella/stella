@@ -536,7 +536,7 @@ test("computed template imports and require calls retain their test importers", 
   });
 });
 
-// Two walks over the real repository graph: the limit only catches a hang.
+// timeout: Two walks over the real repository graph; the limit only catches a hang.
 // Their cost grows with the graph, the number of tests and the runner's load,
 // so it is not a performance budget (the scan test above uses the same limit).
 // Measured p95 is 18.6 s; this test must build the complete repository import graph.

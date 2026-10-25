@@ -161,6 +161,14 @@ describe("literal targets", () => {
     ]);
   });
 
+  test("bounds a product of many brace alternatives before materializing it", () => {
+    const expansions = expandBraces("{a,b}".repeat(80));
+    expect(expansions).toHaveLength(64);
+    expect(new Set(expansions).size).toBe(64);
+    expect(expansions.at(0)).toBe("a".repeat(80));
+    expect(expansions.at(-1)).toBe("a".repeat(74) + "b".repeat(6));
+  });
+
   test("a wildcard with no directory before it names no path", () => {
     expect(literalTargets("**/*.ts")).toEqual([]);
     expect(literalTargets("apps*")).toEqual([]);
@@ -320,8 +328,11 @@ describe("test input coverage", () => {
   test("ignores a path compared by a matcher rather than read", () => {
     const root = createRoot({
       files: {
-        "apps/alpha/src/guard.test.ts":
-          'expect(config).toContain("apps/beta/src/route.ts");\n',
+        "apps/alpha/src/guard.test.ts": [
+          'expect(config).toContain("apps/beta/src/route.ts");',
+          'expect(config).toMatchInlineSnapshot("apps/beta/src/route.ts");',
+          'expect(config).toMatchSnapshot("apps/beta/src/route.ts");',
+        ].join("\n"),
       },
       tasks: {},
     });

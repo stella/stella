@@ -1,6 +1,6 @@
 /**
  * An in-memory organization for the playbook-authoring eval: the smallest
- * `McpRequestContext` the production `list_playbooks` and `save_playbook`
+ * `McpRequestResources` the production `list_playbooks` and `save_playbook`
  * handlers run over. The eval calls `handleMcpToolCall`, so the schema parse,
  * the lenient value readers, the merge, the shared create and update paths,
  * and the error envelope are all production code; only the rows live here.
@@ -18,7 +18,7 @@ import type {
   PlaybookPositions,
   PlaybookScope,
 } from "@/api/lib/workflow/playbook-positions";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -36,7 +36,7 @@ export type StoredPlaybook = {
 };
 
 export type PlaybookStore = {
-  context: McpRequestContext;
+  context: McpRequestResources;
   playbooks: () => readonly StoredPlaybook[];
   /**
    * Move a playbook's `updatedAt` forward, as a person saving in the editor
@@ -186,7 +186,7 @@ export const createPlaybookStore = ({
     }),
   };
 
-  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+  const scopedDb = asTestRaw<McpRequestResources["scopedDb"]>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
 

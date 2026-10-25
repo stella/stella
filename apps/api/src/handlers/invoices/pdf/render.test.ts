@@ -239,12 +239,30 @@ describe("invoice PDF", () => {
         formatMoneyCents({ amountCents, currency: "CZK", locale: "cs-CZ" }),
       );
     const flat = spaced(text);
-    expect(flat).toContain("Množství: 2,5 h");
-    expect(flat).toContain(`Jednotková cena: ${price(22_222)}`);
-    expect(flat).toContain("Množství: 1 234,5");
-    expect(flat).toContain(`Jednotková cena: ${price(100)}`);
-    expect(flat).toContain("Množství: 3 ks");
-    expect(flat).toContain(`Jednotková cena: ${price(300)}`);
+    // One row per line: the figures sit under the column headers, which are
+    // printed once instead of being repeated inside every line.
+    expect(flat).toContain(`2,5 h ${price(22_222)}`);
+    expect(flat).toContain(`1 234,5 ${price(100)}`);
+    expect(flat).toContain(`3 ks ${price(300)}`);
+    expect(flat.match(/MNOŽSTVÍ/gu)).toHaveLength(1);
+    expect(flat).not.toContain("Množství:");
+  });
+
+  test("names countries in the invoice language and gives the payer amount, due date and reference", async () => {
+    const { text } = await textOf(options);
+    const flat = text.replace(/[  ]/gu, " ");
+    expect(flat).toContain("Česko");
+    expect(flat).toContain("Datum splatnosti: 14. 10. 2026");
+    expect(flat).toContain("Reference: 0987654321");
+  });
+
+  test("prints an unassigned country code as stored, not as an unknown region", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: { ...options.invoice, buyerCountry: "ZZ" },
+    });
+    expect(text).toContain("ZZ");
+    expect(text).not.toMatch(/neznám/iu);
   });
 
   test("prints a quantity a double cannot hold exactly as it is stored", async () => {
@@ -283,8 +301,10 @@ describe("invoice PDF", () => {
       },
     });
     expect(pdf.getPages().length).toBeGreaterThan(1);
-    expect(text).toContain("KONEC POPISU");
-    expect(text).toContain("KONEC POZNÁMEK");
+    // A wrapped cell breaks lines anywhere; the ending must survive, not its line breaks.
+    const flowing = text.replace(/\s+/gu, " ");
+    expect(flowing).toContain("KONEC POPISU");
+    expect(flowing).toContain("KONEC POZNÁMEK");
     expect(text).toContain(options.seller.footerNotes);
   });
 

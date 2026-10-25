@@ -202,8 +202,8 @@ describe("pre-commit lint", () => {
   });
 
   test("a would-be autofix fails the hook, prints it and leaves the file as staged", () => {
-    // lefthook stages the files of every stage_fixed step when the hook ends,
-    // whatever order the steps ran in, so only an unmodified file is safe.
+    // A file left modified would reach the commit through any later
+    // `git add`, so only an unmodified file is safe.
     const body = "export const now = (): number => new Date().getTime();";
     const file = writeFixture("safe-fix", body);
     const result = runPrecommitLint([file], { cwd: ROOT });
@@ -258,9 +258,14 @@ describe("pre-commit lint", () => {
     expect(isRecord(lint) ? lint["run"] : undefined).toBe(
       "bun scripts/precommit-lint.ts {staged_files}",
     );
-    // lefthook hides unstaged changes only while a stage_fixed command runs;
-    // lint must see what the commit records, and it never leaves a change.
-    expect(isRecord(lint) ? lint["stage_fixed"] : undefined).toBe(true);
+    // lefthook hides the unstaged part of partially staged files during every
+    // pre-commit, so lint sees what the commit records. Each step stages its own writes; stage_fixed
+    // would `git add` every matched file after the step, edits or not.
+    for (const command of [lint, ...Object.values(others)]) {
+      expect(isRecord(command) ? command["stage_fixed"] : undefined).toBe(
+        undefined,
+      );
+    }
     for (const command of Object.values(others)) {
       expect(isRecord(command) ? String(command["run"]) : "").not.toContain(
         "oxlint",
