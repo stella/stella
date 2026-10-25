@@ -63,7 +63,7 @@
         "@google/genai": "^2.30.0",
         "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
         "@libpdf/core": "catalog:",
-        "@litko/yara-x": "^0.7.5",
+        "@litko/yara-x": "^0.10.0",
         "@modelcontextprotocol/server": "2.3.1",
         "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
         "@openrouter/sdk": "0.13.67",
@@ -2506,19 +2506,19 @@
 
     "@lifeomic/attempt": ["@lifeomic/attempt@3.1.0", "", {}, "sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw=="],
 
-    "@litko/yara-x": ["@litko/yara-x@0.7.5", "", { "optionalDependencies": { "@litko/yara-x-darwin-arm64": "0.7.5", "@litko/yara-x-darwin-x64": "0.7.5", "@litko/yara-x-linux-arm64-gnu": "0.7.5", "@litko/yara-x-linux-x64-gnu": "0.7.5", "@litko/yara-x-win32-arm64-msvc": "0.7.5", "@litko/yara-x-win32-x64-msvc": "0.7.5" } }, "sha512-OgV54RV5YUvR31dsrOqwzwsd8tKq9rElMgTz6ssNNuzAhXm8ikuo8V/5Hx+W4a0zPddEPUVesITwjdK3caUNxw=="],
+    "@litko/yara-x": ["@litko/yara-x@0.10.0", "", { "optionalDependencies": { "@litko/yara-x-darwin-arm64": "0.10.0", "@litko/yara-x-darwin-x64": "0.10.0", "@litko/yara-x-linux-arm64-gnu": "0.10.0", "@litko/yara-x-linux-x64-gnu": "0.10.0", "@litko/yara-x-win32-arm64-msvc": "0.10.0", "@litko/yara-x-win32-x64-msvc": "0.10.0" } }, "sha512-Okbe9qiQTB8rYrYSuxTgImdYPjh93rYsObR0/9zI7Iw3rEyWgNo2IsTYtFTW+GbYsq6reBi8zC0gDEcc2ZTs/g=="],
 
-    "@litko/yara-x-darwin-arm64": ["@litko/yara-x-darwin-arm64@0.7.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Em0FddE+/BErYy98fPyTM4OhmDcw6woP1DkjT7oBX8cS7sx+cXhNSUQ1wyLT9aasy4dHGZtzO3+aDYkp843sGA=="],
+    "@litko/yara-x-darwin-arm64": ["@litko/yara-x-darwin-arm64@0.10.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-KOsfQd4KwRxJle4oo29Ub33cr1BwV9EyF+s1XYh4Op1oKmPyOmwx+suK6sYHBupYQxDg+nqcbDSsFjwZNfZVRQ=="],
 
-    "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.7.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-6zKpsI15GTIonZHXCu3Mv2NFVPW5hLnrV/hMYhHFhb238NACvvvy6zpYHhJ0LJQuYbgGMqHYvlp5ifDS0071tQ=="],
+    "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.10.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-h1eljGqCXsXjwlHt/yhjilQNF7slrOT2vLwSRvELRU1WqNRJPtr1A1gvg5NKxTDqXU3J0Hs7vREwS0UApN8Dxw=="],
 
-    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.7.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-qb71P6yJrdhDmWL5ayepkpdo7QpS9n3pnf/0flS65SA+Bq4RNtlDJcg4zZZ3xD0EMXlz2GY2fXgdKRiKxZGXWg=="],
+    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.10.0", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-fzfOGfxWAjfxnIrDn+EhK2nd4f83/+XLg9h2znLgr6PbB8Y2BCL75zYgexACKHMtR7p58JakwOJDbgLcu5SCqw=="],
 
-    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.7.5", "", { "os": "linux", "cpu": "x64" }, "sha512-w5BPmkBdGYsqzoIzm0m33K/IS2TjwzWuhYo7Lh1x/GvnatJLnvytrt2p++aG3iPRb6DYYs28V0EmHZfhtg5iIA=="],
+    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.10.0", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-NXEmkbgtlpCdWEcTHCW0jo1gVJa520SkWBvGabNf3c3WoSSkRjhol3SGhlMpStHBY2sjd4cnX1fszI1TYHjhoQ=="],
 
-    "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.7.5", "", { "os": "win32", "cpu": "arm64" }, "sha512-IE/CnmYMSsr16IAydLlLn70SMzLhWdQ/tZtHDUoXh06vjel1lVtRIzHr2ee+TyN7KATx242QGhi0G7CA4cgVCw=="],
+    "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.10.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-1B23BYl9CFSdOWQ4I8MlWSpdZBoVit5aqrypNYb37hPYr9M2EJZJbC6YzStoFhOgP5bw4MFkSl+ivBRt6X5TwA=="],
 
-    "@litko/yara-x-win32-x64-msvc": ["@litko/yara-x-win32-x64-msvc@0.7.5", "", { "os": "win32", "cpu": "x64" }, "sha512-qItpwt7jwwrScFhaAZF+ygvFcpirbj4PB3mblgtrZ6WFpsePfYPMF5QsFChq2aWgexcp0bOoI4XlFBvi8sowlw=="],
+    "@litko/yara-x-win32-x64-msvc": ["@litko/yara-x-win32-x64-msvc@0.10.0", "", { "os": "win32", "cpu": "x64" }, "sha512-fOLg3wUwtB+2z5ecFc0/9E7njTSp9KciVp6eqvML0fM5fCpBTEh8mAIOQlwNAAyjbHfRXV0QUSHXg2yYLutmHw=="],
 
     "@manypkg/find-root": ["@manypkg/find-root@3.1.0", "", { "dependencies": { "@manypkg/tools": "^2.1.0" } }, "sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA=="],
 
