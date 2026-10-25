@@ -76,7 +76,7 @@ export type MarkerMeta =
 
 export type DirectiveKind = MarkerMeta["kind"];
 
-export const DIRECTIVE_KINDS = [
+const DIRECTIVE_KIND_VALUES = [
   "placeholder",
   "clause",
   "num",
@@ -88,16 +88,16 @@ export const DIRECTIVE_KINDS = [
   "endif",
   "for",
   "endfor",
-] as const;
-
-DIRECTIVE_KINDS satisfies readonly DirectiveKind[];
+] as const satisfies readonly DirectiveKind[];
 
 type MissingDirectiveKind = Exclude<
   DirectiveKind,
-  (typeof DIRECTIVE_KINDS)[number]
+  (typeof DIRECTIVE_KIND_VALUES)[number]
 >;
 
 true satisfies MissingDirectiveKind extends never ? true : never;
+
+export const DIRECTIVE_KINDS = DIRECTIVE_KIND_VALUES;
 
 const DIRECTIVE_PLACEMENT = {
   placeholder: "inline",
@@ -111,16 +111,7 @@ const DIRECTIVE_PLACEMENT = {
   endif: "block",
   for: "block",
   endfor: "block",
-} as const;
-
-DIRECTIVE_PLACEMENT satisfies Record<DirectiveKind, "block" | "inline">;
-
-true satisfies Exclude<
-  keyof typeof DIRECTIVE_PLACEMENT,
-  DirectiveKind
-> extends never
-  ? true
-  : never;
+} as const satisfies Record<DirectiveKind, "block" | "inline">;
 
 export type BlockDirectiveKind = {
   [TKind in DirectiveKind]: (typeof DIRECTIVE_PLACEMENT)[TKind] extends "block"
@@ -128,24 +119,24 @@ export type BlockDirectiveKind = {
     : never;
 }[DirectiveKind];
 
-/** Directives that occupy their own paragraph, in canonical grammar order. */
-export const BLOCK_DIRECTIVE_KINDS = [
+const BLOCK_DIRECTIVE_KIND_VALUES = [
   "if",
   "elif",
   "else",
   "endif",
   "for",
   "endfor",
-] as const;
-
-BLOCK_DIRECTIVE_KINDS satisfies readonly BlockDirectiveKind[];
+] as const satisfies readonly BlockDirectiveKind[];
 
 type MissingBlockDirectiveKind = Exclude<
   BlockDirectiveKind,
-  (typeof BLOCK_DIRECTIVE_KINDS)[number]
+  (typeof BLOCK_DIRECTIVE_KIND_VALUES)[number]
 >;
 
 true satisfies MissingBlockDirectiveKind extends never ? true : never;
+
+/** Directives that occupy their own paragraph, in canonical grammar order. */
+export const BLOCK_DIRECTIVE_KINDS = BLOCK_DIRECTIVE_KIND_VALUES;
 
 export const isBlockDirectiveKind = (
   kind: unknown,
@@ -241,11 +232,11 @@ export const normalizeMarkerInner = (inner: string): string =>
  * adversarial input: a `{{` with no closing `}}` costs one failed pass, not a
  * polynomial retry.
  */
-export const MARKER_OUTPUT_BODY: string = String.raw`(?:[^{}"“”„«»]|["“„«](?:\\[\s\S]|[^"”»\\])*["”»])*`;
+export const MARKER_OUTPUT_BODY = String.raw`(?:[^{}"“”„«»]|["“„«](?:\\[\s\S]|[^"”»\\])*["”»])*`;
 
 /** What a tag holds between `{%` and `%}`: anything but a brace, and a `%`
  *  only where it does not close the tag. */
-export const MARKER_STATEMENT_BODY: string = String.raw`(?:[^{}%]|%(?!\}))*`;
+export const MARKER_STATEMENT_BODY = String.raw`(?:[^{}%]|%(?!\}))*`;
 
 /**
  * Any marker span: an output `{{...}}` (group `output`) or a tag `{%...%}`
@@ -978,22 +969,22 @@ export type MarkerDefectKind =
   | "python_expression"
   | "bracket_index";
 
-export const MARKER_DEFECT_KINDS = [
+const MARKER_DEFECT_KIND_VALUES = [
   "legacy_marker",
   "unsupported_tag",
   "unknown_filter",
   "python_expression",
   "bracket_index",
-] as const;
-
-MARKER_DEFECT_KINDS satisfies readonly MarkerDefectKind[];
+] as const satisfies readonly MarkerDefectKind[];
 
 type MissingMarkerDefectKind = Exclude<
   MarkerDefectKind,
-  (typeof MARKER_DEFECT_KINDS)[number]
+  (typeof MARKER_DEFECT_KIND_VALUES)[number]
 >;
 
 true satisfies MissingMarkerDefectKind extends never ? true : never;
+
+export const MARKER_DEFECT_KINDS = MARKER_DEFECT_KIND_VALUES;
 
 /** One diagnosis of a rejected span: the kind plus the construct to quote. */
 export type MarkerDefect = {
