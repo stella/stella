@@ -59,7 +59,10 @@ const privateKey = await crypto.subtle.importKey(
   ["decrypt"],
 );
 
-const createSigningFixture = async (kind: "ec" | "rsa") => {
+const createSigningFixture = async (
+  kind: "ec" | "rsa",
+  rsaHash: "SHA-256" | "SHA-384" = "SHA-256",
+) => {
   const fixtureDirectory = mkdtempSync(path.join(directory, `${kind}-`));
   const signingKeyPath = path.join(fixtureDirectory, "key.pem");
   const signingCertificatePath = path.join(fixtureDirectory, "certificate.der");
@@ -100,7 +103,7 @@ const createSigningFixture = async (kind: "ec" | "rsa") => {
   const algorithm =
     kind === "ec"
       ? { name: "ECDSA", namedCurve: "P-256" }
-      : { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
+      : { name: "RSASSA-PKCS1-v1_5", hash: rsaHash };
   return {
     certificate: new Uint8Array(der),
     privateKey: await crypto.subtle.importKey(
@@ -413,6 +416,22 @@ describe("KSeF online session", () => {
     const session = (await client.openOnlineSession()).unwrap();
     await client.sendInvoice(session, "<Faktura>certyfikat</Faktura>");
     expect(fake.received()).toBe("<Faktura>certyfikat</Faktura>");
+  });
+
+  test("rejects an RSA key bound to a hash other than SHA-256 before transport", async () => {
+    let calls = 0;
+    const authenticator = createKsefCertificateAuthenticator({
+      environment: "test",
+      transport: async () => {
+        calls += 1;
+        return response(500);
+      },
+      nip: "1111111111",
+      ...(await createSigningFixture("rsa", "SHA-384")),
+    });
+    const result = await authenticator.getAccessToken();
+    expect(result.isErr() && result.error.kind).toBe("invalid_input");
+    expect(calls).toBe(0);
   });
 
   test("rejects an invalid certificate NIP before transport", async () => {

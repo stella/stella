@@ -622,11 +622,19 @@ const xmlText = (value: string) =>
     .replaceAll("\r", "&#xD;");
 const digestXml = (value: string) => sha256Base64(encoder.encode(value));
 
-const signedAuthTokenRequest = async (
+type SigningInputs = {
+  algorithm: "ECDSA" | "RSASSA-PKCS1-v1_5";
+  certificate: X509Certificate;
+};
+
+/**
+ * Everything certificate login signs with, checked once when the
+ * authenticator is created, so a wrong NIP, key or certificate is refused
+ * before KSeF is contacted.
+ */
+const signingInputs = (
   options: KsefCertificateAuthenticatorOptions,
-  challenge: string,
-  now: Date,
-): Promise<KsefResult<Uint8Array>> => {
+): KsefResult<SigningInputs> => {
   if (!/^\d{10}$/u.test(options.nip)) {
     return Result.err(
       error(
@@ -669,18 +677,50 @@ const signedAuthTokenRequest = async (
       ),
     );
   }
-  const certificate = Result.try({
-    try: () => new X509Certificate(Buffer.from(options.certificate)),
-    catch: () => invalidResponse("The KSeF signing certificate is invalid."),
-  });
-  if (certificate.isErr()) {
-    return Result.err(certificate.error);
+  // WebCrypto signs an RSA key with the hash it was imported with, and the
+  // document declares rsa-sha256: any other hash yields a signature KSeF
+  // cannot verify.
+  if (
+    algorithm === "RSASSA-PKCS1-v1_5" &&
+    (!("hash" in keyAlgorithm) ||
+      typeof keyAlgorithm.hash !== "object" ||
+      keyAlgorithm.hash === null ||
+      !("name" in keyAlgorithm.hash) ||
+      keyAlgorithm.hash.name !== "SHA-256")
+  ) {
+    return Result.err(
+      error(
+        "invalid_input",
+        "Import the KSeF RSA signing key with SHA-256.",
+        false,
+      ),
+    );
   }
+  return Result.try({
+    try: () => ({
+      algorithm,
+      certificate: new X509Certificate(Buffer.from(options.certificate)),
+    }),
+    catch: () =>
+      error(
+        "invalid_input",
+        "The KSeF signing certificate is not a valid DER certificate; export it again from KSeF.",
+        false,
+      ),
+  });
+};
+
+const signedAuthTokenRequest = async (
+  options: KsefCertificateAuthenticatorOptions,
+  { algorithm, certificate }: SigningInputs,
+  challenge: string,
+  now: Date,
+): Promise<KsefResult<Uint8Array>> => {
   const signatureId = "Signature-1";
   const propertiesId = "SignedProperties-1";
   const document = `<AuthTokenRequest xmlns="http://ksef.mf.gov.pl/auth/token/2.0"><Challenge>${xmlText(challenge)}</Challenge><ContextIdentifier><Nip>${xmlText(options.nip)}</Nip></ContextIdentifier><SubjectIdentifierType>certificateSubject</SubjectIdentifierType></AuthTokenRequest>`;
-  const issuer = certificate.value.issuer.replaceAll("\n", ",");
-  const serial = BigInt(`0x${certificate.value.serialNumber}`).toString(10);
+  const issuer = certificate.issuer.replaceAll("\n", ",");
+  const serial = BigInt(`0x${certificate.serialNumber}`).toString(10);
   const properties = `<xades:SignedProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Id="${propertiesId}"><xades:SignedSignatureProperties><xades:SigningTime>${xmlText(now.toISOString())}</xades:SigningTime><xades:SigningCertificate><xades:Cert><xades:CertDigest><ds:DigestMethod xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod><ds:DigestValue xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${sha256Base64(options.certificate)}</ds:DigestValue></xades:CertDigest><xades:IssuerSerial><ds:X509IssuerName xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${xmlText(issuer)}</ds:X509IssuerName><ds:X509SerialNumber xmlns:ds="http://www.w3.org/2000/09/xmldsig#">${serial}</ds:X509SerialNumber></xades:IssuerSerial></xades:Cert></xades:SigningCertificate></xades:SignedSignatureProperties></xades:SignedProperties>`;
   const signatureMethod =
     algorithm === "ECDSA"
@@ -718,23 +758,17 @@ const signedAuthTokenRequest = async (
 export const createKsefCertificateAuthenticator = (
   options: KsefCertificateAuthenticatorOptions,
 ): Authenticator => {
-  if (!/^\d{10}$/u.test(options.nip)) {
+  const inputs = signingInputs(options);
+  if (inputs.isErr()) {
     return {
       getAccessToken: async () =>
-        await Promise.resolve(
-          Result.err(
-            error(
-              "invalid_input",
-              "The KSeF NIP must contain exactly 10 digits.",
-              false,
-            ),
-          ),
-        ),
+        await Promise.resolve(Result.err(inputs.error)),
     };
   }
   return createAuthenticator(options, async (challenge, clock) => {
     const document = await signedAuthTokenRequest(
       options,
+      inputs.value,
       challenge.challenge,
       clock.now(),
     );
