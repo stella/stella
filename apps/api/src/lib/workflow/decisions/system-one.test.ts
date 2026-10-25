@@ -347,6 +347,36 @@ describe("System One client", () => {
     expect(Result.isError(asked)).toBe(true);
   });
 
+  test("uses bounded backoff for a retry-after value with exponent notation", async () => {
+    const waits: number[] = [];
+    const queue = queuedFetcher([
+      new Response("slow down", {
+        status: 429,
+        headers: { "retry-after": "2e0" },
+      }),
+      jsonResponse({
+        model: "jev-1.13.0",
+        answers: { urgent: { type: "noul", noul: 0.2 } },
+        usage: { input_tokens: 10, output_tokens: 1 },
+      }),
+    ]);
+    const systemOne = createSystemOneClient({
+      apiKey: "key-test",
+      fetcher: queue.fetcher,
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+    });
+
+    const asked = await systemOne.ask({
+      state: "text",
+      questions: { urgent: noul("urgent?") },
+    });
+
+    expect(Result.isOk(asked)).toBe(true);
+    expect(waits).toEqual([400]);
+  });
+
   test("reports a missing answer rather than an undefined value", async () => {
     const { client: systemOne } = client([
       jsonResponse({

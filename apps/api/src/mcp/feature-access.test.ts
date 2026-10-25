@@ -28,7 +28,6 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpFeatureInputEnabled } from "@/api/mcp/feature-access";
 import {
   getGatewayMcpToolDefinition,
@@ -42,9 +41,10 @@ import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
-  listMcpTools,
   handleMcpToolCall,
+  listMcpTools,
 } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -91,7 +91,7 @@ const contextFor = (
     | "ordinary",
 ) => {
   const scopedDb = mock(async () => []);
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     organizationId:
       kind === "other-organization" ? "org_other" : organizationId,
     userId: kind === "colleague" ? "user_other" : userId,
@@ -389,7 +389,7 @@ describe("mixed native task inputs", () => {
     const writable = {
       ...context,
       grantedScopes: ["stella:read", "stella:matters_write"],
-    } satisfies McpRequestContext;
+    } satisfies AuthorizedMcpRequestContext;
     const result = await handleMcpToolCall({
       context: writable,
       toolName: "save_task",

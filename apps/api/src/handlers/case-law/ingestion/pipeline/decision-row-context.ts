@@ -1,6 +1,12 @@
+import { and, eq, isNull, sql } from "drizzle-orm";
+
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
 import type { Transaction } from "@/api/db/root";
+import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -15,6 +21,7 @@ import type {
   SourceRawArtifact,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
 import type { CaseLawJudgeDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { DecisionInputProvenance } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -34,6 +41,8 @@ export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
     composedSupplements: StoredSupplement[];
     observedAt: Date;
     observationOrder: bigint;
+    sourceFingerprintVersion: number;
+    inputProvenance: DecisionInputProvenance;
     shape: ObservationShape;
     plan: DecisionWritePlan;
     rawArtifact: SourceRawArtifact;
@@ -121,4 +130,79 @@ export const writeDecisionJudges = async (
     decisionId: writtenDecisionId,
     judges: result.judges,
   });
+};
+
+/**
+ * The mutation trigger invalidates the old input before any payload write.
+ * Only this canonical persist operation can establish its proved input again,
+ * after the actual payload is settled, under the same row lock and source CAS.
+ */
+type RecordParsedGenerationOptions = {
+  write: DecisionRowWrite;
+  phase: "row" | "mirror";
+};
+
+export const recordParsedGenerationTx = async (
+  tx: Pick<Transaction, "update">,
+  { write, phase }: RecordParsedGenerationOptions,
+): Promise<void> => {
+  const {
+    decisionId,
+    observationOrder,
+    inputProvenance,
+    sourceFingerprintVersion,
+    result,
+    shape: { incomingCarriesDocument, preservesExistingDetail },
+    rawArtifact: { sourceRawS3Key, s3UploadFailed },
+    plan: { corpusPlan },
+  } = write;
+  // Pending payloads acquire provenance only after their actual settlement.
+  if (
+    phase === "row" &&
+    (corpusPlan.type === "postgres-mirrored" ||
+      corpusPlan.type === "object-storage")
+  ) {
+    return;
+  }
+  if (
+    !incomingCarriesDocument ||
+    preservesExistingDetail ||
+    s3UploadFailed ||
+    sourceRawS3Key === null
+  ) {
+    return;
+  }
+  // Homing an old object changes the canonical input identity. That new key
+  // requires its own real parse; an old-key reservation cannot credit it.
+  if (
+    inputProvenance.type === "stored" &&
+    inputProvenance.sourceRawS3Key !== sourceRawS3Key
+  ) {
+    return;
+  }
+  // audit: skip — metadata-only public corpus parse proof; canonical ingestion owns the row transaction
+  await tx
+    .update(caseLawDecisions)
+    .set({
+      parsedSourceHash: result.rawHash,
+      parsedSourceHashVersion: sourceFingerprintVersion,
+      parsedSourceRawS3Key: sourceRawS3Key,
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    })
+    .where(
+      and(
+        eq(caseLawDecisions.id, decisionId),
+        eq(caseLawDecisions.sourceId, write.sourceId),
+        eq(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
+        eq(caseLawDecisions.sourceHash, result.rawHash),
+        eq(caseLawDecisions.sourceHashVersion, sourceFingerprintVersion),
+        eq(caseLawDecisions.sourceRawS3Key, sourceRawS3Key),
+        eq(caseLawDecisions.sourceObservationOrder, observationOrder),
+        eq(
+          caseLawDecisions.corpusMirrorStatus,
+          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        ),
+        isNull(caseLawDecisions.redactedAt),
+      ),
+    );
 };

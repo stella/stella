@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
-import { dependencyScope, type DependencyScope } from "./ci-dependency-scope";
+import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
   requiresLandingBuild,
@@ -172,9 +172,11 @@ export const ROUTE_TREE_INPUTS = [
   "apps/web/src/routes/*",
   "apps/web/vite.config.ts",
   "apps/web/route-tree.config.ts",
+  "apps/web/scripts/route-template-manifest.ts",
   "apps/web/scripts/generate-route-tree.ts",
   "apps/web/package.json",
   "apps/web/src/routeTree.gen.ts",
+  "apps/web/src/route-templates.gen.ts",
   "packages/scripts/src/prepared-generated-sources.ts",
   "packages/scripts/src/generated-input-identity.ts",
   "packages/scripts/src/generated-files.ts",
@@ -201,6 +203,7 @@ export const STACK_REDACTION_BROWSER_INPUTS = [
 ] as const;
 
 export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
+  "VERSION",
   "apps/desktop/*",
   "scripts/desktop-*",
   "scripts/*tauri*",
@@ -209,8 +212,6 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/ci-windows-dry-run-*",
   "scripts/wasm-*",
   "scripts/test-wasm-offline.sh",
-  "scripts/run-oxfmt.ts",
-  "scripts/check-format-environment.ts",
   "scripts/ci-install*",
   "scripts/build-updater-manifest.sh",
   "scripts/promote-desktop-release.sh",
@@ -298,6 +299,13 @@ const desktopRustRequired = (files: readonly string[]) =>
 
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
+  const desktopWindowsDryRun =
+    input.eventName !== "merge_group" ||
+    input.scopeUnknown ||
+    input.changedFiles.some(
+      (file) =>
+        !/\.mdx?$/u.test(file) && matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+    );
   const releaseTypecheck =
     input.heavyOnly &&
     (PERIODIC_RELEASE_TYPECHECK_EVENTS.some(
@@ -338,6 +346,10 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     legal_atlas_image_required: TRUE,
     legal_atlas_image_pr_required: TRUE,
     dependency_malware_required: TRUE,
+    // The dependency jobs run only for pull requests and merge groups.
+    dependency_changes_required: bool(
+      input.eventName === "pull_request" || input.eventName === "merge_group",
+    ),
     lockfile_ages_required: FALSE,
     migration_rehearsal_required: TRUE,
     mobile_build_required: TRUE,
@@ -354,7 +366,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     web_build_required: TRUE,
     web_image_smoke_required: TRUE,
     windows_scripts_required: TRUE,
-    desktop_windows_dry_run_required: TRUE,
+    desktop_windows_dry_run_required: bool(desktopWindowsDryRun),
   };
 };
 
@@ -420,6 +432,7 @@ const deriveScopeFacts = (
         legal_atlas_image_required: FALSE,
         legal_atlas_image_pr_required: FALSE,
         dependency_malware_required: FALSE,
+        dependency_changes_required: FALSE,
         lockfile_ages_required: FALSE,
         migration_rehearsal_required: FALSE,
         mobile_build_required: FALSE,
@@ -664,6 +677,7 @@ export const OUTPUT_ORDER = [
   "legal_atlas_image_required",
   "legal_atlas_image_pr_required",
   "dependency_malware_required",
+  "dependency_changes_required",
   "lockfile_ages_required",
   "migration_rehearsal_required",
   "mobile_build_required",
@@ -823,6 +837,40 @@ export const OUTPUT_RULES = {
   dependency_malware_required: (facts) =>
     scopeRule(facts, "dependency_malware_required", ({ files }) =>
       bool(requiresMalwareScan(files)),
+    ),
+  dependency_changes_required: (facts) =>
+    scopeRule(facts, "dependency_changes_required", ({ p }) =>
+      bool(
+        p([
+          "scripts/dependency-audit.ts",
+          "scripts/check-trusted-dependencies.ts",
+          "scripts/retry.sh",
+          "bun.lock",
+          "*/bun.lock",
+          "package.json",
+          "*/package.json",
+          "bunfig.toml",
+          "*/bunfig.toml",
+          "patches/*",
+          ".github/workflows/*",
+          "action.yml",
+          "action.yaml",
+          "*/action.yml",
+          "*/action.yaml",
+          "Cargo.toml",
+          "*/Cargo.toml",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "pyproject.toml",
+          "*/pyproject.toml",
+          "uv.lock",
+          "*/uv.lock",
+          "requirements*.txt",
+          "*/requirements*.txt",
+          "requirements*.in",
+          "*/requirements*.in",
+        ]),
+      ),
     ),
   lockfile_ages_required: (facts) =>
     scopeRule(facts, "lockfile_ages_required", ({ p }) =>
@@ -1005,14 +1053,18 @@ export const OUTPUT_RULES = {
       ),
     ),
   desktop_windows_dry_run_required: (facts) =>
-    scopeRule(facts, "desktop_windows_dry_run_required", ({ files }) =>
-      bool(
-        files.some(
-          (file) =>
-            !/\.mdx?$/u.test(file) &&
-            matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+    scopeRule(
+      facts,
+      "desktop_windows_dry_run_required",
+      ({ input, files, full }) =>
+        bool(
+          (full && input.eventName !== "merge_group") ||
+            files.some(
+              (file) =>
+                !/\.mdx?$/u.test(file) &&
+                matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
+            ),
         ),
-      ),
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;
 

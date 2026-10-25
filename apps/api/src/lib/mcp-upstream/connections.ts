@@ -10,11 +10,11 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import type {
   CachedMcpToolDefinition,
@@ -36,11 +36,11 @@ import {
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
-  MCP_OAUTH_INVALID_GRANT_CODE,
   discoverOAuthMetadata,
   discoverOAuthMetadataForApproval,
   getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
+  MCP_OAUTH_INVALID_GRANT_CODE,
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
@@ -1164,8 +1164,7 @@ type ResolveAuthorizationTokenOptions = {
 };
 
 type ResolvedAuthorizationToken =
-  | { type: "ok"; value: string | null }
-  | { type: "skip" };
+  { type: "ok"; value: string | null } | { type: "skip" };
 
 const resolveAuthorizationToken = async ({
   dependencies,

@@ -21,7 +21,7 @@
 //   bun scripts/check-test-input-coverage.ts
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { readStringLiterals, readTestInputs } from "./test-input-readers";
@@ -80,6 +80,8 @@ const NON_READ_CALLS = new Set([
   "toHaveProperty",
   "toInclude",
   "toMatch",
+  "toMatchInlineSnapshot",
+  "toMatchSnapshot",
   "toStartWith",
   "toStrictEqual",
 ]);
@@ -87,11 +89,17 @@ const NON_READ_CALLS = new Set([
 const GLOB_CHARACTER = /[*?]/u;
 const MAX_BRACE_EXPANSIONS = 64;
 
-/** `{apps,packages}/**` expands to `apps/**` and `packages/**`. */
-export const expandBraces = (pattern: string): readonly string[] => {
+type BraceGroup = {
+  readonly alternatives: readonly string[];
+  readonly prefix: string;
+  readonly suffix: string;
+};
+
+/** The first closed top-level `{a,b}` group of a pattern. */
+const firstBraceGroup = (pattern: string): BraceGroup | undefined => {
   const open = pattern.indexOf("{");
   if (open === -1) {
-    return [pattern];
+    return undefined;
   }
   let depth = 0;
   let close = -1;
@@ -120,15 +128,40 @@ export const expandBraces = (pattern: string): readonly string[] => {
     current += char;
   }
   if (close === -1) {
-    return [pattern];
+    return undefined;
   }
   alternatives.push(current);
-  const prefix = pattern.slice(0, open);
-  const suffix = pattern.slice(close + 1);
-  const expanded = alternatives.flatMap((alternative) =>
-    expandBraces(`${prefix}${alternative}${suffix}`),
-  );
-  return expanded.slice(0, MAX_BRACE_EXPANSIONS);
+  return {
+    alternatives,
+    prefix: pattern.slice(0, open),
+    suffix: pattern.slice(close + 1),
+  };
+};
+
+/**
+ * `{apps,packages}/**` expands to `apps/**` and `packages/**`. Expansion is
+ * depth-first and stops at the cap, so the cap bounds the work as well as the
+ * result: a literal with many groups (an inline JSON snapshot) has
+ * exponentially many expansions.
+ */
+export const expandBraces = (pattern: string): readonly string[] => {
+  const expanded: string[] = [];
+  const pending = [pattern];
+  while (pending.length > 0 && expanded.length < MAX_BRACE_EXPANSIONS) {
+    const next = pending.pop();
+    if (next === undefined) {
+      continue;
+    }
+    const group = firstBraceGroup(next);
+    if (group === undefined) {
+      expanded.push(next);
+      continue;
+    }
+    for (const alternative of group.alternatives.toReversed()) {
+      pending.push(`${group.prefix}${alternative}${group.suffix}`);
+    }
+  }
+  return expanded;
 };
 
 type TargetCandidate = {

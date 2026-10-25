@@ -34,14 +34,14 @@ import type {
   ReplayVisitBound,
 } from "@/api/handlers/case-law/ingestion/replay";
 import {
-  ReplayStageError,
   replayFailure,
+  ReplayStageError,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -411,6 +411,79 @@ describe("replay of a source", () => {
     expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(3);
     expect(ran.report.rejections["no-document"]).toBe(3);
   });
+
+  test.each(["current", "superseded"] as const)(
+    "a %s reserved input is checked before reading or parsing raw bytes",
+    async (state) => {
+      const sourceId = await createSource();
+      const id = createSafeId<"caseLawDecision">();
+      await insertDecision({
+        sourceId,
+        id,
+        sub: 17,
+        caseNumber: "C-17/26",
+        storedRaw: true,
+        sourceHash: "reserved-input",
+      });
+      const expectedRawS3Key = `case-law/raw/${sourceId}/${id}`;
+      const selectedRawS3Key =
+        state === "current"
+          ? expectedRawS3Key
+          : `${expectedRawS3Key}/new-generation`;
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceRawS3Key: selectedRawS3Key })
+        .where(eq(caseLawDecisions.id, id));
+      const before = await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id));
+      const reads: string[] = [];
+      const parsed: string[] = [];
+      const ran = await replayCaseLawSource({
+        adapter: stubAdapter({
+          reparse: (stored) => {
+            parsed.push(stored.caseNumber);
+            return {
+              type: "rejected",
+              rejection: "no-document",
+              detail: "fixture",
+            };
+          },
+        }),
+        scopedDb,
+        sourceId,
+        scope: { type: "decision", decisionId: id },
+        readStoredRaw: storedRawReader(reads),
+        expectedRawS3Key,
+        sourceLease: null,
+        bound: { type: "at-most", limit: 1 },
+        pageSize: 1,
+      });
+      if (ran.type !== "ran") {
+        throw new TypeError("Expected the reserved-input replay to run");
+      }
+      const current = state === "current";
+      expect(reads).toEqual(current ? [expectedRawS3Key] : []);
+      expect(parsed).toEqual(current ? ["C-17/26"] : []);
+      expect(ran.report.visited).toBe(current ? 1 : 0);
+      expect(ran.report.resumeAfter).toBe(current ? id : null);
+      expect(ran.report.failure?.code ?? null).toBe(
+        current ? null : "writer-retryable",
+      );
+      expect(ran.report.haltReason).toBe(
+        current
+          ? null
+          : "C-17/26 (en) could not be replayed: The replay input changed after reservation",
+      );
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id)),
+      ).toEqual(before);
+    },
+  );
 
   test("a payload read that fails halts the run without stepping over the row", async () => {
     const sourceId = await createSource();

@@ -5,9 +5,9 @@ import { and, asc, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpConnectors,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -20,7 +20,7 @@ import {
   refreshCachedMcpToolsForConnection,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
@@ -35,12 +35,14 @@ const mcpStructuredErrorResult = (
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
 export type ExternalGatewayDependencies = {
+  consumeMcpGatewayRateLimit: typeof consumeMcpGatewayRateLimit;
   loadActiveMcpConnectionsForUser: typeof loadActiveMcpConnectionsForUser;
   proxyMcpToolCall: typeof proxyMcpToolCall;
   refreshCachedMcpToolsForConnection: typeof refreshCachedMcpToolsForConnection;
 };
 
 const defaultDependencies: ExternalGatewayDependencies = {
+  consumeMcpGatewayRateLimit,
   loadActiveMcpConnectionsForUser,
   proxyMcpToolCall,
   refreshCachedMcpToolsForConnection,
@@ -85,7 +87,7 @@ export const listGatewayExternalMcpTools = async ({
   context,
   dependencies = defaultDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   dependencies?: ExternalGatewayDependencies;
 }): Promise<ResolvedExternalMcpTool[]> => {
   let cachedRows = await loadCachedGatewayToolRows({ context });
@@ -137,7 +139,7 @@ export const resolveGatewayExternalMcpTool = async ({
   toolName,
   dependencies = defaultDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   dependencies?: ExternalGatewayDependencies;
 }): Promise<ResolvedExternalMcpTool | null> =>
@@ -152,7 +154,7 @@ export const callGatewayExternalMcpTool = async ({
   dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   dependencies?: ExternalGatewayDependencies;
 }) => {
@@ -190,7 +192,7 @@ export const callGatewayExternalMcpTool = async ({
     });
   }
 
-  const allowed = await consumeMcpGatewayRateLimit({
+  const allowed = await dependencies.consumeMcpGatewayRateLimit({
     connectorSlug: resolved.connectorSlug,
     userId: context.userId,
   });
@@ -257,7 +259,7 @@ const recordGatewayToolAudit = async ({
   resolved,
   toolKind,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   durationMs: number;
   outcome: "error" | "rate_limited" | "success";
   resolved: ResolvedExternalMcpTool;
@@ -292,7 +294,7 @@ const refreshMissingCachedTools = async ({
   rows,
   dependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   rows: readonly GatewayConnectionToolRow[];
   dependencies: ExternalGatewayDependencies;
 }): Promise<boolean> => {
@@ -326,7 +328,7 @@ const refreshMissingCachedTools = async ({
 const loadCachedGatewayToolRows = async ({
   context,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
 }): Promise<GatewayConnectionToolRow[]> => {
   const rows = await context.safeDb((tx) =>
     tx

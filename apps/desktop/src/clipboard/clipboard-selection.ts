@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import type { ClipboardSnapshot } from "./clipboard-types";
+import type {
+  ClipboardCaptureUpdate,
+  ClipboardSnapshot,
+} from "./clipboard-types";
 
 export type ClipboardSelectionState = {
   ids: string[];
@@ -57,14 +60,57 @@ type ClipboardHistoryState = {
 
 type ClipboardHistoryAction =
   | Exclude<ClipboardSelectionAction, { type: "historyChanged" }>
-  | { type: "snapshotReceived"; snapshot: ClipboardSnapshot };
+  | { type: "snapshotReceived"; snapshot: ClipboardSnapshot }
+  | { type: "captureReceived"; update: ClipboardCaptureUpdate };
 
 /** Snapshots and their selection projection commit together for every history update. */
 export const clipboardHistory = (
   state: ClipboardHistoryState,
   action: ClipboardHistoryAction,
 ): ClipboardHistoryState => {
+  if (action.type === "captureReceived") {
+    if (action.update.revision !== state.snapshot.revision + 1) {
+      return state;
+    }
+    const removedIds = new Set(action.update.removedItemIds);
+    removedIds.add(action.update.item.id);
+    const items = [
+      action.update.item,
+      ...state.snapshot.items.filter((item) => !removedIds.has(item.id)),
+    ];
+    const visuals = new Map(
+      state.snapshot.sourceAppVisuals.map((visual) => [visual.key, visual]),
+    );
+    for (const visual of action.update.sourceAppVisuals) {
+      visuals.set(visual.key, visual);
+    }
+    const referencedVisualKeys = new Set(
+      items.flatMap(({ sourceApp }) =>
+        sourceApp === null
+          ? []
+          : [
+              sourceApp.visualKey,
+              sourceApp.identifier ?? sourceApp.name,
+              sourceApp.page?.origin,
+            ],
+      ),
+    );
+    return clipboardHistory(state, {
+      type: "snapshotReceived",
+      snapshot: {
+        ...state.snapshot,
+        revision: action.update.revision,
+        items,
+        sourceAppVisuals: [...visuals.values()].filter((visual) =>
+          referencedVisualKeys.has(visual.key),
+        ),
+      },
+    });
+  }
   if (action.type === "snapshotReceived") {
+    if (action.snapshot.revision < state.snapshot.revision) {
+      return state;
+    }
     return {
       snapshot: action.snapshot,
       selection: clipboardSelection(state.selection, {

@@ -3,9 +3,55 @@ import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
 
+import { ingestionStopKindOf } from "@/api/lib/errors/tagged-errors";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+
 import { PublisherPageError, validatePublisherPage } from "./publisher-page";
 
 const context = { adapterKey: "cz-regional", cursor: "2026-01-01:0" };
+
+describe("publisher response failure grading inputs", () => {
+  const expected = {
+    "too-small": "source_unreachable",
+    "content-type": "source_unreachable",
+    interstitial: "publisher_refusal",
+    "invalid-syntax": "adapter_error",
+    "invalid-shape": "adapter_error",
+  } as const satisfies Record<PublisherPageError["reason"], string>;
+  const reasons = [
+    "too-small",
+    "content-type",
+    "interstitial",
+    "invalid-syntax",
+    "invalid-shape",
+  ] as const satisfies readonly PublisherPageError["reason"][];
+  const grades = {
+    source_unreachable: "transient",
+    publisher_refusal: "anticipated",
+    adapter_error: "defect",
+  } as const;
+
+  test("covers every publisher response rejection", () => {
+    expect(Object.keys(expected).toSorted()).toEqual([...reasons].toSorted());
+  });
+
+  for (const reason of reasons) {
+    test(`classifies ${reason} without losing the publisher outcome`, () => {
+      const error = new PublisherPageError({ ...context, reason });
+      expect(error.stopKind).toBe(expected[reason]);
+      expect(
+        gradeFailure(
+          readEvidence(error),
+          failureSink({ event: "publisher.page.test", expected: [] }),
+        ).grade,
+      ).toBe(grades[expected[reason]]);
+      expect(ingestionStopKindOf(new Error("Wrapped", { cause: error }))).toBe(
+        expected[reason],
+      );
+    });
+  }
+});
 
 describe("publisher response contracts", () => {
   const cases = [
@@ -30,6 +76,14 @@ describe("publisher response contracts", () => {
       reason: "content-type",
     },
     {
+      name: "maintenance HTML in JSON",
+      body: "<html><body><h1>Service temporarily unavailable</h1></body></html>",
+      headers: new Headers({ "content-type": "text/html" }),
+      kind: "json",
+      reason: "content-type",
+      stopKind: "source_unreachable",
+    },
+    {
       name: "HTML in XML",
       body: "<html><script></script></html>",
       kind: "xml",
@@ -48,6 +102,25 @@ describe("publisher response contracts", () => {
       kind: "json",
       headers: new Headers({ "retry-after": "5" }),
       reason: "interstitial",
+    },
+    {
+      name: "rate limit header with empty body",
+      body: "",
+      kind: "json",
+      headers: new Headers({ "retry-after": "5" }),
+      reason: "interstitial",
+      stopKind: "publisher_refusal",
+    },
+    {
+      name: "rate limit header with wrong MIME",
+      body: "<html>Rate limited</html>",
+      kind: "json",
+      headers: new Headers({
+        "retry-after": "5",
+        "content-type": "text/html",
+      }),
+      reason: "interstitial",
+      stopKind: "publisher_refusal",
     },
     {
       name: "meta redirect",
@@ -141,6 +214,7 @@ describe("publisher response contracts", () => {
         expect(result.error).toMatchObject({
           ...context,
           reason: fixture.reason,
+          ...("stopKind" in fixture ? { stopKind: fixture.stopKind } : {}),
         });
       }
     });

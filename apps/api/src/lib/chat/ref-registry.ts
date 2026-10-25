@@ -5,13 +5,14 @@ import {
   type ChatSourceCitationTarget,
   isSafeIdValue,
   parseCanonicalChatSourceCitationHref,
-  replaceCanonicalChatSourceCitationHrefs,
   replaceCanonicalChatResourceHrefs,
-  resourceRef,
+  replaceCanonicalChatSourceCitationHrefs,
   RESOURCE_TYPE,
-  toChatSourceCitationHref,
+  resourceRef,
   toChatResourceHref,
+  toChatSourceCitationHref,
 } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -25,6 +26,7 @@ import {
   type ChatRefTokenKind,
 } from "@/api/lib/chat/ref-token";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -107,19 +109,53 @@ const describeUnresolvedRef = (ref: string) => ({
   refMatchesMintedShape: String(MINTED_REF_SHAPE.test(ref)),
 });
 
+/**
+ * Each ref failure is a different defect: an unminted ref is a model mistake,
+ * while a conflicted or malformed binding is corrupt stored history that can
+ * point at the wrong document. The code is the error identity, so each
+ * outcome groups into its own issue.
+ */
+const REF_TELEMETRY_OUTCOME = {
+  unminted: {
+    code: "chat_ref_unminted",
+    message: "Assistant text cited a chat ref this turn never minted",
+  },
+  conflict: {
+    code: "chat_ref_conflict",
+    message: "Stored chat history bound one ref to two targets",
+  },
+  malformed: {
+    code: "chat_ref_malformed",
+    message: "Stored chat ref binding has a malformed ref",
+  },
+} as const satisfies Record<
+  "unminted" | Exclude<RestoreRefOutcome, "restored">,
+  { code: string; message: string }
+>;
+
 const reportRefTelemetry = ({
   kind,
-  message,
+  outcome,
   ref,
 }: {
   kind: string;
-  message: string;
+  outcome: keyof typeof REF_TELEMETRY_OUTCOME;
   ref: string;
 }) => {
-  captureError(new TelemetryError({ message }), {
+  const error = new TelemetryError(REF_TELEMETRY_OUTCOME[outcome]);
+  const description = describeUnresolvedRef(ref);
+  if (outcome === "unminted") {
+    classifyFailure(error, "model_output_invalid");
+    logger.warn("chat-ref-registry.unresolved", {
+      kind,
+      outcome,
+      ...description,
+    });
+  }
+  captureError(error, {
     source: "chat-ref-registry",
     kind,
-    ...describeUnresolvedRef(ref),
+    ...description,
   });
 };
 
@@ -594,11 +630,7 @@ export const createChatRefRegistry = (
     `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
 
   const reportUnknownAssistantRef = (kind: string, ref: string) => {
-    reportRefTelemetry({
-      kind,
-      message: "Assistant text cited a chat ref this turn never minted",
-      ref,
-    });
+    reportRefTelemetry({ kind, outcome: "unminted", ref });
   };
 
   const resolveAssistantTextRefs = (text: string) => {
@@ -880,20 +912,6 @@ export const createChatRefRegistry = (
     return [...ids];
   };
 
-  const reportRestoreFailure = (
-    binding: ChatRefBinding,
-    outcome: Exclude<RestoreRefOutcome, "restored">,
-  ) => {
-    reportRefTelemetry({
-      kind: binding.kind,
-      message:
-        outcome === "conflict"
-          ? "Stored chat history bound one ref to two targets"
-          : "Stored chat ref binding has a malformed ref",
-      ref: binding.ref,
-    });
-  };
-
   const restoreRefBinding = (binding: ChatRefBinding): RestoreRefOutcome => {
     switch (binding.kind) {
       case "contact": {
@@ -978,7 +996,7 @@ export const createChatRefRegistry = (
   for (const binding of restoredBindings) {
     const outcome = restoreRefBinding(binding);
     if (outcome !== "restored") {
-      reportRestoreFailure(binding, outcome);
+      reportRefTelemetry({ kind: binding.kind, outcome, ref: binding.ref });
     }
   }
 

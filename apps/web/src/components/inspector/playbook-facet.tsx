@@ -110,8 +110,8 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
-  restoreReviewRun,
   restoredRunId,
+  restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
@@ -238,8 +238,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type {
   Negotiation,
   PlaybookListItem,
-  Position,
   PlaybookPositionsValue,
+  Position,
 } from "@/lib/knowledge/playbook-types";
 import { positionReferencePassages } from "@/lib/knowledge/playbook-types";
 import {
@@ -2406,7 +2406,6 @@ const PositionConfirmStep = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 onChange={(next) => updateAt(index, next)}
                 onRemove={() =>
                   onChange(positions.filter((_, at) => at !== index))
@@ -2507,7 +2506,6 @@ const ProposalStreamView = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 passageTexts={passageTexts}
                 position={position}
                 referenceNames={referenceNames}

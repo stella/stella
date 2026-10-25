@@ -69,8 +69,8 @@ import {
   isClassifiedMetadataKey,
   METADATA_TEXT_DISPOSITIONS,
   metadataDisplayTextOf,
-  metadataTextAddressDispositionsForAdapter,
   metadataNullOnlyAddressesForAdapter,
+  metadataTextAddressDispositionsForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 
@@ -246,10 +246,17 @@ describe("every adapter accounts for the fields its source states", () => {
         ...(decision.decisionType === undefined
           ? []
           : [{ field: "decisionType", value: decision.decisionType }]),
-        ...(decision.judges ?? []).map(({ nameAsPrinted }, index) => ({
-          field: `judges.${index}.nameAsPrinted`,
-          value: nameAsPrinted,
-        })),
+        ...(decision.judges ?? []).map((judge, index) =>
+          judge.nameAsPrinted === undefined
+            ? {
+                field: `judges.${index}.czechDeclinedName`,
+                value: judge.czechDeclinedName,
+              }
+            : {
+                field: `judges.${index}.nameAsPrinted`,
+                value: judge.nameAsPrinted,
+              },
+        ),
         ...(decision.fulltext === undefined
           ? []
           : [{ field: "fulltext", value: decision.fulltext }]),
@@ -272,7 +279,8 @@ describe("every adapter accounts for the fields its source states", () => {
           { field: `sections.${section.index}.text`, value: section.text },
         ]),
         ...metadataCensus.texts,
-        ...("blocks" in decision.documentAst
+        ...("blocks" in decision.documentAst &&
+        decision.documentAst.metadata.type !== "guidance"
           ? [
               ...decision.documentAst.metadata.keywords.map((value, index) => ({
                 field: `documentAst.metadata.keywords.${index}`,

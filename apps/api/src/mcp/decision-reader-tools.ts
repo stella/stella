@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
-  type DecisionParagraphRange,
   decisionParagraphFragment,
+  type DecisionParagraphRange,
 } from "@stll/api-contract/decision-paragraph-range";
 import { DECISION_READER_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -22,8 +22,8 @@ import {
   openDecisionOutput,
   previewProvisionArgs,
   provisionPreviewOutput,
-  READER_PAGE_MAX_CHARS,
   readDecisionBlocksArgs,
+  READER_PAGE_MAX_CHARS,
 } from "./decision-reader-contract";
 import {
   decodeReaderCursor,
@@ -47,6 +47,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
+import { openMcpRead } from "./write-tool-authority";
 
 const defaultReadSource: typeof readDecisionReaderSource = async (options) =>
   await (
@@ -125,6 +126,7 @@ const missing = () =>
 const common = {
   consumesServices: false,
   access: "read",
+  permissions: openMcpRead("public case-law and legislation corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",

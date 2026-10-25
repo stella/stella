@@ -18,13 +18,18 @@ import { Result } from "better-result";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import {
+  type ScanMediaType,
+  scanMediaType,
+  scanMediaTypeSet,
+} from "@/api/lib/file-scan/media-type";
+import {
   CompoundFile,
   hasCompoundFileSignature,
 } from "@/api/lib/files/compound-file";
 import type { CompoundFileParseError } from "@/api/lib/files/compound-file";
 
 /** The zip-based Office types an encrypted container can be declared as. */
-export const OOXML_MIME_TYPES: ReadonlySet<string> = new Set(
+export const OOXML_MIME_TYPES: ReadonlySet<ScanMediaType> = scanMediaTypeSet(
   Object.values(OFFICE_ARCHIVE_FORMATS)
     .filter((format) => format.family !== "odf")
     .map((format) => format.mimeType),
@@ -121,7 +126,7 @@ export const isExactEncryptedOoxmlLayout = (
   bytes: Uint8Array,
 ): boolean => {
   if (
-    !OOXML_MIME_TYPES.has(declaredMimeType) ||
+    !OOXML_MIME_TYPES.has(scanMediaType(declaredMimeType)) ||
     !hasCompoundFileSignature(bytes)
   ) {
     return false;
@@ -145,5 +150,5 @@ export const isEncryptedOoxmlContainer = (
   declaredMimeType: string,
   bytes: Uint8Array,
 ): boolean =>
-  OOXML_MIME_TYPES.has(declaredMimeType) &&
+  OOXML_MIME_TYPES.has(scanMediaType(declaredMimeType)) &&
   probeEncryptedOoxml(bytes).status === "encrypted";

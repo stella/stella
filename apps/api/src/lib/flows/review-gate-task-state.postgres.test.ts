@@ -21,13 +21,13 @@ import transitionWorkObligation from "@/api/handlers/work-obligations/transition
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -92,7 +92,7 @@ const taskAction = async ({
       }
       return result.value;
     };
-    const context = {
+    const context = authorizedMcpContextForTest({
       accessibleWorkspaceIds: [f.workspaceId],
       accessibleWorkspaceIdSet: new Set([f.workspaceId]),
       accessibleWorkspaceStatusById: new Map([
@@ -107,7 +107,7 @@ const taskAction = async ({
       scopedDb,
       userId: f.userId,
       userEmail: `${f.userId}@example.test`,
-    } satisfies McpRequestContext;
+    });
     const result = await handleMcpToolCall({
       toolName: "save_task",
       args: {

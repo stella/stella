@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildSelectionParentLookup,
+  type CopyToMatterEntity,
+  resolveAncestorIds,
+} from "@/components/workspaces/copy-to-matter-dialog.logic";
+import {
   canRunManualOcr,
   getDesktopEditLockState,
   getDuplicateName,
@@ -9,6 +14,7 @@ import {
   getOcrSource,
   getOcrSources,
   hasOcrExport,
+  planFolderFromSelection,
   requestDesktopEditTakeover,
 } from "@/components/workspaces/row-actions.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -256,6 +262,97 @@ describe("desktop edit takeover", () => {
       forced: 1,
       awaitedConsent: 0,
       reported: [failure],
+    });
+  });
+});
+
+describe("folder from a selection", () => {
+  // matter root
+  //   clients/
+  //     acme/
+  //       contract.docx, memo.docx
+  //       drafts/
+  //         draft.docx
+  //     globex/
+  //       letter.docx
+  //   archive/
+  //     old.docx
+  //   notes.docx
+  const parentById = new Map<string, string | null>([
+    ["clients", null],
+    ["acme", "clients"],
+    ["contract", "acme"],
+    ["memo", "acme"],
+    ["drafts", "acme"],
+    ["draft", "drafts"],
+    ["globex", "clients"],
+    ["letter", "globex"],
+    ["archive", null],
+    ["old", "archive"],
+    ["notes", null],
+  ]);
+  const select = (...ids: string[]): CopyToMatterEntity[] =>
+    ids.map((entityId) => ({
+      entityId,
+      entityName: entityId,
+      kind: "document",
+      ancestorIds: resolveAncestorIds(entityId, parentById),
+    }));
+
+  test("siblings go into a folder in their shared parent", () => {
+    expect(planFolderFromSelection(select("contract", "memo"))).toEqual({
+      entityIds: ["contract", "memo"],
+      parentId: "acme",
+    });
+  });
+
+  test("an entity inside a selected folder moves with that folder", () => {
+    expect(
+      planFolderFromSelection(select("drafts", "draft", "contract")),
+    ).toEqual({ entityIds: ["drafts", "contract"], parentId: "acme" });
+  });
+
+  test("entities in different folders go into their deepest common folder", () => {
+    expect(planFolderFromSelection(select("draft", "letter"))).toEqual({
+      entityIds: ["draft", "letter"],
+      parentId: "clients",
+    });
+    expect(planFolderFromSelection(select("memo", "draft"))).toEqual({
+      entityIds: ["memo", "draft"],
+      parentId: "acme",
+    });
+  });
+
+  test("entities with no common folder go to the matter root", () => {
+    expect(planFolderFromSelection(select("letter", "old"))).toEqual({
+      entityIds: ["letter", "old"],
+      parentId: null,
+    });
+    expect(planFolderFromSelection(select("notes", "memo"))).toEqual({
+      entityIds: ["notes", "memo"],
+      parentId: null,
+    });
+  });
+
+  test("chains resolved from the selection alone fall back to the root, not to a folder missing a target", () => {
+    const selection = [
+      { entityId: "draft", parentId: "drafts" },
+      { entityId: "letter", parentId: "globex" },
+    ];
+    const selectionParents = buildSelectionParentLookup(selection);
+    const partial = selection.map(({ entityId }) => ({
+      entityId,
+      entityName: entityId,
+      kind: "document" as const,
+      ancestorIds: resolveAncestorIds(entityId, selectionParents),
+    }));
+    // The full lookup finds `clients`; the truncated chains cannot.
+    expect(planFolderFromSelection(select("draft", "letter")).parentId).toBe(
+      "clients",
+    );
+    expect(planFolderFromSelection(partial)).toEqual({
+      entityIds: ["draft", "letter"],
+      parentId: null,
     });
   });
 });

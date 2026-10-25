@@ -11,13 +11,18 @@
  * never reported.
  *
  * Commands:
- *   digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>]
+ *   digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>] [--gate <job>]
  *     Reads the run's jobs (as `gh api --paginate --slurp` returns them) and
  *     one `<job id>.log` per failed job. Prints `::error` annotations, writes
- *     the JSON digest and appends a short Markdown summary.
+ *     the JSON digest and appends a short Markdown summary. Cancelled jobs
+ *     without a failed step are listed apart: they are never a cause.
  *   tail <test-output.log>
  *     Prints the failing tests of a test run (with their error lines) so a
  *     failing step's log ends with its failures.
+ *   show <run id or URL> [--repo <owner/repo>]
+ *     Prints a run's digest: its `ci-failures` artifact, or, when the run has
+ *     none (still running, or the gate passed), one built from the jobs API
+ *     and the failed jobs' logs through `gh`.
  *
  * Needs no dependency install: node builtins only.
  */
@@ -25,12 +30,18 @@
 import {
   appendFileSync,
   existsSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
-export const MAX_LINES_PER_STEP = 5;
+// The digest is read instead of the job logs, so a record carries enough of
+// the cause to act on; an annotation shows only its first lines.
+export const MAX_LINES_PER_STEP = 15;
+export const MAX_ANNOTATION_LINES = 5;
 export const MAX_LINE_WIDTH = 200;
 // GitHub keeps at most 10 error annotations per step.
 export const MAX_ANNOTATIONS = 10;
@@ -38,15 +49,18 @@ const MAX_TAIL_TESTS = 30;
 const MAX_TAIL_DETAIL = 12;
 const TAIL_WINDOW = 40;
 
-export type FailureKind =
-  | "infra"
-  | "test"
-  | "typecheck"
-  | "lint"
-  | "ratchet"
-  | "policy"
-  | "build"
-  | "other";
+const FAILURE_KINDS = [
+  "infra",
+  "test",
+  "typecheck",
+  "lint",
+  "ratchet",
+  "policy",
+  "build",
+  "other",
+] as const;
+
+export type FailureKind = (typeof FAILURE_KINDS)[number];
 
 export type FailureLine = {
   readonly message: string;
@@ -73,6 +87,34 @@ export type FailureRecord = {
   readonly lines: readonly FailureLine[];
   readonly tests: readonly FailedTest[];
 };
+
+export const DIGEST_VERSION = 1;
+/** The run artifact holding the digest, and the job that writes it. */
+export const DIGEST_ARTIFACT = "ci-failures";
+export const RESULT_GATE = "ci-result";
+
+// The `ci-failures.json` artifact. The flaky-test history reads it back, so
+// both sides go through this envelope.
+export type DigestFile = {
+  readonly version: typeof DIGEST_VERSION;
+  readonly run_id: string | null;
+  readonly run_attempt: string | null;
+  readonly failures: readonly FailureRecord[];
+  /** Jobs that were cancelled without a failed step: never a cause. */
+  readonly cancelled: readonly CancelledJob[];
+};
+
+export const digestFile = (
+  failures: readonly FailureRecord[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  cancelled: readonly CancelledJob[] = [],
+): DigestFile => ({
+  version: DIGEST_VERSION,
+  run_id: env["GITHUB_RUN_ID"] ?? null,
+  run_attempt: env["GITHUB_RUN_ATTEMPT"] ?? null,
+  failures,
+  cancelled,
+});
 
 // ---------------------------------------------------------------------------
 // Line normalization
@@ -744,6 +786,117 @@ export const dedupe = (lines: readonly FailureLine[]): FailureLine[] => {
   return [...kept.values()];
 };
 
+// `bun run` reporting that a script or binary exited non-zero: it restates
+// the exit and never names the cause.
+const RUNNER_EXIT = /^error: (?:script )?".*" exited with code \d+$/u;
+// Source excerpts (`12 |  code`) and caret rows restate the test file; bare
+// punctuation rows of an expectation diff carry nothing.
+const SOURCE_EXCERPT = /^\s*\d+ \|/u;
+const BARE_DIFF_ROW = /^[-+]?[\s{}[\](),^]*$/u;
+// Playwright's closing counts (`1 failed`), printed after the last failure.
+const PLAYWRIGHT_COUNT =
+  /^\s*\d+ (?:failed|passed|flaky|skipped|did not run|interrupted)\b/u;
+// At most this many lines explain one failing test, so several tests fit.
+const MAX_TEST_DETAIL = 6;
+
+/** The lines after a failing test's headline: further errors and the diff. */
+const testDetail = (failure: TestFailure): string[] => {
+  const index = failure.detail.findIndex((text) => ERROR_HEADLINE.test(text));
+  if (index === -1) {
+    return [];
+  }
+  // A headline ending in `:` already carries its continuation line.
+  const skip = failure.detail.at(index)?.trimEnd().endsWith(":") ? 2 : 1;
+  return failure.detail
+    .slice(index + skip)
+    .filter(
+      (text) =>
+        !SOURCE_EXCERPT.test(text) &&
+        !BARE_DIFF_ROW.test(text) &&
+        !PLAYWRIGHT_COUNT.test(text),
+    )
+    .slice(0, MAX_TEST_DETAIL);
+};
+
+/** Extractors for formats that name their own cause: tests, tsc, oxlint. */
+const specificExtractors = (
+  rawLines: readonly string[],
+  lines: readonly LogLine[],
+): (() => FailureLine[])[] => [
+  () =>
+    testFailures(rawLines).flatMap((failure) => [
+      testFailureLine(failure),
+      ...testDetail(failure).map((message) => ({
+        message: truncate(message),
+        ...located(failure.file, failure.line?.toString()),
+      })),
+    ]),
+  () => tscLines(lines),
+  () => oxlintLines(lines),
+];
+
+// Bun's banner, totals and per-file headers inside a check's own output.
+const TEST_RUNNER_CHATTER =
+  /^(?:bun test v|\d+ (?:pass|fail|skip|todo|snapshots?|expect\(\) calls)\b|Ran \d+ tests? )/u;
+// Structured informational records the checked code logs while it runs, and
+// Node's process warnings with their advice lines.
+const INFO_RECORD = /^\{"(?:severity|level)":"(?:INFO|DEBUG|info|debug)"/u;
+const NODE_WARNING =
+  /^(?:\(node:\d+\) (?:\[\w+\] )?\w*Warning: |Reparsing as ES module because |To eliminate this warning, |\(Use `node --trace-warnings)/u;
+
+const isChatter = (message: string): boolean => {
+  const trimmed = message.trim();
+  return (
+    trimmed === "" ||
+    TEST_RUNNER_CHATTER.test(trimmed) ||
+    BUN_FILE_HEADER.test(trimmed) ||
+    INFO_RECORD.test(trimmed) ||
+    NODE_WARNING.test(trimmed) ||
+    RUNNER_EXIT.test(trimmed) ||
+    BARE_EXIT_CAUSE.test(trimmed) ||
+    isRetrySummary(trimmed) ||
+    isStackFrame(trimmed)
+  );
+};
+
+/**
+ * The lines explaining one failed pooled check, read from its own log group.
+ * A test, compiler or lint diagnostic wins; otherwise the group is the
+ * check's output alone, so its closing lines are the cause: passing tests,
+ * runner banners and bare exit statuses are dropped and the last `limit`
+ * distinct lines kept.
+ */
+export const checkOutputLines = (
+  rawLines: readonly string[],
+  limit = MAX_LINES_PER_STEP,
+): { readonly specific: boolean; readonly lines: FailureLine[] } => {
+  const lines = logLines(rawLines).filter(
+    ({ text }) => !EXIT_MARKER.test(text),
+  );
+  for (const extract of specificExtractors(rawLines, lines)) {
+    const found = dedupe(extract());
+    if (found.length > 0) {
+      return { specific: true, lines: found.slice(0, limit) };
+    }
+  }
+  const closing = lines.flatMap(({ text, scope }): FailureLine[] => {
+    const message = withoutErrorCommand(text);
+    if (isNoise(text) || isChatter(message)) {
+      return [];
+    }
+    const location = findLocation(message);
+    return [
+      {
+        message: truncate(`${scope === "" ? "" : `${scope}: `}${message}`),
+        ...(location === undefined
+          ? {}
+          : located(location.path, location.line)),
+      },
+    ];
+  });
+  return { specific: false, lines: dedupe(closing).slice(-limit) };
+};
+
 /**
  * The first actionable lines of one failed step. The most specific format
  * found wins, so a test failure is never crowded out by fixture output.
@@ -764,26 +917,7 @@ export const failureLines = (
     }),
   );
   const extractors = [
-    () =>
-      testFailures(rawLines).flatMap((failure) => {
-        const index = failure.detail.findIndex((text) =>
-          ERROR_HEADLINE.test(text),
-        );
-        const error = failure.detail.at(index);
-        const detail =
-          index !== -1 && error?.trimEnd().endsWith(":")
-            ? failure.detail.slice(index + 2, index + MAX_LINES_PER_STEP)
-            : [];
-        return [
-          testFailureLine(failure),
-          ...detail.map((message) => ({
-            message: truncate(message),
-            ...located(failure.file, failure.line?.toString()),
-          })),
-        ];
-      }),
-    () => tscLines(lines),
-    () => oxlintLines(lines),
+    ...specificExtractors(rawLines, lines),
     () => {
       const markers = lines.flatMap(({ text, scope, annotation }, index) => {
         const trimmed = text.trimStart();
@@ -799,7 +933,7 @@ export const failureLines = (
         if (
           (message === "" && annotation !== "error") ||
           isStackFrame(message) ||
-          /^error: script ".*" exited with code \d+$/u.test(message)
+          RUNNER_EXIT.test(message)
         ) {
           return [];
         }
@@ -839,7 +973,7 @@ export const failureLines = (
         return (
           annotation !== "continuation" &&
           !isRetrySummary(message) &&
-          !/^error: script ".*" exited with code \d+$/u.test(message) &&
+          !RUNNER_EXIT.test(message) &&
           !isStackFrame(message) &&
           (annotation === "error" || ANCHOR.test(message))
         );
@@ -918,7 +1052,7 @@ export const classify = (
     return "test";
   }
   if (
-    /lint|format|oxlint|oxfmt|biome|prettier|stylelint/u.test(name) ||
+    /lint|format|fmt|oxlint|biome|prettier|stylelint/u.test(name) ||
     LINT_RULE.test(text)
   ) {
     return "lint";
@@ -1126,76 +1260,137 @@ type DigestOptions = {
   readonly jobs: readonly ApiJob[];
   /** The job's log, or undefined when it could not be fetched. */
   readonly logFor: (job: ApiJob) => string | undefined;
+  /** The name of the result gate job, whose failure restates the others'. */
+  readonly gate?: string;
 };
 
 /**
- * Jobs the result gate fails on: failed or timed-out jobs, and cancelled
- * jobs that contain a failed step (a cancellation can mask a failure).
+ * Jobs the result gate fails on: failed or timed-out jobs, cancelled jobs
+ * that contain a failed step (a cancellation can mask a failure), and the
+ * still-running job with a failed step: the gate running this digest, so a
+ * gate that fails before it evaluates any job still names its own step.
  */
 export const isFailedJob = (job: ApiJob): boolean =>
   job.conclusion === "failure" ||
   job.conclusion === "timed_out" ||
-  (job.conclusion === "cancelled" &&
+  ((job.conclusion === "cancelled" || job.conclusion === null) &&
     (job.steps ?? []).some(({ conclusion }) => conclusion === "failure"));
 
-export const buildDigest = ({ jobs, logFor }: DigestOptions): FailureRecord[] =>
-  jobs.filter(isFailedJob).flatMap((job) => {
-    const log = logFor(job);
-    const segments = log === undefined ? [] : splitSteps(log);
-    const unused = [...segments];
-    const failedSteps = (job.steps ?? []).filter(
-      ({ conclusion }) => conclusion === "failure",
-    );
-    const steps =
-      failedSteps.length > 0
-        ? failedSteps
-        : [{ name: "(job)", number: 0, conclusion: "failure" }];
-    return steps.flatMap((step): FailureRecord[] => {
-      const segment =
-        step.name === "(job)"
-          ? (segments.findLast(({ failed }) => failed) ?? segments.at(-1))
-          : segmentForStep(step, unused);
-      const position = segment === undefined ? -1 : unused.indexOf(segment);
-      if (position !== -1) {
-        unused.splice(position, 1);
-      }
-      const pooled =
-        segment === undefined ? [] : pooledFailureRecords(segment.lines);
-      if (pooled.length > 0) {
-        return pooled.map(({ name, cause, groupLines }) => {
-          const own = BARE_EXIT_CAUSE.test(cause)
-            ? failureLines(groupLines)
-            : [];
-          const lines = own.length > 0 ? own : [{ message: cause }];
-          return {
-            job: job.name,
-            step: name,
-            kind: classify(name, lines),
-            url: job.html_url ?? "",
-            lines,
-            tests: failedTests(groupLines),
-          };
-        });
-      }
-      const found = segment === undefined ? [] : failureLines(segment.lines);
-      const link = job.html_url ? ` See ${job.html_url}` : "";
-      const missing =
-        log === undefined
-          ? `Log of job "${job.name}" was unavailable to the digest.${link}`
-          : `No log output found for this step.${link}`;
-      const lines = found.length > 0 ? found : [{ message: missing }];
-      return [
-        {
+/** The lines of one failed pooled check: its own output, then its cause. */
+const pooledLines = (
+  cause: string,
+  groupLines: readonly string[],
+): FailureLine[] => {
+  const generic = BARE_EXIT_CAUSE.test(cause) || RUNNER_EXIT.test(cause);
+  const own = checkOutputLines(
+    groupLines,
+    generic ? MAX_LINES_PER_STEP : MAX_LINES_PER_STEP - 1,
+  );
+  if (own.specific || generic) {
+    return own.lines.length > 0 ? own.lines : [{ message: cause }];
+  }
+  // A named cause leads; a copy of it in the output is listed once.
+  return dedupe([{ message: truncate(cause) }, ...own.lines]);
+};
+
+const jobFailures = (job: ApiJob, log: string | undefined): FailureRecord[] => {
+  const segments = log === undefined ? [] : splitSteps(log);
+  const unused = [...segments];
+  const failedSteps = (job.steps ?? []).filter(
+    ({ conclusion }) => conclusion === "failure",
+  );
+  const steps =
+    failedSteps.length > 0
+      ? failedSteps
+      : [{ name: "(job)", number: 0, conclusion: "failure" }];
+  return steps.flatMap((step): FailureRecord[] => {
+    const segment =
+      step.name === "(job)"
+        ? (segments.findLast(({ failed }) => failed) ?? segments.at(-1))
+        : segmentForStep(step, unused);
+    const position = segment === undefined ? -1 : unused.indexOf(segment);
+    if (position !== -1) {
+      unused.splice(position, 1);
+    }
+    const pooled =
+      segment === undefined ? [] : pooledFailureRecords(segment.lines);
+    if (pooled.length > 0) {
+      return pooled.map(({ name, cause, groupLines }) => {
+        const lines = pooledLines(cause, groupLines);
+        return {
           job: job.name,
-          step: step.name,
-          kind: classify(step.name, lines),
+          step: name,
+          kind: classify(name, lines),
           url: job.html_url ?? "",
           lines,
-          tests: segment === undefined ? [] : failedTests(segment.lines),
-        },
-      ];
-    });
+          tests: failedTests(groupLines),
+        };
+      });
+    }
+    const found = segment === undefined ? [] : failureLines(segment.lines);
+    const link = job.html_url ? ` See ${job.html_url}` : "";
+    const missing =
+      log === undefined
+        ? `Log of job "${job.name}" was unavailable to the digest.${link}`
+        : `No log output found for this step.${link}`;
+    const lines = found.length > 0 ? found : [{ message: missing }];
+    return [
+      {
+        job: job.name,
+        step: step.name,
+        kind: classify(step.name, lines),
+        url: job.html_url ?? "",
+        lines,
+        tests: segment === undefined ? [] : failedTests(segment.lines),
+      },
+    ];
   });
+};
+
+/**
+ * One record per failed step. The result gate (the job named `gate`, or the
+ * still-running job when the gate digests its own run) fails its outcome
+ * step because other jobs failed, so its record is kept only when no other
+ * job explains the failure.
+ */
+export const buildDigest = ({
+  jobs,
+  logFor,
+  gate,
+}: DigestOptions): FailureRecord[] => {
+  const failed = jobs.filter(isFailedJob);
+  const isGate = (job: ApiJob) => job.conclusion === null || job.name === gate;
+  const explained = failed
+    .filter((job) => !isGate(job))
+    .flatMap((job) => jobFailures(job, logFor(job)));
+  return explained.length > 0
+    ? explained
+    : failed.flatMap((job) => jobFailures(job, logFor(job)));
+};
+
+export type CancelledJob = {
+  readonly job: string;
+  readonly url: string;
+  /**
+   * `after-failure`: another job of the attempt failed, so fail-fast or the
+   * run's own cancellation stopped this one. `no-failure`: nothing failed;
+   * the attempt was superseded or cancelled by hand.
+   */
+  readonly reason: "after-failure" | "no-failure";
+};
+
+/**
+ * Cancelled jobs without a failed step of their own. Checks list them as
+ * failing, yet no step of theirs failed: they are never a cause.
+ */
+export const cancelledJobs = (jobs: readonly ApiJob[]): CancelledJob[] => {
+  const reason = jobs.some((job) => job.conclusion !== null && isFailedJob(job))
+    ? "after-failure"
+    : "no-failure";
+  return jobs
+    .filter((job) => job.conclusion === "cancelled" && !isFailedJob(job))
+    .map((job) => ({ job: job.name, url: job.html_url ?? "", reason }));
+};
 
 // ---------------------------------------------------------------------------
 // Output
@@ -1221,7 +1416,10 @@ export const annotations = (
       ...(anchor?.line === undefined ? [] : [`line=${anchor.line}`]),
       `title=${escapeProperty(`${record.job} / ${record.step} [${record.kind}]`)}`,
     ];
-    const text = record.lines.map(({ message }) => message).join("\n");
+    const text = record.lines
+      .slice(0, MAX_ANNOTATION_LINES)
+      .map(({ message }) => message)
+      .join("\n");
     return `::error ${properties.join(",")}::${escapeData(text)}`;
   });
   if (records.length > max) {
@@ -1245,15 +1443,32 @@ const MARKDOWN_SPECIAL = /[\\`*_[\]<>|#]/gu;
 export const escapeMarkdown = (value: string): string =>
   value.replaceAll(MARKDOWN_SPECIAL, "\\$&");
 
-export const summaryMarkdown = (records: readonly FailureRecord[]): string => {
-  if (records.length === 0) {
-    return "### Failure digest\n\nNo failed step in this run's jobs.\n";
-  }
+const CANCELLED_REASON: Readonly<Record<CancelledJob["reason"], string>> = {
+  "after-failure":
+    "stopped after another job failed (fail-fast); none of their steps failed",
+  "no-failure":
+    "no job failed in this attempt; it was superseded or cancelled by hand",
+};
+
+export const summaryMarkdown = (
+  records: readonly FailureRecord[],
+  cancelled: readonly CancelledJob[] = [],
+): string => {
   const sections = records.map((record) => {
     const lines = record.lines.map(({ message }) => fence(message)).join("\n");
     const link = record.url === "" ? "" : ` ([log](${record.url}))`;
     return `**${escapeMarkdown(record.job)} / ${escapeMarkdown(record.step)}** \`${record.kind}\`${link}\n\n\`\`\`text\n${lines}\n\`\`\`\n`;
   });
+  if (records.length === 0) {
+    sections.push("No failed step in this run's jobs.\n");
+  }
+  const reason = cancelled.at(0)?.reason;
+  if (reason !== undefined) {
+    const names = cancelled.map(({ job }) => escapeMarkdown(job)).join(", ");
+    sections.push(
+      `**Cancelled, not failed** (${cancelled.length}): ${names}. ${CANCELLED_REASON[reason]}.\n`,
+    );
+  }
   return `### Failure digest\n\n${sections.join("\n")}`;
 };
 
@@ -1302,6 +1517,183 @@ export const renderTail = (rawLines: readonly string[]): string => {
 };
 
 // ---------------------------------------------------------------------------
+// Reading a run's digest
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+const parseLine = (value: unknown): FailureLine[] => {
+  if (!isRecord(value) || !isString(value["message"])) {
+    return [];
+  }
+  const file = value["file"];
+  const line = value["line"];
+  return [
+    {
+      message: value["message"],
+      ...(isString(file) ? { file } : {}),
+      ...(typeof line === "number" ? { line } : {}),
+    },
+  ];
+};
+
+const isFailureKind = (value: unknown): value is FailureKind =>
+  FAILURE_KINDS.some((kind) => kind === value);
+
+/** The records and cancelled jobs of a `ci-failures.json` artifact. */
+export const parseDigestFile = (
+  value: unknown,
+):
+  | {
+      readonly failures: FailureRecord[];
+      readonly cancelled: CancelledJob[];
+    }
+  | undefined => {
+  if (
+    !isRecord(value) ||
+    value["version"] !== DIGEST_VERSION ||
+    !Array.isArray(value["failures"])
+  ) {
+    return undefined;
+  }
+  const failures = value["failures"].flatMap((record): FailureRecord[] => {
+    if (
+      !isRecord(record) ||
+      !isString(record["job"]) ||
+      !isString(record["step"]) ||
+      !Array.isArray(record["lines"])
+    ) {
+      return [];
+    }
+    const kind = record["kind"];
+    return [
+      {
+        job: record["job"],
+        step: record["step"],
+        kind: isFailureKind(kind) ? kind : "other",
+        url: isString(record["url"]) ? record["url"] : "",
+        lines: record["lines"].flatMap(parseLine),
+        tests: [],
+      },
+    ];
+  });
+  const cancelledValue = value["cancelled"];
+  const cancelled = (
+    Array.isArray(cancelledValue) ? cancelledValue : []
+  ).flatMap((job): CancelledJob[] =>
+    isRecord(job) &&
+    isString(job["job"]) &&
+    (job["reason"] === "after-failure" || job["reason"] === "no-failure")
+      ? [
+          {
+            job: job["job"],
+            url: isString(job["url"]) ? job["url"] : "",
+            reason: job["reason"],
+          },
+        ]
+      : [],
+  );
+  return { failures, cancelled };
+};
+
+/** A run id from an id or an Actions run, job or attempt URL. */
+export const runIdOf = (value: string): string | undefined => {
+  if (/^\d+$/u.test(value)) {
+    return value;
+  }
+  return /\/actions\/runs\/(\d+)(?:[/?#]|$)/u.exec(value)?.[1];
+};
+
+// The digest reads at most this many job logs, as the gate does.
+const MAX_FETCHED_LOGS = 20;
+
+type Gh = (args: readonly string[]) => string | undefined;
+
+const ghCommand: Gh = (args) => {
+  const result = Bun.spawnSync(
+    ["bash", path.join(import.meta.dir, "gh-retry.sh"), ...args],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode === 0) {
+    return result.stdout.toString();
+  }
+  if (args.includes("--allow-escape-sequences")) {
+    // The retry owner emits safe status metadata; raw HTTP traces stay private.
+    process.stderr.write(result.stderr);
+  }
+  return undefined;
+};
+
+/**
+ * The digest of one run as Markdown: the gate's `ci-failures` artifact when
+ * the run has one, else built here from the jobs API and the failed jobs'
+ * logs (a run still in progress, or one whose gate did not fail).
+ */
+export const showRun = (
+  runId: string,
+  repo: string,
+  workDirectory: string,
+  gh: Gh = ghCommand,
+):
+  | { readonly markdown: string; readonly source: "artifact" | "logs" }
+  | { readonly error: string } => {
+  const downloaded = gh([
+    "run",
+    "download",
+    runId,
+    "--repo",
+    repo,
+    "--name",
+    DIGEST_ARTIFACT,
+    "--dir",
+    workDirectory,
+  ]);
+  const artifact = path.join(workDirectory, `${DIGEST_ARTIFACT}.json`);
+  if (downloaded !== undefined && existsSync(artifact)) {
+    const digest = parseDigestFile(JSON.parse(readFileSync(artifact, "utf-8")));
+    if (digest !== undefined) {
+      return {
+        markdown: summaryMarkdown(digest.failures, digest.cancelled),
+        source: "artifact",
+      };
+    }
+  }
+  const jobsJson = gh([
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
+  ]);
+  if (jobsJson === undefined) {
+    return {
+      error: `Could not list the jobs of run ${runId} in ${repo}; check \`gh auth status\`, the run id and --repo.`,
+    };
+  }
+  const jobs = parseJobs(JSON.parse(jobsJson));
+  const fetched = new Set(
+    jobs
+      .filter(isFailedJob)
+      .slice(0, MAX_FETCHED_LOGS)
+      .map(({ id }) => id),
+  );
+  const records = buildDigest({
+    jobs,
+    logFor: ({ id }) =>
+      fetched.has(id)
+        ? gh([
+            "api",
+            "--allow-escape-sequences",
+            `repos/${repo}/actions/jobs/${id}/logs`,
+          ])
+        : undefined,
+    gate: RESULT_GATE,
+  });
+  return {
+    markdown: summaryMarkdown(records, cancelledJobs(jobs)),
+    source: "logs",
+  };
+};
+
+// ---------------------------------------------------------------------------
 // CLI
 
 const flagValue = (
@@ -1313,8 +1705,9 @@ const flagValue = (
 };
 
 const USAGE =
-  "Usage: bun scripts/ci-failure-digest.ts digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>]\n" +
-  "       bun scripts/ci-failure-digest.ts tail <test-output.log>";
+  "Usage: bun scripts/ci-failure-digest.ts digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>] [--gate <job>]\n" +
+  "       bun scripts/ci-failure-digest.ts tail <test-output.log>\n" +
+  "       bun scripts/ci-failure-digest.ts show <run id or URL> [--repo <owner/repo>]";
 
 const main = (args: readonly string[]): number => {
   const [command, ...rest] = args;
@@ -1327,6 +1720,41 @@ const main = (args: readonly string[]): number => {
       process.stdout.write(`\n${tail}\n`);
     }
     return 0;
+  }
+  const run = command === "show" ? runIdOf(rest[0] ?? "") : undefined;
+  if (run !== undefined) {
+    const repo =
+      flagValue(rest, "--repo") ??
+      process.env["GH_REPO"] ??
+      ghCommand([
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".nameWithOwner",
+      ])?.trim();
+    if (repo === undefined || repo === "") {
+      process.stderr.write("No repository: pass --repo <owner/repo>.\n");
+      return 2;
+    }
+    const directory = mkdtempSync(path.join(tmpdir(), "ci-digest-"));
+    try {
+      const shown = showRun(run, repo, directory);
+      if ("error" in shown) {
+        process.stderr.write(`${shown.error}\n`);
+        return 1;
+      }
+      if (shown.source === "logs") {
+        process.stderr.write(
+          `Run ${run} has no ${DIGEST_ARTIFACT} artifact; digested from its job logs.\n`,
+        );
+      }
+      process.stdout.write(shown.markdown);
+      return 0;
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   }
   const jobsFile = flagValue(rest, "--jobs");
   const logsDirectory = flagValue(rest, "--logs");
@@ -1347,23 +1775,16 @@ const main = (args: readonly string[]): number => {
       const file = path.join(logsDirectory, `${id}.log`);
       return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
     },
+    gate: flagValue(rest, "--gate") ?? RESULT_GATE,
   });
+  const cancelled = cancelledJobs(jobs);
   writeFileSync(
     jsonFile,
-    `${JSON.stringify(
-      {
-        version: 1,
-        run_id: process.env["GITHUB_RUN_ID"] ?? null,
-        run_attempt: process.env["GITHUB_RUN_ATTEMPT"] ?? null,
-        failures: records,
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify(digestFile(records, process.env, cancelled), null, 2)}\n`,
   );
   const summary = flagValue(rest, "--summary");
   if (summary !== undefined) {
-    appendFileSync(summary, summaryMarkdown(records));
+    appendFileSync(summary, summaryMarkdown(records, cancelled));
   }
   for (const annotation of annotations(records)) {
     process.stdout.write(`${annotation}\n`);

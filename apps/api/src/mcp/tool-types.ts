@@ -17,7 +17,11 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
-import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
+import type {
+  AuthorizedMcpRequestContext,
+  McpReadToolPermissions,
+  McpWriteToolPermissions,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -73,6 +77,8 @@ export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
  * `static-tool-definitions.ts` can only reason about known reasons.
  */
 const MCP_ANONYMIZED_EXCLUSION_REASONS = [
+  /** An OAuth grant may create browser session authority only on the ordinary surface. */
+  "credential_authority",
   /** Mutating tool. The anonymized surface is egress-only, so writes never appear. */
   "write",
   /**
@@ -183,6 +189,12 @@ export type McpToolAccessBranch =
       access: "read";
       readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
+      /**
+       * The member authority required before a permission-gated read can reach
+       * its handler, or an explicit reason the read is open to every caller
+       * admitted by its scope.
+       */
+      permissions: McpReadToolPermissions;
     }
   | {
       access: "write";
@@ -223,8 +235,7 @@ type McpToolOutboundBehavior = { type: "outbound"; reason: string };
 
 /** Every behavior the transport confirmation gate reads. */
 type McpToolConfirmationBehavior =
-  | McpToolDestructiveBehavior
-  | McpToolOutboundBehavior;
+  McpToolDestructiveBehavior | McpToolOutboundBehavior;
 
 type McpToolDestructiveBranch =
   | {
@@ -297,6 +308,7 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:contacts_write": "contacts_write",
   "stella:matters_write": "matters_write",
   "stella:chat": "chat",
+  "stella:memory_write": "memory_write",
   "stella:documents_write": "documents_write",
   "stella:knowledge_write": "knowledge_write",
   "stella:search": "search",
@@ -522,8 +534,7 @@ export type InternalToolTextError = {
 };
 
 export type InternalToolError =
-  | InternalToolStructuredError
-  | InternalToolTextError;
+  InternalToolStructuredError | InternalToolTextError;
 
 export type InternalToolErrorResult = {
   status: "error";
@@ -536,8 +547,7 @@ export type InternalToolErrorResult = {
  * this result to `CallToolResult`; internal consumers use it directly.
  */
 export type InternalToolResult<TData = unknown> =
-  | InternalToolSuccess<TData>
-  | InternalToolErrorResult;
+  InternalToolSuccess<TData> | InternalToolErrorResult;
 
 /**
  * A handler either returns a finished internal result, or an egress plan the
@@ -582,8 +592,7 @@ export type McpEgressPlan<TPayload = unknown> =
     };
 
 export type McpToolResponse<TData = unknown> =
-  | InternalToolResult<TData>
-  | McpEgressPlan<TData>;
+  InternalToolResult<TData> | McpEgressPlan<TData>;
 
 export type TypedMcpToolResponse<TData> =
   | InternalToolResult<TData>
@@ -598,16 +607,15 @@ export type McpToolHandler<TData = unknown> = ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 type TypedMcpToolHandlerResult<TData> =
-  | TypedMcpToolResponse<TData>
-  | Promise<TypedMcpToolResponse<TData>>;
+  TypedMcpToolResponse<TData> | Promise<TypedMcpToolResponse<TData>>;
 
 export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => TypedMcpToolHandlerResult<TData>;
 
 type TypedHandlerData<THandler> =

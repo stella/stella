@@ -1,4 +1,4 @@
-import { createContext, use, useId } from "react";
+import { createContext, createElement, use, useId } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
@@ -19,8 +19,8 @@ import { optionalOrganizationSettingsOptions } from "@/queries/organization-sett
 
 import {
   CAPABILITY_REASON_KEYS,
-  resolveActionCapabilities,
   isCapabilityActionVisible,
+  resolveActionCapabilities,
 } from "./action-capabilities.logic";
 import type {
   ActionCapabilities,
@@ -122,6 +122,42 @@ export const useActionCapabilities = (
   const live = useLiveActionCapabilities(fixture === null, capability);
   return fixture ?? live;
 };
+
+/**
+ * Renders `children` only where `CapabilityAction` renders `action`. Chrome
+ * that belongs to the action but sits outside its render function (a
+ * separator before it) is rendered through this, so it never outlives the
+ * action and reads capabilities only where the action does.
+ */
+export const CapabilityActionChrome = ({
+  action,
+  children,
+}: {
+  action: ActionDescriptor;
+  children: ReactElement;
+}) =>
+  createElement(
+    renderCapabilityActionChromeContent,
+    {
+      action,
+      capabilities: useActionCapabilities(action.capability),
+    },
+    children,
+  );
+
+function renderCapabilityActionChromeContent({
+  action,
+  capabilities,
+  children,
+}: {
+  action: ActionDescriptor;
+  capabilities: ActionCapabilities;
+  children?: ReactElement;
+}): ReactElement | null {
+  return isCapabilityActionVisible(action, capabilities)
+    ? (children ?? null)
+    : null;
+}
 
 type CapabilityActionChildProps = {
   disabled?: boolean;

@@ -9,7 +9,7 @@ import type { UploadPurpose } from "@/api/handlers/uploads/permissions";
 import { brandPersistedPendingUploadId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import type { McpOAuthScope } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 /**
  * The consent an upload purpose spends.
@@ -84,7 +84,7 @@ const readStoredPurpose = async ({
   context,
   params,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   params: unknown;
 }): Promise<UploadPurpose | null> => {
   if (!isRecord(params)) {
@@ -116,7 +116,7 @@ const readStoredPurpose = async ({
 type UploadPurposeRequirementInput = {
   body: unknown;
   capabilityId: string;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   params: unknown;
 };
 

@@ -35,6 +35,7 @@ import {
   applyReaderAnswerEvent,
   ReaderAnswerFailure,
 } from "./reader-answers.logic";
+import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 
 // oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
 const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
@@ -71,12 +72,67 @@ const createReaderAnswerRuntime = (scope: string) => {
   };
 };
 type ReaderAnswerErrorOrigin =
-  | { type: "operation" }
-  | { type: "stream"; messageId: string };
+  { type: "operation" } | { type: "stream"; messageId: string };
 type ReaderAnswerErrors = ReadonlyMap<
   string,
   ReaderAnswerErrorOrigin & { error: APIError | ReaderAnswerFailure }
 >;
+type ReaderAnswerFailureNoticesOptions = {
+  answers: readonly ReaderAnswer[];
+  failures: ReaderAnswerErrors;
+  queryError: Error | null;
+};
+const readerAnswerFailureNotices = ({
+  answers,
+  failures,
+  queryError,
+}: ReaderAnswerFailureNoticesOptions): ReaderAnswerFailureNotice[] => {
+  const notices: ReaderAnswerFailureNotice[] = [];
+  const transientMessages = new Set<string>();
+  for (const failure of failures.values()) {
+    switch (failure.type) {
+      case "operation":
+        notices.push({ type: "operation", error: failure.error });
+        break;
+      case "stream":
+        transientMessages.add(failure.messageId);
+        notices.push({
+          type: "message",
+          messageId: failure.messageId,
+          error: failure.error,
+        });
+        break;
+      default:
+        failure satisfies never;
+        panic("Unknown reader answer error origin");
+    }
+  }
+  for (const answer of answers) {
+    const message = answer.messages.findLast(
+      (candidate) => candidate.role === "assistant",
+    );
+    if (
+      message?.status !== "failed" ||
+      message.errorCode === null ||
+      transientMessages.has(message.id)
+    ) {
+      continue;
+    }
+    notices.push({
+      type: "message",
+      messageId: message.id,
+      error: new ReaderAnswerFailure({
+        kind: "model",
+        code: message.errorCode,
+        message: "Reader answer generation failed",
+      }),
+    });
+  }
+  if (queryError !== null) {
+    notices.push({ type: "operation", error: queryError });
+  }
+  return notices;
+};
 type RecordReaderAnswerErrorOptions = {
   key: string;
   cause: unknown;
@@ -561,8 +617,14 @@ export const useReaderAnswers = ({
           setErrors,
         }),
     );
+  const answers = query.data ?? [];
   return {
-    answers: query.data ?? [],
+    answers,
+    failureNotices: readerAnswerFailureNotices({
+      answers,
+      failures,
+      queryError: query.error,
+    }),
     activeAnswerId: activation.id,
     openRevision: activation.revision,
     activateAnswer,

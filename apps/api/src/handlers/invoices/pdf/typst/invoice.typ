@@ -31,7 +31,7 @@
 )
 #set par(leading: 0.55em, spacing: 0.9em)
 
-#let label-text(body) = text(size: 7pt, weight: "semibold", fill: muted, tracking: 0.04em, upper(body))
+#let label-text(body) = text(size: 7pt, weight: "semibold", fill: muted, tracking: 0.04em, body)
 #let field-list(items) = for item in items [
   #item.label: #item.value \
 ]
@@ -53,7 +53,7 @@
     if data.isDraft {
       linebreak()
       box(fill: rgb("#fff4d6"), inset: (x: 6pt, y: 3pt), radius: 3pt,
-        text(size: 8pt, weight: "semibold", fill: rgb("#7a5600"), upper(data.draftLabel)))
+        text(size: 8pt, weight: "semibold", fill: rgb("#7a5600"), data.draftLabel))
     }
   },
 )
@@ -81,11 +81,11 @@
 #v(14pt)
 
 // Lines: the header row repeats on every page the table breaks onto.
-#show table: set text(number-width: "tabular")
+#show table: set text(size: 8.5pt, number-width: "tabular")
 #table(
   columns: (1fr, auto, auto, auto, auto, auto),
   stroke: (x, y) => if y == 0 { (bottom: 0.8pt + accent) } else { (bottom: 0.4pt + rule) },
-  inset: (x: 5pt, y: 6pt),
+  inset: (x: 5pt, y: 7pt),
   align: (x, y) => if x == 0 { start + top } else { end + top },
   table.header(
     repeat: true,
@@ -98,6 +98,7 @@
       data.labels.total,
     ).map(h => text(size: 7pt, weight: "semibold", fill: muted, upper(h))),
   ),
+  // One row per line: the description wraps in its own column beside the figures.
   ..data.lines.map(line => (
     line.description,
     if line.quantity != none { line.quantity } else { [] },
@@ -112,17 +113,46 @@
 // Totals, VAT breakdown and the amount due, which is the most prominent figure.
 #align(end, block(width: 62%, breakable: false, {
   set text(number-width: "tabular")
+  // VAT breakdown per rate, then the summed net and VAT.
   grid(
-    columns: (1fr, auto),
+    columns: (1fr, auto, auto),
+    column-gutter: 14pt,
     row-gutter: 6pt,
-    align: (start, end),
-    data.labels.net, data.totals.net,
-    data.labels.vat, data.totals.vat,
+    align: (start, end, end),
+    [], label-text(data.labels.net), label-text(data.labels.vat),
     ..data.totals.breakdown.map(b => (
-      text(fill: muted, size: 8pt, b.label),
-      text(fill: muted, size: 8pt, [#b.net / #b.vat]),
+      text(fill: muted, b.label), text(fill: muted, b.net), text(fill: muted, b.vat),
     )).flatten(),
+    // A single rate is its own sum; with none or several, the summed row carries the totals.
+    ..if data.totals.breakdown.len() != 1 {
+      (
+        grid.hline(stroke: 0.4pt + rule),
+        text(weight: "semibold", data.labels.total),
+        text(weight: "semibold", data.totals.net),
+        text(weight: "semibold", data.totals.vat),
+      )
+    } else { () },
   )
+  if data.totals.homeVat != none {
+    v(8pt)
+    grid(
+      columns: (1fr, auto),
+      row-gutter: 5pt,
+      align: (start, end),
+      ..data.totals.homeVat.breakdown.map(b => (
+        text(fill: muted, size: 8pt, [#data.labels.vatHome — #b.label]),
+        text(fill: muted, size: 8pt, b.vat),
+      )).flatten(),
+      text(weight: "semibold", data.labels.vatHomeTotal),
+      text(weight: "semibold", data.totals.homeVat.total),
+    )
+    v(5pt)
+    text(fill: muted, size: 8pt, [
+      #data.labels.exchangeRate: #data.totals.homeVat.rate; \
+      #data.labels.rateSource: #data.totals.homeVat.source; \
+      #data.labels.rateDate: #data.totals.homeVat.date
+    ])
+  }
   v(8pt)
   block(fill: accent, inset: (x: 12pt, y: 10pt), radius: 5pt, width: 100%,
     grid(
@@ -132,12 +162,18 @@
       text(fill: white, weight: "bold", size: 17pt, data.totals.gross),
     ))
 }))
+#if data.legalNotes.len() > 0 {
+  block(fill: tint, inset: 9pt, radius: 4pt, width: 100%,
+    data.legalNotes.map(note => [#note \ ]).join())
+  v(12pt)
+}
+
 #v(16pt)
 
 // Payment block with the payment QR code (SPAYD, PAY by square or ZBP).
 #if data.payment != none {
   block(breakable: false, grid(
-    columns: if data.payment.qrSvg != none { (1fr, 32mm) } else { (1fr,) },
+    columns: if data.payment.qrSvg != none { (1fr, data.payment.qrWidthMm * 1mm) } else { (1fr,) },
     gutter: 16pt,
     {
       label-text(data.labels.payment)
@@ -146,7 +182,7 @@
       if data.payment.accountNumber != none [#data.payment.accountNumber]
     },
     ..if data.payment.qrSvg != none {
-      (image(bytes(data.payment.qrSvg), format: "svg", width: 32mm),)
+      (image(bytes(data.payment.qrSvg), format: "svg", width: data.payment.qrWidthMm * 1mm),)
     } else { () },
   ))
 }

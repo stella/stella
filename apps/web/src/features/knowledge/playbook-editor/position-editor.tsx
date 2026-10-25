@@ -8,9 +8,9 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
+  type ConditionNode,
   emptyCondition,
   pruneIncomplete,
-  type ConditionNode,
 } from "@stll/conditions";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -25,7 +25,7 @@ import {
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  CopyIcon,
+  DuplicateIcon,
   FlagIcon,
   GripVerticalIcon,
   Link2Icon,
@@ -64,8 +64,8 @@ import {
   PositionHeader,
 } from "@/components/ai-suggestions/review-position-header";
 import {
-  ReferencePassageList,
   type ReferenceNameLookup,
+  ReferencePassageList,
   SeverityChip,
 } from "@/components/ai-suggestions/review-position-row";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -381,7 +381,7 @@ export const PositionEditor = ({
               </MenuTrigger>
               <MenuPopup align="end">
                 <MenuItem onClick={onDuplicate}>
-                  <CopyIcon />
+                  <DuplicateIcon />
                   {t("knowledge.playbooks.duplicatePosition")}
                 </MenuItem>
                 <MenuItem onClick={onRemove} variant="destructive">
@@ -410,7 +410,6 @@ export const PositionEditor = ({
           </span>
         }
         className="gap-1.5"
-        index={index}
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}

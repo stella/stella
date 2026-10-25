@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { createFencedRlsDatabase } from "@/api/db/root";
@@ -30,6 +30,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
+import {
+  emailColumnMatches,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { LIMITS } from "@/api/lib/limits";
@@ -116,7 +120,11 @@ const resolveReviewTarget = async (
       "The review organization must not be the demo organization",
     );
   }
-  if (config.demoEmail !== null && config.demoEmail === config.email) {
+  const reviewEmail = normalizeEmail(config.email);
+  if (
+    config.demoEmail !== null &&
+    normalizeEmail(config.demoEmail) === reviewEmail
+  ) {
     return refuse(
       REVIEW_RESET_REFUSAL.demoAccount,
       "The review account must not be the demo account",
@@ -135,7 +143,7 @@ const resolveReviewTarget = async (
       tx
         .select({ id: user.id })
         .from(user)
-        .where(sql`lower(${user.email}) = ${config.email}`),
+        .where(emailColumnMatches(user.email, reviewEmail)),
       1,
     );
     const members = await readBounded(
@@ -193,12 +201,7 @@ const resolveReviewTarget = async (
 };
 
 type ReviewResetKind =
-  | "matters"
-  | "contacts"
-  | "clauses"
-  | "templates"
-  | "playbooks"
-  | "sweep";
+  "matters" | "contacts" | "clauses" | "templates" | "playbooks" | "sweep";
 
 /** One row the reset could not delete, and why. */
 type ReviewResetFailure = {

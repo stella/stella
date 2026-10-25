@@ -23,7 +23,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
-const { ChatEditorProvider, useChatEditor } =
+const { CHAT_SEND_SENT, ChatEditorProvider, useChatEditor } =
   await import("./chat-editor-provider");
 const { composerText } = await import("./chat-editor-source");
 const { PromptEditorContent } = await import("./prompt-editor");
@@ -194,6 +194,7 @@ for (const editAfterExpand of [false, true]) {
     await act(async () =>
       controller().submit((draft) => {
         sent.push(draft);
+        return CHAT_SEND_SENT;
       }),
     );
     expect(sent).toHaveLength(1);
@@ -313,6 +314,7 @@ test("sending keeps typed content and exact pasted attachment text in the reques
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   const draft = sent.at(0);
@@ -339,6 +341,7 @@ test("a pasted chip alone submits without an empty prompt part", async () => {
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   const draft = sent.at(0);
@@ -383,6 +386,7 @@ test("a failed send restores typed text and pasted chips for an identical retry"
   await act(async () =>
     controller().submit((draft) => {
       sent.push(draft);
+      return CHAT_SEND_SENT;
     }),
   );
   expect(sent).toHaveLength(2);

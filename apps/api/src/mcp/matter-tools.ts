@@ -5,10 +5,11 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -52,15 +53,15 @@ import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nat
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
+  CHECK_COUNTERPARTY_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LINK_MATTER_CONTACT_LINK_PROJECTION,
-  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LIST_CONTACTS_PROJECTION,
   LIST_TASKS_DETAIL_PROJECTION,
   LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
-  CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -92,7 +93,8 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -114,17 +116,16 @@ import {
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
+  entityIdInputSchema,
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
-  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -1000,7 +1001,7 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(256),
       v.description(
-        "Canonical identifier (e.g. company number, VAT number) or company name",
+        "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)",
       ),
     ),
     detail: v.optional(
@@ -1037,6 +1038,26 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     q: parsed.output.query,
     detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
+    loadWebSearch: async () => {
+      const webSearch = await context.loadWebSearchProvider?.();
+      if (webSearch === undefined) {
+        return Result.ok(null);
+      }
+      if (webSearch.isErr()) {
+        return webSearch;
+      }
+      const provider = providerFromMcpWebSearchAvailability(webSearch.value);
+      if (provider === null) {
+        return Result.ok(null);
+      }
+      return Result.ok({
+        provider,
+        observer: actionRequestObserver(
+          context.organizationId,
+          ACTION_COST_CALL_KIND.webSearchRequest,
+        ).onRequest,
+      });
+    },
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
@@ -1093,7 +1114,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1278,7 +1299,7 @@ const resolveTaskWorkspace = async ({
   context,
   taskId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
 }): Promise<ResolvedTask> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -1320,7 +1341,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1329,7 +1350,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1367,7 +1388,7 @@ const readTaskDetail = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }) => {
@@ -1636,7 +1657,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
+          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),
@@ -1759,7 +1780,7 @@ const validateLinkTarget = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   linkEntityId: string;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1821,7 +1842,7 @@ const validateUnlinkTarget = async ({
   unlinkLinkId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
   unlinkLinkId: string;
   workspaceId: SafeId<"workspace">;
@@ -1873,7 +1894,7 @@ const validateSaveTaskTargets = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   input: v.InferOutput<typeof saveTaskArgsSchema>;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -2265,7 +2286,7 @@ const resolveUnlinkWorkspaceContactId = async ({
   workspaceId,
 }: {
   contactId: string | undefined;
-  context: McpRequestContext;
+  context: McpRequestResources;
   workspaceContactId: string | undefined;
   workspaceId: SafeId<"workspace">;
 }): Promise<SafeId<"workspaceContact"> | ReturnType<typeof errorResult>> => {
@@ -2451,6 +2472,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "excluded",
@@ -2534,12 +2556,13 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Look up a company in a public business register. Pass a canonical " +
       "identifier (company/registration number, VAT number) for an exact " +
-      "match, or a company name to search where the register supports it. " +
+      "match, or a company name to search where supported; KRS matches are verified. " +
       "Result IDs belong to the external registry, not stella's contact " +
       "directory. Create a contact with save_contact before using " +
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
@@ -2582,6 +2605,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
@@ -2604,6 +2628,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

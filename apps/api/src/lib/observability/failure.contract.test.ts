@@ -67,8 +67,8 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  initRequestContext,
   getRequestFailure,
+  initRequestContext,
 } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -179,6 +179,9 @@ const SQL_STATE_EXPECTED = {
   "57014": ["pg_query_canceled", "defect"],
   "28P01": ["pg_auth_failed", "defect"],
   "28000": ["pg_auth_failed", "defect"],
+  "22007": ["pg_invalid_input", "defect"],
+  "22008": ["pg_invalid_input", "defect"],
+  "22P02": ["pg_invalid_input", "defect"],
 } as const satisfies Record<keyof typeof PG_SQL_STATE_REASON, Expected>;
 
 // SQLSTATEs no set grades: they stay defects whatever the shape.
@@ -378,7 +381,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     name: "a HandlerError 502 carrying a provider 429 code",
     error: () =>
       new HandlerError({ status: 502, code: "429", message: SENTINEL }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -423,7 +426,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
           }),
         }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -432,7 +435,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
       new Error("wrap", {
         cause: new HandlerError({ status: 404, message: SENTINEL }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -464,6 +467,21 @@ const GRADING_ROWS: readonly GradingRow[] = [
     grade: "anticipated",
   },
   {
+    name: "a cancelled generation through aiHandlerError",
+    error: () =>
+      aiHandlerError(
+        new HandlerError({
+          status: 502,
+          message: SENTINEL,
+          cause: new AIGenerationCancelledError({ message: SENTINEL }),
+        }),
+        { status: 502, message: "fallback" },
+      ),
+    reason: "generation_cancelled",
+    grade: "anticipated",
+    rule: "brand",
+  },
+  {
     name: "a cancellation deeper than the immediate wrapper stays visible",
     error: () =>
       new HandlerError({
@@ -474,7 +492,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
           cause: new AIGenerationCancelledError({ message: SENTINEL }),
         }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -786,7 +804,7 @@ describe("wrapper properties", () => {
     });
     const evidence = readEvidence(deep);
 
-    expect(gradeFailure(evidence, SINK).reason).toBe("unclassified");
+    expect(gradeFailure(evidence, SINK).reason).toBe("tagged_failure");
     expect(errorFields(evidence)["error.chain.1.brand"]).toBe(
       "chat_empty_completion",
     );
@@ -915,7 +933,7 @@ describe("sink expectations", () => {
     });
 
     expect(gradeFailure(readEvidence(error), shallow).reason).toBe(
-      "unclassified",
+      "tagged_failure",
     );
     expect(gradeFailure(readEvidence(error), deep).reason).toBe(
       "optional_file_absent",
@@ -954,6 +972,20 @@ describe("the observation reads the boundary's decision, not the classifier", ()
       expect(answered.status).toBe(status);
       expect(readEvidence(answered).nodes[0]?.brand?.source).toBe("instance");
     }
+  });
+
+  test("a cancelled generation keeps the caller's fallback", () => {
+    const answered = aiHandlerError(
+      new HandlerError({
+        status: 502,
+        message: SENTINEL,
+        cause: new AIGenerationCancelledError({ message: SENTINEL }),
+      }),
+      { status: 502, message: "fallback" },
+    );
+
+    expect(answered.status).toBe(502);
+    expect(answered.message).toBe("fallback");
   });
 
   test("an unknown failure keeps the caller's fallback unclassified", () => {
@@ -1278,7 +1310,7 @@ describe("observeFailure channels", () => {
     expect(logs.at("ERROR")).toEqual([]);
   });
 
-  test("a legacy pin keeps the site's output whatever the grade", () => {
+  test("a legacy severity pin cannot capture a non-defect grade", () => {
     const pinned = failureSink({
       event: "pinned",
       expected: [],
@@ -1296,7 +1328,7 @@ describe("observeFailure channels", () => {
         }),
       }),
     ]);
-    expect(analytics.exceptions()).toHaveLength(1);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("a sustained transient episode raises the severity, not the capture", () => {

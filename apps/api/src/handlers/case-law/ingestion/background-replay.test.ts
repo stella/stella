@@ -4,18 +4,18 @@ import { expect, test } from "bun:test";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
 import {
-  runBackgroundReplayTick,
   type BackgroundReplayBatch,
   type BackgroundReplayDependencies,
   type BackgroundReplaySource,
+  runBackgroundReplayTick,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 
 import {
   REPLAY_FAILURE_CODES,
-  ReplayStageError,
   replayFailure,
+  ReplayStageError,
 } from "./replay-failure";
 
 const fixture = (dailyBudget = 3) => {
@@ -41,6 +41,8 @@ const fixture = (dailyBudget = 3) => {
     decisionId: createSafeId<"caseLawDecision">(),
     parserVersionFrom: 1,
     targetParserVersion: 3,
+    sourceRawS3Key: `fixture/receipt-${spent}`,
+    claimReadmission: 0,
   });
   const success = (current: BackgroundReplayBatch): ReplayRunReport => ({
     visited: 1,

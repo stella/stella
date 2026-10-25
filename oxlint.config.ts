@@ -19,13 +19,13 @@ import {
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
+  designLintBacklogOverrides,
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
   SIZE_LINT_POLICY_OVERRIDES,
   SIZE_LINT_RULES,
-  designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
@@ -44,6 +44,8 @@ import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
 } from "./scripts/sql-perf-scope.ts";
+// Defaults every lint to the committed, read-only Tailwind cache.
+import "./scripts/tailwind-lint-cache.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -186,6 +188,9 @@ const fixtureRuleOverrides = [
   } as const satisfies OxlintOverride,
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
+  ]),
+  fixtureRuleOverride("require-stable-geometry.fixture.ts", [
+    "require-stable-geometry/require-stable-geometry",
   ]),
   fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
     "no-raw-eden-telemetry/no-raw-eden-telemetry",
@@ -344,6 +349,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
   ]),
+  fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
+    "no-raw-mcp-error-result/no-raw-mcp-error-result",
+  ]),
   fixtureRuleOverride("failure-sink-handle.fixture.ts", [
     "failure-sink-handle/failure-sink-handle",
   ]),
@@ -361,6 +369,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
     "no-direct-error-toast/no-direct-error-toast",
+  ]),
+  fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
+    "no-rendered-error-translation/no-rendered-error-translation",
   ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
@@ -383,11 +394,20 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-decorated-search-input.fixture.tsx", [
     "no-decorated-search-input/no-decorated-search-input",
   ]),
-  fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
-    "no-legal-cliche-glyph/no-legal-cliche-glyph",
+  fixtureRuleOverride("no-banned-glyph.fixture.tsx", [
+    "no-banned-glyph/no-banned-glyph",
+  ]),
+  fixtureRuleOverride("no-hand-built-step-marker.fixture.tsx", [
+    "no-hand-built-step-marker/no-hand-built-step-marker",
+  ]),
+  fixtureRuleOverride("no-decorative-heading-accent.fixture.tsx", [
+    "no-decorative-heading-accent/no-decorative-heading-accent",
   ]),
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
+  ]),
+  fixtureRuleOverride("no-placeholder-stella-mark.fixture.tsx", [
+    "no-placeholder-stella-mark/no-placeholder-stella-mark",
   ]),
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
@@ -471,6 +491,11 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
     "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
+  ]),
+  fixtureRuleOverride("test-timing.fixture.ts", [
+    "test-timing/no-real-time-wait",
+    "test-timing/no-polling-loop",
+    "test-timing/no-unreasoned-timeout",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1181,6 +1206,7 @@ const config = defineConfig({
       "error",
     "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
+    "no-domain-enum/no-domain-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
@@ -1274,6 +1300,7 @@ const config = defineConfig({
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
+    "no-unowned-icon/no-unowned-icon": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
     "no-direct-lucide-import/no-direct-lucide-import": "error",
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
@@ -1439,6 +1466,7 @@ const config = defineConfig({
   ignorePatterns: [
     ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
@@ -1515,17 +1543,21 @@ const config = defineConfig({
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-raw-error-output.ts",
+    "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
+    "./.oxlint-plugins/no-unowned-icon.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
-    "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-banned-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -1538,6 +1570,8 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
@@ -1554,6 +1588,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
+    "./.oxlint-plugins/no-rendered-error-translation.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -1641,6 +1676,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-domain-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/provider-call-error-message.ts",
@@ -1666,6 +1702,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
@@ -1676,23 +1713,28 @@ const config = defineConfig({
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
+    "./.oxlint-plugins/require-stable-geometry.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
+    "./.oxlint-plugins/require-polite-publisher-fetch.ts",
     "./.oxlint-plugins/no-object-url-leak.ts",
+    "./.oxlint-plugins/require-frame-loop-cleanup.ts",
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-adhoc-email-fold.ts",
     "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
@@ -1714,6 +1756,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
@@ -1725,6 +1768,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
+    "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
     "./.oxlint-plugins/result-boundary.ts",
     "./.oxlint-plugins/require-exhaustive-panic.ts",
@@ -1743,6 +1787,15 @@ const config = defineConfig({
       ],
       rules: {
         "narrative-prose-component/require-prose": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/mcp-authorized-context-owner.fixture.ts",
+      ],
+      rules: {
+        "mcp-authorized-context-owner/mcp-authorized-context-owner": "error",
       },
     },
     {
@@ -1848,6 +1901,15 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/e2e/**/*.geometry.spec.ts",
+        "apps/web/e2e/**/*-geometry.spec.ts",
+      ],
+      rules: {
+        "require-stable-geometry/require-stable-geometry": "error",
+      },
+    },
+    {
       // Plugin fixtures include intentional lexical reads and class references
       // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
@@ -1928,6 +1990,25 @@ const config = defineConfig({
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
+      },
+    },
+    {
+      // Tests wait on the work's own completion signal, not on the clock.
+      // Existing sites are budgeted in scripts/test-timing-ledger.json,
+      // which only shrinks.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      rules: {
+        "test-timing/no-real-time-wait": "error",
+        "test-timing/no-polling-loop": "error",
+      },
+    },
+    {
+      // A raised timeout or retry needs its reason. The custom lint rule
+      // tests take theirs from scripts/check-oxlint-test-timeouts.ts.
+      files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
+      excludeFiles: [".oxlint-plugins/__tests__/**"],
+      rules: {
+        "test-timing/no-unreasoned-timeout": "error",
       },
     },
     {
@@ -2176,6 +2257,25 @@ const config = defineConfig({
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
     },
     {
+      // Every Bun SQL client and bun-sql drizzle database comes from the
+      // owner, which decodes int8 by column mode (Bun 1.4.4 returns strings).
+      files: [
+        "apps/**/*.{ts,tsx,mts}",
+        "packages/**/*.{ts,tsx,mts}",
+        "scripts/**/*.{ts,mts}",
+        ".oxlint-plugins/__fixtures__/sql-client-owner.fixture.ts",
+      ],
+      rules: { "sql-client-owner/sql-client-owner": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/tooltip-provider-owner.fixture.tsx",
+      ],
+      rules: {
+        "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
       // Exercise no-direct-unsaved-work-guard against its regression fixture;
       // the rule is otherwise scoped to apps/web/src.
       files: [
@@ -2402,6 +2502,12 @@ const config = defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
+      // This helper serializes its boundary into the page before modules load,
+      // so it cannot import `panic()` there.
+      files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
+      rules: { "no-bare-error/no-bare-error": "off" },
+    },
+    {
       // Playwright end-to-end tests. They run outside the app process
       // (no env module, no `panic()` plumbing) and talk to a live HTTP
       // API where bare `throw new Error(...)` is the right signal.
@@ -2624,6 +2730,23 @@ const config = defineConfig({
       },
     },
     {
+      // Interval timers and self-scheduling frame loops in the web app and
+      // the React packages stop when their owner goes away, and frame loops
+      // reschedule only while there is work to draw.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "packages/mcp-apps/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-frame-loop-cleanup.fixture.ts",
+      ],
+      rules: {
+        "require-frame-loop-cleanup/require-frame-loop-cleanup": "error",
+      },
+    },
+    {
       // Repository-relative strings are portable identifiers, whose separator
       // must not vary with the operating system running the code.
       files: [
@@ -2651,6 +2774,24 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Email addresses fold through apps/api/src/lib/email/normalized-email.ts,
+      // the form Better Auth stores and looks accounts up by. The API is where
+      // identity is decided; the web app lowercases only for local substring
+      // search and the API normalizes whatever it receives. Tests compute
+      // expected values independently of the owner.
+      files: [
+        "apps/api/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-adhoc-email-fold.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/email/normalized-email.ts",
+        "apps/api/**/*.test.ts",
+      ],
+      rules: {
+        "no-adhoc-email-fold/no-adhoc-email-fold": "error",
       },
     },
     {
@@ -3248,21 +3389,43 @@ const config = defineConfig({
       },
     },
     {
-      // Scales of justice and gavels are the stock iconography of legal
-      // software: decorative, interchangeable, and drawn by every product in
-      // the category. This design system names the concept instead — a court
-      // is a Landmark, a decision a FileText. Scoped to the surfaces a reader
-      // sees, so a script or a fixture elsewhere is unaffected.
+      // Only a semantic ordered list may own a procedure, timeline, or
+      // ranking number. Decorative labels imply an order that is not there.
+      files: [
+        "apps/landing/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-hand-built-step-marker.fixture.tsx",
+      ],
+      rules: {
+        "no-hand-built-step-marker/no-hand-built-step-marker": "error",
+      },
+    },
+    {
+      files: [
+        "apps/**/*.{jsx,tsx}",
+        "packages/**/*.{jsx,tsx}",
+        ".oxlint-plugins/__fixtures__/no-placeholder-stella-mark.fixture.tsx",
+      ],
+      rules: {
+        "no-placeholder-stella-mark/no-placeholder-stella-mark": "error",
+      },
+    },
+    {
+      // Glyphs this design system never draws: scales of justice and gavels
+      // (legal cliché; a court is a Landmark, a decision a FileText) and
+      // robots (the AI is not a character; its actions use AiActionIcon).
+      // Scoped to the surfaces a reader sees, so a script or a fixture
+      // elsewhere is unaffected.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "packages/ui/src/**/*.{ts,tsx}",
         "packages/workspace-ui/src/**/*.{ts,tsx}",
         "apps/landing/src/**/*.{ts,tsx}",
         "apps/desktop/src/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-legal-cliche-glyph.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/no-banned-glyph.fixture.tsx",
       ],
       rules: {
-        "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+        "no-banned-glyph/no-banned-glyph": "error",
       },
     },
     {
@@ -3360,6 +3523,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-decorated-search-input/no-decorated-search-input": "error",
+      },
+    },
+    {
+      // A heading is one typographic statement. A differently styled fragment
+      // must communicate interaction or independently documented meaning.
+      files: [
+        "apps/landing/src/**/*.tsx",
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-decorative-heading-accent.fixture.tsx",
+      ],
+      rules: {
+        "no-decorative-heading-accent/no-decorative-heading-accent": "error",
       },
     },
     {
@@ -3702,11 +3877,19 @@ const config = defineConfig({
         "no-optional-mutation-command/no-optional-mutation-command": "error",
         "no-discarded-toast-error/no-discarded-toast-error": "error",
         "no-direct-error-toast/no-direct-error-toast": "error",
+        "no-rendered-error-translation/no-rendered-error-translation": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "require-matter-option-label/require-matter-option-label": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: [...PRODUCT_FRONTEND_FILES, "apps/desktop/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "tooltip-provider-owner/tooltip-provider-owner": "error",
       },
     },
     {
@@ -4832,6 +5015,12 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-mcp-error-result/no-raw-mcp-error-result": "error",
+      },
+    },
+    {
       // This sink contract deliberately injects unsafe records and verifies redaction.
       files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
       rules: {
@@ -4867,6 +5056,19 @@ const config = defineConfig({
         "no-raw-error-logging/no-raw-error-logging": "error",
         "no-secret-in-log-sink/no-secret-in-log-sink": "error",
         "require-safe-outbound-target/require-safe-outbound-target": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-polite-publisher-fetch.fixture.ts",
+        "apps/api/src/handlers/case-law/ingestion/**/*.{ts,tsx}",
+        "apps/api/src/handlers/soft-law/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "require-polite-publisher-fetch/require-polite-publisher-fetch":
+          "error",
       },
     },
     {
@@ -5353,6 +5555,17 @@ const config = defineConfig({
       excludeFiles: ["apps/web/src/test-dom-environment.ts"],
       rules: {
         "no-direct-dom-unregister/no-direct-dom-unregister": "error",
+      },
+    },
+    {
+      // Rule tests only: the shared runner (lint-single-rule.ts) owns the
+      // one-oxlint-process slot and runs its lone fallbacks in turn.
+      files: [
+        ".oxlint-plugins/__tests__/*.test.ts",
+        ".oxlint-plugins/__fixtures__/no-serial-lint-case.fixture.ts",
+      ],
+      rules: {
+        "no-serial-lint-case/no-serial-lint-case": "error",
       },
     },
     {
@@ -5877,13 +6090,16 @@ const config = defineConfig({
       // test asserts on class strings rather than rendering chrome.
       files: [
         "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
         "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
         ".oxlint-plugins/__fixtures__/no-raw-overflow-scroll.fixture.tsx",
       ],
       excludeFiles: [
         "**/*.{test,spec}.tsx",
         "**/__tests__/**",
         "packages/ui/src/components/scroll-area.tsx",
+        "packages/ui/src/components/horizontal-scroller.tsx",
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",

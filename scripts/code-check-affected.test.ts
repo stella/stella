@@ -1,11 +1,14 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,35 +20,35 @@ import {
 } from "../packages/scripts/src/code-quality-partition";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
+  cgroupMemoryLimitFiles,
+  cgroupMounts,
   CODE_CHECK_EXECUTION_BUDGET_MS,
-  WORKSPACE_TYPECHECK_CACHE_INPUTS,
-  CommandFailedError,
   codeCheckConcurrency,
+  CommandFailedError,
   configuredCodeCheckConcurrency,
-  discoverAffectedWorkspaces,
-  prioritizeWebLint,
   DEPENDENCY_CACHE_INPUTS,
+  discoverAffectedWorkspaces,
+  executeCheckCommands,
   failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
-  cgroupMemoryLimitFiles,
-  cgroupMounts,
   memoryLimitBytes,
-  separateApiLintFromTypecheck,
-  executeCheckCommands,
   planCheck,
-  planningCommandTimeout,
   planFullCheck,
+  planningCommandTimeout,
   planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
-  ROOT_SCRIPT_LINT_INPUTS,
-  SHARED_COMPILER_CACHE_INPUTS,
+  prioritizeWebLint,
   resultBoundaryLintCommand,
+  ROOT_SCRIPT_LINT_INPUTS,
   scopedCommands,
+  separateApiLintFromTypecheck,
+  SHARED_COMPILER_CACHE_INPUTS,
   summarizeCheckFailure,
+  WORKSPACE_TYPECHECK_CACHE_INPUTS,
 } from "./code-check-affected";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
@@ -1213,6 +1216,23 @@ describe("parallel code-quality legs", () => {
   // until the job's own timeout.
   test("quality steps stop between their warning budget and their job timeout", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    const pooledChecks = (job: string): Record<string, unknown>[] => {
+      const manifest = `.github/ci-checks/${job}.yml`;
+      if (!existsSync(manifest)) {
+        return [];
+      }
+      const parsed: unknown = Bun.YAML.parse(readFileSync(manifest, "utf-8"));
+      const checks =
+        typeof parsed === "object" && parsed !== null && "checks" in parsed
+          ? parsed.checks
+          : undefined;
+      return Array.isArray(checks)
+        ? checks.filter(
+            (check): check is Record<string, unknown> =>
+              typeof check === "object" && check !== null,
+          )
+        : [];
+    };
     const minutes = (text: string, indent: number) =>
       Number(
         new RegExp(`^ {${indent}}timeout-minutes: (\\d+)$`, "mu").exec(
@@ -1228,13 +1248,19 @@ describe("parallel code-quality legs", () => {
         panic(`Missing job ${job}`);
       const jobBlock = block.split(/\n {2}[\w-]+:\n/u).at(0) ?? block;
       const jobMinutes = minutes(jobBlock, 4);
+      // A check moved into the job's check pool keeps its step fields there.
+      const pool = pooledChecks(job);
       for (const name of names) {
-        const step =
-          jobBlock
-            .split(/\n {6}- name: /u)
-            .find((candidate) => candidate.startsWith(`${name}\n`)) ??
-          panic(`Missing step ${name}`);
-        const stepMinutes = minutes(step, 8);
+        const step = jobBlock
+          .split(/\n {6}- name: /u)
+          .find((candidate) => candidate.startsWith(`${name}\n`));
+        const pooled = pool.find((check) => check["name"] === name);
+        const stepMinutes =
+          step === undefined
+            ? Number(
+                pooled?.["timeout-minutes"] ?? panic(`Missing step ${name}`),
+              )
+            : minutes(step, 8);
         expect(stepMinutes * 60_000, name).toBeGreaterThanOrEqual(
           CODE_CHECK_EXECUTION_BUDGET_MS,
         );
@@ -1555,8 +1581,13 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
         nextJob === -1
           ? workflow.slice(start)
           : workflow.slice(start, start + 1 + nextJob);
-      jobs.set(jobId, job);
-      assertLeg(job, leg);
+      // Pooled checks run from the job's manifest, so it is part of the job.
+      const manifest = `.github/ci-checks/${jobId}.yml`;
+      const withPool = existsSync(manifest)
+        ? `${job}\n${readFileSync(manifest, "utf-8")}`
+        : job;
+      jobs.set(jobId, withPool);
+      assertLeg(withPool, leg);
     }
     expect(
       jobs.get("code-quality-api")?.match(/- name: Result consumption/gu),
@@ -1911,21 +1942,80 @@ describe("check failure reporting", () => {
 
 test("the CLI stops after failure, reports it, and propagates its exit code", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "code-check-runner-"));
+  const fixtureRoot = path.join(directory, "repo");
+  const fixtureScripts = path.join(fixtureRoot, "scripts");
+  const fixturePackagesScripts = path.join(fixtureRoot, "packages/scripts/src");
   const log = path.join(directory, "commands.log");
-  const realGit = Bun.which("git");
-  if (realGit === null) {
+  const realNodeModules = path.resolve(import.meta.dir, "../node_modules");
+  const pathValue = process.env["PATH"];
+  if (pathValue === undefined || !existsSync(realNodeModules)) {
+    throw new Error(
+      "CLI execution fixture requires PATH and installed modules",
+    );
+  }
+  mkdirSync(path.join(fixtureRoot, "apps"), { recursive: true });
+  mkdirSync(fixtureScripts, { recursive: true });
+  mkdirSync(fixturePackagesScripts, { recursive: true });
+  copyFileSync(
+    path.join(import.meta.dir, "code-check-affected.ts"),
+    path.join(fixtureScripts, "code-check-affected.ts"),
+  );
+  for (const helper of [
+    "baseline-paths.ts",
+    "check-rust-test-determinism.ts",
+    "check-test-state-baseline.ts",
+    "code-quality-task-budget.ts",
+    "code-quality-task-budgets.json",
+    "generated-files.ts",
+    "ledger-membership.ts",
+    "lint-paths.ts",
+    "oxlint-config-scopes.ts",
+    "ratchet.ts",
+    "result-boundary-globs.ts",
+    "root-script-lint.ts",
+    "rust-test-determinism-scan.ts",
+  ]) {
+    symlinkSync(
+      path.join(import.meta.dir, helper),
+      path.join(fixtureScripts, helper),
+    );
+  }
+  for (const helper of ["child-exit-status.ts", "code-quality-partition.ts"]) {
+    symlinkSync(
+      path.resolve(import.meta.dir, `../packages/scripts/src/${helper}`),
+      path.join(fixturePackagesScripts, helper),
+    );
+  }
+  symlinkSync(realNodeModules, path.join(fixtureRoot, "node_modules"));
+  writeFileSync(
+    path.join(fixtureRoot, ".gitignore"),
+    [
+      "*",
+      "!.gitignore",
+      "!turbo.json",
+      "!scripts/",
+      "scripts/*",
+      "!oxlint.config.ts",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(path.join(fixtureRoot, "turbo.json"), '{"tasks":{}}\n');
+  writeFileSync(path.join(fixtureRoot, "oxlint.config.ts"), "");
+  const git = Bun.which("git");
+  if (git === null) {
     throw new Error("CLI execution fixture requires Git");
   }
-  writeFileSync(
-    path.join(directory, "git"),
-    `#!/bin/sh
-if [ "$*" = 'rev-parse --verify --quiet origin/main^{commit}' ]; then
-  exit 1
-fi
-exec "$CHECK_REAL_GIT" "$@"
-`,
-    { mode: 0o755 },
-  );
+  for (const args of [
+    ["init", "--quiet"],
+    ["add", "turbo.json", "oxlint.config.ts"],
+  ]) {
+    const result = Bun.spawnSync([git, ...args], {
+      cwd: fixtureRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+  }
   const fakeRunner = `#!/bin/sh
 printf '%s\n' "$*" >> "$CHECK_COMMAND_LOG"
 case "$CHECK_FAIL:$*" in
@@ -1950,19 +2040,18 @@ esac
         [
           process.execPath,
           "--no-env-file",
-          path.join(import.meta.dir, "code-check-affected.ts"),
+          path.join(fixtureScripts, "code-check-affected.ts"),
           "--all",
           "--leg",
           "rest",
         ],
         {
-          cwd: path.resolve(import.meta.dir, ".."),
+          cwd: fixtureRoot,
           env: {
             ...process.env,
             ...LARGE_MACHINE,
-            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            PATH: `${directory}:${pathValue}`,
             CHECK_COMMAND_LOG: log,
-            CHECK_REAL_GIT: realGit,
             CHECK_REAL_BUN: process.execPath,
             CHECK_FAIL: failure,
           },
@@ -1971,16 +2060,19 @@ esac
         },
       );
       const output = result.stdout.toString();
+      expect(result.exitCode, result.stderr.toString()).toBe(
+        failure === "yes" ? 1 : 0,
+      );
       const commands = readFileSync(log, "utf-8");
-      expect(commands).toContain("turbo run lint typecheck");
+      expect(
+        commands,
+        `CLI stdout:\n${output}\nCLI stderr:\n${result.stderr.toString()}`,
+      ).toContain("turbo run lint typecheck");
       if (failure === "yes") {
         expect(commands).not.toContain("turbo run typecheck:repo");
       } else {
         expect(commands).toContain("turbo run typecheck:repo");
       }
-      expect(result.exitCode, result.stderr.toString()).toBe(
-        failure === "yes" ? 1 : 0,
-      );
       if (failure === "yes") {
         expect(output).toContain("code-check: 1 failed command(s)");
         expect(output).toContain(

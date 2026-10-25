@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
 
 import {
-  initialBatchState,
-  nextBatch,
   type BatchState,
   type HealthConfig,
-  type Verdict,
+  initialBatchState,
   isHeldTooLong,
+  nextBatch,
+  type Verdict,
 } from "@stll/db-load-gate/health";
 
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
@@ -16,8 +16,8 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { REPLAY_HEALTH_CONFIG } from "./replay-enrolment";
 import {
   classifyReplayFailure,
-  replayFailure,
   type ReplayFailure,
+  replayFailure,
 } from "./replay-failure";
 
 export type BackgroundReplaySource = {
@@ -35,6 +35,10 @@ export type BackgroundReplayBatch = {
   decisionId: SafeId<"caseLawDecision">;
   parserVersionFrom: number | null;
   targetParserVersion: number;
+  /** Captured immutable input; null is an unknown legacy reservation. */
+  sourceRawS3Key: string | null;
+  /** Persisted readmission epoch captured by the reservation owner. */
+  claimReadmission: number;
 };
 
 export type BackgroundReplayReservation =

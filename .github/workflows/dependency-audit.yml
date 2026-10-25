@@ -5,7 +5,6 @@ defaults:
     shell: bash
 
 on:
-  pull_request:
   push:
     branches: [main]
   schedule:
@@ -23,10 +22,12 @@ jobs:
   audit:
     name: bun audit (high/critical)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
     outputs:
       advisory_failure: ${{ steps.full-audit.outputs.advisory_failure || 'false' }}
+      stale_acceptance: ${{ steps.full-audit.outputs.stale_acceptance || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,7 +45,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json'; then
+          if git diff --quiet "$BASE_SHA...HEAD" -- bun.lock ':(glob)**/package.json' Cargo.lock ':(glob)**/Cargo.lock' Cargo.toml ':(glob)**/Cargo.toml' .github/workflows/dependency-audit.yml scripts/dependency-audit.ts scripts/check-trusted-dependencies.ts scripts/retry.sh; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -147,8 +148,9 @@ jobs:
   remediate:
     name: Open dependency audit remediation
     needs: audit
-    if: always() && github.event_name != 'pull_request' && needs.audit.outputs.advisory_failure == 'true'
+    if: always() && github.event_name != 'pull_request' && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # Audit runs are independent, but remediation shares one branch and pull
     # request: runs queue here so each sees the previous run's pull request.
     concurrency:
@@ -176,7 +178,7 @@ jobs:
 
       - name: Mint app token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}

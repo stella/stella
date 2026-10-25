@@ -479,8 +479,8 @@ describe("copy-to-workspace", () => {
     // The bytes never travel through the API task.
     expect(requestKeys("GET")).toEqual([]);
 
-    // The extraction run that reads the copied PDF indexes it, so the copy
-    // carries no mark of its own; marking it too would index it twice.
+    // The copy is marked for immediate name indexing while extraction adds
+    // content independently to the same source-fenced projection.
     if (!copiedEntity) {
       throw new Error("Expected the copy to be inserted");
     }
@@ -488,7 +488,9 @@ describe("copy-to-workspace", () => {
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
     ]);
-    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([]);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
+      copiedEntity.id,
+    ]);
   });
 
   test("maps document type classifier fields by role before name fallback", async () => {

@@ -59,9 +59,9 @@ import {
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
+  type AdmittedModelAction,
   createModelActionAdmitter,
   modelActionRefusal,
-  type AdmittedModelAction,
 } from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedEntityId,
@@ -84,8 +84,8 @@ import {
 import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
-  templateConditionPreviewSchema,
   decideTemplateConditions,
+  templateConditionPreviewSchema,
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 import type {
@@ -117,7 +117,6 @@ import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { projectMcpRefusal } from "@/api/mcp/error-codes";
@@ -188,6 +187,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -688,6 +688,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  permissions: { type: "all", permissions: { template: ["use"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
@@ -779,6 +780,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  permissions: { type: "all", permissions: { workspace: ["read"] } },
   readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
@@ -1063,7 +1065,7 @@ const describeTemplateDetail = async ({
   context,
 }: {
   templateId: string;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }): Promise<
   TypedMcpToolResponse<v.InferInput<typeof LIST_TEMPLATES_PROJECTION>>
 > => {
@@ -1307,7 +1309,7 @@ type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
  * asks for a usage preflight or AI collaborators. A deterministic template
  * declares no AI field, so it must not pay for that read.
  */
-const deferOrgAIConfig = (context: McpRequestContext) => {
+const deferOrgAIConfig = (context: AuthorizedMcpRequestContext) => {
   let pending: Promise<OrgAIConfigRead> | undefined;
   return async (): Promise<OrgAIConfigRead> => {
     const reader = {
@@ -1350,7 +1352,7 @@ const assertTemplateFillUsage = async ({
   readOrgAIConfig,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
@@ -1388,7 +1390,7 @@ const admitTemplateFillAi = ({
   workspaceId,
   collaborators,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
   collaborators: (
@@ -1659,10 +1661,10 @@ const validateFilledTemplateDestination = async ({
   workspaceId,
 }: {
   action: "create_document" | "create_version";
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId?: string | undefined;
   parentId?: string | undefined;
-  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+  workspaceId: AuthorizedMcpRequestContext["accessibleWorkspaceIds"][number];
 }): Promise<string | null> => {
   if (action === "create_document") {
     const destinationResult = await context.safeDb(async (tx) => {
@@ -2282,7 +2284,7 @@ const downloadHostFileDocx = async ({
   context,
   file,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
 }): Promise<ResolvedTemplateDocx> => {
   const permit = context.thirdPartyOutboundPermit;
@@ -2341,7 +2343,7 @@ const resolveTemplateDocx = async ({
   context,
   source,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   source: TemplateDocxSource;
 }): Promise<ResolvedTemplateDocx> => {
   switch (source.type) {
@@ -2366,7 +2368,7 @@ const readCreateTemplateDocx = async ({
   context,
   source,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   source: TemplateDocxSource;
 }): Promise<CreateTemplateDocx> => {
   const resolved = await resolveTemplateDocx({ context, source });
@@ -2472,7 +2474,7 @@ const upsertStoredTemplate = async ({
   templateId,
 }: {
   file: ScannedFile | null;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   name: string | undefined;
   templateId: SafeId<"template">;
 }): Promise<InternalToolErrorResult | { fieldCount: number }> => {
@@ -2628,7 +2630,7 @@ const describeTemplateForAgent = async ({
   context,
   templateId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   templateId: SafeId<"template">;
 }): Promise<InternalToolErrorResult | TemplateDetailPayload> => {
   const described = await (

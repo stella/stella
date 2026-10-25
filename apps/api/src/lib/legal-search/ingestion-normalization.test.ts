@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES,

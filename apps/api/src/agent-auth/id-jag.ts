@@ -22,6 +22,7 @@ import {
 } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 
 /**
  * The error vocabulary the ID-JAG path maps onto HTTP. `issuer_not_enabled`
@@ -31,9 +32,7 @@ import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
  * (no oracle for forging assertions).
  */
 export type IdJagErrorCode =
-  | "issuer_not_enabled"
-  | "login_required"
-  | "invalid_assertion";
+  "issuer_not_enabled" | "login_required" | "invalid_assertion";
 
 export class IdJagValidationError {
   readonly code: IdJagErrorCode;
@@ -194,16 +193,10 @@ const isVerifiedIdentity = (payload: JWTPayload): boolean =>
 
 // `email_verified` does not prove the value is a syntactically valid, canonical
 // address, and this email is the account lookup/provisioning key. Validate the
-// format and canonicalise (trim + lowercase) so a malformed claim cannot create
-// an unreachable user and a case-variant claim still matches an existing one.
-const idJagEmailSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.toLowerCase(),
-  v.email(),
-);
+// format and normalize it so a malformed claim cannot create an unreachable
+// user and a case-variant claim still matches an existing one.
 const canonicalIdJagEmail = (value: unknown): string | null => {
-  const result = v.safeParse(idJagEmailSchema, value);
+  const result = v.safeParse(emailAddressSchema, value);
   return result.success ? result.output : null;
 };
 

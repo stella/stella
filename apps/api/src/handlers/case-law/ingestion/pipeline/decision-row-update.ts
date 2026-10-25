@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -29,6 +29,7 @@ import { sweepRawWriteLostToErasureTx } from "@/api/handlers/case-law/ingestion/
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
+  recordParsedGenerationTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import {
@@ -384,6 +385,10 @@ export const describeRowUpdateTx = async (
       preservesExistingDetail || s3UploadFailed
         ? existing.sourceHash
         : result.rawHash,
+    sourceHashVersion:
+      preservesExistingDetail || s3UploadFailed
+        ? existing.sourceHashVersion
+        : write.sourceFingerprintVersion,
     sourceObservedAt: observedAt,
     sourceObservationOrder: observationOrder,
     sourceObservationHash: result.rawHash,
@@ -394,6 +399,18 @@ export const describeRowUpdateTx = async (
   };
   const where = and(
     eq(caseLawDecisions.id, existing.id),
+    write.inputProvenance.type === "stored"
+      ? and(
+          eq(
+            caseLawDecisions.sourceRawS3Key,
+            write.inputProvenance.sourceRawS3Key,
+          ),
+          or(
+            isNull(caseLawDecisions.parserVersion),
+            lte(caseLawDecisions.parserVersion, result.parserVersion ?? 0),
+          ),
+        )
+      : undefined,
     storedObservationPrecedes({ order: observationOrder }),
     isNull(caseLawDecisions.redactedAt),
     corpusPlan.type === "preserve-stored"
@@ -541,6 +558,7 @@ export const finishRefreshedRowTx = async (
       ...(write.signal === undefined ? {} : { signal: write.signal }),
     });
     await reconcileStableProjection(tx, write, existing.id, projectionLock);
+    await recordParsedGenerationTx(tx, { write, phase: "row" });
     return DECISION_ROW_WRITE_STATUS.APPLIED;
   }
 
@@ -569,5 +587,6 @@ export const finishRefreshedRowTx = async (
     ...(write.signal === undefined ? {} : { signal: write.signal }),
   });
   await reconcileStableProjection(tx, write, existing.id, projectionLock);
+  await recordParsedGenerationTx(tx, { write, phase: "row" });
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };

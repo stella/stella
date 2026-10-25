@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
@@ -74,7 +75,6 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
   COMPARE_DOCUMENTS_TOOL_DEFINITION,
@@ -150,6 +150,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -843,7 +844,7 @@ const loadVersionHistory = async ({
   entityId,
   cursor,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   cursor: string | undefined;
@@ -1012,7 +1013,7 @@ const loadDocumentProcessingStates = async ({
   entityId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   current: CurrentDocumentForState;
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1729,7 +1730,7 @@ const createDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -1788,7 +1789,7 @@ const validateUpdateDocumentTargets = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | undefined;
   versionId: SafeId<"entityVersion"> | undefined;
@@ -1840,7 +1841,7 @@ const applyVersionAnnotations = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   description: string | null | undefined;
   entityId: SafeId<"entity">;
   label: string | null | undefined;
@@ -1888,7 +1889,7 @@ const updateDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -2297,7 +2298,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.nullable(v.pipe(v.string(), v.isoDate())),
+      v.nullable(vApiDate),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
   }),
@@ -2448,6 +2449,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The mode/parent_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2481,6 +2483,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2576,6 +2579,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "upload/version tools replace only a document's primary file.",
     inputSchema: listPropertiesArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

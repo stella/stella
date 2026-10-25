@@ -12,9 +12,9 @@ import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_VIEW_NAME,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_VIEW_NAME,
 } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import {
@@ -32,9 +32,9 @@ import {
   fetchStellaIngestionColumnPrivileges,
   fetchStellaIngestionPolicies,
   fetchStellaIngestionTablePrivileges,
-  fetchStellaUserSelectColumnPrivileges,
-  fetchStellaTablePrivileges,
   fetchStellaPolicies,
+  fetchStellaTablePrivileges,
+  fetchStellaUserSelectColumnPrivileges,
   fetchWorkspaceTenantPairForeignKeys,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -388,6 +388,8 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    // Root-owned OAuth state denies all app-role access.
+    "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -1362,6 +1364,7 @@ describe("policy coverage", () => {
       "oauth_access_token",
       "oauth_client",
       "service_oauth_clients",
+      "mcp_web_handoff",
       "oauth_consent",
       "oauth_refresh_token",
       "session",
@@ -1459,6 +1462,27 @@ describe("policy coverage", () => {
     const policy = result.rows.at(0);
     expect(policy?.rls_enabled).toBe(true);
     expect(policy?.rls_forced).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
+  });
+
+  test("web handoffs retain an owner-only RLS policy", async () => {
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      owner_using: string | null;
+      owner_check: string | null;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.mcp_web_handoff'::regclass
+        AND policy.polname = 'mcp_web_handoff_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
     expect(policy?.owner_using).toContain("CURRENT_USER");
     expect(policy?.owner_using).toContain("pg_get_userbyid");
     expect(policy?.owner_check).toBe(policy?.owner_using);

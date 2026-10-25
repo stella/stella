@@ -6,8 +6,8 @@ import { t } from "elysia";
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreads,
 } from "@/api/db/schema";
 import { revisionText } from "@/api/handlers/chat/chat-revision-context";
@@ -216,9 +216,7 @@ type RevisionListItem = NonNullable<
 // Successor/current snapshots are used only to derive the displayed text;
 // raw replaced snapshots keep their existing serialized contract.
 type InternalRevisionColumns =
-  | "nextContent"
-  | "currentContent"
-  | "currentRevision";
+  "nextContent" | "currentContent" | "currentRevision";
 type StoredRevisionProjection = Omit<
   RevisionListItem,
   "beforeText" | "afterText"

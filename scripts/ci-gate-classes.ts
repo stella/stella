@@ -100,19 +100,11 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
         class: "budget",
         owner: "code-health",
       },
-      "Dated waiver lifecycle guards": {
-        class: "time-based",
-        owner: "code-health",
-      },
     },
   },
   "ci-checks-rest": {
     class: "correctness",
     steps: {
-      "Quarantine-exclude guards": {
-        class: "time-based",
-        owner: "dependencies",
-      },
       "Query data state baseline": {
         class: "budget",
         owner: "api-performance",
@@ -245,6 +237,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "scan-engine-wasm-drift": { class: "correctness" },
   "desktop-rust-tests": { class: "correctness" },
   "desktop-rust-lint": { class: "correctness" },
+  "dependency-audit": { class: "correctness" },
+  "dependency-review": { class: "correctness" },
   "dependency-malware": { class: "correctness" },
   "ci-quick-checks": {
     class: "correctness",

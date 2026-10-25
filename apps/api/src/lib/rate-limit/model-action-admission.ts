@@ -74,7 +74,9 @@ export const createModelActionAdmitter =
           organizationStateDb,
           run: async (admission) => await run({ signal, admission }),
         }),
-    });
+    }).then((outcome) =>
+      Result.isError(outcome) ? Result.err(outcome.error) : outcome.value,
+    );
 
 type DetachedModelActionOptions<TStarted> = {
   /** Runs admitted before the caller resumes; its value answers the caller. */

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
 import type { Verdict } from "@stll/db-load-gate/health";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import { DAY_IN_MS } from "@stll/time";
@@ -10,11 +11,11 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawReplayBatches,
-  caseLawReplayDailyRows,
-  caseLawReplayBlocked,
-  caseLawReplaySourceProgress,
   caseLawReplayAuditEvents,
+  caseLawReplayBatches,
+  caseLawReplayBlocked,
+  caseLawReplayDailyRows,
+  caseLawReplaySourceProgress,
   caseLawSources,
   databaseBackfillStates,
   systemAuditRuns,
@@ -33,19 +34,18 @@ import type {
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/background-replay-runner";
 import {
-  buildReplayCompactionQuery,
   buildReplayRetirementQuery,
   createBackgroundReplayStore,
 } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import {
-  CASE_LAW_REPLAY_SCOPE,
-  REPLAY_ROW_OUTCOME,
-  type ReplayRowReport,
-  replayCaseLawSource,
-  selectScopeEnd,
   buildBackgroundReplayProbe,
   buildReplayPageQuery,
   buildReplayScopeEndQuery,
+  CASE_LAW_REPLAY_SCOPE,
+  REPLAY_ROW_OUTCOME,
+  replayCaseLawSource,
+  type ReplayRowReport,
+  selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
@@ -57,6 +57,7 @@ import {
   splitStoredDecisionTextMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { buildCaseLawReplayCompactionQuery } from "@/api/lib/db/aggregate-lock";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
@@ -64,8 +65,12 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
-  withGatedTestClients,
+  RAW_SOURCE_FAMILY,
+  rawSourcePayloadKey,
+} from "@/api/lib/legal-search/raw-source-storage";
+import {
   openGatedTestDatabase,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -78,6 +83,10 @@ import {
 } from "@/api/tests/query-plans/scale-profile";
 
 import { REPLAY_PREVIEW_FAILURE, replayFailure } from "./replay-failure";
+
+/** A replayed raw key is reported only when the reserved batch has one. */
+const replayedKeyOf = (key: string | null) =>
+  key === null ? {} : { replayedSourceRawS3Key: key };
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -147,7 +156,7 @@ if (!databaseUrl || !enabled) {
       });
       const sortedIds = Array.from({ length: 3 }, () =>
         createSafeId<"caseLawDecision">(),
-      ).toSorted();
+      ).toSorted(compareCodeUnit);
       const [firstId, secondId, thirdId] = sortedIds;
       if (
         firstId === undefined ||
@@ -166,7 +175,16 @@ if (!databaseUrl || !enabled) {
           country: "CZE",
           language: "cs",
           parserVersion: 1,
-          sourceRawS3Key: `fixture/${id}`,
+          sourceHash: "a".repeat(64),
+          sourceHashVersion: 1,
+          sourceRawS3Key: rawSourcePayloadKey({
+            owner: {
+              family: RAW_SOURCE_FAMILY.CASE_LAW,
+              sourceId: source.id,
+              documentId: id,
+            },
+            data: "<html>stored decision</html>",
+          }),
         })),
       );
       const store = createBackgroundReplayStore({
@@ -181,9 +199,407 @@ if (!databaseUrl || !enabled) {
         caseNumber: "fixture",
         language: "cs",
         outcome: REPLAY_ROW_OUTCOME.APPLIED,
+        ...replayedKeyOf(batch.sourceRawS3Key),
       },
       durationMs: 4,
       verdict: verdict(),
+    });
+
+    // Simulates the canonical writer's payload-first, metadata-last transaction.
+    const persistParsedFixture = async (batch: BackgroundReplayBatch) =>
+      await db.transaction(async (tx) => {
+        await tx
+          .update(caseLawDecisions)
+          .set({ parserVersion: batch.targetParserVersion })
+          .where(eq(caseLawDecisions.id, batch.decisionId));
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            parsedSourceHash: caseLawDecisions.sourceHash,
+            parsedSourceHashVersion: caseLawDecisions.sourceHashVersion,
+            parsedSourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+            updatedAt: caseLawDecisions.updatedAt,
+          })
+          .where(eq(caseLawDecisions.id, batch.decisionId));
+      });
+
+    test("restored raw input readmits old writers without downgrading newer parsers", async () => {
+      for (const parserVersion of [null, 1, 2, 3]) {
+        const { source, ids, store } = await fixture(1);
+        for (const id of ids.slice(1)) {
+          await db
+            .update(caseLawDecisions)
+            .set({ parserVersion: 3 })
+            .where(eq(caseLawDecisions.id, id));
+        }
+        const first = await store.reserveBatch(source, "2026-10-01", verdict());
+        if (first.type !== "reserved" || first.batch.sourceRawS3Key === null) {
+          throw new TypeError("Expected the first immutable input reservation");
+        }
+        const originalKey = first.batch.sourceRawS3Key;
+        const replacementKey = rawSourcePayloadKey({
+          owner: {
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: source.id,
+            documentId: first.batch.decisionId,
+          },
+          data: "<html>replacement decision</html>",
+        });
+        expect(replacementKey).not.toBe(originalKey);
+        await db
+          .update(caseLawDecisions)
+          .set({
+            sourceRawS3Key: replacementKey,
+            sourceObservationOrder: sql`coalesce(${caseLawDecisions.sourceObservationOrder}, 0) + 1`,
+          })
+          .where(eq(caseLawDecisions.id, first.batch.decisionId));
+        expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+          type: "empty",
+        });
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.id, first.batch.id))
+          ).at(0),
+        ).toMatchObject({
+          status: "superseded",
+          outcome: null,
+          applied: 0,
+          blocked: 0,
+          readmissions: 0,
+        });
+        await db
+          .update(caseLawDecisions)
+          .set({
+            sourceRawS3Key: originalKey,
+            parserVersion,
+            sourceObservationOrder: sql`coalesce(${caseLawDecisions.sourceObservationOrder}, 0) + 1`,
+          })
+          .where(eq(caseLawDecisions.id, first.batch.decisionId));
+        const restored = await store.reserveBatch(
+          source,
+          "2026-10-01",
+          verdict(),
+        );
+        if (parserVersion === 3) {
+          expect(restored).toEqual({ type: "empty" });
+          expect(
+            (
+              await db
+                .select()
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.id, first.batch.decisionId))
+            ).at(0)?.parserVersion,
+          ).toBe(3);
+          expect(
+            (
+              await db
+                .select()
+                .from(caseLawReplayBatches)
+                .where(eq(caseLawReplayBatches.id, first.batch.id))
+            ).at(0)?.readmissions,
+          ).toBe(0);
+          continue;
+        }
+        if (restored.type !== "reserved") {
+          throw new TypeError(
+            "Expected restored input to reuse its charged row",
+          );
+        }
+        expect(restored.batch).toMatchObject({
+          id: first.batch.id,
+          sourceRawS3Key: originalKey,
+          claimReadmission: 1,
+        });
+        expect(await store.pickUpBatch(restored.batch)).toBe("ready");
+        await persistParsedFixture(restored.batch);
+        expect(
+          await store.completeBatch(restored.batch, applied(restored.batch)),
+        ).toBe("applied");
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayDailyRows)
+            .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+        ).toHaveLength(1);
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, first.batch.decisionId))
+          ).at(0),
+        ).toMatchObject({
+          parserVersion: 2,
+          sourceRawS3Key: originalKey,
+          parsedSourceRawS3Key: originalKey,
+        });
+      }
+    });
+
+    test("reopened claims fence every stale callback and retain cumulative row quotas", async () => {
+      const { source, ids, store } = await fixture(1);
+      for (const id of ids.slice(1)) {
+        await db
+          .update(caseLawDecisions)
+          .set({ parserVersion: 3 })
+          .where(eq(caseLawDecisions.id, id));
+      }
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected initial claim");
+      }
+      await persistParsedFixture(first.batch);
+      expect(await store.completeBatch(first.batch, applied(first.batch))).toBe(
+        "applied",
+      );
+      let activeBatch = first.batch;
+      const sourceState = async () => ({
+        batches: await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.sourceId, source.id)),
+        audit: await db
+          .select()
+          .from(caseLawReplayAuditEvents)
+          .where(eq(caseLawReplayAuditEvents.sourceId, source.id)),
+        daily: await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+        receipts: await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
+        progress: await db
+          .select()
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id)),
+        decisions: await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, source.id)),
+        checkpoint: await db
+          .select()
+          .from(databaseBackfillStates)
+          .where(
+            eq(databaseBackfillStates.name, `case-law-replay:${source.id}:2`),
+          ),
+      });
+      for (
+        let epoch = 1;
+        epoch <= BACKGROUND_REPLAY_LIMITS.maxRowReadmissions;
+        epoch++
+      ) {
+        await db
+          .update(caseLawDecisions)
+          .set({ parserVersion: 1 })
+          .where(eq(caseLawDecisions.id, first.batch.decisionId));
+        const day = epoch === 1 ? "2026-10-01" : "2026-10-02";
+        const reopened = await store.reserveBatch(source, day, verdict());
+        if (reopened.type !== "reserved") {
+          throw new TypeError("Expected bounded readmission");
+        }
+        expect(reopened.batch.id).toBe(first.batch.id);
+        expect(reopened.batch.claimReadmission).toBe(epoch);
+        const beforeStale = await sourceState();
+        expect(await store.pickUpBatch(activeBatch)).toBe("waiting");
+        expect(
+          await store.recordFailure(activeBatch, {
+            ...replayFailure("adapter-exception"),
+            healthyEvidence: "none",
+            durationMs: 1,
+            verdict: verdict(),
+          }),
+        ).toBe("retryable");
+        expect(
+          await store.completeBatch(activeBatch, applied(activeBatch)),
+        ).toBe("retryable");
+        expect(await sourceState()).toEqual(beforeStale);
+        activeBatch = reopened.batch;
+        expect(await store.pickUpBatch(activeBatch)).toBe("ready");
+        await persistParsedFixture(activeBatch);
+        const afterParse = await sourceState();
+        expect(
+          await store.completeBatch(first.batch, applied(first.batch)),
+        ).toBe("retryable");
+        expect(await sourceState()).toEqual(afterParse);
+        expect(
+          await store.completeBatch(activeBatch, applied(activeBatch)),
+        ).toBe("applied");
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayDailyRows)
+            .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+        ).toHaveLength(epoch === 1 ? 1 : 2);
+      }
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: 1 })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.reserveBatch(source, "2026-10-02", verdict())).toEqual(
+        { type: "empty" },
+      );
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, first.batch.id))
+        ).at(0),
+      ).toMatchObject({
+        status: "retry-terminal",
+        readmissions: BACKGROUND_REPLAY_LIMITS.maxRowReadmissions,
+      });
+      expect(await store.reserveBatch(source, "2026-10-03", verdict())).toEqual(
+        { type: "empty" },
+      );
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+      ).toHaveLength(2);
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceRawS3Key: "fixture/new-generation" })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.reserveBatch(source, "2026-10-02", verdict())).toEqual(
+        { type: "budget-exhausted" },
+      );
+      const newInput = await store.reserveBatch(
+        source,
+        "2026-10-03",
+        verdict(),
+      );
+      if (newInput.type !== "reserved") {
+        throw new TypeError("Expected a separately charged new input");
+      }
+      expect(newInput.batch.id).not.toBe(first.batch.id);
+      expect(newInput.batch.claimReadmission).toBe(0);
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+      ).toHaveLength(3);
+    });
+
+    test("an exact rejected input remains terminal when its raw key returns", async () => {
+      const { source, ids, store } = await fixture(1);
+      for (const id of ids.slice(1)) {
+        await db
+          .update(caseLawDecisions)
+          .set({ parserVersion: 3 })
+          .where(eq(caseLawDecisions.id, id));
+      }
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected the rejected-input reservation");
+      }
+      expect(
+        await store.completeBatch(first.batch, {
+          ...applied(first.batch),
+          report: {
+            ...applied(first.batch).report,
+            outcome: REPLAY_ROW_OUTCOME.REJECTED,
+            rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+          },
+        }),
+      ).toBe("blocked");
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceRawS3Key: "fixture/replacement-input" })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceRawS3Key: first.batch.sourceRawS3Key, parserVersion: 1 })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.reserveBatch(source, "2026-10-02", verdict())).toEqual(
+        { type: "empty" },
+      );
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, first.batch.id))
+        ).at(0),
+      ).toMatchObject({ status: "blocked", blocked: 1, readmissions: 0 });
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBlocked)
+            .where(eq(caseLawReplayBlocked.decisionId, first.batch.decisionId))
+        ).at(0),
+      ).toMatchObject({
+        sourceRawS3Key: first.batch.sourceRawS3Key,
+        outcome: "rejected",
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+      ).toHaveLength(1);
+    });
+
+    test("concurrent reopened reservations return one persisted claim epoch", async () => {
+      const { source, ids, store } = await fixture(1);
+      for (const id of ids.slice(1)) {
+        await db
+          .update(caseLawDecisions)
+          .set({ parserVersion: 3 })
+          .where(eq(caseLawDecisions.id, id));
+      }
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected original claim");
+      }
+      await persistParsedFixture(first.batch);
+      expect(await store.completeBatch(first.batch, applied(first.batch))).toBe(
+        "applied",
+      );
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: 1 })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const workers = [openClient(), openClient()].map(({ db: workerDb }) =>
+          createBackgroundReplayStore({
+            db: workerDb,
+            now: () => Date.UTC(2026, 9, 1),
+          }),
+        );
+        const results = await Promise.all(
+          workers.map(
+            async (worker) =>
+              await worker.reserveBatch(source, "2026-10-01", verdict()),
+          ),
+        );
+        expect(results).toEqual([
+          { ...first, batch: { ...first.batch, claimReadmission: 1 } },
+          { ...first, batch: { ...first.batch, claimReadmission: 1 } },
+        ]);
+      });
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, first.batch.id))
+        ).at(0),
+      ).toMatchObject({ status: "reserved", readmissions: 1, attempts: 0 });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+      ).toHaveLength(1);
     });
 
     test("persisted round-robin serves dry-run and enrolled sources fairly with bounded probes", async () => {
@@ -278,10 +694,7 @@ if (!databaseUrl || !enabled) {
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual(first);
       const retry = await store.reserveBatch(source, "2026-10-01", verdict());
       expect(retry).toEqual(first);
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      await persistParsedFixture(first.batch);
       expect(await store.pickUpBatch(first.batch)).toBe("ready");
       await store.completeBatch(first.batch, applied(first.batch));
       await store.completeBatch(first.batch, applied(first.batch));
@@ -357,14 +770,10 @@ if (!databaseUrl || !enabled) {
         .select()
         .from(caseLawReplayDailyRows)
         .where(eq(caseLawReplayDailyRows.sourceId, source.id));
-      expect(charges.map((row) => row.budgetDay).toSorted()).toEqual([
-        "2026-10-01",
-        "2026-10-02",
-      ]);
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      expect(
+        charges.map((row) => row.budgetDay).toSorted(compareCodeUnit),
+      ).toEqual(["2026-10-01", "2026-10-02"]);
+      await persistParsedFixture(reserved.batch);
       await store.completeBatch(reserved.batch, applied(reserved.batch));
       expect(await store.reserveBatch(source, "2026-10-02", verdict())).toEqual(
         { type: "budget-exhausted" },
@@ -778,8 +1187,8 @@ if (!databaseUrl || !enabled) {
                 if (!cleanupState.killed) {
                   await firstSlot.close();
                 }
-                first.release();
-                rival.release();
+                await first.release();
+                await rival.release();
               }
             },
             { closeMode: "force" },
@@ -916,9 +1325,17 @@ if (!databaseUrl || !enabled) {
       if (reserved.type !== "reserved") {
         return;
       }
+      const replayedRawKey =
+        (
+          await db
+            .select({ rawKey: caseLawDecisions.sourceRawS3Key })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+        ).at(0)?.rawKey ?? panic("Expected replayed raw generation");
       const completion = {
         report: {
           id: reserved.batch.decisionId,
+          ...replayedKeyOf(reserved.batch.sourceRawS3Key),
           caseNumber: "fixture",
           language: "cs",
           outcome: REPLAY_ROW_OUTCOME.REJECTED,
@@ -983,12 +1400,12 @@ if (!databaseUrl || !enabled) {
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual(reserved);
       await store.completeBatch(reserved.batch, completion);
       await store.completeBatch(reserved.batch, completion);
-      expect(
-        await db
-          .select()
-          .from(caseLawReplayBlocked)
-          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
-      ).toHaveLength(1);
+      const terminalReceipts = await db
+        .select()
+        .from(caseLawReplayBlocked)
+        .where(eq(caseLawReplayBlocked.sourceId, source.id));
+      expect(terminalReceipts).toHaveLength(1);
+      expect(terminalReceipts.at(0)?.sourceRawS3Key).toBe(replayedRawKey);
       expect(
         await db
           .select()
@@ -1039,10 +1456,7 @@ if (!databaseUrl || !enabled) {
             .from(caseLawReplayDailyRows)
             .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
         ).toHaveLength(1);
-        await db
-          .update(caseLawDecisions)
-          .set({ parserVersion: 2 })
-          .where(eq(caseLawDecisions.id, first.batch.decisionId));
+        await persistParsedFixture(first.batch);
         await store.completeBatch(first.batch, applied(first.batch));
         const denied = await Promise.all([
           firstStore.reserveBatch(source, "2026-10-01", verdict()),
@@ -1061,10 +1475,10 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("unchanged receipts require the exact checked row despite concurrent same-version edits", async () => {
+    test("unchanged receipts require complete proof for the exact current input", async () => {
       for (const invalidation of [
-        "missing-token",
-        "updated-token",
+        "missing-proof",
+        "raw-input",
         "parser-version",
       ] as const) {
         const { source, store } = await fixture(3);
@@ -1076,20 +1490,14 @@ if (!databaseUrl || !enabled) {
         if (reserved.type !== "reserved") {
           throw new TypeError("Expected concurrent unchanged reservation");
         }
-        const checked = (
-          await db
-            .select({ token: sql<string>`${caseLawDecisions.updatedAt}::text` })
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
-        ).at(0);
-        if (checked === undefined) {
-          throw new TypeError("Expected checked row token");
+        if (invalidation !== "missing-proof") {
+          await persistParsedFixture(reserved.batch);
         }
-        if (invalidation === "updated-token") {
+        if (invalidation === "raw-input") {
           await db
             .update(caseLawDecisions)
             .set({
-              updatedAt: sql`${caseLawDecisions.updatedAt} + interval '1 microsecond'`,
+              sourceRawS3Key: "fixture/replaced-input",
             })
             .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
         }
@@ -1103,12 +1511,10 @@ if (!databaseUrl || !enabled) {
           await store.completeBatch(reserved.batch, {
             report: {
               id: reserved.batch.decisionId,
+              ...replayedKeyOf(reserved.batch.sourceRawS3Key),
               caseNumber: "fixture",
               language: "cs",
               outcome: REPLAY_ROW_OUTCOME.UNCHANGED,
-              ...(invalidation === "missing-token"
-                ? {}
-                : { checkedUpdateToken: checked.token }),
             },
             durationMs: 1,
             verdict: verdict(),
@@ -1156,26 +1562,16 @@ if (!databaseUrl || !enabled) {
           if (before === undefined) {
             throw new TypeError("Expected receipt fixture decision");
           }
-          // The changed driver's persisted stamp is the pipeline's completion proof.
-          if (outcome === "changed") {
-            await db
-              .update(caseLawDecisions)
-              .set({ parserVersion: 2 })
-              .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+          // Both successful parse outcomes use the canonical writer's complete proof.
+          if (outcome !== "rejected") {
+            await persistParsedFixture(reserved.batch);
           }
-          const checked = (
-            await db
-              .select({
-                token: sql<string>`${caseLawDecisions.updatedAt}::text`,
-              })
-              .from(caseLawDecisions)
-              .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
-          ).at(0);
-          if (checked === undefined) {
-            throw new TypeError("Expected checked decision token");
-          }
+          const beforeReceipt = await db
+            .select()
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
           const identity = {
-            checkedUpdateToken: checked.token,
+            ...replayedKeyOf(reserved.batch.sourceRawS3Key),
             id: reserved.batch.decisionId,
             caseNumber: before.caseNumber,
             language: before.language,
@@ -1219,14 +1615,12 @@ if (!databaseUrl || !enabled) {
                   : null,
             },
           ]);
-          if (outcome !== "changed") {
-            expect(
-              await db
-                .select()
-                .from(caseLawDecisions)
-                .where(eq(caseLawDecisions.id, reserved.batch.decisionId)),
-            ).toEqual([before]);
-          }
+          expect(
+            await db
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, reserved.batch.decisionId)),
+          ).toEqual(beforeReceipt);
           const scope = {
             type: "decision",
             decisionId: reserved.batch.decisionId,
@@ -1260,9 +1654,11 @@ if (!databaseUrl || !enabled) {
           .select()
           .from(caseLawReplayBlocked)
           .where(eq(caseLawReplayBlocked.sourceId, source.id));
-        expect(receipts.map(({ decisionId }) => decisionId).toSorted()).toEqual(
-          [...ids],
-        );
+        expect(
+          receipts
+            .map(({ decisionId }) => decisionId)
+            .toSorted(compareCodeUnit),
+        ).toEqual([...ids]);
         const daily = await db
           .select()
           .from(caseLawReplayDailyRows)
@@ -1270,7 +1666,7 @@ if (!databaseUrl || !enabled) {
         expect(daily).toHaveLength(outcomes.length);
         expect(
           (await store.reserveBatch(source, "2026-10-01", verdict())).type,
-        ).toBe("budget-exhausted");
+        ).toBe("empty");
       }
     });
 
@@ -1288,6 +1684,7 @@ if (!databaseUrl || !enabled) {
       const completion = {
         report: {
           id: reserved.batch.decisionId,
+          ...replayedKeyOf(reserved.batch.sourceRawS3Key),
           caseNumber: "fixture",
           language: "cs",
           outcome: REPLAY_ROW_OUTCOME.REJECTED,
@@ -1330,6 +1727,25 @@ if (!databaseUrl || !enabled) {
           },
         }),
       ).toBeNull();
+      await db
+        .update(caseLawDecisions)
+        .set({
+          sourceHash: "f".repeat(64),
+          sourceRawS3Key: "fixture/new-input",
+        })
+        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      expect(
+        await selectScopeEnd({
+          scopedDb,
+          sourceId: source.id,
+          scope,
+          selection: {
+            type: "background",
+            currentParserVersion: 2,
+            mode: "enrolled",
+          },
+        }),
+      ).toBe(reserved.batch.decisionId);
       expect(
         await selectScopeEnd({
           scopedDb,
@@ -1354,6 +1770,53 @@ if (!databaseUrl || !enabled) {
           )
       ).at(0);
       expect(checkpoint?.cursor).toBe(reserved.batch.decisionId);
+    });
+
+    test("a known raw key remains an exact terminal identity without a source hash", async () => {
+      const { source, store } = await fixture(1);
+      const decision = (
+        await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, source.id))
+          .limit(1)
+      ).at(0);
+      if (!decision) {
+        throw new TypeError("Expected raw-less replay fixture");
+      }
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: null })
+        .where(eq(caseLawDecisions.id, decision.id));
+      const reserved = await store.reserveBatch(
+        source,
+        "2026-10-01",
+        verdict(),
+      );
+      if (reserved.type !== "reserved") {
+        throw new TypeError("Expected raw-less replay reservation");
+      }
+      await store.completeBatch(reserved.batch, {
+        report: {
+          id: reserved.batch.decisionId,
+          ...replayedKeyOf(reserved.batch.sourceRawS3Key),
+          caseNumber: "fixture",
+          language: "cs",
+          outcome: REPLAY_ROW_OUTCOME.REJECTED,
+          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+          detail: "fixture identity changed",
+        },
+        durationMs: 1,
+        verdict: verdict(),
+      });
+      expect(
+        (
+          await db
+            .select({ rawKey: caseLawReplayBlocked.sourceRawS3Key })
+            .from(caseLawReplayBlocked)
+            .where(eq(caseLawReplayBlocked.decisionId, decision.id))
+        ).at(0)?.rawKey,
+      ).toBe(reserved.batch.sourceRawS3Key);
     });
     test("an incomplete reported write stays reserved until the persisted stamp proves recovery", async () => {
       const { source } = await fixture(10);
@@ -1399,10 +1862,7 @@ if (!databaseUrl || !enabled) {
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
         type: "empty",
       });
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      await persistParsedFixture(reserved.batch);
       expect(
         await store.completeBatch(reserved.batch, applied(reserved.batch)),
       ).toBe("applied");
@@ -1444,10 +1904,7 @@ if (!databaseUrl || !enabled) {
         throw new TypeError("Expected later fixture while first backs off");
       }
       expect(second.batch.decisionId).toBe(ids[1]);
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, second.batch.decisionId));
+      await persistParsedFixture(second.batch);
       await store.completeBatch(second.batch, applied(second.batch));
       for (
         let attempt = 2;
@@ -1492,7 +1949,14 @@ if (!databaseUrl || !enabled) {
         type: "empty",
       });
       currentTime++;
-      expect(await store.pendingBatch(source, "2026-10-08")).toEqual(first);
+      const readmitted = await store.pendingBatch(source, "2026-10-08");
+      expect(readmitted).toEqual({
+        ...first,
+        batch: { ...first.batch, claimReadmission: 1 },
+      });
+      if (readmitted.type !== "reserved") {
+        throw new TypeError("Expected readmitted poison row");
+      }
       expect(
         (
           await db
@@ -1510,8 +1974,11 @@ if (!databaseUrl || !enabled) {
         attemptState: "idle",
         retryAt: null,
       });
-      expect(await store.pickUpBatch(first.batch)).toBe("ready");
-      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
+      expect(await store.pickUpBatch(first.batch)).toBe("waiting");
+      expect(await store.pickUpBatch(readmitted.batch)).toBe("ready");
+      expect(await store.recordFailure(readmitted.batch, failure)).toBe(
+        "retryable",
+      );
       const next = await store.reserveBatch(source, "2026-10-01", verdict());
       expect(next.type).toBe("reserved");
       if (next.type !== "reserved") {
@@ -1528,6 +1995,7 @@ if (!databaseUrl || !enabled) {
       if (first.type !== "reserved") {
         throw new TypeError("Expected crash fixture");
       }
+      let activeBatch = first.batch;
       for (
         let readmissions = 0;
         readmissions <= BACKGROUND_REPLAY_LIMITS.maxRowReadmissions;
@@ -1538,12 +2006,12 @@ if (!databaseUrl || !enabled) {
           attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
           attempt++
         ) {
-          expect(await store.pickUpBatch(first.batch)).toBe("ready");
+          expect(await store.pickUpBatch(activeBatch)).toBe("ready");
           time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
         }
         const terminal =
           readmissions === BACKGROUND_REPLAY_LIMITS.maxRowReadmissions;
-        expect(await store.pickUpBatch(first.batch)).toBe(
+        expect(await store.pickUpBatch(activeBatch)).toBe(
           terminal ? "retry-terminal" : "retry-exhausted",
         );
         const exhausted = (
@@ -1562,7 +2030,7 @@ if (!databaseUrl || !enabled) {
             ? null
             : new Date(time + BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs),
         });
-        expect(await store.pickUpBatch(first.batch)).toBe("waiting");
+        expect(await store.pickUpBatch(activeBatch)).toBe("waiting");
         expect(
           await db
             .select()
@@ -1595,7 +2063,15 @@ if (!databaseUrl || !enabled) {
           });
           continue;
         }
-        expect(recovered).toEqual(first);
+        expect(recovered).toEqual({
+          ...first,
+          batch: { ...first.batch, claimReadmission: readmissions + 1 },
+        });
+        if (recovered.type !== "reserved") {
+          throw new TypeError("Expected next crash claim epoch");
+        }
+        expect(await store.pickUpBatch(activeBatch)).toBe("waiting");
+        activeBatch = recovered.batch;
         expect(
           (
             await db
@@ -1687,6 +2163,7 @@ if (!databaseUrl || !enabled) {
         .update(caseLawDecisions)
         .set({ corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED })
         .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      await persistParsedFixture(first.batch);
       expect(await store.completeBatch(first.batch, applied(first.batch))).toBe(
         "applied",
       );
@@ -1719,10 +2196,7 @@ if (!databaseUrl || !enabled) {
         throw new TypeError("Expected healthy sample");
       }
       expect(healthy.batch.decisionId).not.toBe(poison.batch.decisionId);
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: healthy.batch.targetParserVersion })
-        .where(eq(caseLawDecisions.id, healthy.batch.decisionId));
+      await persistParsedFixture(healthy.batch);
       expect(
         await store.completeBatch(healthy.batch, applied(healthy.batch)),
       ).toBe("applied");
@@ -1838,10 +2312,7 @@ if (!databaseUrl || !enabled) {
         })
         .where(eq(caseLawReplayBatches.id, reserved.batch.id));
       expect(await store.pickUpBatch(reserved.batch)).toBe("ready");
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: reserved.batch.targetParserVersion })
-        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      await persistParsedFixture(reserved.batch);
       expect(
         await store.recordFailure(reserved.batch, {
           ...replayFailure("receipt-write"),
@@ -2004,10 +2475,9 @@ if (!databaseUrl || !enabled) {
         .select()
         .from(caseLawReplayDailyRows)
         .where(eq(caseLawReplayDailyRows.sourceId, source.id));
-      expect(charges.map((row) => row.budgetDay).toSorted()).toEqual([
-        "2026-10-01",
-        "2026-10-02",
-      ]);
+      expect(
+        charges.map((row) => row.budgetDay).toSorted(compareCodeUnit),
+      ).toEqual(["2026-10-01", "2026-10-02"]);
     });
 
     test("concurrent preview and apply workers cannot exceed their shared daily allowance", async () => {
@@ -2311,10 +2781,7 @@ if (!databaseUrl || !enabled) {
       if (reserved.type !== "reserved") {
         throw new TypeError("Expected receipt fixture");
       }
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: reserved.batch.targetParserVersion })
-        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      await persistParsedFixture(reserved.batch);
       expect(
         await store.completeBatch(reserved.batch, applied(reserved.batch)),
       ).toBe("applied");
@@ -2564,32 +3031,30 @@ if (!databaseUrl || !enabled) {
     });
 
     test("actual compaction query scans only the indexed superseded retention page at production scale", async () => {
-      const { source, ids } = await fixture(10);
-      await db.insert(caseLawReplayBatches).values(
-        ids.map((id, index) => ({
-          id: `retention-${id}`,
-          sourceId: source.id,
-          firstDecisionId: id,
-          lastDecisionId: id,
-          parserVersionTo: 2,
-          budgetDay: "2026-10-01",
-          status: "completed" as const,
-          attempted: 1,
-          gateVerdict: verdict(),
-          supersededAt: index === 0 ? new Date(Date.UTC(2025, 0, 1)) : null,
-        })),
-      );
+      const sourceId = createSafeId<"caseLawSource">();
+      const ids = Array.from({ length: 3 }, () =>
+        createSafeId<"caseLawDecision">(),
+      ).toSorted(compareCodeUnit);
       const rolledBack = await Result.tryPromise(
         async () =>
           await db.transaction(async (tx) => {
             const ownerRole = `replay_retention_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+            const fixtureSchema = `replay_retention_${Bun.randomUUIDv7().replaceAll("-", "")}`;
             await tx.execute(
               sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
               GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
-              GRANT CREATE ON SCHEMA public TO ${ownerRole};
-              ALTER TABLE case_law_sources OWNER TO ${ownerRole};
-              ALTER TABLE case_law_replay_batches OWNER TO ${ownerRole};
-              SET LOCAL ROLE ${ownerRole}`),
+              GRANT SELECT ON public.case_law_sources, public.case_law_replay_batches TO ${ownerRole};
+              CREATE SCHEMA ${fixtureSchema} AUTHORIZATION ${ownerRole};
+              SET LOCAL ROLE ${ownerRole};
+              SET LOCAL search_path TO ${fixtureSchema}, public;
+              CREATE TABLE case_law_sources (LIKE public.case_law_sources INCLUDING ALL);
+              CREATE TABLE case_law_replay_batches (LIKE public.case_law_replay_batches INCLUDING ALL);
+              DROP INDEX case_law_replay_batches_source_id_parser_version_to_id_idx;
+              DROP INDEX case_law_replay_batches_superseded_at_id_idx;
+              CREATE INDEX case_law_replay_batches_retire_idx ON case_law_replay_batches (source_id, parser_version_to, id)
+                WHERE superseded_at IS NULL AND status IN ('completed', 'superseded', 'failed', 'retry-exhausted', 'retry-terminal', 'blocked');
+              CREATE INDEX case_law_replay_batches_retention_idx ON case_law_replay_batches (superseded_at, id)
+                WHERE superseded_at IS NOT NULL`),
             );
             const posture = await tx.execute<{
               superuser: boolean;
@@ -2598,6 +3063,13 @@ if (!databaseUrl || !enabled) {
               sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
             );
             expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
+            await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
+              VALUES (${sourceId}, ${ADAPTER_KEYS.EU_ECJ}, 'replay retention fixture')`);
+            for (const [index, id] of ids.entries()) {
+              await tx.execute(sql`INSERT INTO case_law_replay_batches
+                (id, source_id, first_decision_id, last_decision_id, parser_version_to, budget_day, status, attempted, gate_verdict, superseded_at)
+                VALUES (${`retention-${id}`}, ${sourceId}, ${id}, ${id}, 2, '2026-10-01', 'completed', 1, ${verdict()}, ${index === 0 ? new Date(Date.UTC(2025, 0, 1)) : null})`);
+            }
             await tx.execute(sql`ANALYZE case_law_replay_batches`);
             await scaleTableToProfile(tx, "case_law_replay_batches", {
               tables: {
@@ -2627,7 +3099,7 @@ if (!databaseUrl || !enabled) {
                 ({ index }) => index === "case_law_replay_batches_retire_idx",
               ),
             ).toBe(true);
-            const query = buildReplayCompactionQuery(tx, {
+            const query = buildCaseLawReplayCompactionQuery(tx, {
               cutoff: new Date(Date.UTC(2026, 6, 1)),
               limit: BACKGROUND_REPLAY_LIMITS.maxCompactRows,
             });
@@ -2667,16 +3139,10 @@ if (!databaseUrl || !enabled) {
     });
 
     test("actual selector and probe remain indexed and bounded under sparse and full synthetic corpus lag", async () => {
-      const { source } = await fixture(10);
-      // Seed only synthetic rows; catalog restoration is transaction-local and
-      // a deliberate rollback restores every table/index statistic afterwards.
-      await db.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
-        SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${source.id}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
-          CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
-        FROM generate_series(1, 1000) AS series(n)`);
-      await db.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, outcome, reason, detail)
-        SELECT ${source.id}, id, 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
-        FROM case_law_decisions WHERE source_id = ${source.id} AND case_number LIKE 'plan-%'`);
+      const sourceId = createSafeId<"caseLawSource">();
+      const fixtureIds = Array.from({ length: 3 }, () =>
+        createSafeId<"caseLawDecision">(),
+      ).toSorted(compareCodeUnit);
       const end = toSafeId<"caseLawDecision">(
         "ffffffff-ffff-4fff-bfff-ffffffffffff",
       );
@@ -2684,15 +3150,19 @@ if (!databaseUrl || !enabled) {
         async () =>
           await db.transaction(async (tx) => {
             const ownerRole = `replay_plan_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+            const fixtureSchema = `replay_plan_${Bun.randomUUIDv7().replaceAll("-", "")}`;
             await tx.execute(
               sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
               GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
-              GRANT CREATE ON SCHEMA public TO ${ownerRole};
-              ALTER TABLE case_law_sources OWNER TO ${ownerRole};
-              ALTER TABLE case_law_decisions OWNER TO ${ownerRole};
-              ALTER TABLE case_law_replay_batches OWNER TO ${ownerRole};
-              ALTER TABLE case_law_replay_blocked OWNER TO ${ownerRole};
-              SET LOCAL ROLE ${ownerRole}`),
+              GRANT SELECT ON public.case_law_sources, public.case_law_decisions, public.case_law_replay_batches, public.case_law_replay_blocked TO ${ownerRole};
+              CREATE SCHEMA ${fixtureSchema} AUTHORIZATION ${ownerRole};
+              SET LOCAL ROLE ${ownerRole};
+              SET LOCAL search_path TO ${fixtureSchema}, public;
+              CREATE TABLE case_law_sources (LIKE public.case_law_sources INCLUDING ALL);
+              CREATE TABLE case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL);
+              CREATE TABLE case_law_replay_batches (LIKE public.case_law_replay_batches INCLUDING ALL);
+              CREATE TABLE case_law_replay_blocked (LIKE public.case_law_replay_blocked INCLUDING ALL);
+              CREATE INDEX case_law_replay_blocked_source_version_idx ON case_law_replay_blocked (source_id, parser_version_to, decision_id)`),
             );
             const posture = await tx.execute<{
               superuser: boolean;
@@ -2701,6 +3171,20 @@ if (!databaseUrl || !enabled) {
               sql`SELECT rolsuper AS superuser, rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
             );
             expect(posture.at(0)).toEqual({ superuser: false, bypass: false });
+            await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
+              VALUES (${sourceId}, ${ADAPTER_KEYS.EU_ECJ}, 'replay plan fixture')`);
+            for (const [index, id] of fixtureIds.entries()) {
+              await tx.execute(sql`INSERT INTO case_law_decisions
+                (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
+                VALUES (${id}, ${sourceId}, ${`store-${index}`}, 'fixture court', 'CZE', 'cs', 1, ${`fixture/${id}`})`);
+            }
+            await tx.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
+              SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${sourceId}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
+                CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
+              FROM generate_series(1, 1000) AS series(n)`);
+            await tx.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, source_raw_s3_key, parser_version_from, parser_version_to, outcome, reason, detail)
+              SELECT ${sourceId}, id, source_raw_s3_key, 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
+              FROM case_law_decisions WHERE source_id = ${sourceId} AND case_number LIKE 'plan-%'`);
             // Enrolment will ship these corpus indexes; the dormant feature
             // creates them only inside this rolled-back planner fixture.
             await tx.execute(
@@ -2717,23 +3201,37 @@ if (!databaseUrl || !enabled) {
                   SYNTHETIC_SCALE_PROFILE.tables.case_law_decisions,
               },
               attributes: [],
+              scaleRelationPages: true,
             });
-            await scaleTableToProfile(
-              tx,
-              "case_law_decisions",
-              SYNTHETIC_SCALE_PROFILE,
+            await tx.execute(
+              sql`SELECT pg_clear_attribute_stats(current_schema()::text, 'case_law_replay_blocked', 'source_id', false)`,
             );
+            await tx.execute(sql`SELECT pg_restore_attribute_stats(
+              'schemaname', current_schema()::text, 'relname', 'case_law_replay_blocked',
+              'attname', 'source_id', 'inherited', false, 'null_frac', 0::real, 'n_distinct', -1::real
+            )`);
+            await scaleTableToProfile(tx, "case_law_decisions", {
+              ...SYNTHETIC_SCALE_PROFILE,
+              scaleRelationPages: true,
+            });
+            await tx.execute(
+              sql`SELECT pg_clear_attribute_stats(current_schema()::text, 'case_law_decisions', 'source_id', false)`,
+            );
+            await tx.execute(sql`SELECT pg_restore_attribute_stats(
+              'schemaname', current_schema()::text, 'relname', 'case_law_decisions',
+              'attname', 'source_id', 'inherited', false, 'null_frac', 0::real, 'n_distinct', 100::real
+            )`);
             for (const lag of ["sparse", "all"] as const) {
               const frequencies =
                 lag === "sparse" ? [0.00001, 0.99999] : [0.99999, 0.00001];
               await tx.execute(sql`SELECT pg_restore_attribute_stats(
-            'schemaname', 'public', 'relname', 'case_law_decisions',
+            'schemaname', current_schema()::text, 'relname', 'case_law_decisions',
             'attname', 'parser_version', 'inherited', false, 'null_frac', 0::real, 'n_distinct', 2::real,
             'most_common_vals', '{1,2}', 'most_common_freqs', ARRAY[${frequencies.at(0)}::real, ${frequencies.at(1)}::real]::real[]
           )`);
               const queries = [
                 buildReplayScopeEndQuery(tx, {
-                  sourceId: source.id,
+                  sourceId,
                   scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
                   selection: {
                     type: "background",
@@ -2743,11 +3241,11 @@ if (!databaseUrl || !enabled) {
                 }),
                 buildBackgroundReplayProbe(tx, {
                   mode: "enrolled",
-                  sourceId: source.id,
+                  sourceId,
                   currentParserVersion: 2,
                 }),
                 buildReplayPageQuery(tx, {
-                  sourceId: source.id,
+                  sourceId,
                   scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
                   selection: {
                     type: "background",

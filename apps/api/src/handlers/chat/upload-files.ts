@@ -44,7 +44,7 @@ import {
 } from "@/api/lib/data-url";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { FileKey } from "@/api/lib/file-key";
+import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import {
   FileScanRejectedError,
@@ -90,6 +90,7 @@ const CHAT_ATTACHMENT_DELETE_TIMEOUT_MS = 10_000;
 type UploadMessageFilesProps = {
   dependencies?: UploadUserFileDependencies;
   message: PersistableChatMessage;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -98,8 +99,7 @@ type UploadMessageFilesProps = {
 };
 
 export type UploadMessageFilesError =
-  | HandlerError<400 | 409 | 413 | 422 | 500 | 503>
-  | SafeDbError;
+  HandlerError<400 | 409 | 413 | 422 | 500 | 503> | SafeDbError;
 
 type UploadMessageFilesReturn = Result<
   UploadedChatMessage,
@@ -120,6 +120,7 @@ type UploadedChatMessage = {
 export const uploadMessageFiles = async ({
   dependencies,
   message,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -174,6 +175,7 @@ export const uploadMessageFiles = async ({
     const uploadedFile = await uploadUserFile({
       ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -302,9 +304,7 @@ const DIRECT_TEXT_MIME_TYPES = [
 
 type DirectTextMimeType = (typeof DIRECT_TEXT_MIME_TYPES)[number];
 type PlainTextHydratableMimeType =
-  | DirectTextMimeType
-  | typeof DOCX_MIME_TYPE
-  | typeof XLSX_MIME_TYPE;
+  DirectTextMimeType | typeof DOCX_MIME_TYPE | typeof XLSX_MIME_TYPE;
 
 const isDirectTextMimeType = (
   mimeType: string,
@@ -680,6 +680,7 @@ type UploadUserFileInput = {
     fileName: string;
     mimeType: string;
   };
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -690,6 +691,7 @@ type UploadUserFileInput = {
 export const uploadUserFile = async ({
   dependencies,
   file,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -731,33 +733,8 @@ export const uploadUserFile = async ({
     const s3Key = createUserFileKey({
       fileId: id,
       mimeType: file.mimeType,
-      userId,
+      organizationId,
     });
-
-    let organizationId: SafeId<"organization"> | undefined;
-    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      const thread = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await tx.query.chatThreads.findFirst({
-              where: {
-                id: { eq: threadId },
-                userId: { eq: userId },
-              },
-              columns: { organizationId: true },
-            }),
-        ),
-      );
-      if (!thread) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Chat thread no longer exists",
-          }),
-        );
-      }
-      organizationId = thread.organizationId;
-    }
 
     const scanResult = await scanUpload({
       bytes: file.bytes,
@@ -829,11 +806,14 @@ export const uploadUserFile = async ({
         });
       } else {
         const generatedThumbnailId = Bun.randomUUIDv7();
-        const key = createUserFileKey({
-          fileId: generatedThumbnailId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
-        });
+        const key =
+          createUserFileThumbnailKey({
+            sourceKey: s3Key,
+            thumbnailFileId: generatedThumbnailId,
+            organizationId,
+            uploaderUserId: userId,
+          }) ??
+          panic("The freshly created attachment key must have a valid owner");
         preparedThumbnail = {
           bytes: thumbnailResult.value.webp,
           fileId: generatedThumbnailId,
@@ -893,7 +873,7 @@ export const uploadUserFile = async ({
       "FEATURE_FILE_USAGE_LIMITS",
     )
       ? await writeOrganizationFile({
-          organizationId: organizationId ?? panic("Missing chat organization"),
+          organizationId,
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
           content: file.bytes,
@@ -971,8 +951,7 @@ export const uploadUserFile = async ({
         "FEATURE_FILE_USAGE_LIMITS",
       )
         ? await writeOrganizationFile({
-            organizationId:
-              organizationId ?? panic("Missing chat organization"),
+            organizationId,
             objectKey: preparedThumbnail.key,
             sizeBytes: preparedThumbnail.bytes.byteLength,
             content: preparedThumbnail.bytes,

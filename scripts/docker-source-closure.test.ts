@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -14,17 +14,17 @@ import * as v from "valibot";
 
 import {
   BUN_FLAGS,
+  checkDockerSource,
   checkRepositoryDockerSources,
   commandEntries,
-  checkDockerSource,
   copySource,
   dockerInstructions,
   dockerPruneScopes,
   inDockerContext,
   installToolingCopies,
   sourceClosureProblems,
-  updateInstallToolingCopies,
   type SourceTree,
+  updateInstallToolingCopies,
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
@@ -221,6 +221,52 @@ describe("Docker source closure", () => {
       }
     }
   });
+
+  test("a packaged build output copied from another stage runs without a source closure", () => {
+    const stages = [
+      "FROM bun AS builder",
+      "FROM bun AS runner",
+      "COPY --from=builder /app/bundles/ /app/",
+    ];
+    expect(
+      checkDockerSource(
+        root,
+        [...stages, "FROM runner AS smoke", "RUN bun /app/smoke.js"].join("\n"),
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual([]);
+    expect(
+      checkDockerSource(
+        root,
+        [...stages, "RUN bun /opt/absent.js"].join("\n"),
+        new Map(),
+        new Map(),
+      ),
+    ).toEqual(["Entry is unavailable: /opt/absent.js"]);
+  });
+
+  test.each(["/", "/./", "/nested/.."])(
+    "root-copied packaged artifacts retain a single separator: %s",
+    (destination) => {
+      for (const entry of ["/smoke.js", "/app/smoke.js"]) {
+        expect(
+          checkDockerSource(
+            root,
+            [
+              "FROM bun AS builder",
+              "FROM bun AS runner",
+              `COPY --from=builder /packaged/ ${destination}`,
+              "FROM runner AS smoke",
+              `RUN bun ${entry}`,
+            ].join("\n"),
+            new Map(),
+            new Map(),
+          ),
+        ).toEqual([]);
+      }
+    },
+  );
 
   test("source wrappers check their inner reads without splitting quoted arguments", () => {
     const entry = put("wrapper/entry.ts", 'import "./missing";');
@@ -1035,13 +1081,13 @@ describe("Docker source closure", () => {
         mkdirSync(path.dirname(target), { recursive: true });
         writeFileSync(target, source);
       };
-      const output = GENERATORS.find(
-        ({ id }) => id === "route-tree",
-      )?.outputs.at(0);
-      if (output === undefined) {
-        throw new Error("Route tree output is missing");
+      const outputs = GENERATORS.find(({ id }) => id === "route-tree")?.outputs;
+      if (outputs === undefined) {
+        panic("Route tree outputs are missing");
       }
-      write(output, "export const routeTree = {};");
+      for (const output of outputs) {
+        write(output, "export const generated = true;");
+      }
       const producer = "apps/web/scripts/generate-route-tree.ts";
       const manifest = "apps/web/package.json";
       const entry = "apps/web/src/entry.ts";
@@ -1062,7 +1108,15 @@ describe("Docker source closure", () => {
           },
         }),
       );
-      write(entry, 'import "./routeTree.gen";');
+      write(
+        entry,
+        outputs
+          .map(
+            (output) =>
+              `import ${JSON.stringify(`./${path.basename(output, ".ts")}`)};`,
+          )
+          .join("\n"),
+      );
       const context: SourceTree = new Map(
         [producer, manifest, entry].map((file) => [`/${file}`, file]),
       );
@@ -1412,11 +1466,12 @@ describe("Docker source closure", () => {
     );
   });
 
+  // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
   test("every tracked Dockerfile passes the full hydrated repository check", () => {
     expect(
       checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
-  }, 30_000);
+  }, 40_000);
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
     // Pooled checks are steps of their job; see scripts/workflow-steps.ts.

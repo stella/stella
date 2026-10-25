@@ -1,7 +1,7 @@
 /**
  * Shadow grading: the owner's grade, attached to the failure records the
- * existing sinks already emit, without changing what they emit or at which
- * severity.
+ * existing sinks already emit. Log severity remains pinned, while capture
+ * follows the grade so anticipated outcomes never become exceptions.
  *
  * Every site that observes a failure today decided its own channel (capture,
  * a WARN, an ERROR, or both). Before any of those decisions moves to the

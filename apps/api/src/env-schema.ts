@@ -15,9 +15,10 @@ import {
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
 import {
-  resolveInboundMailReceiving,
   type InboundMailReceivingInput,
+  resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -259,6 +260,19 @@ export const envApiServerSchema = {
   ),
   SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
   SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
+  MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
+  MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "0"),
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(43_200),
+    ),
+    "43200",
+  ),
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
@@ -381,9 +395,7 @@ export const envApiServerSchema = {
    * email delivery is skipped for this account (the code is shared
    * out-of-band).
    */
-  DEMO_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  DEMO_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
@@ -394,9 +406,7 @@ export const envApiServerSchema = {
    * inside its own organization. Set both or neither. Every other address is
    * refused password sign-in with the ordinary invalid-credentials answer.
    */
-  APP_REVIEW_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  APP_REVIEW_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   APP_REVIEW_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),

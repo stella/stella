@@ -26,16 +26,16 @@ import path from "node:path";
 
 import {
   CHECK_POOL_JOBS,
-  checkPoolResultsPath,
-  readCheckPool,
   type CheckPoolJob,
+  checkPoolResultsPath,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import {
+  type Context,
   evaluate,
   toValue,
   UNKNOWN,
-  type Context,
   type Value,
 } from "./github-expression";
 
@@ -351,7 +351,7 @@ export const runChecks = async ({
 };
 
 const POOL_ENV = [
-  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_NEEDS_FILE",
   "CI_CHECK_POOL_STEPS",
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
@@ -417,22 +417,27 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
-// A nested group would end the check's own group in the job log.
-const NESTED_GROUP = /^(::(?:end)?group::|##\[(?:end)?group\])/gmu;
+// The runner reads a workflow command after leading whitespace, so a command
+// is neutralized by removing it or by a non-blank prefix, never by indenting.
+// A nested group would end the check's own group in the job log: its title
+// stays as a plain line (Bun's per-file header) and its end is dropped.
+const NESTED_GROUP_START = /^[ \t]*(?:::group::|##\[group\])/gmu;
+const NESTED_GROUP_END =
+  /^[ \t]*(?:::endgroup::|##\[endgroup\]).*(?:\r?\n|$)/gmu;
 // An error command printed by a check that passed comes from a fixture or a
 // refusal the check exercises, never from this run's failure; left active it
 // becomes a job annotation that failure digests then report as the cause.
-const ERROR_COMMAND = /^(::error\b)/gmu;
+const ERROR_COMMAND = /^([ \t]*(?:::error\b|##\[error\]))/gmu;
 
 /** A check's log as the job log shows it, so the check cannot drive the job's commands. */
 export const checkLogText = (
   output: string,
   outcome: CheckResult["outcome"],
 ): string => {
-  const grouped = output.replace(NESTED_GROUP, " $1");
-  return outcome === "failure"
-    ? grouped
-    : grouped.replace(ERROR_COMMAND, " $1");
+  const flat = output
+    .replace(NESTED_GROUP_END, "")
+    .replace(NESTED_GROUP_START, "");
+  return outcome === "failure" ? flat : flat.replace(ERROR_COMMAND, "| $1");
 };
 const escapeProperty = (value: string) =>
   value
@@ -448,6 +453,17 @@ const FAILURE_CAUSE_LIMIT = 500;
 
 const isResultMarker = (line: string) =>
   /^\((?:pass|fail|skip|todo)\) /u.test(line.trimStart());
+
+// Bun's own banner, per-file headers, totals and group commands.
+const TEST_RUNNER_LINE =
+  /^(?:bun test v|\d+ (?:pass|fail|skip|todo|snapshots?|expect\(\) calls)\b|Ran \d+ tests? |(?:::|##\[)(?:end)?group\b|\S+\.test\.[cm]?[jt]sx?:$)/u;
+const isTestRunnerLine = (line: string) =>
+  isResultMarker(line) || TEST_RUNNER_LINE.test(line.trim());
+// A line that starts with an error, possibly behind a workflow error command.
+const ERROR_LINE = /^(?:##\[error\]|::error[^:]*::)?\s*error\b/iu;
+// `path[:line[:column]]: finding`, the shape repository checks report in.
+const FINDING_LINE =
+  /^(?:[\w.@-]+\/)+[\w.@$()[\]-]+(?::\d+){0,2}: \S|^[\w.@-]+\.[a-z\d]+(?::\d+){0,2}: \S/iu;
 
 // Bun prints a test's diagnostics before its `(fail)` line, so the test's own
 // error lies between the previous result marker and its marker; output after
@@ -499,8 +515,15 @@ export const failedCheckCause = (
         : `${failure}${FAILED_CHECK_SEPARATOR}${testError}`
     ).slice(0, FAILURE_CAUSE_LIMIT);
   }
+  // A check that runs its own tests and then reports findings prints the
+  // passing tests first; their names are never the finding.
+  const findings = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !isTestRunnerLine(line));
   return (
-    lines.find((line) => /error/iu.test(line))?.trim() ?? result.detail
+    findings.find((line) => ERROR_LINE.test(line) || FINDING_LINE.test(line)) ??
+    findings.find((line) => /\berror\b/iu.test(line)) ??
+    result.detail
   ).slice(0, FAILURE_CAUSE_LIMIT);
 };
 
@@ -550,9 +573,11 @@ const writeOut = (text: string) => {
       offset += writeSync(1, bytes, offset);
     } catch (error) {
       // A non-blocking pipe that is full: wait briefly and retry.
-      if (
-        !(error instanceof Error && "code" in error && error.code === "EAGAIN")
-      ) {
+      if (!(
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "EAGAIN"
+      )) {
         throw error;
       }
       Atomics.wait(pause, 0, 0, 5);
@@ -594,6 +619,31 @@ export const selectChecks = (
   return checks.filter(({ name }) => selected.has(name));
 };
 
+/** Split a manifest into stable, disjoint CI matrix partitions. */
+export const partitionChecks = (
+  checks: readonly PoolCheck[],
+  partition: string | undefined,
+): PoolCheck[] => {
+  if (partition === undefined) {
+    return [...checks];
+  }
+  const match = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(partition);
+  const index = Number(match?.groups?.["index"]);
+  const count = Number(match?.groups?.["count"]);
+  if (
+    !Number.isInteger(index) ||
+    !Number.isInteger(count) ||
+    index < 1 ||
+    count < 1 ||
+    index > count
+  ) {
+    throw new CheckPoolError(
+      "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
+    );
+  }
+  return checks.filter((_, checkIndex) => checkIndex % count === index - 1);
+};
+
 const main = async () => {
   const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
   if (
@@ -624,13 +674,25 @@ const main = async () => {
     token: process.env["CI_CHECK_POOL_TOKEN"] ?? "",
     event: eventPath ? json(readFileSync(eventPath, "utf-8"), "event") : {},
   };
+  const needsFile = process.env["CI_CHECK_POOL_NEEDS_FILE"];
   const context = poolContext({
     github,
-    needs: json(process.env["CI_CHECK_POOL_NEEDS"], "needs context"),
+    // A file, never the environment: ci-plan's outputs can exceed the
+    // 128 KiB limit of one environment value.
+    needs: json(
+      needsFile ? readFileSync(needsFile, "utf-8") : undefined,
+      "needs context",
+    ),
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
-  const planned = planChecks(selectChecks(readCheckPool(job), value), context);
+  const planned = planChecks(
+    partitionChecks(
+      selectChecks(readCheckPool(job), value),
+      process.env["CI_CHECK_POOL_PARTITION"],
+    ),
+    context,
+  );
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
   // pushed default 5 s Bun test budgets past their limit; three did not.

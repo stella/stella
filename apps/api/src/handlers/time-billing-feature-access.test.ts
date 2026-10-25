@@ -41,16 +41,16 @@ import {
   parseCatalog,
 } from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES, MCP_MODES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpOmittedToolNamesByReason } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -92,7 +92,7 @@ const snapshotFor = (enabled: boolean, deploymentEnabled = true) =>
     ]),
   });
 const enrolledContext = () =>
-  asTestRaw<McpRequestContext>({
+  asTestRaw<AuthorizedMcpRequestContext>({
     userId: USER_ID,
     organizationId: ORGANIZATION_ID,
     featureAccessSnapshot: snapshotFor(true),
@@ -357,14 +357,14 @@ describe("time billing on agent surfaces", () => {
             expect(
               await getMcpToolDefinition(
                 toolName,
-                asTestRaw<McpRequestContext>(context),
+                asTestRaw<AuthorizedMcpRequestContext>(context),
                 mode,
               ),
             ).toBeUndefined();
             const result = await handleMcpToolCall({
               toolName,
               args: {},
-              context: asTestRaw<McpRequestContext>(context),
+              context: asTestRaw<AuthorizedMcpRequestContext>(context),
               mode,
             });
             expect(errorOf(result).code).toBe("unknown_tool");

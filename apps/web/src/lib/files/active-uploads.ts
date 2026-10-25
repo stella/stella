@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import { sha256Hex } from "@stll/sha256/browser";
+
 type ActiveUploadState = {
   count: number;
 };
@@ -46,6 +48,10 @@ export const withActiveUpload = async <T>(
     release();
   }
 };
+
+/** Hash one file in bounded chunks while the reload guard counts the read. */
+export const hashActiveUploadFile = async (file: Blob): Promise<string> =>
+  await withActiveUpload(async () => await sha256Hex(file));
 
 /** Test seam. Production batches release themselves. */
 export const resetActiveUploadsForTests = (): void => {
