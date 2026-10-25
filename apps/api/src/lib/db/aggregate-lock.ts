@@ -2431,6 +2431,7 @@ export const lockInvoiceInStatus = async (
       sellerProfileId: invoices.sellerProfileId,
       taxableSupplyDate: invoices.taxableSupplyDate,
       totalAmount: invoices.totalAmount,
+      vatExchangeRate: invoices.vatExchangeRate,
     })
     .from(invoices)
     .where(
