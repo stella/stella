@@ -47,7 +47,6 @@ import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
-  grantPgliteDecisionCitationStatsReader,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
@@ -132,7 +131,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    await grantPgliteDecisionCitationStatsReader(db);
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>

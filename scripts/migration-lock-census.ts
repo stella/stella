@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261024213100_public_corpus_owner_policies",
+    form: "create-policy",
+    reason:
+      "The one policy adds only table-owner access to case-law decision aliases; catalog-only policy creation performs no row scan, with 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:

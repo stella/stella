@@ -22,7 +22,6 @@ import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   createTestPglite,
-  grantPgliteDecisionCitationStatsReader,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
@@ -99,7 +98,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client, relations: databaseRelations });
-    await grantPgliteDecisionCitationStatsReader(db);
     await seedQueryPlanData(db);
   },
   { timeout: DB_TEST_TIMEOUT_MS },
@@ -507,7 +505,6 @@ const reportRegistryScans = async (profile: ScaleProfile | null) => {
       client: reportClient,
       relations: databaseRelations,
     });
-    await grantPgliteDecisionCitationStatsReader(reportDb);
     await seedQueryPlanData(reportDb);
     if (profile !== null) {
       await injectScaleProfile(reportDb, profile);
