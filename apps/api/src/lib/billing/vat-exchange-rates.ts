@@ -127,15 +127,24 @@ const parseRateJson = <TSchema extends v.GenericSchema>(
   text: string,
   schema: TSchema,
   source: RateSource,
-) =>
-  Result.try({
-    try: () => v.parse(schema, JSON.parse(text)),
-    catch: (error) =>
-      new VatRateMalformedError({
-        message: `${source} returned a malformed exchange-rate response`,
-        error,
-      }),
+): Result<v.InferOutput<TSchema>, VatRateMalformedError> => {
+  const malformedResponse = (error: unknown) =>
+    new VatRateMalformedError({
+      message: `${source} returned a malformed exchange-rate response`,
+      error,
+    });
+  const decoded = Result.try({
+    try: (): unknown => JSON.parse(text),
+    catch: malformedResponse,
   });
+  if (Result.isError(decoded)) {
+    return decoded;
+  }
+  const parsed = v.safeParse(schema, decoded.value);
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(malformedResponse(parsed.issues));
+};
 
 const nbpSchema = v.object({
   rates: v.array(
