@@ -32,6 +32,16 @@ export const vatTaxPointDate = ({
   return taxableSupplyDate ?? invoiceDate;
 };
 
+/** The date the statutory exchange rate is selected relative to. */
+export const vatRateReferenceDate = (input: TaxPointInput): string => {
+  const taxPoint = vatTaxPointDate(input);
+  // PL ustawa o VAT art. 31a ust. 2: an invoice issued before the tax point
+  // uses the rate preceding its issue date.
+  return input.country === "PL" && input.invoiceDate < taxPoint
+    ? input.invoiceDate
+    : taxPoint;
+};
+
 type Decimal = { coefficient: bigint; scale: number };
 
 const decimal = (value: string): Decimal => {
@@ -53,8 +63,12 @@ const decimal = (value: string): Decimal => {
 
 const powerOfTen = (places: number) => 10n ** BigInt(places);
 
-const divideHalfUp = (numerator: bigint, denominator: bigint) =>
-  (numerator * 2n + denominator) / (denominator * 2n);
+/** Rounds half away from zero; BigInt division alone truncates toward zero. */
+const divideHalfUp = (numerator: bigint, denominator: bigint) => {
+  const magnitude = numerator < 0n ? -numerator : numerator;
+  const rounded = (magnitude * 2n + denominator) / (denominator * 2n);
+  return numerator < 0n ? -rounded : rounded;
+};
 
 /** Converts a source quote to home-currency units per one invoice-currency unit. */
 export const normalizeVatExchangeRate = (input: {

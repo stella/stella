@@ -32,7 +32,7 @@ describe("official VAT exchange rates", () => {
       await fetchVatExchangeRate({
         country: "CZ",
         currency: "JPY",
-        taxPointDate: "2026-10-24",
+        referenceDate: "2026-10-24",
         fetcher: fixtureFetch(await fixture("cnb-2026-10-24.txt")),
       }),
     );
@@ -50,7 +50,7 @@ describe("official VAT exchange rates", () => {
       await fetchVatExchangeRate({
         country: "SK",
         currency: "USD",
-        taxPointDate: "2026-10-26",
+        referenceDate: "2026-10-26",
         fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json"), seen),
       }),
     );
@@ -64,7 +64,7 @@ describe("official VAT exchange rates", () => {
       await fetchVatExchangeRate({
         country: "PL",
         currency: "EUR",
-        taxPointDate: "2026-01-05",
+        referenceDate: "2026-01-05",
         fetcher: fixtureFetch(await fixture("nbp-2026-01-02.json")),
       }),
     );
@@ -80,7 +80,7 @@ describe("official VAT exchange rates", () => {
     const malformed = await fetchVatExchangeRate({
       country: "PL",
       currency: "XYZ",
-      taxPointDate: "2026-01-02",
+      referenceDate: "2026-01-02",
       fetcher: fixtureFetch("{}"),
     });
     expect(Result.isError(malformed) && malformed.error).toBeInstanceOf(
@@ -89,7 +89,7 @@ describe("official VAT exchange rates", () => {
     const missing = await fetchVatExchangeRate({
       country: "CZ",
       currency: "XYZ",
-      taxPointDate: "2026-01-02",
+      referenceDate: "2026-01-02",
       fetcher: fixtureFetch("02.01.2026 #1\nzemě|měna|množství|kód|kurz"),
     });
     expect(Result.isError(missing) && missing.error).toBeInstanceOf(

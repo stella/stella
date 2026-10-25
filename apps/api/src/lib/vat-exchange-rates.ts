@@ -101,16 +101,20 @@ const normalizeRate = (
   return normalized;
 };
 
-type RateRequest = { currency: string; taxPointDate: string; fetcher: Fetcher };
+type RateRequest = {
+  currency: string;
+  referenceDate: string;
+  fetcher: Fetcher;
+};
 type RateResult = Promise<Result<VatExchangeRate, VatExchangeRateError>>;
 
 const fetchCnbRate = async ({
   currency,
-  taxPointDate,
+  referenceDate,
   fetcher,
 }: RateRequest): RateResult => {
   // CZ zákon 235/2004 Sb. § 4 odst. 8: use the ČNB rate valid on the tax point (the daily file carries forward on non-publication days).
-  const displayDate = taxPointDate.split("-").toReversed().join(".");
+  const displayDate = referenceDate.split("-").toReversed().join(".");
   const requested = await request(
     `https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt?date=${displayDate}`,
     fetcher,
@@ -167,11 +171,11 @@ const fetchCnbRate = async ({
 
 const fetchEcbRate = async ({
   currency,
-  taxPointDate,
+  referenceDate,
   fetcher,
 }: RateRequest): RateResult => {
   // SK zákon 222/2004 Z. z. § 26 ods. 1: use the ECB rate from the day before the tax point; latest earlier publication on a gap (weekend rule UNVERIFIED).
-  const end = daysBefore(taxPointDate, 1);
+  const end = daysBefore(referenceDate, 1);
   const requested = await request(
     `https://data-api.ecb.europa.eu/service/data/EXR/D.${encodeURIComponent(currency)}.EUR.SP00.A?startPeriod=${daysBefore(end, 10)}&endPeriod=${end}&format=jsondata`,
     fetcher,
@@ -234,11 +238,11 @@ const fetchEcbRate = async ({
 
 const fetchNbpRate = async ({
   currency,
-  taxPointDate,
+  referenceDate,
   fetcher,
 }: RateRequest): RateResult => {
   // PL ustawa o VAT art. 31a ust. 1: use NBP table A's latest effectiveDate strictly before the tax point.
-  const end = daysBefore(taxPointDate, 1);
+  const end = daysBefore(referenceDate, 1);
   const requested = await request(
     `https://api.nbp.pl/api/exchangerates/rates/a/${encodeURIComponent(currency)}/${daysBefore(end, 10)}/${end}/?format=json`,
     fetcher,
@@ -268,7 +272,7 @@ const fetchNbpRate = async ({
     );
   }
   const rate = parsed.output.rates.findLast(
-    ({ effectiveDate }) => effectiveDate < taxPointDate,
+    ({ effectiveDate }) => effectiveDate < referenceDate,
   );
   if (!rate) {
     return Result.err(
@@ -310,6 +314,6 @@ export const fetchVatExchangeRate = async ({
 }: {
   country: VatRateCountry;
   currency: string;
-  taxPointDate: string;
+  referenceDate: string;
   fetcher?: Fetcher;
 }): RateResult => await VAT_RATE_SOURCES[country]({ ...rateRequest, fetcher });

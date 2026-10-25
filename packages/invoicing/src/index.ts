@@ -75,6 +75,7 @@ export { INVOICE_PDF_LABELS } from "./profiles/pdf-labels";
 export {
   homeCurrencyVat,
   normalizeVatExchangeRate,
+  vatRateReferenceDate,
   vatTaxPointDate,
   type VatRateCountry,
 } from "./vat-currency";

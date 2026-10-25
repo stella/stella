@@ -6,6 +6,7 @@ import {
   INVOICE_COUNTRY_PROFILES,
   invoiceCountryOf,
   type VatRateCountry,
+  vatRateReferenceDate,
   vatTaxPointDate,
 } from "@stll/invoicing";
 
@@ -428,15 +429,16 @@ const resolveVatRate = async (
       }),
     );
   }
-  const taxPointDate = vatTaxPointDate({
+  const dates = {
     country,
     invoiceDate: invoice.invoiceDate,
     taxableSupplyDate: invoice.taxableSupplyDate,
-  });
+  };
+  const taxPointDate = vatTaxPointDate(dates);
   const rate = await rateSource({
     country,
     currency: invoice.currency,
-    taxPointDate,
+    referenceDate: vatRateReferenceDate(dates),
   });
   if (rate.isErr()) {
     return Result.err(vatRateHandlerError(rate.error));

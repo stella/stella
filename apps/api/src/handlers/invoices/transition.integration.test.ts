@@ -179,6 +179,57 @@ describe("invoice transition integration", () => {
       .where(eq(sellerProfiles.id, sellerProfileId));
   });
 
+  test("keys a Polish rate to the issue date of an invoice issued before the supply (art. 31a ust. 2)", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "PL seller",
+      vatId: "PL5260001246",
+      vatPayer: true,
+      country: "PL",
+      defaultCurrency: "EUR",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb
+      .update(invoices)
+      .set({
+        sellerProfileId,
+        currency: "EUR",
+        invoiceDate: "2026-06-10",
+        taxableSupplyDate: "2026-06-22",
+      })
+      .where(eq(invoices.id, invoiceId));
+    await seedVatLine(invoiceId, 10_000);
+    const requested: string[] = [];
+    const handler = createTransitionInvoice({
+      rateSource: async ({ referenceDate }) => {
+        requested.push(referenceDate);
+        return Result.ok({
+          rate: "4.250000000000",
+          source: "NBP",
+          effectiveDate: "2026-06-09",
+          sourceReference: "110/A/NBP/2026",
+        });
+      },
+    });
+    const context = asTestRaw<Parameters<typeof handler.handler>[0]>(
+      createContext({ invoiceId, action: "finalize", auditEvents: [] }),
+    );
+    expect(await handler.handler(context)).toEqual({ id: invoiceId });
+    expect(requested).toEqual(["2026-06-10"]);
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { vatExchangeRateTaxPoint: true },
+      }),
+    ).toEqual({ vatExchangeRateTaxPoint: "2026-06-22" });
+    await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+    await testDb
+      .delete(sellerProfiles)
+      .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
   test("finalizes a zero-VAT foreign-currency invoice without requesting a rate", async () => {
     const sellerProfileId = createSafeId<"sellerProfile">();
     await testDb.insert(sellerProfiles).values({
