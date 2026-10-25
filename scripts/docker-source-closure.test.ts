@@ -12,6 +12,7 @@ import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
 
+import { hasPreparedGeneratedSources } from "../packages/scripts/src/prepared-generated-sources";
 import { checkBudget } from "./ci-check-budgets";
 import {
   BUN_FLAGS,
@@ -32,6 +33,7 @@ import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
 import { workflowJobSteps } from "./workflow-steps";
 
 const root = mkdtempSync(path.join(tmpdir(), "docker-source-fixtures-"));
+const repository = path.resolve(import.meta.dir, "..");
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 const put = (file: string, source: string) => {
   mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -1470,13 +1472,39 @@ describe("Docker source closure", () => {
   // timeout: This hydrates and inspects every tracked Dockerfile. Its whole
   // file took p50 22.4 s and p95 30.1 s in CI before its prunes ran at once;
   // the pool's measured budget bounds the check itself.
-  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
-    expect(
-      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
-    ).toEqual([]);
-  }, 60_000);
+  // It needs the prepared generated sources the stage copies. A checkout
+  // without them (a repeat run of changed tests, a local run) cannot decide
+  // it; the job that runs this check always prepares them (pinned below).
+  test.skipIf(!hasPreparedGeneratedSources(repository))(
+    "every tracked Dockerfile passes the full hydrated repository check",
+    async () => {
+      expect(await checkRepositoryDockerSources(repository)).toEqual([]);
+    },
+    60_000,
+  );
 
   test("runs after source hydration in the installed light job under its measured budget", () => {
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    );
+    // The job declares the prepared manifest, so the full repository check
+    // runs there; a missing or stale manifest fails it rather than skips it.
+    const job = v.parse(
+      v.object({
+        jobs: v.object({
+          "ci-checks-rest": v.looseObject({
+            env: v.looseObject({ CI_GENERATED_SOURCES_MANIFEST: v.string() }),
+          }),
+        }),
+      }),
+      workflow,
+    ).jobs["ci-checks-rest"];
+    expect(job.env.CI_GENERATED_SOURCES_MANIFEST).toEndWith(
+      "/.cache/ci-generated-sources/manifest.json",
+    );
     // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
     const steps = v.parse(
       v.array(
@@ -1487,15 +1515,7 @@ describe("Docker source closure", () => {
           "timeout-minutes": v.optional(v.number()),
         }),
       ),
-      workflowJobSteps(
-        Bun.YAML.parse(
-          readFileSync(
-            new URL("../.github/workflows/ci.yml", import.meta.url),
-            "utf-8",
-          ),
-        ),
-        "ci-checks-rest",
-      ),
+      workflowJobSteps(workflow, "ci-checks-rest"),
     );
     const restore = steps.findIndex((step) =>
       step.run?.includes("ci-generated-sources.ts restore"),

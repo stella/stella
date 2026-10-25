@@ -2036,7 +2036,7 @@ export const checkRepositoryDockerSources = async (
     for (const prune of prunes) {
       prune.kill();
     }
-    await Promise.all(prunes.map(({ exited }) => exited));
+    await Promise.all(prunes.map(async ({ exited }) => exited));
     rmSync(scratch, { recursive: true, force: true });
   }
   return problems;

@@ -465,9 +465,11 @@ export const processLauncher =
       },
     );
     active.add(child.pid);
-    let timedOut = false;
+    // Set by the timer: a mutable holder, as a local `let` reads as never
+    // reassigned after the await to type-aware lint.
+    const deadline = { reached: false };
     const timer = setTimeout(() => {
-      timedOut = true;
+      deadline.reached = true;
       killGroup(child.pid);
     }, budget.seconds * 1000);
     const exitCode = await child.exited;
@@ -477,6 +479,7 @@ export const processLauncher =
     active.delete(child.pid);
     closeSync(log);
     const usage = child.resourceUsage();
+    const timedOut = deadline.reached;
     return {
       exitCode,
       timedOut,

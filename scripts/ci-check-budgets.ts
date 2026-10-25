@@ -189,7 +189,7 @@ export const budgetBasis = (budget: CheckBudget) =>
 
 const POOL_HEADER =
   /^([\w-]+): \d+ of \d+ checks selected; running \d+ at a time$/u;
-const TABLE_HEADER = /^\| Check \| Result \| Seconds \|/u;
+const TABLE_HEADER = "| Check | Result | Seconds |";
 // A downloaded job log line starts with its timestamp.
 const TIMESTAMP = /^\d{4}-\d\d-\d\dT[\d:.]+Z /u;
 
@@ -214,7 +214,7 @@ export const durationsFromLogs = (
         inTable = false;
         continue;
       }
-      if (TABLE_HEADER.test(line)) {
+      if (line.startsWith(TABLE_HEADER)) {
         inTable = job !== undefined;
         continue;
       }

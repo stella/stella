@@ -1852,15 +1852,15 @@ test("show prints a run's digest from its artifact, else from its job logs", () 
   }
 });
 
-test("a pooled check stopped at its budget is an infrastructure record, never a finding", () => {
+test("a pooled check stopped at its budget with no failure of its own is an infrastructure record", () => {
   const cause = timedOutCheckCause(91, { seconds: 91, p95Seconds: 30.1 });
   expect(TYPED_INFRA_FAILURE.test(cause)).toBe(true);
-  // A killed test file leaves partial output; none of it is the cause.
+  // Partial output without a failed test or error command is never the
+  // cause, even when it reads like one.
   const log = runStep(4, "bun scripts/ci-check-pool.ts run ci-checks-rest", [
     "##[group]Check Docker source closure: TIMED OUT in 91.0 s",
     "(pass) Docker source closure > keeps commands after comment lines [0.12ms]",
-    "(fail) Docker source closure > a test the kill interrupted",
-    "error: expected value",
+    "Turbo prune failed to start in time; retrying",
     "##[endgroup]",
     `##[error]${cause}: timed out after 91.0 s`,
     failedCheckRecord("Check Docker source closure", cause),
