@@ -64,6 +64,47 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "tailwind-class-cache",
+    outputKind: "committed",
+    outputs: [".tailwind-cache/**"],
+    inputs: [
+      // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
+      // sources and package versions (chat and workspace-ui use the web
+      // stylesheet).
+      "apps/web/**/*.css",
+      "apps/web/**/*.{ts,tsx,js,jsx}",
+      "apps/web/package.json",
+      "packages/mcp-apps/**/*.css",
+      "packages/mcp-apps/**/*.{ts,tsx,js,jsx}",
+      "packages/mcp-apps/package.json",
+      "apps/desktop/**/*.css",
+      "apps/desktop/**/*.{ts,tsx,js,jsx}",
+      "apps/desktop/package.json",
+      "apps/playground/**/*.css",
+      "apps/playground/**/*.{ts,tsx,js,jsx}",
+      "apps/playground/package.json",
+      "apps/landing/**/*.css",
+      "apps/landing/**/*.{ts,tsx,js,jsx}",
+      "apps/landing/package.json",
+      "packages/ui/**/*.css",
+      "packages/ui/**/*.{ts,tsx,js,jsx}",
+      "packages/ui/package.json",
+      "packages/chat/**/*.{ts,tsx,js,jsx}",
+      "packages/chat/package.json",
+      "packages/workspace-ui/**/*.{ts,tsx,js,jsx}",
+      "packages/workspace-ui/package.json",
+      "oxlint.config.ts",
+      "scripts/generate-tailwind-classes.ts",
+      "patches/oxlint-tailwindcss@1.16.0.patch",
+      "package.json",
+      "bun.lock",
+    ],
+    write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
+    check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "migration-lock-baseline",
     outputKind: "committed",
     outputs: ["scripts/migration-lock-baseline.ts"],
