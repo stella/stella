@@ -17,6 +17,7 @@ import {
   READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
   READER_ANSWER_MAX_MESSAGES,
+  type ReaderAnswerSpans,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -322,7 +323,7 @@ describe("reader answer turn lifecycle", () => {
         endOffset: long.length,
       },
       { paragraphId: "p-3", quote: "follows", startOffset: 0, endOffset: 7 },
-    ];
+    ] satisfies ReaderAnswerSpans;
     const result = await prepareReaderAnswer({
       ...scope(),
       command: {
