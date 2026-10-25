@@ -64,13 +64,11 @@ type ReaderAnnotations = {
 type MigrateGuestAnnotationOptions = {
   item: ReturnType<typeof readGuestAnnotationStore>["items"][number];
   storage: Parameters<typeof removeGuestAnnotation>[0];
-  targetType: ReaderAnnotationTarget["type"];
 };
 
 const migrateGuestAnnotation = async ({
   item,
   storage,
-  targetType,
 }: MigrateGuestAnnotationOptions) => {
   const migrated = await Result.tryPromise(async () => {
     const response = await api.reader.annotations.post({
@@ -86,7 +84,7 @@ const migrateGuestAnnotation = async ({
       fingerprintKey: "useReaderAnnotations.operation:failure",
       scope: {
         type: "handler",
-        handlerId: `reader-annotations.guest.${targetType}.migrate`,
+        handlerId: `reader-annotations.guest.${item.targetType}.migrate`,
       },
       context: {
         operation: "legal-reader.guest-annotation.migrate",
@@ -101,7 +99,7 @@ const migrateGuestAnnotation = async ({
       fingerprintKey: "useReaderAnnotations.operation:failure-2",
       scope: {
         type: "handler",
-        handlerId: `reader-annotations.guest.${targetType}.remove-migrated`,
+        handlerId: `reader-annotations.guest.${item.targetType}.remove-migrated`,
       },
       context: {
         operation: "legal-reader.guest-annotation.migrate",
@@ -191,7 +189,6 @@ export const useReaderAnnotations = (
             await migrateGuestAnnotation({
               item,
               storage,
-              targetType: target.type,
             }),
         });
         setStore(readGuestAnnotationStore(storage));
@@ -213,7 +210,7 @@ export const useReaderAnnotations = (
       })(),
       "legal-reader.migrate-guest-annotations",
     );
-  }, [queryClient, signedIn, storage, t, target.type]);
+  }, [queryClient, signedIn, storage, t]);
 
   // The tab's marks as they are now, not as this render saw them: a step
   // taken right after another reads what that one left.
