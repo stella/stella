@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { getSessionFromCtx } from "better-auth/api";
 import { panic } from "better-result";
 
 import { secondFactorProviderIdentifier } from "@/api/lib/auth-artifacts";
@@ -122,6 +123,12 @@ export const sessionLinkedAccountRequirement = async (
 ): Promise<LinkedAccountRequirement> => {
   if (!ctx || !isSecondFactorCompletion(ctx)) {
     return firstFactorRequirement(ctx);
+  }
+  // Better Auth completes enrollment, not a pending sign-in, when the request
+  // already carries a session: that verification rotates the signed-in
+  // session and has no pending challenge to have recorded a first factor.
+  if ((await getSessionFromCtx(ctx)) !== null) {
+    return { type: "none" };
   }
   const grant = await ctx.getSignedCookie(
     ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME).name,

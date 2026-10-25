@@ -24,6 +24,109 @@ const password = "correct horse battery staple";
 
 type Written = "session" | "pending second factor" | "completed second factor";
 
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+/** The text an RFC 4648 base32 authenticator secret encodes. */
+const decodeBase32Text = (encoded: string): string => {
+  const bitString = [...encoded.replaceAll("=", "").toUpperCase()]
+    .map((symbol) => {
+      const index = BASE32_ALPHABET.indexOf(symbol);
+      return index === -1
+        ? panic(`Invalid base32 symbol: ${symbol}`)
+        : index.toString(2).padStart(5, "0");
+    })
+    .join("");
+  const byteCount = Math.floor(bitString.length / 8);
+  const bytes = Array.from({ length: byteCount }, (_unused, byte) =>
+    Number.parseInt(bitString.slice(byte * 8, byte * 8 + 8), 2),
+  );
+  return new TextDecoder().decode(Uint8Array.from(bytes));
+};
+
+/**
+ * Authenticator enrollment as Better Auth ships it (verification required),
+ * with the production session hook: the signed-in user verifies a real TOTP
+ * code, which rotates their session.
+ */
+const enrollAuthenticator = async () => {
+  const auth = betterAuth({
+    baseURL: "http://localhost:3001",
+    secret: "test-secret-that-is-long-enough-for-better-auth",
+    database: memoryAdapter({
+      user: [],
+      session: [],
+      account: [],
+      verification: [],
+      twoFactor: [],
+    }),
+    emailAndPassword: { enabled: true },
+    plugins: [twoFactor()],
+    databaseHooks: {
+      session: {
+        create: {
+          after: async (session, ctx) => {
+            const ended = await endSessionWithoutLinkedAccount({
+              requirement: await sessionLinkedAccountRequirement(ctx),
+              userId: toSafeId<"user">(session.userId),
+              hasAccount: async (userId, providerId) => {
+                const context = await auth.$context;
+                const accounts =
+                  await context.internalAdapter.findAccounts(userId);
+                return accounts.some(
+                  (account) => account.providerId === providerId,
+                );
+              },
+              endSession: async () => {
+                await ctx?.context.internalAdapter.deleteSession(session.token);
+              },
+            });
+            if (ended) {
+              throw new APIError("UNAUTHORIZED", {
+                message: DISCONNECTED_SIGN_IN_MESSAGE,
+              });
+            }
+          },
+        },
+      },
+    },
+  });
+  const cookiesOf = (response: Response) =>
+    response.headers
+      .getSetCookie()
+      .map((cookie) => cookie.split(";")[0])
+      .join("; ");
+  await auth.api.signUpEmail({ body: { email, password, name: "Account" } });
+  const signedIn = await auth.api.signInEmail({
+    body: { email, password },
+    asResponse: true,
+  });
+  const cookie = cookiesOf(signedIn);
+  const enabled = await auth.api.enableTwoFactor({
+    body: { password },
+    headers: new Headers({ cookie }),
+  });
+  if (enabled.method !== "totp") {
+    panic("Two-factor enrolment did not return an authenticator URI");
+  }
+  const encodedSecret =
+    new URL(enabled.totpURI).searchParams.get("secret") ??
+    panic("Authenticator URI has no secret");
+  const { code } = await auth.api.generateTOTP({
+    body: { secret: decodeBase32Text(encodedSecret) },
+  });
+  const verified = await auth.handler(
+    new Request("http://localhost:3001/api/auth/two-factor/verify-totp", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ code }),
+    }),
+  );
+  const session = await auth.api.getSession({
+    headers: new Headers({ cookie: cookiesOf(verified) || cookie }),
+  });
+  return { verified, session };
+};
+
 /**
  * A password sign-in through Better Auth with the production session and
  * pending second-factor hooks and the cookie cache. With `reset.before` set,
@@ -406,6 +509,13 @@ describe("sign-in account provider", () => {
       }),
     ).toBe(true);
     expect({ lookups, ended }).toEqual({ lookups: 0, ended: true });
+  });
+
+  test("a signed-in user's authenticator enrollment keeps its rotated session", async () => {
+    const { verified, session } = await enrollAuthenticator();
+    expect(verified.status).toBe(200);
+    expect(session?.user.email).toBe(email);
+    expect(session?.user.twoFactorEnabled).toBe(true);
   });
 
   test("a callback that names no provider is refused", () => {
