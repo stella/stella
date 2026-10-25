@@ -11,7 +11,7 @@ const candidates = [
     displayName: "Registry Search",
     authType: "oauth2",
     status: "needs_reauth",
-    expiresAt: "2026-01-01T00:00:00Z",
+    expiresAt: null,
   },
   {
     id: toSafeId<"mcpUserConnection">("00000000-0000-4000-8000-000000000002"),
