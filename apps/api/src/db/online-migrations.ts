@@ -72,6 +72,10 @@ import type {
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 import {
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
+} from "./organization-access-state-constraint-validation";
+import {
   READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   READER_ANNOTATION_CLAIM_CONSTRAINTS,
 } from "./reader-annotation-claim-constraint-validation";
@@ -797,6 +801,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
   ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
@@ -822,6 +827,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
@@ -883,7 +889,8 @@ export const runOnlineMigrations = async (
   );
 
 type OnlineValidationOutcome =
-  { type: "validated" } | { type: "migrator_active" };
+  | { type: "validated" }
+  | { type: "migrator_active" };
 
 const VALIDATED = {
   type: "validated",

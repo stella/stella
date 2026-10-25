@@ -1,7 +1,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-schema - replacing this check widens the accepted evaluation_ended shape without removing lifecycle validation.
+-- stella-migration-safety: reviewed drop-constraint - the replacement check added in the same transaction only widens the accepted evaluation_ended shape and keeps every other lifecycle rule; the next migration validates it; rollback re-adds the previous check, which requires evaluation start and end timestamps for evaluation_ended.
 ALTER TABLE "organization_access_states"
   DROP CONSTRAINT "organization_access_states_shape";--> statement-breakpoint
 ALTER TABLE "organization_access_states"
