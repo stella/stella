@@ -21,20 +21,21 @@ pre-commit:
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
       # Lint autofixes never reach a commit unreviewed: the hook fails and
-      # prints them instead (scripts/precommit-lint.ts). stage_fixed makes
-      # lefthook hide unstaged changes, so lint checks the staged text; the
-      # script restores every file, so it never stages a fix.
+      # prints them instead (scripts/precommit-lint.ts). lefthook hides the
+      # unstaged part of partially staged files during every pre-commit, so
+      # lint checks the staged text; the script restores every file and
+      # never stages a fix.
       run: bun scripts/precommit-lint.ts {staged_files}
-      stage_fixed: true
     format:
       # bun fmt re-stages what it formats and refuses a partially staged file
       # whose staged text needs formatting.
       run: bun fmt --staged
     i18n:
       glob: "apps/web/src/i18n/langs/*.{json,ts}"
-      # The sync runs packages/scripts tools and an apps/web script.
-      run: bash scripts/ensure-hook-deps.sh packages/scripts apps/web && bun run i18n:sync
-      stage_fixed: true
+      # The sync runs packages/scripts tools and an apps/web script. The
+      # script stages exactly the files the sync changed and refuses before
+      # writing when one of them holds unstaged changes.
+      run: bash scripts/ensure-hook-deps.sh packages/scripts apps/web && bun scripts/precommit-i18n.ts
     ai-skills:
       glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"
       run: bash scripts/check-ai-skill-sources.sh
