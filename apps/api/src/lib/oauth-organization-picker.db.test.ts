@@ -268,7 +268,7 @@ describe("OAuth organization picker", () => {
       consentPage,
     });
     const claims = decodeJwt(grant.accessToken);
-    expect(claims["sub"]).toBe(second.userId);
+    expect(claims.sub).toBe(second.userId);
     expect(claims["org_id"]).toBe(secondOrganization.id);
   });
 
