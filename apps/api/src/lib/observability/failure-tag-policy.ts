@@ -307,6 +307,7 @@ export const TAGGED_FAILURE_REASON = {
   OrganizationStorageTeardownStateError: "tagged_failure",
   OwnerAccessLostError: "tagged_failure",
   ParseXmlError: "tagged_failure",
+  PartnerClientOperatorError: "tagged_failure",
   PatternError: "tagged_failure",
   PayloadBudgetError: "tagged_failure",
   PdfRevisionAppendError: "tagged_failure",
