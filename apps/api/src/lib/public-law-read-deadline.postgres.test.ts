@@ -74,6 +74,34 @@ if (!databaseUrl || !runPostgres) {
       ).toBe(1);
     });
 
+    test("a statement timeout the request clamped is the budget's, even before the deadline", async () => {
+      // The clamped statement_timeout floors to whole milliseconds, so its
+      // cancel can land while a fraction of the budget remains. A shorter
+      // timeout inside the same read stands in for that early cancel, with
+      // budget plainly left: provenance, not the clock, names it.
+      const outcome = await runWithinRequestLatencyBudget(
+        { label: "read_statute", budgetMs: BUDGET_MS },
+        async () =>
+          await Result.tryPromise({
+            try: async () =>
+              await publicLawReadDb(async (tx) => {
+                await tx.execute(
+                  sql`SELECT set_config('statement_timeout', '100ms', true)`,
+                );
+                await tx.execute(sql`SELECT pg_sleep(1)`);
+                return "answered late";
+              }),
+            catch: (cause) => cause,
+          }),
+      );
+      const error = Result.isError(outcome) ? outcome.error : undefined;
+      expect(error).toBeInstanceOf(TimeoutError);
+      expect(readFailureBrand(error)).toEqual({
+        reason: "timeout_budgeted",
+        source: "instance",
+      });
+    });
+
     test("a read inside its budget answers, and a read outside a scope keeps no deadline", async () => {
       const scoped = await runWithinRequestLatencyBudget(
         { label: "read_statute", budgetMs: BUDGET_MS },

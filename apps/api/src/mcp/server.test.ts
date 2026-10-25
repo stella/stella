@@ -33,6 +33,10 @@ import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-an
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  requestBoundedTimeoutMs,
+  runBoundedRequestStep,
+} from "@/api/lib/load/request-latency-budget";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -67,6 +71,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
+import { mcpRequestStartedAt } from "@/api/mcp/request-metrics";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -332,6 +337,57 @@ describe("handleMcpHttpRequest", () => {
         .map((line) => JSON.parse(line))
         .find((record) => record.event === "mcp.request.phases"),
     ).toMatchObject({ method: "tools/list", path: "modern" });
+  });
+
+  test("a tool's budget counts from the request start, preparation included", async () => {
+    const preparationMs = 400;
+    const budgetMs = mcpToolLatencyBudgetMs("list_matters");
+    const staticDefinition = listStaticMcpToolDefinitions("default").find(
+      ({ name }) => name === "list_matters",
+    );
+    if (staticDefinition === undefined) {
+      panic("Canonical list_matters tool definition is missing");
+    }
+    authenticateMcpRequestMock.mockImplementation(async () => {
+      // real-time: preparation time is what the deadline must charge.
+      await Bun.sleep(preparationMs);
+      return Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      });
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    getMcpToolDefinitionMock.mockResolvedValue(staticDefinition);
+    let dependencyTimeoutMs = Number.POSITIVE_INFINITY;
+    let endedAfterRequestStartMs = Number.POSITIVE_INFINITY;
+    handleMcpToolCallMock.mockImplementation(async () => {
+      const requestStartedAt = mcpRequestStartedAt() ?? Number.NaN;
+      // A dependency that would wait a minute takes whatever is left.
+      dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
+      const step = await runBoundedRequestStep(
+        async () => await Promise.withResolvers<never>().promise,
+        { label: "slow-dependency", budgetMs: 60_000 },
+      );
+      endedAfterRequestStartMs = performance.now() - requestStartedAt;
+      return { content: [{ type: "text", text: step.status }] };
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({
+        id: 1,
+        method: "tools/call",
+        params: { arguments: {}, name: "list_matters" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(dependencyTimeoutMs).toBeLessThanOrEqual(budgetMs - preparationMs);
+    // The dependency gives way at the request's deadline, counted from the
+    // request's start as the metric and the canary count it, not at
+    // preparation plus a fresh budget.
+    expect(endedAfterRequestStartMs).toBeGreaterThanOrEqual(budgetMs - 50);
+    expect(endedAfterRequestStartMs).toBeLessThan(budgetMs + 150);
   });
 
   test.each([

@@ -34,12 +34,22 @@ type RequestLatencyScope = {
 
 const requestLatencyScope = new AsyncLocalStorage<RequestLatencyScope>();
 
+/**
+ * Open a request latency scope. `startedAtMs` is the `performance.now()` at
+ * which the request began, so time spent before the scope opens (auth,
+ * context, server build) is charged to the budget the request is judged by;
+ * omitted, the budget starts now.
+ */
 export const runWithinRequestLatencyBudget = <T>(
-  { label, budgetMs }: { label: string; budgetMs: number },
+  {
+    label,
+    budgetMs,
+    startedAtMs = performance.now(),
+  }: { label: string; budgetMs: number; startedAtMs?: number | undefined },
   fn: () => T,
 ): T =>
   requestLatencyScope.run(
-    { label, budgetMs, deadlineAtMs: performance.now() + budgetMs },
+    { label, budgetMs, deadlineAtMs: startedAtMs + budgetMs },
     fn,
   );
 
@@ -68,18 +78,26 @@ export const requestBoundedTimeoutMs = (timeoutMs: number): number => {
 };
 
 /**
- * A failure that surfaced once the request's budget was spent, as the
- * budget's own `TimeoutError` (classified `timeout_budgeted`, the original
- * failure as its cause); undefined while budget remains or outside a scope.
+ * A failure the request's budget caused, as the budget's own `TimeoutError`
+ * (classified `timeout_budgeted`, the original failure as its cause), or
+ * undefined outside a scope and for any other failure.
  *
- * A dependency the request clamped to its deadline fails in its own terms
- * (a cancelled statement, a closed connection); this names what ended it.
+ * A dependency the request clamped to its deadline fails in its own terms (a
+ * cancelled statement, a session the server ended). The caller says which of
+ * its failures are that clamped timeout (`clampedTimeout`), so one surfacing
+ * a hair before the deadline (the clamp floors to whole milliseconds) is
+ * still the budget's. A failure once the budget is spent is the budget's too:
+ * it can only be the clamped dependency giving way in some other form.
  */
 export const requestBudgetExpiry = (
   cause: unknown,
+  { clampedTimeout }: { clampedTimeout: boolean },
 ): TimeoutError | undefined => {
   const scope = requestLatencyScope.getStore();
-  if (scope === undefined || remainingRequestBudgetMs() !== 0) {
+  if (
+    scope === undefined ||
+    (!clampedTimeout && remainingRequestBudgetMs() !== 0)
+  ) {
     return undefined;
   }
   return classifyFailure(

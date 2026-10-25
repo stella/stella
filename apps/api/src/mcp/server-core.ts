@@ -106,6 +106,7 @@ import {
 } from "@/api/mcp/observe-tool-call";
 import {
   addMcpPhaseDuration,
+  mcpRequestStartedAt,
   measureMcpPhase,
   observeMcpRequest,
   setMcpMetricParsedMethod,
@@ -1003,7 +1004,8 @@ export const createMcpHttpRequestHandler = ({
     const metricToolName = classifyMcpMetricToolName(definition.name, mode);
     const run = async (signal?: AbortSignal) => {
       signal?.throwIfAborted();
-      // Everything the tool waits on gives up inside the tool's budget: the
+      // Everything the tool waits on gives up inside the tool's budget, counted
+      // from the request's start as the metric and the canary count it: the
       // corpus client and public-law statements clamp to what is left of it.
       const result = await measureMcpPhase(
         "dispatch",
@@ -1012,6 +1014,7 @@ export const createMcpHttpRequestHandler = ({
             {
               label: metricToolName,
               budgetMs: mcpToolLatencyBudgetMs(metricToolName),
+              startedAtMs: mcpRequestStartedAt(),
             },
             async () =>
               await handleMcpToolCall({

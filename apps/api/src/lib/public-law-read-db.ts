@@ -21,6 +21,7 @@ import {
   requestBoundedTimeoutMs,
   requestBudgetExpiry,
 } from "@/api/lib/load/request-latency-budget";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -517,9 +518,10 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
  * accidentally depending on authenticated route macros.
  *
  * Inside a request latency scope the guards end the transaction at the
- * request's deadline, and a failure that surfaces once the budget is spent
- * (the cancelled statement, or the session the server ended) is reported as
- * the budget's `timeout_budgeted` TimeoutError, the database error its cause.
+ * request's deadline. Their timeouts there are the request's (clamped to its
+ * deadline), so a statement or transaction timeout is reported as the
+ * budget's `timeout_budgeted` TimeoutError, the database error its cause,
+ * even when it surfaces a hair before the deadline.
  */
 export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
@@ -539,5 +541,20 @@ export const publicLawReadDb = async <T>(
   if (Result.isOk(outcome)) {
     return outcome.value;
   }
-  throw requestBudgetExpiry(outcome.error) ?? outcome.error;
+  throw (
+    requestBudgetExpiry(outcome.error, {
+      clampedTimeout: isRequestClampedTimeout(outcome.error),
+    }) ?? outcome.error
+  );
+};
+
+/** The timeouts the read guards clamp to the request's deadline. */
+const REQUEST_CLAMPED_SQL_STATES: ReadonlySet<string> = new Set([
+  PG_ERROR.QUERY_CANCELED,
+  PG_ERROR.TRANSACTION_TIMEOUT,
+]);
+
+const isRequestClampedTimeout = (error: unknown): boolean => {
+  const code = getPgErrorCode(error);
+  return code !== undefined && REQUEST_CLAMPED_SQL_STATES.has(code);
 };

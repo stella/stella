@@ -71,33 +71,69 @@ describe("request latency budget", () => {
 });
 
 describe("request budget expiry", () => {
-  test("names nothing outside a scope or while budget remains", () => {
-    const cause = new Error("statement cancelled");
-    expect(requestBudgetExpiry(cause)).toBeUndefined();
+  const cause = new Error("statement cancelled");
+
+  test("names nothing outside a scope, or for another failure while budget remains", () => {
+    expect(
+      requestBudgetExpiry(cause, { clampedTimeout: true }),
+    ).toBeUndefined();
     runWithinRequestLatencyBudget(
       { label: "read_statute", budgetMs: 2000 },
       () => {
-        expect(requestBudgetExpiry(cause)).toBeUndefined();
+        expect(
+          requestBudgetExpiry(cause, { clampedTimeout: false }),
+        ).toBeUndefined();
       },
     );
   });
 
-  test("reports a failure after the deadline as the budget's, cause kept", () => {
-    const cause = new Error("connection ended by the server");
+  test("names a clamped timeout that surfaces just before the deadline", () => {
+    // The clamp floors to whole milliseconds, so the dependency can give up
+    // while a fraction of the budget is left: provenance, not the clock,
+    // makes it the budget's.
+    runWithinRequestLatencyBudget(
+      { label: "read_statute", budgetMs: 2000 },
+      () => {
+        expect(remainingRequestBudgetMs()).toBeGreaterThan(0);
+        const expiry = requestBudgetExpiry(cause, { clampedTimeout: true });
+        expect(expiry).toBeInstanceOf(TimeoutError);
+        expect(readFailureBrand(expiry)).toEqual({
+          reason: "timeout_budgeted",
+          source: "instance",
+        });
+      },
+    );
+  });
+
+  test("reports any failure after the deadline as the budget's, cause kept", () => {
+    const ended = new Error("connection ended by the server");
     runWithinRequestLatencyBudget(
       { label: "read_statute", budgetMs: 0 },
       () => {
-        const expiry = requestBudgetExpiry(cause);
+        const expiry = requestBudgetExpiry(ended, { clampedTimeout: false });
         expect(expiry).toBeInstanceOf(TimeoutError);
         expect(expiry).toMatchObject({
           label: "read_statute",
           timeoutMs: 0,
-          cause,
+          cause: ended,
         });
         expect(readFailureBrand(expiry)).toEqual({
           reason: "timeout_budgeted",
           source: "instance",
         });
+      },
+    );
+  });
+
+  test("counts the budget from the request's start, not from the scope", () => {
+    runWithinRequestLatencyBudget(
+      {
+        label: "read_statute",
+        budgetMs: 2000,
+        startedAtMs: performance.now() - 1500,
+      },
+      () => {
+        expect(requestBoundedTimeoutMs(30_000)).toBeLessThanOrEqual(500);
       },
     );
   });

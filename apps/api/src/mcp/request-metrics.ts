@@ -86,6 +86,13 @@ export const addMcpPhaseDuration = (
   }
 };
 
+/**
+ * The `performance.now()` at which the observed MCP request began, the start
+ * its latency budget is judged from; undefined outside an observed request.
+ */
+export const mcpRequestStartedAt = (): number | undefined =>
+  phaseStore.getStore()?.startedAt;
+
 export const setMcpMetricProtocolPath = (path: "legacy" | "modern"): void => {
   const state = phaseStore.getStore();
   if (state !== undefined) {
