@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -47,9 +47,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   fetchVatExchangeRate,
   type VatExchangeRate,
-  type VatRateCurrencyError,
-  type VatRateMalformedError,
-  type VatRateUnavailableError,
+  type VatExchangeRateError,
 } from "@/api/lib/vat-exchange-rates";
 
 type TransitionAction =
@@ -368,28 +366,38 @@ type ResolvedVatRate = {
   rate: VatExchangeRate;
 };
 
-const vatRateHandlerError = (
-  error: VatRateUnavailableError | VatRateCurrencyError | VatRateMalformedError,
-) => {
-  if (error._tag === "VatRateCurrencyError") {
-    return new HandlerError({
-      status: 422,
-      message: "The invoice currency has no official VAT exchange rate",
-      hint: "Use a currency published by the seller's official rate source, then finalize again.",
-    });
+const vatRateHandlerError = (error: VatExchangeRateError) => {
+  switch (error._tag) {
+    case "VatRateCurrencyError":
+      return new HandlerError({
+        status: 422,
+        message: "The invoice currency has no official VAT exchange rate",
+        hint: "Use a currency published by the seller's official rate source, then finalize again.",
+      });
+    case "VatRateNotPublishedError":
+      return new HandlerError({
+        status: 409,
+        message:
+          "The official VAT exchange rate for this tax point is not published yet",
+        hint: `Finalize once the rate for ${error.availableFrom} is published, or correct the taxable supply date.`,
+      });
+    case "VatRateMalformedError":
+      return new HandlerError({
+        status: 503,
+        message: "The official VAT exchange-rate response could not be read",
+        hint: "Retry finalizing later; if the problem continues, use the seller's home VAT currency.",
+      });
+    case "VatRateUnavailableError":
+      return new HandlerError({
+        status: 503,
+        message: "The official VAT exchange-rate service is unavailable",
+        hint: "Retry finalizing later; no changes were made to the invoice.",
+      });
+    default: {
+      error satisfies never;
+      return panic("Unknown VAT exchange-rate error");
+    }
   }
-  if (error._tag === "VatRateMalformedError") {
-    return new HandlerError({
-      status: 503,
-      message: "The official VAT exchange-rate response could not be read",
-      hint: "Retry finalizing later; if the problem continues, use the seller's home VAT currency.",
-    });
-  }
-  return new HandlerError({
-    status: 503,
-    message: "The official VAT exchange-rate service is unavailable",
-    hint: "Retry finalizing later; no changes were made to the invoice.",
-  });
 };
 
 type VatRatePreflight = {

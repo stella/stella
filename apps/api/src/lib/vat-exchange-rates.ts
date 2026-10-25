@@ -14,6 +14,10 @@ export class VatRateCurrencyError extends TaggedError("VatRateCurrencyError")<{
 export class VatRateMalformedError extends TaggedError(
   "VatRateMalformedError",
 )<{ message: string; error?: unknown }> {}
+/** The statutory publication for this date lies ahead; finalize once it exists. */
+export class VatRateNotPublishedError extends TaggedError(
+  "VatRateNotPublishedError",
+)<{ message: string; availableFrom: string }> {}
 
 export type VatExchangeRate = {
   rate: string;
@@ -37,7 +41,16 @@ type RateHttpRequest = {
   currencyOn404?: { source: string; currency: string };
 };
 
-const request = async ({ url, fetcher, currencyOn404 }: RateHttpRequest) => {
+type RateHttpResult = Result<
+  Response,
+  VatRateUnavailableError | VatRateCurrencyError
+>;
+
+const request = async ({
+  url,
+  fetcher,
+  currencyOn404,
+}: RateHttpRequest): Promise<RateHttpResult> => {
   const requested = await Result.tryPromise({
     try: async () =>
       await fetcher(url, {
@@ -97,7 +110,10 @@ const ecbSchema = v.object({
 });
 
 export type VatExchangeRateError =
-  VatRateUnavailableError | VatRateCurrencyError | VatRateMalformedError;
+  | VatRateUnavailableError
+  | VatRateCurrencyError
+  | VatRateMalformedError
+  | VatRateNotPublishedError;
 
 const malformed = (message: string, error?: unknown) =>
   Result.err(new VatRateMalformedError({ message, error }));
@@ -119,15 +135,43 @@ const normalizeRate = (
 type RateRequest = {
   currency: string;
   referenceDate: string;
+  /** Today in Prague time (CET/CEST), where ČNB, ECB and NBP publish. */
+  today: string;
   fetcher: Fetcher;
 };
+
+const notPublished = (availableFrom: string) =>
+  Result.err(
+    new VatRateNotPublishedError({
+      message: `The official exchange rate for ${availableFrom} is not published yet`,
+      availableFrom,
+    }),
+  );
+
+/**
+ * A day-before source must hold its publication for `required`: while that day
+ * is ahead, or is today and its rate is not out yet, the latest observation is
+ * the wrong one. Once the day has passed, a gap is a non-publication day.
+ */
+const publicationPending = (input: {
+  required: string;
+  latest: string;
+  today: string;
+}) =>
+  input.required > input.today ||
+  (input.required === input.today && input.latest !== input.required);
 type RateResult = Promise<Result<VatExchangeRate, VatExchangeRateError>>;
 
 const fetchCnbRate = async ({
   currency,
   referenceDate,
+  today,
   fetcher,
 }: RateRequest): RateResult => {
+  // ČNB's file for a future date carries the latest rate, not the one valid then.
+  if (referenceDate > today) {
+    return notPublished(referenceDate);
+  }
   // CZ zákon 235/2004 Sb. § 4 odst. 8: use the ČNB rate valid on the tax point (the daily file carries forward on non-publication days).
   const displayDate = referenceDate.split("-").toReversed().join(".");
   const requested = await request({
@@ -187,10 +231,14 @@ const fetchCnbRate = async ({
 const fetchEcbRate = async ({
   currency,
   referenceDate,
+  today,
   fetcher,
 }: RateRequest): RateResult => {
   // SK zákon 222/2004 Z. z. § 26 ods. 1: use the ECB rate from the day before the tax point; latest earlier publication on a gap (weekend rule UNVERIFIED).
   const end = daysBefore(referenceDate, 1);
+  if (end > today) {
+    return notPublished(end);
+  }
   const requested = await request({
     url: `https://data-api.ecb.europa.eu/service/data/EXR/D.${encodeURIComponent(currency)}.EUR.SP00.A?startPeriod=${daysBefore(end, 10)}&endPeriod=${end}&format=jsondata`,
     fetcher,
@@ -236,6 +284,9 @@ const fetchEcbRate = async ({
       }),
     );
   }
+  if (publicationPending({ required: end, latest: date, today })) {
+    return notPublished(end);
+  }
   const normalized = normalizeRate({
     quote: String(quote),
     foreignUnits: 1,
@@ -255,10 +306,14 @@ const fetchEcbRate = async ({
 const fetchNbpRate = async ({
   currency,
   referenceDate,
+  today,
   fetcher,
 }: RateRequest): RateResult => {
   // PL ustawa o VAT art. 31a ust. 1: use NBP table A's latest effectiveDate strictly before the tax point.
   const end = daysBefore(referenceDate, 1);
+  if (end > today) {
+    return notPublished(end);
+  }
   const requested = await request({
     url: `https://api.nbp.pl/api/exchangerates/rates/a/${encodeURIComponent(currency)}/${daysBefore(end, 10)}/${end}/?format=json`,
     fetcher,
@@ -299,6 +354,11 @@ const fetchNbpRate = async ({
       }),
     );
   }
+  if (
+    publicationPending({ required: end, latest: rate.effectiveDate, today })
+  ) {
+    return notPublished(end);
+  }
   const normalized = normalizeRate({
     quote: String(rate.mid),
     foreignUnits: 1,
@@ -327,10 +387,13 @@ const VAT_RATE_SOURCES = {
 export const fetchVatExchangeRate = async ({
   country,
   fetcher = fetch,
+  today = Temporal.Now.plainDateISO("Europe/Prague").toString(),
   ...rateRequest
 }: {
   country: VatRateCountry;
   currency: string;
   referenceDate: string;
+  today?: string;
   fetcher?: Fetcher;
-}): RateResult => await VAT_RATE_SOURCES[country]({ ...rateRequest, fetcher });
+}): RateResult =>
+  await VAT_RATE_SOURCES[country]({ ...rateRequest, today, fetcher });

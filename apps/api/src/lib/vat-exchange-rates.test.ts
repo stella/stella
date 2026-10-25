@@ -5,6 +5,7 @@ import {
   fetchVatExchangeRate,
   VatRateCurrencyError,
   VatRateMalformedError,
+  VatRateNotPublishedError,
   VatRateUnavailableError,
 } from "./vat-exchange-rates";
 
@@ -35,6 +36,7 @@ describe("official VAT exchange rates", () => {
         country: "CZ",
         currency: "JPY",
         referenceDate: "2026-10-24",
+        today: "2026-12-31",
         fetcher: fixtureFetch(await fixture("cnb-2026-10-24.txt"), seen),
       }),
     );
@@ -57,6 +59,7 @@ describe("official VAT exchange rates", () => {
         country: "SK",
         currency: "USD",
         referenceDate: "2026-10-26",
+        today: "2026-12-31",
         fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json"), seen),
       }),
     );
@@ -71,6 +74,7 @@ describe("official VAT exchange rates", () => {
         country: "PL",
         currency: "EUR",
         referenceDate: "2026-01-05",
+        today: "2026-12-31",
         fetcher: fixtureFetch(await fixture("nbp-2026-01-02.json")),
       }),
     );
@@ -87,6 +91,7 @@ describe("official VAT exchange rates", () => {
       country: "PL",
       currency: "XYZ",
       referenceDate: "2026-01-02",
+      today: "2026-12-31",
       fetcher: fixtureFetch("{}"),
     });
     expect(Result.isError(malformed) && malformed.error).toBeInstanceOf(
@@ -96,6 +101,7 @@ describe("official VAT exchange rates", () => {
       country: "CZ",
       currency: "XYZ",
       referenceDate: "2026-01-02",
+      today: "2026-12-31",
       fetcher: fixtureFetch("02.01.2026 #1\nzemě|měna|množství|kód|kurz"),
     });
     expect(Result.isError(missing) && missing.error).toBeInstanceOf(
@@ -110,6 +116,7 @@ describe("official VAT exchange rates", () => {
         country,
         currency: "XYZ",
         referenceDate: "2026-01-05",
+        today: "2026-12-31",
         fetcher: async () =>
           new Response("404 NotFound - Not Found - Brak danych", {
             status: 404,
@@ -122,6 +129,7 @@ describe("official VAT exchange rates", () => {
         country,
         currency: "USD",
         referenceDate: "2026-01-05",
+        today: "2026-12-31",
         fetcher: async () => new Response("", { status: 503 }),
       });
       expect(Result.isError(outage) && outage.error).toBeInstanceOf(
@@ -129,4 +137,44 @@ describe("official VAT exchange rates", () => {
       );
     },
   );
+
+  test.each([
+    ["CZ", "2026-10-30", "2026-10-30"],
+    ["SK", "2026-10-30", "2026-10-29"],
+    ["PL", "2026-10-30", "2026-10-29"],
+  ] as const)(
+    "%s: a future tax point is refused before any request",
+    async (country, referenceDate, availableFrom) => {
+      const seen: string[] = [];
+      const result = await fetchVatExchangeRate({
+        country,
+        currency: "USD",
+        referenceDate,
+        today: "2026-10-26",
+        fetcher: fixtureFetch("", seen),
+      });
+      expect(Result.isError(result) && result.error).toBeInstanceOf(
+        VatRateNotPublishedError,
+      );
+      expect(Result.isError(result) && result.error.availableFrom).toBe(
+        availableFrom,
+      );
+      expect(seen).toEqual([]);
+    },
+  );
+
+  test("SK: today's ECB publication still pending refuses instead of using yesterday's", async () => {
+    // Required: Monday 2026-10-26 (the day before a Tuesday tax point); the
+    // response holds only Friday's publication because Monday's is not out.
+    const result = await fetchVatExchangeRate({
+      country: "SK",
+      currency: "USD",
+      referenceDate: "2026-10-27",
+      today: "2026-10-26",
+      fetcher: fixtureFetch(await fixture("ecb-2026-10-23.json")),
+    });
+    expect(Result.isError(result) && result.error).toBeInstanceOf(
+      VatRateNotPublishedError,
+    );
+  });
 });
