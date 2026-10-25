@@ -89,6 +89,7 @@
     "./panel-inset": "./src/lib/panel-inset.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
+    "./steps": "./src/components/steps.tsx",
     "./positioner-sizing": "./src/lib/positioner-sizing.ts",
     "./preview-card": "./src/components/preview-card.tsx",
     "./preview-pane": "./src/components/preview-pane.tsx",

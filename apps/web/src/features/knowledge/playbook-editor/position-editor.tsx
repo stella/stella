@@ -410,7 +410,6 @@ export const PositionEditor = ({
           </span>
         }
         className="gap-1.5"
-        index={index}
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}
