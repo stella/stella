@@ -1,0 +1,161 @@
+name: Mobile Release Plan
+
+defaults:
+  run:
+    shell: bash
+
+# After each merge that can touch the mobile app, reports what each variant's
+# next release needs (apps/mobile/scripts/release-plan.ts): an over-the-air
+# update when this commit's native fingerprint matches the variant's latest
+# TestFlight build, or a new TestFlight build first when it does not.
+#
+# Plan only: the job summary names the workflow to run, and nothing here
+# publishes, builds or holds a secret. Release Mobile iOS and Publish Mobile
+# Update stay manual and reviewed.
+#
+# Each fingerprint is computed at its own commit with that commit's installed
+# packages, under its own variant (a variant's name and identifier are part
+# of it), on Linux; the pull request check proves Linux and the macOS
+# TestFlight build agree on iOS.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "bun.lock"
+      - "package.json"
+      - "patches/**"
+  workflow_dispatch:
+
+permissions: {}
+
+# Only the newest commit's plan matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  builds:
+    name: Latest TestFlight builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      builds: ${{ steps.builds.outputs.result }}
+    steps:
+      - id: builds
+        name: Find each variant's latest TestFlight build
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 3
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: "release-mobile-ios.yml",
+              branch: "main",
+              status: "success",
+              per_page: 100,
+            });
+            // Newest first; the run name ends with the variant.
+            const builds = {};
+            for (const run of data.workflow_runs) {
+              const variant = run.display_title.split(" ").at(-1);
+              if (["preview", "production"].includes(variant) && !(variant in builds)) {
+                builds[variant] = { sha: run.head_sha, url: run.html_url };
+              }
+            }
+            return builds;
+
+  plan:
+    name: Release plan
+    needs: builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      PREVIEW_SHA: ${{ fromJSON(needs.builds.outputs.builds).preview.sha }}
+      PREVIEW_URL: ${{ fromJSON(needs.builds.outputs.builds).preview.url }}
+      PRODUCTION_SHA: ${{ fromJSON(needs.builds.outputs.builds).production.sha }}
+      PRODUCTION_URL: ${{ fromJSON(needs.builds.outputs.builds).production.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every build's commit is on main.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Check out the preview build's commit
+        if: env.PREVIEW_SHA != ''
+        run: git checkout --quiet "$PREVIEW_SHA"
+
+      - name: Install the preview build's mobile dependencies
+        if: env.PREVIEW_SHA != ''
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Fingerprint the preview build
+        if: env.PREVIEW_SHA != ''
+        working-directory: apps/mobile
+        env:
+          APP_VARIANT: preview
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          fingerprint=null
+          if [ -f scripts/fingerprint.ts ]; then
+            fingerprint="$(bun scripts/fingerprint.ts ios --json)"
+          fi
+          jq -n --arg sha "$PREVIEW_SHA" --arg url "$PREVIEW_URL" --argjson fingerprint "$fingerprint" \
+            '{ sha: $sha, url: $url, fingerprint: $fingerprint }' > "$RUNNER_TEMP/plan/build-preview.json"
+
+      - name: Check out the production build's commit
+        if: env.PRODUCTION_SHA != ''
+        run: git checkout --quiet "$PRODUCTION_SHA"
+
+      - name: Install the production build's mobile dependencies
+        if: env.PRODUCTION_SHA != ''
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Fingerprint the production build
+        if: env.PRODUCTION_SHA != ''
+        working-directory: apps/mobile
+        env:
+          APP_VARIANT: production
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          fingerprint=null
+          if [ -f scripts/fingerprint.ts ]; then
+            fingerprint="$(bun scripts/fingerprint.ts ios --json)"
+          fi
+          jq -n --arg sha "$PRODUCTION_SHA" --arg url "$PRODUCTION_URL" --argjson fingerprint "$fingerprint" \
+            '{ sha: $sha, url: $url, fingerprint: $fingerprint }' > "$RUNNER_TEMP/plan/build-production.json"
+
+      - name: Check out this commit
+        run: git checkout --quiet "$GITHUB_SHA"
+
+      - name: Install this commit's mobile dependencies
+        uses: ./.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/mobile...","--filter","!stella"]'
+
+      - name: Plan
+        working-directory: apps/mobile
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          for variant in preview production; do
+            APP_VARIANT="$variant" bun scripts/fingerprint.ts ios --json > "$RUNNER_TEMP/plan/head-$variant.json"
+          done
+          bun scripts/release-plan.ts "$RUNNER_TEMP/plan" >> "$GITHUB_STEP_SUMMARY"
