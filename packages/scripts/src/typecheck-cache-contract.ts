@@ -1,15 +1,16 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   nativeProgramSpansWorkspaces,
   nativeTypecheckProgramFiles,
 } from "./api-typecheck-inputs";
 import { apiTypecheckProjects } from "./api-typecheck-partition";
-import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 const typecheckCacheTaskSchema = v.looseObject({
   cache: v.optional(v.boolean()),
@@ -150,66 +151,90 @@ export const typecheckCacheProblems = ({
     : []),
 ];
 
-const readCompilerProject = (project: string) => {
-  const parsed = ts.getParsedCommandLineOfConfigFile(
-    project,
-    {},
-    {
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: (diagnostic) =>
-        panic(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
-    },
-  );
-  if (!parsed) {
-    panic(`Cannot read native compiler project ${project}`);
+const readCompilerProject = async (project: string) => {
+  const compiler = new API({ cwd: path.dirname(project) });
+  try {
+    const parsed = await compiler.parseConfigFile(project);
+    if (parsed.errors.length > 0) {
+      panic(parsed.errors.map(({ text }) => text).join("\n"));
+    }
+    return parsed;
+  } finally {
+    await compiler.close();
   }
-  const errors = withoutTsgoOnlyOptionDiagnostics(parsed.errors);
-  if (errors.length > 0) {
-    panic(
-      errors
-        .map((diagnostic) =>
-          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-        )
-        .join("\n"),
-    );
-  }
-  return parsed;
 };
 
-const assertReferenceDeclarations = (project: string) => {
-  const parsed = readCompilerProject(project);
+const assertReferenceDeclarations = async (project: string) => {
+  const parsed = await readCompilerProject(project);
   if (!parsed.options.disableSourceOfProjectReferenceRedirect) {
     return;
   }
   for (const reference of parsed.projectReferences ?? []) {
-    const config = ts.resolveProjectReferencePath(reference);
-    const producer = readCompilerProject(config);
+    const config = reference.path.endsWith(".json")
+      ? reference.path
+      : path.join(reference.path, "tsconfig.json");
+    const producer = await readCompilerProject(config);
+    const directories = producer.fileNames
+      .filter((file) => !/\.d\.[cm]?ts$/u.test(file))
+      .map((file) => path.dirname(file));
+    let common = directories.at(0) ?? path.dirname(config);
+    for (const directory of directories) {
+      while (
+        directory !== common &&
+        !directory.startsWith(`${common}${path.sep}`)
+      ) {
+        common = path.dirname(common);
+      }
+    }
+    const sourceRoot =
+      producer.options.rootDir ??
+      (producer.options.composite ? path.dirname(config) : common);
+    const outputRoot =
+      producer.options.declarationDir ?? producer.options.outDir;
     for (const source of producer.fileNames) {
-      for (const output of ts.getOutputFileNames(producer, source, false)) {
-        if (/\.d\.[cm]?ts$/u.test(output) && !existsSync(output)) {
-          panic(
-            `Prepare declaration output before native cache audit: ${output}`,
-          );
+      if (/\.d\.[cm]?ts$/u.test(source) || !/\.[cm]?tsx?$/u.test(source)) {
+        continue;
+      }
+      const output = (
+        outputRoot
+          ? path.join(outputRoot, repoRelativePath(sourceRoot, source))
+          : source
+      ).replace(/\.(?:tsx?|mts|cts)$/u, (extension) => {
+        if (extension === ".mts") {
+          return ".d.mts";
         }
+        if (extension === ".cts") {
+          return ".d.cts";
+        }
+        return ".d.ts";
+      });
+      if (!existsSync(output)) {
+        panic(
+          `Prepare declaration output before native cache audit: ${output}`,
+        );
       }
     }
   }
 };
 
-export const typecheckCacheCrossWorkspacePrograms = (root: string) => {
+export const typecheckCacheCrossWorkspacePrograms = async (root: string) => {
   const crossWorkspacePrograms = new Set<string>();
   const filesByProject = new Map<string, string[]>();
   for (const [name, projects] of explicitTypecheckProjects(root)) {
-    const files = projects.flatMap((project) => {
-      const existing = filesByProject.get(project);
-      if (existing) {
-        return existing;
-      }
-      assertReferenceDeclarations(project);
-      const resolved = nativeTypecheckProgramFiles(project);
-      filesByProject.set(project, resolved);
-      return resolved;
-    });
+    const files = (
+      await Promise.all(
+        projects.map(async (project) => {
+          const existing = filesByProject.get(project);
+          if (existing) {
+            return existing;
+          }
+          await assertReferenceDeclarations(project);
+          const resolved = nativeTypecheckProgramFiles(project);
+          filesByProject.set(project, resolved);
+          return resolved;
+        }),
+      )
+    ).flat();
     if (nativeProgramSpansWorkspaces(files, root)) {
       crossWorkspacePrograms.add(name);
     }
@@ -217,16 +242,19 @@ export const typecheckCacheCrossWorkspacePrograms = (root: string) => {
   return crossWorkspacePrograms;
 };
 
-export const typecheckCacheContractIssues = (
+export const typecheckCacheContractIssues = async (
   root: string,
-  crossWorkspacePrograms = typecheckCacheCrossWorkspacePrograms(root),
+  crossWorkspacePrograms?: ReadonlySet<string>,
 ) => {
+  const crossWorkspace =
+    crossWorkspacePrograms ??
+    (await typecheckCacheCrossWorkspacePrograms(root));
   const resolvedInputPrograms = resolvedTypecheckCachePrograms(root);
   return readTypecheckCacheTasks(root).flatMap(([name, task]) =>
     typecheckCacheProblems({
       name,
       task,
-      crossWorkspacePrograms,
+      crossWorkspacePrograms: crossWorkspace,
       resolvedInputPrograms,
     }).map((problem) => `${name}: ${problem}`),
   );

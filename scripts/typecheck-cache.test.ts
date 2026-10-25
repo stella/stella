@@ -151,7 +151,7 @@ test("full lock hashing follows resolved workspace boundaries", () => {
   ).toContain("must explicitly enable caching");
 });
 
-test("native discovery binds multi-project commands and single-workspace lock policy", () => {
+test("native discovery binds multi-project commands and single-workspace lock policy", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "typecheck-native-lock-"));
   const app = path.join(directory, "apps/fixture");
   const write = (file: string, text: string) => {
@@ -214,16 +214,16 @@ test("native discovery binds multi-project commands and single-workspace lock po
       path.join(app, "multi.json"),
     ]);
     expect(projects.has("@stll/fixture#typecheck:aggregate")).toBe(false);
-    expect(typecheckCacheContractIssues(directory)).toEqual([]);
+    expect(await typecheckCacheContractIssues(directory)).toEqual([]);
     expect(
-      apiResolvedTypecheckInputs(path.join(app, "single.json")),
+      await apiResolvedTypecheckInputs(path.join(app, "single.json")),
     ).not.toContain("$TURBO_ROOT$/bun.lock");
-    expect(apiResolvedTypecheckInputs(path.join(app, "multi.json"))).toContain(
-      "$TURBO_ROOT$/bun.lock",
-    );
+    expect(
+      await apiResolvedTypecheckInputs(path.join(app, "multi.json")),
+    ).toContain("$TURBO_ROOT$/bun.lock");
     tasks["@stll/fixture#typecheck"].inputs = requiredInputs;
     writeTasks();
-    expect(typecheckCacheContractIssues(directory)).toContain(
+    expect(await typecheckCacheContractIssues(directory)).toContain(
       "@stll/fixture#typecheck: root and cross-workspace programs must hash the full lockfile",
     );
     tasks["@stll/fixture#typecheck"].inputs = [
@@ -235,7 +235,7 @@ test("native discovery binds multi-project commands and single-workspace lock po
       inputs: [...requiredInputs, "$TURBO_ROOT$/bun.lock"],
     };
     writeTasks();
-    expect(typecheckCacheContractIssues(directory)).toContain(
+    expect(await typecheckCacheContractIssues(directory)).toContain(
       "@stll/fixture#typecheck:single: must let Turbo hash relevant lock entries",
     );
   } finally {
