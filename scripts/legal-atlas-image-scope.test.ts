@@ -32,9 +32,9 @@ type FixtureOptions = {
   source?: string;
   extra?: Readonly<Record<string, string>>;
 };
-const withFixture = (
+const withFixture = async (
   options: FixtureOptions,
-  check: (root: string, trackedFiles: string[]) => void,
+  check: (root: string, trackedFiles: string[]) => Promise<void>,
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "legal-atlas-scope-"));
   const files = {
@@ -61,27 +61,27 @@ const withFixture = (
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), content);
     }
-    check(root, Object.keys(files));
+    await check(root, Object.keys(files));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 };
 
-test("image selection includes every consumed source and workspace manifest and rejects any omission", () => {
+test("image selection includes every consumed source and workspace manifest and rejects any omission", async () => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: ROOT });
   expect(tracked.exitCode).toBe(0);
   const trackedFiles = tracked.stdout.toString().split("\0").filter(Boolean);
   const tree = new Map(trackedFiles.map((file) => [`/app/${file}`, file]));
   // This integration guard follows the real build script and Docker inputs.
   // Resolver completeness is independently pinned by the alias fixture below.
-  const entries = commandEntries(
+  const entries = await commandEntries(
     ROOT,
     tree,
     "bun --filter @stll/legal-atlas-runner build",
     "/app",
   );
   const seen = new Set<string>();
-  expect(sourceClosureProblems(ROOT, tree, entries, seen)).toEqual([]);
+  expect(await sourceClosureProblems(ROOT, tree, entries, seen)).toEqual([]);
   const dockerfile = readFileSync(path.join(ROOT, DOCKERFILE), "utf-8");
   const installInputs = /for input in ([^;]+);/u
     .exec(dockerfile)
@@ -116,23 +116,26 @@ test("image selection includes every consumed source and workspace manifest and 
     consumed.filter((file) => legalAtlasImageSelected([file])),
   );
   const required = legalAtlasApiSourcePredicate({ root: ROOT, trackedFiles });
-  expect(required([UNRELATED])).toBe(false);
-  const included = new Set(
-    consumed.filter((file) => selected.has(file) && required([file])),
-  );
+  expect(await required([UNRELATED])).toBe(false);
+  const included = new Set<string>();
+  for (const file of consumed) {
+    if (selected.has(file) && (await required([file]))) {
+      included.add(file);
+    }
+  }
   const violations = (selection: ReadonlySet<string>) =>
     consumed.filter((file) => !selection.has(file));
   expect(violations(included)).toEqual([]);
   for (const file of consumed) {
-    expect(required([file]), file).toBe(true);
+    expect(await required([file]), file).toBe(true);
     const omitted = new Set(included);
     omitted.delete(file);
     expect(violations(omitted), file).toEqual([file]);
   }
 }, 30_000);
 
-test("image build entrypoints and configured aliases contribute new API dependencies automatically", () => {
-  withFixture(
+test("image build entrypoints and configured aliases contribute new API dependencies automatically", async () => {
+  await withFixture(
     {
       build:
         "bun build src/index.ts --outfile dist/index.js && bun build ../api/src/new-entry.ts --outfile dist/extra.js",
@@ -141,18 +144,18 @@ test("image build entrypoints and configured aliases contribute new API dependen
         "apps/api/src/new-dependency.ts": "export const dependency = 1;",
       },
     },
-    (root, trackedFiles) => {
+    async (root, trackedFiles) => {
       const required = legalAtlasApiSourcePredicate({ root, trackedFiles });
-      expect(required([API_SOURCE])).toBe(true);
-      expect(required(["apps/api/src/new-entry.ts"])).toBe(true);
-      expect(required(["apps/api/src/new-dependency.ts"])).toBe(true);
-      expect(required([UNRELATED])).toBe(false);
+      expect(await required([API_SOURCE])).toBe(true);
+      expect(await required(["apps/api/src/new-entry.ts"])).toBe(true);
+      expect(await required(["apps/api/src/new-dependency.ts"])).toBe(true);
+      expect(await required([UNRELATED])).toBe(false);
     },
   );
 });
 
-test("additional Docker build commands and newly configured aliases join the source scope", () => {
-  withFixture(
+test("additional Docker build commands and newly configured aliases join the source scope", async () => {
+  await withFixture(
     {
       source: 'import "@new/dependency";',
       extra: {
@@ -170,7 +173,7 @@ test("additional Docker build commands and newly configured aliases join the sou
         "apps/api/src/direct-dependency.ts": "export const direct = 1;",
       },
     },
-    (root, trackedFiles) => {
+    async (root, trackedFiles) => {
       // This list comes from the fixture's authored imports, never from the
       // resolver. Losing an alias or transitive edge must fail this oracle.
       const expected = [
@@ -181,7 +184,7 @@ test("additional Docker build commands and newly configured aliases join the sou
         "apps/api/src/direct-entry.ts",
         "apps/api/src/direct-dependency.ts",
       ];
-      const closure = legalAtlasApiSourceClosure({ root, trackedFiles });
+      const closure = await legalAtlasApiSourceClosure({ root, trackedFiles });
       expect(closure.status).toBe("resolved");
       if (closure.status !== "resolved") {
         panic("Alias fixture must have a resolved image source closure");
@@ -189,31 +192,31 @@ test("additional Docker build commands and newly configured aliases join the sou
       expect(closure.files).toEqual(new Set(expected));
       const required = legalAtlasApiSourcePredicate({ root, trackedFiles });
       for (const file of expected) {
-        expect(required([file]), file).toBe(true);
+        expect(await required([file]), file).toBe(true);
         const omitted = new Set(closure.files);
         omitted.delete(file);
         expect(
           expected.filter((dependency) => !omitted.has(dependency)),
         ).toEqual([file]);
       }
-      expect(required([API_SOURCE])).toBe(false);
-      expect(required([UNRELATED])).toBe(false);
+      expect(await required([API_SOURCE])).toBe(false);
+      expect(await required([UNRELATED])).toBe(false);
     },
   );
 });
 
-test("unknown import edges and missing tracked sources conservatively require the image", () => {
+test("unknown import edges and missing tracked sources conservatively require the image", async () => {
   for (const source of [
     'import "@/api/missing";',
     'const module = "@/api/consumed"; await import(module);',
     'const module = "@/api/consumed"; require(module);',
     `const name = "consumed"; await import(\`@/api/\${name}\`);`,
   ]) {
-    withFixture({ source }, (root, trackedFiles) => {
-      const closure = legalAtlasApiSourceClosure({ root, trackedFiles });
+    await withFixture({ source }, async (root, trackedFiles) => {
+      const closure = await legalAtlasApiSourceClosure({ root, trackedFiles });
       expect(closure.status, source).toBe("unresolved");
       expect(
-        legalAtlasApiSourceRequired({
+        await legalAtlasApiSourceRequired({
           changed: [UNRELATED],
           root,
           trackedFiles,
@@ -221,9 +224,9 @@ test("unknown import edges and missing tracked sources conservatively require th
       ).toBe(true);
     });
   }
-  withFixture({}, (root, trackedFiles) => {
+  await withFixture({}, async (root, trackedFiles) => {
     expect(
-      legalAtlasApiSourceRequired({
+      await legalAtlasApiSourceRequired({
         changed: [UNRELATED],
         root,
         trackedFiles: trackedFiles.filter((file) => file !== API_SOURCE),
@@ -232,12 +235,12 @@ test("unknown import edges and missing tracked sources conservatively require th
   });
 });
 
-test("image metadata and non-API inputs retain the existing broad image scope", () => {
+test("image metadata and non-API inputs retain the existing broad image scope", async () => {
   const required = legalAtlasApiSourcePredicate({
     root: "/missing-image-scope-fixture",
     trackedFiles: [],
   });
-  expect(required([])).toBe(false);
+  expect(await required([])).toBe(false);
   for (const file of [
     "apps/api/package.json",
     "apps/api/tsconfig.json",
@@ -253,9 +256,9 @@ test("image metadata and non-API inputs retain the existing broad image scope", 
     ".dockerignore",
     DOCKERFILE,
   ]) {
-    expect(required([file]), file).toBe(true);
+    expect(await required([file]), file).toBe(true);
   }
-  expect(required([UNRELATED])).toBe(true);
+  expect(await required([UNRELATED])).toBe(true);
 });
 
 test("the canonical runtime import reader distinguishes literal edges from unresolved execution", () => {

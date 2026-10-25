@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   existsSync,
   mkdirSync,
@@ -10,9 +10,21 @@ import {
 } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import ts from "typescript6";
+import {
+  API,
+  type CompilerOptions,
+  ModuleKind,
+  ModuleResolutionKind,
+  type ModuleResolver,
+  type Snapshot,
+} from "tsrs/unstable/async";
+import { createFileSystem } from "tsrs/unstable/fs";
 import * as v from "valibot";
 
+import {
+  parseSource,
+  walk as walkSyntax,
+} from "../packages/scripts/src/syntax-tree";
 import { type Generator, GENERATORS } from "./generated-files";
 import { specifierCandidates } from "./generated-imports";
 import { lexShell } from "./install-free-ci";
@@ -174,68 +186,68 @@ const readRuntimeImports = (file: string, source: string) => {
   if (cached?.source === source) {
     return cached;
   }
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    false,
-  );
+  const parsed = parseSource(file, source);
   const imports: string[] = [];
   const unresolved: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isImportDeclaration(node) &&
-      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      const bindings = node.importClause?.namedBindings;
+  walkSyntax(parsed.program, (node) => {
+    if (node.type === "ImportDeclaration") {
       if (
-        !node.importClause?.name &&
-        bindings !== undefined &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.length > 0 &&
-        bindings.elements.every((item) => item.isTypeOnly)
+        node.importKind === "type" ||
+        (node.specifiers.length > 0 &&
+          node.specifiers.every(
+            (specifier) =>
+              specifier.type === "ImportSpecifier" &&
+              specifier.importKind === "type",
+          ))
       ) {
         return;
       }
-      imports.push(node.moduleSpecifier.text);
-    } else if (
-      ts.isExportDeclaration(node) &&
-      !node.isTypeOnly &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      if (
-        node.exportClause !== undefined &&
-        ts.isNamedExports(node.exportClause) &&
-        node.exportClause.elements.length > 0 &&
-        node.exportClause.elements.every((item) => item.isTypeOnly)
-      ) {
-        return;
-      }
-      imports.push(node.moduleSpecifier.text);
-    } else if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const argument = node.arguments[0];
-      if (
-        argument !== undefined &&
-        (ts.isStringLiteral(argument) ||
-          ts.isNoSubstitutionTemplateLiteral(argument))
-      ) {
-        imports.push(argument.text);
-      } else {
-        const line =
-          parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1;
-        unresolved.push(`${file}:${line}: nonliteral runtime import`);
-      }
+      imports.push(node.source.value);
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+    if (node.type === "ExportNamedDeclaration" && node.source !== null) {
+      if (
+        node.exportKind === "type" ||
+        (node.specifiers.length > 0 &&
+          node.specifiers.every((specifier) => specifier.exportKind === "type"))
+      ) {
+        return;
+      }
+      imports.push(node.source.value);
+      return;
+    }
+    if (node.type === "ExportAllDeclaration") {
+      if (node.exportKind !== "type") {
+        imports.push(node.source.value);
+      }
+      return;
+    }
+    const isRequire =
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require";
+    if (node.type !== "ImportExpression" && !isRequire) {
+      return;
+    }
+    const argument =
+      node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+    let specifier: string | undefined;
+    if (argument?.type === "Literal" && typeof argument.value === "string") {
+      specifier = argument.value;
+    } else if (
+      argument?.type === "TemplateLiteral" &&
+      argument.expressions.length === 0
+    ) {
+      specifier = argument.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    if (specifier !== undefined) {
+      imports.push(specifier);
+    } else {
+      unresolved.push(
+        `${file}:${parsed.locate(node.start).line}: nonliteral runtime import`,
+      );
+    }
+  });
   // Literal edges depend on file content; their resolution still uses each stage.
   const result = { source, imports, unresolved };
   importCache.set(file, result);
@@ -255,7 +267,7 @@ const configurationOptions = (
   tree: SourceTree,
   physical: (file: string) => string,
 ) => {
-  const optionCache = new Map<string, ts.CompilerOptions>();
+  const optionCache = new Map<string, CompilerOptions>();
   const configCache = new Map<string, Record<string, string[]>>();
   const configPaths = (
     file: string,
@@ -276,8 +288,8 @@ const configurationOptions = (
       active.delete(key);
       return {};
     }
-    const parsed = ts.parseConfigFileTextToJson(origin, text(root, origin));
-    if (parsed.error) {
+    const parsed = Result.try(() => Bun.JSONC.parse(text(root, origin)));
+    if (parsed.isErr()) {
       panic(`Invalid tsconfig: ${origin}`);
     }
     const directory = path.posix.dirname(key);
@@ -291,7 +303,7 @@ const configurationOptions = (
           }),
         ),
       }),
-      parsed.config,
+      parsed.value,
     );
     const parent = config.extends;
     const inherited =
@@ -319,15 +331,15 @@ const configurationOptions = (
     configCache.set(key, paths);
     return paths;
   };
-  const optionsFor = (file: string): ts.CompilerOptions => {
+  const optionsFor = (file: string): CompilerOptions => {
     const cached = optionCache.get(path.posix.dirname(file));
     if (cached !== undefined) {
       return cached;
     }
     let directory = path.posix.dirname(file);
-    const result: ts.CompilerOptions = {
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      module: ts.ModuleKind.Preserve,
+    const result: CompilerOptions = {
+      moduleResolution: ModuleResolutionKind.Bundler,
+      module: ModuleKind.Preserve,
       resolveJsonModule: true,
       allowJs: true,
       customConditions: ["bun", "source"],
@@ -343,6 +355,69 @@ const configurationOptions = (
     return result;
   };
   return optionsFor;
+};
+
+type SourceTreeResolverOptions = {
+  root: string;
+  tree: SourceTree;
+  workspaces: ReadonlyMap<string, string>;
+};
+const sourceTreeResolver = ({
+  root,
+  tree,
+  workspaces,
+}: SourceTreeResolverOptions) => {
+  let compiler: API | undefined;
+  let snapshot: Snapshot | undefined;
+  const resolvers = new Map<string, ModuleResolver>();
+  const resolveModule = async (
+    specifier: string,
+    file: string,
+    options: CompilerOptions,
+  ) => {
+    compiler ??= new API({ cwd: "/app" });
+    // Module resolution reads package metadata and probes source existence;
+    // source bodies need no parsing. The full inventory cannot fall through
+    // to checkout files, and workspace links stay inside that inventory.
+    snapshot ??= await compiler.createSnapshot({
+      fileSystem: createFileSystem(
+        [...tree]
+          .filter(([filename]) => !/\.d\.[cm]?ts$/u.test(filename))
+          .map(([filename, origin]) => [
+            filename,
+            filename.endsWith("/package.json") ? text(root, origin) : "",
+          ]),
+        {
+          symlinks: Object.fromEntries(
+            [...workspaces].map(([name, target]) => [
+              `/app/node_modules/${name}`,
+              { target },
+            ]),
+          ),
+        },
+      ),
+    });
+    const key = JSON.stringify(options);
+    let resolver = resolvers.get(key);
+    if (resolver === undefined) {
+      resolver = await compiler.createModuleResolver(options);
+      resolvers.set(key, resolver);
+    }
+    return (
+      await resolver.resolveModuleName(
+        specifier,
+        path.posix.dirname(file),
+        undefined,
+        { snapshot },
+      )
+    ).resolvedModule?.resolvedFileName;
+  };
+  return {
+    resolveModule,
+    close: async () => {
+      await compiler?.close();
+    },
+  };
 };
 
 // Follow literal runtime imports (type-only imports vanish).
@@ -362,12 +437,12 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
   );
   const lockfile = tree.get("/app/bun.lock");
   if (typeof lockfile === "string") {
-    const parsed = ts.parseConfigFileTextToJson(lockfile, text(root, lockfile));
-    if (parsed.error) {
+    const parsed = Result.try(() => Bun.JSONC.parse(text(root, lockfile)));
+    if (parsed.isErr()) {
       panic("Invalid Bun lockfile");
     }
     workspaces.clear();
-    for (const [name, entry] of Object.entries(parsed.config.packages ?? {})) {
+    for (const [name, entry] of Object.entries(parsed.value.packages ?? {})) {
       if (!Array.isArray(entry) || typeof entry[0] !== "string") {
         panic(`Invalid lock resolution: ${name}`);
       }
@@ -401,15 +476,7 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
   };
   const sourceAvailable = (file: string) =>
     !/\.d\.[cm]?ts$/u.test(file) && tree.has(physical(file));
-  const host: ts.ModuleResolutionHost = {
-    getCurrentDirectory: () => "/app",
-    fileExists: sourceAvailable,
-    readFile: (file) => {
-      const origin = tree.get(physical(file));
-      return typeof origin === "string" ? text(root, origin) : undefined;
-    },
-    // No directoryExists: TypeScript probes virtual files directly.
-  };
+  const resolver = sourceTreeResolver({ root, tree, workspaces });
   const optionsFor = configurationOptions(root, tree, physical);
   // TypeScript resolves module extensions only, so a workspace export naming
   // an asset (`@stll/x/reader.css`) is read from the stage's own manifest.
@@ -436,7 +503,10 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     const file = path.posix.join(directory, target);
     return sourceAvailable(file) ? file : undefined;
   };
-  return (entries: readonly string[], seen = new Set<string>()): string[] => {
+  const check = async (
+    entries: readonly string[],
+    seen = new Set<string>(),
+  ): Promise<string[]> => {
     const problems: string[] = [];
     const pending = [...entries];
     while (pending.length > 0) {
@@ -528,8 +598,7 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
         }
         const resolved =
           aliasTargets.find(sourceAvailable) ??
-          ts.resolveModuleName(clean, file, options, host).resolvedModule
-            ?.resolvedFileName ??
+          (await resolver.resolveModule(clean, file, options)) ??
           workspaceAsset(clean, name ?? "");
         if (resolved === undefined) {
           problems.push(
@@ -542,14 +611,27 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     }
     return problems;
   };
+  return {
+    check,
+    close: async () => {
+      await resolver.close();
+    },
+  };
 };
 
-export const sourceClosureProblems = (
+export const sourceClosureProblems = async (
   root: string,
   tree: SourceTree,
   entries: readonly string[],
   seen = new Set<string>(),
-): string[] => sourceClosureChecker(root, tree)(entries, seen);
+): Promise<string[]> => {
+  const checker = sourceClosureChecker(root, tree);
+  try {
+    return await checker.check(entries, seen);
+  } finally {
+    await checker.close();
+  }
+};
 
 type InstallToolingCopiesOptions = {
   root: string;
@@ -557,13 +639,13 @@ type InstallToolingCopiesOptions = {
   entry: string;
 };
 
-export const installToolingCopies = ({
+export const installToolingCopies = async ({
   root,
   files,
   entry,
-}: InstallToolingCopiesOptions): string => {
+}: InstallToolingCopiesOptions): Promise<string> => {
   const seen = new Set<string>();
-  const problems = sourceClosureProblems(root, files, [entry], seen);
+  const problems = await sourceClosureProblems(root, files, [entry], seen);
   for (const file of seen) {
     const origin = files.get(file);
     if (origin === undefined) {
@@ -600,7 +682,10 @@ export const installToolingCopies = ({
 
 const INSTALL_TOOLING_GENERATOR = "api-image-install-tooling";
 
-export const updateInstallToolingCopies = (root: string, write: boolean) => {
+export const updateInstallToolingCopies = async (
+  root: string,
+  write: boolean,
+) => {
   const generator = GENERATORS.find(
     ({ id }) => id === INSTALL_TOOLING_GENERATOR,
   );
@@ -619,7 +704,7 @@ export const updateInstallToolingCopies = (root: string, write: boolean) => {
       .filter(Boolean)
       .map((file) => [`/app/${file}`, file]),
   );
-  const copies = installToolingCopies({
+  const copies = await installToolingCopies({
     root,
     files,
     entry: "/app/scripts/ci-install.ts",
@@ -672,14 +757,19 @@ type StageClosureOptions = {
   root: string;
   stage: Stage;
   entries: readonly string[];
+  checkers: Set<ReturnType<typeof sourceClosureChecker>>;
 };
-const stageClosureProblems = ({
+const stageClosureProblems = async ({
   root,
   stage,
   entries,
+  checkers,
 }: StageClosureOptions) => {
-  stage.checker ??= sourceClosureChecker(root, stage.files);
-  return stage.checker(entries, stage.seen);
+  if (stage.checker === undefined) {
+    stage.checker = sourceClosureChecker(root, stage.files);
+    checkers.add(stage.checker);
+  }
+  return await stage.checker.check(entries, stage.seen);
 };
 
 export const dockerPruneScopes = (source: string): string[][] =>
@@ -732,14 +822,14 @@ type CommandContext = {
   consume?: (
     entry: SourceCommandEntry,
     production: "guaranteed" | "conditional",
-  ) => void;
+  ) => Promise<void>;
   command?: (options: ShellSourceCommand) => void;
 };
 type SourceCommandOptions = {
   command: string;
   words: string[];
   cwd: string;
-  expand: (command: string, cwd: string) => SourceCommandEntry[];
+  expand: (command: string, cwd: string) => Promise<SourceCommandEntry[]>;
 };
 type BunFlagPolicy =
   | "value"
@@ -971,7 +1061,7 @@ type PackageScriptOptions = {
   cwd: string;
   expand: SourceCommandOptions["expand"];
 };
-const packageScriptEntries = (
+const packageScriptEntries = async (
   context: CommandContext,
   options: PackageScriptOptions,
 ) => {
@@ -988,7 +1078,7 @@ const packageScriptEntries = (
     panic(`Recursive build script: ${key}`);
   }
   context.active.add(key);
-  const entries = options.expand(scripts[options.name], options.cwd);
+  const entries = await options.expand(scripts[options.name], options.cwd);
   context.active.delete(key);
   return entries;
 };
@@ -1006,15 +1096,17 @@ const workspaceCwd = (context: CommandContext, name: string) => {
   return path.posix.dirname(owner[0]);
 };
 
-const consumeSourceEntry = (
+const consumeSourceEntry = async (
   context: CommandContext,
   entry: SourceCommandEntry,
-) => context.consume?.(entry, context.production ?? "conditional");
+) => {
+  await context.consume?.(entry, context.production ?? "conditional");
+};
 
-const sourceCommandEntries = (
+const sourceCommandEntries = async (
   context: CommandContext,
   options: SourceCommandOptions,
-): SourceCommandEntry[] => {
+): Promise<SourceCommandEntry[]> => {
   const { command } = options;
   const entries: SourceCommandEntry[] = [];
   let commandCwd = options.cwd;
@@ -1060,7 +1152,7 @@ const sourceCommandEntries = (
           mode: "preload",
         } satisfies SourceCommandEntry;
         entries.push(preload);
-        context.consume?.(preload, context.production ?? "conditional");
+        await context.consume?.(preload, context.production ?? "conditional");
       }
       continue;
     }
@@ -1074,7 +1166,7 @@ const sourceCommandEntries = (
       continue;
     }
     if (!found && (word !== "build" || packageScript)) {
-      const expanded = packageScriptEntries(context, {
+      const expanded = await packageScriptEntries(context, {
         name: word,
         cwd: commandCwd,
         expand: options.expand,
@@ -1096,7 +1188,7 @@ const sourceCommandEntries = (
       mode,
     } satisfies SourceCommandEntry;
     entries.push(entry);
-    consumeSourceEntry(context, entry);
+    await consumeSourceEntry(context, entry);
     found = true;
     if (mode === "run") {
       break;
@@ -1309,11 +1401,11 @@ const unwrapSourceCommand = (
   }
 };
 
-const walkCommand = (
+const walkCommand = async (
   context: CommandContext,
   command: string,
   initialCwd: string,
-): SourceCommandEntry[] => {
+): Promise<SourceCommandEntry[]> => {
   const { tree } = context;
   const runContext = commandScope(context, command);
   let cwd = initialCwd;
@@ -1341,7 +1433,7 @@ const walkCommand = (
       if (words.at(0) !== "-c" || script === undefined || words.length !== 2) {
         panic(`Unsupported source wrapper: ${program}`);
       }
-      entries.push(...walkCommand(runContext, script, cwd));
+      entries.push(...(await walkCommand(runContext, script, cwd)));
       continue;
     }
     runContext.command?.({
@@ -1374,7 +1466,7 @@ const walkCommand = (
       ];
       entries.push(...viteEntries);
       for (const entry of viteEntries) {
-        consumeSourceEntry(runContext, entry);
+        await consumeSourceEntry(runContext, entry);
       }
       continue;
     }
@@ -1403,40 +1495,41 @@ const walkCommand = (
       continue;
     }
     entries.push(
-      ...sourceCommandEntries(runContext, {
+      ...(await sourceCommandEntries(runContext, {
         command,
         words,
         cwd,
-        expand: (source, directory) =>
-          walkCommand(runContext, source, directory),
-      }),
+        expand: async (source, directory) =>
+          await walkCommand(runContext, source, directory),
+      })),
     );
   }
   return entries;
 };
 
-export const commandEntries = (
+export const commandEntries = async (
   root: string,
   tree: SourceTree,
   command: string,
   cwd: string,
-): string[] =>
-  walkCommand({ root, tree, active: new Set() }, command, cwd).map(
+): Promise<string[]> =>
+  (await walkCommand({ root, tree, active: new Set() }, command, cwd)).map(
     ({ file }) => file,
   );
 
-const generatorEntries = (
+const generatorEntries = async (
   root: string,
   context: SourceTree,
   generator: Generator,
-): readonly SourceCommandEntry[] => {
+): Promise<readonly SourceCommandEntry[]> => {
   const inventory: SourceTree = new Map(
     [...context].map(([file, origin]) => [`/app${file}`, origin]),
   );
-  return [
+  const result: SourceCommandEntry[] = [];
+  for (const command of [
     generator.write,
     ...(generator.prepare === undefined ? [] : [generator.prepare]),
-  ].flatMap((command) => {
+  ]) {
     const words = [...command];
     let cwd = "/app";
     const directory = words.find((word) => word.startsWith("--cwd="));
@@ -1444,7 +1537,7 @@ const generatorEntries = (
       cwd = absolute(cwd, directory.slice("--cwd=".length));
       words.splice(words.indexOf(directory), 1);
       if (!inventory.has(`${cwd}/package.json`)) {
-        return [];
+        continue;
       }
     }
     const filter = words.indexOf("--filter");
@@ -1475,14 +1568,17 @@ const generatorEntries = (
         );
       })
     ) {
-      return [];
+      continue;
     }
-    return walkCommand(
-      { root, tree: inventory, active: new Set() },
-      words.join(" "),
-      cwd,
+    result.push(
+      ...(await walkCommand(
+        { root, tree: inventory, active: new Set() },
+        words.join(" "),
+        cwd,
+      )),
     );
-  });
+  }
+  return result;
 };
 
 type CopyInstructionOptions = {
@@ -1731,213 +1827,260 @@ const createStage = (parent?: Stage) =>
     environment: new Map(parent?.environment),
   }) satisfies Stage;
 
-export const checkDockerSource = (
+const sourceProducers = async (root: string, context: SourceTree) =>
+  await Promise.all(
+    GENERATORS.filter(({ outputKind }) => outputKind === "derived").map(
+      async (generator) => ({
+        generator,
+        entries: await generatorEntries(root, context, generator),
+        inputGlobs: generator.inputs.map((input) => new Bun.Glob(input)),
+        outputGlobs: generator.outputs.map((output) => new Bun.Glob(output)),
+      }),
+    ),
+  );
+
+type HydrateStageSourcesOptions = {
+  root: string;
+  stage: Stage;
+  context: SourceTree;
+  entry: SourceCommandEntry;
+  production: "guaranteed" | "conditional";
+  producers: Awaited<ReturnType<typeof sourceProducers>>;
+};
+const hydrateStageSources = ({
+  root,
+  stage,
+  context,
+  entry,
+  production,
+  producers,
+}: HydrateStageSourcesOptions) => {
+  const problems: string[] = [];
+  // A Docker RUN can create declared sources after validating its own
+  // source closure. Only hydrated outputs of that exact producer enter
+  // the stage; later imports still resolve against this inventory.
+  for (const {
+    generator,
+    entries: producerEntries,
+    inputGlobs,
+    outputGlobs,
+  } of producers) {
+    if (
+      production !== "guaranteed" ||
+      entry.mode !== "run" ||
+      !producerEntries.some(
+        (producer) =>
+          producer.file === entry.file &&
+          JSON.stringify(producer.args) === JSON.stringify(entry.args),
+      )
+    ) {
+      continue;
+    }
+    const missingInputs = [...context].filter(([file]) => {
+      const relative = file.replace(/^\//u, "");
+      return (
+        generator.prepare !== undefined &&
+        inputGlobs.some((input) => input.match(relative)) &&
+        !outputGlobs.some((output) => output.match(relative)) &&
+        !stage.files.has(absolute("/app", relative))
+      );
+    });
+    if (missingInputs.length > 0) {
+      problems.push(
+        ...missingInputs.map(
+          ([file]) => `Generator input is unavailable: ${generator.id}/${file}`,
+        ),
+      );
+      continue;
+    }
+    for (const pattern of generator.outputs) {
+      const outputs = [
+        ...new Bun.Glob(pattern).scanSync({
+          cwd: root,
+          onlyFiles: true,
+        }),
+      ];
+      if (outputs.length === 0) {
+        problems.push(
+          `Generated output is unavailable: ${generator.id}/${pattern}`,
+        );
+      }
+      for (const output of outputs) {
+        stage.files.set(absolute("/app", output), output);
+      }
+    }
+    stage.seen.clear();
+    delete stage.checker;
+  }
+  return problems;
+};
+
+export const checkDockerSource = async (
   root: string,
   source: string,
   context: SourceTree,
   pruned: SourceTree,
-): string[] => {
-  const producers = GENERATORS.filter(
-    ({ outputKind }) => outputKind === "derived",
-  ).map((generator) => ({
-    generator,
-    entries: generatorEntries(root, context, generator),
-    inputGlobs: generator.inputs.map((input) => new Bun.Glob(input)),
-    outputGlobs: generator.outputs.map((output) => new Bun.Glob(output)),
-  }));
+): Promise<string[]> => {
+  const producers = await sourceProducers(root, context);
   const stages = new Map<string, Stage>();
   let stage: Stage = createStage();
   const problems: string[] = [];
   let index = 0;
-  for (const instruction of dockerInstructions(source)) {
-    const split = instruction.indexOf(" ");
-    const operation = instruction.slice(0, split);
-    const body = instruction.slice(split + 1);
-    if (operation === "FROM") {
-      const words = body.split(/\s+/u).filter((word) => !word.startsWith("--"));
-      const parent = stages.get(words[0] ?? "");
-      stage = createStage(parent);
-      stages.set(words[2] ?? `stage-${index++}`, stage);
-    } else if (operation === "ENV" || operation === "ARG") {
-      declareEnvironment(stage, operation, body);
-    } else if (operation === "WORKDIR") {
-      stage.cwd = absolute(stage.cwd, body);
-    } else if (operation === "ADD") {
-      const words = body.split(/\s+/u);
-      const inputs = words.filter((word) => !word.startsWith("--"));
-      const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
-      const [url, target] = inputs;
-      if (url !== undefined && !/^https?:\/\//u.test(url)) {
-        if (inputs.some((input) => archive.test(input))) {
+  const checkers = new Set<ReturnType<typeof sourceClosureChecker>>();
+  try {
+    for (const instruction of dockerInstructions(source)) {
+      const split = instruction.indexOf(" ");
+      const operation = instruction.slice(0, split);
+      const body = instruction.slice(split + 1);
+      if (operation === "FROM") {
+        const words = body
+          .split(/\s+/u)
+          .filter((word) => !word.startsWith("--"));
+        const parent = stages.get(words[0] ?? "");
+        stage = createStage(parent);
+        stages.set(words[2] ?? `stage-${index++}`, stage);
+      } else if (operation === "ENV" || operation === "ARG") {
+        declareEnvironment(stage, operation, body);
+      } else if (operation === "WORKDIR") {
+        stage.cwd = absolute(stage.cwd, body);
+      } else if (operation === "ADD") {
+        const words = body.split(/\s+/u);
+        const inputs = words.filter((word) => !word.startsWith("--"));
+        const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
+        const [url, target] = inputs;
+        if (url !== undefined && !/^https?:\/\//u.test(url)) {
+          if (inputs.some((input) => archive.test(input))) {
+            panic(`Unsupported source instruction: ${instruction}`);
+          }
+          copyInstruction({ stages, stage, context, body, operation: "ADD" });
+          continue;
+        }
+        const targetPath =
+          target === undefined ? "" : absolute(stage.cwd, target);
+        const directoryTarget =
+          target?.endsWith("/") ||
+          stage.cwd === targetPath ||
+          stage.cwd.startsWith(`${targetPath}/`) ||
+          hasDirectory(stage.files, targetPath);
+        if (
+          words.some(
+            (word) =>
+              word.startsWith("--") &&
+              !/^--checksum=sha256:[a-f0-9]{64}$/u.test(word),
+          ) ||
+          inputs.length !== 2 ||
+          url === undefined ||
+          target === undefined ||
+          !/^https?:\/\//u.test(url) ||
+          !archive.test(url) ||
+          (!archive.test(target) && !directoryTarget) ||
+          /[$\\]/u.test(body)
+        ) {
           panic(`Unsupported source instruction: ${instruction}`);
         }
-        copyInstruction({ stages, stage, context, body, operation: "ADD" });
-        continue;
-      }
-      const targetPath =
-        target === undefined ? "" : absolute(stage.cwd, target);
-      const directoryTarget =
-        target?.endsWith("/") ||
-        stage.cwd === targetPath ||
-        stage.cwd.startsWith(`${targetPath}/`) ||
-        hasDirectory(stage.files, targetPath);
-      if (
-        words.some(
-          (word) =>
-            word.startsWith("--") &&
-            !/^--checksum=sha256:[a-f0-9]{64}$/u.test(word),
-        ) ||
-        inputs.length !== 2 ||
-        url === undefined ||
-        target === undefined ||
-        !/^https?:\/\//u.test(url) ||
-        !archive.test(url) ||
-        (!archive.test(target) && !directoryTarget) ||
-        /[$\\]/u.test(body)
-      ) {
-        panic(`Unsupported source instruction: ${instruction}`);
-      }
-      // Remote archives stay opaque: neither ADD nor a later native unpack
-      // declares repository modules available to a Bun source runner.
-    } else if (operation === "COPY") {
-      copyInstruction({ stages, stage, context, body, operation: "COPY" });
-    } else if (operation === "RUN") {
-      const runStage = stage;
-      walkCommand(
-        {
-          root,
-          tree: runStage.files,
-          active: new Set(),
-          environment: runStage.environment,
-          command: ({ program, words, cwd, production }) => {
-            if (program === "turbo" && words.at(0) === "prune") {
-              if (production !== "guaranteed") {
+        // Remote archives stay opaque: neither ADD nor a later native unpack
+        // declares repository modules available to a Bun source runner.
+      } else if (operation === "COPY") {
+        copyInstruction({ stages, stage, context, body, operation: "COPY" });
+      } else if (operation === "RUN") {
+        const runStage = stage;
+        await walkCommand(
+          {
+            root,
+            tree: runStage.files,
+            active: new Set(),
+            environment: runStage.environment,
+            command: ({ program, words, cwd, production }) => {
+              if (program === "turbo" && words.at(0) === "prune") {
+                if (production !== "guaranteed") {
+                  return;
+                }
+                runStage.seen.clear();
+                delete runStage.checker;
+                for (const [file, origin] of pruned) {
+                  runStage.files.set(`/app/out/full${file.slice(4)}`, origin);
+                  if (file.endsWith("/package.json")) {
+                    runStage.files.set(`/app/out/json${file.slice(4)}`, origin);
+                  }
+                }
+              } else if (
+                program === "find" &&
+                words.at(0) === "apps" &&
+                words.at(1) === "packages" &&
+                words.some((word) => word.includes("/json/"))
+              ) {
+                runStage.seen.clear();
+                delete runStage.checker;
+                for (const [file, origin] of [...runStage.files]) {
+                  if (
+                    file === "/app/package.json" ||
+                    file === "/app/bun.lock" ||
+                    file.endsWith("/package.json") ||
+                    /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
+                  ) {
+                    runStage.files.set(`/json/${file.slice(5)}`, origin);
+                  }
+                }
+              } else {
+                sourceMutation({
+                  stage: runStage,
+                  program,
+                  words,
+                  cwd,
+                  production,
+                });
+              }
+            },
+            consume: async (entry, production) => {
+              if (runStage.hazards.size > 0) {
+                panic([...runStage.hazards].join("\n"));
+              }
+              if (entry.file.includes("/dist/")) {
                 return;
               }
-              runStage.seen.clear();
-              delete runStage.checker;
-              for (const [file, origin] of pruned) {
-                runStage.files.set(`/app/out/full${file.slice(4)}`, origin);
-                if (file.endsWith("/package.json")) {
-                  runStage.files.set(`/app/out/json${file.slice(4)}`, origin);
-                }
+              if (isPackagedArtifact(runStage, entry.file)) {
+                return;
               }
-            } else if (
-              program === "find" &&
-              words.at(0) === "apps" &&
-              words.at(1) === "packages" &&
-              words.some((word) => word.includes("/json/"))
-            ) {
-              runStage.seen.clear();
-              delete runStage.checker;
-              for (const [file, origin] of [...runStage.files]) {
-                if (
-                  file === "/app/package.json" ||
-                  file === "/app/bun.lock" ||
-                  file.endsWith("/package.json") ||
-                  /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
-                ) {
-                  runStage.files.set(`/json/${file.slice(5)}`, origin);
-                }
-              }
-            } else {
-              sourceMutation({
+              const closure = await stageClosureProblems({
+                root,
                 stage: runStage,
-                program,
-                words,
-                cwd,
-                production,
+                entries: [entry.file],
+                checkers,
               });
-            }
+              problems.push(...closure);
+              if (closure.length > 0) {
+                return;
+              }
+              problems.push(
+                ...hydrateStageSources({
+                  root,
+                  stage: runStage,
+                  context,
+                  entry,
+                  production,
+                  producers,
+                }),
+              );
+            },
           },
-          consume: (entry, production) => {
-            if (runStage.hazards.size > 0) {
-              panic([...runStage.hazards].join("\n"));
-            }
-            if (entry.file.includes("/dist/")) {
-              return;
-            }
-            if (isPackagedArtifact(runStage, entry.file)) {
-              return;
-            }
-            const closure = stageClosureProblems({
-              root,
-              stage: runStage,
-              entries: [entry.file],
-            });
-            problems.push(...closure);
-            if (closure.length > 0) {
-              return;
-            }
-            // A Docker RUN can create declared sources after validating its own
-            // source closure. Only hydrated outputs of that exact producer enter
-            // the stage; later imports still resolve against this inventory.
-            for (const {
-              generator,
-              entries: producerEntries,
-              inputGlobs,
-              outputGlobs,
-            } of producers) {
-              if (
-                production !== "guaranteed" ||
-                entry.mode !== "run" ||
-                !producerEntries.some(
-                  (producer) =>
-                    producer.file === entry.file &&
-                    JSON.stringify(producer.args) ===
-                      JSON.stringify(entry.args),
-                )
-              ) {
-                continue;
-              }
-              const missingInputs = [...context].filter(([file]) => {
-                const relative = file.replace(/^\//u, "");
-                return (
-                  generator.prepare !== undefined &&
-                  inputGlobs.some((input) => input.match(relative)) &&
-                  !outputGlobs.some((output) => output.match(relative)) &&
-                  !runStage.files.has(absolute("/app", relative))
-                );
-              });
-              if (missingInputs.length > 0) {
-                problems.push(
-                  ...missingInputs.map(
-                    ([file]) =>
-                      `Generator input is unavailable: ${generator.id}/${file}`,
-                  ),
-                );
-                continue;
-              }
-              for (const pattern of generator.outputs) {
-                const outputs = [
-                  ...new Bun.Glob(pattern).scanSync({
-                    cwd: root,
-                    onlyFiles: true,
-                  }),
-                ];
-                if (outputs.length === 0) {
-                  problems.push(
-                    `Generated output is unavailable: ${generator.id}/${pattern}`,
-                  );
-                }
-                for (const output of outputs) {
-                  runStage.files.set(absolute("/app", output), output);
-                }
-              }
-              runStage.seen.clear();
-              delete runStage.checker;
-            }
-          },
-        },
-        body,
-        runStage.cwd,
-      );
+          body,
+          runStage.cwd,
+        );
+      }
     }
+    return [...new Set(problems)];
+  } finally {
+    await Promise.all(
+      [...checkers].map(async (checker) => {
+        await checker.close();
+      }),
+    );
   }
-  return [...new Set(problems)];
 };
 
-export const checkRepositoryDockerSources = (root: string): string[] => {
+export const checkRepositoryDockerSources = async (
+  root: string,
+): Promise<string[]> => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   if (tracked.exitCode !== 0) {
     panic("Cannot enumerate Docker sources");
@@ -1998,7 +2141,7 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
         }
       }
       problems.push(
-        ...checkDockerSource(root, source, context, pruned).map(
+        ...(await checkDockerSource(root, source, context, pruned)).map(
           (problem) => `${file}: ${problem}`,
         ),
       );
@@ -2015,14 +2158,14 @@ if (import.meta.main) {
     mode === "--write-install-tooling" ||
     mode === "--check-install-tooling"
   ) {
-    updateInstallToolingCopies(
+    await updateInstallToolingCopies(
       path.resolve(import.meta.dir, ".."),
       mode === "--write-install-tooling",
     );
     process.exit(0);
   }
   const start = performance.now();
-  const problems = checkRepositoryDockerSources(
+  const problems = await checkRepositoryDockerSources(
     path.resolve(import.meta.dir, ".."),
   );
   if (problems.length > 0) {

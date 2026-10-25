@@ -23,11 +23,11 @@ type LegalAtlasClosureOptions = {
   trackedFiles?: readonly string[];
 };
 
-export const legalAtlasApiSourceClosure = ({
+export const legalAtlasApiSourceClosure = async ({
   root = ROOT,
   trackedFiles,
 }: LegalAtlasClosureOptions = {}) => {
-  const resolved = Result.try(() => {
+  const resolved = await Result.tryPromise(async () => {
     const tracked =
       trackedFiles ??
       (() => {
@@ -85,16 +85,19 @@ export const legalAtlasApiSourceClosure = ({
           event.words.includes("build"),
       ),
     );
-    const entries = commands.flatMap((command) =>
-      lexShell(command).some(
-        (event) =>
-          event.type === "command" &&
-          event.words.at(0) === "bun" &&
-          event.words.includes("build"),
-      )
-        ? commandEntries(root, tree, command, "/app")
-        : [],
-    );
+    const entries: string[] = [];
+    for (const command of commands) {
+      if (
+        lexShell(command).some(
+          (event) =>
+            event.type === "command" &&
+            event.words.at(0) === "bun" &&
+            event.words.includes("build"),
+        )
+      ) {
+        entries.push(...(await commandEntries(root, tree, command, "/app")));
+      }
+    }
     if (!ownerBuild || entries.length === 0) {
       return {
         status: "unresolved",
@@ -102,7 +105,7 @@ export const legalAtlasApiSourceClosure = ({
       } as const;
     }
     const seen = new Set<string>();
-    const problems = sourceClosureProblems(root, tree, entries, seen);
+    const problems = await sourceClosureProblems(root, tree, entries, seen);
     for (const file of seen) {
       const origin = tree.get(file);
       if (origin === undefined || !MODULE.test(file)) {
@@ -136,7 +139,7 @@ export const legalAtlasApiSourcePredicate = (
   options: LegalAtlasClosureOptions = {},
 ) => {
   let closure: ReturnType<typeof legalAtlasApiSourceClosure> | undefined;
-  return (changed: readonly string[]): boolean => {
+  return async (changed: readonly string[]) => {
     if (changed.length === 0) {
       return false;
     }
@@ -148,7 +151,7 @@ export const legalAtlasApiSourcePredicate = (
       return true;
     }
     closure ??= legalAtlasApiSourceClosure(options);
-    const currentClosure = closure;
+    const currentClosure = await closure;
     switch (currentClosure.status) {
       case "unresolved":
         return true;
@@ -165,12 +168,14 @@ type LegalAtlasApiSourceOptions = LegalAtlasClosureOptions & {
   changed: readonly string[];
 };
 
-export const legalAtlasApiSourceRequired = ({
+export const legalAtlasApiSourceRequired = async ({
   changed,
   ...options
-}: LegalAtlasApiSourceOptions): boolean =>
-  legalAtlasApiSourcePredicate(options)(changed);
+}: LegalAtlasApiSourceOptions) =>
+  await legalAtlasApiSourcePredicate(options)(changed);
 
 if (import.meta.main) {
-  console.log(legalAtlasApiSourceRequired({ changed: process.argv.slice(2) }));
+  console.log(
+    await legalAtlasApiSourceRequired({ changed: process.argv.slice(2) }),
+  );
 }
