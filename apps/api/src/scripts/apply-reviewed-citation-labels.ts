@@ -12,7 +12,9 @@ import { Result } from "better-result";
  * `reviewRef` and `origin`. `origin` is `human-review`, or for a label a
  * model produced `ai-adjudicated` or `ai-annotation` together with `model`,
  * `promptVersion`, `promptSha256`, `evidenceSha256` (the passage the label was
- * read from), `runId` and `producedAt`.
+ * read from), `textRevisionSha256`, `runId` and `producedAt`.
+ * The revision is the SQL SHA256 of jsonb_build_array(content_hash, sections)::text
+ * read before producing the label; a stale revision writes nothing.
  *
  * Each entry is settled on its own. One that does not validate or resolve is
  * invalid. Origin precedence runs human, then adjudicated, then annotation;
@@ -23,9 +25,12 @@ import { Result } from "better-result";
  * results are written before the run commits, so labels never change without
  * their record: a run whose results cannot be written applies nothing.
  *
- * A review outlives refreshes of the citing decision: ingestion re-applies it
- * to the re-inserted rows, and the classifier passes leave reviewed rows
- * alone.
+ * Human reviews outlive refreshes of the citing decision. Model reviews
+ * apply only while their text revision matches; older model reviews without
+ * a revision remain stored but do not override current classifications.
+ * Read the revision alongside the text with:
+ * SELECT encode(sha256(convert_to(jsonb_build_array(content_hash, sections)::text, 'UTF8')), 'hex')
+ * FROM case_law_decisions WHERE id = :citingDecisionId;
  *
  * Idempotent: a stored review that already says the same is left as it is,
  * and a citation row already carrying it is not rewritten.
@@ -132,7 +137,7 @@ await runScriptWithErrorOutput(async () => {
   const { summary } = outcome;
   const verb = outcome.type === "applied" ? "" : "would be ";
   console.info(
-    `Entries: ${summary.applied} ${verb}applied, ${summary.unmatched} ${verb}stored without a current citation row, ${summary.unchanged} unchanged, ${summary["refused-precedence"]} refused by precedence, ${summary.invalid} invalid.`,
+    `Entries: ${summary.applied} ${verb}applied, ${summary.unmatched} ${verb}stored without a current citation row, ${summary.unchanged} unchanged, ${summary["refused-precedence"]} refused by precedence, ${summary.invalid} invalid, ${summary.stale} stale.`,
   );
   console.info(
     `Citation rows ${verb}relabelled: ${outcome.type === "applied" ? outcome.relabelled : summary.citationRows}.`,

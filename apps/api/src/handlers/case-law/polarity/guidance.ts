@@ -17,9 +17,9 @@ export const POLARITY_GUIDANCE = {
   cited decision, and says so. Phrases like "v souladu s", "odkazuje na",
   "jak konstatoval", "following", "in line with", "as held in".`,
   supportive: `The court relies on the cited decision without stating
-  agreement outright: a comparison or see-also pointer offered in support
-  of what it is saying. Phrases like "srov.", "viz", "obdobně",
-  "přiměřeně", "porov.", "pozri", "cf.", "see also".`,
+  agreement outright and expresses that reliance in its own words. Phrases
+  like "má oporu v", "odpovídá závěr", "judikoval", "relies on".
+  A bare comparison or see-also marker is citation form, not support.`,
   neutral: `The court names the cited decision without endorsing or
   rejecting it, most often as part of the procedural record. Phrases like
   "proti rozsudku", "vedené u", "veden pod". This is also the answer when

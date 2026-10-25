@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { caseLawCitations } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 
 /** Rows reset per statement; bounded so the lock never spans the table. */
 const RESET_BATCH = 5000;
@@ -25,11 +26,18 @@ export const resetRetiredRuleVerdicts = async (
   if (retiredIds.length === 0) {
     return [];
   }
-  const reset = await db.transaction(async (tx) => {
+  const reset = await withAggregateTransaction(db, async (tx) => {
     // audit: skip — operator rule retirement; derived labels only
     const rows = await tx
       .update(caseLawCitations)
-      .set({ polarity: null, polarityRuleId: null })
+      .set({
+        polarity: null,
+        polarityRuleId: null,
+        polaritySource: null,
+        polarityClassifierVersion: null,
+        polarityEvidenceWindows: null,
+        polarityConfidence: null,
+      })
       .where(
         sql`${caseLawCitations.id} IN (
           SELECT ${caseLawCitations.id} FROM ${caseLawCitations}

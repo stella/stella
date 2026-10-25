@@ -51,6 +51,10 @@ const citation = ({
   citationId,
   citationText,
   textWithheldReason,
+  textIncompleteReason: null,
+  evidenceIncompleteReason: null,
+  polarityEvidence: null,
+  citedPart: null,
   polarity,
   doctrine: null,
   decision: decision

@@ -15,10 +15,7 @@
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
 import type { CitationDecisionTypeHint } from "@/api/handlers/case-law/citation-decision-type-hint";
-import {
-  CITATION_KIND,
-  classifyCitation,
-} from "@/api/handlers/case-law/citation-kind";
+import { classifyCitation } from "@/api/handlers/case-law/citation-kind";
 import type {
   CitationKind,
   ProceduralKeys,
@@ -29,7 +26,7 @@ import {
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
-import type { CitationContexts } from "@/api/handlers/case-law/polarity/context";
+import type { CitationWindows } from "@/api/handlers/case-law/polarity/context";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ExtractedCitation = ReturnType<typeof extractCitations>[number];
@@ -72,12 +69,8 @@ export type DecisionReference = {
   hints: DecisionReferenceHints;
   /** The section the citation was found in; null when not located. */
   sectionIndex: number | null;
-  /**
-   * The windows the polarity rules read, one per mention. Null for a
-   * procedural reference, whose treatment is not read, and for one whose
-   * printed form is not found in the text.
-   */
-  polarityMentions: CitationContexts | null;
+  /** The one extraction used for treatment, cited-part hints, and evidence. */
+  polarityWindows: CitationWindows | null;
 };
 
 type DecisionReferences = {
@@ -138,10 +131,7 @@ export const deriveDecisionReferences = ({
         decisionDate: citation.citedDecisionDate,
       },
       sectionIndex: citation.sectionIndex,
-      polarityMentions:
-        kind === CITATION_KIND.PRECEDENT && windows !== null
-          ? windows.mentions
-          : null,
+      polarityWindows: windows,
     };
   }),
 });

@@ -25,6 +25,10 @@ import {
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
 } from "./chat-content-v3-backfill";
+import {
+  CITATION_POLARITY_EVIDENCE_CONSTRAINT_VALIDATIONS,
+  CITATION_POLARITY_EVIDENCE_CONSTRAINTS,
+} from "./citation-polarity-evidence-constraint-validation";
 import { CONTACT_VAT_ID_REPAIR } from "./contact-vat-id-repair";
 import {
   CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
@@ -71,6 +75,7 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import { POLARITY_RULE_KIND_REPAIR } from "./polarity-rule-kind-repair";
 import {
   READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   READER_ANNOTATION_CLAIM_CONSTRAINTS,
@@ -800,6 +805,9 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
+  // The seed kinds land before the rule checks validate.
+  POLARITY_RULE_KIND_REPAIR,
+  ...CITATION_POLARITY_EVIDENCE_CONSTRAINT_VALIDATIONS,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
@@ -824,6 +832,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...CITATION_POLARITY_EVIDENCE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

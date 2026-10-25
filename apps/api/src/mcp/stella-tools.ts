@@ -1242,8 +1242,10 @@ export const STELLA_TOOL_DEFINITIONS = [
     // at, the passage's bounds, and the next call spelled out.
     description:
       "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
-      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
+      "Filters `doctrine` and `polarity` combine with AND. `polarity` is stance: " +
       "'unclassified' means unread; 'mixed' means mentions disagreed. " +
+      "`polarityEvidence` attributes its exact excerpt; `citedPart` names the " +
+      "opinion part; incomplete reasons explain missing evidence or text. " +
       "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
       "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
@@ -3782,6 +3784,10 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         citationId: item.id,
         citationText: item.citationText,
         textWithheldReason: item.textWithheldReason,
+        textIncompleteReason: item.textIncompleteReason,
+        evidenceIncompleteReason: item.evidenceIncompleteReason,
+        polarityEvidence: item.polarityEvidence,
+        citedPart: item.citedPart,
         polarity: item.treatment,
         doctrine: item.doctrine,
         decision:
