@@ -14,7 +14,10 @@ Visual inspiration: glass-like surfaces. Clean, translucent, precise.
 
 Default palette: clean neutral grays on white. Accent palettes
 (Nord, Flexoki) available as user preferences; brand stays
-monochrome with the Stella § mark.
+monochrome with the Stella symbol (`StellaMark` from
+`@stll/ui/stella-mark`). Never substitute a letter or a section-sign glyph
+for the symbol; static markup uses the official
+`apps/landing/public/brand/stella-symbol.svg` asset.
 
 Brand colours (reference, not for hard-coding):
 
@@ -42,6 +45,8 @@ rather than raw colour values.
   professional.
 
 ## Core Beliefs
+
+- Number content only when order is meaningful, and only through the Steps component.
 
 - Users notice the little things
 - Every interaction should feel smooth

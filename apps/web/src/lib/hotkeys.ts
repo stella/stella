@@ -1,5 +1,5 @@
 import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
-import type { Hotkey, IndividualKey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord, IndividualKey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -18,11 +18,11 @@ export const HOTKEYS = {
   REJECT_SUGGESTION: "Alt+Shift+Enter",
   NEXT_SUGGESTION: "Alt+ArrowDown",
   PREVIOUS_SUGGESTION: "Alt+ArrowUp",
-} as const satisfies Record<string, Hotkey>;
+} as const satisfies Record<string, HotkeyChord>;
 
 /**
  * The cheatsheet dialog opens on `?`. `Shift+/` is intentionally NOT a
- * TanStack `Hotkey` (that type excludes `Shift+<punctuation>` because the
+ * TanStack `HotkeyChord` (that type excludes `Shift+<punctuation>` because the
  * physical key that yields `?` is keyboard-layout dependent). We match the
  * produced character via `KeyboardEvent.key` instead, which is layout-correct.
  */
@@ -36,12 +36,12 @@ export const SHORTCUT_CONTEXTS = ["global", "workspace", "pdf"] as const;
 export type ShortcutContext = (typeof SHORTCUT_CONTEXTS)[number];
 
 /**
- * How a shortcut is bound. `hotkey` maps to a @tanstack `Hotkey` (bound with
+ * How a shortcut is bound. `hotkey` maps to a @tanstack `HotkeyChord` (bound with
  * `useHotkey`, displayed with `formatForDisplay`); `char` is a bare produced
  * character (layout-correct, matched via `KeyboardEvent.key`).
  */
 export type ShortcutBinding =
-  | { readonly type: "hotkey"; readonly hotkey: Hotkey }
+  | { readonly type: "hotkey"; readonly hotkey: HotkeyChord }
   | { readonly type: "char"; readonly char: string };
 
 /**
@@ -243,7 +243,7 @@ export const resolveHydrationSafeHotkeyPlatform = (
   state.status === "mounted" ? state.detected : SSR_HOTKEY_PLATFORM;
 
 export const formatHotkeyForPlatform = (
-  hotkey: Hotkey,
+  hotkey: HotkeyChord,
   platform: HotkeyPlatform,
 ): string => formatForDisplay(hotkey, { platform });
 

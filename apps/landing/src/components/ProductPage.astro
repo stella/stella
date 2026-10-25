@@ -248,18 +248,12 @@ const faqJsonLd = {
                     ]}
                     style={`--reveal-delay: ${index * 60}ms; border-color: var(--border)`}
                   >
-                    <span
-                      class="font-mono text-xs font-medium tabular-nums"
-                      style="color: color-mix(in srgb, var(--primary) 75%, transparent)"
-                    >
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
                     <h3
                       class:list={[
                         "font-display font-medium tracking-tight",
                         isLead
-                          ? "mt-4 max-w-xl text-2xl sm:text-3xl"
-                          : "mt-3 text-lg",
+                          ? "max-w-xl text-2xl sm:text-3xl"
+                          : "text-lg",
                       ]}
                     >
                       {cap.title}
@@ -301,7 +295,6 @@ const faqJsonLd = {
               <div
                 data-reveal
               >
-                <span class="font-mono text-xs" style="color: var(--muted-foreground)">{String(index + 1).padStart(2, "0")}</span>
                 <h2 class="font-display text-2xl font-medium tracking-tight sm:text-3xl">
                   {section.heading}
                 </h2>

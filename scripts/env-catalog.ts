@@ -1563,12 +1563,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SIGN_IN",
+  "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
   "JOURNEY_WEB_DECISION_URL",
   "JOURNEY_WEB_SEARCH_URL",
   "JOURNEY_WEB_STATUTES_URL",
   "JOURNEY_WEB_URL",
   "LANDING_SITE",
+  // Release pull request refresh: the main commit it plans from.
+  "MAIN_SHA",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
   "MARKETING_THEME",
@@ -1595,6 +1599,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Tailwind lint worker liveness tuning. The test hooks are confined to the
+  // plugin regression suite and are inert unless explicitly set.
+  "OXLINT_TAILWINDCSS_CACHE_DIR",
+  "OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
+  "OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS",
+  "OXLINT_TAILWINDCSS_WORKER_TEST_HOOK",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
@@ -1637,6 +1649,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_GATE_DIR",
+  // Release pull request refresh: open release numbers and the release to update.
+  "RELEASE_NUMBERS",
+  "RELEASE_PULL_REQUEST",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
@@ -1737,6 +1752,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "VERSION",
+  // Web image build: the previous release image whose own assets carry forward.
+  "PREVIOUS_WEB_IMAGE",
   // Release dependency-audit gate: a reasoned waiver and the remediation branch.
   "WAIVE_DEPENDENCY_AUDIT",
   "WAIVER_REASON",

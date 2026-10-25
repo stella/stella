@@ -110,3 +110,198 @@ jobs:
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+
+  # An open release versions the changesets pending at its cut. A `@stll/cli`
+  # entry that reaches main later stays pending beside the release, which the
+  # tag refuses (scripts/check-cli-release-coupling.ts), so the release branch
+  # takes main and versions the entry. Only `@stll/cli` entries trigger it; the
+  # refreshed head re-runs every release proof.
+  refresh-release-plan:
+    needs: gate
+    if: >-
+      !cancelled() && needs.gate.result == 'success' &&
+      needs.gate.outputs.may-version == 'false' && vars.STELLA_MERGE_HOLD == ''
+    name: Plan the release pull request refresh
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      refresh: ${{ steps.plan.outputs.refresh }}
+      number: ${{ steps.plan.outputs.number }}
+      branch: ${{ steps.plan.outputs.branch }}
+      head: ${{ steps.plan.outputs.head }}
+      merge: ${{ steps.plan.outputs.merge }}
+    steps:
+      - name: Check out the refresh planner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            packages/collation/src/collation.ts
+            scripts/changeset-entry.ts
+            scripts/changeset-guard.ts
+            scripts/check-cli-release-coupling.ts
+            scripts/gh-retry.sh
+            scripts/release-pull-request-refresh.ts
+            scripts/release-pull-requests.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Decide whether the release takes main
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          release_state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY")
+          RELEASE_NUMBERS=$(sed -n 's/^numbers=//p' <<<"$release_state") \
+            bun scripts/release-pull-request-refresh.ts plan
+
+  # No install runs in this job: the token exists only beside GitHub's merge.
+  refresh-release-merge:
+    needs: refresh-release-plan
+    if: >-
+      !cancelled() && needs.refresh-release-plan.result == 'success' &&
+      needs.refresh-release-plan.outputs.refresh == 'true' &&
+      needs.refresh-release-plan.outputs.merge == 'true'
+    name: Merge main into the release pull request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      head: ${{ steps.merge.outputs.head }}
+    steps:
+      - name: Check out the refresh planner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            packages/collation/src/collation.ts
+            scripts/changeset-entry.ts
+            scripts/changeset-guard.ts
+            scripts/check-cli-release-coupling.ts
+            scripts/gh-retry.sh
+            scripts/release-pull-request-refresh.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Mint release refresh token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.CHANGELOG_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # GitHub merges, so the merge commit is signed, and only from the head
+      # the plan read: a release that moved meanwhile fails this run.
+      - name: Merge main into the release branch
+        id: merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_PULL_REQUEST: ${{ needs.refresh-release-plan.outputs.number }}
+          HEAD_SHA: ${{ needs.refresh-release-plan.outputs.head }}
+        run: bun scripts/release-pull-request-refresh.ts update
+
+  # Also resumes a refresh whose merge landed and whose versioning did not:
+  # the plan then reports pending entries on the release head and no merge.
+  refresh-release-version:
+    needs: [refresh-release-plan, refresh-release-merge]
+    if: >-
+      !cancelled() && needs.refresh-release-plan.outputs.refresh == 'true' &&
+      contains(fromJSON('["success", "skipped"]'), needs.refresh-release-merge.result)
+    name: Version the changesets main added to the release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the merged release branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.refresh-release-merge.outputs.head || needs.refresh-release-plan.outputs.head }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      # Install hooks run before a write-capable credential exists in the job.
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile
+
+      - name: Version the pending changesets into the release
+        id: refresh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bun scripts/prepare-maintenance-release.ts --refresh
+          generated="$RUNNER_TEMP/release-refresh-generated-paths"
+          jq -r '.generatedPaths[]' scripts/changeset-policy.json > "$generated"
+          # The commit carries only the release paths, so a change anywhere
+          # else would be dropped from it; refuse instead of committing less.
+          unexpected=""
+          while IFS= read -r path; do
+            case "$path" in
+              .changeset/* | docs/changelog/*) continue ;;
+            esac
+            grep -qxF -- "$path" "$generated" || unexpected+="  $path"$'\n'
+          done < <(git status --porcelain=v1 --untracked-files=all | cut -c4-)
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::The refresh changed files outside the release paths:"
+            printf '%s' "$unexpected"
+            exit 1
+          fi
+          {
+            echo "paths<<PATHS_EOF"
+            echo ".changeset"
+            echo "docs/changelog"
+            cat "$generated"
+            echo "PATHS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint release refresh token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.CHANGELOG_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # Appends only on top of the merged head checked out above; a commit
+      # pushed to the release meanwhile fails the step.
+      - name: Commit the refreshed release files
+        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: append
+          branch: ${{ needs.refresh-release-plan.outputs.branch }}
+          paths: ${{ steps.refresh.outputs.paths }}
+          commit-message: "chore: version changesets that reached main after the release cut"

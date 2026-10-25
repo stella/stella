@@ -64,6 +64,23 @@ const MODEL_CATALOG_INPUTS = [
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "migration-lock-baseline",
+    outputKind: "committed",
+    outputs: ["scripts/migration-lock-baseline.ts"],
+    inputs: [
+      "scripts/check-migration-locks.ts",
+      "scripts/check-migration-safety.ts",
+      "scripts/migration-lock-census.ts",
+      "scripts/online-ddl-lock-census.ts",
+      "apps/api/src/db/online-ddl.ts",
+      "apps/api/drizzle/**/*.sql",
+    ],
+    write: ["bun", "scripts/check-migration-locks.ts", "--write-baseline"],
+    check: ["bun", "scripts/check-migration-locks.ts"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "cloud-setup",
     outputKind: "committed",
     outputs: [".agents/cloud-setup.sh"],
@@ -283,6 +300,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
+      "packages/api-contract/src/document-version-upload.ts",
       "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",
@@ -598,6 +616,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/routes/**",
       "apps/web/vite.config.ts",
       "apps/web/route-tree.config.ts",
+      "apps/web/scripts/route-template-manifest.ts",
       "apps/web/scripts/generate-route-tree.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
       "packages/scripts/src/generated-input-identity.ts",

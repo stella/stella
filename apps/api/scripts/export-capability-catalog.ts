@@ -131,6 +131,8 @@ const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 // artifacts above (see `serializeCoverageDoc`).
 const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
 export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun apps/api/scripts/export-capability-catalog.ts --check";
 const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
 
 /**
@@ -293,6 +295,7 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
   "entities.create": "stella:documents_write",
+  "entities.folder-from-selection.create": "stella:documents_write",
   "entities.blank-document.create": "stella:documents_write",
   "entities.delete": "stella:documents_write",
   "entities.versions.delete": "stella:documents_write",

@@ -65,6 +65,22 @@ describe("MCP gateway rate limiter", () => {
     ).toBe(true);
   });
 
+  test("rejects Redis replies that are not a whole numeric token", async () => {
+    const onRedisError = mock();
+    const limiter = createMcpGatewayRateLimiter({
+      createRedis: () => ({ send: async () => " 1 " }),
+      now: () => 1000,
+      onRedisError: (error) => {
+        onRedisError(error);
+      },
+    });
+
+    expect(
+      await limiter.consume({ connectorSlug: "registry", userId: "user_1" }),
+    ).toBe(true);
+    expect(onRedisError).toHaveBeenCalledTimes(1);
+  });
+
   test("falls back to a per-process window when Redis is unavailable", async () => {
     let currentTime = 1000;
     const onRedisError = mock();

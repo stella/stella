@@ -1008,6 +1008,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
+    path: "apps/web/src/routes/sitemap[.]xml.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Passes the default fetch transport to public case-law and statute shard readers for the root sitemap.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/bun-docker/api.ts",
     class: "operator-configured-infrastructure",
     reason:

@@ -89,7 +89,7 @@ import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-proje
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { readPresent } from "@/api/lib/errors/read-outcome";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -1920,6 +1920,27 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     });
 
+    test("reports registry settings read failures instead of provider absence", async () => {
+      let providerLoads = 0;
+      const cause = new DatabaseError({ message: "Settings read unavailable" });
+      const result = await handleMcpToolCall({
+        args: { registry: "krs", query: "Company name" },
+        context: {
+          ...createContext(),
+          loadWebSearchProvider: async () => {
+            providerLoads += 1;
+            return Result.err(cause);
+          },
+        },
+        toolName: "lookup_business_registry",
+      });
+      expect(providerLoads).toBe(1);
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: { code: "internal_error" },
+      });
+    });
+
     test("passes the requested detail through to the lookup", async () => {
       const baseContext = createContext();
       const executeRegistryLookupMock = mock(
@@ -3272,12 +3293,12 @@ describe("OpenAI-compatible MCP tools", () => {
     const calls = [
       {
         toolName: "search_case_law",
-        args: { country: "SVK", queries: ["synthetic"] },
+        args: { country: "AUT", queries: ["synthetic"] },
         expectedDomain: "caseLaw",
       },
       {
         toolName: "search_legislation",
-        args: { country: "SVK", query: "synthetic" },
+        args: { country: "AUT", query: "synthetic" },
         expectedDomain: "legislation",
       },
     ];
@@ -3291,8 +3312,8 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(result.structuredContent).toMatchObject({
         status: "unavailable",
         domain: expectedDomain,
-        country: "SVK",
-        reason: "pages_public",
+        country: "AUT",
+        reason: "pending_public",
       });
       expect(result.content).toContainEqual({
         type: "text",
@@ -6505,16 +6526,16 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
     test.each([null, createCitationDigest()])(
-      "identity-only countries report unavailable citations on MCP and CLI (%#)",
+      "unlaunched countries report unavailable citations on MCP and CLI (%#)",
       async (digest) => {
         const base = createReadDecisionResult();
         readGatedDecisionMock.mockResolvedValue({
           ...base,
           id: toSafeId<"caseLawDecision">(DECISION_ID),
-          country: "EU",
+          country: "AUT",
           decisionDate: "2024-02-01",
           documentAst: null,
-          fulltext: "Synthetic EU decision.",
+          fulltext: "Synthetic Austrian decision.",
           identifiers: [
             {
               type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -6556,7 +6577,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 citations: {
                   status: "unavailable",
                   reason: "country_not_search_admitted",
-                  country: "EU",
+                  country: "AUT",
                 },
               },
             },

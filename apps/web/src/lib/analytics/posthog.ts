@@ -12,6 +12,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 
 import { env } from "@/env";
 import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
@@ -19,6 +20,7 @@ import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnosti
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
 import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
@@ -155,8 +157,9 @@ const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
 const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
-// found, a rejected provider key or continuation, a file the upload scan
-// refused). Other 4xx and every 5xx stay reported.
+// found, a rejected provider key or continuation, a provider key that needs
+// more setup, a file the upload scan refused). Other 4xx and every 5xx stay
+// reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
@@ -164,6 +167,7 @@ const API_ERROR_TYPES: ReadonlySet<string> = new Set([
 const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
+  ...Object.values(PROVIDER_SETUP_ERROR_CODE),
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
 ]);
@@ -815,6 +819,7 @@ export const signedInAnonymousId = (userId: string): string =>
  * rather than relying on deployment-specific environment settings.
  */
 type CreatePostHogAnalyticsOptions = {
+  routeTemplates?: readonly string[];
   key: string;
   host: string;
   /**
@@ -825,10 +830,58 @@ type CreatePostHogAnalyticsOptions = {
   uiHost?: string | undefined;
 };
 
+// Events whose properties are already typed for PostHog go straight to the
+// SDK; keeping them out of the factory keeps its body to the stateful parts.
+const forwardedCaptures: Pick<
+  Analytics,
+  | "capturePageHangSuspected"
+  | "captureLongAnimationFrame"
+  | "captureGuideStepSkipped"
+  | "captureFeedbackDialogOpened"
+  | "captureFeedbackReportSubmitted"
+  | "captureProvisionPlacementGaps"
+  | "captureInspectorRestoreRecovered"
+  | "captureFollowupShown"
+  | "captureFollowupSelected"
+  | "captureKeyActionTiming"
+> = {
+  capturePageHangSuspected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
+  },
+  captureLongAnimationFrame: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.longAnimationFrame, properties);
+  },
+  captureGuideStepSkipped: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
+  },
+  captureFeedbackDialogOpened: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
+  },
+  captureFeedbackReportSubmitted: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
+  },
+  captureProvisionPlacementGaps: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+  },
+  captureInspectorRestoreRecovered: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
+  },
+  captureFollowupShown: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+  },
+  captureFollowupSelected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+  },
+  captureKeyActionTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
+  },
+};
+
 export const createPostHogAnalytics = ({
   host,
   key,
   uiHost,
+  routeTemplates = [],
 }: CreatePostHogAnalyticsOptions): {
   analytics: Analytics;
   client: typeof posthog | undefined;
@@ -880,6 +933,13 @@ export const createPostHogAnalytics = ({
             : sanitizeExceptionEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
           return routeErrorLifecycleSanitizer?.(event) ?? null;
+        case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+        case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+          return sanitizeHangDiagnosticEvent({
+            event,
+            appUrl: env.VITE_PUBLIC_APP_URL,
+            routeTemplates,
+          });
         case WEB_ANALYTICS_EVENTS.webVitals:
           return sanitizeWebVitalsEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.pageViewed:
@@ -999,33 +1059,7 @@ export const createPostHogAnalytics = ({
         path,
       });
     },
-    captureGuideStepSkipped: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
-    },
-    captureFeedbackDialogOpened: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
-    },
-    captureFeedbackReportSubmitted: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
-    },
-    captureProvisionPlacementGaps: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
-    },
-    captureInspectorRestoreRecovered: (properties) => {
-      posthog.capture(
-        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
-        properties,
-      );
-    },
-    captureFollowupShown: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
-    },
-    captureFollowupSelected: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
-    },
-    captureKeyActionTiming: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
-    },
+    ...forwardedCaptures,
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")
         .then((module) => {

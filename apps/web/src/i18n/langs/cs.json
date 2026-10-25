@@ -388,6 +388,7 @@
         "reading": "Text ke čtení"
       },
       "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
+      "pdfTextFailed": "Text PDF se nepodařilo přečíst, proto tvrzení nejsou na stránkách vyznačena.",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Importní tabulka ESO9 (XLSX)",
         "exporting": "Připravuji export…",
         "isdoc": "E-faktura ISDOC (ABRA Gen a další)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Tabulky",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Položky faktur (XLSX)"
@@ -757,6 +759,7 @@
     "sellerProfiles": {
       "add": "Přidat profil dodavatele",
       "archiveConfirm": "Archivovat tento profil dodavatele? Nebude již dostupný pro nové faktury.",
+      "barRegistration": "Registrace v advokátní komoře",
       "bic": "Kód BIC / SWIFT",
       "default": "Výchozí dodavatel",
       "defaultCurrency": "Výchozí měna",
@@ -768,11 +771,10 @@
       "invalidCurrency": "Zadejte třípísmenný kód měny.",
       "invalidIban": "Zadejte platný IBAN.",
       "legalName": "Oficiální název",
+      "registerEntry": "Zápis v rejstříku",
       "registrationId": "Registrační číslo",
       "setDefault": "Nastavit jako výchozí",
       "title": "Profily dodavatelů",
-      "vatId": "DIČ",
-      "vatPayer": "Plátce DPH",
       "vatPayerHelp": "Faktury tohoto dodavatele účtují DPH. Vypněte u identifikované osoby, která má DIČ, ale není plátcem DPH.",
       "vatPayerRequiresVatId": "Pro vystavování faktur jako plátce DPH zadejte DIČ."
     },
@@ -807,6 +809,8 @@
     "total": "Celkem",
     "vatRates": {
       "add": "Přidat sazbu DPH",
+      "addCzechia": "Přidat sazby pro Česko",
+      "addSlovakia": "Přidat sazby pro Slovensko",
       "archiveConfirm": "Archivovat tuto sazbu DPH? Nebude již dostupná pro nové doklady.",
       "code": "Kód sazby",
       "current": "Aktuální sazba",
@@ -821,6 +825,7 @@
       "overlap": "Období platnosti pro stejný kód sazby se nesmějí překrývat.",
       "past": "Dřívější sazba",
       "periodHelp": "Počáteční datum je zahrnuto; koncové datum není zahrnuto. Pro období bez konce ponechte koncové datum prázdné.",
+      "presetResult": "Přidáno: {added}; přeskočeno: {skipped}.",
       "rate": "Procentní sazba DPH",
       "title": "Sazby DPH",
       "validFrom": "Platí od",
@@ -1027,7 +1032,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z přibližně {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · přibližně {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku",
       "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"
@@ -2121,6 +2129,7 @@
       "ZH-HANT": "čínština (tradiční)"
     },
     "lastUpdated": "Naposledy aktualizováno",
+    "layoutResetAfterProblem": "Po problému bylo obnoveno výchozí rozložení.",
     "legalDatabase": "Právní databáze",
     "loadMore": "Načíst další",
     "loading": "Načítám",
@@ -2219,6 +2228,7 @@
     "suggested": "Návrh",
     "summarizeChanges": "Shrnout změny",
     "target": "Cíl",
+    "taxId": "DIČ",
     "timeBilling": "Čas a fakturace",
     "today": "Dnes",
     "translate": "Přeložit",
@@ -2242,6 +2252,8 @@
     "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
     "value": "Hodnota",
+    "vatId": "DIČ",
+    "vatPayer": "Plátce DPH",
     "verified": "Ověřeno",
     "verify": "Ověřit",
     "version": "Verze",
@@ -2432,7 +2444,9 @@
       "prefix": "Titul před",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ",
+      "vatPayer": "Stav plátce DPH",
+      "vatPayerNo": "Není plátce DPH",
+      "vatPayerUnknown": "Neznámý",
       "year": "Rok"
     },
     "filterOrganizations": "Organizace",
@@ -2472,7 +2486,6 @@
         "primary_phone": "Hlavní telefon",
         "state": "Stát nebo oblast",
         "suffix": "Titul za jménem",
-        "tax_id": "Daňové identifikační číslo",
         "type": "Typ kontaktu"
       },
       "fileInvalid": "Vyberte jeden soubor CSV, TSV nebo TXT.",
@@ -4800,6 +4813,8 @@
     "recentDocuments": "Nedávné dokumenty",
     "recentSearches": "Nedávná hledání",
     "recentlyOpenedFiles": "Nedávno otevřené soubory",
+    "registryCandidateNameMismatch": "Oficiální název „{officialName}“ se neshoduje",
+    "registryCandidateNoOfficialRecord": "Oficiální rejstřík pro toto číslo neobsahuje žádný záznam",
     "registryChoose": "Vyberte obchodní rejstřík",
     "registryCredentialAskAdmin": "Požádejte správce organizace o nastavení přístupu k tomuto rejstříku.",
     "registryCredentialSaved": "Přístup k rejstříku uložen",
@@ -4810,6 +4825,7 @@
       "enrichmentUnavailable": "Podrobnosti z obchodního rejstříku jsou dočasně nedostupné"
     },
     "registryKrsHint": "KRS vyhledává podle registračního čísla, ne podle názvu společnosti. Zadejte desetimístné číslo KRS včetně úvodních nul (např. 0000006865).",
+    "registryNameSearchNotFound": "Tomuto názvu neodpovídá žádná ověřená společnost. Následující kandidáti byli odmítnuti:",
     "registryVatHint": "VIES ověřuje DIČ, ne názvy společností. Zadejte DIČ včetně kódu země (např. CZ27082440); formát závisí na zemi.",
     "renameSearchTitle": "Přejmenovat uložené hledání",
     "requestCountry": "Požádat o přidání nové země",

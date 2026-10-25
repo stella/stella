@@ -61,6 +61,11 @@ const CHUNK_HASH_SUFFIX = /-[A-Za-z0-9_-]{8}(?=\.[a-z]+$)/u;
 const stableBasename = (basename: string): string =>
   basename.replace(CHUNK_HASH_SUFFIX, "");
 
+// The SSR build content-hashes its chunks the same way. Stack redaction
+// reports a server frame relative to the web app root, so only a server
+// chunk has this prefix.
+const SERVER_ASSET_DIRECTORY = "dist/server/assets/";
+
 type FirstPartyAssetOptions = {
   filename: string;
   firstPartyOrigin: string;
@@ -70,6 +75,9 @@ const isFirstPartyAsset = ({
   filename,
   firstPartyOrigin,
 }: FirstPartyAssetOptions): boolean => {
+  if (filename.startsWith(SERVER_ASSET_DIRECTORY)) {
+    return true;
+  }
   if (
     !URL.canParse(firstPartyOrigin) ||
     !URL.canParse(filename, firstPartyOrigin)
