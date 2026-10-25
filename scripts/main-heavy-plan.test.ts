@@ -703,6 +703,19 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
           }
+          // Pull request quick checks run in the heavy-suite gate, so the gate
+          // runs where the baseline quick checks ran and they skip there.
+          if (job === "pr-heavy-gate") {
+            expected =
+              event === "pull_request" &&
+              selected(
+                original.jobs["ci-quick-checks"]?.if ?? "true",
+                context(event, false, plan),
+              );
+          }
+          if (job === "ci-quick-checks" && event === "pull_request") {
+            expected = false;
+          }
           expect(
             selected(current, context(event, false, plan)),
             `${event}/${depth}/${required}/${job}`,
