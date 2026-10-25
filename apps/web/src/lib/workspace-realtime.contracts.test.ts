@@ -665,6 +665,9 @@ const realtimeConfigurationOfHandler = (
       return undefined;
     }
     const value = syntaxValue(expression);
+    if (!ts.isExpression(value)) {
+      return undefined;
+    }
     return ts.isIdentifier(value) && values.has(value.text)
       ? values.get(value.text)
       : value;
