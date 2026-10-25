@@ -13,7 +13,7 @@ import type {
 } from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
 
@@ -37,7 +37,7 @@ export type CapabilityHandlerContext = HandlerContext<
 
 const recorderFactory =
   (
-    context: McpRequestContext,
+    context: McpRequestResources,
     request: Request,
     defaultWorkspaceId: SafeId<"workspace"> | null,
   ): AuditRecorderFactory =>
@@ -64,7 +64,7 @@ const recorderFactory =
  * only (one indexed `organization_settings` read).
  */
 const mcpMemberCaller = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
   request: Request,
 ): Promise<MemberCaller> => {
   // Executable gateway contexts must provide an operation-local scope. The
@@ -144,7 +144,7 @@ export const capabilityHandlerContext = async ({
   workspaceId,
 }: {
   capabilityId: string;
-  context: McpRequestContext;
+  context: McpRequestResources;
   input: { body: unknown; params: unknown; query: unknown };
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;

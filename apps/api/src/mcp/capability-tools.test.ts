@@ -49,11 +49,12 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -183,7 +184,7 @@ const visibleReferenceDatabase = (ids: readonly string[]) =>
     },
   });
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
     const builder = {
       select: () => builder,
@@ -213,19 +214,19 @@ const createContext = ({
   workspaceIds = ["ws_1"],
   toolConfirmation,
 }: {
-  createOperationDatabaseScope?: McpRequestContext["createOperationDatabaseScope"];
-  credentialPermissions?: McpRequestContext["credentialPermissions"];
+  createOperationDatabaseScope?: AuthorizedMcpRequestContext["createOperationDatabaseScope"];
+  credentialPermissions?: AuthorizedMcpRequestContext["credentialPermissions"];
   grantedScopes?: readonly string[];
-  memberRole?: McpRequestContext["memberRole"];
-  pinServerValidatedWorkspaceId?: McpRequestContext["pinServerValidatedWorkspaceId"];
-  scopedDb?: McpRequestContext["scopedDb"];
-  safeDb?: McpRequestContext["safeDb"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  pinServerValidatedWorkspaceId?: AuthorizedMcpRequestContext["pinServerValidatedWorkspaceId"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+  safeDb?: AuthorizedMcpRequestContext["safeDb"];
   archivedWorkspaceIds?: string[];
   workspaceIds?: string[];
-  toolConfirmation?: McpRequestContext["toolConfirmation"];
-} = {}): McpRequestContext => {
+  toolConfirmation?: AuthorizedMcpRequestContext["toolConfirmation"];
+} = {}): AuthorizedMcpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
-  return {
+  return authorizedMcpContextForTest({
     testDependencies: {
       loadOrgSettingsForAuth: loadOrgSettingsMock,
       consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
@@ -287,7 +288,7 @@ const createContext = ({
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const call = async (toolName: string, args: Record<string, unknown>) =>
@@ -2226,7 +2227,7 @@ describe("capability executor upload purpose gate", () => {
 
   // A pending upload the finalize gate reads its purpose from.
   const storedPurposeDb = (purpose: string) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) => {
         const builder = {
           select: () => builder,

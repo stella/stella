@@ -22,7 +22,6 @@ import {
   brandPersistedFileComparisonUploadId,
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveDocumentWriteTarget } from "@/api/mcp/document-entity-access";
 import {
   runFileComparison,
@@ -48,6 +47,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const TARGET_LIMIT_TEXT = String(DOCUMENT_COMPARE_TARGET_LIMIT);
@@ -346,7 +346,7 @@ const sharedDocxFileProperties = async ({
   versionIds,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   versionIds: readonly SafeId<"entityVersion">[];
   workspaceId: SafeId<"workspace">;
@@ -419,7 +419,7 @@ const resolveFilePropertyId = async ({
   versionIds,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   explicitFilePropertyId: string | undefined;
   versionIds: readonly SafeId<"entityVersion">[];
@@ -676,7 +676,7 @@ export const handleCompareDocumentsTool = async (
   {
     args,
     context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
+  }: { args: Record<string, unknown>; context: AuthorizedMcpRequestContext },
   dependencies: CompareDocumentsDependencies = DEFAULT_COMPARE_DOCUMENTS_DEPENDENCIES,
 ): Promise<TypedMcpToolResponse<CompareDocumentsOutput>> => {
   const parsed = v.safeParse(COMPARE_DOCUMENTS_INPUT_SCHEMA, args);

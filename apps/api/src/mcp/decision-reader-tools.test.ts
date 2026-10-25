@@ -10,9 +10,9 @@ import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import type { McpRequestContext } from "./context";
 import {
   blocksDecisionOutput,
   openDecisionOutput,
@@ -106,8 +106,10 @@ const sourceOf = (
     referenceNextCursor: null,
   }) satisfies ReaderSource;
 const contextWith = (
-  testDependencies: NonNullable<McpRequestContext["testDependencies"]>,
-) => asTestRaw<McpRequestContext>({ testDependencies });
+  testDependencies: NonNullable<
+    AuthorizedMcpRequestContext["testDependencies"]
+  >,
+) => asTestRaw<AuthorizedMcpRequestContext>({ testDependencies });
 
 type HandlerInput = Parameters<McpToolHandler>[0];
 

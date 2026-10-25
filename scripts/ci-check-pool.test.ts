@@ -681,21 +681,39 @@ test("only a failed check's own error commands reach the job log", () => {
     "::error file=a.ts,line=1::Expected refusal",
     "  ::error::already indented",
     "::warning::advisory note",
-    "::group::nested",
+    "::group::scripts/a.test.ts:",
+    "(pass) a [0.10ms]",
+    "  ::endgroup::",
+    "##[group]rendered",
+    "##[endgroup]",
     "ok",
   ].join("\n");
+  // The runner trims leading whitespace before it reads a command, so only a
+  // removed command or a non-blank prefix is inert.
+  const flat = ["scripts/a.test.ts:", "(pass) a [0.10ms]", "rendered", "ok"];
   const neutralized = [
-    " ::error::Release history includes a fixture pull request",
-    " ::error file=a.ts,line=1::Expected refusal",
-    "  ::error::already indented",
+    "| ::error::Release history includes a fixture pull request",
+    "| ::error file=a.ts,line=1::Expected refusal",
+    "|   ::error::already indented",
     "::warning::advisory note",
-    " ::group::nested",
-    "ok",
+    ...flat,
   ].join("\n");
   for (const outcome of ["success", "skipped"] as const) {
-    expect(checkLogText(output, outcome)).toBe(neutralized);
+    const text = checkLogText(output, outcome);
+    expect(text).toBe(neutralized);
+    for (const line of text.split("\n")) {
+      expect(line.trimStart()).not.toMatch(
+        /^(?:::(?:error|group|endgroup)\b|##\[)/u,
+      );
+    }
   }
   expect(checkLogText(output, "failure")).toBe(
-    output.replace("::group::nested", " ::group::nested"),
+    [
+      "::error::Release history includes a fixture pull request",
+      "::error file=a.ts,line=1::Expected refusal",
+      "  ::error::already indented",
+      "::warning::advisory note",
+      ...flat,
+    ].join("\n"),
   );
 });

@@ -192,8 +192,10 @@ describe("invoice document export", () => {
       .map((page) => page.text)
       .join("\n");
     expect(text).toContain("Contract review");
-    expect(text).toContain("Množstvo: 2,5 h");
-    expect(text).toContain("Jednotková cena:");
+    // Slovak column headers, with the figures under them.
+    expect(text).toContain("MNOŽSTVO");
+    expect(text).toContain("JEDNOTKOVÁ CENA");
+    expect(text).toContain("2,5 h");
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action: "download",
@@ -231,8 +233,10 @@ describe("invoice document export", () => {
       .extractText()
       .map((page) => page.text)
       .join("\n");
-    expect(text).toContain("Quantity: 2.5 h");
-    expect(text).toContain("Unit price:");
+    // English column headers, with the figures under them.
+    expect(text).toContain("QUANTITY");
+    expect(text).toContain("UNIT PRICE");
+    expect(text).toContain("2.5 h");
   });
   test.each(["timeout", "crashed", "memory"] as const)(
     "maps renderer %s failures to a retryable service response",

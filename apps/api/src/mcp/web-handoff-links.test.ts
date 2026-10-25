@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import type { McpRequestContext } from "./context";
+import type { McpRequestResources } from "./context";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -36,7 +37,9 @@ describe("MCP app web handoff tool", () => {
       structuredContent: { url: "https://app.example/law/cz/2020/1" },
     };
     for (const credentialType of ["api-key", "anonymous", undefined] as const) {
-      const context = asTestRaw<McpRequestContext>({ credentialType });
+      const context = authorizedMcpContextForTest(
+        asTestRaw<McpRequestResources>({ credentialType }),
+      );
       expect(await withWebHandoffLinks(result, context)).toBe(result);
       const handler = getStaticMcpToolHandler(MCP_WEB_HANDOFF_TOOL);
       expect(handler).toBeDefined();
@@ -54,7 +57,9 @@ describe("MCP app web handoff tool", () => {
   });
 
   test("rejects malformed app requests before minting", async () => {
-    const context = asTestRaw<McpRequestContext>({ credentialType: "oauth" });
+    const context = authorizedMcpContextForTest(
+      asTestRaw<McpRequestResources>({ credentialType: "oauth" }),
+    );
     for (const input of [
       {},
       { url: 123 },

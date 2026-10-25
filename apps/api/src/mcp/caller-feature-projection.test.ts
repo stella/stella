@@ -27,8 +27,8 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { capabilityHandlerContext } from "@/api/mcp/capability-context";
 import { parseCatalog } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -121,7 +121,7 @@ const contextFor = (granted: boolean, capability: string) => {
     organizationId,
     email: "member@example.test",
   } as const;
-  const context = {
+  const context = authorizedMcpContextForTest({
     organizationId,
     userId,
     userEmail: "member@example.test",
@@ -181,7 +181,7 @@ const contextFor = (granted: boolean, capability: string) => {
         promptCachingEnabled: false,
       }),
     },
-  } satisfies McpRequestContext;
+  });
   return { context, database };
 };
 /**

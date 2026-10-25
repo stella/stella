@@ -80,6 +80,8 @@ const NON_READ_CALLS = new Set([
   "toHaveProperty",
   "toInclude",
   "toMatch",
+  "toMatchInlineSnapshot",
+  "toMatchSnapshot",
   "toStartWith",
   "toStrictEqual",
 ]);

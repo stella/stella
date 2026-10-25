@@ -2452,6 +2452,52 @@ describe("czUsAdapter judges", () => {
     expect(decision?.metadata["recordCard"] === "absent").toBe(true);
   });
 
+  const OPENING_BENCH =
+    "Ústavní soud rozhodl v senátě složeném z předsedy Jana Svatoně (soudce zpravodaje), soudce Milana Hulmáka a soudkyně Daniely Zemanové o ústavní stížnosti";
+
+  test("adds the bench the opening sentence states, ahead of the card", async () => {
+    const decision = await decisionWithCard({
+      documentText: OPENING_BENCH,
+      rapporteur: "Svatoň Jan",
+    });
+
+    // Declined as the sentence prints them; the roster resolves them when
+    // the row is written.
+    expect(
+      Bun.deepEquals(decision?.judges, [
+        { role: "presiding", czechDeclinedName: "Jana Svatoně" },
+        { role: "rapporteur", czechDeclinedName: "Jana Svatoně" },
+        { role: "panel-member", czechDeclinedName: "Milana Hulmáka" },
+        { role: "panel-member", czechDeclinedName: "Daniely Zemanové" },
+        { role: "rapporteur", nameAsPrinted: "Svatoň Jan" },
+      ]),
+    ).toBe(true);
+    expect(decision?.metadata["judge"] === "Svatoň Jan").toBe(true);
+  });
+
+  test("states the sentence's bench where the court holds no card", async () => {
+    const decision = await decisionWithCard({
+      documentText: OPENING_BENCH,
+      recordCardStatus: 404,
+    });
+
+    expect(decision?.judges?.map(({ role }) => role)).toEqual([
+      "presiding",
+      "rapporteur",
+      "panel-member",
+      "panel-member",
+    ]);
+  });
+
+  test("leaves the stored judges alone where the card could not be read, bench or not", async () => {
+    const decision = await decisionWithCard({
+      documentText: OPENING_BENCH,
+      recordCardStatus: 500,
+    });
+
+    expect(decision?.judges).toBeUndefined();
+  });
+
   test("states an empty bench where the card names no judge", async () => {
     const decision = await decisionWithCard({
       rapporteur: "",

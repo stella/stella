@@ -34,6 +34,22 @@ describe("canonicalModuleId", () => {
     );
   });
 
+  test.each([
+    "@/api/lib/../mcp/./write-tool-authority.ts",
+    "@/api/mcp//write-tool-authority.ts",
+    "../../mcp//./write-tool-authority.ts",
+  ])("normalizes equivalent repository path spelling %s", (specifier) => {
+    expect(canonicalModuleId(specifier, IMPORTER)).toBe(
+      "apps/api/src/mcp/write-tool-authority",
+    );
+  });
+
+  test("normalizes the importing app's alias path", () => {
+    expect(
+      canonicalModuleId("@/lib/../lib//fetch.ts", "apps/web/src/routes/a.tsx"),
+    ).toBe("apps/web/src/lib/fetch");
+  });
+
   test("drops a trailing index and leaves packages alone", () => {
     expect(canonicalModuleId("./db/index.ts", IMPORTER)).toBe(
       "apps/api/src/lib/entities/db",
