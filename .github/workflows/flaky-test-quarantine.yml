@@ -139,7 +139,7 @@ jobs:
       # queued automatically. Re-running refreshes it from current main.
       - name: Open or update the quarantine proposal
         if: steps.scan.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/.github/actions/signed-commit@12eb83b8c6bd42a0bead73d9c6bc30b4caad6433
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
