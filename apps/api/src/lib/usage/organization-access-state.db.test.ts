@@ -18,13 +18,14 @@ import { eq, inArray } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { member, organization } from "@/api/db/auth-schema";
+import { apikey, member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   organizationSettings,
+  usageEntitlements,
   usagePolicies,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
@@ -47,6 +48,7 @@ import {
 import {
   allowsInstanceModels,
   endOrganizationEvaluation,
+  moveKeylessOrganizationsToFree,
   readManagedModelTier,
   recordMissingOrganizationAccessStatesWhileUnenforced,
   recordNewOrganizationAccessState,
@@ -147,6 +149,144 @@ const readState = async (organizationId: SafeId<"organization">) =>
     .from(organizationAccessStates)
     .where(eq(organizationAccessStates.organizationId, organizationId))
     .then((rows) => rows.at(0));
+
+describe("moving keyless organizations to the free floor", () => {
+  test("moves exactly keyless self-managed organizations once", async () => {
+    const now = new Date("2026-10-25T12:00:00.000Z");
+    const accessIds = {
+      keyless: mintAuthProviderId<"organization">(),
+      ownKey: mintAuthProviderId<"organization">(),
+      personalKey: mintAuthProviderId<"organization">(),
+      evaluating: mintAuthProviderId<"organization">(),
+      ended: mintAuthProviderId<"organization">(),
+      entitled: mintAuthProviderId<"organization">(),
+    };
+    const organizationIds = Object.values(accessIds);
+    const policyId = createSafeId<"usagePolicy">();
+    const entitlementId = createSafeId<"usageEntitlement">();
+    const personalKeyId = `personal-${Bun.randomUUIDv7()}`;
+
+    await testDb.insert(organization).values(
+      organizationIds.map((id) => ({
+        id,
+        name: "Free-floor move fixture",
+        slug: `free-floor-${id}`,
+        createdAt: now,
+      })),
+    );
+    await testDb.insert(organizationSettings).values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId: accessIds.ownKey,
+      aiConfigEncrypted: Buffer.from("encrypted-org-ai-config"),
+    });
+    await testDb.insert(apikey).values({
+      id: personalKeyId,
+      key: `digest-${Bun.randomUUIDv7()}`,
+      referenceId: ids.userA1,
+      metadata: JSON.stringify({
+        kind: "personal",
+        organizationId: accessIds.personalKey,
+      }),
+    });
+    await testDb.insert(usagePolicies).values({
+      id: policyId,
+      policyKey: `move_test_${Bun.randomUUIDv7()}`,
+      displayName: "Move test paid policy",
+      monthlyUsageUnits: 1,
+    });
+    await testDb.insert(usageEntitlements).values({
+      id: entitlementId,
+      organizationId: accessIds.entitled,
+      usagePolicyId: policyId,
+      status: "active",
+      seats: 1,
+      currentPeriodStart: new Date(now.getTime() - DAY_IN_MS),
+      currentPeriodEnd: new Date(now.getTime() + DAY_IN_MS),
+      source: "manual",
+    });
+    await testDb.insert(organizationAccessStates).values([
+      ...[
+        accessIds.keyless,
+        accessIds.ownKey,
+        accessIds.personalKey,
+        accessIds.entitled,
+      ].map((organizationId) => ({
+        organizationId,
+        state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+      })),
+      {
+        organizationId: accessIds.evaluating,
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        evaluationStartedAt: new Date(now.getTime() - DAY_IN_MS),
+        evaluationEndsAt: new Date(now.getTime() + DAY_IN_MS),
+      },
+      {
+        organizationId: accessIds.ended,
+        state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+        evaluationStartedAt: new Date(now.getTime() - 2 * DAY_IN_MS),
+        evaluationEndsAt: new Date(now.getTime() - DAY_IN_MS),
+        evaluationEndedAt: new Date(now.getTime() - DAY_IN_MS),
+      },
+    ]);
+
+    const beforeEvaluating = await readState(accessIds.evaluating);
+    const beforeEnded = await readState(accessIds.ended);
+    const moved = await moveKeylessOrganizationsToFree(ownerDb(), { now });
+    const expectedMoved = [
+      accessIds.keyless,
+      accessIds.personalKey,
+      accessIds.entitled,
+    ];
+    const unrelatedMoved = moved.filter(
+      (organizationId) => !expectedMoved.includes(organizationId),
+    );
+
+    expect(new Set(moved.filter((id) => expectedMoved.includes(id)))).toEqual(
+      new Set(expectedMoved),
+    );
+    expect(await readState(accessIds.ownKey)).toMatchObject({
+      state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+      evaluationEndedAt: null,
+    });
+    for (const organizationId of expectedMoved) {
+      expect(await readState(organizationId)).toMatchObject({
+        state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+        evaluationStartedAt: null,
+        evaluationEndsAt: null,
+        evaluationEndedAt: now,
+      });
+    }
+    expect(await readState(accessIds.evaluating)).toEqual(beforeEvaluating);
+    expect(await readState(accessIds.ended)).toEqual(beforeEnded);
+    expect(
+      await testDb
+        .select({ id: usageEntitlements.id })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.id, entitlementId)),
+    ).toEqual([{ id: entitlementId }]);
+    const movedAgain = await moveKeylessOrganizationsToFree(ownerDb(), {
+      now: new Date(now.getTime() + DAY_IN_MS),
+    });
+    expect(movedAgain).toEqual([]);
+    if (unrelatedMoved.length > 0) {
+      await testDb
+        .update(organizationAccessStates)
+        .set({
+          state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+          evaluationEndedAt: null,
+        })
+        .where(
+          inArray(organizationAccessStates.organizationId, unrelatedMoved),
+        );
+    }
+
+    await testDb.delete(apikey).where(eq(apikey.id, personalKeyId));
+    await testDb
+      .delete(organization)
+      .where(inArray(organization.id, organizationIds));
+    await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
+  });
+});
 
 test("action admission reads access state only through its authorized organization scope", async () => {
   expect(

@@ -7,7 +7,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notExists, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -17,6 +17,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  organizationSettings,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -187,6 +188,50 @@ export const recordMissingOrganizationAccessStates = async (
     FROM ${organization}
     ON CONFLICT (organization_id) DO NOTHING
   `);
+};
+
+/**
+ * Moves the blanket-backfilled organizations without an organization AI
+ * configuration onto the free floor. The encrypted blob's presence is enough:
+ * its validated plaintext always contains at least one provider, so this path
+ * neither needs nor attempts to decrypt it.
+ */
+export const moveKeylessOrganizationsToFree = async (
+  db: Pick<Transaction, "update" | "select">,
+  { now }: Pick<OrganizationAccessStateChange, "now">,
+): Promise<SafeId<"organization">[]> => {
+  // audit: skip - organization access-state transitions have no audit helper.
+  const moved = await db
+    .update(organizationAccessStates)
+    .set({
+      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      evaluationEndedAt: now,
+    })
+    .where(
+      and(
+        eq(
+          organizationAccessStates.state,
+          ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+        ),
+        notExists(
+          db
+            .select({ organizationId: organizationSettings.organizationId })
+            .from(organizationSettings)
+            .where(
+              and(
+                eq(
+                  organizationSettings.organizationId,
+                  organizationAccessStates.organizationId,
+                ),
+                sql`${organizationSettings.aiConfigEncrypted} IS NOT NULL`,
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({ organizationId: organizationAccessStates.organizationId });
+
+  return moved.map((row) => row.organizationId);
 };
 
 /**
