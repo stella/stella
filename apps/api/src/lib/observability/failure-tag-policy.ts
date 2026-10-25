@@ -250,6 +250,8 @@ export const TAGGED_FAILURE_REASON = {
   JustificationDataError: "tagged_failure",
   JustificationTextError: "tagged_failure",
   KsefError: "tagged_failure",
+  KsefLoginCryptoError: "tagged_failure",
+  KsefLoginError: "tagged_failure",
   LatestDecisionsError: "tagged_failure",
   LegacyChatContentError: "tagged_failure",
   LegacyWordParseError: "tagged_failure",

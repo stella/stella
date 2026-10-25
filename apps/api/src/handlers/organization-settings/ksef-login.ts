@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { parseNip } from "@stll/invoicing";
@@ -10,15 +11,14 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
-import { encryptOrganizationSecret } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   authenticatorFromLogin,
   certificateMetadata,
   importKsefSigningKey,
   KSEF_ENVIRONMENTS,
-  KSEF_LOGIN_PURPOSE,
 } from "@/api/lib/ksef-login";
+import { encryptKsefLogin } from "@/api/lib/ksef-login-crypto";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const bodySchema = v.variant("kind", [
@@ -26,14 +26,19 @@ const bodySchema = v.variant("kind", [
     kind: v.literal("token"),
     target: v.picklist(KSEF_ENVIRONMENTS),
     nip: v.pipe(v.string(), v.maxLength(10)),
-    token: v.pipe(v.string(), v.minLength(1), v.maxLength(4096)),
+    token: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(4096),
+      v.brand("Secret"),
+    ),
   }),
   v.strictObject({
     kind: v.literal("certificate"),
     target: v.picklist(KSEF_ENVIRONMENTS),
     nip: v.pipe(v.string(), v.maxLength(10)),
     certificate: v.pipe(v.string(), v.maxLength(32_000)),
-    privateKey: v.pipe(v.string(), v.maxLength(32_000)),
+    privateKey: v.pipe(v.string(), v.maxLength(32_000), v.brand("Secret")),
   }),
 ]);
 const baseConfig = {
@@ -42,29 +47,29 @@ const baseConfig = {
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
-const transport: KsefTransport = async ({ method, url, headers, body }) => {
-  const fetched = await safeOutboundFetchBytes({
-    url,
-    method,
-    headers,
-    body,
-    maxBytes: 2_000_000,
-    timeout: { type: "headers", ms: 20_000 },
-    permit: grantThirdPartyOutboundPermit(),
-  });
-  if (fetched.isErr()) {
-    throw fetched.error;
-  }
-  return {
-    status: fetched.value.status,
-    headers: fetched.value.headers,
-    body: new Uint8Array(fetched.value.body),
-  };
-};
+const ksefTransport =
+  (permit: ReturnType<typeof grantThirdPartyOutboundPermit>): KsefTransport =>
+  async ({ method, url, headers, body }) =>
+    (
+      await safeOutboundFetchBytes({
+        url,
+        method,
+        headers,
+        body,
+        maxBytes: 2_000_000,
+        timeout: { type: "headers", ms: 20_000 },
+        permit,
+      })
+    ).map((response) => ({
+      status: response.status,
+      headers: response.headers,
+      body: new Uint8Array(response.body),
+    }));
 
 export const saveKsefLogin = createSafeRootHandler(
   { ...baseConfig, body: bodySchema },
   async function* ({ safeDb, session, body, recordAuditEvent }) {
+    const transport = ksefTransport(grantThirdPartyOutboundPermit());
     const nip = parseNip(body.nip);
     if (nip === null || nip !== body.nip) {
       return Result.err(
@@ -87,13 +92,13 @@ export const saveKsefLogin = createSafeRootHandler(
       metadata = certificateMetadata(body.certificate);
       if (metadata.isErr()) {
         return Result.err(
-          new HandlerError({ status: 400, message: metadata.error }),
+          new HandlerError({ status: 400, message: metadata.error.message }),
         );
       }
       const key = await importKsefSigningKey(body.privateKey);
       if (key.isErr()) {
         return Result.err(
-          new HandlerError({ status: 400, message: key.error }),
+          new HandlerError({ status: 400, message: key.error.message }),
         );
       }
     }
@@ -105,7 +110,7 @@ export const saveKsefLogin = createSafeRootHandler(
     });
     if (built.isErr()) {
       return Result.err(
-        new HandlerError({ status: 400, message: built.error }),
+        new HandlerError({ status: 400, message: built.error.message }),
       );
     }
     const authenticated = await built.value.getAccessToken();
@@ -115,10 +120,9 @@ export const saveKsefLogin = createSafeRootHandler(
       );
     }
     // no-secret-in-log-sink: serialized only into the encryption envelope.
-    const encrypted = await encryptOrganizationSecret(
+    const encrypted = await encryptKsefLogin(
       session.activeOrganizationId,
-      KSEF_LOGIN_PURPOSE,
-      JSON.stringify(login),
+      login,
     );
     const cert = metadata?.isOk() ? metadata.value : undefined;
     yield* Result.await(
@@ -137,7 +141,7 @@ export const saveKsefLogin = createSafeRootHandler(
             ksefCertificateValidFrom: cert?.validFrom,
             ksefCertificateValidTo: cert?.validTo,
             ksefLoginSetAt: new Date(),
-            ksefLoginSetBy: session.userId,
+            ksefLoginSetBy: session.id,
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
@@ -151,7 +155,7 @@ export const saveKsefLogin = createSafeRootHandler(
               ksefCertificateValidFrom: cert?.validFrom ?? null,
               ksefCertificateValidTo: cert?.validTo ?? null,
               ksefLoginSetAt: new Date(),
-              ksefLoginSetBy: session.userId,
+              ksefLoginSetBy: session.id,
               updatedAt: new Date(),
             },
           });
@@ -239,7 +243,12 @@ export const deleteKsefLogin = createSafeRootHandler(
             ksefLoginSetBy: null,
             updatedAt: new Date(),
           })
-          .where({ organizationId: { eq: session.activeOrganizationId } });
+          .where(
+            eq(
+              organizationSettings.organizationId,
+              session.activeOrganizationId,
+            ),
+          );
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,

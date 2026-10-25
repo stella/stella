@@ -1149,6 +1149,11 @@ export type OutboundPermitGrantOwner = {
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
+    path: "apps/api/src/handlers/organization-settings/ksef-login.ts",
+    reason:
+      "Validates organization KSeF credentials at the authenticated save boundary.",
+  },
+  {
     path: "apps/api/src/handlers/chat/link-icons/get-exact.ts",
     reason:
       "Authenticated direct boundary for verified public connector and catalogue icon bytes.",

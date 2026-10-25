@@ -1,6 +1,5 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { X509Certificate } from "node:crypto";
-import * as v from "valibot";
 
 import {
   type Authenticator,
@@ -10,46 +9,68 @@ import {
   type KsefTransport,
 } from "@stll/invoicing/ksef";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptOrganizationSecret } from "@/api/lib/content-encryption";
+import {
+  decryptKsefLogin,
+  type StoredKsefLogin,
+} from "@/api/lib/ksef-login-crypto";
 
-export const KSEF_LOGIN_PURPOSE = "ksef_login";
 export const KSEF_ENVIRONMENTS = ["test", "demo", "production"] as const;
 
-export type StoredKsefLogin =
-  | { kind: "token"; token: string }
-  | { kind: "certificate"; certificate: string; privateKey: string };
-const storedLoginSchema = v.variant("kind", [
-  v.object({ kind: v.literal("token"), token: v.string() }),
-  v.object({
-    kind: v.literal("certificate"),
-    certificate: v.string(),
-    privateKey: v.string(),
-  }),
-]);
+export class KsefLoginError extends TaggedError("KsefLoginError")<{
+  reason:
+    | "certificate_expired"
+    | "certificate_invalid"
+    | "certificate_not_yet_valid"
+    | "key_invalid"
+    | "login_not_configured"
+    | "stored_login_invalid";
+  message: string;
+  ecFailure?: string;
+  rsaFailure?: string;
+}> {}
 
 export const importKsefSigningKey = async (
   encoded: string,
-): Promise<Result<CryptoKey, string>> => {
+): Promise<Result<CryptoKey, KsefLoginError>> => {
   const bytes = Buffer.from(encoded, "base64");
-  for (const algorithm of [
-    { name: "ECDSA", namedCurve: "P-256" },
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-  ] as const) {
-    const imported = await Result.tryPromise({
-      try: async () =>
-        await crypto.subtle.importKey("pkcs8", bytes, algorithm, false, [
-          "sign",
-        ]),
-      catch: () => undefined,
-    });
-    if (imported.isOk()) {
-      return Result.ok(imported.value);
-    }
+  const ec = await Result.tryPromise({
+    try: async () =>
+      await crypto.subtle.importKey(
+        "pkcs8",
+        bytes,
+        { name: "ECDSA", namedCurve: "P-256" },
+        false,
+        ["sign"],
+      ),
+    catch: String,
+  });
+  if (ec.isOk()) {
+    return Result.ok(ec.value);
+  }
+  const rsa = await Result.tryPromise({
+    try: async () =>
+      await crypto.subtle.importKey(
+        "pkcs8",
+        bytes,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["sign"],
+      ),
+    catch: String,
+  });
+  if (rsa.isOk()) {
+    return Result.ok(rsa.value);
   }
   return Result.err(
-    "The KSeF private key must be PKCS#8 DER for ECDSA P-256 or RSA SHA-256 (at least 2048 bits).",
+    new KsefLoginError({
+      reason: "key_invalid",
+      message:
+        "The KSeF private key must be PKCS#8 DER for ECDSA P-256 or RSA SHA-256 (at least 2048 bits).",
+      ecFailure: ec.error,
+      rsaFailure: rsa.error,
+    }),
   );
 };
 
@@ -57,7 +78,11 @@ export const certificateMetadata = (encoded: string, now = new Date()) => {
   const parsed = Result.try({
     try: () => new X509Certificate(Buffer.from(encoded, "base64")),
     catch: () =>
-      "The KSeF certificate must be a valid DER certificate encoded as base64.",
+      new KsefLoginError({
+        reason: "certificate_invalid",
+        message:
+          "The KSeF certificate must be a valid DER certificate encoded as base64.",
+      }),
   });
   if (parsed.isErr()) {
     return Result.err(parsed.error);
@@ -66,11 +91,20 @@ export const certificateMetadata = (encoded: string, now = new Date()) => {
   const validTo = new Date(parsed.value.validTo);
   if (validTo <= now) {
     return Result.err(
-      "The KSeF certificate has expired; upload a current certificate.",
+      new KsefLoginError({
+        reason: "certificate_expired",
+        message:
+          "The KSeF certificate has expired; upload a current certificate.",
+      }),
     );
   }
   if (validFrom > now) {
-    return Result.err("The KSeF certificate is not valid yet.");
+    return Result.err(
+      new KsefLoginError({
+        reason: "certificate_not_yet_valid",
+        message: "The KSeF certificate is not valid yet.",
+      }),
+    );
   }
   return Result.ok({ subject: parsed.value.subject, validFrom, validTo });
 };
@@ -85,7 +119,7 @@ export const authenticatorFromLogin = async ({
   target: KsefEnvironment;
   nip: string;
   transport: KsefTransport;
-}): Promise<Result<Authenticator, string>> => {
+}): Promise<Result<Authenticator, KsefLoginError>> => {
   if (login.kind === "token") {
     return Result.ok(
       createKsefTokenAuthenticator({
@@ -112,10 +146,14 @@ export const authenticatorFromLogin = async ({
 export const ksefAuthenticatorFor = async (
   organizationId: SafeId<"organization">,
   transport: KsefTransport,
+  database: Pick<typeof rootDb, "query">,
 ): Promise<
-  Result<{ authenticator: Authenticator; target: KsefEnvironment }, string>
+  Result<
+    { authenticator: Authenticator; target: KsefEnvironment },
+    KsefLoginError
+  >
 > => {
-  const row = await rootDb.query.organizationSettings.findFirst({
+  const row = await database.query.organizationSettings.findFirst({
     where: { organizationId: { eq: organizationId } },
     columns: {
       ksefLoginEncrypted: true,
@@ -130,23 +168,33 @@ export const ksefAuthenticatorFor = async (
     !row.ksefLoginTarget ||
     !row.ksefLoginNip
   ) {
-    return Result.err("No KSeF login is configured for this organization.");
+    return Result.err(
+      new KsefLoginError({
+        reason: "login_not_configured",
+        message: "No KSeF login is configured for this organization.",
+      }),
+    );
   }
-  const clear = await decryptOrganizationSecret(
+  const decrypted = await decryptKsefLogin({
     organizationId,
-    KSEF_LOGIN_PURPOSE,
-    row.ksefLoginEncrypted,
-    row.ksefLoginIv,
-  );
-  const login = v.parse(storedLoginSchema, JSON.parse(clear));
+    ciphertext: row.ksefLoginEncrypted,
+    iv: row.ksefLoginIv,
+  });
+  if (decrypted.isErr()) {
+    return Result.err(
+      new KsefLoginError({
+        reason: "stored_login_invalid",
+        message: decrypted.error.message,
+      }),
+    );
+  }
+  const login = decrypted.value;
+  const target = row.ksefLoginTarget;
   const authenticator = await authenticatorFromLogin({
     login,
-    target: row.ksefLoginTarget,
+    target,
     nip: row.ksefLoginNip,
     transport,
   });
-  return authenticator.map((value) => ({
-    authenticator: value,
-    target: row.ksefLoginTarget,
-  }));
+  return authenticator.map((value) => ({ authenticator: value, target }));
 };

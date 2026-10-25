@@ -121,18 +121,15 @@ const signingFixtures = {
   rsa: await createSigningFixture("rsa"),
 };
 
-const response = (
-  status: number,
-  value?: unknown,
-  headers = new Headers(),
-) => ({
-  status,
-  headers,
-  body:
-    value instanceof Uint8Array
-      ? value
-      : encoder.encode(value === undefined ? "" : JSON.stringify(value)),
-});
+const response = (status: number, value?: unknown, headers = new Headers()) =>
+  Result.ok({
+    status,
+    headers,
+    body:
+      value instanceof Uint8Array
+        ? value
+        : encoder.encode(value === undefined ? "" : JSON.stringify(value)),
+  });
 
 // Identifiers in the documented shape: Base64 of a SHA-256, 44 characters.
 const TOKEN_KEY_ID = "QIoAK/Yc3s27Z4t3SZY4Mhp8JNLH7Vl4N3lNlJAEig8=";
@@ -574,9 +571,7 @@ describe("KSeF online session", () => {
     const secret = "must-not-leak";
     const authenticator = createKsefTokenAuthenticator({
       environment: "test",
-      transport: async () => {
-        throw new Error(secret);
-      },
+      transport: async () => Result.err(new Error(secret)),
       nip: "1111111111",
       ksefToken: secret,
     });

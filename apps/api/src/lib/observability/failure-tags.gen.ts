@@ -240,6 +240,8 @@ export const FAILURE_TAGS = [
   "JustificationDataError",
   "JustificationTextError",
   "KsefError",
+  "KsefLoginCryptoError",
+  "KsefLoginError",
   "LatestDecisionsError",
   "LegacyChatContentError",
   "LegacyWordParseError",

@@ -39,7 +39,9 @@ export type KsefTransport = (request: {
   url: string;
   headers: Record<string, string>;
   body?: Uint8Array;
-}) => Promise<{ status: number; headers: Headers; body: Uint8Array }>;
+}) => Promise<
+  Result<{ status: number; headers: Headers; body: Uint8Array }, unknown>
+>;
 
 export type KsefErrorKind =
   | "invalid_response"
@@ -151,31 +153,30 @@ const request = async ({
   body,
   accept = "application/json",
   contentType = "application/json",
-}: RequestOptions): Promise<KsefResult<Awaited<ReturnType<KsefTransport>>>> => {
-  const attempted = await Result.tryPromise({
-    try: async () =>
-      await transport({
-        method,
-        url: `${API_URLS[environment]}${path}`,
-        headers: {
-          Accept: accept,
-          "Content-Type": contentType,
-          "X-Error-Format": "problem-details",
-          ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
-        },
-        ...(body === undefined
-          ? {}
-          : { body: body instanceof Uint8Array ? body : jsonBytes(body) }),
-      }),
-    catch: () =>
+}: RequestOptions): Promise<
+  KsefResult<{ status: number; headers: Headers; body: Uint8Array }>
+> => {
+  const attempted = await transport({
+    method,
+    url: `${API_URLS[environment]}${path}`,
+    headers: {
+      Accept: accept,
+      "Content-Type": contentType,
+      "X-Error-Format": "problem-details",
+      ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
+    },
+    ...(body === undefined
+      ? {}
+      : { body: body instanceof Uint8Array ? body : jsonBytes(body) }),
+  });
+  if (attempted.isErr()) {
+    return Result.err(
       error(
         "unavailable",
         "KSeF could not be reached; retry the operation without resending an invoice whose outcome is unknown.",
         true,
       ),
-  });
-  if (attempted.isErr()) {
-    return Result.err(attempted.error);
+    );
   }
   const response = attempted.value;
   if (response.status >= 200 && response.status < 300) {
