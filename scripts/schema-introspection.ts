@@ -1,7 +1,15 @@
-import { panic } from "better-result";
-import { existsSync, readFileSync } from "node:fs";
+import { panic, Result } from "better-result";
+import { existsSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import * as ts from "tsrs/unstable/ast";
+import {
+  API,
+  type Checker,
+  ModuleKind,
+  ModuleResolutionKind,
+  type Symbol as CompilerSymbol,
+} from "tsrs/unstable/async";
+import { serverFS } from "tsrs/unstable/fs";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -10,6 +18,12 @@ import {
   isDatabaseOperationMethod,
 } from "../.oxlint-plugins/database-access.ts";
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
+import {
+  type Node,
+  type ObjectExpression,
+  parseSource,
+  walk as walkSyntax,
+} from "../packages/scripts/src/syntax-tree";
 import type { AllowedFile } from "./ownership.ts";
 
 const DYNAMIC_CALL = "dynamic-call";
@@ -17,9 +31,9 @@ const FULL_SCHEMA = "apps/api/src/db/schema";
 const DATABASE_DRIVERS =
   /^(?:postgres|pg|pg-pool|mysql2|better-sqlite3|sqlite3|bun:sqlite|@electric-sql\/pglite|drizzle-orm\/(?!pg-core(?:\/|$))[^/]+)(?:\/|$)/u;
 const RESOLUTION_OPTIONS = {
-  module: ts.ModuleKind.ESNext,
-  moduleResolution: ts.ModuleResolutionKind.Bundler,
-} satisfies ts.CompilerOptions;
+  module: ModuleKind.ESNext,
+  moduleResolution: ModuleResolutionKind.Bundler,
+};
 
 const hasRuntimeBindings = (clause: ts.ImportClause | undefined): boolean => {
   if (clause === undefined) {
@@ -48,17 +62,17 @@ const memberName = (node: ts.Node): string | undefined => {
   }
   if (
     ts.isElementAccessExpression(node) &&
-    ts.isStringLiteralLike(node.argumentExpression)
+    ts.isStringLiteralLikeNode(node.argumentExpression)
   ) {
     return node.argumentExpression.text;
   }
   return undefined;
 };
 
-const isDrizzleViewDefinitionSelect = (
+const isDrizzleViewDefinitionSelect = async (
   node: ts.Node,
   source: ts.SourceFile,
-): boolean => {
+): Promise<boolean> => {
   let callback: ts.Node | undefined;
   for (let current: ts.Node = node; ; current = current.parent) {
     if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
@@ -91,10 +105,10 @@ const isDrizzleViewDefinitionSelect = (
   ) {
     return false;
   }
-  const checker = sourceProgram(source).getTypeChecker();
+  const checker = sourceChecker(source);
   if (
-    checker.getSymbolAtLocation(builderParameter) !==
-    checker.getSymbolAtLocation(node.expression)
+    (await checker.getSymbolAtLocation(builderParameter)) !==
+    (await checker.getSymbolAtLocation(node.expression))
   ) {
     return false;
   }
@@ -118,7 +132,7 @@ const transparentExpression = (node: ts.Expression): ts.Expression => {
     ts.isAsExpression(node) ||
     ts.isSatisfiesExpression(node) ||
     ts.isParenthesizedExpression(node) ||
-    ts.isTypeAssertionExpression(node) ||
+    ts.isTypeAssertion(node) ||
     ts.isNonNullExpression(node)
   ) {
     return transparentExpression(node.expression);
@@ -132,7 +146,7 @@ const transparentExpressionParent = (node: ts.Expression): ts.Node => {
     (ts.isAsExpression(current.parent) ||
       ts.isSatisfiesExpression(current.parent) ||
       ts.isParenthesizedExpression(current.parent) ||
-      ts.isTypeAssertionExpression(current.parent) ||
+      ts.isTypeAssertion(current.parent) ||
       ts.isNonNullExpression(current.parent)) &&
     current.parent.expression === current
   ) {
@@ -168,19 +182,61 @@ const assignedIdentifier = (
 
 // Bind only this source to distinguish a collection/hash method from a
 // database operation without loading the application's type graph.
-const sourceProgram = (source: ts.SourceFile) => {
-  const options = { noLib: true, noResolve: true };
-  const host = ts.createCompilerHost(options);
-  host.getSourceFile = (file) =>
-    file === source.fileName ? source : undefined;
-  return ts.createProgram([source.fileName], options, host);
+const declarationsOf = async (
+  symbol: CompilerSymbol | undefined,
+): Promise<ts.Declaration[] | undefined> => {
+  if (symbol === undefined) {
+    return undefined;
+  }
+  const declarations: ts.Declaration[] = [];
+  for (const handle of symbol.declarations) {
+    const declaration = await handle.resolve();
+    if (declaration === undefined) {
+      panic("Missing symbol declaration");
+    }
+    declarations.push(declaration);
+  }
+  return declarations;
 };
 
-const isCalledAlias = (
+const someAsync = async <T>(
+  values: readonly T[],
+  predicate: (value: T) => boolean | Promise<boolean>,
+): Promise<boolean> => {
+  for (const value of values) {
+    if (await predicate(value)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const childrenAsync = async <T>(
+  node: ts.Node,
+  visit: (child: ts.Node) => Promise<T>,
+): Promise<T | undefined> => {
+  const children: ts.Node[] = [];
+  node.forEachChild((child) => {
+    children.push(child);
+  });
+  for (const child of children) {
+    const value = await visit(child);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+const sourceCheckers = new WeakMap<ts.SourceFile, Checker>();
+const sourceChecker = (source: ts.SourceFile): Checker =>
+  sourceCheckers.get(source) ?? panic("Missing schema introspection checker");
+
+const isCalledAlias = async (
   source: ts.SourceFile,
   member: ts.Expression,
-): boolean => {
-  const checker = sourceProgram(source).getTypeChecker();
+): Promise<boolean> => {
+  const checker = sourceChecker(source);
   const expression = transparentExpression(member);
   const parent = transparentExpressionParent(member);
   if (
@@ -193,20 +249,23 @@ const isCalledAlias = (
   const symbol =
     aliasName === undefined
       ? undefined
-      : checker.getSymbolAtLocation(aliasName);
+      : await checker.getSymbolAtLocation(aliasName);
   if (symbol === undefined) {
     return false;
   }
-  const reachesCall = (current: ts.Symbol, seen: Set<ts.Symbol>): boolean => {
+  const reachesCall = async (
+    current: CompilerSymbol,
+    seen: Set<CompilerSymbol>,
+  ): Promise<boolean> => {
     if (seen.has(current)) {
       return false;
     }
     seen.add(current);
     let invoked = false;
-    const visit = (node: ts.Node): void => {
+    const visit = async (node: ts.Node): Promise<void> => {
       if (
         ts.isIdentifier(node) &&
-        checker.getSymbolAtLocation(node) === current
+        (await checker.getSymbolAtLocation(node)) === current
       ) {
         const useParent = transparentExpressionParent(node);
         if (
@@ -220,52 +279,56 @@ const isCalledAlias = (
         const alias =
           nextAliasName === undefined
             ? undefined
-            : checker.getSymbolAtLocation(nextAliasName);
-        if (alias !== undefined && reachesCall(alias, seen)) {
+            : await checker.getSymbolAtLocation(nextAliasName);
+        if (alias !== undefined && (await reachesCall(alias, seen))) {
           invoked = true;
           return;
         }
       }
       if (!invoked) {
-        ts.forEachChild(node, visit);
+        await childrenAsync(node, visit);
       }
     };
-    source.statements.some((statement) => {
-      visit(statement);
+    await someAsync(source.statements, async (statement) => {
+      await visit(statement);
       return invoked;
     });
     return invoked;
   };
-  return reachesCall(symbol, new Set());
+  return await reachesCall(symbol, new Set());
 };
 
 type GlobalConsoleDispatchOptions = {
   node: ts.Expression;
   method: string;
-  checker: ts.TypeChecker;
+  checker: Checker;
 };
 
-const isGlobalConsoleDispatch = ({
+const isGlobalConsoleDispatch = async ({
   node,
   method,
   checker,
-}: GlobalConsoleDispatchOptions): boolean =>
+}: GlobalConsoleDispatchOptions): Promise<boolean> =>
   method === DYNAMIC_CALL &&
   ts.isIdentifier(node) &&
   node.text === "console" &&
-  checker.getSymbolAtLocation(node) === undefined;
+  (await checker.getSymbolAtLocation(node)) === undefined;
 
 const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
-  const checker = sourceProgram(source).getTypeChecker();
-  const importedCryptoHash = (node: ts.Node): boolean => {
-    const declarations = checker.getSymbolAtLocation(node)?.declarations;
+  const checker = sourceChecker(source);
+  const importedCryptoHash = async (node: ts.Node): Promise<boolean> => {
+    const declarations = await declarationsOf(
+      await checker.getSymbolAtLocation(node),
+    );
     const declaration =
       declarations?.length === 1 ? declarations.at(0) : undefined;
     if (
       declaration === undefined ||
       !ts.isImportSpecifier(declaration) ||
       !ts.isImportDeclaration(declaration.parent.parent.parent) ||
-      !ts.isStringLiteralLike(declaration.parent.parent.parent.moduleSpecifier)
+      !ts.isStringLiteralLikeNode(
+        declaration.parent.parent.parent.moduleSpecifier,
+      )
     ) {
       return false;
     }
@@ -277,33 +340,37 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
         ["@stll/sha256/bun", "@stll/sha256/node"].includes(specifier))
     );
   };
-  const typedCollection = (
+  const typedCollection = async (
     declaration: ts.Declaration,
     method: string,
-  ): boolean => {
+  ): Promise<boolean> => {
     const typedDeclaration =
       ts.isBindingElement(declaration) &&
       ts.isObjectBindingPattern(declaration.parent)
-        ? checker
-            .getTypeAtLocation(declaration.parent)
-            .getProperty(
-              (declaration.propertyName ?? declaration.name).getText(source),
+        ? (
+            await declarationsOf(
+              await (
+                await checker.getTypeAtLocation(declaration.parent)
+              ).getProperty(
+                (declaration.propertyName ?? declaration.name).getText(source),
+              ),
             )
-            ?.declarations?.at(0)
+          )?.at(0)
         : declaration;
     return (
       method === "delete" &&
       typedDeclaration !== undefined &&
-      (ts.isParameter(typedDeclaration) ||
-        ts.isPropertySignature(typedDeclaration)) &&
+      (ts.isParameterDeclaration(typedDeclaration) ||
+        ts.isPropertySignatureDeclaration(typedDeclaration)) &&
       typedDeclaration.type !== undefined &&
       ts.isTypeReferenceNode(typedDeclaration.type) &&
       ts.isIdentifier(typedDeclaration.type.typeName) &&
       ["Map", "Set", "ReadonlyMap", "ReadonlySet"].includes(
         typedDeclaration.type.typeName.text,
       ) &&
-      checker.getSymbolAtLocation(typedDeclaration.type.typeName)
-        ?.declarations === undefined
+      (await declarationsOf(
+        await checker.getSymbolAtLocation(typedDeclaration.type.typeName),
+      )) === undefined
     );
   };
   type KnownReceiverOptions = {
@@ -311,11 +378,11 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
     method: string;
     seen?: Set<ts.Node>;
   };
-  const known = ({
+  const known = async ({
     node,
     method,
     seen = new Set<ts.Node>(),
-  }: KnownReceiverOptions): boolean => {
+  }: KnownReceiverOptions): Promise<boolean> => {
     if (seen.has(node)) {
       return false;
     }
@@ -325,7 +392,7 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
       ts.isSatisfiesExpression(node) ||
       ts.isParenthesizedExpression(node)
     ) {
-      return known({ node: node.expression, method, seen });
+      return await known({ node: node.expression, method, seen });
     }
     if (method === DYNAMIC_CALL && ts.isObjectLiteralExpression(node)) {
       return node.properties.every(
@@ -335,13 +402,15 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
             ts.isFunctionExpression(property.initializer)),
       );
     }
-    if (isGlobalConsoleDispatch({ node, method, checker })) {
+    if (await isGlobalConsoleDispatch({ node, method, checker })) {
       return true;
     }
-    const member = checker.getTypeAtLocation(node).getProperty(method);
+    const member = await (
+      await checker.getTypeAtLocation(node)
+    ).getProperty(method);
     if (member !== undefined) {
-      const type = checker.getTypeOfSymbolAtLocation(member, node);
-      if (type.isStringLiteral() || type.isNumberLiteral()) {
+      const type = await checker.getTypeOfSymbolAtLocation(member, node);
+      if (type.isStringLiteralType() || type.isNumberLiteralType()) {
         return true;
       }
     }
@@ -350,17 +419,22 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
         (method === "delete" &&
           ts.isIdentifier(node.expression) &&
           ["Map", "Set"].includes(node.expression.text) &&
-          checker.getSymbolAtLocation(node.expression) === undefined) ||
+          (await checker.getSymbolAtLocation(node.expression)) === undefined) ||
         (method === "update" &&
           ts.isPropertyAccessExpression(node.expression) &&
           node.expression.getText(source) === "Bun.CryptoHasher")
       );
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      return method === "update" && hashFactoryReceiver(node.expression, seen);
+      return (
+        method === "update" &&
+        (await hashFactoryReceiver(node.expression, seen))
+      );
     }
     const symbolNode = ts.isPropertyAccessExpression(node) ? node.name : node;
-    const declarations = checker.getSymbolAtLocation(symbolNode)?.declarations;
+    const declarations = await declarationsOf(
+      await checker.getSymbolAtLocation(symbolNode),
+    );
     const declaration =
       declarations?.length === 1 ? declarations.at(0) : undefined;
     if (declaration === undefined) {
@@ -372,16 +446,21 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
     ) {
       return (
         declaration.initializer !== undefined &&
-        known({ node: declaration.initializer, method, seen })
+        (await known({ node: declaration.initializer, method, seen }))
       );
     }
-    return typedCollection(declaration, method);
+    return await typedCollection(declaration, method);
   };
-  const hashFactoryReceiver = (node: ts.Identifier, seen: Set<ts.Node>) => {
-    if (importedCryptoHash(node)) {
+  const hashFactoryReceiver = async (
+    node: ts.Identifier,
+    seen: Set<ts.Node>,
+  ) => {
+    if (await importedCryptoHash(node)) {
       return true;
     }
-    const factory = checker.getSymbolAtLocation(node)?.declarations;
+    const factory = await declarationsOf(
+      await checker.getSymbolAtLocation(node),
+    );
     const declaration = factory?.length === 1 ? factory.at(0) : undefined;
     return (
       declaration !== undefined &&
@@ -389,7 +468,11 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
       declaration.initializer !== undefined &&
       ts.isArrowFunction(declaration.initializer) &&
       !ts.isBlock(declaration.initializer.body) &&
-      known({ node: declaration.initializer.body, method: "update", seen })
+      (await known({
+        node: declaration.initializer.body,
+        method: "update",
+        seen,
+      }))
     );
   };
   return known;
@@ -399,20 +482,20 @@ type InspectImportOptions = {
   node: ts.Node;
   source: ts.SourceFile;
   file: string;
-  dependency: (specifier: string, full: boolean) => void;
+  dependency: (specifier: string, full: boolean) => Promise<void>;
   report: (message: string) => void;
 };
 
-const inspectImport = ({
+const inspectImport = async ({
   node,
   source,
   file,
   dependency,
   report,
-}: InspectImportOptions): void => {
+}: InspectImportOptions): Promise<void> => {
   if (
     ts.isImportDeclaration(node) &&
-    ts.isStringLiteralLike(node.moduleSpecifier) &&
+    ts.isStringLiteralLikeNode(node.moduleSpecifier) &&
     hasRuntimeBindings(node.importClause)
   ) {
     const bindings = node.importClause?.namedBindings;
@@ -428,7 +511,7 @@ const inspectImport = ({
         }
       }
     }
-    dependency(
+    await dependency(
       node.moduleSpecifier.text,
       bindings !== undefined && ts.isNamespaceImport(bindings),
     );
@@ -437,12 +520,15 @@ const inspectImport = ({
     ts.isExportDeclaration(node) &&
     !node.isTypeOnly &&
     node.moduleSpecifier !== undefined &&
-    ts.isStringLiteralLike(node.moduleSpecifier) &&
+    ts.isStringLiteralLikeNode(node.moduleSpecifier) &&
     (node.exportClause === undefined ||
       !ts.isNamedExports(node.exportClause) ||
       node.exportClause.elements.some((element) => !element.isTypeOnly))
   ) {
-    dependency(node.moduleSpecifier.text, node.exportClause === undefined);
+    await dependency(
+      node.moduleSpecifier.text,
+      node.exportClause === undefined,
+    );
   }
   if (
     ts.isImportEqualsDeclaration(node) &&
@@ -450,12 +536,108 @@ const inspectImport = ({
     ts.isExternalModuleReference(node.moduleReference)
   ) {
     const expression = node.moduleReference.expression;
-    if (ts.isStringLiteralLike(expression)) {
-      dependency(expression.text, true);
+    if (ts.isStringLiteralLikeNode(expression)) {
+      await dependency(expression.text, true);
     } else {
       report(`unresolved runtime import in ${file}`);
     }
   }
+};
+
+const inspectCall = async ({
+  node,
+  file,
+  dependency,
+  report,
+}: Omit<InspectImportOptions, "source">): Promise<void> => {
+  if (ts.isCallExpression(node)) {
+    const name = memberName(node.expression);
+    if (
+      ts.isIdentifier(node.expression) &&
+      isDatabaseOperationMethod(node.expression.text)
+    ) {
+      report(`database operation in ${file}: ${node.expression.text}`);
+    }
+    if (
+      node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+      name === "require"
+    ) {
+      const specifier = node.arguments.at(0);
+      if (specifier !== undefined && ts.isStringLiteralLikeNode(specifier)) {
+        await dependency(specifier.text, true);
+      } else {
+        report(`unresolved runtime import in ${file}`);
+      }
+    }
+  }
+};
+
+const openIntrospectionCompiler = async (repoRoot: string) => {
+  const sources = new Map<string, ts.SourceFile | undefined>();
+  const configs = new Map<string, string>();
+  const api = new API({
+    cwd: repoRoot,
+    fs: {
+      readFile: (file) => configs.get(file) ?? serverFS.useOS,
+      fileExists: (file) => (configs.has(file) ? true : serverFS.useOS),
+      directoryExists: serverFS.useOS,
+      getAccessibleEntries: serverFS.useOS,
+      realpath: (file) =>
+        configs.has(file) ? serverFS.identity : serverFS.useOS,
+      stat: serverFS.useOS,
+      writeFile: serverFS.error,
+      removeFile: serverFS.error,
+    },
+  });
+  const resolving = await Result.tryPromise(
+    async () => await api.createModuleResolver(RESOLUTION_OPTIONS),
+  );
+  if (resolving.isErr()) {
+    await api.close();
+    return panic(
+      "Could not open schema introspection resolver",
+      resolving.error,
+    );
+  }
+  return {
+    resolver: resolving.value,
+    sourceOf: async (file: string) => {
+      if (sources.has(file)) {
+        return sources.get(file);
+      }
+      const absolute = path.join(repoRoot, file);
+      const configPath = path.join(
+        repoRoot,
+        `tsconfig.__schema-introspection-${sources.size}__.json`,
+      );
+      configs.set(
+        configPath,
+        JSON.stringify({
+          files: [absolute],
+          compilerOptions: { noLib: true, noResolve: true, types: [] },
+        }),
+      );
+      const snapshot = await api.createSnapshot({ openProjects: [configPath] });
+      const project =
+        snapshot.getConfiguredProject(configPath) ??
+        panic("Missing schema introspection project");
+      const source =
+        (await project.program.getSourceFile(absolute)) ??
+        panic(`Missing schema introspection source: ${file}`);
+      if (
+        (await project.program.getSyntacticDiagnostics([absolute])).length > 0
+      ) {
+        sources.set(file, undefined);
+        return undefined;
+      }
+      sourceCheckers.set(source, project.checker);
+      sources.set(file, source);
+      return source;
+    },
+    close: async () => {
+      await api.close();
+    },
+  };
 };
 
 type ValidateSchemaIntrospectionOptions = {
@@ -466,299 +648,285 @@ type ValidateSchemaIntrospectionOptions = {
 // Runtime imports and re-exports are followed, including aliases and workspace
 // packages. Type-only imports carry no database capability. Third-party code
 // is a trust boundary; driver imports are refused rather than traversed.
-export const validateSchemaIntrospection = ({
+export const validateSchemaIntrospection = async ({
   entries,
   repoRoot,
-}: ValidateSchemaIntrospectionOptions): string[] => {
+}: ValidateSchemaIntrospectionOptions): Promise<string[]> => {
   const problems: string[] = [];
-  const sources = new Map<string, ts.SourceFile>();
-  const declared = new Set<string>();
-  for (const entry of entries) {
-    const report = (message: string): void => {
-      problems.push(`${entry.path}: ${message}`);
-    };
-    if (entry.reason.trim().length === 0) {
-      report("schema introspection needs a reason");
-    }
-    if (declared.has(entry.path)) {
-      report("duplicate schema introspection entry");
-    }
-    declared.add(entry.path);
-    if (
-      entry.path.endsWith("/") ||
-      !existsSync(path.join(repoRoot, entry.path))
-    ) {
-      report("schema introspection must name an existing file");
-      continue;
-    }
-    const visited = new Set<string>();
-    const fullSchemaImports = new Set<string>();
-    const walk = (file: string): void => {
-      if (visited.has(file)) {
-        return;
-      }
-      visited.add(file);
-      const absolute = path.join(repoRoot, file);
-      let source = sources.get(file);
-      if (source === undefined) {
-        source = ts.createSourceFile(
-          file,
-          readFileSync(absolute, "utf-8"),
-          ts.ScriptTarget.Latest,
-          true,
-        );
-        sources.set(file, source);
-      }
-      if (sourceProgram(source).getSyntacticDiagnostics(source).length > 0) {
-        report(`cannot parse runtime dependency: ${file}`);
-        return;
-      }
-      let knownNonDatabaseReceiver:
-        ReturnType<typeof nonDatabaseMethodReceiver> | undefined;
-      const dependency = (specifier: string, full: boolean): void => {
-        const module = canonicalModuleId(specifier, file);
-        if (
-          file === entry.path &&
-          full &&
-          (module === FULL_SCHEMA ||
-            (file === `${FULL_SCHEMA}.ts` &&
-              module.startsWith(`${FULL_SCHEMA}/`)))
-        ) {
-          fullSchemaImports.add(module);
-        }
-        if (
-          DATABASE_DRIVERS.test(module) ||
-          module === "apps/api/src/db" ||
-          /\/db\/(?:root|scoped|system|index)$/u.test(module)
-        ) {
-          report(`database handle import in ${file}: ${specifier}`);
-          return;
-        }
-        const local =
-          module.startsWith("apps/") ||
-          module.startsWith("packages/") ||
-          module.startsWith("scripts/") ||
-          specifier.startsWith(".") ||
-          specifier.startsWith("@/");
-        if (local) {
-          const target = [
-            `${module}.ts`,
-            `${module}.tsx`,
-            `${module}/index.ts`,
-          ].find((candidate) => existsSync(path.join(repoRoot, candidate)));
-          if (target === undefined) {
-            report(`unresolved runtime import in ${file}: ${specifier}`);
-            return;
-          }
-          walk(target);
-          return;
-        }
-        if (specifier.startsWith("@stll/")) {
-          const resolved = ts.resolveModuleName(
-            specifier,
-            absolute,
-            RESOLUTION_OPTIONS,
-            ts.sys,
-          ).resolvedModule;
-          if (
-            resolved === undefined ||
-            resolved.resolvedFileName.endsWith(".d.ts")
-          ) {
-            report(
-              `unresolved workspace runtime import in ${file}: ${specifier}`,
-            );
-            return;
-          }
-          walk(repoRelativePath(repoRoot, resolved.resolvedFileName));
-        }
+  const compiler = await openIntrospectionCompiler(repoRoot);
+  const { resolver } = compiler;
+  try {
+    const declared = new Set<string>();
+    for (const entry of entries) {
+      const report = (message: string): void => {
+        problems.push(`${entry.path}: ${message}`);
       };
-      const inspectMember = (node: ts.Node): void => {
-        if (
-          !ts.isPropertyAccessExpression(node) &&
-          !ts.isElementAccessExpression(node)
-        ) {
+      if (entry.reason.trim().length === 0) {
+        report("schema introspection needs a reason");
+      }
+      if (declared.has(entry.path)) {
+        report("duplicate schema introspection entry");
+      }
+      declared.add(entry.path);
+      if (
+        entry.path.endsWith("/") ||
+        !existsSync(path.join(repoRoot, entry.path))
+      ) {
+        report("schema introspection must name an existing file");
+        continue;
+      }
+      const visited = new Set<string>();
+      const fullSchemaImports = new Set<string>();
+      const walk = async (file: string): Promise<void> => {
+        if (visited.has(file)) {
           return;
         }
-        const name = memberName(node);
-        if (
-          name === undefined &&
-          ts.isCallExpression(node.parent) &&
-          node.parent.expression === node
-        ) {
+        visited.add(file);
+        const absolute = path.join(repoRoot, file);
+        const source = await compiler.sourceOf(file);
+        if (source === undefined) {
+          report(`cannot parse runtime dependency: ${file}`);
+          return;
+        }
+        let knownNonDatabaseReceiver:
+          ReturnType<typeof nonDatabaseMethodReceiver> | undefined;
+        const dependency = async (
+          specifier: string,
+          full: boolean,
+        ): Promise<void> => {
+          const module = canonicalModuleId(specifier, file);
+          if (
+            file === entry.path &&
+            full &&
+            (module === FULL_SCHEMA ||
+              (file === `${FULL_SCHEMA}.ts` &&
+                module.startsWith(`${FULL_SCHEMA}/`)))
+          ) {
+            fullSchemaImports.add(module);
+          }
+          if (
+            DATABASE_DRIVERS.test(module) ||
+            module === "apps/api/src/db" ||
+            /\/db\/(?:root|scoped|system|index)$/u.test(module)
+          ) {
+            report(`database handle import in ${file}: ${specifier}`);
+            return;
+          }
+          const local =
+            module.startsWith("apps/") ||
+            module.startsWith("packages/") ||
+            module.startsWith("scripts/") ||
+            specifier.startsWith(".") ||
+            specifier.startsWith("@/");
+          if (local) {
+            const target = [
+              `${module}.ts`,
+              `${module}.tsx`,
+              `${module}/index.ts`,
+            ].find((candidate) => existsSync(path.join(repoRoot, candidate)));
+            if (target === undefined) {
+              report(`unresolved runtime import in ${file}: ${specifier}`);
+              return;
+            }
+            await walk(target);
+            return;
+          }
+          if (specifier.startsWith("@stll/")) {
+            const resolved = (
+              await resolver.resolveModuleName(
+                specifier,
+                path.dirname(absolute),
+                undefined,
+                {},
+              )
+            ).resolvedModule;
+            if (
+              resolved === undefined ||
+              resolved.resolvedFileName.endsWith(".d.ts")
+            ) {
+              report(
+                `unresolved workspace runtime import in ${file}: ${specifier}`,
+              );
+              return;
+            }
+            await walk(repoRelativePath(repoRoot, resolved.resolvedFileName));
+          }
+        };
+        const inspectMember = async (node: ts.Node): Promise<void> => {
+          if (
+            !ts.isPropertyAccessExpression(node) &&
+            !ts.isElementAccessExpression(node)
+          ) {
+            return;
+          }
+          const name = memberName(node);
+          if (
+            name === undefined &&
+            ts.isCallExpression(node.parent) &&
+            node.parent.expression === node
+          ) {
+            knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
+            if (
+              !(await knownNonDatabaseReceiver({
+                node: node.expression,
+                method: DYNAMIC_CALL,
+              }))
+            ) {
+              report(`unresolved runtime call in ${file}`);
+            }
+            return;
+          }
+          if (name === undefined || !isDatabaseOperationMethod(name)) {
+            return;
+          }
+          if (name === "query" && !(await isCalledAlias(source, node))) {
+            return;
+          }
+          if (
+            name === "select" &&
+            file.startsWith("apps/api/src/db/schema/") &&
+            (await isDrizzleViewDefinitionSelect(node, source))
+          ) {
+            return;
+          }
           knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
           if (
-            !knownNonDatabaseReceiver({
+            !(await knownNonDatabaseReceiver({
               node: node.expression,
-              method: DYNAMIC_CALL,
-            })
+              method: name,
+            }))
           ) {
-            report(`unresolved runtime call in ${file}`);
-          }
-          return;
-        }
-        if (name === undefined || !isDatabaseOperationMethod(name)) {
-          return;
-        }
-        if (name === "query" && !isCalledAlias(source, node)) {
-          return;
-        }
-        if (
-          name === "select" &&
-          file.startsWith("apps/api/src/db/schema/") &&
-          isDrizzleViewDefinitionSelect(node, source)
-        ) {
-          return;
-        }
-        knownNonDatabaseReceiver ??= nonDatabaseMethodReceiver(source);
-        if (
-          !knownNonDatabaseReceiver({ node: node.expression, method: name })
-        ) {
-          report(`database operation in ${file}: ${name}`);
-        }
-      };
-      const inspectCall = (node: ts.Node): void => {
-        if (ts.isCallExpression(node)) {
-          const name = memberName(node.expression);
-          if (
-            ts.isIdentifier(node.expression) &&
-            isDatabaseOperationMethod(node.expression.text)
-          ) {
-            report(`database operation in ${file}: ${node.expression.text}`);
-          }
-          if (
-            node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-            name === "require"
-          ) {
-            const specifier = node.arguments.at(0);
-            if (specifier !== undefined && ts.isStringLiteralLike(specifier)) {
-              dependency(specifier.text, true);
-            } else {
-              report(`unresolved runtime import in ${file}`);
-            }
-          }
-        }
-      };
-      const visit = (node: ts.Node): void => {
-        inspectImport({ node, source, file, dependency, report });
-        inspectCall(node);
-        inspectMember(node);
-        if (
-          ts.isBindingElement(node) &&
-          node.propertyName !== undefined &&
-          ts.isObjectBindingPattern(node.parent)
-        ) {
-          const name = memberName(node.propertyName ?? node.name);
-          if (name !== undefined && isDatabaseOperationMethod(name)) {
             report(`database operation in ${file}: ${name}`);
           }
-        }
-        ts.forEachChild(node, visit);
+        };
+        const visit = async (node: ts.Node): Promise<void> => {
+          await inspectImport({ node, source, file, dependency, report });
+          await inspectCall({ node, file, dependency, report });
+          await inspectMember(node);
+          if (
+            ts.isBindingElement(node) &&
+            node.propertyName !== undefined &&
+            ts.isObjectBindingPattern(node.parent)
+          ) {
+            const name = memberName(node.propertyName ?? node.name);
+            if (name !== undefined && isDatabaseOperationMethod(name)) {
+              report(`database operation in ${file}: ${name}`);
+            }
+          }
+          await childrenAsync(node, visit);
+        };
+        await visit(source);
       };
-      visit(source);
-    };
-    walk(entry.path);
-    if (fullSchemaImports.size === 0) {
-      report(
-        "stale schema introspection entry: no full-schema import or re-export",
-      );
+      await walk(entry.path);
+      if (fullSchemaImports.size === 0) {
+        report(
+          "stale schema introspection entry: no full-schema import or re-export",
+        );
+      }
     }
+    return [...new Set(problems)];
+  } finally {
+    await compiler.close();
   }
-  return [...new Set(problems)];
 };
 
 // Measure path membership rather than list length: removing one entry cannot
 // fund a different entry. The initial comparison reads the existing schema
 // owners' exceptions from the base tree, without evaluating either registry.
 export const schemaIntrospectionPaths = (content: string): string[] => {
-  const source = ts.createSourceFile(
-    "ownership.ts",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const parsed = parseSource("ownership.ts", content);
   const paths = new Set<string>();
-  const property = (object: ts.ObjectLiteralExpression, name: string) =>
+  const property = (object: ObjectExpression, name: string) =>
     object.properties.find(
-      (node): node is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(node) && memberName(node.name) === name,
-    )?.initializer;
-  const collectPaths = (node: ts.Node): void => {
-    if (ts.isObjectLiteralExpression(node)) {
-      const value = property(node, "path");
-      if (
-        value !== undefined &&
-        ts.isStringLiteralLike(value) &&
-        !value.text.endsWith("/")
-      ) {
-        paths.add(value.text);
+      (node) =>
+        node.type === "Property" &&
+        node.key.type === "Identifier" &&
+        node.key.name === name,
+    );
+  const valueOf = (object: ObjectExpression, name: string) => {
+    const entry = property(object, name);
+    return entry?.type === "Property" ? entry.value : undefined;
+  };
+  const literalString = (node: Node | undefined): string | undefined => {
+    if (node?.type === "Literal" && typeof node.value === "string") {
+      return node.value;
+    }
+    if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+      return node.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    return undefined;
+  };
+  const collectPaths = (node: Node): void => {
+    walkSyntax(node, (child) => {
+      if (child.type !== "ObjectExpression") {
+        return;
       }
-    }
-    ts.forEachChild(node, collectPaths);
+      const value = literalString(valueOf(child, "path"));
+      if (value !== undefined && !value.endsWith("/")) {
+        paths.add(value);
+      }
+    });
   };
-  let shared: ts.Expression | undefined;
-  const findShared = (node: ts.Node): void => {
+  let shared: Node | undefined;
+  walkSyntax(parsed.program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "SCHEMA_INTROSPECTION"
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.id.name === "SCHEMA_INTROSPECTION"
     ) {
-      shared = node.initializer;
+      shared = node.init ?? undefined;
     }
-    ts.forEachChild(node, findShared);
-  };
-  findShared(source);
+  });
   if (shared !== undefined) {
     while (
-      ts.isAsExpression(shared) ||
-      ts.isSatisfiesExpression(shared) ||
-      ts.isParenthesizedExpression(shared)
+      shared.type === "TSAsExpression" ||
+      shared.type === "TSSatisfiesExpression" ||
+      shared.type === "ParenthesizedExpression"
     ) {
       shared = shared.expression;
     }
-    if (!ts.isArrayLiteralExpression(shared)) {
+    if (shared.type !== "ArrayExpression") {
       panic(
         "SCHEMA_INTROSPECTION must be a literal array for membership measurement",
       );
     }
     for (const item of shared.elements) {
-      if (!ts.isObjectLiteralExpression(item)) {
+      if (item?.type !== "ObjectExpression") {
         panic("SCHEMA_INTROSPECTION entries must be literal objects");
       }
-      const value = property(item, "path");
-      if (value === undefined || !ts.isStringLiteralLike(value)) {
+      const value = literalString(valueOf(item, "path"));
+      if (value === undefined) {
         panic("SCHEMA_INTROSPECTION paths must be literal strings");
       }
-      paths.add(value.text);
+      paths.add(value);
     }
     return [...paths];
   }
-  const legacy = (node: ts.Node): void => {
-    if (ts.isObjectLiteralExpression(node)) {
-      const kind = property(node, "kind");
-      const specifiers = property(node, "specifiers");
-      const allowed = property(node, "allowed");
-      if (
-        kind !== undefined &&
-        ts.isStringLiteralLike(kind) &&
-        kind.text === "import" &&
-        specifiers !== undefined &&
-        ts.isArrayLiteralExpression(specifiers) &&
-        specifiers.elements.some(
-          (specifier) =>
-            ts.isStringLiteralLike(specifier) &&
-            (canonicalModuleId(specifier.text, `${FULL_SCHEMA}.ts`) ===
-              FULL_SCHEMA ||
-              canonicalModuleId(specifier.text, `${FULL_SCHEMA}.ts`).startsWith(
-                `${FULL_SCHEMA}/`,
-              )),
-        ) &&
-        allowed !== undefined
-      ) {
-        collectPaths(allowed);
-      }
+  walkSyntax(parsed.program, (node) => {
+    if (node.type !== "ObjectExpression") {
+      return;
     }
-    ts.forEachChild(node, legacy);
-  };
-  legacy(source);
+    const specifiers = valueOf(node, "specifiers");
+    const allowed = valueOf(node, "allowed");
+    if (
+      literalString(valueOf(node, "kind")) !== "import" ||
+      specifiers?.type !== "ArrayExpression" ||
+      allowed === undefined
+    ) {
+      return;
+    }
+    if (
+      specifiers.elements.some((specifier) => {
+        const value = literalString(specifier ?? undefined);
+        if (value === undefined) {
+          return false;
+        }
+        const module = canonicalModuleId(value, `${FULL_SCHEMA}.ts`);
+        return module === FULL_SCHEMA || module.startsWith(`${FULL_SCHEMA}/`);
+      })
+    ) {
+      collectPaths(allowed);
+    }
+  });
   return [...paths];
 };

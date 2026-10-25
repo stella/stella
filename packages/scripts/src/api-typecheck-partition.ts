@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { panic } from "better-result";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -21,7 +21,6 @@ import {
   requireApiTypecheckGeneratedSources,
   uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
-import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 import {
   readTurboTypecheckInputs,
   writeTurboTypecheckInputs,
@@ -29,174 +28,146 @@ import {
 
 const isTest = (filename: string) => /\.test\.tsx?$/u.test(filename);
 
-const readApiSourceConfig = (root: string) => {
-  const api = path.join(root, "apps/api");
-  const filename = path.join(api, "tsconfig.json");
-  const config = ts.readConfigFile(filename, (file) => ts.sys.readFile(file));
-  const parsed = ts.parseJsonConfigFileContent(
-    config.config,
-    ts.sys,
-    api,
-    undefined,
-    filename,
-  );
-  const diagnostics = withoutTsgoOnlyOptionDiagnostics(
-    config.error ? [config.error, ...parsed.errors] : parsed.errors,
-  );
-  if (diagnostics.length > 0) {
-    panic(
-      ts.formatDiagnostics(diagnostics, {
-        getCurrentDirectory: () => root,
-        getCanonicalFileName: (file) => file,
-        getNewLine: () => "\n",
-      }),
-    );
-  }
-  return parsed;
-};
+const readApiSourceConfig = async (root: string) =>
+  await readApiTypecheckConfig(path.join(root, "apps/api/tsconfig.json"));
 
 // Source roots and compiler resolution determine the census. A test is safe to
 // isolate only when every reachable API implementation enters declared roots.
-export const deriveApiTestPartition = (directory: string) => {
-  const root = ts.sys.realpath?.(directory) ?? directory;
+export const deriveApiTestPartition = async (directory: string) => {
+  const root = realpathSync(directory);
   const api = path.join(root, "apps/api");
-  const parsed = readApiSourceConfig(root);
-  const resolutionCache = ts.createModuleResolutionCache(
-    root,
-    (file) => file,
-    parsed.options,
-  );
-  const surface = readApiTypecheckConfig(
-    path.join(api, "tsconfig.declarations.json"),
-  );
-  const declared = new Set(surface.fileNames);
-  const testFiles = new Set(parsed.fileNames.filter(isTest));
-  const modules = new Map<
-    string,
-    { dependencies: Set<string>; unsafe: boolean }
-  >();
-  const moduleInfo = (file: string, mode: "test" | "source" = "test") => {
-    const cached = modules.get(file);
-    if (cached) {
-      return cached;
-    }
-    const text = readFileSync(file, "utf-8");
-    // Source reachability needs only literal imports, which the compiler's
-    // preprocessor scans without constructing every implementation AST.
-    const imports =
-      mode === "source"
-        ? {
-            imports: new Set(
-              ts
-                .preProcessFile(text, true, true)
-                .importedFiles.map(({ fileName }) => fileName),
-            ),
-            dynamic: false,
+  const parsed = await readApiSourceConfig(root);
+  const compiler = new API({ cwd: root });
+  try {
+    const resolver = await compiler.createModuleResolver(parsed.options);
+    const surface = await readApiTypecheckConfig(
+      path.join(api, "tsconfig.declarations.json"),
+    );
+    const declared = new Set(surface.fileNames);
+    const testFiles = new Set(parsed.fileNames.filter(isTest));
+    const modules = new Map<
+      string,
+      { dependencies: Set<string>; unsafe: boolean }
+    >();
+    const moduleInfo = async (
+      file: string,
+      mode: "test" | "source" = "test",
+    ) => {
+      const cached = modules.get(file);
+      if (cached) {
+        return cached;
+      }
+      const text = readFileSync(file, "utf-8");
+      // Source reachability needs only literal imports, which the compiler's
+      // preprocessor scans without constructing every implementation AST.
+      const references = typescriptModuleReferences(text, file);
+      const imports =
+        mode === "source"
+          ? { imports: references.imports, dynamic: false }
+          : references;
+      const dependencies = new Set<string>();
+      let unsafe = imports.dynamic;
+      for (const specifier of imports.imports) {
+        const resolved = (
+          await resolver.resolveModuleName(specifier, path.dirname(file))
+        ).resolvedModule;
+        if (!resolved) {
+          if (specifier.startsWith(".") || specifier.startsWith("@/api/")) {
+            unsafe = true;
           }
-        : typescriptModuleReferences(text, file);
-    const dependencies = new Set<string>();
-    let unsafe = imports.dynamic;
-    for (const specifier of imports.imports) {
-      const resolved = ts.resolveModuleName(
-        specifier,
-        file,
-        parsed.options,
-        ts.sys,
-        resolutionCache,
-      ).resolvedModule;
-      if (!resolved) {
-        if (specifier.startsWith(".") || specifier.startsWith("@/api/")) {
-          unsafe = true;
+          continue;
         }
+        const resolvedFile = path.resolve(resolved.resolvedFileName);
+        const dependency = realpathSync(resolvedFile);
+        if (
+          dependency.startsWith(`${root}${path.sep}`) &&
+          !dependency.includes(`${path.sep}node_modules${path.sep}`) &&
+          !/\.d\.[cm]?ts$/u.test(dependency)
+        ) {
+          dependencies.add(dependency);
+        }
+      }
+      const result = { dependencies, unsafe };
+      modules.set(file, result);
+      return result;
+    };
+    const sourceRoot = `${path.join(api, "src")}${path.sep}`;
+    const parents = new Map<string, Set<string>>();
+    const unsafe = new Set<string>();
+    const queue = [...testFiles];
+    const visited = new Set<string>();
+    for (const file of queue) {
+      if (visited.has(file)) {
         continue;
       }
-      const resolvedFile = path.resolve(resolved.resolvedFileName);
-      const dependency = ts.sys.realpath?.(resolvedFile) ?? resolvedFile;
-      if (
-        dependency.startsWith(`${root}${path.sep}`) &&
-        !dependency.includes(`${path.sep}node_modules${path.sep}`) &&
-        !/\.d\.[cm]?ts$/u.test(dependency)
-      ) {
-        dependencies.add(dependency);
-      }
-    }
-    const result = { dependencies, unsafe };
-    modules.set(file, result);
-    return result;
-  };
-  const sourceRoot = `${path.join(api, "src")}${path.sep}`;
-  const parents = new Map<string, Set<string>>();
-  const unsafe = new Set<string>();
-  const queue = [...testFiles];
-  const visited = new Set<string>();
-  for (const file of queue) {
-    if (visited.has(file)) {
-      continue;
-    }
-    visited.add(file);
-    const info = moduleInfo(file);
-    if (info.unsafe) {
-      unsafe.add(file);
-    }
-    for (const dependency of info.dependencies) {
-      if (declared.has(dependency)) {
-        continue;
-      }
-      if (dependency.startsWith(sourceRoot) && !testFiles.has(dependency)) {
+      visited.add(file);
+      const info = await moduleInfo(file);
+      if (info.unsafe) {
         unsafe.add(file);
+      }
+      for (const dependency of info.dependencies) {
+        if (declared.has(dependency)) {
+          continue;
+        }
+        if (dependency.startsWith(sourceRoot) && !testFiles.has(dependency)) {
+          unsafe.add(file);
+          continue;
+        }
+        const predecessors = parents.get(dependency) ?? new Set<string>();
+        predecessors.add(file);
+        parents.set(dependency, predecessors);
+        queue.push(dependency);
+      }
+    }
+    // Propagate unsafe dependencies once through the reverse graph. Cycles are
+    // safe only when none of their reachable modules crosses the boundary.
+    const unsafeQueue = [...unsafe];
+    for (const file of unsafeQueue) {
+      for (const parent of parents.get(file) ?? []) {
+        if (unsafe.has(parent)) {
+          continue;
+        }
+        unsafe.add(parent);
+        unsafeQueue.push(parent);
+      }
+    }
+    const independent = [...testFiles].filter((file) => !unsafe.has(file));
+    const coupled = [...testFiles]
+      .filter((file) => unsafe.has(file))
+      .map((file) => repoRelativePath(api, file));
+    // A safe test imported by source-owned code still belongs to source: exclude
+    // every such root from the isolated project, including transitive test imports.
+    const isolated = new Set(independent);
+    const sourceQueue = parsed.fileNames.filter((file) => !isolated.has(file));
+    const visitedSource = new Set<string>();
+    for (const file of sourceQueue) {
+      if (!file || visitedSource.has(file) || /\.d\.[cm]?ts$/u.test(file)) {
         continue;
       }
-      const predecessors = parents.get(dependency) ?? new Set<string>();
-      predecessors.add(file);
-      parents.set(dependency, predecessors);
-      queue.push(dependency);
-    }
-  }
-  // Propagate unsafe dependencies once through the reverse graph. Cycles are
-  // safe only when none of their reachable modules crosses the boundary.
-  const unsafeQueue = [...unsafe];
-  for (const file of unsafeQueue) {
-    for (const parent of parents.get(file) ?? []) {
-      if (unsafe.has(parent)) {
-        continue;
-      }
-      unsafe.add(parent);
-      unsafeQueue.push(parent);
-    }
-  }
-  const independent = [...testFiles].filter((file) => !unsafe.has(file));
-  const coupled = [...testFiles]
-    .filter((file) => unsafe.has(file))
-    .map((file) => repoRelativePath(api, file));
-  // A safe test imported by source-owned code still belongs to source: exclude
-  // every such root from the isolated project, including transitive test imports.
-  const isolated = new Set(independent);
-  const sourceQueue = parsed.fileNames.filter((file) => !isolated.has(file));
-  const visitedSource = new Set<string>();
-  for (const file of sourceQueue) {
-    if (!file || visitedSource.has(file) || /\.d\.[cm]?ts$/u.test(file)) {
-      continue;
-    }
-    visitedSource.add(file);
-    for (const dependency of moduleInfo(file, "source").dependencies) {
-      if (isolated.delete(dependency)) {
-        coupled.push(repoRelativePath(api, dependency));
-      }
-      if (
-        dependency.startsWith(`${root}${path.sep}`) &&
-        !dependency.includes(`${path.sep}node_modules${path.sep}`) &&
-        /\.[cm]?tsx?$/u.test(dependency)
-      ) {
-        sourceQueue.push(dependency);
+      visitedSource.add(file);
+      for (const dependency of (await moduleInfo(file, "source"))
+        .dependencies) {
+        if (isolated.delete(dependency)) {
+          coupled.push(repoRelativePath(api, dependency));
+        }
+        if (
+          dependency.startsWith(`${root}${path.sep}`) &&
+          !dependency.includes(`${path.sep}node_modules${path.sep}`) &&
+          /\.[cm]?tsx?$/u.test(dependency)
+        ) {
+          sourceQueue.push(dependency);
+        }
       }
     }
+    return {
+      independent: [...isolated]
+        .map((file) => repoRelativePath(api, file))
+        .toSorted(),
+      coupled: coupled.toSorted(),
+    };
+  } finally {
+    await compiler.close();
   }
-  return {
-    independent: [...isolated]
-      .map((file) => repoRelativePath(api, file))
-      .toSorted(),
-    coupled: coupled.toSorted(),
-  };
 };
 
 export const apiTypecheckProjects = (api: string) => {
@@ -223,26 +194,28 @@ export const apiTypecheckProjects = (api: string) => {
   return programs;
 };
 
-const apiProjectInputs = (api: string) =>
+const apiProjectInputs = async (api: string) =>
   new Map(
-    [...apiTypecheckProjects(api)].map(([task, project]) => [
-      task,
-      apiResolvedTypecheckInputs(project),
-    ]),
+    await Promise.all(
+      [...apiTypecheckProjects(api)].map(
+        async ([task, project]) =>
+          [task, await apiResolvedTypecheckInputs(project)] as const,
+      ),
+    ),
   );
 
-export const apiTestPartitionIssues = (root: string) => {
-  const { independent, coupled } = deriveApiTestPartition(root);
+export const apiTestPartitionIssues = async (root: string) => {
+  const { independent, coupled } = await deriveApiTestPartition(root);
   const api = path.join(root, "apps/api");
   const testsProject = path.join(api, "tsconfig.tests.json");
   const sourceProject = path.join(api, "tsconfig.src.json");
   const actual = new Set(
-    readApiTypecheckConfig(testsProject)
-      .fileNames.map((file) => repoRelativePath(api, file))
+    (await readApiTypecheckConfig(testsProject)).fileNames
+      .map((file) => repoRelativePath(api, file))
       .filter((file) => !/\.d\.[cm]?ts$/u.test(file)),
   );
   const sourceFiles = new Set(
-    readApiTypecheckConfig(sourceProject).fileNames.map((file) =>
+    (await readApiTypecheckConfig(sourceProject)).fileNames.map((file) =>
       repoRelativePath(api, file),
     ),
   );
@@ -280,7 +253,7 @@ export const apiTestPartitionIssues = (root: string) => {
   return issues;
 };
 
-export const apiTypecheckInputIssues = (
+export const apiTypecheckInputIssues = async (
   root: string,
   programs = new Map(
     [...apiTypecheckProjects(path.join(root, "apps/api"))].map(
@@ -288,7 +261,7 @@ export const apiTypecheckInputIssues = (
     ),
   ),
 ) => {
-  const directory = ts.sys.realpath?.(root) ?? root;
+  const directory = realpathSync(root);
   const issues: { path: string; message: string }[] = [];
   const turbo = readTurboTypecheckInputs(path.join(root, "turbo.json"));
   const projects = apiTypecheckProjects(path.join(root, "apps/api"));
@@ -298,7 +271,7 @@ export const apiTypecheckInputIssues = (
       panic(`Missing API compiler project: ${task}`);
     }
     const inputs = turbo.tasks[task]?.inputs ?? [];
-    const expected = apiProgramTypecheckInputs(project, files);
+    const expected = await apiProgramTypecheckInputs(project, files);
     const required = expected.filter((input) => !input.startsWith("!"));
     const sources = files.filter(
       (file) =>
@@ -341,7 +314,26 @@ export const apiTypecheckInputIssues = (
   return issues;
 };
 
-const checkResolvedApiTestPartition = (root: string) => {
+type DeclarationOutputNameOptions = { source: string; outFile?: string };
+const declarationOutputName = ({
+  source,
+  outFile,
+}: DeclarationOutputNameOptions) => {
+  if (outFile) {
+    return `${outFile.replace(/\.[^./\\]+$/u, "")}.d.ts`;
+  }
+  return source.replace(/\.(?:[jt]sx?|[mc][jt]s)$/u, (extension) => {
+    if (extension === ".mts" || extension === ".mjs") {
+      return ".d.mts";
+    }
+    if (extension === ".cts" || extension === ".cjs") {
+      return ".d.cts";
+    }
+    return ".d.ts";
+  });
+};
+
+const checkResolvedApiTestPartition = async (root: string) => {
   const api = path.join(root, "apps/api");
   const programs = new Map(
     [...apiTypecheckProjects(api)].map(([task, project]) => [
@@ -349,21 +341,40 @@ const checkResolvedApiTestPartition = (root: string) => {
       nativeTypecheckProgramFiles(project),
     ]),
   );
-  const inputIssues = apiTypecheckInputIssues(root, programs);
+  const inputIssues = await apiTypecheckInputIssues(root, programs);
   if (inputIssues.length > 0) {
     panic(inputIssues.map(({ message }) => message).join("\n"));
   }
 
-  const surface = readApiTypecheckConfig(
+  const surface = await readApiTypecheckConfig(
     path.join(api, "tsconfig.declarations.json"),
   );
+  const outputRoot = surface.options.declarationDir ?? surface.options.outDir;
+  const directories = surface.fileNames
+    .filter((source) => !/\.d\.[cm]?ts$/u.test(source))
+    .map((source) => path.dirname(source));
+  let common = directories.at(0) ?? api;
+  for (const directory of directories) {
+    while (
+      common !== path.parse(common).root &&
+      directory !== common &&
+      !directory.startsWith(`${common}${path.sep}`)
+    ) {
+      common = path.dirname(common);
+    }
+  }
+  const sourceRoot =
+    surface.options.rootDir ?? (surface.options.composite ? api : common);
   for (const file of surface.fileNames.filter(
     (source) => !/\.d\.[cm]?ts$/u.test(source),
   )) {
-    const declaration = ts
-      .getOutputFileNames(surface, file, false)
-      .find((output) => /\.d\.[cm]?ts$/u.test(output));
-    if (!declaration || !existsSync(declaration)) {
+    const declaration = declarationOutputName({
+      source: outputRoot
+        ? path.join(outputRoot, repoRelativePath(sourceRoot, file))
+        : file,
+      outFile: surface.options.outFile,
+    });
+    if (!existsSync(declaration)) {
       panic(`Missing API declaration for ${file}`);
     }
   }
@@ -372,7 +383,7 @@ const checkResolvedApiTestPartition = (root: string) => {
       (programs.get(task) ?? []).filter((file) => /\.[cm]?tsx?$/u.test(file)),
     );
   const files = programFiles("@stll/api#typecheck:tests");
-  const { independent, coupled } = deriveApiTestPartition(root);
+  const { independent, coupled } = await deriveApiTestPartition(root);
   const owned = new Set(independent.map((file) => path.resolve(api, file)));
   const sourceFiles = programFiles("@stll/api#typecheck:src");
   for (const file of coupled) {
@@ -403,9 +414,9 @@ const checkResolvedApiTestPartition = (root: string) => {
   }
 };
 
-export const writeApiTestPartition = (root: string) => {
+export const writeApiTestPartition = async (root: string) => {
   const api = path.join(root, "apps/api");
-  const partition = deriveApiTestPartition(root);
+  const partition = await deriveApiTestPartition(root);
   const project = path.join(api, "tsconfig.declarations.json");
   if (usesGeneratedApiConfig(project)) {
     const source = apiTypecheckArtifact(api, "src");
@@ -453,17 +464,17 @@ if (import.meta.main) {
   const root = path.resolve(import.meta.dir, "../../..");
   requireApiTypecheckGeneratedSources(root);
   if (process.argv.includes("--resolved")) {
-    checkResolvedApiTestPartition(root);
+    await checkResolvedApiTestPartition(root);
     process.stdout.write("API tests declaration boundary: ok\n");
     process.exit(0);
   }
-  const partition = deriveApiTestPartition(root);
+  const partition = await deriveApiTestPartition(root);
   if (process.argv.includes("--write")) {
-    writeApiTestPartition(root);
+    await writeApiTestPartition(root);
     const api = path.join(root, "apps/api");
     writeTurboTypecheckInputs(
       path.join(root, "turbo.json"),
-      apiProjectInputs(api),
+      await apiProjectInputs(api),
     );
   }
   process.stdout.write(

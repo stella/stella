@@ -151,7 +151,7 @@ const checkOut = (remote: string, sha: string, fetchDepth: number) => {
   return workspace;
 };
 
-test("every job that installs with lifecycle scripts checks out the hygiene baseline", () => {
+test("every job that installs with lifecycle scripts checks out the hygiene baseline", async () => {
   const jobs = installingJobs();
   expect(jobs.map(({ job }) => job)).toContain(
     "release-pr.yml#refresh-release-version",
@@ -160,7 +160,7 @@ test("every job that installs with lifecycle scripts checks out the hygiene base
   for (const { job, fetchDepth } of jobs) {
     expect({
       job,
-      issues: validateWorkspaceAppBoundaries(
+      issues: await validateWorkspaceAppBoundaries(
         checkOut(remote, staged, fetchDepth),
         PUSH_TO_MAIN,
       ),
@@ -168,10 +168,13 @@ test("every job that installs with lifecycle scripts checks out the hygiene base
   }
 });
 
-test("a single-commit checkout of the release has no baseline to read", () => {
+test("a single-commit checkout of the release has no baseline to read", async () => {
   const { remote, staged } = releaseRemote();
   expect(
-    validateWorkspaceAppBoundaries(checkOut(remote, staged, 1), PUSH_TO_MAIN),
+    await validateWorkspaceAppBoundaries(
+      checkOut(remote, staged, 1),
+      PUSH_TO_MAIN,
+    ),
   ).toEqual([
     {
       message: "app-boundary ledger baseline branch is unavailable",

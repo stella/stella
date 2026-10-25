@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 describe("workspace app boundaries", () => {
-  test("detects app dependencies, source imports, path aliases, and includes", () => {
+  test("detects app dependencies, source imports, path aliases, and includes", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writePackage(rootDir, "apps/web", {
@@ -76,10 +76,10 @@ describe("workspace app boundaries", () => {
     );
     writeFileSync(
       path.join(rootDir, "apps/landing/src/page.astro"),
-      '---\nimport type { API } from "@stll/api/types";\n---\n',
+      '---\nimport type { API } from "@stll/api/types";\n---\n<script type="application/json" set:html={JSON.stringify({})} /><script>import type { ScriptAPI } from "@stll/api/script-types";</script>',
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
           message:
@@ -103,6 +103,11 @@ describe("workspace app boundaries", () => {
         {
           message:
             "source import @stll/api/types targets apps/api; import shared code from packages/*",
+          path: "apps/landing/src/page.astro",
+        },
+        {
+          message:
+            "source import @stll/api/script-types targets apps/api; import shared code from packages/*",
           path: "apps/landing/src/page.astro",
         },
         {
@@ -134,13 +139,13 @@ describe("workspace app boundaries", () => {
     );
 
     expect(
-      collectAppBoundaryEdges(rootDir).some(
+      (await collectAppBoundaryEdges(rootDir)).some(
         ({ specifier }) => specifier === "@stll/api/ignored",
       ),
     ).toBe(false);
   });
 
-  test("resolves inherited TypeScript paths and includes", () => {
+  test("resolves inherited TypeScript paths and includes", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writePackage(rootDir, "apps/web", { name: "@stll/web" });
@@ -156,7 +161,7 @@ describe("workspace app boundaries", () => {
       JSON.stringify({ extends: "./tsconfig.base.json" }),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
           message:
@@ -171,7 +176,7 @@ describe("workspace app boundaries", () => {
     );
   });
 
-  test("fails closed on invalid TypeScript configuration", () => {
+  test("fails closed on invalid TypeScript configuration", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/web", { name: "@stll/web" });
     writeFileSync(
@@ -179,7 +184,7 @@ describe("workspace app boundaries", () => {
       JSON.stringify({ extends: "./missing.json" }),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: expect.stringContaining("invalid TypeScript configuration"),
         path: "apps/web/tsconfig.json",
@@ -187,7 +192,7 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("ignores not-yet-generated API typecheck configs but no other missing extends", () => {
+  test("ignores not-yet-generated API typecheck configs but no other missing extends", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writeFileSync(
@@ -204,7 +209,7 @@ describe("workspace app boundaries", () => {
       }),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
 
     writeFileSync(
       path.join(rootDir, "apps/api/tsconfig.tests.json"),
@@ -216,7 +221,7 @@ describe("workspace app boundaries", () => {
       }),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: expect.stringContaining("invalid TypeScript configuration"),
         path: "apps/api/tsconfig.tests.json",
@@ -224,7 +229,7 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("uses Git's tracked, untracked, and ignored file set", () => {
+  test("uses Git's tracked, untracked, and ignored file set", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writePackage(rootDir, "apps/web", { name: "@stll/web" });
@@ -246,7 +251,7 @@ describe("workspace app boundaries", () => {
       'import type { API } from "@stll/api/ignored";\n',
     );
 
-    const edges = collectAppBoundaryEdges(rootDir);
+    const edges = await collectAppBoundaryEdges(rootDir);
     expect(edges.map(({ specifier }) => specifier)).toContain(
       "@stll/api/types",
     );
@@ -258,23 +263,23 @@ describe("workspace app boundaries", () => {
     );
   });
 
-  test("requires the exception ledger to equal the observed debt", () => {
+  test("requires the exception ledger to equal the observed debt", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writePackage(rootDir, "packages/shared", { name: "@stll/shared" });
     const sourcePath = path.join(rootDir, "packages/shared/src/index.ts");
     writeFileSync(sourcePath, 'export type { API } from "@stll/api/types";\n');
-    const observed = collectAppBoundaryEdges(rootDir);
+    const observed = await collectAppBoundaryEdges(rootDir);
     writeFileSync(
       path.join(rootDir, "scripts/app-boundary-exceptions.json"),
       `${JSON.stringify(observed, null, 2)}\n`,
     );
     initializeGitRoot(rootDir);
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
 
     writeFileSync(sourcePath, "export {};\n");
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message:
           "stale app-boundary exception; remove it now that the dependency no longer exists",
@@ -283,7 +288,7 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("forbids adding an observed edge to the committed exception ledger", () => {
+  test("forbids adding an observed edge to the committed exception ledger", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writePackage(rootDir, "packages/shared", { name: "@stll/shared" });
@@ -291,7 +296,7 @@ describe("workspace app boundaries", () => {
       path.join(rootDir, "packages/shared/src/existing.ts"),
       'export type { API } from "@stll/api/existing";\n',
     );
-    const baseline = collectAppBoundaryEdges(rootDir);
+    const baseline = await collectAppBoundaryEdges(rootDir);
     writeFileSync(
       path.join(rootDir, "scripts/app-boundary-exceptions.json"),
       `${JSON.stringify(baseline, null, 2)}\n`,
@@ -302,13 +307,13 @@ describe("workspace app boundaries", () => {
       path.join(rootDir, "packages/shared/src/new-debt.ts"),
       'export type { API } from "@stll/api/new-debt";\n',
     );
-    const grownLedger = collectAppBoundaryEdges(rootDir);
+    const grownLedger = await collectAppBoundaryEdges(rootDir);
     writeFileSync(
       path.join(rootDir, "scripts/app-boundary-exceptions.json"),
       `${JSON.stringify(grownLedger, null, 2)}\n`,
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message:
           "new app-boundary exceptions are forbidden; the ledger may only shrink",
@@ -317,13 +322,13 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("fails closed when Git cannot read the repository", () => {
+  test("fails closed when Git cannot read the repository", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
     initializeGitRoot(rootDir);
     writeFileSync(path.join(rootDir, ".git/config"), "[core\n");
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: "app-boundary ledger baseline could not be read from Git",
         path: LEDGER_PATH,
@@ -331,19 +336,19 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("skips the baseline comparison outside a Git repository locally", () => {
+  test("skips the baseline comparison outside a Git repository locally", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("requires a Git checkout in CI", () => {
+  test("requires a Git checkout in CI", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
 
     expect(
-      validateWorkspaceAppBoundaries(rootDir, { env: { CI: "true" } }),
+      await validateWorkspaceAppBoundaries(rootDir, { env: { CI: "true" } }),
     ).toEqual([
       {
         message: "app-boundary ledger baseline requires a Git checkout in CI",
@@ -352,16 +357,19 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("skips the baseline comparison without a Git binary locally, and requires one in CI", () => {
+  test("skips the baseline comparison without a Git binary locally, and requires one in CI", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
     const missingBinary: GitRunner = () => ({ kind: "missing-binary" });
 
     expect(
-      validateWorkspaceAppBoundaries(rootDir, { ...LOCAL, git: missingBinary }),
+      await validateWorkspaceAppBoundaries(rootDir, {
+        ...LOCAL,
+        git: missingBinary,
+      }),
     ).toEqual([]);
     expect(
-      validateWorkspaceAppBoundaries(rootDir, {
+      await validateWorkspaceAppBoundaries(rootDir, {
         ...PULL_REQUEST,
         git: missingBinary,
       }),
@@ -373,7 +381,7 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("fails closed when the base tree cannot be read", () => {
+  test("fails closed when the base tree cannot be read", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
     initializeGitRoot(rootDir);
@@ -385,7 +393,7 @@ describe("workspace app boundaries", () => {
       path.join(rootDir, ".git/objects", tree.slice(0, 2), tree.slice(2)),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: "base app-boundary ledger could not be read",
         path: LEDGER_PATH,
@@ -393,36 +401,40 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("compares against no baseline when the base has no ledger yet", () => {
+  test("compares against no baseline when the base has no ledger yet", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, "scripts/.keep"), "");
     initializeGitRoot(rootDir);
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
 
-    expect(validateWorkspaceAppBoundaries(rootDir, PULL_REQUEST)).toEqual([]);
+    expect(await validateWorkspaceAppBoundaries(rootDir, PULL_REQUEST)).toEqual(
+      [],
+    );
   });
 
-  test("fails closed in a pull request whose base branch cannot be resolved", () => {
+  test("fails closed in a pull request whose base branch cannot be resolved", async () => {
     const rootDir = createRoot();
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
     initializeGitRoot(rootDir, "feature");
 
-    expect(validateWorkspaceAppBoundaries(rootDir, PULL_REQUEST)).toEqual([
-      {
-        message: "app-boundary ledger baseline branch is unavailable",
-        path: LEDGER_PATH,
-      },
-    ]);
+    expect(await validateWorkspaceAppBoundaries(rootDir, PULL_REQUEST)).toEqual(
+      [
+        {
+          message: "app-boundary ledger baseline branch is unavailable",
+          path: LEDGER_PATH,
+        },
+      ],
+    );
   });
 
-  test("fails closed when the exception ledger is malformed", () => {
+  test("fails closed when the exception ledger is malformed", async () => {
     const rootDir = createRoot();
     writeFileSync(
       path.join(rootDir, "scripts/app-boundary-exceptions.json"),
       "not json\n",
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: "app-boundary ledger must contain valid JSON",
         path: "scripts/app-boundary-exceptions.json",
@@ -430,7 +442,7 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
-  test("rejects duplicate and inexact exception entries", () => {
+  test("rejects duplicate and inexact exception entries", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
     writePackage(rootDir, "packages/shared", { name: "@stll/shared" });
@@ -438,7 +450,7 @@ describe("workspace app boundaries", () => {
       path.join(rootDir, "packages/shared/src/index.ts"),
       'export type { API } from "@stll/api/types";\n',
     );
-    const [observed] = collectAppBoundaryEdges(rootDir);
+    const [observed] = await collectAppBoundaryEdges(rootDir);
     if (observed === undefined) {
       throw new Error("expected one app-boundary edge");
     }
@@ -447,7 +459,7 @@ describe("workspace app boundaries", () => {
       JSON.stringify([observed, observed, { ...observed, reason: "extra" }]),
     );
 
-    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
       {
         message: "app-boundary exception must not be duplicated",
         path: "scripts/app-boundary-exceptions.json:2",
