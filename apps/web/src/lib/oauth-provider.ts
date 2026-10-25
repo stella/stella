@@ -76,7 +76,7 @@ export const getOauthRedirectUrl = (value: unknown): string | null => {
 
 export const oauthConsentInfoSchema = v.object({
   client_name: v.nullable(v.string()),
-  redirectHosts: v.array(v.string()),
+  redirectTargets: v.array(v.string()),
   clientIdHost: v.nullable(v.string()),
   unverified: v.boolean(),
   // An omitted brand reads as "no verified brand", never as an error.

@@ -44,7 +44,7 @@ import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 
-const SelectedClient = ({
+export const SelectedClient = ({
   client,
   onClear,
   clearLabel,

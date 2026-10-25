@@ -58,11 +58,16 @@ import {
   normalizeRedirectTo,
   onboardingNavigation,
 } from "@/lib/redirect";
-import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import {
+  optionalFlagSearchSchema,
+  schemaFormOptions,
+  toFormErrors,
+} from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
 
-const searchSchema = v.object({
-  devQuickStart: v.optional(v.boolean()),
+const searchSchema = routeSearchSchema({
+  devQuickStart: optionalFlagSearchSchema,
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
 

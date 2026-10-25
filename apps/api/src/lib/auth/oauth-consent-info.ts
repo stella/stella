@@ -199,6 +199,17 @@ type OAuthConsentClient = Pick<
 >;
 
 /**
+ * Where a redirect sends the authorization code, as the consent screen shows
+ * it: the host of an http(s) redirect, and the scheme (with its authority, if
+ * any) of a private-use one, so a look-alike client name cannot hide which
+ * application receives the code.
+ */
+const redirectTarget = (url: URL): string =>
+  url.protocol === "http:" || url.protocol === "https:"
+    ? url.host
+    : `${url.protocol}${url.host ? `//${url.host}` : ""}`;
+
+/**
  * What the consent screen may claim about a client. A client identified by a
  * metadata document is verified by where that document lives; any other client
  * by every one of its redirect URIs. `verifiedBrand` names the product only
@@ -232,8 +243,13 @@ export const getOAuthConsentInfo = (
   const [onlyBrand] = brands;
   return {
     client_name: client.name ?? null,
-    redirectHosts: [
-      ...new Set(redirects.flatMap((url) => (url?.host ? [url.host] : []))),
+    redirectTargets: [
+      ...new Set(
+        redirects.flatMap((url) => {
+          const target = url ? redirectTarget(url) : "";
+          return target ? [target] : [];
+        }),
+      ),
     ],
     clientIdHost: clientUrl?.host ?? null,
     unverified,

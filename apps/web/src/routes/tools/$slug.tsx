@@ -34,6 +34,7 @@ import {
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
+import { routeSearchSchema } from "@/route-search-params";
 
 const AddToStella = lazy(async () => ({
   default: (await import("@/features/knowledge/public/tools/add-to-stella"))
@@ -44,7 +45,7 @@ const AddToStella = lazy(async () => ({
 // degrade to "no install intent", not throw into the router's default
 // error boundary. `v.fallback` swallows the parse failure and yields
 // `undefined`, rendering the page as if the param were absent.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   install: v.fallback(v.optional(v.literal("1")), undefined),
 });
 
