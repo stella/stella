@@ -1117,10 +1117,15 @@ export const hostedUsageWebhookEvents = p.pgTable(
   ],
 );
 
+export const HOSTED_CUSTOMER_ERASURE_STATUS = {
+  pending: "pending",
+  erased: "erased",
+  failed: "failed",
+} as const;
 export const HOSTED_CUSTOMER_ERASURE_STATUSES = [
-  "pending",
-  "erased",
-  "failed",
+  HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+  HOSTED_CUSTOMER_ERASURE_STATUS.erased,
+  HOSTED_CUSTOMER_ERASURE_STATUS.failed,
 ] as const;
 const HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES =
   HOSTED_CUSTOMER_ERASURE_STATUSES.map((status) => sql.raw(`'${status}'`));
@@ -1134,7 +1139,7 @@ export const hostedCustomerErasures = p.pgTable(
     status: p
       .text({ enum: HOSTED_CUSTOMER_ERASURE_STATUSES })
       .notNull()
-      .default("pending"),
+      .default(HOSTED_CUSTOMER_ERASURE_STATUS.pending),
     attempts: p.integer().notNull().default(0),
     nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
     lastErrorCode: p.varchar("last_error_code", { length: 64 }),

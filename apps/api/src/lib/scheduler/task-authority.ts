@@ -302,6 +302,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "hosted-usage-webhook-retention.ts",
     "Retention redaction of provider events.",
   ),
+  "usage.eraseHostedCustomers": platform(
+    "hosted-customer-erasure.ts",
+    "Erases provider customer records after organization deletion.",
+  ),
   "workObligations.attentionScout": platform(
     "work-attention-scout.ts",
     "Emits unassigned organization signals; its session identity decides no visibility.",

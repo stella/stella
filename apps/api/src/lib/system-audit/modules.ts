@@ -36,6 +36,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:registration-retention",
   "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts":
     "system:usage-webhook-retention",
+  "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts":
+    "system:hosted-customer-erasure",
   "apps/api/src/lib/uploads/file-comparison/sweep.ts":
     "system:file-comparison-sweep",
   "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts":

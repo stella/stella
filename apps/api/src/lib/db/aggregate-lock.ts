@@ -36,6 +36,8 @@ import {
   entities,
   entityVersions,
   fields,
+  HOSTED_CUSTOMER_ERASURE_STATUS,
+  hostedCustomerErasures,
   pdfSigningSessions,
   workspaceMembers,
   workspaces,
@@ -644,6 +646,76 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
     const value = await run(tx, rows);
     completeAcquisition(history);
     return value;
+  });
+};
+
+type HostedCustomerErasureClaim = {
+  id: string;
+  externalCustomerRef: string;
+  attempts: number;
+};
+
+/** Atomically leases due provider erasures without exposing a raw lock site. */
+export const claimHostedCustomerErasures = async ({
+  database,
+  limit,
+  leaseMilliseconds,
+  maximumAttempts,
+  recordTransitionAuditEvent,
+}: {
+  database: {
+    transaction: <Value>(
+      run: (tx: Transaction) => Promise<Value>,
+    ) => Promise<Value>;
+  };
+  limit: number;
+  leaseMilliseconds: number;
+  maximumAttempts: number;
+  recordTransitionAuditEvent: (
+    tx: Transaction,
+    rows: readonly HostedCustomerErasureClaim[],
+  ) => void | Promise<void>;
+}): Promise<HostedCustomerErasureClaim[]> => {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    return panic("Hosted customer erasure claims require a positive limit");
+  }
+  return await withAggregateTransaction(database, async (tx) => {
+    const result = await tx.execute(sql`
+      WITH due AS (
+        SELECT ${hostedCustomerErasures.id}
+        FROM ${hostedCustomerErasures}
+        WHERE ${hostedCustomerErasures.status} IN (
+          ${HOSTED_CUSTOMER_ERASURE_STATUS.pending},
+          ${HOSTED_CUSTOMER_ERASURE_STATUS.failed}
+        )
+          AND ${hostedCustomerErasures.attempts} < ${maximumAttempts}
+          AND ${hostedCustomerErasures.nextAttemptAt} <= now()
+        ORDER BY ${hostedCustomerErasures.nextAttemptAt}
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE ${hostedCustomerErasures} AS erasure
+      SET attempts = erasure.attempts + 1,
+          next_attempt_at = now() + (${leaseMilliseconds} * interval '1 millisecond'),
+          updated_at = now()
+      FROM due
+      WHERE erasure.id = due.id
+      RETURNING erasure.id,
+        erasure.external_customer_ref AS "externalCustomerRef",
+        erasure.attempts
+    `);
+    const rows = executedRows(result).map((row) => {
+      if (!isRecord(row)) {
+        return panic("Hosted customer erasure claim returned an invalid row");
+      }
+      return {
+        id: String(row["id"]),
+        externalCustomerRef: String(row["externalCustomerRef"]),
+        attempts: Number(row["attempts"]),
+      };
+    });
+    await recordTransitionAuditEvent(tx, rows);
+    return rows;
   });
 };
 
