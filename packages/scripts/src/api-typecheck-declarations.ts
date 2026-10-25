@@ -53,6 +53,9 @@ const declarationProfile = (
 // A JSON module (`resolveJsonModule`) is data: it references no other module.
 const JSON_MODULE = /\.json$/iu;
 
+// A tsconfig rewritten here keeps every field it already has.
+const TSCONFIG_OBJECT = v.record(v.string(), v.unknown());
+
 export const typescriptModuleReferences = (text: string, filename: string) => {
   const imports = new Set<string>();
   let dynamic = false;
@@ -147,7 +150,10 @@ export const writeApiDeclarationSurface = (
     });
     return roots;
   }
-  const config = Bun.JSONC.parse(readFileSync(configPath, "utf-8"));
+  const config = v.parse(
+    TSCONFIG_OBJECT,
+    Bun.JSONC.parse(readFileSync(configPath, "utf-8")),
+  );
   writeFileSync(
     configPath,
     `${JSON.stringify({ ...config, files: roots }, null, 2)}\n`,
@@ -591,7 +597,10 @@ export const regenerateApiDeclarationSurface = async (
     if (!existsSync(filename)) {
       continue;
     }
-    const config = Bun.JSONC.parse(readFileSync(filename, "utf-8"));
+    const config = v.parse(
+      TSCONFIG_OBJECT,
+      Bun.JSONC.parse(readFileSync(filename, "utf-8")),
+    );
     const roots = v.parse(
       v.object({ files: v.optional(v.array(v.string())) }),
       config,

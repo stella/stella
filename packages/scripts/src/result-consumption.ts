@@ -313,7 +313,10 @@ const inspectDiscardedExpression = async ({
           expression: property.initializer,
           report,
         });
-      } else if (ts.isShorthandPropertyAssignment(property)) {
+      } else if (
+        ts.isShorthandPropertyAssignment(property) &&
+        ts.isIdentifier(property.name)
+      ) {
         await inspectDiscardedExpression({
           checker,
           expression: property.name,
@@ -501,7 +504,10 @@ const inspectDiscardedObjectEntries = async ({
           report,
         });
       }
-    } else if (ts.isShorthandPropertyAssignment(property)) {
+    } else if (
+      ts.isShorthandPropertyAssignment(property) &&
+      ts.isIdentifier(property.name)
+    ) {
       if (property.name !== retainedNode) {
         await inspectDiscardedExpression({
           checker,

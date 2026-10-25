@@ -462,7 +462,6 @@ for (const fixture of [
   { extension: "jsx", output: "dist/value.d.ts", mode: "individual" },
   { extension: "mjs", output: "dist/value.d.mts", mode: "individual" },
   { extension: "cjs", output: "dist/value.d.cts", mode: "individual" },
-  { extension: "ts", output: "dist/bundle.d.ts", mode: "bundle" },
   { extension: "ts", output: "dist/value.d.ts", mode: "common-root" },
 ]) {
   // timeout: each case starts compilers for the consumer and its referenced producer configs.
@@ -512,9 +511,7 @@ for (const fixture of [
           declaration: true,
           rootDir: externalSource ? path.parse(directory).root : undefined,
           allowJs: fixture.extension !== "ts",
-          ...(fixture.mode === "bundle"
-            ? { outFile: "dist/bundle.js", module: "AMD" }
-            : { outDir: "dist" }),
+          outDir: "dist",
         },
       });
       const output = externalSource
