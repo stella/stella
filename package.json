@@ -278,7 +278,7 @@
     "jszip": "3.10.2",
     "lucide-react": "1.60.0",
     "lzma1": "0.6.1",
-    "oxc-transform-react": "0.152.0",
+    "oxc-transform-react": "0.155.0",
     "oxlint": "1.87.0",
     "parse5": "7.3.0",
     "parse5-htmlparser2-tree-adapter": "7.1.0",
