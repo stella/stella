@@ -69,12 +69,12 @@ const tailwindFailures = async (env: Record<string, string | undefined>) => {
 const generate = async (cacheDirectory: string) => {
   await rm(cacheDirectory, { recursive: true, force: true });
   await mkdir(cacheDirectory, { recursive: true });
+  // oxlint.config.ts defaults lint to read-only; generation fills the cache.
   const env = {
     ...process.env,
     OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory,
+    OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "0",
   };
-  // oxlint.config.ts defaults lint to read-only; generation fills the cache.
-  env["OXLINT_TAILWINDCSS_CACHE_READ_ONLY"] = "0";
   const generationFailures = await tailwindFailures(env);
   if (generationFailures.length > 0) {
     panic(
@@ -93,8 +93,10 @@ const generate = async (cacheDirectory: string) => {
     }
     await Bun.write(file, `${JSON.stringify(value)}\n`);
   }
-  env["OXLINT_TAILWINDCSS_CACHE_READ_ONLY"] = "1";
-  const missing = await tailwindFailures(env);
+  const missing = await tailwindFailures({
+    ...env,
+    OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1",
+  });
   if (missing.length > 0) {
     panic(
       `Read-only lint misses answers in the generated Tailwind cache:\n${missing.join("\n")}`,
