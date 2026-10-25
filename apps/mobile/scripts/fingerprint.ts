@@ -128,10 +128,31 @@ export type NativeFingerprint = {
  * Each path is cut to its last `node_modules/`; the files' contents and the
  * packages' versions still decide the hash.
  */
-const STORE_PATH = /[^\s"'`]*\/node_modules\//gu;
+const NODE_MODULES = "/node_modules/";
 
-export const portablePath = (text: string): string =>
-  text.replaceAll(STORE_PATH, "node_modules/");
+/** Where a path ends inside a source: whitespace or a quote. */
+const isPathBreak = (char: string): boolean =>
+  char.trim() === "" || char === '"' || char === "'" || char === "`";
+
+const cutToPackage = (storePath: string): string => {
+  const at = storePath.lastIndexOf(NODE_MODULES);
+  return at === -1
+    ? storePath
+    : `node_modules/${storePath.slice(at + NODE_MODULES.length)}`;
+};
+
+export const portablePath = (text: string): string => {
+  let portable = "";
+  let pathStart = 0;
+  for (let index = 0; index <= text.length; index += 1) {
+    const char = text[index];
+    if (char === undefined || isPathBreak(char)) {
+      portable += cutToPackage(text.slice(pathStart, index)) + (char ?? "");
+      pathStart = index + 1;
+    }
+  }
+  return portable;
+};
 
 const byCodeUnit = (left: string, right: string): number => {
   if (left < right) {
