@@ -710,7 +710,13 @@ export const createChatRuntime = ({
             messages.slice(-1),
             requestBody,
             abortSignal,
-            runContext,
+            {
+              ...runContext,
+              // The API owns tool schemas and derives browser availability
+              // from browserClient. Keep local executors registered without
+              // uploading their schemas on every send and continuation.
+              clientTools: [],
+            },
           ),
         ),
         (diagnostic) => {

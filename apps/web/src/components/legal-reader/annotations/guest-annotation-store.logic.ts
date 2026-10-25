@@ -136,7 +136,7 @@ export const EMPTY_GUEST_ANNOTATION_STORE: GuestAnnotationStore = {
   version: GUEST_ANNOTATIONS_VERSION,
 };
 
-export type GuestAnnotationStorage = Pick<
+type GuestAnnotationStorage = Pick<
   Storage,
   "getItem" | "removeItem" | "setItem"
 >;

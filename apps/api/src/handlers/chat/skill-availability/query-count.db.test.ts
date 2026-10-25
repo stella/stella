@@ -36,11 +36,12 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
  * and the same for each of several calls in flight at once.
  *
  * Sign-in leaves the signed session snapshot cookie, so auth reads no session
- * row: member role and AI settings (2), then the AI gate confirms the caller
- * is still a member (1). The handler reads the caller's skills, then the chat
- * tool inputs a built-in skill's required tools are decided over: tool
- * overrides, matters, web-search keys and registry credentials, each in its
- * own scoped transaction (5 x 2).
+ * row: member role, AI settings and the AI gate's current membership (3).
+ * The AI gate rechecks membership at its own boundary even while seat policy
+ * is disabled. The handler reads the caller's skills,
+ * then the chat tool inputs a built-in skill's required tools are decided
+ * over: tool overrides, matters, web-search keys and registry credentials,
+ * each in its own scoped transaction (5 x 2).
  */
 const WITH_SESSION_SNAPSHOT = 13;
 /**

@@ -27,6 +27,8 @@ import {
   removeWorkspaceMemberHandler,
 } from "./remove";
 
+// Every advisory acquisition in these fixtures succeeds under one identity.
+const ADVISORY_LOCK_ROW = { acquired: true, key1: 1, key2: 2 };
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 const removeWorkspaceMember = createRemoveWorkspaceMember({
   broadcastSessionEvent: () => undefined,
@@ -81,13 +83,23 @@ describe("removeWorkspaceMember", () => {
     let deleteCalled = false;
 
     const { safeDb } = createScopedDbMock({
+      execute: async () => await Promise.resolve([ADVISORY_LOCK_ROW]),
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
-            limit: () => ({
-              for: async () =>
-                table === timeEntries ? [{ id: "timer_test" }] : [],
-            }),
+            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
+            limit: () =>
+              Object.assign(
+                Promise.resolve(
+                  table === workspaces
+                    ? [{ organizationId: "org_test123" }]
+                    : [],
+                ),
+                {
+                  for: async () =>
+                    table === timeEntries ? [{ id: "timer_test" }] : [],
+                },
+              ),
             for: async () => {
               if (table === workspaces) {
                 return [{ leadUserId: null }];
@@ -137,6 +149,7 @@ describe("removeWorkspaceMember", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
+      execute: async () => await Promise.resolve([ADVISORY_LOCK_ROW]),
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
@@ -147,9 +160,16 @@ describe("removeWorkspaceMember", () => {
           }),
           where: () => ({
             orderBy: async () => await createSelectQueryMock([]).from().where(),
-            limit: () => ({
-              for: async () => [],
-            }),
+            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
+            limit: () =>
+              Object.assign(
+                Promise.resolve(
+                  table === workspaces
+                    ? [{ organizationId: "org_test123" }]
+                    : [],
+                ),
+                { for: async () => [] },
+              ),
             for: async () => {
               if (table === workspaces) {
                 return [{ leadUserId: "user_lead" }];

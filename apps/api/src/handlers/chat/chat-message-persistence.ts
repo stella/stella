@@ -64,6 +64,7 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
+import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -251,7 +252,15 @@ const insertMessages = async ({
     return Result.ok(NO_TURN_WRITES);
   }
 
+  const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+    messages,
+    sendMode: acceptedSendMode,
+  });
+
   const insertResult = await safeDb(async (tx) => {
+    if (marksUsedAnonymization) {
+      await lockThreadStoredContentTransitionOnTx(tx, threadId);
+    }
     if (
       !(await reserveChatTurnAcceptanceOnTx({
         acceptance: turnAcceptance,
@@ -284,12 +293,7 @@ const insertMessages = async ({
       .update(chatThreads)
       .set({
         updatedAt: new Date(),
-        ...(shouldMarkThreadUsedAnonymization({
-          messages,
-          sendMode: acceptedSendMode,
-        })
-          ? { usedAnonymization: true }
-          : {}),
+        ...(marksUsedAnonymization ? { usedAnonymization: true } : {}),
       })
       .where(eq(chatThreads.id, threadId));
 
@@ -865,7 +869,14 @@ const runPersistMessage = async ({
   }
 
   if (persistencePlan.type === "update") {
+    const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+      messages: [persistencePlan.message],
+      sendMode: acceptedSendMode,
+    });
     const updateResult = await safeDb(async (tx) => {
+      if (marksUsedAnonymization) {
+        await lockThreadStoredContentTransitionOnTx(tx, threadId);
+      }
       if (
         !(await reserveChatTurnAcceptanceOnTx({
           acceptance: turnAcceptance,
@@ -935,12 +946,7 @@ const runPersistMessage = async ({
         .update(chatThreads)
         .set({
           updatedAt: new Date(),
-          ...(shouldMarkThreadUsedAnonymization({
-            messages: [persistencePlan.message],
-            sendMode: acceptedSendMode,
-          })
-            ? { usedAnonymization: true }
-            : {}),
+          ...(marksUsedAnonymization ? { usedAnonymization: true } : {}),
         })
         .where(eq(chatThreads.id, threadId));
 
@@ -987,6 +993,9 @@ const runPersistMessage = async ({
       return Result.ok(NO_TURN_WRITES);
     }
     const turnResult = await safeDb(async (tx) => {
+      if (marksUsedAnonymization) {
+        await lockThreadStoredContentTransitionOnTx(tx, threadId);
+      }
       if (
         !(await reserveChatTurnAcceptanceOnTx({
           acceptance: turnAcceptance,
@@ -1029,7 +1038,14 @@ const runPersistMessage = async ({
     );
   }
 
+  const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+    messages: [persistencePlan.insertMessage],
+    sendMode: acceptedSendMode,
+  });
   const replaceResult = await safeDb(async (tx) => {
+    if (marksUsedAnonymization) {
+      await lockThreadStoredContentTransitionOnTx(tx, threadId);
+    }
     if (
       !(await reserveChatTurnAcceptanceOnTx({
         acceptance: turnAcceptance,
@@ -1089,12 +1105,7 @@ const runPersistMessage = async ({
       .update(chatThreads)
       .set({
         updatedAt: new Date(),
-        ...(shouldMarkThreadUsedAnonymization({
-          messages: [insertedMessage],
-          sendMode: acceptedSendMode,
-        })
-          ? { usedAnonymization: true }
-          : {}),
+        ...(marksUsedAnonymization ? { usedAnonymization: true } : {}),
       })
       .where(eq(chatThreads.id, threadId));
     await recordAuditEvent(tx, {
