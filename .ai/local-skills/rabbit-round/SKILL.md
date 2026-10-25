@@ -24,7 +24,7 @@ mutation on another.
 This workflow never posts GitHub comments, review-thread replies, or reviews.
 Every handled finding is recorded in the PR body (Section 4); the only thread
 mutation it performs is resolving a bot-only thread once its disposition is
-recorded.
+recorded and that disposition's prerequisite holds.
 
 Fetch paginated review threads through GitHub GraphQL so unresolved state and
 every comment in a thread are preserved. Fetch top-level issue comments
@@ -87,12 +87,18 @@ Refetch the PR body immediately before editing it and change only the
 dispositions section, so concurrent edits to the rest of the body survive. Do not
 claim a check passed unless it ran successfully on the reported head.
 
-Resolve a review thread only after its fix is on the current head and its PR
-body entry is recorded. Refetch the thread first and triage any new bot finding in it. Resolve it
-only when every participant is a confirmed allowed bot and the finding is
-implemented, already addressed, answered with supported pushback, or deferred to
-a named follow-up PR. Any human, unknown, mixed-participant, or uncertain
-participant leaves the thread open. Top-level bot comments have no resolution
+Resolve a review thread only once its PR body entry is recorded and the
+disposition's own prerequisite holds:
+
+- implemented (with or without an adjustment): the fix commit is on the current
+  head
+- already addressed: the code or commit that proves it is on the current head
+- pushback: its evidence is recorded in the PR body
+- deferred: the named follow-up PR exists and is linked in the PR body
+
+Refetch the thread first and triage any new bot finding in it. In every case,
+resolve it only when every participant is a confirmed allowed bot; any human,
+unknown, mixed-participant, or uncertain participant leaves the thread open. Top-level bot comments have no resolution
 state: the PR body entry is the whole disposition there. Do not minimize bot
 summaries by default.
 
