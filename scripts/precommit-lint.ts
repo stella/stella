@@ -4,7 +4,7 @@
  * Lint autofixes are code changes, and some change behaviour, so they never
  * reach a commit unseen. The hook runs the fix pass, and when it would change
  * a staged file it prints the change, restores the file and fails. Nothing is
- * left modified for another step's `stage_fixed` to sweep into the commit, so
+ * left modified for a later `git add` to sweep into the commit, so
  * a fix pass can neither rewrite code behind a passing hook nor turn a commit
  * empty. Apply the fixes deliberately with `--apply`, review `git diff`, stage
  * and commit again.
