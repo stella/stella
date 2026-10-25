@@ -225,8 +225,9 @@ describe("native redirect URI exceptions", () => {
   )("%s is pinned by its client's registration fixture", (_client, entry) => {
     const pinned = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).some(
       (fixture) =>
-        fixture.client === entry.client &&
+        // Origin first: matching the client narrows the fixture union.
         fixture.origin !== "synthetic" &&
+        fixture.client === entry.client &&
         v
           .parse(v.array(v.string()), fixture.body.redirect_uris)
           .includes(entry.redirectUri),
