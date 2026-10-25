@@ -282,23 +282,22 @@ export const DECISION_DOCKET_IDENTITY_FIXTURES = {
     },
     generated: {
       dockets: fc.oneof(
-        withWritten(
-          fc
-            .tuple(
-              fc.constantFrom("RE", "ARE", "ADI", "HC", "REsp", "AREsp"),
-              fc.integer({ min: 1, max: 99_999_999 }),
-            )
-            .map(([className, number]) => `${className} ${String(number)}`),
-          (filed) => {
-            const [className = "", number = ""] = filed.split(" ");
-            const dotted = Number(number).toLocaleString("pt-BR");
-            return fc.constantFrom(
-              filed,
-              `${className} ${dotted}`,
-              `${className.toLowerCase()} ${dotted}/SP`,
-            );
-          },
-        ),
+        fc
+          .tuple(
+            fc.constantFrom("RE", "ARE", "ADI", "HC", "REsp", "AREsp"),
+            fc.integer({ min: 1, max: 99_999_999 }),
+          )
+          .chain(([className, number]) => {
+            const filed = `${className} ${String(number)}`;
+            const dotted = number.toLocaleString("pt-BR");
+            return fc
+              .constantFrom(
+                filed,
+                `${className} ${dotted}`,
+                `${className.toLowerCase()} ${dotted}/SP`,
+              )
+              .map((written) => ({ filed, written, partSibling: KEYED }));
+          }),
         withWritten(
           fc
             .tuple(
