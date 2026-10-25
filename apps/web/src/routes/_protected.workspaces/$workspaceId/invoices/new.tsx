@@ -11,12 +11,14 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { usePermissions } from "@/hooks/use-permissions";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { detached } from "@/lib/detached";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { invoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { InvoiceComposer } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer";
+import { prefetchPendingApprovals } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/new-invoice-loader";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices/new",
@@ -37,31 +39,19 @@ export const Route = createFileRoute(
     }
   },
   loader: async ({ context, params }) => {
-    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
-    const canApprove = authClient.organization.checkRolePermission({
-      role,
-      permissions: { timeEntry: ["approve"] },
-    });
-    await Promise.all([
-      ensureRouteQueryData(
-        context.queryClient,
-        invoicePrefillOptions(params.workspaceId),
-      ),
-      ...(canApprove
-        ? [
-            ensureRouteQueryData(
-              context.queryClient,
-              timeEntriesOptions(params.workspaceId, context.user.id, {
-                status: "draft",
-              }),
-            ),
-            ensureRouteQueryData(
-              context.queryClient,
-              expensesOptions(params.workspaceId, { status: "draft" }),
-            ),
-          ]
-        : []),
-    ]);
+    // A hint only: never awaited, so a failed count cannot block the route.
+    detached(
+      prefetchPendingApprovals({
+        queryClient: context.queryClient,
+        userId: context.user.id,
+        workspaceId: params.workspaceId,
+      }),
+      "invoice-composer.prefetch-pending-approvals",
+    );
+    await ensureRouteQueryData(
+      context.queryClient,
+      invoicePrefillOptions(params.workspaceId),
+    );
   },
   pendingComponent: NewInvoicePending,
   component: NewInvoicePage,
