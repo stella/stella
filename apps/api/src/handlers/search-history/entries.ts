@@ -213,10 +213,11 @@ const pathCountry = (segment: string): CaseLawJurisdiction | null => {
 /**
  * The entry as stored, the jurisdiction it was recorded under, and the text
  * its repeats are matched on. A query is matched case- and
- * spacing-insensitively within its jurisdiction, so "Náhrada  škody" and
- * "náhrada škody" are one entry; an opened document is matched on its
- * identifier. `null` when the entry is not one the law pages could have
- * recorded.
+ * spacing-insensitively, so "Náhrada  škody" and "náhrada škody" are one
+ * entry; an opened document is matched on its identifier. The jurisdiction
+ * is not part of the match: it files the entry, and a deletion recorded under
+ * the match holds whichever jurisdiction a later import names. `null` when
+ * the entry is not one the law pages could have recorded.
  */
 export const canonicalSearchHistoryEntry = (
   entry: SearchHistoryEntryInput,
@@ -231,16 +232,11 @@ export const canonicalSearchHistoryEntry = (
       if (query.length === 0) {
         return null;
       }
-      const match = searchHistoryEntryMatch(entry);
-      if (entry.country === undefined) {
-        // An imported query without a jurisdiction keeps the key it was
-        // first stored under, so a repeated import converges on its row.
-        return { entry: { kind: "search", query }, country: null, match };
-      }
       return {
-        entry: { kind: "search", query, country: entry.country },
-        country: entry.country,
-        match: `${entry.country}\u0000${match}`,
+        entry: { kind: "search", query },
+        // An imported query from before jurisdictions has none.
+        country: entry.country ?? null,
+        match: searchHistoryEntryMatch(entry),
       };
     }
     case "decision":
@@ -356,7 +352,11 @@ const prepareUses = async (
     const isLatest = use.usedAt >= previous.lastUsedAt;
     prepared.set(mapKey, {
       kind: previous.kind,
-      country: isLatest ? canonical.country : previous.country,
+      // The latest use files the entry; a use without a jurisdiction never
+      // unfiles one.
+      country: isLatest
+        ? (canonical.country ?? previous.country)
+        : (previous.country ?? canonical.country),
       lookupKey,
       entry: isLatest ? canonical.entry : previous.entry,
       firstUsedAt:
@@ -604,7 +604,7 @@ export const upsertSearchHistoryRows = async ({
               table.lookupKey,
             ],
             set: {
-              country: sql`CASE WHEN ${incomingIsLatest} THEN excluded.country ELSE ${table.country} END`,
+              country: sql`CASE WHEN ${incomingIsLatest} THEN COALESCE(excluded.country, ${table.country}) ELSE COALESCE(${table.country}, excluded.country) END`,
               courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
               ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
               iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,

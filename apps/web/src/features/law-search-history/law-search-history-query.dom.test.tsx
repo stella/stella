@@ -44,6 +44,7 @@ test("server history stays visible while a local import recovers", async () => {
   const recovery = Promise.withResolvers<undefined>();
   const importBodies: unknown[] = [];
   let imported = false;
+  const listReads: { country: string | null; imported: boolean }[] = [];
   let clockRequests = 0;
   const clockSource = spyOn(Temporal.Now, "instant").mockImplementation(() =>
     Temporal.Instant.from("2026-01-01T12:00:00Z").add({
@@ -80,18 +81,29 @@ test("server history stays visible while a local import recovers", async () => {
           imported = true;
           return Response.json({ entries: 2, skipped: 0, rejected: 0 });
         }
+        // Browser history predates jurisdictions, so its import is stored
+        // without one and, as the API does, a country filter leaves it out.
+        const country = url.searchParams.get("country");
+        listReads.push({ country, imported });
         return Response.json({
-          items: (imported
-            ? ["Saved query", "Local query", "Earlier query"]
-            : ["Saved query"]
-          ).map((query, index) => ({
-            id: `history-${index}`,
-            kind: "search",
-            query,
-            firstUsedAt: "2026-01-01T12:00:00Z",
-            lastUsedAt: "2026-01-01T12:00:00Z",
-            useCount: 1,
-          })),
+          items: [
+            { query: "Saved query", country: "CZE" },
+            ...(imported
+              ? [
+                  { query: "Local query", country: null },
+                  { query: "Earlier query", country: null },
+                ]
+              : []),
+          ]
+            .filter((item) => country === null || item.country === country)
+            .map((item, index) => ({
+              id: `history-${index}`,
+              kind: "search",
+              ...item,
+              firstUsedAt: "2026-01-01T12:00:00Z",
+              lastUsedAt: "2026-01-01T12:00:00Z",
+              useCount: 1,
+            })),
           nextCursor: null,
           scope: {
             userId: MEMBER_SESSION.user.id,
@@ -141,16 +153,15 @@ test("server history stays visible while a local import recovers", async () => {
     });
     await act(async () => recovery.resolve(undefined));
     await waitFor(() => {
-      expect(result.current.list).toMatchObject({
-        status: "ready",
-        entries: [
-          { query: "Saved query" },
-          { query: "Local query" },
-          { query: "Earlier query" },
-        ],
-      });
       expect(storage.getItem(scopedKey)).toBeNull();
       expect(storage.getItem(LAW_HISTORY_STORAGE_KEY)).toBeNull();
+      expect(listReads.some((read) => read.imported)).toBe(true);
+    });
+    // The list reread after the import asks for the selected country only.
+    expect(listReads.every(({ country }) => country === "CZE")).toBe(true);
+    expect(result.current.list).toMatchObject({
+      status: "ready",
+      entries: [{ query: "Saved query" }],
     });
   } finally {
     recovery.resolve(undefined);

@@ -455,13 +455,22 @@ if (!databaseUrl || !enabled) {
                     entry: { kind: "search", query: "  NÁHRADA\t škody  " },
                     usedAt: "2020-01-01T00:00:00Z",
                   },
+                  {
+                    entry: {
+                      kind: "search",
+                      query: "náhrada škody",
+                      country: "POL",
+                    },
+                    usedAt: "2020-01-02T00:00:00Z",
+                  },
                 ],
               },
             },
           ),
         );
 
-        expect(imported).toEqual({ entries: 0, skipped: 1, rejected: 0 });
+        // The deletion holds whichever jurisdiction, or none, an import names.
+        expect(imported).toEqual({ entries: 0, skipped: 2, rejected: 0 });
         expect((await readHistory(fixture)).items).toEqual([]);
         const scopedEntries = await fixture.db
           .select()
@@ -865,9 +874,11 @@ if (!databaseUrl || !enabled) {
 
     test("entries keep their jurisdiction and a country filter lists only its own", async () => {
       await withHistory(databaseUrl, async (fixture) => {
-        const czechQuery = await recordQuery(fixture, "Náhrada škody", "CZE");
+        const refiled = await recordQuery(fixture, "Náhrada škody", "CZE");
+        const czechQuery = await recordQuery(fixture, "Zástavní právo", "CZE");
+        // One query is one entry: the latest jurisdiction it ran under files it.
         const polishQuery = await recordQuery(fixture, "náhrada  škody", "POL");
-        expect(polishQuery.id).not.toBe(czechQuery.id);
+        expect(polishQuery.id).toBe(refiled.id);
         const polishDecision = await recordEntry(fixture, {
           kind: "decision",
           documentId: "01a16610-b177-712f-bff9-4732ef2df307",
@@ -877,6 +888,11 @@ if (!databaseUrl || !enabled) {
         const legacyRows = await prepareSearchHistoryRows(fixture, [
           {
             entry: { kind: "search", query: "kept before countries" },
+            usedAt: new Date(NOW.getTime() - 60_000),
+          },
+          {
+            // A use kept before jurisdictions never unfiles its entry.
+            entry: { kind: "search", query: "NÁHRADA škody" },
             usedAt: new Date(NOW.getTime() - 60_000),
           },
         ]);
@@ -900,6 +916,9 @@ if (!databaseUrl || !enabled) {
         expect(new Set(polish.items.map(({ id }) => id))).toEqual(
           new Set([polishQuery.id, polishDecision.id]),
         );
+        expect(
+          polish.items.find(({ id }) => id === polishQuery.id),
+        ).toMatchObject({ useCount: 2 });
         expect(polish.items.every(({ country }) => country === "POL")).toBe(
           true,
         );
