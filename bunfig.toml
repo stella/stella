@@ -89,6 +89,7 @@ minimumReleaseAgeExcludes = [
   "@stll/stdnum-win32-x64-msvc", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
   "@stll/text-search", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
   "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/utf8-boundaries", # quarantine-excluded-since: 2026-10-25T18:26:59.000Z
 ]
 
 [fmt]
