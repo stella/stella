@@ -26,6 +26,7 @@ import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type {
   Block,
   DocumentAst,
@@ -320,13 +321,20 @@ const cellOf = (cell: Element): TableCell => {
     });
   }
   const trimmed = trimRuns(singleBreaks(runs));
-  const colSpan = Number(cell.attribs["colspan"] ?? "1");
-  const rowSpan = Number(cell.attribs["rowspan"] ?? "1");
+  // A span of one, or one the markup does not state as a whole number, is
+  // no span.
+  const spanOf = (attribute: string) =>
+    parseIntegerToken(cell.attribs[attribute], {
+      sign: "unsigned",
+      min: 2,
+    }).unwrapOr(undefined);
+  const colSpan = spanOf("colspan");
+  const rowSpan = spanOf("rowspan");
   return {
     inlines: trimmed.map(inlineOfRun),
     plainText: plainTextOfRuns(trimmed),
-    ...(Number.isInteger(colSpan) && colSpan >= 2 ? { colSpan } : {}),
-    ...(Number.isInteger(rowSpan) && rowSpan >= 2 ? { rowSpan } : {}),
+    ...(colSpan === undefined ? {} : { colSpan }),
+    ...(rowSpan === undefined ? {} : { rowSpan }),
     ...(cell.tagName.toLowerCase() === "th" ? { header: true as const } : {}),
   };
 };

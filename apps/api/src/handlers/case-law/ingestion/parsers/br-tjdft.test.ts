@@ -219,6 +219,21 @@ describe("markup the parser does not classify", () => {
   });
 });
 
+describe("a table cell's span", () => {
+  test("is kept when the markup states a whole number above one", () => {
+    const { documentAst } = parse({
+      type: "html",
+      text: "<table><tr><td colspan='2'>Órgão julgador</td></tr><tr><td colspan='1'>Turma</td><td colspan='x'>Cível</td></tr></table>",
+    });
+    const [table] = documentAst.blocks;
+    expect(
+      table?.type === "table"
+        ? table.rows.map((cells) => cells.map(({ colSpan }) => colSpan))
+        : [],
+    ).toEqual([[2], [undefined, undefined]]);
+  });
+});
+
 describe("a table's caption", () => {
   test("is kept, before the rows it names", () => {
     const { fulltext } = parse({
