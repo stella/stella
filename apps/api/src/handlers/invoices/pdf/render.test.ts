@@ -158,6 +158,15 @@ describe("invoice PDF", () => {
     expect(flat).toContain("Reference: 0987654321");
   });
 
+  test("prints an unassigned country code as stored, not as an unknown region", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: { ...options.invoice, buyerCountry: "ZZ" },
+    });
+    expect(text).toContain("ZZ");
+    expect(text).not.toMatch(/neznám/iu);
+  });
+
   test("prints a quantity a double cannot hold exactly as it is stored", async () => {
     const { text } = await textOf({
       ...options,

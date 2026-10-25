@@ -123,8 +123,8 @@
     ..data.totals.breakdown.map(b => (
       text(fill: muted, b.label), text(fill: muted, b.net), text(fill: muted, b.vat),
     )).flatten(),
-    // A single rate is its own sum; the summed row only adds information for several.
-    ..if data.totals.breakdown.len() > 1 {
+    // A single rate is its own sum; with none or several, the summed row carries the totals.
+    ..if data.totals.breakdown.len() != 1 {
       (
         grid.hline(stroke: 0.4pt + rule),
         text(weight: "semibold", data.labels.total),

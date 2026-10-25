@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { encode } from "uqr";
 
+import { isCountryCode } from "@stll/country-codes";
 import {
   INVOICE_COUNTRY_PROFILES,
   INVOICE_PDF_LABELS,
@@ -120,12 +121,11 @@ export const qrSvg = (payload: string, ecc: "L" | "M" = "M") => {
 
 /** The country's name in the invoice language; an unknown code prints as stored. */
 const countryName = (code: string | null, lang: string) => {
-  // The column is free text; only an ISO 3166 alpha-2 code has a display name.
-  if (code === null || !/^[A-Z]{2}$/u.test(code)) {
+  // The column is free text; only an assigned ISO 3166 code has a display name.
+  if (code === null || !isCountryCode(code)) {
     return code;
   }
-  const name = new Intl.DisplayNames([lang], { type: "region" }).of(code);
-  return name === undefined || name === code ? code : name;
+  return new Intl.DisplayNames([lang], { type: "region" }).of(code) ?? code;
 };
 
 type PartyOptions = {
