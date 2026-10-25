@@ -8,7 +8,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });

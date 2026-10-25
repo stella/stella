@@ -16,7 +16,6 @@ import {
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import type { GatewayDispatchResult } from "@/api/mcp/gateway/dispatch-call";
 import { gatewayLoadErrorResult } from "@/api/mcp/gateway/external-tools";
@@ -43,6 +42,7 @@ import {
   handleMcpToolCall,
   listMcpTools,
 } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -58,7 +58,7 @@ true satisfies {
   : true;
 const MATTER_ID = "00000000-0000-4000-8000-0000000a0001";
 const contextFor = () =>
-  asTestRaw<McpRequestContext>({
+  asTestRaw<AuthorizedMcpRequestContext>({
     organizationId: "private-organization-37a9",
     userId: "private-user-37a9",
     userEmail: "private-member@example.test",

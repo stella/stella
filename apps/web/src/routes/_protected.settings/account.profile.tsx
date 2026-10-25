@@ -64,7 +64,7 @@ import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -262,7 +262,7 @@ function ProfilePageBody() {
     mutationFn: async () => {
       setOtpError(null);
       const res = await api.me.delete["send-otp"].post();
-      return unwrapEden(res);
+      return unwrapApiResponse(res);
     },
     onSuccess: () => {
       setStep("otp");
@@ -289,7 +289,7 @@ function ProfilePageBody() {
       // Named before the delete: afterwards the session may name no one.
       const deletedUserId = authenticatedUser.id;
       const res = await api.me.delete.verify.post(payload);
-      unwrapEden(res);
+      unwrapApiResponse(res);
       return { deletedUserId };
     },
     onSuccess: async ({ deletedUserId }) => {

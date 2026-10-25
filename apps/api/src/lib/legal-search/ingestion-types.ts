@@ -70,11 +70,34 @@ import { isRecord } from "@/api/lib/type-guards";
 export { EMPTY_AST };
 export type { EmptyAst };
 
-/** A judge as one decision names them, before the roster is consulted. */
-export type DecisionJudgeInput = {
+/**
+ * A judge the source names in the form a reader sees, titles removed.
+ *
+ * Each variant rules out the other's name field, so a reader of either
+ * spelling (`judge.czechDeclinedName !== undefined`) tells them apart, and a
+ * consumer that only reads printed names still compiles against both.
+ */
+export type PrintedDecisionJudge = {
   role: DecisionJudgeRole;
   nameAsPrinted: string;
+  czechDeclinedName?: never;
 };
+
+/**
+ * A judge a Czech text names inside a sentence, in the case its grammar asks
+ * for ("z předsedy Jana Svatoně"). The declined form is never shown: the row
+ * is written only when the court's roster names exactly one person it can be,
+ * and then under that person's own name.
+ */
+export type CzechDeclinedDecisionJudge = {
+  role: DecisionJudgeRole;
+  czechDeclinedName: string;
+  nameAsPrinted?: never;
+};
+
+/** A judge as one decision names them, before the roster is consulted. */
+export type DecisionJudgeInput =
+  PrintedDecisionJudge | CzechDeclinedDecisionJudge;
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -276,9 +299,18 @@ type PlainTextResultFields = {
   decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
   judges?:
-    | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
-        nameAsPrinted: PlainText;
-      })[]
+    | readonly (
+        | {
+            role: DecisionJudgeRole;
+            nameAsPrinted: PlainText;
+            czechDeclinedName?: never;
+          }
+        | {
+            role: DecisionJudgeRole;
+            czechDeclinedName: PlainText;
+            nameAsPrinted?: never;
+          }
+      )[]
     | undefined;
   textFields: Readonly<
     Record<
@@ -421,11 +453,16 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
         raw.judges === undefined
           ? undefined
           : yield* Result.all(
-              raw.judges.map(({ role, nameAsPrinted }) =>
-                toPlainText(nameAsPrinted).map((plain) => ({
-                  role,
-                  nameAsPrinted: plain,
-                })),
+              raw.judges.map((judge) =>
+                judge.czechDeclinedName !== undefined
+                  ? toPlainText(judge.czechDeclinedName).map((plain) => ({
+                      role: judge.role,
+                      czechDeclinedName: plain,
+                    }))
+                  : toPlainText(judge.nameAsPrinted).map((plain) => ({
+                      role: judge.role,
+                      nameAsPrinted: plain,
+                    })),
               ),
             ),
       textFields: {

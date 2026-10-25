@@ -23,7 +23,11 @@ import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";
 import { fetchSession } from "@/lib/auth-queries";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import {
+  APIError,
+  shouldRetryAPIRequest,
+  unwrapApiResponse,
+} from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { migrateLocalLawHistory } from "@/lib/law-search-history/law-search-history-import.logic";
@@ -115,12 +119,12 @@ const importLocalLawHistory = async ({
     userKey: scopedKey,
     canRemove: () => !signal.aborted && isCurrentScope(),
     importEntries: async (entries) => {
-      const clock = unwrapEden(
+      const clock = unwrapApiResponse(
         await api["search-history"]["import-clock"].get(
           historyMutationRequest(scope, signal),
         ),
       );
-      unwrapEden(
+      unwrapApiResponse(
         await api["search-history"].import.post(
           {
             entries,
@@ -268,10 +272,10 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
   const request = historyMutationRequest(write.scope);
   switch (write.type) {
     case "record":
-      unwrapEden(await api["search-history"].post(write.entry, request));
+      unwrapApiResponse(await api["search-history"].post(write.entry, request));
       return;
     case "remove":
-      unwrapEden(
+      unwrapApiResponse(
         await api["search-history"]({ entryId: write.entry.id }).delete(
           {},
           request,
@@ -279,7 +283,7 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
       );
       return;
     case "clear":
-      unwrapEden(await api["search-history"].delete({}, request));
+      unwrapApiResponse(await api["search-history"].delete({}, request));
       return;
     default:
       write satisfies never;
@@ -316,7 +320,7 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
         organizationId: scope.organizationId,
       };
       const readPage = async () =>
-        unwrapEden(
+        unwrapApiResponse(
           await api["search-history"].get({
             query:
               filter === "all"

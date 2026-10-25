@@ -693,5 +693,8 @@ export const lintRuleAcrossFiles = async (
     }
     lines.push(line);
   }
+  for (const lines of Object.values(linesByFile)) {
+    recordCoverage(`${plugin}/${ruleName}`, lines);
+  }
   return linesByFile;
 };

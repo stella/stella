@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import {
@@ -75,7 +75,6 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
   COMPARE_DOCUMENTS_TOOL_DEFINITION,
@@ -151,6 +150,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -844,7 +844,7 @@ const loadVersionHistory = async ({
   entityId,
   cursor,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   cursor: string | undefined;
@@ -1013,7 +1013,7 @@ const loadDocumentProcessingStates = async ({
   entityId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   current: CurrentDocumentForState;
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1730,7 +1730,7 @@ const createDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -1789,7 +1789,7 @@ const validateUpdateDocumentTargets = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | undefined;
   versionId: SafeId<"entityVersion"> | undefined;
@@ -1841,7 +1841,7 @@ const applyVersionAnnotations = async ({
   versionId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   description: string | null | undefined;
   entityId: SafeId<"entity">;
   label: string | null | undefined;
@@ -1889,7 +1889,7 @@ const updateDocumentEntity = async ({
   context,
   input,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   input: SaveDocumentInput;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_DOCUMENT_PROJECTION>>
@@ -2298,7 +2298,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.nullable(vApiDate),
+      v.nullable(apiDateSchema),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
   }),
@@ -2449,6 +2449,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The mode/parent_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2482,6 +2483,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2577,6 +2579,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "upload/version tools replace only a document's primary file.",
     inputSchema: listPropertiesArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2588,13 +2591,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Set a document's value for a property (a cell in the matter's table). " +
-      "Pass the document entity_id, the property_id (from list_properties), and " +
-      "a content object whose 'type' matches the property's value type: text " +
-      "(value: string), single-select (value: string or null), multi-select " +
-      "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
-      "(value: integer, optional currency: 3-letter ISO code). An empty value " +
-      "clears the cell.",
+      "Set a document property cell. Pass entity_id, property_id from " +
+      "list_properties, and content matching the property's type: 'text' string; " +
+      "'single-select' string or null; 'multi-select' string array; 'date' ISO value " +
+      "or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     inputSchema: setFieldValueArgsSchema,
     // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on

@@ -2,7 +2,6 @@ import { defaultKeyHasher } from "@better-auth/api-key";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import Elysia from "elysia";
 import {
   calculateJwkThumbprint,
   decodeJwt,
@@ -21,11 +20,15 @@ import { auditLogs } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import { env } from "@/api/env";
 import renewDesktopAccount from "@/api/handlers/desktop-registry/renew";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
@@ -289,12 +292,13 @@ describe.skipIf(!postgresEnabled)(
             .where(eq(apikey.referenceId, userId));
           expect(before).toHaveLength(1);
           request.headers.set("DPoP", invalid);
-          const app = new Elysia().post(
-            "/renew",
-            renewDesktopAccount.handler,
-            renewDesktopAccount.config,
+          await using server = serveForTest(
+            createHttpApp({
+              middleware: [errorBoundary],
+              routes: routes({ "/renew": { POST: renewDesktopAccount } }),
+            }),
           );
-          const response = await app.handle(request);
+          const response = await server.fetch(request);
           expect(response.status).toBe(401);
           expect(await response.json()).toMatchObject({
             code: "desktop_proof_invalid",

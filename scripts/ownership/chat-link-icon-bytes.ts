@@ -7,14 +7,19 @@ export default {
   summary:
     "The web adapter deduplicates authenticated requests by hostname. Visible reply links retry temporary responses with bounded backoff and retain local blob URLs until disposal; composer and restricted hosts keep bundled icons.",
   enforcement: {
-    kind: "import",
-    specifiers: ["@/lib/api", "@/lib/eden-client"],
-    names: ["linkIconsApi"],
+    // The browser reaches the icons through the `link-icons` path segment of
+    // the API client (`api.chat["link-icons"]`).
+    kind: "literal-pattern",
+    pattern: "^link-icons$",
     allowed: [
       {
-        path: "apps/web/src/lib/api.ts",
+        path: "apps/api/src/handlers/chat/link-icons/",
         reason:
-          "The canonical API import surface re-exports the configured Eden icon client.",
+          "The API's icon cache names its own coordination scope, not a client path.",
+      },
+      {
+        path: "apps/api/src/lib/redis-keys.ts",
+        reason: "The key registry lists the icon cache's scope.",
       },
     ],
   },

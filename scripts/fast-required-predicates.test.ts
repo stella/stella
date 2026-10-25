@@ -66,7 +66,7 @@ describe("fast-required predicates", () => {
     const outputs = new Map(
       fastRequiredJobs(CI_YML).map(({ job: id, output }) => [id, output]),
     );
-    expect(outputs.get("web-build")).toBe("browser_spec_selection_required");
+    expect(outputs.get("web-build")).toBe("web_build_pr_required");
     expect(outputs.get("ci-quick-checks")).toBeNull();
     expect(outputs.get("ci-tests")).toBe("ci_tests_required");
   });

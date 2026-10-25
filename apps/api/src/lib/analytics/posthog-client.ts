@@ -23,8 +23,8 @@ import type {
 } from "@/api/lib/analytics/server-analytics";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { postToOperatorEndpoint } from "@/api/lib/observability/operator-endpoint-fetch";
 import { RELEASE_VERSION_PROPERTY } from "@/api/lib/observability/release-failure-contract";
-import { postToOperatorEndpoint } from "@/api/lib/operator-endpoint-fetch";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 /** Library stamp on every event, in place of the SDK's own. */

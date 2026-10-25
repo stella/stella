@@ -20,8 +20,8 @@
 //     shape. The `new *Command(...)` argument is required, so an unrelated
 //     `transport.send(message)` stays out of scope.
 //   - A method call on a binding imported from `@aws-sdk/*`,
-//     `@stll/api-client`, or the Eden client (`@/lib/eden-client` and its
-//     `@/lib/api` barrel, which export `api` / `memoriesApi`), e.g.
+//     `@stll/api-client`, or the browser client (`@/lib/api`, which exports
+//     `api` and `apiClient`), e.g.
 //     `await api.documents({ id }).get()`. Computed access is traversed, so a
 //     generated hyphenated route (`api["copy-to-workspace"].post(...)`) still
 //     resolves to the imported client.
@@ -91,17 +91,13 @@ const FUNCTION_TYPES = new Set([
 const FETCH_MODULES = new Set([
   "@stll/fetch",
   "@/api/lib/safe-outbound-fetch",
-  "@/api/lib/operator-endpoint-fetch",
+  "@/api/lib/observability/operator-endpoint-fetch",
   "@/api/lib/redirect-fetch",
 ]);
 
 // Modules whose exported objects are remote clients: any method call on one
 // of their bindings is a round-trip.
-const CLIENT_MODULES = new Set([
-  "@stll/api-client",
-  "@/lib/eden-client",
-  "@/lib/api",
-]);
+const CLIENT_MODULES = new Set(["@stll/api-client", "@/lib/api"]);
 
 const CLIENT_MODULE_PREFIX = "@aws-sdk/";
 

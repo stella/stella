@@ -12,7 +12,7 @@ import { detached } from "@/lib/detached";
 import {
   shouldRetryAPIRequest,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -256,7 +256,7 @@ export const useDuplicateWorkspace = () => {
           includeContent,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(

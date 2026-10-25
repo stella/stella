@@ -1,126 +1,111 @@
 /**
- * Every route mounted under a `:workspaceId` prefix receives `workspaceId` in
- * its params object. A route-level `params` schema that omits it fails
- * validation for every request, before authentication, with a bare
- * "Invalid request".
+ * Every route mounted under a `:workspaceId` segment receives `workspaceId` in
+ * its params. A route-level `params` schema that omits it hands the handler
+ * params without the matter it was authorized for, and a strict schema
+ * refuses every request outright.
  *
  * `WorkspaceHandlerConfig["params"]` closes the class at compile time for
  * anything `createSafeHandler` mounts. This census is the runtime backstop for
- * what that type cannot see: params declared inline on a route or a `.group()`
- * guard, params reaching a route through a macro or a handler the factory does
- * not produce, and any future factory that skips the config type. Discovery
- * matches the `:workspaceId` segment in any route string, so a module that
- * mounts it in a `.group()` rather than its prefix is loaded too. It asserts
- * the invariant (the schema declares `workspaceId`), not the spelling, so a
- * hand-written schema is reported only when it actually drops the property.
+ * what that type cannot see: endpoints defined outside the factory, tables
+ * that mount a handler under a workspace prefix it was not written for, and
+ * any future factory that skips the config type. It reads the composed route
+ * table, so every mount path counts, and it asserts the invariant (the schema
+ * declares `workspaceId`), not the spelling.
  */
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
+import * as v from "valibot";
 
-const handlersDir = path.resolve(import.meta.dir, "../../handlers");
+import { apiRoutes } from "@/api/api-routes";
+import type { RouteEntry } from "@/api/http/route";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const OBJECT_TYPES = new Set([
+  "object",
+  "loose_object",
+  "strict_object",
+  "object_with_rest",
+]);
 
 /**
- * A module mounts the workspace segment either in its own `prefix` or in a
- * `.group("/:workspaceId", ...)` inside it, so discovery matches the segment in
- * any string literal rather than in the prefix alone. Scanning for `new Elysia`
- * keeps the import list to route modules; everything else contributes no routes.
+ * Whether a params schema declares `workspaceId`. A valibot object (piped or
+ * not) names its keys in `entries`; a union declares it only when every
+ * option does. Any other shape cannot be shown to declare it.
  */
-const declaresWorkspaceRoute = (source: string): boolean =>
-  source.includes("new Elysia") && /"[^"]*:workspaceId/u.test(source);
-
-const collectRouteModules = (dir: string): string[] => {
-  const files: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      files.push(...collectRouteModules(full));
-      continue;
-    }
-    if (!entry.endsWith(".ts") || entry.endsWith(".test.ts")) {
-      continue;
-    }
-    if (declaresWorkspaceRoute(readFileSync(full, "utf-8"))) {
-      files.push(full);
-    }
+const declaresWorkspaceId = (schema: unknown): boolean => {
+  if (!isRecord(schema)) {
+    return false;
   }
-  return files;
-};
-
-type RouteRecord = {
-  hooks: unknown;
-  method: string;
-  path: string;
-};
-
-const isRouteRecord = (value: unknown): value is RouteRecord =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof Reflect.get(value, "path") === "string" &&
-  typeof Reflect.get(value, "method") === "string";
-
-const routesOf = (module: Record<string, unknown>): RouteRecord[] => {
-  const routes: RouteRecord[] = [];
-  for (const value of Object.values(module)) {
-    const candidate =
-      typeof value === "object" && value !== null
-        ? Reflect.get(value, "routes")
-        : undefined;
-    if (Array.isArray(candidate)) {
-      routes.push(...candidate.filter(isRouteRecord));
-    }
+  const type = schema["type"];
+  if (typeof type === "string" && OBJECT_TYPES.has(type)) {
+    const entries = schema["entries"];
+    return isRecord(entries) && Object.hasOwn(entries, "workspaceId");
   }
-  return routes;
+  if (type === "union" || type === "variant" || type === "intersect") {
+    const options = schema["options"];
+    return (
+      Array.isArray(options) &&
+      options.length > 0 &&
+      (type === "intersect"
+        ? options.some(declaresWorkspaceId)
+        : options.every(declaresWorkspaceId))
+    );
+  }
+  return false;
 };
 
-const paramsSchemaProperties = (hooks: unknown): unknown => {
-  const params =
-    typeof hooks === "object" && hooks !== null
-      ? Reflect.get(hooks, "params")
-      : undefined;
-  return typeof params === "object" && params !== null
-    ? Reflect.get(params, "properties")
-    : undefined;
-};
+const offenders = (entries: readonly RouteEntry[]): string[] =>
+  entries
+    .filter(
+      ({ path, definition }) =>
+        path.includes(":workspaceId") &&
+        definition.config.params !== undefined &&
+        !declaresWorkspaceId(definition.config.params),
+    )
+    .map(({ method, path }) => `${method} ${path}`);
 
 describe("workspace-prefixed route params", () => {
-  test("the source scan finds both ways a module mounts the segment", () => {
-    const modules = collectRouteModules(handlersDir);
-
-    // Declared in the instance prefix.
-    expect(modules).toContainEqual(
-      path.join(handlersDir, "entities/routes.ts"),
+  test("the route table mounts workspace routes with their own params schemas", () => {
+    const workspaceRoutes = apiRoutes.filter(({ path }) =>
+      path.includes(":workspaceId"),
     );
-    expect(modules).toContainEqual(path.join(handlersDir, "files/routes.ts"));
-
-    // Declared in a `.group("/:workspaceId", ...)` under a prefix that has no
-    // segment of its own; a prefix-only scan never loads this module.
-    expect(modules).toContainEqual(
-      path.join(handlersDir, "workspaces/routes.ts"),
-    );
+    expect(workspaceRoutes.length).toBeGreaterThan(50);
+    // Without schemas to read the census below would pass vacuously.
+    expect(
+      workspaceRoutes.filter(
+        ({ definition }) => definition.config.params !== undefined,
+      ).length,
+    ).toBeGreaterThan(10);
   });
 
-  test("every params schema on a :workspaceId route declares workspaceId", async () => {
-    const offenders: string[] = [];
-    for (const file of collectRouteModules(handlersDir)) {
-      const module: Record<string, unknown> = await import(file);
-      for (const route of routesOf(module)) {
-        if (!route.path.includes(":workspaceId")) {
-          continue;
-        }
-        const properties = paramsSchemaProperties(route.hooks);
-        if (properties === undefined) {
-          continue;
-        }
-        const hasWorkspaceId =
-          typeof properties === "object" &&
-          properties !== null &&
-          "workspaceId" in properties;
-        if (!hasWorkspaceId) {
-          offenders.push(`${route.method} ${route.path}`);
-        }
-      }
-    }
-    expect(offenders).toEqual([]);
+  test("every params schema on a :workspaceId route declares workspaceId", () => {
+    expect(offenders(apiRoutes)).toEqual([]);
+  });
+
+  test("the census reports a params schema that drops workspaceId", () => {
+    const run = async () => "ok";
+    const entry = (
+      path: string,
+      params: NonNullable<RouteEntry["definition"]["config"]["params"]>,
+    ): RouteEntry => ({
+      method: "GET",
+      path,
+      middleware: [],
+      definition: { access: "workspace", config: { params }, run },
+    });
+    expect(
+      offenders([
+        entry(
+          "/v1/files/:workspaceId/:fileId",
+          v.object({ fileId: v.string() }),
+        ),
+        entry(
+          "/v1/files/:workspaceId/:fileId/raw",
+          v.pipe(v.object({ workspaceId: v.string(), fileId: v.string() })),
+        ),
+        entry("/v1/notes/:noteId", v.object({ noteId: v.string() })),
+      ]),
+    ).toEqual(["GET /v1/files/:workspaceId/:fileId"]);
   });
 });

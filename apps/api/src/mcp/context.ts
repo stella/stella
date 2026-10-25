@@ -152,6 +152,11 @@ export type McpOperationDatabaseScope = {
   scopedDb: ScopedDb;
 };
 
+export type McpRequestDataAccess = Pick<
+  McpOperationDatabaseScope,
+  "safeDb" | "scopedDb"
+>;
+
 export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
@@ -337,10 +342,14 @@ export type McpRequestContext = {
    * declared with `withThirdPartyOutbound`.
    */
   thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
-  safeDb: SafeDb;
-  scopedDb: ScopedDb;
   userId: SafeId<"user">;
   userEmail: string;
+};
+
+/** Resources built with the caller context but kept outside its authority. */
+export type McpRequestResources = McpRequestContext & {
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
 };
 
 /**
@@ -348,9 +357,9 @@ export type McpRequestContext = {
  * contexts carry the request needed to rebuild the recorder; chat contexts
  * already receive a recorder whose approval was resolved by the chat gate.
  */
-export const bindApprovedMcpAuditContext = (
-  context: McpRequestContext,
-): McpRequestContext => {
+export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
+  context: TContext,
+): TContext => {
   if (context.request === undefined) {
     return context;
   }
@@ -570,7 +579,7 @@ export const resolveMcpSessionContext = async (
     checkAccountOperation?: typeof checkDemoAccountOperation;
     checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
-): Promise<McpRequestContext> => {
+): Promise<McpRequestResources> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
     userId: session.userId,

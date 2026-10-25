@@ -622,7 +622,7 @@ describe("workspace hygiene", () => {
       rootPackageJson: {
         catalog: {
           oxlint: "1.77.0",
-          typescript: "5.9.3",
+          tsrs: "0.17.0",
         },
         devDependencies: {
           turbo: "2.10.3",
@@ -750,12 +750,12 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "typescript is the root-owned TypeScript 7 compiler; only apps/landing pins its own TypeScript 6 for Astro's checker",
+            "typescript is not a workspace dependency: bun check embeds TypeScript 7 and tsrs serves its compiler API; only apps/landing pins its own TypeScript 6 for Astro's checker",
           path: "apps/web/package.json",
         },
         {
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
           path: "apps/web/package.json",
         },
       ]),
@@ -790,7 +790,7 @@ const createWorkspaceRoot = ({
         ? rootPackageJson["catalog"]
         : {}),
       oxlint: repositoryPackage.catalog.oxlint,
-      typescript: "7.0.2",
+      tsrs: repositoryPackage.catalog.tsrs,
       typescript6: "npm:typescript@6.0.3",
     },
     catalogs: { ts6: { typescript: "6.0.3" } },
@@ -799,7 +799,7 @@ const createWorkspaceRoot = ({
         repositoryPackage.devDependencies["@stll/oxlint-config"],
       typescript6: "catalog:",
       "oxlint-tsgolint": "7.0.2003",
-      typescript: "catalog:",
+      tsrs: "catalog:",
       ...rootDevDependencies,
     },
   };

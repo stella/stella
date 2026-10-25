@@ -3,12 +3,12 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "operator-endpoint-transport",
   capability: "Posting to endpoints the operator configured for the API",
-  owner: ["apps/api/src/lib/operator-endpoint-fetch.ts"],
+  owner: ["apps/api/src/lib/observability/operator-endpoint-fetch.ts"],
   summary:
     "postToOperatorEndpoint skips the address checks that guard request-selected URLs, because an operator's collector may sit on a private network. Only clients whose URL comes from the API environment may call it; each reads status and headers and releases the body unread.",
   enforcement: {
     kind: "import",
-    specifiers: ["@/api/lib/operator-endpoint-fetch"],
+    specifiers: ["@/api/lib/observability/operator-endpoint-fetch"],
     names: ["postToOperatorEndpoint"],
     allowed: [
       {

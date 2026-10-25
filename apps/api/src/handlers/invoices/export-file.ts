@@ -11,6 +11,7 @@ import {
   buildKsefFa3Files,
   buildLedes1998b,
   buildMoneyS3Xml,
+  buildPeppolSkFiles,
   buildPohodaXml,
   buildUblFiles,
 } from "@stll/invoicing";
@@ -35,6 +36,7 @@ export const INVOICE_EXPORT_FORMATS = [
   "flexibee",
   "isdoc",
   "ubl",
+  "peppol_sk",
   "ksef_fa3",
   "eso9",
   "ledes_1998b",
@@ -153,6 +155,12 @@ export const buildInvoiceExportFile = async ({
     }
     case "ubl": {
       const files = buildUblFiles(records);
+      return files.isErr()
+        ? Result.err(files.error)
+        : Result.ok(await documentsFile(files.value, "xml"));
+    }
+    case "peppol_sk": {
+      const files = buildPeppolSkFiles(records);
       return files.isErr()
         ? Result.err(files.error)
         : Result.ok(await documentsFile(files.value, "xml"));

@@ -469,7 +469,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-sqs"],
   },
   {
-    path: "apps/api/src/lib/operator-endpoint-fetch.ts",
+    path: "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Posts analytics batches and log records to the endpoints configured in the API environment.",
@@ -512,7 +512,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason: "Reads and writes objects using configured S3-compatible services.",
     transports: [
-      "module:@stll/fetch",
+      "global:fetch",
       "module:@aws-sdk/client-s3",
       "module:@stll/fetch",
       "module:bun",
@@ -652,7 +652,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason: "Runs an authentication replay against the configured API origin.",
     transports: [
-      "module:@stll/fetch",
+      "global:fetch",
       "module:better-auth",
       "module:better-auth/plugins",
     ],
@@ -1017,6 +1017,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed stella API client; sends each route call to the configured API origin through the caller's fetcher or the global fetch.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/boe/src/client.ts",
     class: "package-owned-client",
     reason:
@@ -1205,6 +1212,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/external-preview/preview.ts",
     reason: "Issues request authority for the external preview routes.",
+  },
+  {
+    path: "apps/api/src/handlers/invoices/transition.ts",
+    reason:
+      "Issues request authority for the official VAT exchange rate an invoice finalize needs.",
   },
   {
     path: "apps/api/src/handlers/legislation/boe/law-structure/get.ts",

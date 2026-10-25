@@ -55,9 +55,9 @@ import type {
 } from "@/api/lib/uploads/file-comparison/deliver-redline";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 import { withTimeout } from "@/api/lib/with-timeout";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { notFoundResult, structuredErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const PREPARE_HINT =
@@ -103,7 +103,7 @@ const DEFAULT_FILE_COMPARISON_RUN_DEPENDENCIES: FileComparisonRunDependencies =
 export type FileComparisonRunOptions = {
   baseTrackedChanges: TrackedChangeDisposition;
   baseUploadId: SafeId<"fileComparisonUpload">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   granularity: CompareGranularity;
   mode: CompareMode;
   outputMode: UploadsOutputMode;
@@ -166,7 +166,7 @@ const discardInput = async ({
   status,
   uploadId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   deleteObject: FileComparisonRunDependencies["deleteObject"];
   signal: AbortSignal;
   status: "consumed" | "failed";
@@ -234,7 +234,7 @@ const loadInput = async ({
   row,
   signal,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: FileComparisonRunDependencies;
   path: string;
   row: InputRow;
@@ -417,7 +417,7 @@ const deliver = async ({
   targetName,
 }: {
   compared: CompareResult;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: FileComparisonRunDependencies;
   outputMode: UploadsOutputMode;
   signal: AbortSignal;
@@ -471,7 +471,7 @@ const recordComparisonAudit = async ({
 }: {
   base: InputRow;
   changeCount: number | null;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   target: InputRow;
 }): Promise<void> => {
   const recorded = await Result.tryPromise(
@@ -508,7 +508,7 @@ const loadInputRows = async ({
   targetUploadId,
 }: {
   baseUploadId: SafeId<"fileComparisonUpload">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   targetUploadId: SafeId<"fileComparisonUpload">;
 }): Promise<Result<InputRow[], unknown>> =>
   await Result.tryPromise(

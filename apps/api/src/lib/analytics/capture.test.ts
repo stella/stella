@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import fc from "fast-check";
 
-import { classifyFailure } from "@stll/errors";
+import {
+  classifyFailure,
+  FAILURE_REASON_GRADE,
+  isFailureReason,
+} from "@stll/errors";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   captureError,
+  captureObservedError,
   captureRequestError,
   resetCaptureWindows,
 } from "@/api/lib/analytics/capture";
@@ -17,10 +22,13 @@ import {
   HandlerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   enrichRequestContext,
   getRequestFailure,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 
@@ -238,14 +246,14 @@ describe("captureError issue grouping", () => {
   test("renders an actionable value from typed failure fields", () => {
     captureError(
       new HandlerError({
-        code: "upstream_unavailable",
+        code: "provider_request_rejected",
         message: "Alex Doe <alex@example.test> privileged document text",
         status: 502,
       }),
     );
 
     expect(firstExceptionValue()).toMatch(
-      /^HandlerError\[upstream_unavailable\] 502 transient at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
+      /^HandlerError\[provider_request_rejected\] 502 tagged_failure defect at apps\/api\/src\/lib\/analytics\/capture\.test\.ts:\d+:\d+$/u,
     );
   });
 
@@ -349,7 +357,7 @@ describe("captureError issue grouping", () => {
         captureError(
           Object.assign(
             new HandlerError({
-              code: "upstream_unavailable",
+              code: "provider_request_rejected",
               message: privateMessage,
               status: 502,
             }),
@@ -368,10 +376,12 @@ describe("captureRequestError organization attribution", () => {
   test("attaches the organization group from the request context", () => {
     const organizationId = "3f6e0a7e-9f6f-4a53-9a3e-2b8f6f0c9d41";
     const request = new Request("https://api.test/internal");
-    initRequestContext(request);
-    enrichRequestContext(request, { organizationId });
+    runWithRequestIdScope(() => {
+      openRequestContext();
+      enrichRequestContext({ organizationId });
 
-    captureRequestError(new Error("boom"), { request });
+      captureRequestError(new Error("boom"), { request });
+    });
 
     // The group is what PostHog's organization breakdown reads; losing it
     // while organization_id survives as a plain property would go unnoticed.
@@ -380,9 +390,11 @@ describe("captureRequestError organization attribution", () => {
 
   test("stays ungrouped without an organization in the request context", () => {
     const request = new Request("https://api.test/internal");
-    initRequestContext(request);
+    runWithRequestIdScope(() => {
+      openRequestContext();
 
-    captureRequestError(new Error("boom"), { request });
+      captureRequestError(new Error("boom"), { request });
+    });
 
     expect(captured.at(0)?.groups).toBeUndefined();
   });
@@ -516,21 +528,49 @@ describe("captureError owned fields", () => {
 
   test("a request capture records its grade on the request", () => {
     const request = new Request("https://api.test/v1/items");
-    initRequestContext(request);
+    const failure = runWithRequestIdScope(() => {
+      openRequestContext();
 
-    captureRequestError(
-      Object.assign(new Error("reset"), { code: "ECONNRESET" }),
-      { request },
-    );
+      captureRequestError(
+        Object.assign(new Error("reset"), { code: "ECONNRESET" }),
+        { request },
+      );
+      return getRequestFailure();
+    });
 
-    expect(getRequestFailure(request)).toEqual({
+    expect(failure).toEqual({
       grade: "transient",
       reason: "network_reset",
       sink: "exception.captured",
     });
-    expect(captured.at(0)?.properties).toMatchObject({
-      "failure.grade": "transient",
-      "failure.reason": "network_reset",
-    });
+    expect(captured).toEqual([]);
   });
+});
+
+describe("exception capture follows the declared grade", () => {
+  const sink = failureSink({ event: "capture.contract", expected: [] });
+  for (const [reason, grade] of Object.entries(FAILURE_REASON_GRADE)) {
+    test(`${reason} uses the same capture policy in shadow and observed paths`, () => {
+      if (!isFailureReason(reason)) {
+        throw new TypeError("Failure policy key must be a declared reason");
+      }
+      const error = classifyFailure(new Error("bounded outcome"), reason);
+      const grading = gradeFailure(readEvidence(error), sink);
+      expect(grading.grade).toBe(grade);
+      const capturePaths = [
+        () => captureError(error),
+        () =>
+          captureRequestError(error, {
+            request: new Request("http://localhost/"),
+          }),
+        () => captureObservedError(error, { observation: grading }),
+      ];
+      for (const capture of capturePaths) {
+        captured.length = 0;
+        resetCaptureWindows();
+        capture();
+        expect(captured).toHaveLength(grade === "defect" ? 1 : 0);
+      }
+    });
+  }
 });

@@ -81,7 +81,6 @@ import type {
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { plainRecord } from "@/api/mcp/input-schemas";
 import {
@@ -124,6 +123,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type KnowledgeToolName =
   | "list_clauses"
@@ -717,7 +717,7 @@ const readClauseDetail = async ({
   versionId,
 }: {
   clauseId: SafeId<"clause">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   versionId: string | undefined;
 }): Promise<
   TypedMcpToolResponse<v.InferInput<typeof LIST_CLAUSES_PROJECTION>>
@@ -1430,7 +1430,7 @@ const readPlaybookDetail = async ({
   context,
   playbookId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   playbookId: SafeId<"playbookDefinition">;
 }): Promise<
   TypedMcpToolResponse<v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>>
@@ -1798,7 +1798,7 @@ const savePlaybookFailureResult = (error: unknown) => {
   return internalFailureResult(error);
 };
 
-const loadOrgSettings = async (context: McpRequestContext) => {
+const loadOrgSettings = async (context: AuthorizedMcpRequestContext) => {
   const reader = {
     organizationId: context.organizationId,
     userId: context.userId,
@@ -1808,7 +1808,7 @@ const loadOrgSettings = async (context: McpRequestContext) => {
 };
 
 type SavePlaybookUpdateFailureOptions = {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   error: unknown;
   playbookId: ReturnType<typeof brandPersistedPlaybookDefinitionId>;
 };
@@ -1845,7 +1845,7 @@ const readSavePlaybookSources = async ({
   positions,
   stored,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   positions: readonly PlaybookPositionInput[];
   stored: readonly Position[];
 }) => {
@@ -1872,7 +1872,7 @@ const readSavePlaybookSources = async ({
 };
 
 /** A playbook save's ask derivations, admitted inside the tool call's action. */
-const playbookDerivationAdmitter = (context: McpRequestContext) =>
+const playbookDerivationAdmitter = (context: AuthorizedMcpRequestContext) =>
   createModelActionAdmitter({
     organizationId: context.organizationId,
     userId: context.userId,
@@ -2243,6 +2243,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2333,6 +2334,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "pagination dependency; it remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2347,16 +2349,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create a review playbook, or add, change, and remove positions in one. " +
-      "Omit playbook_id to create (name required); pass playbook_id and " +
-      "expected_updated_at to update. positions lists only what is added or " +
-      "changed, never the whole playbook: an entry with source_id replaces " +
-      "that stored position whole, an entry without one is added. Entries are " +
-      "checked one by one; a refused entry comes back in issues with the fix " +
-      "and the rest are saved. A saved playbook is a draft that a person " +
-      "approves in the editor before it can run. Returns the playbook id, the " +
-      "updatedAt to pass as the next expected_updated_at, and each written " +
-      "position's sourceId.",
+      "Create a review playbook or change its positions. Omit playbook_id to " +
+      "create (name required); to update, pass it with expected_updated_at. " +
+      "positions is a patch: source_id replaces one position, while no source_id " +
+      "adds one. Invalid entries return in issues; valid entries are saved. The " +
+      "result is a draft for human approval and returns the id, updatedAt for the " +
+      "next update, and written sourceIds.",
     inputSchema: savePlaybookArgsSchema,
     inputNormalization: {
       "scope.perspective": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

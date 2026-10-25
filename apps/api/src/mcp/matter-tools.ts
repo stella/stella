@@ -9,7 +9,7 @@ import {
   resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -93,8 +93,8 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -1114,7 +1114,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1299,7 +1299,7 @@ const resolveTaskWorkspace = async ({
   context,
   taskId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
 }): Promise<ResolvedTask> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -1341,7 +1341,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1350,7 +1350,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1388,7 +1388,7 @@ const readTaskDetail = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }) => {
@@ -1657,7 +1657,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
+          v.nullable(v.pipe(apiDateSchema, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),
@@ -1780,7 +1780,7 @@ const validateLinkTarget = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   linkEntityId: string;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -1842,7 +1842,7 @@ const validateUnlinkTarget = async ({
   unlinkLinkId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   taskId: SafeId<"entity">;
   unlinkLinkId: string;
   workspaceId: SafeId<"workspace">;
@@ -1894,7 +1894,7 @@ const validateSaveTaskTargets = async ({
   taskId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   input: v.InferOutput<typeof saveTaskArgsSchema>;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
@@ -2286,7 +2286,7 @@ const resolveUnlinkWorkspaceContactId = async ({
   workspaceId,
 }: {
   contactId: string | undefined;
-  context: McpRequestContext;
+  context: McpRequestResources;
   workspaceContactId: string | undefined;
   workspaceId: SafeId<"workspace">;
 }): Promise<SafeId<"workspaceContact"> | ReturnType<typeof errorResult>> => {
@@ -2472,6 +2472,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "excluded",
@@ -2561,6 +2562,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
@@ -2575,19 +2577,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Screen a company or person for due diligence. `check` picks the " +
-      "source. A register check returns one outcome: clear, found (adverse " +
-      "records), not-registered (no record; not a clearance), unavailable " +
-      "(no answer: NOT cleared) or not-covered (cannot screen this " +
-      "subject, or needs the tax ID). The sanctions check returns one " +
-      "outcome per list in `lists`, with whether it binds the firm: clear; " +
-      "possible-match (resembling entries with score and conflicting " +
-      "fields; each needs human review, none confirmed); incomplete (only " +
-      "a bounded subset screened, nothing matched: NOT cleared); or " +
-      "unavailable (stale, not loaded, or company name unreadable: NOT " +
-      "cleared, edition not screened). Top level is clear only if every " +
-      "list was fully screened clear. Person matches rest on name and " +
-      "birth date: compare the record first.",
+      "Screen a company or person; `check` selects the source. Register outcomes " +
+      "are clear, found, not-registered (not a clearance), unavailable (not " +
+      "cleared), or not-covered. Sanctions returns each list's firm applicability " +
+      "and outcome: clear, possible-match requiring human review, incomplete " +
+      "(not cleared), or unavailable (not cleared). Only fully screened clear " +
+      "lists produce top-level clear. " +
+      "Verify person matches against name and birth date.",
     inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
@@ -2603,6 +2599,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
@@ -2625,6 +2622,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",

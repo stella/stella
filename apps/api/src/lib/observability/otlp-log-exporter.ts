@@ -18,7 +18,7 @@ import { Result } from "better-result";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
-import { postToOperatorEndpoint } from "@/api/lib/operator-endpoint-fetch";
+import { postToOperatorEndpoint } from "@/api/lib/observability/operator-endpoint-fetch";
 
 /** OTLP severity numbers for the levels the API logger emits. */
 export const LOG_SEVERITY_NUMBER = {

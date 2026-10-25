@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
@@ -14,6 +13,7 @@ import {
   caseLawSources,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -48,14 +48,19 @@ const SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT =
   1;
 const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
-export const sitemapShardDecisionsQuerySchema = t.Object({
-  country: t.String({ pattern: SITEMAP_COUNTRY_PATTERN }),
-  year: t.String({ pattern: SITEMAP_YEAR_PATTERN }),
-  month: t.String({ pattern: SITEMAP_MONTH_PATTERN }),
-  bucket: t.Optional(t.String({ pattern: SITEMAP_BUCKET_PATTERN })),
+export const sitemapShardDecisionsQuerySchema = v.object({
+  country: v.pipe(
+    v.string(),
+    v.regex(new RegExp(SITEMAP_COUNTRY_PATTERN, "u")),
+  ),
+  year: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_YEAR_PATTERN, "u"))),
+  month: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_MONTH_PATTERN, "u"))),
+  bucket: v.optional(
+    v.pipe(v.string(), v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u"))),
+  ),
 });
 
-type SitemapShardDecisionsQuery = Static<
+type SitemapShardDecisionsQuery = v.InferOutput<
   typeof sitemapShardDecisionsQuerySchema
 >;
 

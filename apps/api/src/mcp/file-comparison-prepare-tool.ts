@@ -25,7 +25,6 @@ import {
   fileComparisonObjectKey,
 } from "@/api/lib/uploads/file-comparison/uploads";
 import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type {
   InternalToolErrorResult,
@@ -43,6 +42,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** The enforced ceiling, and the number every staging description renders. */
@@ -258,7 +258,7 @@ export const reserveFileComparisonInputs = async ({
   target,
 }: {
   base: FileComparisonInputFile;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: PrepareFileComparisonDependencies;
   target: FileComparisonInputFile;
 }): Promise<Result<ReservedFileComparisonInputs, InternalToolErrorResult>> => {
@@ -343,7 +343,7 @@ export const handlePrepareFileComparisonTool = async (
   {
     args,
     context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
+  }: { args: Record<string, unknown>; context: AuthorizedMcpRequestContext },
   dependencies: PrepareFileComparisonDependencies = DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES,
 ): Promise<TypedMcpToolResponse<PrepareFileComparisonOutput>> => {
   const parsed = v.safeParse(PREPARE_FILE_COMPARISON_INPUT_SCHEMA, args);

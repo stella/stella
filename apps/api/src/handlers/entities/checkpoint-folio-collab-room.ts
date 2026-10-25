@@ -1,6 +1,6 @@
 import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -26,7 +26,7 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   presignDocxDownloadFromFileId,
@@ -56,6 +56,7 @@ import type {
   S3ObjectWriteCertainty,
   S3ObjectWriteOwnership,
 } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -65,10 +66,10 @@ export const hashFolioCollabCheckpoint = (
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 
-const checkpointFolioCollabRoomBodySchema = t.Object({
-  expectedGeneration: t.Integer({ minimum: 0 }),
-  expectedSnapshotRevision: t.Integer({ minimum: 0 }),
-  roomId: tSafeId("folioCollabRoom"),
+const checkpointFolioCollabRoomBodySchema = v.object({
+  expectedGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  expectedSnapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  roomId: resourceIdSchema("folioCollabRoom"),
 });
 
 type FolioCollabSnapshotCut = {
@@ -549,7 +550,7 @@ const checkpointFolioCollabRoomHandler = async function* (
       async () =>
         await presignDocxDownloadFromFileId({
           readSessionAuthority,
-          source: { kind: "request", sessionId: session.id },
+          source: callerDownloadSource(session),
           userId: user.id,
           fileId: nextFileId,
           fileName: target.room.fileName,

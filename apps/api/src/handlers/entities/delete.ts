@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -20,7 +19,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
@@ -45,14 +44,15 @@ import { getSearchMaintenance } from "@/api/lib/search/provider";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
 
-const deleteEntitiesBodySchema = t.Object({
-  entityIds: t.Array(tSafeId("entity"), {
-    minItems: 1,
-    maxItems: LIMITS.entitiesPageSizeMax,
-  }),
+const deleteEntitiesBodySchema = v.object({
+  entityIds: v.pipe(
+    v.array(resourceIdSchema("entity")),
+    v.minLength(1),
+    v.maxLength(LIMITS.entitiesPageSizeMax),
+  ),
 });
 
-type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
+type DeleteEntitiesBodySchema = v.InferOutput<typeof deleteEntitiesBodySchema>;
 
 export type DeleteEntitiesHandlerProps = {
   enqueueCleanup?: (

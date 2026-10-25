@@ -47,6 +47,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "./valibot-tool-definition";
+import { openMcpRead } from "./write-tool-authority";
 
 const defaultReadSource: typeof readDecisionReaderSource = async (options) =>
   await (
@@ -125,6 +126,7 @@ const missing = () =>
 const common = {
   consumesServices: false,
   access: "read",
+  permissions: openMcpRead("public case-law and legislation corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",

@@ -1,22 +1,3 @@
-/**
- * Finalize a presigned upload. Runs the claim FSM, verifies what
- * the client uploaded against what they declared, scans the bytes,
- * dispatches into the per-purpose domain finalizer, then records the
- * finalized result. File-backed finalizers promote `tmp/` to the final
- * key before committing DB rows that point at it.
- *
- * Concurrency-safe via an atomic `UPDATE … WHERE status IN (…)`
- * claim. A second caller for the same `uploadId` either:
- *   - replays the cached `finalizedResult` (status = 'finalized')
- *   - sees the cached reject reason  (status = 'rejected')
- *   - gets a 409 if a previous attempt is still inside its
- *     `FINALIZE_CLAIM_TIMEOUT_MS` window
- *
- * Crash recovery is implicit: a process that dies mid-scan leaves
- * the row in `scanning`; the next finalize call after the timeout
- * can re-claim it because both `claimed_at` and the row's status
- * are atomically compared in the WHERE.
- */
 import { panic, Result } from "better-result";
 import type { Err } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
@@ -42,7 +23,26 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+/**
+ * Finalize a presigned upload. Runs the claim FSM, verifies what
+ * the client uploaded against what they declared, scans the bytes,
+ * dispatches into the per-purpose domain finalizer, then records the
+ * finalized result. File-backed finalizers promote `tmp/` to the final
+ * key before committing DB rows that point at it.
+ *
+ * Concurrency-safe via an atomic `UPDATE … WHERE status IN (…)`
+ * claim. A second caller for the same `uploadId` either:
+ *   - replays the cached `finalizedResult` (status = 'finalized')
+ *   - sees the cached reject reason  (status = 'rejected')
+ *   - gets a 409 if a previous attempt is still inside its
+ *     `FINALIZE_CLAIM_TIMEOUT_MS` window
+ *
+ * Crash recovery is implicit: a process that dies mid-scan leaves
+ * the row in `scanning`; the next finalize call after the timeout
+ * can re-claim it because both `claimed_at` and the row's status
+ * are atomically compared in the WHERE.
+ */
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
@@ -68,7 +68,7 @@ import {
 } from "@/api/lib/uploads/runtime";
 
 const finalizeParamsSchema = workspaceParams({
-  uploadId: tSafeId("pendingUpload"),
+  uploadId: resourceIdSchema("pendingUpload"),
 });
 
 const config = {

@@ -26,10 +26,11 @@ import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -206,7 +207,7 @@ const createScopedDb = (
   entityTargets: Record<string, SeededEntityTarget> = {},
   entityCount = 0,
 ) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       // list_templates now uses the core query builder; the chain ignores its
       // column/where/order arguments and resolves to the seeded rows.
@@ -256,54 +257,55 @@ const createContext = ({
   scopedDb = createScopedDb(),
   workspaceStatus = "active",
 }: {
-  memberRole?: McpRequestContext["memberRole"];
-  scopedDb?: McpRequestContext["scopedDb"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
   workspaceStatus?: "active" | "archived";
-} = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
-  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
-  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
-    mock(async () => undefined),
-  ),
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-  testDependencies: {
-    describeStoredTemplate: describeStoredTemplateMock,
-    fillStoredTemplateDocx: fillStoredTemplateDocxMock,
-    fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
-    fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
-    createStoredTemplate: createStoredTemplateMock,
-    renameStoredTemplate: renameStoredTemplateMock,
-    writeStoredTemplate: writeStoredTemplateMock,
-    safeOutboundFetchBytes: safeOutboundFetchBytesMock,
-    recordTemplateFill: recordTemplateFillMock,
-    recordTemplateUse: recordTemplateUseMock,
-    claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
-    fingerprintTemplatePersistenceRequest:
-      fingerprintTemplatePersistenceRequestMock,
-    persistFilledTemplateDocument: createEntityFromBufferMock,
-    persistFilledTemplateVersion: createEntityVersionFromBufferMock,
-    recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
-    releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
-    configureTemplateFields: configureTemplateFieldsMock,
-    templateDecideConditionsLogic: templateDecideConditionsLogicMock,
-    decideTemplateConditions: decideTemplateConditionsMock,
-    loadOrgAIConfig: loadOrgAIConfigMock,
-    loadManagedAIResidency: async () => "eu",
-    anonymizeTextFields: anonymizeTextFieldsMock,
-    loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
-    loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
-  },
-});
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+    accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+    accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+      mock(async () => undefined),
+    ),
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+    testDependencies: {
+      describeStoredTemplate: describeStoredTemplateMock,
+      fillStoredTemplateDocx: fillStoredTemplateDocxMock,
+      fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
+      fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
+      createStoredTemplate: createStoredTemplateMock,
+      renameStoredTemplate: renameStoredTemplateMock,
+      writeStoredTemplate: writeStoredTemplateMock,
+      safeOutboundFetchBytes: safeOutboundFetchBytesMock,
+      recordTemplateFill: recordTemplateFillMock,
+      recordTemplateUse: recordTemplateUseMock,
+      claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
+      fingerprintTemplatePersistenceRequest:
+        fingerprintTemplatePersistenceRequestMock,
+      persistFilledTemplateDocument: createEntityFromBufferMock,
+      persistFilledTemplateVersion: createEntityVersionFromBufferMock,
+      recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
+      releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
+      configureTemplateFields: configureTemplateFieldsMock,
+      templateDecideConditionsLogic: templateDecideConditionsLogicMock,
+      decideTemplateConditions: decideTemplateConditionsMock,
+      loadOrgAIConfig: loadOrgAIConfigMock,
+      loadManagedAIResidency: async () => "eu",
+      anonymizeTextFields: anonymizeTextFieldsMock,
+      loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
+      loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
+    },
+  });
 
-const createOutboundContext = (): McpRequestContext => ({
+const createOutboundContext = (): AuthorizedMcpRequestContext => ({
   ...createContext(),
   thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
 });
@@ -1569,7 +1571,9 @@ describe("MCP template tools", () => {
       toolName: "preview_template_conditions",
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: { code: "permission_denied" },
+    });
     expect(templateDecideConditionsLogicMock).not.toHaveBeenCalled();
     expect(loadOrgAIConfigMock).not.toHaveBeenCalled();
   });

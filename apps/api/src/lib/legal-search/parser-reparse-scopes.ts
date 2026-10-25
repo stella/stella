@@ -133,11 +133,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 26,
+    version: 27,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "the bench read from the opening sentence is part of the judges every re-parse replaces, which have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
@@ -17,7 +17,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
@@ -31,9 +31,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
   mcp: { type: "internal", reason: "document_processing" },
-  body: t.Object({
-    justificationId: tSafeId("justification"),
-  }),
+  body: v.object({ justificationId: resourceIdSchema("justification") }),
 } satisfies WorkspaceHandlerConfig;
 
 const generateBoundingBoxes = createSafeHandler(

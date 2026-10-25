@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import type { MaybePromise } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -27,6 +26,8 @@ import type {
   AuditAction,
   AuditResourceType,
 } from "../audit-log.constants";
+
+type MaybePromise<T> = T | Promise<T>;
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
 export type { AuditAction, AuditResourceType } from "../audit-log.constants";

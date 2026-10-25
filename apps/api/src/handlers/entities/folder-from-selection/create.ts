@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -12,7 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   isTreeParentGuardError,
@@ -31,16 +30,17 @@ import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-cre
 
 import { DESCENDANT_MOVE_MESSAGE, moveEntities } from "../move";
 
-const createFolderFromSelectionBodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 255 }),
-  parentId: t.Nullable(tSafeId("entity")),
-  entityIds: t.Array(tSafeId("entity"), {
-    minItems: 1,
-    maxItems: LIMITS.entitiesPageSizeMax,
-  }),
+const createFolderFromSelectionBodySchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  parentId: v.nullable(resourceIdSchema("entity")),
+  entityIds: v.pipe(
+    v.array(resourceIdSchema("entity")),
+    v.minLength(1),
+    v.maxLength(LIMITS.entitiesPageSizeMax),
+  ),
 });
 
-type CreateFolderFromSelectionBodySchema = Static<
+type CreateFolderFromSelectionBodySchema = v.InferOutput<
   typeof createFolderFromSelectionBodySchema
 >;
 
@@ -206,7 +206,7 @@ const createFolderFromSelection = createSafeHandler(
   },
 );
 
-declareAggregateMutation(createFolderFromSelection.handler, {
+declareAggregateMutation(createFolderFromSelection, {
   type: "independent",
   reason:
     "Serialized by the matter's entity tree lock, which every entity reparent and the parent-acyclic trigger take; the folder insert and the moves commit or roll back together.",

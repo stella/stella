@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
@@ -1291,13 +1290,15 @@ export const createApprovalHarness = ({
    * has ended and been checked.
    */
   const postChatBody = async (
-    raw: unknown,
+    posted: unknown,
     signal: AbortSignal | undefined,
   ): Promise<{ done: Promise<void>; response: Response }> => {
-    if (!Value.Check(agUiSendMessageBodySchema, raw)) {
-      const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
+    // Decoded exactly as the route decodes it: unknown keys are dropped.
+    const decoded = v.safeParse(agUiSendMessageBodySchema, posted);
+    if (!decoded.success) {
+      const errors = decoded.issues
         .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
+        .map((issue) => `${v.getDotPath(issue) ?? "$"}: ${issue.message}`);
       clientFindings.push(
         ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
           { invalidBody: errors },
@@ -1310,6 +1311,7 @@ export const createApprovalHarness = ({
         }),
       };
     }
+    const raw = decoded.output;
     const endRecord = beginRecord(raw);
     if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
       provider.promptLedgerOf(raw.threadId).replacesTail();

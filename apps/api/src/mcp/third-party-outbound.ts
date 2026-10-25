@@ -1,7 +1,7 @@
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { TypedMcpToolResponse } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const REQUIRES_THIRD_PARTY_OUTBOUND: unique symbol = Symbol(
   "RequiresThirdPartyOutbound",
@@ -19,12 +19,15 @@ export type RequiresThirdPartyOutbound = {
 
 type ThirdPartyOutboundHandlerOptions = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   permit: ThirdPartyOutboundPermit;
 };
 
 type ThirdPartyOutboundHandler<TData, TDependencies extends unknown[]> = ((
-  request: { args: Record<string, unknown>; context: McpRequestContext },
+  request: {
+    args: Record<string, unknown>;
+    context: AuthorizedMcpRequestContext;
+  },
   ...dependencies: TDependencies
 ) => Promise<TypedMcpToolResponse<TData>>) &
   RequiresThirdPartyOutbound;
@@ -50,7 +53,7 @@ export const withThirdPartyOutbound = <
         context,
       }: {
         args: Record<string, unknown>;
-        context: McpRequestContext;
+        context: AuthorizedMcpRequestContext;
       },
       ...dependencies: TDependencies
     ): Promise<TypedMcpToolResponse<TData>> => {

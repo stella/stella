@@ -43,7 +43,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
@@ -134,13 +134,13 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     mutationFn: async (view: WorkspaceView) => {
       const id = savedIds.current.get(view.id) ?? view.id;
       const result = isUnsavedViewId(id)
-        ? unwrapEden(
+        ? unwrapApiResponse(
             await api["entity-views"].put({
               name: view.name,
               layout: view.layout,
             }),
           )
-        : unwrapEden(
+        : unwrapApiResponse(
             await api["entity-views"]({
               viewId: toSafeId<"workspaceView">(id),
             }).patch({ name: view.name, layout: view.layout }),
@@ -175,7 +175,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const remove = useMutation({
     scope: { id: `entity-views:${organizationId}` },
     mutationFn: async (viewId: string) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["entity-views"]({
           viewId: toSafeId<"workspaceView">(viewId),
         }).delete(),
@@ -195,7 +195,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   });
   const reorder = useMutation({
     mutationFn: async (viewIds: string[]) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["entity-views"].reorder.post({
           viewIds: viewIds.map((id) => toSafeId<"workspaceView">(id)),
         }),

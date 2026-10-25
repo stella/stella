@@ -286,6 +286,9 @@ const createHarness = ({
   const context = asTestRaw<Ctx>({
     body: {
       filePropertyId: propertyId,
+      // Parsed bodies carry the schema defaults.
+      mode: "strict",
+      granularity: "word",
       selection: {
         type: previous ? "previous" : "versions",
         ...(previous
@@ -304,7 +307,8 @@ const createHarness = ({
     route: "/documents/:workspaceId/document/:documentId/compare",
     safeDb,
     scopedDb,
-    session: { activeOrganizationId: organizationId },
+    // A credential without a browser session, such as an agent's.
+    session: { activeOrganizationId: organizationId, id: null },
     workspaceId,
     user: { id: userId },
     recordAuditEvent: asTestRaw<AuditRecorder>(auditRecorder),
@@ -608,7 +612,7 @@ describe("documents.compare", () => {
       recordAuditEvent: harness.auditRecorder,
       source: {
         kind: "background",
-        reason: "document comparison without a request session",
+        reason: "requested with a credential that has no browser session",
       },
       userId: harness.context.user.id,
     });

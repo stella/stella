@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handlePrepareFileComparisonTool } from "@/api/mcp/file-comparison-prepare-tool";
 import type { PrepareFileComparisonDependencies } from "@/api/mcp/file-comparison-prepare-tool";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -43,7 +43,7 @@ const createHarness = ({
     }),
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set<string>(),
     accessibleWorkspaceStatusById: new Map(),

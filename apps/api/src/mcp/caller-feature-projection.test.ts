@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
@@ -11,6 +10,10 @@ import type {
 } from "@/api/db/schema";
 import readItems from "@/api/handlers/lists/items/list";
 import readSources from "@/api/handlers/lists/items/sources/list";
+import { listsRoute } from "@/api/handlers/lists/routes";
+import { createHttpApp } from "@/api/http/app";
+import type { RouteDefinition, RouteEntry } from "@/api/http/route";
+import { decodeRouteInput, routeContext } from "@/api/http/route-input";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
@@ -22,11 +25,12 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
-import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
+import { capabilityHandlerContext } from "@/api/mcp/capability-context";
 import { parseCatalog } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -117,7 +121,7 @@ const contextFor = (granted: boolean, capability: string) => {
     organizationId,
     email: "member@example.test",
   } as const;
-  const context = {
+  const context = authorizedMcpContextForTest({
     organizationId,
     userId,
     userEmail: "member@example.test",
@@ -177,9 +181,24 @@ const contextFor = (granted: boolean, capability: string) => {
         promptCachingEnabled: false,
       }),
     },
-  } satisfies McpRequestContext;
+  });
   return { context, database };
 };
+/**
+ * The list route as REST mounts it (its path and its own input schemas), with
+ * the member the MCP fixture proved standing in for the session lookup the
+ * route's own `run` performs.
+ */
+const restRoute = (
+  definition: RouteDefinition,
+  run: RouteDefinition["run"],
+): RouteEntry => {
+  const entry =
+    listsRoute.find((candidate) => candidate.definition === definition) ??
+    panic("The list read is not mounted in the lists route table");
+  return { ...entry, middleware: [], definition: { ...entry.definition, run } };
+};
+
 for (const transport of [
   "shared handler",
   "REST HTTP",
@@ -215,7 +234,7 @@ for (const transport of [
             }),
           )["result"];
         } else {
-          const synthesized = await synthesizeCapabilityContext({
+          const handlerCtx = await capabilityHandlerContext({
             context,
             capabilityId: capability,
             request: context.request,
@@ -225,23 +244,19 @@ for (const transport of [
               params: { ...input.params, workspaceId: matterId },
             },
           });
-          const synthesizedWithSessionId = {
-            ...synthesized,
-            session: { id: "fixture-session", ...synthesized.session },
+          const handlerCtxWithSessionId = {
+            ...handlerCtx,
+            session: { ...handlerCtx.session, id: "fixture-session" },
           };
-          const execute = async () => {
+          const execute = async (ctx: object) => {
             switch (capability) {
               case "lists.items.sources.list":
                 return await readSources.handler(
-                  asTestRaw<Parameters<typeof readSources.handler>[0]>(
-                    synthesizedWithSessionId,
-                  ),
+                  asTestRaw<Parameters<typeof readSources.handler>[0]>(ctx),
                 );
               case "lists.items.list":
                 return await readItems.handler(
-                  asTestRaw<Parameters<typeof readItems.handler>[0]>(
-                    synthesizedWithSessionId,
-                  ),
+                  asTestRaw<Parameters<typeof readItems.handler>[0]>(ctx),
                 );
               default:
                 capability satisfies never;
@@ -249,58 +264,43 @@ for (const transport of [
             }
           };
           if (transport === "REST HTTP") {
-            const featureAccessSnapshot = synthesized.featureAccessSnapshot;
-            if (featureAccessSnapshot === undefined) {
-              panic("Missing feature access snapshot in HTTP fixture");
-            }
-            const app = new Elysia().resolve(() => ({
-              workspaceId: toSafeId<"workspace">(matterId),
-              user: synthesized.user,
-              session: synthesizedWithSessionId.session,
-              featureAccessSnapshot,
-              safeDb: synthesized.safeDb,
-              scopedDb: synthesized.scopedDb,
-              getActiveWorkspaceIds: synthesized.getActiveWorkspaceIds,
-              getAccessibleWorkspaces: synthesized.getAccessibleWorkspaces,
-              getWorkspaceAccess: synthesized.getWorkspaceAccess,
-              pinServerValidatedWorkspaceId:
-                synthesized.pinServerValidatedWorkspaceId,
-              memberRole: synthesized.memberRole,
-              orgAIConfig: synthesized.orgAIConfig,
-              orgAIConfigStatus: synthesized.orgAIConfigStatus,
-              promptCachingEnabled: synthesized.promptCachingEnabled,
-              managedAIResidency: synthesized.managedAIResidency,
-              recordAuditEvent: synthesized.recordAuditEvent,
-              createAuditRecorder: synthesized.createAuditRecorder,
-            }));
-            const route =
+            const definition =
               capability === "lists.items.sources.list"
-                ? app.get(
-                    "/lists/:workspaceId/:listId/items/:itemEntityId/sources",
-                    readSources.handler,
-                    {
-                      params: readSources.config.params,
-                      query: readSources.config.query,
-                    },
-                  )
-                : app.get(
-                    "/lists/:workspaceId/:listId/items",
-                    readItems.handler,
-                    {
-                      params: readItems.config.params,
-                      query: readItems.config.query,
-                    },
+                ? readSources
+                : readItems;
+            const app = createHttpApp({
+              middleware: [],
+              routes: [
+                restRoute(definition, async (request) => {
+                  const decoded = await decodeRouteInput(
+                    definition.config,
+                    request,
+                    await request.readBody(),
                   );
-            const url = `http://localhost/lists/${matterId}/${listId}/items${
-              capability === "lists.items.sources.list"
-                ? `/${itemId}/sources`
-                : ""
-            }`;
-            const response = await route.handle(new Request(url));
-            expect(response.status).toBe(200);
-            result = await response.json();
+                  return await execute({
+                    ...handlerCtxWithSessionId,
+                    ...routeContext(request, decoded),
+                    workspaceId: toSafeId<"workspace">(matterId),
+                  });
+                }),
+              ],
+            });
+            const server = serveForTest(app);
+            try {
+              const response = await server.fetch(
+                `http://localhost/lists/${matterId}/${listId}/items${
+                  capability === "lists.items.sources.list"
+                    ? `/${itemId}/sources`
+                    : ""
+                }`,
+              );
+              expect(response.status).toBe(200);
+              result = await response.json();
+            } finally {
+              await server.stop();
+            }
           } else {
-            result = await execute();
+            result = await execute(handlerCtxWithSessionId);
           }
         }
         const serialized = JSON.stringify(result);

@@ -1,11 +1,17 @@
-import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
+import { panic } from "better-result";
+import { afterAll, describe, expect, test } from "bun:test";
 
+import { apiPipeline } from "@/api/api-pipeline";
+import { env } from "@/api/env";
 import {
   createMcpRoute,
-  handleMcpPreflightRequest,
+  mcpTransportMethodRefusal,
 } from "@/api/handlers/mcp/routes-core";
 import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import { frontendOrigins } from "@/api/lib/dev-origins";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
@@ -22,16 +28,76 @@ import {
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
-import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
+import type { McpMode } from "@/api/mcp/constants";
+import {
+  createMcpCorsHeaders,
+  getMcpProtectedResourceMetadata,
+} from "@/api/mcp/metadata";
 import { MCP_LAW_RESOURCE_SCOPES } from "@/api/mcp/resource-policy-contract";
+import { runtimeMode } from "@/api/runtime-mode";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
-const mcpRoute = createMcpRoute({
-  handleMcpHttpRequest: async () => new Response("Unexpected MCP transport"),
+type HandleMcpHttpRequest = Parameters<
+  typeof createMcpRoute
+>[0]["handleMcpHttpRequest"];
+
+/** The MCP routes over a real socket with a stand-in transport. */
+const serveMcpRoute = (handleMcpHttpRequest: HandleMcpHttpRequest) =>
+  serveForTest(
+    createHttpApp({
+      routes: createMcpRoute({ handleMcpHttpRequest }),
+      middleware: [
+        responseCachePolicy,
+        mcpTransportMethodRefusal,
+        errorBoundary,
+      ],
+    }),
+  );
+
+const mcpRoute = serveMcpRoute(
+  async () => new Response("Unexpected MCP transport"),
+);
+afterAll(async () => {
+  await mcpRoute.stop();
 });
+
+/**
+ * A transport path answers its own preflight and forwards every other method
+ * it serves, with the path's mode, to the transport handler.
+ */
+const assertTransportForwarding = async (
+  path: string,
+  mode: McpMode | undefined,
+) => {
+  const calls: { method: string; mode: string | undefined }[] = [];
+  await using route = serveMcpRoute(async (request, options) => {
+    calls.push({ method: request.method, mode: options?.mode });
+    return new Response("ok");
+  });
+
+  const preflight = await route.fetch(
+    new Request(`http://localhost${path}`, { method: "OPTIONS" }),
+  );
+  expect(preflight.status).toBe(204);
+  expect(preflight.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+
+  for (const method of ["GET", "POST", "DELETE"]) {
+    const response = await route.fetch(
+      new Request(`http://localhost${path}`, { method }),
+    );
+    expect(response.status).toBe(200);
+  }
+
+  expect(calls).toEqual([
+    { method: "GET", mode },
+    { method: "POST", mode },
+    { method: "DELETE", mode },
+  ]);
+};
 
 describe("MCP protected resource discovery routes", () => {
   const assertMetadataResponse = async (path: string) => {
-    const response = await mcpRoute.handle(
+    const response = await mcpRoute.fetch(
       new Request(`http://localhost${path}`),
     );
 
@@ -47,7 +113,7 @@ describe("MCP protected resource discovery routes", () => {
   };
 
   test("serves protected resource metadata from the canonical path", async () => {
-    const response = await mcpRoute.handle(
+    const response = await mcpRoute.fetch(
       new Request(`http://localhost${MCP_DISCOVERY_PATH}`),
     );
     const metadata = await response.json();
@@ -75,7 +141,7 @@ describe("MCP protected resource discovery routes", () => {
   });
 
   test("serves protected resource metadata from the anonymized path", async () => {
-    const response = await mcpRoute.handle(
+    const response = await mcpRoute.fetch(
       new Request(`http://localhost${MCP_ANONYMIZED_DISCOVERY_PATH}`),
     );
 
@@ -86,7 +152,7 @@ describe("MCP protected resource discovery routes", () => {
   });
 
   test("serves least-privilege metadata from the documents path", async () => {
-    const response = await mcpRoute.handle(
+    const response = await mcpRoute.fetch(
       new Request(`http://localhost${MCP_DOCUMENTS_DISCOVERY_PATH}`),
     );
 
@@ -97,7 +163,7 @@ describe("MCP protected resource discovery routes", () => {
   });
 
   test("serves the derived law resource scopes from the law path", async () => {
-    const response = await mcpRoute.handle(
+    const response = await mcpRoute.fetch(
       new Request(`http://localhost${MCP_LAW_DISCOVERY_PATH}`),
     );
 
@@ -110,7 +176,7 @@ describe("MCP protected resource discovery routes", () => {
   });
 
   test("answers CORS preflight requests on the root compatibility path", async () => {
-    const response = await mcpRoute.handle(
+    const response = await mcpRoute.fetch(
       new Request(`http://localhost${ROOT_MCP_DISCOVERY_PATH}`, {
         method: "OPTIONS",
       }),
@@ -126,48 +192,8 @@ describe("MCP protected resource discovery routes", () => {
     );
   });
 
-  test("serves discovery the same to every origin, so a shared cache keeps one copy", async () => {
-    // The global CORS layer's defaults, as they reach the route.
-    const route = new Elysia()
-      .onRequest(({ set }) => {
-        set.headers["access-control-allow-credentials"] = "true";
-        set.headers.vary = "Origin";
-      })
-      .use(mcpRoute);
-    const response = await route.handle(
-      new Request(`http://localhost${MCP_DISCOVERY_PATH}`, {
-        headers: { origin: "https://client.example.test" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
-    expect(response.headers.get("Vary")).toBeNull();
-    expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
-  });
-
   test("forwards default MCP HTTP methods to the transport handler", async () => {
-    const calls: { method: string; mode: string | undefined }[] = [];
-    const route = createMcpRoute({
-      handleMcpHttpRequest: async (request, options) => {
-        calls.push({ method: request.method, mode: options?.mode });
-        return new Response("ok");
-      },
-    });
-
-    for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
-      const response = await route.handle(
-        new Request(`http://localhost${MCP_HTTP_PATH}`, { method }),
-      );
-      expect(response.status).toBe(200);
-    }
-
-    expect(calls).toEqual([
-      { method: "OPTIONS", mode: undefined },
-      { method: "GET", mode: undefined },
-      { method: "POST", mode: undefined },
-      { method: "DELETE", mode: undefined },
-    ]);
+    await assertTransportForwarding(MCP_HTTP_PATH, undefined);
   });
 
   test("leaves each JSON-RPC request body unread for the MCP SDK transport", async () => {
@@ -178,15 +204,13 @@ describe("MCP protected resource discovery routes", () => {
       params: {},
     });
     const forwarded: { body: string; mode: string | undefined }[] = [];
-    const route = createMcpRoute({
-      handleMcpHttpRequest: async (request, options) => {
-        forwarded.push({ body: await request.text(), mode: options?.mode });
-        return new Response("ok");
-      },
+    await using route = serveMcpRoute(async (request, options) => {
+      forwarded.push({ body: await request.text(), mode: options?.mode });
+      return new Response("ok");
     });
 
     for (const path of [MCP_HTTP_PATH, MCP_DOCUMENTS_HTTP_PATH]) {
-      const response = await route.handle(
+      const response = await route.fetch(
         new Request(`http://localhost${path}`, {
           body: jsonRpcBody,
           headers: { "content-type": "application/json" },
@@ -203,142 +227,43 @@ describe("MCP protected resource discovery routes", () => {
   });
 
   test("forwards anonymized MCP HTTP methods with anonymized mode", async () => {
-    const calls: { method: string; mode: string | undefined }[] = [];
-    const route = createMcpRoute({
-      handleMcpHttpRequest: async (request, options) => {
-        calls.push({ method: request.method, mode: options?.mode });
-        return new Response("ok");
-      },
-    });
-
-    for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
-      const response = await route.handle(
-        new Request(`http://localhost${MCP_ANONYMIZED_HTTP_PATH}`, { method }),
-      );
-      expect(response.status).toBe(200);
-    }
-
-    expect(calls).toEqual([
-      { method: "OPTIONS", mode: "anonymized" },
-      { method: "GET", mode: "anonymized" },
-      { method: "POST", mode: "anonymized" },
-      { method: "DELETE", mode: "anonymized" },
-    ]);
+    await assertTransportForwarding(MCP_ANONYMIZED_HTTP_PATH, "anonymized");
   });
 
   test("forwards documents MCP HTTP methods with documents mode", async () => {
-    const calls: { method: string; mode: string | undefined }[] = [];
-    const route = createMcpRoute({
-      handleMcpHttpRequest: async (request, options) => {
-        calls.push({ method: request.method, mode: options?.mode });
-        return new Response("ok");
-      },
-    });
-
-    for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
-      const response = await route.handle(
-        new Request(`http://localhost${MCP_DOCUMENTS_HTTP_PATH}`, { method }),
-      );
-      expect(response.status).toBe(200);
-    }
-
-    expect(calls).toEqual([
-      { method: "OPTIONS", mode: "documents" },
-      { method: "GET", mode: "documents" },
-      { method: "POST", mode: "documents" },
-      { method: "DELETE", mode: "documents" },
-    ]);
+    await assertTransportForwarding(MCP_DOCUMENTS_HTTP_PATH, "documents");
   });
 
   test("forwards law MCP HTTP methods with law mode", async () => {
-    const calls: { method: string; mode: string | undefined }[] = [];
-    const route = createMcpRoute({
-      handleMcpHttpRequest: async (request, options) => {
-        calls.push({ method: request.method, mode: options?.mode });
-        return new Response("ok");
-      },
-    });
-
-    for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
-      const response = await route.handle(
-        new Request(`http://localhost${MCP_LAW_HTTP_PATH}`, { method }),
-      );
-      expect(response.status).toBe(200);
-    }
-
-    expect(calls).toEqual([
-      { method: "OPTIONS", mode: "law" },
-      { method: "GET", mode: "law" },
-      { method: "POST", mode: "law" },
-      { method: "DELETE", mode: "law" },
-    ]);
+    await assertTransportForwarding(MCP_LAW_HTTP_PATH, "law");
   });
 
-  test("owns the preflight for every MCP path ahead of the global CORS layer", async () => {
-    const transportPreflight = handleMcpPreflightRequest(
+  test("owns the preflight for every MCP path with exactly the methods the path serves", async () => {
+    const transportPreflight = await mcpRoute.fetch(
       new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "OPTIONS" }),
-      { headers: { "access-control-allow-credentials": "true" } },
     );
-    const discoveryPreflight = handleMcpPreflightRequest(
+    const discoveryPreflight = await mcpRoute.fetch(
       new Request(`http://localhost${MCP_DISCOVERY_PATH}`, {
         method: "OPTIONS",
       }),
-      { headers: {} },
     );
 
-    expect(transportPreflight?.status).toBe(204);
-    expect(
-      transportPreflight?.headers.get("Access-Control-Allow-Methods"),
-    ).toBe(MCP_STATELESS_ALLOW_HEADER);
-    expect(transportPreflight?.headers.get("Allow")).toBe(
+    expect(transportPreflight.status).toBe(204);
+    expect(transportPreflight.headers.get("Access-Control-Allow-Methods")).toBe(
       MCP_STATELESS_ALLOW_HEADER,
     );
-    expect(discoveryPreflight?.headers.get("Allow")).toBe("GET, OPTIONS");
-    expect(discoveryPreflight?.headers.get("Access-Control-Max-Age")).toBe(
-      String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+    expect(transportPreflight.headers.get("Allow")).toBe(
+      MCP_STATELESS_ALLOW_HEADER,
     );
-  });
-
-  test("drops the global credentialed CORS default on MCP responses", () => {
-    // A browser refuses `Allow-Origin: *` with credentials, and this endpoint
-    // authenticates with a bearer token rather than cookies.
-    // Typed as the route's own header bag: `dropCredentialedCors` replaces it
-    // wholesale, so a literal's narrow inferred shape cannot describe the
-    // emptied result.
-    const set: { headers: Record<string, string> } = {
-      headers: { "access-control-allow-credentials": "true" },
-    };
-
-    handleMcpPreflightRequest(
-      new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "OPTIONS" }),
-      set,
-    );
-
-    expect(set.headers).toEqual({});
-  });
-
-  test("leaves preflight for a non-MCP path to the global CORS layer", () => {
-    expect(
-      handleMcpPreflightRequest(
-        new Request("http://localhost/matters", { method: "OPTIONS" }),
-        { headers: {} },
-      ),
-    ).toBeUndefined();
-    expect(
-      handleMcpPreflightRequest(
-        new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "POST" }),
-        { headers: {} },
-      ),
-    ).toBeUndefined();
+    expect(discoveryPreflight.status).toBe(204);
+    expect(discoveryPreflight.headers.get("Allow")).toBe("GET, OPTIONS");
   });
 
   test("rejects unsupported MCP HTTP methods before transport handling", async () => {
     let calls = 0;
-    const route = createMcpRoute({
-      handleMcpHttpRequest: async () => {
-        calls += 1;
-        return new Response("unexpected");
-      },
+    await using route = serveMcpRoute(async () => {
+      calls += 1;
+      return new Response("unexpected");
     });
 
     for (const path of [
@@ -348,7 +273,7 @@ describe("MCP protected resource discovery routes", () => {
       MCP_LAW_HTTP_PATH,
     ]) {
       for (const method of ["PATCH", "PUT"]) {
-        const response = await route.handle(
+        const response = await route.fetch(
           new Request(`http://localhost${path}`, { method }),
         );
 
@@ -369,5 +294,100 @@ describe("MCP protected resource discovery routes", () => {
     }
 
     expect(calls).toBe(0);
+  });
+});
+
+describe("MCP CORS under the API pipeline", () => {
+  // An origin the API's credentialed CORS admits, so a credentialed answer
+  // would show if the MCP routes did not own their CORS.
+  const allowedOrigin =
+    frontendOrigins({
+      frontendUrl: env.FRONTEND_URL,
+      runtimeMode: runtimeMode(),
+    }).at(0) ?? panic("No frontend origin is configured");
+
+  const serveUnderPipeline = () =>
+    serveForTest(
+      createHttpApp({
+        routes: createMcpRoute({
+          handleMcpHttpRequest: async () =>
+            new Response("ok", { headers: createMcpCorsHeaders() }),
+        }),
+        middleware: apiPipeline,
+      }),
+    );
+
+  const browserPreflight = (path: string) =>
+    new Request(`http://localhost${path}`, {
+      method: "OPTIONS",
+      headers: {
+        origin: allowedOrigin,
+        "access-control-request-method": "POST",
+      },
+    });
+
+  test("answers an MCP browser preflight itself, without the credentialed default", async () => {
+    await using api = serveUnderPipeline();
+
+    for (const path of [MCP_HTTP_PATH, MCP_DISCOVERY_PATH]) {
+      const response = await api.fetch(browserPreflight(path));
+
+      expect(response.status).toBe(204);
+      // A browser refuses `Allow-Origin: *` with credentials, and this
+      // endpoint authenticates with a bearer token rather than cookies.
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+      expect(
+        response.headers.get("Access-Control-Allow-Credentials"),
+      ).toBeNull();
+      expect(response.headers.get("Allow")).not.toBeNull();
+    }
+  });
+
+  test("serves discovery the same to every origin, so a shared cache keeps one copy", async () => {
+    await using api = serveUnderPipeline();
+
+    const response = await api.fetch(
+      new Request(`http://localhost${MCP_DISCOVERY_PATH}`, {
+        headers: { origin: allowedOrigin },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Vary")).toBeNull();
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=300, stale-while-revalidate=3600",
+    );
+  });
+
+  test("drops the global credentialed CORS default on MCP transport responses", async () => {
+    await using api = serveUnderPipeline();
+
+    const response = await api.fetch(
+      new Request(`http://localhost${MCP_HTTP_PATH}`, {
+        method: "POST",
+        headers: { origin: allowedOrigin },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  test("leaves preflight for a non-MCP path to the global CORS layer", async () => {
+    await using api = serveUnderPipeline();
+
+    const response = await api.fetch(browserPreflight("/matters"));
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      allowedOrigin,
+    );
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBe(
+      "true",
+    );
+    expect(response.headers.get("Allow")).toBeNull();
   });
 });

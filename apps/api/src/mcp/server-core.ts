@@ -67,7 +67,7 @@ import {
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
 } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   type McpAccessRefusalError,
   McpAuthenticationError,
@@ -128,6 +128,7 @@ import {
   MCP_WEB_HANDOFF_TOOL,
   withWebHandoffLinks,
 } from "@/api/mcp/web-handoff-links";
+import { omittedWriteToolResult } from "@/api/mcp/write-result-omission";
 import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -207,7 +208,7 @@ type McpServerDependencies = {
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
     toolName: string,
-    context: McpRequestContext,
+    context: McpRequestResources,
     mode?: McpMode,
   ) => Promise<McpToolDefinition | undefined>;
   getMcpToolRequiredScopesHint: (
@@ -221,26 +222,29 @@ type McpServerDependencies = {
     toolName,
   }: {
     args: Record<string, unknown>;
-    context: McpRequestContext;
+    context: McpRequestResources;
     mode?: McpMode;
     toolName: string;
   }) => Promise<CallToolResult>;
   listMcpTools: (
-    context: McpRequestContext,
+    context: McpRequestResources,
     mode?: McpMode,
     scopes?: readonly string[],
   ) => Promise<McpTool[]>;
-  listMcpResources: (mode: McpMode, context?: McpRequestContext) => Resource[];
+  listMcpResources: (
+    mode: McpMode,
+    context?: McpRequestResources,
+  ) => Resource[];
   readMcpResource: (
     uri: string,
     mode: McpMode,
-    context?: McpRequestContext,
+    context?: McpRequestResources,
   ) => ReadResourceResult | Promise<ReadResourceResult>;
   recordMcpSessionInitialized: RecordMcpSessionInitialized;
   resolveMcpSessionContext: (
     session: McpSession,
     options: { clientIp?: string | null; request: Request },
-  ) => Promise<McpRequestContext>;
+  ) => Promise<McpRequestResources>;
 };
 
 // Derived from the public API contract rather than hand-bumped: a client that
@@ -629,7 +633,7 @@ const withCappedRequestBody = async (
  * instance.
  */
 type McpFactoryState = {
-  context: McpRequestContext;
+  context: McpRequestResources;
   session: McpSession;
 };
 
@@ -760,7 +764,7 @@ type BoundMcpToolResultOptions = {
   definition: McpToolDefinition;
   readClass: McpReadClass | undefined;
   resultDisposition: ReturnType<typeof toolResultDisposition>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   chargeReadBytes: typeof chargeMcpReadBytes;
   captureError: McpServerDependencies["captureError"];
@@ -839,20 +843,8 @@ const boundMcpToolResult = async ({
       hint: "Request a smaller selection using this tool's filters or page limit.",
     });
   }
-  return {
-    isError: false,
-    content: [
-      {
-        type: "text",
-        text: "Action applied. The result was too large and was omitted. Do not repeat the action; use a read tool to inspect its outcome.",
-      },
-    ],
-    structuredContent: {
-      applied: true,
-      resultOmitted: true,
-      reason: "result_too_large",
-    },
-  } satisfies CallToolResult;
+  // Every write tool advertises this shape beside its own output.
+  return omittedWriteToolResult();
 };
 
 export const createMcpHttpRequestHandler = ({
@@ -874,7 +866,7 @@ export const createMcpHttpRequestHandler = ({
   type ToolsCallRequestOptions = {
     toolRequest: CallToolRequest;
     requestContext: ServerContext;
-    context: McpRequestContext;
+    context: McpRequestResources;
     mode: McpMode;
     session: McpSession;
   };
@@ -1073,7 +1065,7 @@ export const createMcpHttpRequestHandler = ({
     mode,
     session,
   }: {
-    context: McpRequestContext;
+    context: McpRequestResources;
     mode: McpMode;
     session: McpSession;
   }) => {
@@ -1231,7 +1223,7 @@ export const createMcpHttpRequestHandler = ({
     session,
   }: {
     authInfo: AuthInfo;
-    context: McpRequestContext;
+    context: McpRequestResources;
     mode: McpMode;
     parsedBody: unknown;
     request: Request;

@@ -20,6 +20,7 @@ import {
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
   observeShadow,
   reportEmitFailure,
@@ -423,6 +424,10 @@ const captureErrorWithOptions = (
   // reproducing a tight failure loop needs every occurrence.
   logServerDevError(safeError, properties);
 
+  if (grading !== undefined && !failureOutputPolicy(grading.grade).capture) {
+    return;
+  }
+
   const suppressed = admitCapture(
     captureWindowKey(properties),
     Temporal.Now.instant().epochMilliseconds,
@@ -459,7 +464,7 @@ export const captureError = (
 };
 
 const requestCaptureOptions = (request: Request) => {
-  const reqCtx = getRequestContext(request);
+  const reqCtx = getRequestContext();
   return {
     request,
     distinctId: reqCtx?.posthogDistinctId,

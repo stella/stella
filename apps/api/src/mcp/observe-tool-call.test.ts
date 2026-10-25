@@ -10,12 +10,12 @@ import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   observeMcpRequest,
   setMcpMetricToolName,
 } from "@/api/mcp/request-metrics";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 afterEach(() => {
@@ -39,7 +39,7 @@ test.each([
     setMetricLineSinkForTesting((line) => {
       metricLines.push(line);
     });
-    const context = asTestRaw<McpRequestContext>({});
+    const context = asTestRaw<AuthorizedMcpRequestContext>({});
     const result: CallToolResult = {
       content: [{ type: "text", text: "ok" }],
     };

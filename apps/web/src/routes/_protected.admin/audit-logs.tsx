@@ -31,7 +31,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
@@ -148,7 +148,7 @@ function AuditLogsPage() {
           query: cleanParams,
         });
 
-        return unwrapEden(response);
+        return unwrapApiResponse(response);
       },
       catch: (error) => error,
     });

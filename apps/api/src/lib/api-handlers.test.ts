@@ -1,6 +1,5 @@
 import { Result, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
@@ -13,6 +12,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import tableChart from "@/api/handlers/chat/table-chart";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -102,7 +102,7 @@ test.each([
   const ctx = createContext(endpoint, safeDb);
   const response = await endpoint.handler(ctx);
   expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
-  if (!(response instanceof ElysiaCustomStatusResponse)) {
+  if (!(response instanceof HttpStatusResponse)) {
     throw new Error("Expected a status response");
   }
   expect(response.response.retryable).toBe(true);
@@ -139,63 +139,47 @@ test("a thrown retryable handler error sets Retry-After", async () => {
   });
 });
 
-test.each([
-  ["Headers", () => new Headers()],
-  ["plain record", () => ({})],
-] as const)(
-  "a retryable handler error sets Retry-After on %s",
-  async (_name, createHeaders) => {
-    const endpoint = createSafeRootHandler(
-      {
-        contract: "patch",
-        permissions: { workspace: ["read"] },
-        accountAccess: ACCOUNT_ACCESS.sandbox,
-        mcp: { type: "internal", reason: "health_infra" },
-      },
-      async function* () {
-        return Result.err(
-          new HandlerError({
-            status: 503,
-            message: "Work capacity is unavailable",
-            retryable: true,
-            retryAfterMs: 2000,
-          }),
-        );
-      },
-    );
-    const safeDb: SafeDb = async <T>() =>
-      Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
-    const ctx = createContext(endpoint, safeDb);
-    const headers = createHeaders();
-    ctx.set.headers = headers;
+test("a retryable handler error sets a whole-second Retry-After", async () => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          message: "Work capacity is unavailable",
+          retryable: true,
+          retryAfterMs: 2000,
+        }),
+      );
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
 
-    await endpoint.handler(ctx);
+  await endpoint.handler(ctx);
 
-    const retryAfter =
-      headers instanceof Headers
-        ? headers.get("Retry-After")
-        : Object.entries(headers)
-            .find(([name]) => name === "Retry-After")
-            ?.at(1);
-    expect(retryAfter).toMatch(/^\d+$/u);
-    expect(Number(retryAfter)).toBeGreaterThanOrEqual(2);
-  },
-);
+  const retryAfter = ctx.set.headers["Retry-After"];
+  expect(retryAfter).toMatch(/^\d+$/u);
+  expect(Number(retryAfter)).toBeGreaterThanOrEqual(2);
+});
 
 test.each([
   [
-    "Headers",
-    () =>
-      new Headers({
-        "Content-Disposition": "attachment; filename=fixture.txt",
-      }),
+    "canonical",
+    () => ({ "Content-Disposition": "attachment; filename=fixture.txt" }),
   ],
   [
-    "plain record",
+    "lower-cased",
     () => ({ "content-disposition": "attachment; filename=fixture.txt" }),
   ],
 ] as const)(
-  "reads Content-Disposition from %s",
+  "reads a %s Content-Disposition header",
   async (_name, createHeaders) => {
     const endpoint = createSafePublicHandler(
       {
@@ -227,13 +211,16 @@ test.each([
 );
 
 describe("createSafeHandler workspace audit binding", () => {
-  test("rebinds audit recording to the validated workspace", async () => {
+  // The caller binds the recorder to the matter it proved (REST in
+  // `authorizeWorkspace`, MCP in `capabilityHandlerContext`); the handler
+  // factory hands that recorder on and never builds or swaps its own.
+  test("hands the handler the recorder its caller bound to the matter", async () => {
     const workspaceId = toSafeId<"workspace">(
       "019e7000-0000-7000-8000-000000000003",
     );
-    const reboundRecorder: AuditRecorder = async () => undefined;
+    const boundRecorder: AuditRecorder = async () => undefined;
     let recorderSeenByHandler: AuditRecorder | undefined;
-    let recorderWorkspaceId: string | null | undefined;
+    let recorderFactoryCalled = false;
     const endpoint = createSafeHandler(
       {
         contract: "patch",
@@ -275,20 +262,18 @@ describe("createSafeHandler workspace audit binding", () => {
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
-      recordAuditEvent: noopAuditRecorder,
-      createAuditRecorder: (options?: {
-        workspaceId?: typeof workspaceId | null;
-      }) => {
-        recorderWorkspaceId = options?.workspaceId;
-        return reboundRecorder;
+      recordAuditEvent: boundRecorder,
+      createAuditRecorder: () => {
+        recorderFactoryCalled = true;
+        return noopAuditRecorder;
       },
     };
 
     const result = await endpoint.handler(asTestRaw(context));
 
     expect(result).toEqual({ ok: true });
-    expect(recorderWorkspaceId).toBe(workspaceId);
-    expect(recorderSeenByHandler).toBe(reboundRecorder);
+    expect(recorderSeenByHandler).toBe(boundRecorder);
+    expect(recorderFactoryCalled).toBe(false);
   });
 });
 
@@ -512,8 +497,8 @@ describe("createSafeRootHandler usage preflight", () => {
   });
 });
 
-const createContext = (
-  endpoint: ReturnType<typeof createSafeRootHandler>,
+const createContext = <TContext>(
+  _endpoint: { readonly handler: (ctx: TContext) => unknown },
   safeDb: SafeDb,
   {
     orgAIConfig = null,
@@ -524,7 +509,7 @@ const createContext = (
     orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
-): Parameters<typeof endpoint.handler>[0] =>
+): TContext =>
   ({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
@@ -552,7 +537,7 @@ const createContext = (
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
-  }) as unknown as Parameters<typeof endpoint.handler>[0];
+  }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({
   providers: [{ provider: "openai", apiKey: "test-api-key" }],

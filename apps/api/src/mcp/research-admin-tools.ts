@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
@@ -31,7 +31,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
@@ -59,6 +58,8 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
@@ -215,6 +216,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // and never appears on the anonymized surface.
   access: "read",
   readClass: "tenant",
+  permissions: { type: "all", permissions: { auditLog: ["read"] } },
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",
@@ -476,6 +478,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
       "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
   },
   access: "read",
+  permissions: openMcpRead("public legislation corpus"),
   readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
@@ -779,7 +782,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(vApiDate),
+          v.nullable(apiDateSchema),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),
@@ -892,7 +895,7 @@ const handleAddMember = async ({
   requestedWorkspaceId,
   userId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
 }): Promise<
@@ -933,7 +936,7 @@ const handleRemoveMember = async ({
   userId,
   reassignTo,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   requestedWorkspaceId: string;
   userId: string;
   reassignTo?: string | undefined;

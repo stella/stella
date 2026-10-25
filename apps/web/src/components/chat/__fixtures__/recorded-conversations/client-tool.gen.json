@@ -22,12 +22,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Draft it as a document"
               }
             ],
@@ -383,36 +383,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft it as a document"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft it as a document"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -737,24 +737,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-2",
-            "parentRunId": "run-recorded-1",
-            "resume": [
-              {
-                "interruptId": "client_tool_call-1",
-                "payload": {
-                  "destination": "draft",
-                  "fileName": "Mutual NDA.docx",
-                  "fixes": [],
-                  "success": true,
-                  "warnings": []
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:13.000Z",
@@ -770,7 +757,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "toolCalls": [
                   {
                     "id": "call-1",
@@ -783,8 +769,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-1",
+                "role": "tool",
                 "toolCallId": "call-1",
                 "content": "{\"destination\":\"draft\",\"fileName\":\"Mutual NDA.docx\",\"fixes\":[],\"success\":true,\"warnings\":[]}",
                 "metadata": {
@@ -1146,6 +1132,9 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1163,17 +1152,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "create-document",
-                      "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1204,27 +1182,38 @@
                     "state": "complete"
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "create-document",
+                      "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:15.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "client_tool_call-1",
+                  "status": "resolved",
                   "payload": {
                     "destination": "draft",
                     "fileName": "Mutual NDA.docx",
                     "fixes": [],
                     "success": true,
                     "warnings": []
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1242,17 +1231,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "create-document",
-                      "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1283,26 +1261,48 @@
                     "state": "complete"
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "create-document",
+                      "arguments": "{\"name\":\"Mutual NDA\",\"source\":\"@title Mutual NDA\\n\\nThe parties agree to keep each other's information confidential.\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:17.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "client_tool_call-1",
+                  "status": "resolved",
                   "payload": {
                     "destination": "draft",
                     "fileName": "Mutual NDA.docx",
                     "fixes": [],
                     "success": true,
                     "warnings": []
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "client_tool_call-1",
+                "status": "resolved",
+                "payload": {
+                  "destination": "draft",
+                  "fileName": "Mutual NDA.docx",
+                  "fixes": [],
+                  "success": true,
+                  "warnings": []
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {
