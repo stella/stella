@@ -87,9 +87,22 @@ const inspectSourceWrites = (source: string, file: string) => {
       ancestors.at(-1)?.type === "ObjectPattern" &&
       node.key.type === "Identifier"
     ) {
+      const owner = ancestors.findLast(
+        (ancestor) =>
+          ![
+            "ObjectPattern",
+            "ArrayPattern",
+            "Property",
+            "AssignmentPattern",
+            "RestElement",
+          ].includes(ancestor.type),
+      );
       const binding =
         node.value.type === "AssignmentPattern" ? node.value.left : node.value;
-      if (binding.type === "Identifier") {
+      if (
+        owner?.type !== "AssignmentExpression" &&
+        binding.type === "Identifier"
+      ) {
         aliases.set(binding.name, node.key.name);
       }
     }
@@ -128,6 +141,9 @@ const inspectSourceWrites = (source: string, file: string) => {
   ): string | undefined => {
     if (seen.has(expression)) {
       return undefined;
+    }
+    if (expression.type === "ChainExpression") {
+      return callName(expression.expression, new Set(seen).add(expression));
     }
     if (expression.type === "Identifier") {
       const initializer = bindingFor(expression);
@@ -201,6 +217,7 @@ const inspectSourceWrites = (source: string, file: string) => {
       }
     }
     if (
+      node.type === "ChainExpression" ||
       node.type === "ParenthesizedExpression" ||
       node.type === "AwaitExpression" ||
       node.type === "TSAsExpression" ||
@@ -571,6 +588,12 @@ test("only Bun.write is treated as the filesystem write API", () => {
   ).toEqual([]);
   expect(
     inspectSourceWrites(
+      `let save; ({ writeFileSync: save } = fixture()); save(${destination}, "");`,
+      "packages/scripts/src/example.test.ts",
+    ),
+  ).toEqual([]);
+  expect(
+    inspectSourceWrites(
       `fixture.write(${destination}, "");`,
       "packages/scripts/src/example.test.ts",
     ),
@@ -587,6 +610,8 @@ test("the census rejects every writer through direct and derived source destinat
   const destinations = [
     'import.meta.dir + "/mutation.ts"',
     'path.join(__dirname, "mutation.ts")',
+    'path?.join(import.meta.dir, "mutation.ts")',
+    'import.meta?.dir + "/mutation.ts"',
     'path.resolve(import.meta.dir, "nested", name)',
     'path.join("apps/api/src", name)',
     '"src/mutation.ts"',
@@ -603,6 +628,15 @@ test("the census rejects every writer through direct and derived source destinat
       expect(
         inspectSourceWrites(fixture, "apps/api/src/tests/example.test.ts"),
         fixture,
+      ).toHaveLength(argumentIndexes.length);
+      const alias = writer === "write" ? "Bun?.write" : `fs?.${writer}`;
+      const aliasedFixture = `const target = ${destination}; const save = ${alias}; save(${arguments_.join(", ")});`;
+      expect(
+        inspectSourceWrites(
+          aliasedFixture,
+          "apps/api/src/tests/example.test.ts",
+        ),
+        aliasedFixture,
       ).toHaveLength(argumentIndexes.length);
     }
   }
