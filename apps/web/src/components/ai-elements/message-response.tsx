@@ -13,12 +13,14 @@ import { cn } from "@stll/ui/utils";
 import { mermaidDiagramRenderer } from "@/components/ai-elements/mermaid-diagram-block";
 import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
+import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
   sourceOffsets?: boolean;
 };
 
 const streamdownPlugins = { cjk, math, renderers: [mermaidDiagramRenderer] };
+const EMPTY_REHYPE_PLUGINS = Object.freeze([]);
 
 // `<stll-anon>` is injected into the parsed HAST by the
 // `rehype-anon-spans` plugin after markdown parsing. Streamdown's
@@ -38,7 +40,13 @@ export const MessageResponseImpl = memo(
   }: MessageResponseProps) => {
     const effectiveRehypePlugins = useMemo(
       () => [
-        ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
+        // Streamdown's raw HTML, sanitize and harden chain always runs first:
+        // a caller's `rehypePlugins` only add to it. Replacing it would render
+        // raw HTML as literal text and leave link hardening to the components.
+        // Ids and names from raw HTML then move into the answer namespace.
+        ...Object.values(defaultRehypePlugins),
+        rehypeScopeAnswerIds,
+        ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
         ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
         rehypeChatLinks,
       ],
@@ -89,12 +97,14 @@ export const MessageResponseImpl = memo(
       />
     );
   },
-  // Children covers streaming text deltas. Compare the props that
-  // matter for downstream features (rehype plugin, components map,
-  // styling) so the wasm pipeline output isn't masked by an over-
-  // aggressive memo.
+  // Children covers streaming text deltas; `isAnimating` marks the last
+  // block incomplete and holds code-block actions until the stream settles.
+  // Compare the props that matter for downstream features (rehype plugin,
+  // components map, styling) so the wasm pipeline output isn't masked by an
+  // over-aggressive memo.
   (prev, next) =>
     prev.children === next.children &&
+    prev.isAnimating === next.isAnimating &&
     prev.rehypePlugins === next.rehypePlugins &&
     prev.components === next.components &&
     prev.allowedTags === next.allowedTags &&

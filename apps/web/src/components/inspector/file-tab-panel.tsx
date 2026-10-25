@@ -140,8 +140,7 @@ const getFileTabEditorState = ({
   desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
   editingDocxTabId: string | null;
   entityData:
-    | { fields: { id: string; propertyId?: string | undefined }[] }
-    | undefined;
+    { fields: { id: string; propertyId?: string | undefined }[] } | undefined;
   filePropertyId: string | undefined;
   isNativeDocxDisplay: boolean;
   isPdfDisplay: boolean;
@@ -294,6 +293,7 @@ export const FileTabPanel = ({
     isEmailViewerActive: display.isEmailViewerActive,
     isPdfDisplay,
     minimized,
+    needsConversionStatus: display.needsConversionStatus,
     needsPropertyResolution: display.needsPropertyResolution,
     tab,
   });

@@ -10,9 +10,9 @@ import path from "node:path";
 import ts from "typescript6";
 
 import {
+  countDbAwaitInLoopDirectives,
   type DbAwaitInLoopReport,
   isApiSourceInScope,
-  countDbAwaitInLoopDirectives,
   scanDbAwaitInLoop,
 } from "./db-await-in-loop";
 

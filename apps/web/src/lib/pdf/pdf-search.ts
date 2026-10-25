@@ -2,6 +2,8 @@ import type { PDF, PDFPage } from "@libpdf/core";
 
 import { findSearchMatchRanges } from "@stll/text-normalize";
 
+import { resolvePDFPageSource } from "@/lib/pdf/pdf-page-source";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import {
@@ -39,6 +41,7 @@ export type PDFSearchViewportBox = {
 type FindPDFSearchResultsOptions = {
   bytes: Uint8Array;
   password?: string | undefined;
+  pageSource: PDFPageSource;
   searchText: SearchTextQuery;
   signal: AbortSignal;
 };
@@ -108,7 +111,12 @@ export const mergePDFSearchBoxes = (
 
 type PageText = ReturnType<PDFPage["extractText"]>;
 
-type PageSearchText = {
+/**
+ * A page's text as LibPDF extracts it, with the glyph box behind each UTF-16
+ * unit (null for the newline between lines). The text is LibPDF's own page
+ * text: lines of span characters joined by "\n".
+ */
+export type PageSearchText = {
   boxesByOffset: (PDFSearchBox | null)[];
   text: string;
 };
@@ -216,14 +224,23 @@ const findPageMatches = ({
     pageIndex,
   });
 
-const getViewerSearchPages = async (
-  pdf: PDF,
-  signal: AbortSignal,
-): Promise<ViewerSearchPage[]> => {
+type GetViewerSearchPagesOptions = {
+  pdf: PDF;
+  signal: AbortSignal;
+  pageSource: PDFPageSource;
+};
+
+const getViewerSearchPages = async ({
+  pdf,
+  signal,
+  pageSource,
+}: GetViewerSearchPagesOptions): Promise<ViewerSearchPage[]> => {
   const rootPages = pdf.getPages();
   const pdfAttachments: Uint8Array[] = [];
 
-  for (const [name, attachment] of pdf.getAttachments()) {
+  const attachmentEntries =
+    pageSource === "portfolio" ? pdf.getAttachments() : [];
+  for (const [name, attachment] of attachmentEntries) {
     signal.throwIfAborted();
     if (!attachment.filename.trim().toLowerCase().endsWith(".pdf")) {
       continue;
@@ -234,7 +251,13 @@ const getViewerSearchPages = async (
     }
   }
 
-  if (rootPages.length > 1 || pdfAttachments.length === 0) {
+  if (
+    resolvePDFPageSource({
+      pageSource,
+      documentPageCount: rootPages.length,
+      attachmentCount: pdfAttachments.length,
+    }) === "document"
+  ) {
     return rootPages.map((page, pageIndex) => ({ page, pageIndex }));
   }
 
@@ -262,6 +285,7 @@ const getViewerSearchPages = async (
 export const findPDFSearchResults = async ({
   bytes,
   password,
+  pageSource,
   searchText,
   signal,
 }: FindPDFSearchResultsOptions): Promise<PDFSearchResult | null> => {
@@ -274,7 +298,7 @@ export const findPDFSearchResults = async ({
   );
   signal.throwIfAborted();
 
-  const pages = await getViewerSearchPages(pdf, signal);
+  const pages = await getViewerSearchPages({ pdf, signal, pageSource });
   signal.throwIfAborted();
   const candidates = getSearchTextCandidates(searchText);
   const pageSearchTextCache = new WeakMap<PDFPage, PageSearchText>();
@@ -393,4 +417,42 @@ export const toPDFSearchViewportBox = (
     width: Math.abs(end.x - start.x),
     height: Math.abs(end.y - start.y),
   };
+};
+
+/** One page's search text, by its 1-based number in the document. */
+export type NumberedPageSearchText = PageSearchText & { pageNumber: number };
+
+type ExtractPDFPageSearchTextsOptions = {
+  bytes: Uint8Array;
+  /** 1-based; a number past the last page is skipped. */
+  pageNumbers: readonly number[];
+  signal: AbortSignal;
+};
+
+/**
+ * The search text of the document's own pages, read the way the server reads
+ * a PDF for verification (`PDF.load(bytes)`, then each page's
+ * `extractText()`), so a server offset into page N's text indexes the same
+ * unit here. Embedded portfolio PDFs are not opened.
+ */
+export const extractPDFPageSearchTexts = async ({
+  bytes,
+  pageNumbers,
+  signal,
+}: ExtractPDFPageSearchTextsOptions): Promise<NumberedPageSearchText[]> => {
+  signal.throwIfAborted();
+  const { PDF } = await import("@libpdf/core");
+  const pdf = await PDF.load(bytes);
+  signal.throwIfAborted();
+  const pages = pdf.getPages();
+  const texts: NumberedPageSearchText[] = [];
+  for (const pageNumber of new Set(pageNumbers)) {
+    signal.throwIfAborted();
+    const page = pages.at(pageNumber - 1);
+    if (pageNumber < 1 || page === undefined) {
+      continue;
+    }
+    texts.push({ pageNumber, ...buildPageSearchText(page.extractText()) });
+  }
+  return texts;
 };

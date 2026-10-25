@@ -219,7 +219,6 @@ export const DOC_SOURCES = {
       "oxlint",
       "@oxlint/plugins",
       "oxc-transform-react",
-      "oxfmt",
       "oxlint-tsgolint",
     ],
     markdownPages: {
@@ -375,6 +374,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "use-debounce",
   "use-intl",
   "uuid",
+  "xmllint-wasm",
 ]
   .map(noLlmsTxt)
   .concat(
@@ -402,11 +402,27 @@ export const DOC_SOURCE_EXCLUSIONS = [
         }) satisfies NoLlmsTxtExclusion,
     ),
     {
+      checkedAt: "2026-10-24T00:00:00.000Z",
+      dependency: "@noble/hashes",
+      explanation:
+        "The repository's https://raw.githubusercontent.com/paulmillr/noble-hashes/main/llms.txt returns 404. Use the official README and API declarations at https://github.com/paulmillr/noble-hashes directly; the shared SHA-256 owner uses create(), update() and digest() for bounded browser Blob hashing.",
+      expiresAt: "2026-11-23T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-20T00:00:00.000Z",
       dependency: "lzma1",
       explanation:
         "https://xseman.github.io/lzma1/llms.txt and the repository's llms.txt return 404. Use the README and type declarations at https://github.com/xseman/lzma1 directly; PAY by square uses only compress() with explicit lc/lp/pb/dictSize options.",
       expiresAt: "2026-11-19T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-24T00:00:00.000Z",
+      dependency: "bysquare",
+      explanation:
+        "https://raw.githubusercontent.com/xseman/bysquare/master/llms.txt and the typescript/llms.txt path return 404. Use the TypeScript README and API declarations at https://github.com/xseman/bysquare/tree/master/typescript directly; the package is used only as an independent PAY by square decoder in tests.",
+      expiresAt: "2026-11-23T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
@@ -634,11 +650,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-23T00:00:00.000Z",
+      checkedAt: "2026-10-23T00:00:00.000Z",
       dependency: "hyparquet",
       explanation:
         "https://hyparam.github.io/hyparquet/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/hyparam/hyparquet and the typed API in its package (src/types.d.ts) directly.",
-      expiresAt: "2026-10-23T00:00:00.000Z",
+      expiresAt: "2026-11-22T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {

@@ -50,10 +50,12 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Storage tombstones: they must outlive the rows they erase.",
   template_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
+  mcp_web_handoff: "Short-lived OAuth state; never reviewer content.",
   mcp_oauth_clients: "OAuth data: never touched by the reset.",
   mcp_oauth_state: "OAuth data: never touched by the reset.",
   mcp_user_connections: "OAuth data: never touched by the reset.",
   service_oauth_clients: "OAuth data: never touched by the reset.",
+  oauth_grant_revocations: "OAuth data: never touched by the reset.",
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",

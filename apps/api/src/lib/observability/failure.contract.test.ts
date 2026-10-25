@@ -67,8 +67,8 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
-  initRequestContext,
   getRequestFailure,
+  initRequestContext,
 } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -179,6 +179,9 @@ const SQL_STATE_EXPECTED = {
   "57014": ["pg_query_canceled", "defect"],
   "28P01": ["pg_auth_failed", "defect"],
   "28000": ["pg_auth_failed", "defect"],
+  "22007": ["pg_invalid_input", "defect"],
+  "22008": ["pg_invalid_input", "defect"],
+  "22P02": ["pg_invalid_input", "defect"],
 } as const satisfies Record<keyof typeof PG_SQL_STATE_REASON, Expected>;
 
 // SQLSTATEs no set grades: they stay defects whatever the shape.
@@ -462,6 +465,21 @@ const GRADING_ROWS: readonly GradingRow[] = [
       }),
     reason: "generation_cancelled",
     grade: "anticipated",
+  },
+  {
+    name: "a cancelled generation through aiHandlerError",
+    error: () =>
+      aiHandlerError(
+        new HandlerError({
+          status: 502,
+          message: SENTINEL,
+          cause: new AIGenerationCancelledError({ message: SENTINEL }),
+        }),
+        { status: 502, message: "fallback" },
+      ),
+    reason: "generation_cancelled",
+    grade: "anticipated",
+    rule: "brand",
   },
   {
     name: "a cancellation deeper than the immediate wrapper stays visible",
@@ -954,6 +972,20 @@ describe("the observation reads the boundary's decision, not the classifier", ()
       expect(answered.status).toBe(status);
       expect(readEvidence(answered).nodes[0]?.brand?.source).toBe("instance");
     }
+  });
+
+  test("a cancelled generation keeps the caller's fallback", () => {
+    const answered = aiHandlerError(
+      new HandlerError({
+        status: 502,
+        message: SENTINEL,
+        cause: new AIGenerationCancelledError({ message: SENTINEL }),
+      }),
+      { status: 502, message: "fallback" },
+    );
+
+    expect(answered.status).toBe(502);
+    expect(answered.message).toBe("fallback");
   });
 
   test("an unknown failure keeps the caller's fallback unclassified", () => {

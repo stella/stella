@@ -135,10 +135,7 @@ const inAppScope = async <T>(
 const gateOf = async (
   client: SQL,
   relation:
-    | "entity_versions"
-    | "fields"
-    | "extracted_content"
-    | "search_documents",
+    "entity_versions" | "fields" | "extracted_content" | "search_documents",
   id: string,
 ) => {
   switch (relation) {

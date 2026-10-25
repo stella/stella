@@ -10,7 +10,6 @@ import {
   CONTACT_IMPORT_MAX_COLUMNS,
   CONTACT_IMPORT_MAX_ROWS,
   CONTACT_IMPORT_VOCABULARIES,
-  parseContactImportMapping,
   type ContactImportField,
   type ContactImportIssueCode,
   type ContactImportLabeledField,
@@ -18,6 +17,7 @@ import {
   type ContactImportTargetField,
   type ContactImportTaxIdScheme,
   type ContactType,
+  parseContactImportMapping,
 } from "@stll/api-contract";
 import { isCountryCode } from "@stll/country-codes";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -31,6 +31,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { classifyBrazilianTaxId } from "@/api/handlers/contacts/contact-import-receipt";
 import { isValidDateOfBirth } from "@/api/handlers/contacts/person-details";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
@@ -214,8 +215,7 @@ const FIELD_ALIASES = {
  * fallback for a header nothing recognizes, never something an alias declares.
  */
 export type ContactImportSuggestedTarget =
-  | ContactImportField
-  | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
+  ContactImportField | typeof CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION;
 
 /**
  * Where each label of a `Label: value` vocabulary lands. The five identity
@@ -246,7 +246,11 @@ const BRAZILIAN_TAX_ID_TOKENS = new Set(
   ),
 );
 
-const TARGET_FOR_ALIAS = new Map<string, ContactImportSuggestedTarget>();
+// Each field's own name is seeded first, so the export's header row (exactly
+// `CONTACT_IMPORT_FIELDS`) maps back to itself whatever the aliases list.
+const TARGET_FOR_ALIAS = new Map<string, ContactImportSuggestedTarget>(
+  CONTACT_IMPORT_FIELDS.map((field) => [normalizeToken(field), field]),
+);
 for (const field of CONTACT_IMPORT_FIELDS) {
   for (const alias of FIELD_ALIASES[field]) {
     if (!TARGET_FOR_ALIAS.has(alias)) {
@@ -1162,3 +1166,16 @@ export const previewContactImport = ({
     validCount: rows.filter(({ issues }) => issues.length === 0).length,
   });
 };
+
+/**
+ * An import's single tax column holds a national tax number or an EU VAT
+ * number; it is stored the way every contact writer stores the pair
+ * (`contactTaxIdentifiers`). Brazilian tax ids stay tax ids.
+ */
+export const importedTaxIdentifiers = (
+  taxId: string | undefined,
+  taxIdScheme: ContactImportTaxIdScheme,
+) =>
+  taxIdScheme === "none"
+    ? contactTaxIdentifiers({ taxId: taxId ?? null, vatId: null })
+    : { taxId: taxId ?? null, vatId: null };

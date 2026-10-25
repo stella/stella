@@ -134,7 +134,6 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "legal_list_items",
   "legal_list_sections",
   "legal_lists",
-  "legal_reader_annotations",
   "legislation_documents",
   "legislation_index_jobs",
   "legislation_search_documents",

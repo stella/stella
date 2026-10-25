@@ -10,8 +10,8 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
-  DECISION_TEXT_WITHHELD_REASON,
   DECISION_TEXT_SOURCE,
+  DECISION_TEXT_WITHHELD_REASON,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
 import {
@@ -1342,6 +1342,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         unitPrice: v.number(),
         vatRateBps: v.number(),
         vatTreatment: v.string(),
+        exemptionReason: v.nullable(contentText()),
         netAmount: v.number(),
         vatAmount: v.number(),
         grossAmount: v.number(),
@@ -1438,20 +1439,46 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
             knownGaps: v.variant("type", [
-              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
               projectionBranch(
-                v.strictObject({ type: v.literal("none-recorded") }),
+                v.strictObject({
+                  type: v.literal("not_reconciled"),
+                  reason: v.string(),
+                }),
               ),
               projectionBranch(
                 v.strictObject({
-                  type: v.literal("known"),
-                  gaps: v.array(
-                    v.strictObject({
-                      from: v.string(),
-                      to: v.string(),
-                      reason: v.string(),
-                      evidenceRef: v.string(),
-                    }),
+                  type: v.literal("reconciled"),
+                  summary: v.strictObject({
+                    missing: v.number(),
+                    shortSlices: v.number(),
+                    unlistedSlices: v.number(),
+                  }),
+                  years: v.array(
+                    v.variant("type", [
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("complete"),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("gaps"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                        }),
+                      ),
+                      projectionBranch(
+                        v.strictObject({
+                          year: v.number(),
+                          type: v.literal("unlisted"),
+                          missing: v.number(),
+                          shortSlices: v.number(),
+                          unlistedSlices: v.number(),
+                        }),
+                      ),
+                    ]),
                   ),
                 }),
               ),
@@ -2028,6 +2055,12 @@ const businessRegistryHitProjection = v.strictObject({
   // unchanged.
   registryUrl: publicUrl(),
   details: v.optional(unenumeratedJson()),
+  provenance: v.optional(
+    v.strictObject({
+      identifierSource: v.literal("web-search"),
+      recordSource: v.literal("official-registry"),
+    }),
+  ),
 });
 
 /**
@@ -2048,6 +2081,26 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
       type: v.literal("search"),
       registry: v.string(),
       hits: v.array(businessRegistryHitProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-not-found"),
+      registry: v.string(),
+      candidates: v.array(
+        v.strictObject({
+          id: v.string(),
+          reason: v.picklist(["no-official-record", "name-mismatch"]),
+          officialName: v.optional(v.string()),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-unavailable"),
+      registry: v.string(),
+      reason: v.literal("web-search-unavailable"),
     }),
   ),
 ]);

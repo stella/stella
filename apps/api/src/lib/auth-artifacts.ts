@@ -19,6 +19,7 @@ import {
   folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
   sharepointConnections,
   sharepointOAuthState,
@@ -102,6 +103,20 @@ const API_KEY_ORGANIZATION_SCOPE = {
  * because re-inviting the same person restores exactly that membership.
  */
 const MEMBER_CREDENTIAL_REVOCATION = {
+  mcpWebHandoff: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    // audit: skip - removeOrganizationMemberInTransaction records the parent membership event in this transaction.
+    await tx
+      .delete(mcpWebHandoff)
+      .where(
+        and(
+          eq(mcpWebHandoff.userId, userId),
+          eq(mcpWebHandoff.organizationId, organizationId),
+        ),
+      );
+  },
   oauthAccessToken: async (
     tx,
     { organizationId, userId }: MemberCredentialScope,
@@ -339,6 +354,26 @@ const MEMBER_CREDENTIAL_REVOCATION = {
       );
   },
 } as const satisfies Record<string, RevokeMemberCredentials>;
+
+/** Tables whose credential rows are revoked by the registry above. */
+export const memberCredentialRevocationTables = {
+  mcpWebHandoff,
+  oauthAccessToken,
+  oauthRefreshToken,
+  oauthConsent,
+  session: sessionTable,
+  agentRegistration,
+  agentDelegation,
+  mcpUserConnection: mcpUserConnections,
+  mcpOAuthState,
+  sharepointConnection: sharepointConnections,
+  sharepointOAuthState,
+  desktopEditHandoff: desktopEditHandoffs,
+  desktopEditSession: desktopEditSessions,
+  pdfSigningSession: pdfSigningSessions,
+  folioCollabRoomToken: folioCollabRoomTokens,
+  apiKey: apikey,
+} as const satisfies Record<keyof typeof MEMBER_CREDENTIAL_REVOCATION, PgTable>;
 
 /**
  * End every credential one member holds in one organization. Runs inside the

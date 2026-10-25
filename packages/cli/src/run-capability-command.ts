@@ -7,6 +7,8 @@
 
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type { Context } from "./context.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
@@ -15,10 +17,10 @@ import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
-  renderClientError,
   maybeConfirmAndRetry,
   parseInputObject,
   readOutputFormat,
+  renderClientError,
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
@@ -155,7 +157,9 @@ export const runCapabilityCommand = async ({
       setPath(
         input,
         `${paginationPart}.limit`,
-        Number.parseInt(limitFlag.trim(), 10),
+        parseIntegerToken(limitFlag, { sign: "unsigned", min: 1 }).unwrap(
+          "Reserved pagination limit was validated before building the request",
+        ),
       );
     }
   }
@@ -169,12 +173,16 @@ export const runCapabilityCommand = async ({
   }
 
   // Write capabilities own confirmation; read arguments never carry a gate.
-  if (spec.access === "write" && spec.destructive) {
+  if (
+    spec.access === "write" &&
+    (spec.destructive || spec.confirmation === "required")
+  ) {
     const outcome = await confirmDestructive({
       context,
       flags,
       writers,
       label: spec.commandPath.join(" "),
+      operation: spec.destructive ? "destructive" : "approval",
     });
     if (outcome === "aborted") {
       setExit(context, EXIT_CODES.aborted);

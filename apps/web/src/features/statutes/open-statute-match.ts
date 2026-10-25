@@ -6,8 +6,8 @@ import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 
 import {
-  statutesInfiniteOptions,
   type StatuteListFilters,
+  statutesInfiniteOptions,
 } from "@/features/statutes/queries/statutes";
 import { readStatuteIntent } from "@/features/statutes/statute-index-search.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";

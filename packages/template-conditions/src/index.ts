@@ -12,9 +12,9 @@
  */
 
 import {
-  evaluateCondition as evaluateConditionAst,
   type ConditionNode,
   type ConditionValue,
+  evaluateCondition as evaluateConditionAst,
   type OperandResolver,
 } from "@stll/conditions";
 

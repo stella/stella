@@ -1,5 +1,5 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -67,7 +67,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
-import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/bun";
+import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -88,9 +88,9 @@ import {
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
-  STORED_RAW_REPARSE_REJECTION,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {

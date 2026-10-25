@@ -12,7 +12,7 @@ import {
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -21,9 +21,9 @@ import {
   COMPACTION_SYSTEM_PROMPT,
 } from "@/api/lib/chat/compaction-summary";
 import {
+  compactionGenerationRequest,
   DEFAULT_PRESERVE_TOKENS,
   DEFAULT_TRIGGER_TOKENS,
-  compactionGenerationRequest,
   estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_STRUCTURED_PART_CHARS,
@@ -39,6 +39,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+
+// Compaction serves an interactive turn; a stalled summary falls back to the
+// bounded recent history and its visible context notice.
+const COMPACTION_GENERATION_DEADLINE_MS = 30_000;
 
 export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
@@ -489,6 +493,7 @@ export const compactModelMessages = async ({
 };
 
 type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
+  summaryDeadlineMs?: number | undefined;
   abortSignal: AbortSignal;
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   boundary: ChatThirdPartyBoundary;
@@ -506,6 +511,7 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
 };
 
 type CompactModelMessagesForModelOptions = {
+  summaryDeadlineMs?: number | undefined;
   abortSignal: AbortSignal;
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   modelId?: string | undefined;
@@ -527,6 +533,7 @@ type CompactModelMessagesForModelOptions = {
 };
 
 export const compactChatMessagesForModel = async ({
+  summaryDeadlineMs = COMPACTION_GENERATION_DEADLINE_MS,
   abortSignal,
   aiAnalytics,
   boundary,
@@ -555,6 +562,7 @@ export const compactChatMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            deadlineMs: summaryDeadlineMs,
             userId: admission.userId,
             dataClass: "customer",
             abortSignal,
@@ -599,6 +607,7 @@ export const compactChatMessagesForModel = async ({
   });
 
 export const compactModelMessagesForModel = async ({
+  summaryDeadlineMs = COMPACTION_GENERATION_DEADLINE_MS,
   abortSignal,
   aiAnalytics,
   modelId,
@@ -629,6 +638,7 @@ export const compactModelMessagesForModel = async ({
       const result = await Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            deadlineMs: summaryDeadlineMs,
             userId: admission.userId,
             dataClass: "customer",
             abortSignal,

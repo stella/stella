@@ -1,15 +1,16 @@
 # Managed deployment
 
-Administrators can fix three settings for every user of a Mac or PC. The
+Administrators can fix these settings for every user of a Mac or PC. The
 app reads them once at launch; a change applies the next time stella desktop
 starts.
 
-| Key               | Type    | Effect                                                                                   |
-| ----------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `DisableUpdates`  | Boolean | No update checks: background, tray and handoff. The tray says updates are managed.       |
-| `DisableActivity` | Boolean | The activity timeline stays off even when the server enables it for the account.         |
-| `ServerWebOrigin` | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
-| `ServerApiURL`    | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
+| Key                | Type    | Effect                                                                                   |
+| ------------------ | ------- | ---------------------------------------------------------------------------------------- |
+| `DisableUpdates`   | Boolean | No update checks: background, tray and handoff. The tray says updates are managed.       |
+| `DisableActivity`  | Boolean | The activity timeline stays off even when the server enables it for the account.         |
+| `DisableClipboard` | Boolean | No clipboard history: nothing is recorded, and no shortcut, tray item or link opens it.  |
+| `ServerWebOrigin`  | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
+| `ServerApiURL`     | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
 
 Both server keys must be set, as exact HTTPS origins without a path; a
 server named by only one of them, or by an invalid URL, is ignored. The
@@ -19,6 +20,12 @@ of it.
 `DisableActivity` stops recording and closes the activity window, like any
 other closed feature gate. Data already recorded stays on the device until
 retention removes it.
+
+`DisableClipboard` keeps clipboard history from starting: the clipboard is
+never read, the global shortcut is not registered, the tray has no Clipboard
+item, and first-run setup skips the shortcut practice step. Settings say the
+organization turned it off. Clips recorded before stay encrypted on the device
+and are not shown.
 
 Copy diagnostics reports which of these settings apply, without naming the
 server.
@@ -50,6 +57,8 @@ General › Device Management; its values are forced in the same way.
   <true/>
   <key>DisableActivity</key>
   <true/>
+  <key>DisableClipboard</key>
+  <true/>
   <key>ServerWebOrigin</key>
   <string>https://stella.firm.example</string>
   <key>ServerApiURL</key>
@@ -73,6 +82,7 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\stella\Desktop]
 "DisableUpdates"=dword:00000001
 "DisableActivity"=dword:00000001
+"DisableClipboard"=dword:00000001
 "ServerWebOrigin"="https://stella.firm.example"
 "ServerApiURL"="https://api.stella.firm.example"
 ```

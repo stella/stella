@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
@@ -56,7 +56,7 @@ export type ReaderAnnotationTarget =
 /** How the annotation store and the API address the document. */
 export const readerAnnotationTargetKey = (
   target: ReaderAnnotationTarget,
-): { targetId: string; targetType: ReaderAnnotationTargetType } => ({
+): { targetId: string; targetType: ReaderDocumentTargetType } => ({
   targetId: target.id,
   targetType: target.type,
 });

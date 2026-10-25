@@ -13,9 +13,9 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {
+  SOFT_LAW_BATCH_LIMIT,
   SoftLawIngestionError,
   SoftLawItemError,
-  SOFT_LAW_BATCH_LIMIT,
   softLawItemErrorRejection,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {

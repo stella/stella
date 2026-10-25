@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as agentSchema from "@/api/db/agent-auth-schema";
@@ -69,6 +69,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_research_answers.run",
   "case_law_research_columns.content",
   "case_law_research_columns.tool",
+  "case_law_sitemap_shard_counts.months",
   "case_law_sources.config",
   "case_law_sources.descriptor",
   "chat_thread_compactions.summary",
@@ -201,6 +202,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "oauth_grant_revocations.user_id":
+    "A revocation only refuses tokens issued before it and is pruned after the access-token lifetime.",
   "desktop_time_entry_batches.user_id":
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":
@@ -483,6 +486,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "mcp_web_handoff.user_id":
+    "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
   "search_history_entries.user_id":
