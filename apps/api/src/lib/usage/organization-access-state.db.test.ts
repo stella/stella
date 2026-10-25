@@ -355,6 +355,7 @@ describe("moving keyless organizations to the free floor", () => {
         await endOrganizationEvaluation(ownerDb(), {
           organizationId: endedId,
           now: new Date(),
+          actor: "operator:test",
         }),
       ).toBe(false);
       const moved = await transitionScopedBatch({
@@ -601,9 +602,24 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       expect(await readState(createdOrgId)).toEqual(started);
 
       // Ending is once; nothing brings the evaluation back.
-      const end = { organizationId: createdOrgId, now };
+      const end = { organizationId: createdOrgId, now, actor: "operator:test" };
       expect(await endOrganizationEvaluation(ownerDb(), end)).toBe(true);
       expect(await endOrganizationEvaluation(ownerDb(), end)).toBe(false);
+      // The ending is audited once; the refused repeat records nothing.
+      expect(
+        await testDb
+          .select({ id: auditLogs.id })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.organizationId, createdOrgId),
+              eq(
+                auditLogs.resourceType,
+                AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+              ),
+            ),
+          ),
+      ).toHaveLength(1);
       await recordNewOrganizationAccessState(ownerDb(), end);
       expect((await readState(createdOrgId))?.state).toBe(
         ORGANIZATION_ACCESS_STATE.evaluationEnded,
@@ -619,6 +635,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       await endOrganizationEvaluation(ownerDb(), {
         organizationId: selfManagedOrgId,
         now: new Date(),
+        actor: "operator:test",
       }),
     ).toBe(false);
     expect((await readState(selfManagedOrgId))?.state).toBe(

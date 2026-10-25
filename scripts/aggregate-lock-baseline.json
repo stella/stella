@@ -4314,12 +4314,6 @@
     "reason": "transaction-boundary in apps/api/src/scripts/corpus-snippet-compare.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/end-organization-evaluation.ts",
-    "fingerprint": "25233166cdd2604aabccfbb2a40be16f46e824f1edb238725f08444c39576e0a",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/end-organization-evaluation.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/scripts/eu-completion-tick.ts",
     "fingerprint": "5462927de6f847a28a3c44c7cb8b032d778b3a8b01fa9300e84273ed82b01d1e",
     "count": 1,

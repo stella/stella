@@ -156,9 +156,16 @@ const addDays = (from: Date, days: number): Date =>
  * repeated call, or one for an organization in any other state, changes
  * nothing.
  */
+const EVALUATION_END_AUDIT_SOURCE = "organization-evaluation-end";
+
+type EndOrganizationEvaluationOptions = OrganizationAccessStateChange & {
+  /** The operator recorded on the audit event. */
+  actor: string;
+};
+
 export const endOrganizationEvaluation = async (
   db: Transaction,
-  { organizationId, now }: OrganizationAccessStateChange,
+  { organizationId, now, actor }: EndOrganizationEvaluationOptions,
 ): Promise<boolean> => {
   const ended = await transitionScopedBatch({
     tx: db,
@@ -169,7 +176,43 @@ export const endOrganizationEvaluation = async (
       to: ORGANIZATION_ACCESS_STATE.evaluationEnded,
       set: { evaluationEndedAt: now },
     },
-    recordTransitionAuditEvent: async () => await Promise.resolve(),
+    recordTransitionAuditEvent: async (auditTx, rows) => {
+      if (rows.length === 0) {
+        return;
+      }
+      await recordAuditGroups({
+        tx: auditTx,
+        groups: [
+          {
+            bindings: {
+              organizationId,
+              workspaceId: null,
+              userId: actor,
+              execution: {
+                performer: { type: "service", id: actor, name: actor },
+                trigger: {
+                  type: "system",
+                  source: EVALUATION_END_AUDIT_SOURCE,
+                },
+              },
+            },
+            events: [
+              {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+                resourceId: organizationId,
+                changes: {
+                  state: {
+                    old: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+                    new: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      });
+    },
   });
   return ended.length > 0;
 };
