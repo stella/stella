@@ -757,6 +757,39 @@ const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
 ] as const;
 
 /** Install the count state and trigger invariants omitted by schema push. */
+const STATUTE_CITATION_PROJECTION_MIGRATIONS = [
+  "20261010212100_case_law_publication_filter",
+  "20261022230000_provision_citation_anchor_lineage",
+] as const;
+
+const definedFunctionsOf = (migration: string): string[] =>
+  Array.from(
+    readFileSync(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      "utf-8",
+    ).matchAll(/CREATE OR REPLACE FUNCTION "([^"]+)"/gu),
+    ([, name]) => name ?? "",
+  );
+
+/**
+ * The projection's migrations, then every later one that redefines a
+ * function they install, oldest first: the schema runs the newest definition
+ * of each, and no redefinition can be left out of the replay.
+ */
+const statuteCitationProjectionMigrations = (): string[] => {
+  const installed = new Set(
+    STATUTE_CITATION_PROJECTION_MIGRATIONS.flatMap(definedFunctionsOf),
+  );
+  const last = STATUTE_CITATION_PROJECTION_MIGRATIONS.at(-1) ?? "";
+  const later = readdirSync(DRIZZLE_DIR)
+    .filter((name) => /^\d{14}_/u.test(name) && name > last)
+    .toSorted()
+    .filter((name) =>
+      definedFunctionsOf(name).some((defined) => installed.has(defined)),
+    );
+  return [...STATUTE_CITATION_PROJECTION_MIGRATIONS, ...later];
+};
+
 export const installPgliteStatuteCitationCounts = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -779,10 +812,7 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
-  for (const migration of [
-    "20261010212100_case_law_publication_filter",
-    "20261022230000_provision_citation_anchor_lineage",
-  ]) {
+  for (const migration of statuteCitationProjectionMigrations()) {
     for (const statement of readMigrationStatements(
       nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
     ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
@@ -1072,6 +1102,13 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261025104500_per_seat_member_capacity",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261025120000_manual_entitlement_period_bound",
         "migration.sql",
       ),
     ),

@@ -102,6 +102,10 @@ import {
 } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import {
+  optionalFlagSearchSchema,
+  optionalIntegerSearchSchema,
+} from "@/lib/schema";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
@@ -112,6 +116,7 @@ import {
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { routeSearchSchema } from "@/route-search-params";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";
@@ -137,21 +142,19 @@ export const Route = createFileRoute(
   component: RouteComponent,
   // v.object: validateSearch receives the full URL search params
   // including params from parent routes; strictObject would reject them.
-  validateSearch: v.object({
+  validateSearch: routeSearchSchema({
     entity: v.optional(v.string()),
     field: v.optional(v.string()),
     justification: v.optional(v.string()),
-    justificationPage: v.optional(
-      v.pipe(v.number(), v.integer(), v.minValue(1)),
-    ),
-    pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+    justificationPage: optionalIntegerSearchSchema({ min: 1 }),
+    pdfPage: optionalIntegerSearchSchema({ min: 1 }),
     pdfMode: v.optional(v.picklist(["organize"])),
     pdfColorMode: v.optional(v.picklist(PDF_COLOR_MODES)),
     // Folio block to land on in a DOCX (report citation links). Consumed once
     // on mount through the inspector's pending block scroll.
     block: v.optional(v.string()),
     panel: v.optional(v.picklist(["versions"])),
-    editing: v.optional(v.boolean()),
+    editing: optionalFlagSearchSchema,
     // Which pane reads the document review. Absent is the default
     // arrangement: the document here, the review in the inspector.
     pane: v.optional(v.picklist(DOCUMENT_PANE_SEARCH_VALUES)),

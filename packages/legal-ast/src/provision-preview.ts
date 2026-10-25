@@ -11,6 +11,19 @@ import {
 } from "./document-ast.js";
 import type { Block, HeadingBlock } from "./document-ast.js";
 
+/**
+ * What continues an anchor into one nested under it: `-` in e-Sbírka paths
+ * and in every anchor a parser derives from its owner (`…-table_1`), `/` in
+ * US code paths (`s1983/a/1`). A duplicate's `~2` is the same provision
+ * stated twice, never a child of it.
+ */
+const NESTED_ANCHOR_SEPARATORS = ["-", "/"] as const;
+
+const continuesAnchor = (parent: string, child: string): boolean =>
+  NESTED_ANCHOR_SEPARATORS.some((separator) =>
+    child.startsWith(`${parent}${separator}`),
+  );
+
 const blocksOwnedByHeading = (
   blocks: readonly Block[],
   heading: HeadingBlock,
@@ -52,7 +65,7 @@ export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
 
   const owned: T[] = [cited];
   for (const block of blocks.slice(start + 1)) {
-    if (!block.anchorId.startsWith(`${cited.anchorId}-`)) {
+    if (!continuesAnchor(cited.anchorId, block.anchorId)) {
       break;
     }
     owned.push(block);
@@ -101,10 +114,38 @@ export const provisionPreviewBlocks = (
 
 /**
  * The heading a cited subdivision belongs to: `par_90-odst_5` is filed, cited
- * and versioned under `par_90`. The subdivision stays the highlight target.
+ * and versioned under `par_90`, `s1983/a/1` under `s1983`. The separator is
+ * the citing grammar's, because a section number may itself carry another
+ * one (`s2000e-2/a`). The subdivision stays the highlight target.
  */
-export const provisionHeadingAnchor = (anchor: string): string =>
-  anchor.split("-")[0] ?? anchor;
+export const provisionHeadingAnchor = (
+  anchor: string,
+  separator: string | null,
+): string =>
+  separator === null ? anchor : (anchor.split(separator)[0] ?? anchor);
+
+/**
+ * The heading in `blocks` an anchor is nested under: the longest heading
+ * anchor the anchor continues. Read off the document, for a reader that
+ * holds the statute but not the grammar that cited it. Null when the anchor
+ * continues no heading.
+ */
+export const enclosingHeadingAnchor = (
+  blocks: readonly Block[],
+  anchor: string,
+): string | null => {
+  let enclosing: string | null = null;
+  for (const block of blocks) {
+    if (
+      block.type === "heading" &&
+      continuesAnchor(block.anchorId, anchor) &&
+      (enclosing === null || block.anchorId.length > enclosing.length)
+    ) {
+      enclosing = block.anchorId;
+    }
+  }
+  return enclosing;
+};
 
 /**
  * The headings a provision sits under, outermost first, without the

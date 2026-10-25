@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Üks klient",
+      "availabilityClientBadgeHelp": "Saadaval ainult ühe kliendi toimikutes.",
+      "availabilityClientHelp": "Kasutatav ainult selle kliendi toimikutes. Seda ei saa hiljem muuta.",
+      "availabilityFixedHelp": "Määrati oskuse loomisel. Seda ei saa muuta.",
+      "availabilityLabel": "Saadaval",
+      "availabilityMatter": "Üks toimik",
+      "availabilityMatterBadgeHelp": "Saadaval ainult ühes toimikus.",
+      "availabilityMatterHelp": "Kasutatav ainult selles toimikus. Seda ei saa hiljem muuta.",
+      "availabilityOrganization": "Kogu organisatsioon",
+      "availabilityTeamNeedsMatter": "Oskuse jagamiseks meeskonnaga valige toimik, mille jaoks see on mõeldud. Seda ei saa hiljem muuta.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Looge lepingute ülevaatamise playbook seisukoht seisukoha haaval, tuginedes oma varem allkirjastatud lepingutele, lühikesele intervjuule ja turul tavapärastele standarditele.",
