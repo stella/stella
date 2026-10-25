@@ -1,0 +1,8 @@
+{
+  "capture": "recorded",
+  "sha256": "bc7e46ff4d5dc3bccd8794bda90a72cee957a6d8f25e1831dc96c2c89aa736cc",
+  "sourceUrl": "https://www.courtlistener.com/api/rest/v4/search/",
+  "capturedAt": "2026-10-25T09:55:00.000Z",
+  "query": "type=o&highlight=on&order_by=score desc&court=scotus ca1 ca2 ca3 ca4 ca5 ca6 ca7 ca8 ca9 ca10 ca11 cadc cafc; q in \"U.S.C.\", \"C.F.R.\", \"CFR\", \"USC\", \"United States Code\", \"Treas. Reg.\", \"U. S. C.\", \"et seq.\"; up to four result pages each",
+  "note": "Highlighted snippets of published federal opinions (public-domain court text) as the CourtListener search API returned them. Each line keeps the opinion id, the court, the filing date and the snippet text with the API's <mark> tags removed; case names are left out. Lines with identical text are kept once, sorted by opinion id. The golden file beside it records what the reader located in each line when the fixture was captured, reviewed line by line."
+}

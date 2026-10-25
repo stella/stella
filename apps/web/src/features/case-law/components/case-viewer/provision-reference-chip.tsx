@@ -36,6 +36,8 @@ type ProvisionReferenceChipProps = {
     | { type: "hosted"; document: ProvisionDocument | null }
     | { type: "external"; href: string };
   label: string;
+  /** What the cited anchor is cut on to find its provision's heading. */
+  anchorSeparator: string | null;
   provision: ProvisionGroup;
   versionMarker: "group" | "exception";
 };
@@ -44,6 +46,7 @@ type ProvisionReferenceChipProps = {
 export const ProvisionReferenceChip = ({
   target,
   label,
+  anchorSeparator,
   provision,
   versionMarker,
 }: ProvisionReferenceChipProps) => {
@@ -58,7 +61,7 @@ export const ProvisionReferenceChip = ({
     refetch,
   } = useQuery({
     ...provisionPreviewOptions({
-      anchor: provisionHeadingAnchor(provision.anchor),
+      anchor: provisionHeadingAnchor(provision.anchor, anchorSeparator),
       citedAnchor: provision.anchor,
       documentId: document?.id ?? "",
     }),

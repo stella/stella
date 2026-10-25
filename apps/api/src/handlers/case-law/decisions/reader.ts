@@ -6,6 +6,7 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionPieces } from "@stll/legal-ast/projection-digest";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { attachDecisionProvisionPreviews } from "@/api/handlers/case-law/provisions/previews-for-decision";
@@ -166,7 +167,10 @@ const locateProvisionAnchors = async ({
       url: preview.url,
       provision: {
         document_id: preview.documentId,
-        anchor: provisionHeadingAnchor(row.anchor),
+        anchor: provisionHeadingAnchor(
+          row.anchor,
+          provisionAnchorSeparatorFor(row.jurisdiction),
+        ),
         cited_anchor: row.anchor,
       },
     });

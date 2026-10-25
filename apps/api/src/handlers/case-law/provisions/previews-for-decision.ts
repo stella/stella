@@ -6,6 +6,7 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 
 import {
   legislationDocuments,
@@ -257,7 +258,10 @@ export const attachDecisionProvisionPreviews = async <
         ...buildProvisionPreview({
           version,
           blocks,
-          anchor: provisionHeadingAnchor(row.anchor),
+          anchor: provisionHeadingAnchor(
+            row.anchor,
+            provisionAnchorSeparatorFor(row.jurisdiction),
+          ),
           citedAnchor: row.anchor,
         }),
       });

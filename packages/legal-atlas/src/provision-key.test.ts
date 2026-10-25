@@ -21,6 +21,9 @@ import { formatWorkIdentifier } from "./provision-citation-profile";
 import { parseProvisionKey, provisionRefOf } from "./provision-key";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
+
+/** The jurisdictions with a provision grammar, named here so adding one is a decision. */
+const WITH_GRAMMAR: ReadonlySet<string> = new Set(["CZE", "EU", "USA"]);
 const reference = fc.record({
   unit: fc.constant("section" as const),
   section: fc.integer({ min: 1, max: 9999 }),
@@ -462,7 +465,7 @@ describe("provision identity construction", () => {
       }),
     ).toEqual({ status: "invalid_work_identifier" });
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE" || jurisdiction === "EU") {
+      if (WITH_GRAMMAR.has(jurisdiction)) {
         continue;
       }
       expect(
@@ -518,7 +521,7 @@ describe("provision identity construction", () => {
 
   test("unsupported jurisdictions explicitly decline provision construction", () => {
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE" || jurisdiction === "EU") {
+      if (WITH_GRAMMAR.has(jurisdiction)) {
         continue;
       }
       expect(PROVISION_CITATION_GRAMMARS[jurisdiction]).toEqual({

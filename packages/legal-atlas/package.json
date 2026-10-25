@@ -94,6 +94,10 @@
     "./provision-version-grammar": {
       "types": "./src/provision-version-grammar.ts",
       "import": "./src/provision-version-grammar.ts"
+    },
+    "./us-code-citations": {
+      "types": "./src/us-code-citations.ts",
+      "import": "./src/us-code-citations.ts"
     }
   },
   "scripts": {
