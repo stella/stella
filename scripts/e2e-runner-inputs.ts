@@ -296,7 +296,8 @@ const setupProjectInputs = ({
 // Resolve only static configuration, without executing code from a pull request.
 // Unknown configuration is handled by the caller's full-suite fallback.
 export const e2eRunnerInputs = (root: string): string[] | undefined => {
-  const absoluteConfig = path.join(root, CONFIG_PATH);
+  const canonicalRoot = realpathSync(root);
+  const absoluteConfig = path.join(canonicalRoot, CONFIG_PATH);
   const source = readFileSync(absoluteConfig, "utf-8");
   new Bun.Transpiler({ loader: "ts" }).scan(source);
   const tree = parseSource(absoluteConfig, source).program;
@@ -318,13 +319,17 @@ export const e2eRunnerInputs = (root: string): string[] | undefined => {
     }
     for (const reference of references) {
       const absolute = realpathSync(Bun.resolveSync(reference, directory));
-      const relative = repoRelativePath(root, absolute);
+      const relative = repoRelativePath(canonicalRoot, absolute);
       if (relative.startsWith("../") || relative.includes("node_modules/")) {
         return undefined;
       }
       entries.push(relative);
     }
   }
-  const setupInputs = setupProjectInputs({ root, directory, ...reader });
+  const setupInputs = setupProjectInputs({
+    root: canonicalRoot,
+    directory,
+    ...reader,
+  });
   return setupInputs === undefined ? undefined : [...entries, ...setupInputs];
 };

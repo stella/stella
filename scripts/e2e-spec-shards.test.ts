@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -238,6 +244,29 @@ test.each(["globalSetup", "globalTeardown"] as const)(
     }
   },
 );
+
+test("runner inputs are invariant under a symlinked repository root", () => {
+  const { root, write } = fixture();
+  const aliases = mkdtempSync(path.join(tmpdir(), "e2e-runner-alias-"));
+  const alias = path.join(aliases, "repo");
+  try {
+    write("apps/web/e2e/global-setup.ts", "export default () => {};\n");
+    write(
+      "apps/web/e2e/playwright.config.ts",
+      'export default { globalSetup: "./global-setup.ts" };\n',
+    );
+    symlinkSync(root, alias, "dir");
+    const expected = [
+      "apps/web/e2e/playwright.config.ts",
+      "apps/web/e2e/global-setup.ts",
+    ];
+    expect(e2eRunnerInputs(root)).toEqual(expected);
+    expect(e2eRunnerInputs(alias)).toEqual(expected);
+  } finally {
+    rmSync(aliases, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("a transitive global hook import outside e2e selects every shard", () => {
   const { root, write } = fixture();
