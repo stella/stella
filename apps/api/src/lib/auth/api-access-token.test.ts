@@ -66,7 +66,7 @@ describe("API access token claims", () => {
     await authenticateApiAccessToken("a.b.c", {
       reviewAccount: NO_REVIEW_ACCOUNT,
       verifyToken: async (_token, options) => {
-        audience = options?.verifyOptions?.audience;
+        audience = options.verifyOptions.audience;
         return await Promise.resolve(USER_CLAIMS);
       },
     });

@@ -22,7 +22,9 @@ const SESSION: StoredSession = {
 const rotatingTokenEndpoint = () => {
   const presented: string[] = [];
   const fetch: Fetch = async (_input, init) => {
-    const body = new URLSearchParams(String(init?.body));
+    const body = new URLSearchParams(
+      typeof init?.body === "string" ? init.body : "",
+    );
     const refreshToken = body.get("refresh_token") ?? "";
     presented.push(refreshToken);
     const generation = presented.length;

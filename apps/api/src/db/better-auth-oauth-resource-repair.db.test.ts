@@ -3,6 +3,7 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL, SQLChunk } from "drizzle-orm";
 
 import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -273,7 +274,7 @@ test("the deploy repair adds a new audience to an existing database", async () =
         ).not.toEqual(resource.allowedScopes);
         expect(policies).toContainEqual({
           identifier: resource.identifier,
-          allowedScopes: resource.allowedScopes.toSorted(),
+          allowedScopes: resource.allowedScopes.toSorted(compareCodeUnit),
           updatedAt: expect.any(String),
         });
       }
@@ -576,7 +577,7 @@ test("the deploy repair takes a released policy to the configured scopes", async
       for (const resource of getBetterAuthOAuthResources()) {
         expect(policies).toContainEqual({
           identifier: resource.identifier,
-          allowedScopes: resource.allowedScopes.toSorted(),
+          allowedScopes: resource.allowedScopes.toSorted(compareCodeUnit),
           updatedAt: expect.any(String),
         });
       }
