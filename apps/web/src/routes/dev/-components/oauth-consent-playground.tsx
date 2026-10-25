@@ -21,21 +21,21 @@ import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 const CLIENTS = {
   claude: {
     client_name: "Claude",
-    redirectHosts: ["claude.ai"],
+    redirectTargets: ["claude.ai"],
     clientIdHost: null,
     unverified: false,
     verifiedBrand: "claude",
   },
   chatgpt: {
     client_name: "ChatGPT",
-    redirectHosts: ["chatgpt.com"],
+    redirectTargets: ["chatgpt.com"],
     clientIdHost: null,
     unverified: false,
     verifiedBrand: "chatgpt",
   },
   unverified: {
     client_name: "Example connector",
-    redirectHosts: ["connector.example"],
+    redirectTargets: ["connector.example"],
     clientIdHost: null,
     unverified: true,
     verifiedBrand: null,

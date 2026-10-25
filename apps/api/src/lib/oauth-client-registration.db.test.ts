@@ -166,7 +166,7 @@ describe("OAuth dynamic client registration", () => {
     );
     expect(await details.json()).toEqual({
       client_name: "Example connector",
-      redirectHosts: ["connector.example"],
+      redirectTargets: ["connector.example"],
       clientIdHost: null,
       unverified: true,
       verifiedBrand: null,
@@ -445,6 +445,108 @@ describe("OAuth dynamic client registration", () => {
     expect(response.status).toBe(400);
     const refused = v.parse(registrationErrorSchema, await response.json());
     expect(refused.error).toBe(fixture.error);
+  });
+});
+
+const registeredClientSchema = v.looseObject({
+  client_id: v.string(),
+  application_type: v.string(),
+  scope: v.string(),
+});
+
+/** Register, sign in, and start authorization with `redirectUri` and `scope`. */
+const startAuthorization = async (
+  body: Record<string, unknown>,
+  { redirectUri, scope }: { redirectUri: string; scope: string },
+) => {
+  const response = await registerClient(body);
+  expect(response.status).toBe(201);
+  const registered = v.parse(registeredClientSchema, await response.json());
+  const browser = await signInHuman(
+    `interop-${String(registrationsIssued)}@example.test`,
+  );
+  const organization = await getAuth().api.createOrganization({
+    body: { name: "Interop", slug: `interop-${Bun.randomUUIDv7()}` },
+    headers: browser.headers(),
+  });
+  await browser.setActiveOrganization(organization.id);
+  const query = new URLSearchParams({
+    client_id: registered.client_id,
+    code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    code_challenge_method: "S256",
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope,
+  });
+  const authorized = await getAuth().handler(
+    new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${query}`, {
+      headers: { cookie: browser.cookieHeader() },
+    }),
+  );
+  expect(authorized.status).toBe(302);
+  const location = new URL(
+    v.parse(v.string(), authorized.headers.get("location")),
+  );
+  return {
+    registered,
+    location,
+    signed: new URLSearchParams(readSignedQuery(location)),
+  };
+};
+
+describe("OAuth client interoperability", () => {
+  test("registers Cursor as a native client and asks for consent at its private-use callback", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.cursorDesktop;
+    const { registered, location, signed } = await startAuthorization(body, {
+      redirectUri: "cursor://anysphere.cursor-mcp/oauth/callback",
+      scope: "openid stella:read",
+    });
+
+    expect(registered.application_type).toBe("native");
+    expect(location.pathname).toBe("/consent");
+    expect(signed.get("redirect_uri")).toBe(
+      "cursor://anysphere.cursor-mcp/oauth/callback",
+    );
+    expect(signed.get("prompt")?.split(" ")).toContain("consent");
+    expect(signed.get("code_challenge_method")).toBe("S256");
+  });
+
+  test("an https-only public client stays a web client", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.chatgptConnector;
+    const response = await registerClient(body);
+
+    expect(response.status).toBe(201);
+    const registered = v.parse(registeredClientSchema, await response.json());
+    expect(registered.application_type).toBe("web");
+  });
+
+  test("a client asking only for unoffered scopes registers and consents with the default set", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.cursorAgentLegacyScope;
+    const { registered, signed } = await startAuthorization(body, {
+      redirectUri: "http://localhost:8787/callback",
+      scope: "mcp:tools",
+    });
+
+    expect(registered.scope.split(" ").toSorted()).toEqual(
+      OPEN_REGISTRATION_SCOPES.toSorted(),
+    );
+    expect(signed.get("scope")?.split(" ").toSorted()).toEqual(
+      OPEN_REGISTRATION_SCOPES.toSorted(),
+    );
+  });
+
+  test("unoffered identity scopes are dropped at registration and authorization", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.identityScopeClient;
+    const { registered, signed } = await startAuthorization(body, {
+      redirectUri: "https://assistant.example.com/oauth/callback",
+      scope: "openid profile email name picture offline_access",
+    });
+
+    const granted = ["openid", "profile", "email", "offline_access"];
+    expect(registered.scope.split(" ").toSorted()).toEqual(granted.toSorted());
+    expect(signed.get("scope")?.split(" ").toSorted()).toEqual(
+      granted.toSorted(),
+    );
   });
 });
 

@@ -24,11 +24,35 @@ describe("OAuth consent app details", () => {
       ),
     ).toEqual({
       client_name: "Example connector",
-      redirectHosts: ["connector.example"],
+      redirectTargets: ["connector.example"],
       clientIdHost: null,
       unverified: true,
       verifiedBrand: null,
     });
+  });
+
+  test("shows the scheme of private-use redirects next to http hosts", () => {
+    expect(
+      getOAuthConsentInfo(
+        {
+          clientId: "example-client",
+          name: "Example connector",
+          redirectUris: [
+            "cursor://anysphere.cursor-mcp/oauth/callback",
+            "com.example.app:/oauth/callback",
+            "https://www.cursor.com/agents/mcp/oauth/callback",
+            "http://localhost:8787/callback",
+          ],
+          clientDiscoveryId: null,
+        },
+        origins,
+      ).redirectTargets,
+    ).toEqual([
+      "cursor://anysphere.cursor-mcp",
+      "com.example.app:",
+      "www.cursor.com",
+      "localhost:8787",
+    ]);
   });
 
   test("recognizes configured origins and keeps loopback apps unverified", () => {
