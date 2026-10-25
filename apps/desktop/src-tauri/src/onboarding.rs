@@ -702,15 +702,28 @@ pub async fn onboarding_open_settings(app: AppHandle) -> Result<(), String> {
   Ok(())
 }
 
+/// Where the document-app probe is created. Private files open only under the
+/// app's own roots in production; the temp directory is approved in tests alone.
+#[cfg(target_os = "macos")]
+fn document_app_probe_dir() -> Option<std::path::PathBuf> {
+  dirs::cache_dir().map(|root| {
+    root
+      .join(crate::config::APP_DATA_DIR_NAME)
+      .join("document-app-probe")
+  })
+}
+
 /// The default app for `.docx`, read from the OS. macOS answers for a file,
-/// so a short-lived empty probe file in the temp directory carries the type.
+/// so a short-lived empty probe file in the app cache carries the type.
 #[cfg(target_os = "macos")]
 fn document_app() -> Option<DocumentApp> {
   use objc2_app_kit::NSWorkspace;
   use objc2_foundation::{NSString, NSURL};
 
-  let probe = std::env::temp_dir()
-    .join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
+  let directory = document_app_probe_dir()?;
+  crate::local_store::create_private_dir(&directory).ok()?;
+  let probe =
+    directory.join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
   crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, &probe)
     .ok()?;
   let url = NSURL::fileURLWithPath(&NSString::from_str(probe.to_str()?));
@@ -736,6 +749,23 @@ fn document_app() -> Option<DocumentApp> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// The probe must sit under a root the production private-file policy
+  /// approves: the temp directory is approved only in test builds, so a probe
+  /// there passes every test while detection fails in the shipped app.
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn document_app_probe_uses_an_approved_production_root() {
+    let directory = document_app_probe_dir().unwrap();
+    assert!(
+      directory.starts_with(
+        dirs::cache_dir()
+          .unwrap()
+          .join(crate::config::APP_DATA_DIR_NAME)
+      )
+    );
+    assert!(!directory.starts_with(std::env::temp_dir()));
+  }
 
   /// Every combination with clipboard history; its absence has its own test.
   const CONTEXTS: [FlowContext; 8] = {
