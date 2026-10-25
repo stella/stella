@@ -54,6 +54,7 @@ export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+  [ADAPTER_KEYS.BR_TJDFT]: 0,
 } as const satisfies Record<AdapterKey, number>;
 
 type CandidateSide = {
@@ -90,7 +91,9 @@ export type RepublishedDecisionCandidate = {
 };
 
 type CandidateDisposition =
-  "link" | "separate_alias_group_survivor" | "separate_already_retired";
+  | "link"
+  | "separate_alias_group_survivor"
+  | "separate_already_retired";
 
 export type ApplyRepublishedDecisionOutcome =
   | { type: "linked"; retiredId: SafeId<"caseLawDecision"> }

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "81f4fa7f4d072c726363244cfd113fe65d3086360fa523788855d6bb9bca4a05",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:37.000Z",
+  "note": "POST body {\"query\":\"\",\"termosAcessorios\":[{\"campo\":\"base\",\"valor\":\"acordaos\"},{\"campo\":\"dataPublicacao\",\"valor\":\"entre 2024-03-01 e 2024-03-01\"}],\"pagina\":0,\"tamanho\":40,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":false,\"retornaTotalizacao\":false}; the first listing page of the acórdãos published on 2024-03-01, six of them under segredo de justiça"
+}

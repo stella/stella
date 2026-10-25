@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
@@ -31,6 +32,7 @@ export const ADAPTER_KEYS = {
   PL_KIS: "pl-kis",
   PL_UODO: "pl-uodo",
   PL_UOKIK: "pl-uokik",
+  BR_TJDFT: "br-tjdft",
 } as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
@@ -81,6 +83,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.PL_KIS]: 9,
   [ADAPTER_KEYS.PL_UODO]: 13,
   [ADAPTER_KEYS.PL_UOKIK]: 11,
+  [ADAPTER_KEYS.BR_TJDFT]: 1,
 } as const satisfies Record<AdapterKey, number>;
 
 // parser-output-unchanged: adds the source fingerprint versions; no parser reads them, so parser output is unchanged.
@@ -126,6 +129,7 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+  [ADAPTER_KEYS.BR_TJDFT]: 0,
 } as const satisfies Record<AdapterKey | ImportSourceKey, number>;
 
 /**
