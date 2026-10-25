@@ -1,9 +1,81 @@
 import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+import {
+  type ArrowFunctionExpression,
+  type CallExpression,
+  type ExportAllDeclaration,
+  type ExportNamedDeclaration,
+  type FunctionDeclaration,
+  type FunctionExpression,
+  type ImportDeclaration,
+  type JSXAttribute,
+  type JSXMemberExpression,
+  type JSXOpeningElement,
+  type MemberExpression,
+  type Node,
+  type ParsedSource,
+  parseSource,
+  type TSType,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
+
+const TYPE_NODES = {
+  TSAnyKeyword: true,
+  TSBigIntKeyword: true,
+  TSBooleanKeyword: true,
+  TSIntrinsicKeyword: true,
+  TSNeverKeyword: true,
+  TSNullKeyword: true,
+  TSNumberKeyword: true,
+  TSObjectKeyword: true,
+  TSStringKeyword: true,
+  TSSymbolKeyword: true,
+  TSUndefinedKeyword: true,
+  TSUnknownKeyword: true,
+  TSVoidKeyword: true,
+  TSArrayType: true,
+  TSConditionalType: true,
+  TSConstructorType: true,
+  TSFunctionType: true,
+  TSImportType: true,
+  TSIndexedAccessType: true,
+  TSInferType: true,
+  TSIntersectionType: true,
+  TSLiteralType: true,
+  TSMappedType: true,
+  TSNamedTupleMember: true,
+  TSTemplateLiteralType: true,
+  TSThisType: true,
+  TSTupleType: true,
+  TSTypeLiteral: true,
+  TSTypeOperator: true,
+  TSTypePredicate: true,
+  TSTypeQuery: true,
+  TSTypeReference: true,
+  TSUnionType: true,
+  TSParenthesizedType: true,
+  JSDocNullableType: true,
+  JSDocNonNullableType: true,
+  JSDocUnknownType: true,
+} as const satisfies Record<TSType["type"], true>;
+
+const visitChildren = (node: Node, visit: (child: Node) => void) => {
+  walk(node, (child) => {
+    if (child === node) {
+      return undefined;
+    }
+    visit(child);
+    return "skip-children";
+  });
+};
+const nameOf = (node: {
+  type: string;
+  name?: string;
+  value?: unknown;
+}): string => (typeof node.name === "string" ? node.name : String(node.value));
 
 // These boundaries install the first frame; their descendants already have one.
 export const FIRST_FRAME_OWNERS = [
@@ -30,11 +102,11 @@ type Boundary = {
   file: string;
   line: number;
   kind: "pendingComponent" | "defaultPendingComponent" | "Suspense";
-  expression: ts.Node;
+  expression: Node;
 };
 type Module = {
-  source: ts.SourceFile;
-  definitions: Map<string, ts.Node>;
+  source: ParsedSource & { fileName: string };
+  definitions: Map<string, Node>;
   imports: Map<string, { module: string; name: string }>;
   exports: Map<string, { module: string; name: string }>;
   exportStars: string[];
@@ -85,13 +157,10 @@ class FallbackSymbols {
     if (cached) {
       return cached;
     }
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, "utf-8"),
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
+    const source = {
+      ...parseSource(file, readFileSync(file, "utf-8")),
+      fileName: file,
+    };
     const module: Module = {
       source,
       definitions: new Map(),
@@ -100,93 +169,89 @@ class FallbackSymbols {
       exportStars: [],
     };
     this.modules.set(file, module);
-    for (const statement of source.statements) {
+    for (const statement of source.program.body) {
       this.indexDefinition(statement, module);
-      if (ts.isImportDeclaration(statement)) {
+      if (statement.type === "ImportDeclaration") {
         this.indexImport(statement, module);
       }
-      if (ts.isExportDeclaration(statement)) {
+      if (
+        statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportAllDeclaration"
+      ) {
         this.indexExport(statement, module);
       }
     }
     return module;
   }
-  indexDefinition(node: ts.Statement, module: Module) {
-    if (ts.isExportAssignment(node)) {
-      module.definitions.set("default", node.expression);
+  indexDefinition(node: Node, module: Module) {
+    if (node.type === "ExportNamedDeclaration") {
+      if (node.declaration) {
+        this.indexDefinition(node.declaration, module);
+      }
       return;
     }
-    if (ts.isFunctionDeclaration(node)) {
-      if (node.name) {
-        module.definitions.set(node.name.text, node);
-      }
+    if (node.type === "ExportDefaultDeclaration") {
+      module.definitions.set("default", node.declaration);
       if (
-        node.modifiers?.some(
-          (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword,
-        )
+        node.declaration.type === "FunctionDeclaration" &&
+        node.declaration.id
       ) {
-        module.definitions.set("default", node);
+        module.definitions.set(node.declaration.id.name, node.declaration);
       }
       return;
     }
-    if (!ts.isVariableStatement(node)) {
+    if (node.type === "FunctionDeclaration") {
+      if (node.id) {
+        module.definitions.set(node.id.name, node);
+      }
       return;
     }
-    for (const declaration of node.declarationList.declarations) {
-      if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-        module.definitions.set(declaration.name.text, declaration.initializer);
+    if (node.type !== "VariableDeclaration") {
+      return;
+    }
+    for (const declaration of node.declarations) {
+      if (declaration.id.type === "Identifier" && declaration.init) {
+        module.definitions.set(declaration.id.name, declaration.init);
       }
     }
   }
-  indexImport(node: ts.ImportDeclaration, module: Module) {
-    if (!ts.isStringLiteral(node.moduleSpecifier)) {
+  indexImport(node: ImportDeclaration, module: Module) {
+    if (node.importKind === "type") {
       return;
     }
-    const specifier = node.moduleSpecifier.text;
-    const clause = node.importClause;
-    if (!clause || clause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-      return;
-    }
-    if (clause.name) {
-      module.imports.set(clause.name.text, {
-        module: specifier,
-        name: "default",
-      });
-    }
-    const bindings = clause.namedBindings;
-    if (!bindings) {
-      return;
-    }
-    if (ts.isNamespaceImport(bindings)) {
-      module.imports.set(bindings.name.text, { module: specifier, name: "*" });
-      return;
-    }
-    for (const imported of bindings.elements) {
-      if (imported.isTypeOnly) {
+    for (const binding of node.specifiers) {
+      if (binding.type === "ImportSpecifier" && binding.importKind === "type") {
         continue;
       }
-      module.imports.set(imported.name.text, {
-        module: specifier,
-        name: imported.propertyName?.text ?? imported.name.text,
+      let name = "*";
+      if (binding.type === "ImportSpecifier") {
+        name = nameOf(binding.imported);
+      }
+      if (binding.type === "ImportDefaultSpecifier") {
+        name = "default";
+      }
+      module.imports.set(binding.local.name, {
+        module: node.source.value,
+        name,
       });
     }
   }
-  indexExport(node: ts.ExportDeclaration, module: Module) {
-    if (node.isTypeOnly) {
+  indexExport(
+    node: ExportNamedDeclaration | ExportAllDeclaration,
+    module: Module,
+  ) {
+    if (node.exportKind === "type") {
       return;
     }
-    const specifier =
-      node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
-        ? node.moduleSpecifier.text
-        : "";
-    if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-      for (const exported of node.exportClause.elements) {
-        if (exported.isTypeOnly) {
+    const specifier = node.source?.value ?? "";
+    if (node.type === "ExportNamedDeclaration") {
+      for (const exported of node.specifiers) {
+        if (exported.exportKind === "type") {
           continue;
         }
-        module.exports.set(exported.name.text, {
+        module.exports.set(nameOf(exported.exported), {
           module: specifier,
-          name: exported.propertyName?.text ?? exported.name.text,
+          name: nameOf(exported.local),
         });
       }
       return;
@@ -194,6 +259,9 @@ class FallbackSymbols {
     if (specifier) {
       module.exportStars.push(specifier);
     }
+  }
+  text(file: string, node: Node) {
+    return this.load(file).source.sourceText.slice(node.start, node.end);
   }
   inspectSymbol(file: string, name: string, visited: Set<string>): string[] {
     const key = `${file}#${name}`;
@@ -234,45 +302,50 @@ class FallbackSymbols {
   }
   inspectNode(
     file: string,
-    node: ts.Node,
+    node: Node,
     visited: Set<string>,
-    locals = new Map<string, ts.Node>(),
+    locals = new Map<string, Node>(),
   ): string[] {
-    if (ts.isTypeNode(node)) {
-      return [];
-    }
-    if (ts.isJsxClosingElement(node)) {
-      return [];
-    }
     if (
-      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      this.isInlineLoader(file, node)
+      node.type === "TSTypeAnnotation" ||
+      Object.hasOwn(TYPE_NODES, node.type)
     ) {
       return [];
     }
-    if (ts.isJsxAttribute(node)) {
+    if (node.type === "JSXClosingElement") {
+      return [];
+    }
+    if (node.type === "JSXOpeningElement" && this.isInlineLoader(file, node)) {
+      return [];
+    }
+    if (node.type === "JSXAttribute") {
       return this.inspectAttribute(file, node, visited, locals);
     }
     if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression)
+      node.type === "JSXMemberExpression" &&
+      node.object.type === "JSXIdentifier"
+    ) {
+      return this.inspectJsxMember(file, node, visited);
+    }
+
+    if (
+      node.type === "MemberExpression" &&
+      !node.computed &&
+      node.object.type === "Identifier"
     ) {
       return this.inspectPropertyAccess(file, node, visited);
     }
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword
-    ) {
-      const specifier = node.arguments.at(0);
-      if (specifier && ts.isStringLiteral(specifier)) {
-        if (specifier.text === LOGO_LOADER_MODULE) {
-          return [`${specifier.text}#default`];
+    if (node.type === "ImportExpression") {
+      const specifier = node.source;
+      if (specifier.type === "Literal" && typeof specifier.value === "string") {
+        if (specifier.value === LOGO_LOADER_MODULE) {
+          return [`${specifier.value}#default`];
         }
-        const target = this.resolveModule(file, specifier.text);
+        const target = this.resolveModule(file, specifier.value);
         return target ? this.inspectSymbol(target, "default", visited) : [];
       }
     }
-    if (ts.isCallExpression(node)) {
+    if (node.type === "CallExpression") {
       const constructed = this.inspectReactElement(file, node, visited, locals);
       if (constructed) {
         return constructed;
@@ -283,133 +356,161 @@ class FallbackSymbols {
       }
       return this.inspectRenderCall(file, node, visited, locals);
     }
-    if (ts.isPropertyAssignment(node)) {
-      return this.inspectNode(file, node.initializer, visited, locals);
+    if (node.type === "Property") {
+      return this.inspectNode(file, node.value, visited, locals);
     }
-    if (ts.isIdentifier(node)) {
-      const local = locals.get(node.text);
+    if (node.type === "Identifier" || node.type === "JSXIdentifier") {
+      const local = locals.get(node.name);
       if (local) {
-        const key = `${file}:${local.pos}`;
+        const key = `${file}:${local.start}`;
         if (visited.has(key)) {
           return [];
         }
         visited.add(key);
         return this.inspectNode(file, local, visited, locals);
       }
-      return this.inspectSymbol(file, node.text, visited);
+      return this.inspectSymbol(file, node.name, visited);
     }
     if (
-      ts.isFunctionDeclaration(node) ||
-      ts.isArrowFunction(node) ||
-      ts.isFunctionExpression(node)
+      node.type === "FunctionDeclaration" ||
+      node.type === "ArrowFunctionExpression" ||
+      node.type === "FunctionExpression"
     ) {
       return this.inspectFunction(file, node, visited, locals);
     }
     const findings: string[] = [];
-    ts.forEachChild(node, (child) => {
+    visitChildren(node, (child) => {
       findings.push(...this.inspectNode(file, child, visited, locals));
     });
     return findings;
   }
-  inspectPropertyAccess(
+  inspectJsxMember(
     file: string,
-    node: ts.PropertyAccessExpression,
+    node: JSXMemberExpression,
     visited: Set<string>,
   ): string[] {
-    if (!ts.isIdentifier(node.expression)) {
+    if (node.object.type !== "JSXIdentifier") {
       return [];
     }
-    const imported = this.load(file).imports.get(node.expression.text);
+    const imported = this.load(file).imports.get(node.object.name);
+    if (
+      imported?.module === LOGO_LOADER_MODULE ||
+      (imported?.name === "*" && SHELL_SYMBOLS.has(node.property.name))
+    ) {
+      return [`${imported.module}#${node.property.name}`];
+    }
+    if (imported?.name !== "*") {
+      return [];
+    }
+    const target = this.resolveModule(file, imported.module);
+    return target
+      ? this.inspectSymbol(target, node.property.name, visited)
+      : [];
+  }
+  inspectPropertyAccess(
+    file: string,
+    node: MemberExpression,
+    visited: Set<string>,
+  ): string[] {
+    if (
+      node.object.type !== "Identifier" ||
+      node.computed ||
+      node.property.type !== "Identifier"
+    ) {
+      return [];
+    }
+    const imported = this.load(file).imports.get(node.object.name);
     if (imported?.module === LOGO_LOADER_MODULE) {
-      return [`${imported.module}#${node.name.text}`];
+      return [`${imported.module}#${nameOf(node.property)}`];
     }
     if (imported?.name === "*") {
-      if (SHELL_SYMBOLS.has(node.name.text)) {
-        return [`${imported.module}#${node.name.text}`];
+      if (SHELL_SYMBOLS.has(nameOf(node.property))) {
+        return [`${imported.module}#${nameOf(node.property)}`];
       }
       const target = this.resolveModule(file, imported.module);
-      return target ? this.inspectSymbol(target, node.name.text, visited) : [];
+      return target
+        ? this.inspectSymbol(target, nameOf(node.property), visited)
+        : [];
     }
     // Data/query members in JSX props are not rendered component symbols.
     return [];
   }
   inspectFunction(
     file: string,
-    node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
+    node: FunctionDeclaration | ArrowFunctionExpression | FunctionExpression,
     visited: Set<string>,
-    locals: Map<string, ts.Node>,
+    locals: Map<string, Node>,
   ): string[] {
     const findings: string[] = [];
     const body = node.body;
     if (!body) {
       return findings;
     }
-    if (!ts.isBlock(body)) {
+    if (body.type !== "BlockStatement") {
       return this.inspectNode(file, body, visited, locals);
     }
     const scopedLocals = new Map(locals);
-    const declarations = (child: ts.Node) => {
+    const declarations = (child: Node) => {
       if (
-        ts.isVariableDeclaration(child) &&
-        ts.isIdentifier(child.name) &&
-        child.initializer
+        child.type === "VariableDeclarator" &&
+        child.id.type === "Identifier" &&
+        child.init
       ) {
-        scopedLocals.set(child.name.text, child.initializer);
+        scopedLocals.set(child.id.name, child.init);
       }
-      if (ts.isFunctionDeclaration(child)) {
-        if (child.name) {
-          scopedLocals.set(child.name.text, child);
+      if (child.type === "FunctionDeclaration") {
+        if (child.id) {
+          scopedLocals.set(child.id.name, child);
         }
         return;
       }
-      if (ts.isArrowFunction(child) || ts.isFunctionExpression(child)) {
+      if (
+        child.type === "ArrowFunctionExpression" ||
+        child.type === "FunctionExpression"
+      ) {
         return;
       }
-      ts.forEachChild(child, declarations);
+      visitChildren(child, declarations);
     };
-    ts.forEachChild(body, declarations);
-    const returns = (child: ts.Node) => {
-      if (ts.isReturnStatement(child) && child.expression) {
+    visitChildren(body, declarations);
+    const returns = (child: Node) => {
+      if (child.type === "ReturnStatement" && child.argument) {
         findings.push(
-          ...this.inspectNode(file, child.expression, visited, scopedLocals),
+          ...this.inspectNode(file, child.argument, visited, scopedLocals),
         );
         return;
       }
       if (
-        ts.isFunctionDeclaration(child) ||
-        ts.isArrowFunction(child) ||
-        ts.isFunctionExpression(child)
+        child.type === "FunctionDeclaration" ||
+        child.type === "ArrowFunctionExpression" ||
+        child.type === "FunctionExpression"
       ) {
         return;
       }
-      ts.forEachChild(child, returns);
+      visitChildren(child, returns);
     };
-    ts.forEachChild(body, returns);
+    visitChildren(body, returns);
     return findings;
   }
   inspectAttribute(
     file: string,
-    node: ts.JsxAttribute,
+    node: JSXAttribute,
     visited: Set<string>,
-    locals: Map<string, ts.Node>,
+    locals: Map<string, Node>,
   ): string[] {
-    if (node.name.getText() === "data-slot") {
-      const value = node.initializer;
+    if (this.text(file, node.name) === "data-slot") {
+      const value = node.value;
       const expression =
-        value && ts.isJsxExpression(value) ? value.expression : value;
-      if (
-        expression &&
-        ts.isStringLiteral(expression) &&
-        expression.text === "sidebar"
-      ) {
+        value?.type === "JSXExpressionContainer" ? value.expression : value;
+      if (expression?.type === "Literal" && expression.value === "sidebar") {
         return ["DOM#data-slot=sidebar"];
       }
     }
-    if (/^on[A-Z]/u.test(node.name.getText())) {
+    if (/^on[A-Z]/u.test(this.text(file, node.name))) {
       return [];
     }
-    return node.initializer
-      ? this.inspectNode(file, node.initializer, visited, locals)
+    return node.value
+      ? this.inspectNode(file, node.value, visited, locals)
       : [];
   }
   isCanonicalLoader(file: string, name: string, visited: Set<string>): boolean {
@@ -437,8 +538,8 @@ class FallbackSymbols {
       );
     }
     const definition = module.definitions.get(name);
-    if (definition && ts.isIdentifier(definition)) {
-      return this.isCanonicalLoader(file, definition.text, visited);
+    if (definition?.type === "Identifier") {
+      return this.isCanonicalLoader(file, definition.name, visited);
     }
     for (const specifier of module.exportStars) {
       const target = this.resolveModule(file, specifier);
@@ -448,68 +549,69 @@ class FallbackSymbols {
     }
     return false;
   }
-  isInlineLoader(
-    file: string,
-    node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
-  ): boolean {
-    if (node.attributes.properties.some(ts.isJsxSpreadAttribute)) {
+  isInlineLoader(file: string, node: JSXOpeningElement): boolean {
+    if (
+      node.attributes.some(
+        (attribute) => attribute.type === "JSXSpreadAttribute",
+      )
+    ) {
       return false;
     }
-    const sizes = node.attributes.properties.filter(
+    const sizes = node.attributes.filter(
       (attribute) =>
-        ts.isJsxAttribute(attribute) && attribute.name.getText() === "size",
+        attribute.type === "JSXAttribute" &&
+        this.text(file, attribute.name) === "size",
     );
     const size = sizes.at(0);
-    if (sizes.length !== 1 || !size || !ts.isJsxAttribute(size)) {
+    if (sizes.length !== 1 || !size || size.type !== "JSXAttribute") {
       return false;
     }
-    const value = size.initializer;
+    const value = size.value;
     const expression =
-      value && ts.isJsxExpression(value) ? value.expression : value;
+      value?.type === "JSXExpressionContainer" ? value.expression : value;
     if (
       !expression ||
-      !ts.isStringLiteral(expression) ||
-      expression.text !== "sm"
+      expression.type !== "Literal" ||
+      expression.value !== "sm"
     ) {
       return false;
     }
     // The owner defines sm as progress next to a control; md/lg occupy a region.
-    if (ts.isIdentifier(node.tagName)) {
-      return this.isCanonicalLoader(file, node.tagName.text, new Set());
+    if (node.name.type === "JSXIdentifier") {
+      return this.isCanonicalLoader(file, node.name.name, new Set());
     }
     if (
-      !ts.isPropertyAccessExpression(node.tagName) ||
-      !ts.isIdentifier(node.tagName.expression)
+      node.name.type !== "JSXMemberExpression" ||
+      node.name.object.type !== "JSXIdentifier"
     ) {
       return false;
     }
-    const imported = this.load(file).imports.get(node.tagName.expression.text);
+    const imported = this.load(file).imports.get(node.name.object.name);
     if (!imported) {
       return false;
     }
     if (imported.module === LOGO_LOADER_MODULE) {
-      return node.tagName.name.text === "Loader";
+      return node.name.property.name === "Loader";
     }
     const target = this.resolveModule(file, imported.module);
     return (
       target !== undefined &&
-      this.isCanonicalLoader(target, node.tagName.name.text, new Set())
+      this.isCanonicalLoader(target, node.name.property.name, new Set())
     );
   }
   inspectRenderCall(
     file: string,
-    node: ts.CallExpression,
+    node: CallExpression,
     visited: Set<string>,
-    locals: Map<string, ts.Node>,
+    locals: Map<string, Node>,
   ): string[] {
-    const findings = this.inspectNode(file, node.expression, visited, locals);
+    const findings = this.inspectNode(file, node.callee, visited, locals);
     for (const argument of node.arguments) {
       if (
-        ts.isArrowFunction(argument) ||
-        ts.isFunctionExpression(argument) ||
-        ts.isJsxElement(argument) ||
-        ts.isJsxSelfClosingElement(argument) ||
-        ts.isJsxFragment(argument)
+        argument.type === "ArrowFunctionExpression" ||
+        argument.type === "FunctionExpression" ||
+        argument.type === "JSXElement" ||
+        argument.type === "JSXFragment"
       ) {
         findings.push(...this.inspectNode(file, argument, visited, locals));
       }
@@ -518,25 +620,25 @@ class FallbackSymbols {
   }
   inspectReactElement(
     file: string,
-    node: ts.CallExpression,
+    node: CallExpression,
     visited: Set<string>,
-    locals: Map<string, ts.Node>,
+    locals: Map<string, Node>,
   ): string[] | undefined {
-    const callee = node.expression;
+    const callee = node.callee;
     const module = this.load(file);
-    const named = ts.isIdentifier(callee)
-      ? module.imports.get(callee.text)
-      : undefined;
+    const named =
+      callee.type === "Identifier"
+        ? module.imports.get(callee.name)
+        : undefined;
     const namespace =
-      ts.isPropertyAccessExpression(callee) &&
-      ts.isIdentifier(callee.expression)
-        ? module.imports.get(callee.expression.text)
+      callee.type === "MemberExpression" && callee.object.type === "Identifier"
+        ? module.imports.get(callee.object.name)
         : undefined;
     const isCreateElement =
       (named?.module === "react" && named.name === "createElement") ||
       (namespace?.module === "react" &&
-        ts.isPropertyAccessExpression(callee) &&
-        callee.name.text === "createElement");
+        callee.type === "MemberExpression" &&
+        nameOf(callee.property) === "createElement");
     if (!isCreateElement) {
       return undefined;
     }
@@ -548,46 +650,44 @@ class FallbackSymbols {
   }
   inspectNamedImport(
     file: string,
-    node: ts.CallExpression,
+    node: CallExpression,
     visited: Set<string>,
   ): string[] | undefined {
     if (
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "then"
+      node.callee.type === "MemberExpression" &&
+      nameOf(node.callee.property) === "then"
     ) {
-      const receiver = node.expression.expression;
+      const receiver = node.callee.object;
       const callback = node.arguments.at(0);
       if (
-        ts.isCallExpression(receiver) &&
-        receiver.expression.kind === ts.SyntaxKind.ImportKeyword &&
-        callback &&
-        ts.isArrowFunction(callback)
+        receiver.type === "ImportExpression" &&
+        callback?.type === "ArrowFunctionExpression"
       ) {
-        const specifier = receiver.arguments.at(0);
-        const parameter = callback.parameters.at(0)?.name;
+        const specifier = receiver.source;
+        const parameter = callback.params.at(0);
         if (
-          specifier &&
-          ts.isStringLiteral(specifier) &&
-          parameter &&
-          ts.isIdentifier(parameter)
+          specifier.type === "Literal" &&
+          typeof specifier.value === "string" &&
+          parameter?.type === "Identifier"
         ) {
-          if (specifier.text === LOGO_LOADER_MODULE) {
-            return [`${specifier.text}#Loader`];
+          if (specifier.value === LOGO_LOADER_MODULE) {
+            return [`${specifier.value}#Loader`];
           }
-          const target = this.resolveModule(file, specifier.text);
+          const target = this.resolveModule(file, specifier.value);
           const findings: string[] = [];
-          const namedExports = (child: ts.Node) => {
+          const namedExports = (child: Node) => {
             if (
               target &&
-              ts.isPropertyAccessExpression(child) &&
-              ts.isIdentifier(child.expression) &&
-              child.expression.text === parameter.text
+              child.type === "MemberExpression" &&
+              !child.computed &&
+              child.object.type === "Identifier" &&
+              child.object.name === parameter.name
             ) {
               findings.push(
-                ...this.inspectSymbol(target, child.name.text, visited),
+                ...this.inspectSymbol(target, nameOf(child.property), visited),
               );
             }
-            ts.forEachChild(child, namedExports);
+            visitChildren(child, namedExports);
           };
           namedExports(callback.body);
           return findings;
@@ -605,16 +705,13 @@ export const checkRouteFallbacks = (sourceDirectory: string) => {
   const addBoundary = (
     file: string,
     kind: Boundary["kind"],
-    expression: ts.Node,
+    expression: Node,
   ) => {
     boundaries.push({
       file: repoRelativePath(srcDirectory, file),
       kind,
       expression,
-      line:
-        symbols
-          .load(file)
-          .source.getLineAndCharacterOfPosition(expression.getStart()).line + 1,
+      line: symbols.load(file).source.locate(expression.start).line,
     });
   };
   const routeTree = symbols.load(path.join(srcDirectory, "routeTree.gen.ts"));
@@ -635,55 +732,55 @@ export const checkRouteFallbacks = (sourceDirectory: string) => {
     panic("Route fallback census found no registered routes");
   }
   const collect = (file: string) => {
-    const visit = (node: ts.Node) => {
+    const visit = (node: Node) => {
       if (
-        ts.isPropertyAssignment(node) &&
-        (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
+        node.type === "Property" &&
+        (node.key.type === "Identifier" || node.key.type === "Literal")
       ) {
-        const name = node.name.text;
+        const name = nameOf(node.key);
         if (name === "pendingComponent" && registeredRoutes.has(file)) {
-          addBoundary(file, name, node.initializer);
+          addBoundary(file, name, node.value);
         }
         if (
           name === "defaultPendingComponent" &&
           file === path.join(srcDirectory, "router.tsx")
         ) {
-          addBoundary(file, name, node.initializer);
+          addBoundary(file, name, node.value);
         }
       }
-      if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-        const name = node.tagName.getText();
-        const imported = ts.isIdentifier(node.tagName)
-          ? symbols.load(file).imports.get(name)
-          : undefined;
+      if (node.type === "JSXOpeningElement") {
+        const name = symbols.text(file, node.name);
+        const imported =
+          node.name.type === "JSXIdentifier"
+            ? symbols.load(file).imports.get(name)
+            : undefined;
         const namespace =
-          ts.isPropertyAccessExpression(node.tagName) &&
-          ts.isIdentifier(node.tagName.expression)
-            ? symbols.load(file).imports.get(node.tagName.expression.text)
+          node.name.type === "JSXMemberExpression" &&
+          node.name.object.type === "JSXIdentifier"
+            ? symbols.load(file).imports.get(node.name.object.name)
             : undefined;
         const namespacedSuspense =
-          ts.isPropertyAccessExpression(node.tagName) &&
-          node.tagName.name.text === "Suspense" &&
+          node.name.type === "JSXMemberExpression" &&
+          node.name.property.name === "Suspense" &&
           namespace?.module === "react";
         if (
           namespacedSuspense ||
           name === "Suspense" ||
           (imported?.module === "react" && imported.name === "Suspense")
         ) {
-          for (const attribute of node.attributes.properties) {
+          for (const attribute of node.attributes) {
             if (
-              ts.isJsxAttribute(attribute) &&
-              attribute.name.getText() === "fallback" &&
-              attribute.initializer
+              attribute.type === "JSXAttribute" &&
+              symbols.text(file, attribute.name) === "fallback" &&
+              attribute.value
             ) {
-              addBoundary(file, "Suspense", attribute.initializer);
+              addBoundary(file, "Suspense", attribute.value);
             }
           }
         }
       }
-      ts.forEachChild(node, visit);
     };
-    visit(symbols.load(file).source);
+    walk(symbols.load(file).source.program, visit);
   };
   const routeFiles = (directory: string) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -712,11 +809,14 @@ export const checkRouteFallbacks = (sourceDirectory: string) => {
         return true;
       }
       return (
-        ts.isJsxExpression(expression) &&
-        expression.expression !== undefined &&
-        ts.isJsxSelfClosingElement(expression.expression) &&
-        expression.expression.tagName.getText() === candidate.component &&
-        expression.expression.attributes.properties.length === 0
+        expression.type === "JSXExpressionContainer" &&
+        expression.expression.type === "JSXElement" &&
+        expression.expression.openingElement.selfClosing &&
+        symbols.text(
+          path.join(srcDirectory, boundary.file),
+          expression.expression.openingElement.name,
+        ) === candidate.component &&
+        expression.expression.openingElement.attributes.length === 0
       );
     });
     const chrome = [

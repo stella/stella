@@ -1,9 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+import {
+  type CallExpression,
+  type Identifier,
+  type MemberExpression,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const E2E_ROOT = path.resolve(import.meta.dirname, "..");
 const READINESS_LIFECYCLES = new Set(["commit", "domcontentloaded"]);
@@ -49,65 +55,55 @@ const specFiles = async (directory: string): Promise<string[]> => {
 
 const navigationViolations = async (filePath: string): Promise<string[]> => {
   const sourceText = await readFile(filePath, "utf-8");
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sourceFile = parseSource(filePath, sourceText);
   const violations: string[] = [];
 
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && isPageNavigation(node)) {
+  walk(sourceFile.program, (node) => {
+    if (node.type === "CallExpression" && isPageNavigation(node)) {
       const lifecycle = navigationLifecycle(node);
       if (!READINESS_LIFECYCLES.has(lifecycle ?? "")) {
-        const { line } = sourceFile.getLineAndCharacterOfPosition(
-          node.getStart(sourceFile),
-        );
+        const { line } = sourceFile.locate(node.start);
         violations.push(
-          `${repoRelativePath(E2E_ROOT, filePath)}:${line + 1} uses ${
-            node.expression.name.text
-          } without waitUntil: "commit" or "domcontentloaded"`,
+          `${repoRelativePath(E2E_ROOT, filePath)}:${line} uses ${sourceText.slice(
+            node.callee.property.start,
+            node.callee.property.end,
+          )} without waitUntil: "commit" or "domcontentloaded"`,
         );
       }
     }
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
+  });
   return violations;
 };
 
-type PageNavigationCall = ts.CallExpression & {
-  expression: ts.PropertyAccessExpression & {
-    expression: ts.Identifier;
-  };
+type PageNavigationCall = CallExpression & {
+  callee: MemberExpression & { object: Identifier; property: Identifier };
 };
-
-const isPageNavigation = (
-  call: ts.CallExpression,
-): call is PageNavigationCall =>
-  ts.isPropertyAccessExpression(call.expression) &&
-  ts.isIdentifier(call.expression.expression) &&
-  call.expression.expression.text === "page" &&
-  NAVIGATION_OPTIONS_INDEX.has(call.expression.name.text);
-
+const isPageNavigation = (call: CallExpression): call is PageNavigationCall =>
+  call.callee.type === "MemberExpression" &&
+  !call.callee.computed &&
+  call.callee.object.type === "Identifier" &&
+  call.callee.object.name === "page" &&
+  call.callee.property.type === "Identifier" &&
+  NAVIGATION_OPTIONS_INDEX.has(call.callee.property.name);
 const navigationLifecycle = (call: PageNavigationCall): string | null => {
   const options = call.arguments.at(
-    NAVIGATION_OPTIONS_INDEX.get(call.expression.name.text) ?? 0,
+    NAVIGATION_OPTIONS_INDEX.get(call.callee.property.name) ?? 0,
   );
-  if (!options || !ts.isObjectLiteralExpression(options)) {
+  if (!options || options.type !== "ObjectExpression") {
     return null;
   }
   const waitUntil = options.properties.find(
     (property) =>
-      ts.isPropertyAssignment(property) &&
-      property.name.getText() === "waitUntil",
+      property.type === "Property" &&
+      !property.computed &&
+      property.key.type === "Identifier" &&
+      property.key.name === "waitUntil",
   );
-  if (!waitUntil || !ts.isPropertyAssignment(waitUntil)) {
+  if (!waitUntil || waitUntil.type !== "Property") {
     return null;
   }
-  return ts.isStringLiteral(waitUntil.initializer)
-    ? waitUntil.initializer.text
+  return waitUntil.value.type === "Literal" &&
+    typeof waitUntil.value.value === "string"
+    ? waitUntil.value.value
     : null;
 };
