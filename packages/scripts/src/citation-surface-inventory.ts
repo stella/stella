@@ -42,6 +42,21 @@ function visit(node: Node, inspect: (node: Node) => void) {
     return undefined;
   });
 }
+/** The name a declared value binds: an initialized variable or a defined function. */
+function declaredValueName(node: Node): string | undefined {
+  if (
+    node.type === "VariableDeclarator" &&
+    node.id.type === "Identifier" &&
+    node.init
+  ) {
+    return node.id.name;
+  }
+  if (node.type === "FunctionDeclaration" && node.id && node.body) {
+    return node.id.name;
+  }
+  return undefined;
+}
+
 function nameOf(node: Node) {
   if (node.type === "Identifier" || node.type === "JSXIdentifier") {
     return node.name;
@@ -113,16 +128,11 @@ function createInventory({
           });
         }
       }
-      if (
-        (node.type === "VariableDeclarator" &&
-          node.id.type === "Identifier" &&
-          node.init) ||
-        (node.type === "FunctionDeclaration" && node.id && node.body)
-      ) {
-        const key = node.id.name;
-        const values = unit.values.get(key) ?? [];
+      const declaredName = declaredValueName(node);
+      if (declaredName !== undefined) {
+        const values = unit.values.get(declaredName) ?? [];
         values.push(node);
-        unit.values.set(key, values);
+        unit.values.set(declaredName, values);
       }
       if (node.type === "JSXOpeningElement") {
         unit.openings.push(node);
@@ -449,7 +459,7 @@ function provenance(
         parameter?.type === "FunctionExpression" ||
         parameter?.type === "FunctionDeclaration"
       ) ||
-      !parameter.params.includes(pattern)
+      !parameter.params.some((param) => param === pattern)
     ) {
       return;
     }

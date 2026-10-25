@@ -117,6 +117,7 @@ const readRoute = (filePath: string) => {
           "beforeLoad" &&
         (property.value.type === "ArrowFunctionExpression" ||
           property.value.type === "FunctionExpression") &&
+        property.value.body !== null &&
         hasDirectGateCall(property.value.body, gateNames),
     );
   if (

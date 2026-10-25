@@ -10,7 +10,14 @@ import {
   type Node,
   parseSync,
   Visitor,
+  visitorKeys,
 } from "oxc-parser";
+
+const isNode = (value: unknown): value is Node =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  typeof value.type === "string";
 
 const parsePropertySource = (file: string, source: string) => {
   const parsed = parseSync(file, source);
@@ -373,14 +380,28 @@ const inspectPropertySpawns = ({ relativePath, source }: PropertyTestFile) => {
         }
       }
     };
-    new Visitor({
-      CallExpression(call) {
-        inspectCallee(call.callee);
-      },
-      TaggedTemplateExpression(template) {
-        inspectCallee(template.tag);
-      },
-    }).visit(node);
+    // oxc's Visitor walks only a Program; a helper is a function node, so its
+    // subtree is walked by its own visitor keys.
+    const enter = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          enter(item);
+        }
+        return;
+      }
+      if (!isNode(value)) {
+        return;
+      }
+      if (value.type === "CallExpression") {
+        inspectCallee(value.callee);
+      } else if (value.type === "TaggedTemplateExpression") {
+        inspectCallee(value.tag);
+      }
+      for (const key of visitorKeys[value.type] ?? []) {
+        enter(Reflect.get(value, key));
+      }
+    };
+    enter(node);
     return found;
   };
 

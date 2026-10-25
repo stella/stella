@@ -97,7 +97,8 @@ const propertyIds = (file: string, source: string): Set<string> => {
         if (
           callback !== undefined &&
           (callback.type === "ArrowFunctionExpression" ||
-            callback.type === "FunctionExpression")
+            callback.type === "FunctionExpression") &&
+          callback.body !== null
         ) {
           visit(
             callback.body,
