@@ -10,8 +10,12 @@ const userId = "user-fixture";
 const organizationId = "org-fixture";
 
 /** Leaf guards are bypassed by the shell fixture; these are their consumed outputs. */
-export const authFixtureBeforeLoadData = (routeId: string) => {
+export const authFixtureBeforeLoadData = (routeId: string, email: string) => {
   switch (routeId) {
+    case "/auth/otp":
+      return { otpEmail: email } satisfies Awaited<
+        ReturnType<NonNullable<typeof OtpRoute.options.beforeLoad>>
+      >;
     case "/auth/organization":
       return { userId, isOauthPostLoginFromSearch: false } satisfies Awaited<
         ReturnType<NonNullable<typeof OrganizationRoute.options.beforeLoad>>
@@ -86,6 +90,8 @@ const organizations = [
 
 export const authFixtureResponse = (pathname: string): Response | undefined => {
   switch (pathname) {
+    case "/dev-public/last-otp":
+      return Response.json({ otp: "123456" });
     case "/v1/auth/capabilities":
       return Response.json(capabilities);
     case "/api/auth/organization/list":

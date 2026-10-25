@@ -10,13 +10,14 @@ import {
   TOOLS_KIND_FILTERS,
   type ToolsKindFilter,
 } from "@/lib/tools-catalogue";
+import { routeSearchSchema } from "@/route-search-params";
 import { PublicToolsIndex } from "@/routes/tools/-components/public-tools-index";
 
 // Public SEO page: a bad `?kind=` value (e.g. `?kind=skills`) must degrade
 // to the default "all" filter, not throw into the router's default error
 // boundary. `v.fallback` swallows the parse failure and yields "all",
 // rendering the page as if the param were absent.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   kind: v.fallback(v.optional(v.picklist(TOOLS_KIND_FILTERS), "all"), "all"),
 });
 
