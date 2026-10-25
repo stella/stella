@@ -41,6 +41,12 @@ import {
   grantOAuthClient,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const routeServer = serveRoutesForTest(apiKeysRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 /**
  * Every MCP HTTP request authenticates its bearer credential and then builds
@@ -177,7 +183,7 @@ const postJson = async (
   browser: HumanBrowser,
   body: Record<string, unknown>,
 ) => {
-  const response = await apiKeysRoute.handle(
+  const response = await routeServer.fetch(
     new Request(`${BASE}${path}`, {
       method: "POST",
       headers: {

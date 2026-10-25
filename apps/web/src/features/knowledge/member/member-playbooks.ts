@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   knowledgeKeys,
   playbooksOptions,
@@ -87,7 +87,9 @@ const usePlaybookActions = (organizationId: string) => {
         fetch: { signal },
       }),
     createFromStarter: async (starterId: StarterId) =>
-      unwrapEden(await api.playbooks["from-starter"].post({ starterId })),
+      unwrapApiResponse(
+        await api.playbooks["from-starter"].post({ starterId }),
+      ),
   };
 };
 

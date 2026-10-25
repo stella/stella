@@ -1,7 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
@@ -16,6 +15,7 @@ import {
   readShelfCourts,
   type ShelfCourt,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
@@ -48,11 +48,13 @@ import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
  * are.
  */
 
-export const listLatestDecisionsQuerySchema = t.Object({
+export const listLatestDecisionsQuerySchema = v.object({
   country: tPublicLawCountry,
 });
 
-type ListLatestDecisionsQuery = Static<typeof listLatestDecisionsQuerySchema>;
+type ListLatestDecisionsQuery = v.InferOutput<
+  typeof listLatestDecisionsQuerySchema
+>;
 
 export type LatestDecision = {
   id: SafeId<"caseLawDecision">;

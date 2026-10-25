@@ -56,8 +56,6 @@ COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/font
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
 RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
-# Build the server unminified: `bun build --minify` can break Elysia's AOT
-# handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 # The server and collab are bundles run by the image's Bun, not --compile
 # binaries: each compiled binary embeds another full copy of the runtime.
 # Every bundle sets --public-path to the directory it lands in on the runner.

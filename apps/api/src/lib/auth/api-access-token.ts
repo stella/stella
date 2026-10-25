@@ -39,7 +39,7 @@ import { getVerifyBearerToken } from "@/api/mcp/auth";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
 
 /**
- * Every REST route an API access token may open, by Elysia route pattern,
+ * Every REST route an API access token may open, by route pattern,
  * with the scope it requires and the handler module that serves it.
  * `api-oauth-routes.test.ts` proves each entry: the live route serves that
  * handler, the handler is not account control, and the capability catalog
@@ -48,7 +48,7 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * phone must not be able to keep itself connected.
  */
 export const API_OAUTH_ROUTES = {
-  "GET /v1/workspaces/": {
+  "GET /v1/workspaces": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/list.ts",
   },
@@ -203,10 +203,12 @@ export const admitApiAccessTokenRoute = ({
   scopes,
 }: {
   readonly method: string;
-  readonly route: string;
+  /** Absent when no route matched, which no token opens. */
+  readonly route: string | undefined;
   readonly scopes: readonly string[];
 }): ApiRouteAdmission => {
-  const required = ROUTE_SCOPES.get(`${method} ${route}`);
+  const required =
+    route === undefined ? undefined : ROUTE_SCOPES.get(`${method} ${route}`);
   if (required === undefined) {
     return { admitted: false, reason: "route" };
   }

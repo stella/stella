@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   BLUEPRINT_IDS,
@@ -24,9 +24,9 @@ import { uniqueSlug } from "../slug";
 
 const encoder = new TextEncoder();
 
-const fromBlueprintBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  blueprintId: t.UnionEnum(BLUEPRINT_IDS),
+const fromBlueprintBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  blueprintId: v.picklist(BLUEPRINT_IDS),
 });
 
 const config = {

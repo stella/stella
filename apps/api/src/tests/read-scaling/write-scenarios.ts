@@ -1,11 +1,11 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { vatRates } from "@/api/db/schema";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import {
@@ -97,11 +97,11 @@ const seedVatRateWriteScaling = async (db: GatedTestDb, size: number) => {
 
 type WriteFixture = Awaited<ReturnType<typeof seedVatRateWriteScaling>>;
 
-/** The same handler objects are mounted by Elysia and exercised by the harness. */
+/** The same endpoint definitions are mounted by the API and exercised by the harness. */
 export const writeScalingScenarios = [
   {
     name: "VAT rate preset",
-    handler: applyVatRatePreset.handler,
+    definition: applyVatRatePreset,
     prepare: async (db: GatedTestDb) =>
       await createScalingTempTables(db, [organization, user, vatRates]),
     seed: seedVatRateWriteScaling,
@@ -126,7 +126,7 @@ export const writeScalingScenarios = [
             route: "/v1/vat-rates/apply-preset",
           }),
         );
-        if (response instanceof ElysiaCustomStatusResponse) {
+        if (response instanceof HttpStatusResponse) {
           panic(
             "VAT rate preset scaling requires a successful handler response",
           );

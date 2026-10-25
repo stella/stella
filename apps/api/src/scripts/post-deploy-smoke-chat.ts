@@ -22,7 +22,6 @@
  * connection or reads the app's env module.
  */
 import { TaggedError } from "better-result";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -304,7 +303,7 @@ export const buildSmokeAIConfigBody = (apiKey: string) => {
   };
 };
 
-type ChatSmokeBody = Static<typeof agUiSendMessageBodySchema>;
+type ChatSmokeBody = v.InferOutput<typeof agUiSendMessageBodySchema>;
 
 export const buildUserTurnBody = ({
   runId,

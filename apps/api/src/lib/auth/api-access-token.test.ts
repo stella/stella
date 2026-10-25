@@ -114,6 +114,16 @@ describe("which routes an API access token opens", () => {
     }
   });
 
+  test("a request no route matched is refused", () => {
+    expect(
+      admitApiAccessTokenRoute({
+        method: "GET",
+        route: undefined,
+        scopes: ["stella:read"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
+  });
+
   test("every unlisted route is refused whatever the token carries", () => {
     const listed = new Set(Object.keys(API_OAUTH_ROUTES));
     assertProperty(
@@ -123,10 +133,10 @@ describe("which routes an API access token opens", () => {
         fc.oneof(
           fc.webPath(),
           fc.constantFrom(
-            "/v1/workspaces",
-            "/v1/workspaces/:workspaceId/",
+            "/v1/workspaces/",
+            "/v1/workspaces/:workspaceId",
             "/v1/me/oauth-connections/:consentId",
-            "/v1/contacts/",
+            "/v1/contacts",
           ),
         ),
         fc.array(

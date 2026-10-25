@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq, gt, lt, or } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { classifyFailure } from "@stll/errors";
@@ -18,7 +17,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { getS3 } from "@/api/lib/s3";
@@ -39,8 +38,8 @@ const MAX_SOURCE_CHARS = 30_000;
 const EXTRACT_TIMEOUT_MS = 60_000;
 const PROCESSING_LEASE_MS = 3 * 60 * 1000;
 
-const extractProcuracaoBodySchema = t.Object({
-  uploadId: tSafeId("contactExtractionUpload"),
+const extractProcuracaoBodySchema = v.object({
+  uploadId: resourceIdSchema("contactExtractionUpload"),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output

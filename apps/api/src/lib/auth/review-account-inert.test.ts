@@ -15,6 +15,12 @@ import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-po
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const routeServer = serveRoutesForTest(authCapabilitiesRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 const email = "member@example.test";
 const password = "fixture password for tests";
@@ -157,7 +163,7 @@ const runScenario = async (localPasswordEnabled: boolean) => {
 
 describe("restricted review account, unconfigured", () => {
   test("capabilities offer no restricted password sign-in", async () => {
-    const response = await authCapabilitiesRoute.handle(
+    const response = await routeServer.fetch(
       new Request("http://localhost/auth/capabilities"),
     );
     const body = v.parse(

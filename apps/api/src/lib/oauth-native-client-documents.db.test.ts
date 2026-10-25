@@ -31,7 +31,8 @@ testState.setEnv("PUBLIC_URL", PUBLIC_URL);
 
 const { env } = await import("@/api/env");
 const { getAuth } = await import("@/api/lib/auth");
-const { default: api } = await import("@/api/server");
+const { apiApp } = await import("@/api/server");
+const { serveForTest } = await import("@/api/tests/helpers/test-server");
 const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
 const { signInHuman } = await import("@/api/tests/helpers/human-session");
@@ -54,6 +55,8 @@ const { apiOAuthResourceUrl } =
   await import("@stll/api-contract/api-oauth-resource");
 const { readCredentialFile } =
   await import("../../../../packages/cli/src/auth/credential-store.ts");
+
+const api = serveForTest(apiApp);
 
 const MOBILE_CLIENT_ID = `${PUBLIC_URL}${MOBILE_CLIENT_METADATA_PATH}`;
 
@@ -84,7 +87,7 @@ const serveInProcess = async (
   );
   const response = url.pathname.startsWith("/api/auth/")
     ? await getAuth().handler(local)
-    : await api.handle(local);
+    : await api.fetch(local);
   if (
     !hideDocumentSupport ||
     !url.pathname.endsWith("/.well-known/oauth-authorization-server")
@@ -279,6 +282,7 @@ testState.beforeAll(async () => {
 
 afterAll(async () => {
   fetchSpy.mockRestore();
+  await api.stop();
   await Promise.all(
     configDirs.map(async (dir) => {
       await rm(dir, { force: true, recursive: true });

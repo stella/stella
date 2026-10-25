@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import { listSkillMetadata, listSkillResources } from "@stll/skills";
 import { readSkillDisplayName } from "@stll/skills/frontmatter";
 
@@ -17,7 +18,7 @@ import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skill
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -31,14 +32,18 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
-const listSkillsQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.agentSkillsPageSizeMax,
-    }),
+const listSkillsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.agentSkillsPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const config = {

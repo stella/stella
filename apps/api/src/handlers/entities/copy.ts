@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import type { Static } from "elysia";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -32,7 +31,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
@@ -58,15 +57,15 @@ import {
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-const copyToWorkspaceBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  targetWorkspaceId: tSafeId("workspace"),
-  targetParentId: t.Nullable(tSafeId("entity")),
-  deleteSource: t.Boolean(),
-  sourceFieldId: t.Optional(tSafeId("field")),
+const copyToWorkspaceBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  targetWorkspaceId: resourceIdSchema("workspace"),
+  targetParentId: v.nullable(resourceIdSchema("entity")),
+  deleteSource: v.boolean(),
+  sourceFieldId: v.optional(resourceIdSchema("field")),
 });
 
-type CopyToWorkspaceBody = Static<typeof copyToWorkspaceBodySchema>;
+type CopyToWorkspaceBody = v.InferOutput<typeof copyToWorkspaceBodySchema>;
 
 type CopyToWorkspaceHandlerProps = {
   safeDb: SafeDb;

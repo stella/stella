@@ -13,7 +13,7 @@ import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
@@ -97,7 +97,7 @@ export const useMarkdownFileDraft = ({
           file,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (response, variables) => {
       replaceFileFieldId(variables.fieldId, {

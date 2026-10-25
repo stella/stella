@@ -803,25 +803,6 @@ checks:
       bun apps/api/scripts/capability-description-guard.ts --self-test
       bun apps/api/scripts/capability-description-guard.ts
 
-  - name: exactMirror route guard
-    env:
-      CI_CHECK_KIND: STATIC
-      CI_CHECK_INPUTS: tracked-tree+generated-inputs
-    id: static_check_054
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/exactMirror route guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_054 != 'true') }}
-    # Elysia builds an "exactMirror" serializer per route schema. Some
-    # schemas (recursive ones: t.Recursive, or a Type.Unsafe wrapping a
-    # self-referential TypeBox node) cannot be mirrored: Elysia logs the
-    # failure and falls back to slow per-request serialization, which can
-    # stall the API at boot. Typecheck and lint do not catch it. The
-    # guard builds the real app and forces every route's mirror to compile,
-    # failing if any cannot. The --self-test run first proves the detector
-    # still catches a known recursive schema, so a broken guard cannot pass
-    # silently.
-    run: |
-      bun apps/api/scripts/exact-mirror-guard.ts --self-test
-      bun apps/api/scripts/exact-mirror-guard.ts
-
   - name: MCP coverage guard
     env:
       CI_CHECK_KIND: STATIC

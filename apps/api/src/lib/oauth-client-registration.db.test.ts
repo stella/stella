@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
@@ -13,10 +14,6 @@ import {
   OPEN_REGISTRATION_SCOPES,
 } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {

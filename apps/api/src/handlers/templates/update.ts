@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
@@ -10,7 +9,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 import {
@@ -19,30 +21,34 @@ import {
 } from "@/api/lib/templates/template-languages";
 import type { TemplateMetadataUpdate } from "@/api/lib/templates/write-template";
 
-const updateTemplateBodySchema = t.Object({
-  name: t.Optional(tDefaultVarchar),
-  categoryId: t.Optional(t.Nullable(tSafeId("templateCategory"))),
-  tags: t.Optional(
-    t.Array(t.String({ minLength: 1, maxLength: 64 }), {
-      maxItems: 32,
-    }),
+const updateTemplateBodySchema = v.object({
+  name: v.exactOptional(defaultVarcharSchema),
+  categoryId: v.exactOptional(v.nullable(resourceIdSchema("templateCategory"))),
+  tags: v.exactOptional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+      v.maxLength(32),
+    ),
   ),
-  whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  // Accepts language tags (canonicalized to ISO 639-1 base codes server-side
-  // by `normalizeTemplateLanguages`). Tags cap at 35 chars (RFC 5646 buffer).
-  languages: t.Optional(
-    t.Array(t.String({ maxLength: 35 }), {
-      maxItems: MAX_TEMPLATE_LANGUAGES,
-    }),
+  whenToUse: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  whenNotToUse: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  languages: v.exactOptional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(35))),
+      v.maxLength(MAX_TEMPLATE_LANGUAGES),
+    ),
   ),
 });
 
-const updateTemplateParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const updateTemplateParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
-type UpdateTemplateBody = Static<typeof updateTemplateBodySchema>;
+type UpdateTemplateBody = v.InferOutput<typeof updateTemplateBodySchema>;
 
 type UpdateTemplateProps = {
   safeDb: SafeDb;

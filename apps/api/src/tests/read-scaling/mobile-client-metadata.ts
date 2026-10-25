@@ -8,7 +8,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
  */
 export const mobileClientMetadataScalingScenario = {
   name: "mobile client metadata document",
-  handler: readMobileClientMetadata.handler,
+  definition: readMobileClientMetadata,
   measure: async () =>
     await runWithMeasuredQueryCounter(async (counter) => {
       const response = await readMobileClientMetadata.handler(
@@ -16,6 +16,7 @@ export const mobileClientMetadataScalingScenario = {
           request: new Request(
             "https://example.test/v1/mcp/oauth/mobile-client-metadata.json",
           ),
+          route: "/v1/mcp/oauth/mobile-client-metadata.json",
           set: { headers: {} },
         }),
       );

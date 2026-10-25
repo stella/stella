@@ -8,7 +8,7 @@ import {
   RESOURCE_TYPE,
   resourceRef,
 } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -823,14 +823,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     source_id: v.optional(uuidInputSchema("Filter by source ID")),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
       ),
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),
@@ -1197,17 +1197,13 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
-      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
-      "textVersion as text_version; versionChanged flags changed text. " +
+      "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
+      "text_version; versionChanged flags changed text. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches and neighbours with position, publisher label, " +
-      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
-      "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(citedBy reference counts, polarity, top citers: exact " +
-      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
-      "cites with held decisionIds). " +
-      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
-      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`query` returns matches, neighbours and deep links. Page 1 adds " +
+      "reader/publisher URL, metadata, textFields and citation summaries (top " +
+      `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
+      "Use read_case_law_citations for all citations. One id adds an outline. " +
       "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
@@ -2514,7 +2510,10 @@ const caseLawSearchResult = ({
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
-          keywords: hit.keywords,
+          keywords:
+            hit.keywords === null
+              ? null
+              : { ...hit.keywords, items: [...hit.keywords.items] },
           headnote:
             hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
         }

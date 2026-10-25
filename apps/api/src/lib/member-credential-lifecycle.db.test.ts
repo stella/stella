@@ -42,6 +42,15 @@ import type {
   OAuthGrant,
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const routeServer = serveRoutesForTest([
+  ...apiKeysRoute,
+  ...desktopRegistryRoute,
+]);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 // One member's whole credential set, minted through the endpoints that issue
 // each kind in production, then checked against the verifier that accepts it
@@ -84,12 +93,11 @@ const BASE = "http://localhost";
 const createdKeySchema = v.looseObject({ key: v.string() });
 
 const postJson = async (
-  route: { handle: (request: Request) => Promise<Response> },
   path: string,
   browser: HumanBrowser,
   body: Record<string, unknown>,
 ) =>
-  await route.handle(
+  await routeServer.fetch(
     new Request(`${BASE}${path}`, {
       method: "POST",
       headers: {
@@ -112,18 +120,13 @@ const createDesktopCredential = async (
   const device = await createDesktopDeviceSigner();
   const correlationId = Bun.randomUUIDv7();
   const verifier = randomBytes(32).toString("hex");
-  const grant = await postJson(
-    desktopRegistryRoute,
-    "/desktop-registry/grant",
-    browser,
-    {
-      correlationId,
-      deviceJkt: device.deviceJkt,
-      verifierHash: hashSha256Hex(verifier),
-    },
-  );
+  const grant = await postJson("/desktop-registry/grant", browser, {
+    correlationId,
+    deviceJkt: device.deviceJkt,
+    verifierHash: hashSha256Hex(verifier),
+  });
   expect(grant.status, await grant.clone().text()).toBe(200);
-  const redeemed = await desktopRegistryRoute.handle(
+  const redeemed = await routeServer.fetch(
     await device.signRequest({
       request: new Request(`${BASE}/desktop-registry/redeem-link`, {
         method: "POST",
@@ -283,7 +286,7 @@ describe("organization member credential lifecycle", () => {
     const credentials: MemberCredentials = {
       browser: member,
       machineKey: await readCreatedKey(
-        await postJson(apiKeysRoute, "/api-keys", member, {
+        await postJson("/api-keys", member, {
           name: "CI",
           scopes: ["stella:read"],
           permissions: { workspace: ["read"] },

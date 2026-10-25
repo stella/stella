@@ -1,12 +1,12 @@
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { status } from "elysia";
 
 import {
   caseLawCitations,
   caseLawSources,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";

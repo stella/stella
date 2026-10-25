@@ -62,7 +62,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
@@ -150,7 +150,7 @@ const TaskDetailPanelContent = ({
           ...taskUpdateBody(update),
           taskId: toSafeId<"entity">(update.taskId),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       if (taskUpdateClearsWorkflowReason(variables)) {
@@ -200,7 +200,7 @@ const TaskDetailPanelContent = ({
       })({ entityId: toSafeId<"entity">(taskId) }).patch({
         ...workflowUpdateBody(update),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       if (workflowUpdateClearsReason(variables)) {
@@ -228,9 +228,9 @@ const TaskDetailPanelContent = ({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) });
       if (action.type === "acknowledge") {
-        return unwrapEden(await endpoint.acknowledge.post({}));
+        return unwrapApiResponse(await endpoint.acknowledge.post({}));
       }
-      return unwrapEden(
+      return unwrapApiResponse(
         await endpoint.transition.post({
           action: action.action,
           ...(action.reason ? { reason: action.reason } : {}),

@@ -323,7 +323,7 @@
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
       // Turbo hashes each workspace dependency closure from bun.lock. Root
-      // tools (typescript and bun-types) enter its global dependency hash;
+      // tools (tsrs and bun-types) enter its global dependency hash;
       // The narrow generated Bun pin is a global input. Hash shared source separately.
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -428,7 +428,7 @@
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
-      // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, typescript and
+      // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, tsrs and
       // better-result are covered by Turbo's global root dependency hash.
       // Type-aware lint reads the same external install and compiler inputs as
       // TypeScript, in addition to Oxlint's root config and plugins.
@@ -1471,8 +1471,6 @@
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
-        "$TURBO_ROOT$/scripts/check-write-contracts.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"

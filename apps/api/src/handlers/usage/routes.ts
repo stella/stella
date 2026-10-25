@@ -1,8 +1,3 @@
-import Elysia from "elysia";
-
-import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
-
-import { env } from "@/api/env";
 import assignSeat from "@/api/handlers/usage/assign-seat";
 import createHostedManagement from "@/api/handlers/usage/create-hosted-management";
 import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
@@ -12,77 +7,35 @@ import getLane from "@/api/handlers/usage/get-lane";
 import listPolicies from "@/api/handlers/usage/list-policies";
 import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
 import unassignSeat from "@/api/handlers/usage/unassign-seat";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
-
-const USAGE_PATH = "/usage";
-const VERSIONED_USAGE_PATH = `${STELLA_API_VERSION_PREFIX}${USAGE_PATH}`;
+import { routes } from "@/api/http/route";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 // Operator-driven admin endpoints (manual entitlement upsert,
-// discretionary usage allocations) are deliberately NOT mounted on this
-// branch. They need a dedicated platform-staff permission gate
-// (owner-of-own-org is too broad — would let any owner
-// allocate units to themselves) and must run their writes through
-// `rootDb` so the restrictive RLS deny on
-// `usage_entitlements`/`usage_allocations` does not block them. Both
-// land in a follow-up PR per the original plan.
-export const usageRoute = new Elysia({ prefix: USAGE_PATH })
-  .onRequest(({ request, status }) => {
-    if (env.FEATURE_USAGE) {
-      return undefined;
-    }
-    const path = new URL(request.url).pathname;
-    // Admission precedes body validation and authentication database access.
-    // The root-mounted provider webhook retains its own delivery contract.
-    if (
-      (path === USAGE_PATH ||
-        path.startsWith(`${USAGE_PATH}/`) ||
-        path === VERSIONED_USAGE_PATH ||
-        path.startsWith(`${VERSIONED_USAGE_PATH}/`)) &&
-      path !== "/usage/hosted/webhook"
-    ) {
-      return status(404, { error: "Not Found" });
-    }
-    return undefined;
-  })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/entitlement", getEntitlement.handler, {
-    permissions: getEntitlement.config.permissions,
-    accountAccess: getEntitlement.config.accountAccess,
-  })
-  .get("/access", getAccess.handler, {
-    permissions: getAccess.config.permissions,
-    accountAccess: getAccess.config.accountAccess,
-  })
-  .get("/lane", getLane.handler, {
-    permissions: getLane.config.permissions,
-    accountAccess: getLane.config.accountAccess,
-  })
-  .get("/policies", listPolicies.handler, {
-    permissions: listPolicies.config.permissions,
-    accountAccess: listPolicies.config.accountAccess,
-  })
-  .get("/assignments", listSeatAssignments.handler, {
-    permissions: listSeatAssignments.config.permissions,
-    accountAccess: listSeatAssignments.config.accountAccess,
-  })
-  .post("/assignments", assignSeat.handler, {
-    body: assignSeat.config.body,
-    permissions: assignSeat.config.permissions,
-    accountAccess: assignSeat.config.accountAccess,
-  })
-  .delete("/assignments", unassignSeat.handler, {
-    body: unassignSeat.config.body,
-    permissions: unassignSeat.config.permissions,
-    accountAccess: unassignSeat.config.accountAccess,
-  })
-  .post("/hosted/setup", createHostedSetup.handler, {
-    body: createHostedSetup.config.body,
-    permissions: createHostedSetup.config.permissions,
-    accountAccess: createHostedSetup.config.accountAccess,
-  })
-  .post("/hosted/management", createHostedManagement.handler, {
-    permissions: createHostedManagement.config.permissions,
-    accountAccess: createHostedManagement.config.accountAccess,
-  });
+// discretionary usage allocations) are deliberately NOT mounted here. They
+// need a dedicated platform-staff permission gate (owner-of-own-org is too
+// broad: any owner could allocate units to themselves) and must run their
+// writes through `rootDb` so the restrictive RLS deny on
+// `usage_entitlements`/`usage_allocations` does not block them.
+//
+// Without the usage feature these routes answer like absent ones, before
+// authentication or input validation. The provider webhook is mounted on its
+// own and keeps its delivery contract.
+export const usageRoute = routes(
+  {
+    "/entitlement": { GET: getEntitlement },
+    "/access": { GET: getAccess },
+    "/lane": { GET: getLane },
+    "/policies": { GET: listPolicies },
+    "/assignments": {
+      GET: listSeatAssignments,
+      POST: assignSeat,
+      DELETE: unassignSeat,
+    },
+    "/hosted/setup": { POST: createHostedSetup },
+    "/hosted/management": { POST: createHostedManagement },
+  },
+  {
+    prefix: "/usage",
+    middleware: [deploymentFeatureGate("FEATURE_USAGE")],
+  },
+);

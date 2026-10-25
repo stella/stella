@@ -1,7 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
@@ -9,6 +8,7 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { legislationShelfSuccessResponseSchema } from "@/api/handlers/legislation/catalog-response";
 import { projectLegislationShelf } from "@/api/handlers/legislation/catalog-response";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
+import { status } from "@/api/http/status";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
@@ -36,13 +36,13 @@ import { logger } from "@/api/lib/observability/logger";
  * Whole-corpus and slow-moving, so it is cached like the decision shelf.
  */
 
-export const legislationShelfQuerySchema = t.Object({
+export const legislationShelfQuerySchema = v.object({
   country: tPublicLawCountry,
 });
 
-type LegislationShelfQuery = Static<typeof legislationShelfQuerySchema>;
+type LegislationShelfQuery = v.InferOutput<typeof legislationShelfQuerySchema>;
 
-export type LegislationShelf = Static<
+export type LegislationShelf = v.InferOutput<
   typeof legislationShelfSuccessResponseSchema
 >;
 

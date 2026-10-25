@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
+import {
+  expectedUpdatedAtSchema,
+  VERSION_CONFLICT_ERROR_CODE,
+} from "@/api/lib/optimistic-concurrency";
 
 import {
   assertWriteContract,
@@ -129,14 +132,15 @@ describe("replacement writes require the state the caller read", () => {
 describe("replacement precondition schemas", () => {
   test("a planted replacement without a required precondition fails at the factory boundary", () => {
     for (const body of [
-      t.Object({ values: t.Array(t.String()) }),
-      t.Any({ required: ["expectedUpdatedAt"] }),
-      t.Object({ expectedUpdatedAt: t.Any() }),
-      t.Object({ expectedUpdatedAt: t.Number() }),
-      t.Object({ expectedUpdatedAt: t.Optional(t.String()) }),
-      t.Union([
-        t.Object({ expectedUpdatedAt: t.String({ format: "date-time" }) }),
-        t.Object({ values: t.Array(t.String()) }),
+      v.object({ values: v.array(v.string()) }),
+      v.unknown(),
+      v.object({ expectedUpdatedAt: v.any() }),
+      v.object({ expectedUpdatedAt: v.number() }),
+      v.object({ expectedUpdatedAt: v.string() }),
+      v.object({ expectedUpdatedAt: v.optional(expectedUpdatedAtSchema) }),
+      v.union([
+        v.object({ expectedUpdatedAt: expectedUpdatedAtSchema }),
+        v.object({ values: v.array(v.string()) }),
       ]),
     ]) {
       expect(() => assertWriteContract({ ...timestampContract, body })).toThrow(
@@ -146,22 +150,30 @@ describe("replacement precondition schemas", () => {
   });
 
   test("required tokens survive every union alternative and intersection", () => {
-    const token = t.Object({
-      expectedUpdatedAt: t.String({ format: "date-time" }),
-    });
+    const token = v.object({ expectedUpdatedAt: expectedUpdatedAtSchema });
     const bodies = [
       token,
-      t.Union([
-        t.Object({
-          type: t.Literal("a"),
-          expectedUpdatedAt: t.String({ format: "date-time" }),
+      v.union([
+        v.object({
+          type: v.literal("a"),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
         }),
-        t.Object({
-          type: t.Literal("b"),
-          expectedUpdatedAt: t.String({ format: "date-time" }),
+        v.object({
+          type: v.literal("b"),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
         }),
       ]),
-      t.Intersect([token, t.Object({ values: t.Array(t.String()) })]),
+      v.variant("type", [
+        v.object({
+          type: v.literal("a"),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
+        }),
+        v.object({
+          type: v.literal("b"),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
+        }),
+      ]),
+      v.intersect([token, v.object({ values: v.array(v.string()) })]),
     ];
     for (const body of bodies) {
       const handler = () => undefined;
@@ -179,7 +191,9 @@ describe("replacement precondition schemas", () => {
           type: "revision",
           fields: ["expectedGeneration", "expectedSnapshotRevision"],
         },
-        body: t.Object({ expectedGeneration: t.Integer() }),
+        body: v.object({
+          expectedGeneration: v.pipe(v.number(), v.integer()),
+        }),
       }),
     ).toThrow("must require expectedSnapshotRevision in every branch");
   });
@@ -195,18 +209,22 @@ describe("replacement precondition schemas", () => {
     expect(() =>
       assertWriteContract({
         ...revision,
-        body: t.Object({
-          expectedGeneration: t.Integer({ minimum: 0 }),
-          expectedSnapshotRevision: t.Integer({ minimum: 0 }),
+        body: v.object({
+          expectedGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+          expectedSnapshotRevision: v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(0),
+          ),
         }),
       }),
     ).not.toThrow();
     expect(() =>
       assertWriteContract({
         ...revision,
-        body: t.Object({
-          expectedGeneration: t.Integer(),
-          expectedSnapshotRevision: t.Union([t.Integer(), t.Null()]),
+        body: v.object({
+          expectedGeneration: v.pipe(v.number(), v.integer()),
+          expectedSnapshotRevision: v.nullable(v.pipe(v.number(), v.integer())),
         }),
       }),
     ).toThrow("must require expectedSnapshotRevision in every branch");
@@ -224,7 +242,7 @@ test("invalid contract registration names the handler, source and violated rule"
   expect(() =>
     recordWriteContract(invalidReplacement, {
       ...timestampContract,
-      body: t.Object({ values: t.Array(t.String()) }),
+      body: v.object({ values: v.array(v.string()) }),
     }),
   ).toThrow(
     /Invalid write contract for invalidReplacement: A replacement body must require expectedUpdatedAt in every branch[\s\S]*Handler registration:[\s\S]*write-contract\.test\.ts/u,
