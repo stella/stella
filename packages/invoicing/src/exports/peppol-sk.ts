@@ -1,18 +1,13 @@
 import { Result } from "better-result";
 
 import { invalidInput, type InvoicingResult } from "../errors";
-import {
-  countryCodeOf,
-  type InvoiceExportRecord,
-  vatPercentText,
-} from "./record";
+import { countryCodeOf, type InvoiceExportRecord } from "./record";
 import { serializeUblFiles } from "./ubl";
 
 const CUSTOMIZATION_ID =
   "urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0";
 const PROFILE_ID = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 const SLOVAK_TAX_ID = /^\d{10}$/u;
-const SLOVAK_VAT_RATES = new Set([500, 1900, 2300]);
 
 const refusal = (record: InvoiceExportRecord, reason: string) =>
   invalidInput(`Invoice ${record.number}: ${reason}`);
@@ -98,18 +93,11 @@ const lineRefusal = (record: InvoiceExportRecord): string | null => {
   if (exemptionBases.has("")) {
     return "each exempt line needs its stored statutory exemption basis";
   }
-  if (exemptionBases.size > 1) {
-    return "exempt lines with different exemption bases cannot share one VAT breakdown; export them on separate invoices";
-  }
-  const foreignRate = record.lines.find(
-    (line) =>
-      line.vatTreatment === "domestic_vat" &&
-      line.vatRateBps !== 0 &&
-      !SLOVAK_VAT_RATES.has(line.vatRateBps),
-  );
-  return foreignRate === undefined
-    ? null
-    : `domestic VAT rate ${vatPercentText(foreignRate.vatRateBps)}% is not a Slovak 23%, 19%, or 5% rate`;
+  // The rate is the one the supply was taxed at (20 % and 10 % before 2025),
+  // so a correction of an older supply keeps its historical rate.
+  return exemptionBases.size > 1
+    ? "exempt lines with different exemption bases cannot share one VAT breakdown; export them on separate invoices"
+    : null;
 };
 
 const validate = (record: InvoiceExportRecord): string | null =>

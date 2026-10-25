@@ -337,6 +337,39 @@ describe("Peppol BIS Billing 3.0 for Slovak sellers", () => {
     },
   );
 
+  test("exports a supply taxed at the pre-2025 20 % rate and its correction", () => {
+    const invoice = contentOf(
+      peppolRecord({
+        number: "2024-090",
+        lines: [
+          {
+            description: "Advice in 2024",
+            netAmountMinor: cents(10_000),
+            vatRateBps: 2000,
+          },
+        ],
+      }),
+    );
+    expect(invoice).toContain("<cbc:Percent>20</cbc:Percent>");
+    const credit = contentOf(
+      peppolRecord({
+        number: "2027-CN-001",
+        documentType: "credit_note",
+        originalNumber: "2024-090",
+        originalIssueDate: "2024-12-10",
+        dueDate: null,
+        lines: [
+          {
+            description: "Correction of 2024 advice",
+            netAmountMinor: cents(-10_000),
+            vatRateBps: 2000,
+          },
+        ],
+      }),
+    );
+    expect(credit).toContain("<cbc:Percent>20</cbc:Percent>");
+  });
+
   test("generated line sets keep document line totals equal at two decimals", () => {
     assertProperty(
       "peppol-sk-line-extension-total",
