@@ -35,21 +35,24 @@ import { panic, Result, TaggedError } from "better-result";
  *
  * Cursor, therefore:
  *
- *   walk over the precedents window, then each publication day from the
+ *   the sweep: the precedents window, then each publication day from the
  *   floor, oldest first, each window paged by offset to the count the
- *   publisher stated for it (a changed count restarts the window, rule 19);
- *   parked once the last closed day is walked.
+ *   publisher stated for it; parked once the last closed day is walked;
+ *   the frontier: each day that closes after that, read once.
  *
  * A day is closed once it is over in Brasília: the publisher's current day is
  * never walked. Parked, a cycle with no newly closed day costs no request and
- * returns its cursor; each closed day is walked once. The court keeps indexing
- * a day for weeks (despachos arrive four to eight weeks late), and what lands
- * after the walk passed is the reconciliation ledger's: its slices are the
- * same days, its tip re-lists the last week, and its listing verifies the
- * distinct identities it read against the count the publisher states for the
- * slice (rule 15). That is also the walk's verification pass: the crawl does
- * not re-read a window, because a listing row is the full decision and a
- * second pass would cost the whole corpus again.
+ * returns its cursor. The court keeps indexing a day for weeks (despachos
+ * arrive four to eight weeks late). On the sweep, a day past that window is a
+ * fixed set and a moved count restarts it (rule 19); a day still inside it,
+ * and every day on the frontier, is read on with the moved count recorded,
+ * since a restart would chase the indexer. What lands after the walk passed
+ * is the reconciliation ledger's: its slices are the same days, its tip
+ * re-lists the last week, its listing holds the distinct identities it read
+ * to the count the publisher states (rule 15), and a day still inside the
+ * indexing window is listed twice, the second pass verifying the identities
+ * of the first. The crawl does not re-read a window itself: a listing row is
+ * the full decision, and that verification is the reconciliation slice's.
  *
  * Thirteen acórdãos and despachos with no publication date are reachable by
  * no window and are a known blind spot of both walks.
@@ -463,14 +466,49 @@ export const brTstSourceDocumentId = (
   return isPersistableSourceDocumentId(identity) ? identity : undefined;
 };
 
+/**
+ * The fields a record states whether or not its id is there: its type, its
+ * docket and dates, and the court's own numbers for the document. The
+ * reindexing stamp, the sort key and the highlight renderings change while
+ * the record does not, so they are not part of it.
+ */
+const QUARANTINE_FIELDS = [
+  "tipo",
+  "numero",
+  "numFormatado",
+  "dtaPublicacao",
+  "dtaJulgamento",
+  "orgaoJudicante",
+  "numInterno",
+  "numMinuta",
+  "numProcDocumento",
+  "indiceTipo",
+  "indiceNumero",
+] as const;
+
+/**
+ * The content-addressed identity of a record that states no id (rule 20),
+ * from the fields that survive the id's recovery: the row the record is
+ * quarantined under is the row its id later adopts, through the repair alias.
+ */
+export const brTstQuarantineId = (record: Record<string, unknown>): string =>
+  `quarantine:${sha256Hex(
+    JSON.stringify(
+      QUARANTINE_FIELDS.map((field) => [field, record[field] ?? null]),
+    ),
+  )}`;
+
+/**
+ * Every listed record is keyed: by its publisher identity, or by its
+ * quarantine identity when it states none, so a record with no id is held
+ * and counted like any other rather than dropped from the slice.
+ */
 export const brTstListingIdentity = (
   record: Record<string, unknown>,
-): ListingIdentity => {
-  const sourceDocumentId = brTstSourceDocumentId(record);
-  return sourceDocumentId === undefined
-    ? { type: "unidentifiable" }
-    : { type: "document", sourceDocumentId };
-};
+): ListingIdentity => ({
+  type: "document",
+  sourceDocumentId: brTstSourceDocumentId(record) ?? brTstQuarantineId(record),
+});
 
 /**
  * How a record's docket was read.
@@ -815,15 +853,20 @@ const caseNumberOf = (
 const storedRecordOf = (record: Record<string, unknown>) => {
   const listing = JSON.stringify(record);
   const sourceRaw = encodeSourceRawEnvelope({ [RAW_PART.LISTING]: listing });
+  const publisherId = brTstSourceDocumentId(record);
+  const quarantineId = brTstQuarantineId(record);
   return {
-    // A row with no identity of its own is quarantined under its content
-    // (rule 20): the listing proves it exists, and nothing else names it.
-    sourceDocumentId:
-      brTstSourceDocumentId(record) ?? `quarantine:${sha256Hex(listing)}`,
+    // A row with no identity of its own is quarantined under its stable
+    // fields (rule 20); once the id is stated, the quarantine identity is the
+    // repair alias that lets it adopt that row instead of adding a second.
+    sourceDocumentId: publisherId ?? quarantineId,
+    ...(publisherId === undefined
+      ? {}
+      : { sourceDocumentIdRepairAliases: [quarantineId] }),
     country: COUNTRY,
     language: LANGUAGE,
     rawHash: sourceFingerprint({ sourceRaw }),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEY],
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.BR_TST],
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   };
@@ -1243,24 +1286,37 @@ const parseSlice = (slice: string): ParsedSlice | null => {
 };
 
 /**
- * What one slice's listing has read so far, so its last page can hold the
- * distinct identities it listed against the count the publisher stated
- * (rule 15). The shared listing reads a slice's pages in order in one call,
- * so the record lives from its first page to its last.
+ * Days whose records the court can still add to or replace: its indexing runs
+ * weeks behind (despachos four to eight weeks), so a listing of one of these
+ * days is verified by a second pass before it counts as complete (rule 19).
+ */
+export const BR_TST_MUTABLE_DAYS = 120;
+
+const isMutableDay = (day: string, now: Temporal.Instant): boolean =>
+  day > addDays(brTstLastClosedDay(now), -BR_TST_MUTABLE_DAYS);
+
+/**
+ * The largest listing page: a page of acórdãos runs to tens of megabytes,
+ * and the publisher read stops at 64 MB.
+ */
+const MAX_LISTING_PAGE_SIZE = 200;
+
+type ListedWindow = { window: BrTstWindow; reported: number };
+
+/**
+ * One slice's listing: its windows, the page size that fits all of them
+ * (and their verification pass) under the shared listing's page cap, and the
+ * identities each pass read, so the last page can hold the slice to the
+ * publisher's count and the second pass to the first.
  */
 type SliceListing = {
-  windows: readonly {
-    window: BrTstWindow;
-    reported: number;
-    firstPage: number;
-  }[];
+  windows: readonly ListedWindow[];
+  pageSize: number;
+  passes: 1 | 2;
+  pagesPerPass: number;
   reported: number;
-  seen: Set<string>;
-  /** Rows with no identity: counted, since the publisher counts them too. */
-  unidentifiable: number;
+  seen: readonly [Set<string>, Set<string>];
 };
-
-const sliceListings = new Map<string, SliceListing>();
 
 type WindowCount = { window: BrTstWindow; reported: number };
 
@@ -1279,15 +1335,30 @@ const countWindow = async (
   return counted.map(({ reported }) => ({ window, reported }));
 };
 
+const pagesOf = (windows: readonly ListedWindow[], pageSize: number): number =>
+  windows.reduce(
+    (pages, { reported }) => pages + Math.ceil(reported / pageSize),
+    0,
+  );
+
+type PlanSliceOptions = {
+  parsed: ParsedSlice;
+  slice: string;
+  now: Temporal.Instant;
+  signal: AbortSignal | undefined;
+};
+
 /**
- * The windows a slice is listed in: its one window, or, for a day past the
- * offset ceiling, each part of the day, with the publisher's count for each.
+ * The windows a slice is listed in (its one window, or each record type of a
+ * day past the offset ceiling, with the publisher's count for each), and a
+ * page size under which every pass fits the shared listing's page cap.
  */
-const planSlice = async (
-  parsed: ParsedSlice,
-  slice: string,
-  signal: AbortSignal | undefined,
-): Promise<Result<SliceListing, AdapterFetchError>> => {
+const planSlice = async ({
+  parsed,
+  slice,
+  now,
+  signal,
+}: PlanSliceOptions): Promise<Result<SliceListing, AdapterFetchError>> => {
   const whole: BrTstWindow =
     parsed.type === "precedents"
       ? { type: "precedents" }
@@ -1296,12 +1367,12 @@ const planSlice = async (
   if (Result.isError(counted)) {
     return counted;
   }
-  const counts: WindowCount[] = [];
+  const windows: ListedWindow[] = [];
   if (
     counted.value.reported <= BR_TST_OFFSET_CEILING ||
     parsed.type === "precedents"
   ) {
-    counts.push(counted.value);
+    windows.push(counted.value);
   } else {
     for (const part of DAY_PARTS) {
       const partCount = await countWindow(
@@ -1312,10 +1383,10 @@ const planSlice = async (
       if (Result.isError(partCount)) {
         return partCount;
       }
-      counts.push(partCount.value);
+      windows.push(partCount.value);
     }
   }
-  const overCeiling = counts.find(
+  const overCeiling = windows.find(
     ({ reported }) => reported > BR_TST_OFFSET_CEILING,
   );
   if (overCeiling !== undefined) {
@@ -1326,122 +1397,211 @@ const planSlice = async (
       ),
     );
   }
-  const windows: SliceListing["windows"][number][] = [];
-  let firstPage = 0;
-  for (const { window, reported } of counts) {
-    windows.push({ window, reported, firstPage });
-    firstPage += Math.ceil(reported / BR_TST_LISTING_PAGE_SIZE);
+  const passes =
+    parsed.type === "precedents" || isMutableDay(parsed.day, now) ? 2 : 1;
+  const records = windows.reduce((sum, { reported }) => sum + reported, 0);
+  // Each window can leave one part-filled page, hence the margin per window.
+  const pageSize = Math.max(
+    BR_TST_LISTING_PAGE_SIZE,
+    Math.ceil((passes * records) / (MAX_SLICE_PAGES - passes * windows.length)),
+  );
+  if (pageSize > MAX_LISTING_PAGE_SIZE) {
+    return Result.err(
+      searchError(
+        slice,
+        `${records} records cannot be listed ${passes === 2 ? "and verified " : ""}within ${MAX_SLICE_PAGES} pages of at most ${MAX_LISTING_PAGE_SIZE}`,
+      ),
+    );
   }
   return Result.ok({
     windows,
+    pageSize,
+    passes,
+    pagesPerPass: pagesOf(windows, pageSize),
     reported: counted.value.reported,
-    seen: new Set(),
-    unidentifiable: 0,
+    seen: [new Set(), new Set()],
   });
 };
 
-const listBrTstSlicePage = async ({
-  page,
-  signal,
-  slice,
-}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  const parsed = parseSlice(slice);
-  if (parsed === null) {
-    return await Promise.reject(
-      searchError(slice, `not a TST slice: ${slice}`),
-    );
-  }
-  if (page === 0) {
-    const planned = await planSlice(parsed, slice, signal);
-    if (Result.isError(planned)) {
-      return await Promise.reject(planned.error);
+/** The window and offset a page of one pass reads. */
+const locatePage = (
+  listing: SliceListing,
+  pageInPass: number,
+): { located: ListedWindow; offset: number } | undefined => {
+  let firstPage = 0;
+  for (const located of listing.windows) {
+    const pages = Math.ceil(located.reported / listing.pageSize);
+    if (pageInPass < firstPage + pages) {
+      return {
+        located,
+        offset: (pageInPass - firstPage) * listing.pageSize,
+      };
     }
-    sliceListings.set(slice, planned.value);
+    firstPage += pages;
   }
-  const listing = sliceListings.get(slice);
-  if (listing === undefined) {
-    return await Promise.reject(
-      searchError(
-        slice,
-        `page ${page} of a listing that never read its first page`,
-      ),
-    );
-  }
-  const totalPages = listing.windows.reduce(
-    (pages, { reported }) =>
-      pages + Math.ceil(reported / BR_TST_LISTING_PAGE_SIZE),
-    0,
-  );
-  if (totalPages === 0) {
-    sliceListings.delete(slice);
-    return { items: [], totalPages: 0 };
-  }
-  const located = listing.windows.findLast(
-    ({ firstPage }) => firstPage <= page,
-  );
-  if (located === undefined || page >= totalPages) {
-    sliceListings.delete(slice);
-    return await Promise.reject(
-      searchError(slice, `page ${page} is past the slice`),
-    );
-  }
-  const offset = (page - located.firstPage) * BR_TST_LISTING_PAGE_SIZE;
-  const read = await search({
-    window: located.window,
-    offset,
-    size: Math.min(BR_TST_LISTING_PAGE_SIZE, located.reported - offset),
-    cursor: slice,
-    signal,
-  });
-  if (Result.isError(read)) {
-    sliceListings.delete(slice);
-    return await Promise.reject(read.error);
-  }
-  if (read.value.reported !== located.reported) {
-    sliceListings.delete(slice);
-    return await Promise.reject(
-      searchError(
-        slice,
-        `the count moved from ${located.reported} to ${read.value.reported} while the slice was listed`,
-      ),
-    );
-  }
-  const items = read.value.records.map((listed) => {
-    const payload = brTstRetainedRecord(listed);
-    const identity = brTstListingIdentity(payload);
-    if (identity.type === "document") {
-      listing.seen.add(identity.sourceDocumentId);
-    } else {
-      listing.unidentifiable += 1;
-    }
-    return { identity, payload };
-  });
-  if (page + 1 < totalPages) {
-    return { items, totalPages };
-  }
-  sliceListings.delete(slice);
-  // Offsets over a set that reordered between pages repeat some rows and
-  // skip others; the count of distinct ids is what shows it.
-  const listed = listing.seen.size + listing.unidentifiable;
-  if (listed !== listing.reported) {
-    return await Promise.reject(
-      searchError(
-        slice,
-        `listed ${listed} distinct records of the ${listing.reported} the publisher counts`,
-      ),
-    );
-  }
-  return { items, totalPages };
+  return undefined;
 };
+
+const sameIdentities = (
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): boolean =>
+  left.size === right.size &&
+  [...left].every((identity) => right.has(identity));
+
+/**
+ * How many slice listings one lister holds at once. The shared listing reads
+ * one slice's pages in order, so more than one is in flight only when a
+ * listing was abandoned; past this, the oldest is dropped, and a listing that
+ * needed it fails on its next page rather than reading stale state.
+ */
+export const BR_TST_HELD_LISTINGS = 4;
+
+type BrTstSliceListerOptions = {
+  now: () => Temporal.Instant;
+};
+
+/**
+ * The reconciliation listing of TST slices, with the state one listing
+ * carries from its first page to its last. A failed or cancelled page drops
+ * that state, and the lister holds at most `BR_TST_HELD_LISTINGS` at once.
+ */
+export const createBrTstSliceLister = ({ now }: BrTstSliceListerOptions) => {
+  const held = new Map<string, SliceListing>();
+
+  const listPage = async ({
+    page,
+    signal,
+    slice,
+  }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+    const parsed = parseSlice(slice);
+    if (parsed === null) {
+      return await Promise.reject(
+        searchError(slice, `not a TST slice: ${slice}`),
+      );
+    }
+    if (page === 0) {
+      held.delete(slice);
+      const planned = await planSlice({ parsed, slice, now: now(), signal });
+      if (Result.isError(planned)) {
+        return await Promise.reject(planned.error);
+      }
+      for (const stale of [...held.keys()].slice(
+        0,
+        Math.max(0, held.size - BR_TST_HELD_LISTINGS + 1),
+      )) {
+        held.delete(stale);
+      }
+      held.set(slice, planned.value);
+    }
+    const listing = held.get(slice);
+    if (listing === undefined) {
+      return await Promise.reject(
+        searchError(
+          slice,
+          `page ${page} of a listing that never read its first page`,
+        ),
+      );
+    }
+    const totalPages = listing.passes * listing.pagesPerPass;
+    if (totalPages === 0) {
+      held.delete(slice);
+      return { items: [], totalPages: 0 };
+    }
+    const pass = page < listing.pagesPerPass ? 0 : 1;
+    const target = locatePage(listing, page - pass * listing.pagesPerPass);
+    if (target === undefined || page >= totalPages) {
+      return await Promise.reject(
+        searchError(slice, `page ${page} is past the slice`),
+      );
+    }
+    const { located, offset } = target;
+    const read = await search({
+      window: located.window,
+      offset,
+      size: Math.min(listing.pageSize, located.reported - offset),
+      cursor: slice,
+      signal,
+    });
+    if (Result.isError(read)) {
+      return await Promise.reject(read.error);
+    }
+    if (read.value.reported !== located.reported) {
+      return await Promise.reject(
+        searchError(
+          slice,
+          `the count moved from ${located.reported} to ${read.value.reported} while the slice was listed`,
+        ),
+      );
+    }
+    const seen = listing.seen[pass];
+    const items = read.value.records.map((listed) => {
+      const payload = brTstRetainedRecord(listed);
+      const identity = brTstListingIdentity(payload);
+      if (identity.type === "document") {
+        seen.add(identity.sourceDocumentId);
+      }
+      return { identity, payload };
+    });
+    // The verification pass lists identities only: its rows were the first
+    // pass's to hand over.
+    const handed = pass === 0 ? items : [];
+    if (page + 1 < totalPages) {
+      return { items: handed, totalPages };
+    }
+    held.delete(slice);
+    // Offsets over a set that reordered between pages repeat some rows and
+    // skip others; the count of distinct ids is what shows it.
+    const [first, second] = listing.seen;
+    if (first.size !== listing.reported) {
+      return await Promise.reject(
+        searchError(
+          slice,
+          `listed ${first.size} distinct records of the ${listing.reported} the publisher counts`,
+        ),
+      );
+    }
+    // A record replaced at a position already read keeps both counts equal;
+    // only a second listing of the same identities shows it (rule 19).
+    if (listing.passes === 2 && !sameIdentities(first, second)) {
+      return await Promise.reject(
+        searchError(
+          slice,
+          `the verification pass listed other records than the first pass at the same count`,
+        ),
+      );
+    }
+    return { items: handed, totalPages };
+  };
+
+  return {
+    listSlicePage: async (
+      options: ReconciliationSlicePageOptions,
+    ): Promise<ReconciliationSlicePage> =>
+      await listPage(options).catch(async (error: unknown) => {
+        held.delete(options.slice);
+        return await Promise.reject(
+          adapterCatch(ADAPTER_KEY, options.slice)(error),
+        );
+      }),
+    /** Listings this lister holds, for the bound's test. */
+    held: (): number => held.size,
+  };
+};
+
+const brTstSliceLister = createBrTstSliceLister({
+  now: () => Temporal.Now.instant(),
+});
 
 const buildBrTstFromPayload = async (
   payload: unknown,
 ): Promise<ReconciliationBuildOutcome> => {
-  if (!isRecord(payload) || brTstSourceDocumentId(payload) === undefined) {
+  if (!isRecord(payload)) {
     return await Promise.resolve({ type: "unkeyable" });
   }
-  // A record of a type this adapter does not read is still a listed identity:
-  // it is held as the listing-only row the crawl writes for it (rule 20).
+  // A record with no id or of a type this adapter does not read is still a
+  // listed identity: it is held as the listing-only row the crawl writes for
+  // it (rule 20).
   return { type: "built", decision: buildBrTstDecision(payload).decision };
 };
 
@@ -1480,9 +1640,20 @@ const windowSchema = v.variant("type", [
   }),
 ]);
 
+/**
+ * Which half of rule 19 a walk is in. The sweep pages days whose set is
+ * fixed, so a count that moves restarts the window. The frontier reads days
+ * as they close, while the court is still indexing them: a moved count is
+ * recorded and the walk goes on, since restarting would chase the indexer
+ * forever, and the day's reconciliation slice is what verifies it.
+ */
+const REGIMES = ["sweep", "frontier"] as const;
+type Regime = (typeof REGIMES)[number];
+
 const cursorSchema = v.variant("phase", [
   v.strictObject({
     phase: v.literal("walk"),
+    regime: v.picklist(REGIMES),
     window: windowSchema,
     offset: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
     /** The count the window's first page stated; a change restarts it. */
@@ -1510,6 +1681,7 @@ export const encodeBrTstCursor = (cursor: BrTstCursor): string =>
 
 const START: BrTstCursor = {
   phase: "walk",
+  regime: "sweep",
   window: { type: "precedents" },
   offset: 0,
 };
@@ -1529,12 +1701,17 @@ export const parseBrTstCursor = (
       });
 
 /** The walk position after `day`, or parked when no later day has closed. */
-const afterDay = (day: string, now: Temporal.Instant): BrTstCursor => {
+const afterDay = (
+  day: string,
+  regime: Regime,
+  now: Temporal.Instant,
+): BrTstCursor => {
   const next = addDays(day, 1);
   return next > brTstLastClosedDay(now)
     ? { phase: "parked", through: day }
     : {
         phase: "walk",
+        regime,
         window: { type: "day", day: next, part: "all" },
         offset: 0,
       };
@@ -1552,18 +1729,20 @@ const afterWindow = (
       ? { phase: "parked", through: addDays(FIRST_DAY, -1) }
       : {
           phase: "walk",
+          regime: cursor.regime,
           window: { type: "day", day: FIRST_DAY, part: "all" },
           offset: 0,
         };
   }
   if (window.part === "all" || cursor.split === undefined) {
-    return afterDay(window.day, now);
+    return afterDay(window.day, cursor.regime, now);
   }
   const partsTotal = cursor.split.partsTotal + reported;
   const nextPart = DAY_PARTS[DAY_PARTS.indexOf(window.part) + 1];
   if (nextPart !== undefined) {
     return {
       phase: "walk",
+      regime: cursor.regime,
       window: { type: "day", day: window.day, part: nextPart },
       offset: 0,
       split: { dayTotal: cursor.split.dayTotal, partsTotal },
@@ -1580,7 +1759,7 @@ const afterWindow = (
       partsTotal,
     });
   }
-  return afterDay(window.day, now);
+  return afterDay(window.day, cursor.regime, now);
 };
 
 type CollectedPage = Pick<SyncPage, "decisions" | "itemBuildFailures">;
@@ -1640,7 +1819,9 @@ export const brTstFetchPage = async (
   }
   let position = parsed.value;
   if (position.phase === "parked") {
-    const resumed = afterDay(position.through, now);
+    // A parked walk has read every closed day once: whatever closes now is
+    // the frontier's.
+    const resumed = afterDay(position.through, "frontier", now);
     if (resumed.phase === "parked") {
       // No day has closed since: the quiet cycle, no request (rule 19).
       return Result.ok({
@@ -1672,24 +1853,43 @@ export const brTstFetchPage = async (
       return read;
     }
     const { records, reported, url } = read.value;
-    if (walk.reported !== undefined && reported !== walk.reported) {
-      // The window changed under the walk: every later offset moved, so the
+    const moved = walk.reported !== undefined && reported !== walk.reported;
+    // A day the court is still indexing is never a fixed set, even on the
+    // sweep: restarting it would chase the indexer.
+    const fixedSet =
+      walk.regime === "sweep" &&
+      !(walk.window.type === "day" && isMutableDay(walk.window.day, now));
+    if (moved && fixedSet) {
+      // The window changed under the sweep: every later offset moved, so the
       // window is read again from its start (rule 19).
       return Result.ok({
         decisions: [],
         sourceUrl: url,
         nextCursor: encodeBrTstCursor({
           phase: "walk",
+          regime: walk.regime,
           window: walk.window,
           offset: 0,
           ...(walk.split === undefined ? {} : { split: walk.split }),
         }),
       });
     }
+    if (moved) {
+      // On the frontier the court is still indexing the day; the walk keeps
+      // its place, and the day's reconciliation slice verifies it.
+      logger.warn("case_law.ingestion.br_tst_frontier_window_moved", {
+        adapterKey: ADAPTER_KEY,
+        window: JSON.stringify(walk.window),
+        offset: walk.offset,
+        reportedBefore: walk.reported,
+        reportedNow: reported,
+      });
+    }
     if (reported > BR_TST_OFFSET_CEILING) {
       if (walk.window.type === "day" && walk.window.part === "all") {
         position = {
           phase: "walk",
+          regime: walk.regime,
           window: { type: "day", day: walk.window.day, part: DAY_PARTS[0] },
           offset: 0,
           split: { dayTotal: reported, partsTotal: 0 },
@@ -1784,7 +1984,7 @@ export const brTstAdapter = defineSourceAdapter({
     nextSlice,
     previousSlice,
     tipWindowDays: TIP_WINDOW_DAYS,
-    listSlicePage: listBrTstSlicePage,
+    listSlicePage: brTstSliceLister.listSlicePage,
     buildDecision: buildBrTstFromPayload,
   },
   async fetchPage(cursor, _config, signal) {

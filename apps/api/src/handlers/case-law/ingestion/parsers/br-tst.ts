@@ -171,10 +171,61 @@ const numberedBlocks = (drafts: readonly BlockDraft[]): Block[] =>
  * Every paragraph under `root`, in printed order.
  *
  * A `<p>` is one paragraph. Text outside any `<p>` still reaches the document
- * as a paragraph of its own, and an element that holds paragraphs is walked
- * into rather than flattened, so nothing the export prints is dropped for
- * sitting somewhere unexpected.
+ * as a paragraph of its own, and an element that holds paragraphs or other
+ * blocks (a `<div>`, a table row or cell, a list item) is walked into rather
+ * than flattened, so nothing the export prints is dropped for sitting
+ * somewhere unexpected, and two blocks never run together into one word.
  */
+/**
+ * Elements a browser lays out as a block of their own: the boundary between
+ * two of them separates words even where the markup puts no space there.
+ */
+const BLOCK_TAGS = new Set([
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "caption",
+  "center",
+  "dd",
+  "div",
+  "dl",
+  "dt",
+  "figcaption",
+  "figure",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+  "ul",
+]);
+
+/** Whether `node` holds a block anywhere below it. */
+const holdsBlock = (node: AnyNode): boolean =>
+  isTag(node) &&
+  node.children.some(
+    (child) =>
+      isTag(child) && (BLOCK_TAGS.has(child.name) || holdsBlock(child)),
+  );
+
 const htmlDrafts = (
   $: cheerio.CheerioAPI,
   root: cheerio.Cheerio<AnyNode>,
@@ -203,7 +254,7 @@ const htmlDrafts = (
       );
       return;
     }
-    if (element.find("p").length === 0) {
+    if (!holdsBlock(node)) {
       push(undefined, walkInlines($, element));
       return;
     }

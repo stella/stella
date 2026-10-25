@@ -169,6 +169,19 @@ describe("an acórdão's full text", () => {
     ]);
   });
 
+  test("blocks and table cells outside a paragraph stay apart", () => {
+    const parsed = parseBrTstHtml(
+      "<html><body><div><div>não</div><div>conheço</div></div><table><tr><td>a</td><td>b</td></tr></table></body></html>",
+      identity,
+    );
+    if (!Result.isOk(parsed)) {
+      throw parsed.error;
+    }
+    expect(
+      parsed.value.documentAst.blocks.map(({ plainText }) => plainText),
+    ).toEqual(["não", "conheço", "a", "b"]);
+  });
+
   test("names only styles it gives a role", () => {
     expect(BR_TST_PARAGRAPH_STYLES).not.toContain("Ementa");
     expect(BR_TST_PARAGRAPH_STYLES).toContain("Voto");

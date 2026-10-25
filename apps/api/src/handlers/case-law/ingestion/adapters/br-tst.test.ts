@@ -22,15 +22,19 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  BR_TST_HELD_LISTINGS,
   BR_TST_LISTING_PAGE_SIZE,
+  BR_TST_MUTABLE_DAYS,
   BR_TST_OFFSET_CEILING,
   BR_TST_PLACEHOLDER,
   BR_TST_PLACEHOLDER_FIELDS,
   brTstAdapter,
   brTstFetchPage,
   brTstLastClosedDay,
+  brTstQuarantineId,
   brTstSearchBody,
   buildBrTstDecision,
+  createBrTstSliceLister,
   encodeBrTstCursor,
   parseBrTstCursor,
 } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
@@ -372,6 +376,7 @@ const cursorOf = (
 const walkAt = (day: string, offset = 0): string =>
   encodeBrTstCursor({
     phase: "walk",
+    regime: "sweep",
     window: { type: "day", day, part: "all" },
     offset,
   });
@@ -422,6 +427,7 @@ describe("the walk", () => {
     // was short: the walk is on the next day.
     expect(parseBrTstCursor(cursor).unwrap()).toMatchObject({
       phase: "walk",
+      regime: "sweep",
       window: { type: "day", day: "2024-03-16" },
     });
   });
@@ -438,6 +444,7 @@ describe("the walk", () => {
     const page = await brTstFetchPage(
       encodeBrTstCursor({
         phase: "walk",
+        regime: "sweep",
         window: { type: "day", day: "2024-03-15", part: "all" },
         offset: 20,
         reported: 45,
@@ -447,6 +454,7 @@ describe("the walk", () => {
     expect(Result.isOk(page) && page.value.decisions).toEqual([]);
     expect(cursorOf(page)).toEqual({
       phase: "walk",
+      regime: "sweep",
       window: { type: "day", day: "2024-03-15", part: "all" },
       offset: 0,
     });
@@ -505,6 +513,7 @@ describe("the walk", () => {
     expect(Result.isOk(page) && page.value.decisions).toHaveLength(3);
     expect(cursorOf(page)).toEqual({
       phase: "walk",
+      regime: "sweep",
       window: { type: "day", day: "2024-03-15", part: "despacho" },
       offset: 0,
       split: { dayTotal: BR_TST_OFFSET_CEILING + 1, partsTotal: 3 },
@@ -689,5 +698,207 @@ describe("reconciliation", () => {
     expect(revisionOf({ ...record, dispositivo: "outro" })).not.toEqual(
       revisionOf(record),
     );
+  });
+});
+
+// ── Review fixes ─────────────────────────────────────────
+
+type SliceLister = ReturnType<typeof createBrTstSliceLister>;
+
+const listWith = async (lister: SliceLister, slice: string) =>
+  await listReconciliationSlice({
+    adapterKey: brTstAdapter.key,
+    listSlicePage: lister.listSlicePage,
+    slice,
+    pageDelayMs: 0,
+    pageTimeoutMs: 5000,
+    sleep: async () => {
+      await Promise.resolve();
+    },
+  });
+
+const tiposOf = (call: Call): unknown[] => {
+  const tipos = call.body["tipos"];
+  return Array.isArray(tipos) ? tipos : [];
+};
+
+describe("a split day's reconciliation", () => {
+  test("lists every part within the shared listing's page cap", async () => {
+    const acordaos = dayOf(6000, "a");
+    const despachos = dayOf(6000, "d");
+    const calls = stubSearch((call) => {
+      const tipos = tiposOf(call);
+      if (tipos.length === 0) {
+        return responseOf(12_000, []);
+      }
+      if (tipos.includes("ACORDAO")) {
+        return serve(acordaos)(call);
+      }
+      return tipos.includes("DESPACHO")
+        ? serve(despachos)(call)
+        : responseOf(0, []);
+    });
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    const listed = await listWith(lister, "2024-03-15");
+    expect(Result.isOk(listed) && listed.value.keyed.size).toBe(12_000);
+    // One count of the day, one per part, and the pages.
+    expect(calls.length).toBeLessThanOrEqual(4 + MAX_SLICE_PAGES);
+  });
+});
+
+describe("the frontier", () => {
+  test("a day whose count keeps moving is read to its end, not restarted", async () => {
+    const rows = dayOf(100);
+    const calls = stubSearch(({ start, size }) =>
+      responseOf(45 + calls.length, rows.slice(start - 1, start - 1 + size)),
+    );
+    let cursor = encodeBrTstCursor({ phase: "parked", through: "2026-10-23" });
+    const seen = new Set<string>();
+    for (let step = 0; step < 10; step += 1) {
+      const page = await brTstFetchPage(cursor, { now: NOW });
+      if (!Result.isOk(page)) {
+        throw page.error;
+      }
+      for (const { sourceDocumentId } of page.value.decisions) {
+        seen.add(sourceDocumentId ?? "");
+      }
+      cursor = page.value.nextCursor ?? "";
+      if (parseBrTstCursor(cursor).unwrap().phase === "parked") {
+        break;
+      }
+    }
+    expect(parseBrTstCursor(cursor).unwrap()).toEqual({
+      phase: "parked",
+      through: "2026-10-24",
+    });
+    expect(seen.size).toBeGreaterThan(40);
+  });
+
+  test("a resumed parked walk is on the frontier", async () => {
+    const rows = dayOf(45);
+    stubSearch(serve(rows));
+    const page = await brTstFetchPage(
+      encodeBrTstCursor({ phase: "parked", through: "2026-10-23" }),
+      { now: NOW },
+    );
+    expect(cursorOf(page)).toMatchObject({ phase: "walk", regime: "frontier" });
+  });
+});
+
+describe("a slice the court can still change", () => {
+  test("is listed twice, and a record replaced between the passes fails it", async () => {
+    const first = dayOf(60);
+    const second = first.map((row, index) =>
+      index === 5 ? { ...row, id: "replaced00000000000000000000000000" } : row,
+    );
+    let firstPassDone = false;
+    stubSearch(({ start, size }) => {
+      const rows = firstPassDone ? second : first;
+      if (size > 0 && start - 1 + size >= first.length) {
+        firstPassDone = true;
+      }
+      return responseOf(60, rows.slice(start - 1, start - 1 + size));
+    });
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    const error = await rejectionOf(listWith(lister, "2026-10-20"));
+    expect(error instanceof Error ? error.message : "").toContain(
+      "verification pass",
+    );
+  });
+
+  test("an unchanged one settles after its verification pass", async () => {
+    const rows = dayOf(60);
+    const calls = stubSearch(serve(rows));
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    const listed = await listWith(lister, "2026-10-20");
+    expect(Result.isOk(listed) && listed.value.keyed.size).toBe(60);
+    // The count, then each page twice.
+    expect(calls.filter(({ size }) => size > 0)).toHaveLength(4);
+  });
+
+  test("a day past the court's indexing window is listed once", async () => {
+    const calls = stubSearch(serve(dayOf(60)));
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    await listWith(lister, "2024-03-15");
+    expect(calls.filter(({ size }) => size > 0)).toHaveLength(2);
+    expect(BR_TST_MUTABLE_DAYS).toBeGreaterThan(56);
+  });
+});
+
+describe("a record with no id", () => {
+  const record = (): Record<string, unknown> => {
+    const [row] = dayOf(1);
+    const { id: _id, ...rest } = row ?? {};
+    return { ...rest, dtaAtualizacao: "2026-04-27T17:00:08-03" };
+  };
+
+  test("is keyed, counted and held as a listing-only row", async () => {
+    stubSearch(() => responseOf(1, [record()]));
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    const listed = await listWith(lister, "2024-03-15");
+    const item = Result.isOk(listed)
+      ? [...listed.value.keyed.values()].at(0)
+      : undefined;
+    expect(item?.identity).toEqual({
+      type: "document",
+      sourceDocumentId: brTstQuarantineId(record()),
+    });
+    const outcome = await brTstAdapter.reconciliation.buildDecision(
+      item?.payload,
+    );
+    expect(outcome.type === "built" && outcome.decision.isListingOnly).toBe(
+      true,
+    );
+  });
+
+  test("keeps its quarantine identity across reindexing, and its id later adopts it", () => {
+    const quarantined = buildBrTstDecision(record()).decision;
+    const reindexed = buildBrTstDecision({
+      ...record(),
+      dtaAtualizacao: "2027-01-01T00:00:00-03",
+      dtaOrdenacao: "2027-01-01T00:00:00-03",
+    }).decision;
+    expect(reindexed.sourceDocumentId).toBe(quarantined.sourceDocumentId);
+    const recovered = buildBrTstDecision({
+      ...record(),
+      id: "f0000000000000000000000000000000",
+    }).decision;
+    expect(recovered.sourceDocumentId).toBe(
+      "ACORDAO:f0000000000000000000000000000000",
+    );
+    expect(recovered.sourceDocumentIdRepairAliases).toEqual([
+      quarantined.sourceDocumentId ?? "",
+    ]);
+  });
+});
+
+describe("the slice lister's state", () => {
+  test("is dropped when a page fails", async () => {
+    stubSearch(({ start, size }) =>
+      start > 1
+        ? new Response("", { status: 500 })
+        : serve(dayOf(120))({ start, size, body: {} }),
+    );
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    expect(await rejectionOf(listWith(lister, "2024-03-15"))).toBeInstanceOf(
+      AdapterFetchError,
+    );
+    expect(lister.held()).toBe(0);
+  });
+
+  test("is bounded when listings are abandoned after their first page", async () => {
+    stubSearch(serve(dayOf(120)));
+    const lister = createBrTstSliceLister({ now: () => NOW });
+    for (const day of [
+      "2024-03-11",
+      "2024-03-12",
+      "2024-03-13",
+      "2024-03-14",
+      "2024-03-15",
+      "2024-03-18",
+    ]) {
+      await lister.listSlicePage({ slice: day, page: 0 });
+    }
+    expect(lister.held()).toBe(BR_TST_HELD_LISTINGS);
   });
 });

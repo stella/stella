@@ -2913,6 +2913,7 @@ export const brTstCrawlFixture = (): EnrolledAdapterFixture => ({
     const page = await brTstFetchPage(
       encodeBrTstCursor({
         phase: "walk",
+        regime: "sweep",
         window: { type: "day", day: "2024-03-15", part: "all" },
         offset: 0,
       }),
