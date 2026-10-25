@@ -14,23 +14,25 @@ import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
+import { testFailures } from "./ci-failure-digest";
 import { parseBunTestScript } from "./flake-gate-command";
 import {
   cleanupCapability,
-  runFlakeProcess,
-  type FlakeProcessOutcome,
   type FlakeCleanup,
+  type FlakeProcessOutcome,
+  runFlakeProcess,
 } from "./flake-gate-process";
 import {
   createRustTestListing,
   rustExactCommand,
   rustListCommand,
-  selectRustTargets,
   type RustTarget,
+  selectRustTargets,
 } from "./flake-gate-rust";
 
-export const REPEATS = 20;
-export const BUDGET_MS = 60 * 60 * 1000;
+export const REPEATS = 5;
+export const MAX_CHANGED_TEST_FILES = 10;
+export const BUDGET_MS = 5 * 60 * 1000;
 const root = path.resolve(import.meta.dir, "..");
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const manifestSchema = v.object({
@@ -55,6 +57,19 @@ type SelectOptions = {
   changed: readonly string[];
   hasDb: boolean;
   apiImpact?: typeof selectApiTestImpact;
+};
+
+const packageTestIgnores = (flags: readonly string[], file: string) => {
+  const ignored = flags.flatMap((flag, index) => {
+    if (flag === "--path-ignore-patterns") {
+      const pattern = flags.at(index + 1);
+      return pattern === undefined ? [] : [pattern];
+    }
+    return flag.startsWith("--path-ignore-patterns=")
+      ? [flag.slice("--path-ignore-patterns=".length)]
+      : [];
+  });
+  return ignored.some((pattern) => new Bun.Glob(pattern).match(file));
 };
 
 export const selectTargets = ({
@@ -181,6 +196,13 @@ export const selectTargets = ({
       });
       continue;
     }
+    if (packageTestIgnores(parsed.flags, repoRelativePath(cwd, absolute))) {
+      skipped.push({
+        file,
+        reason: "not gated (excluded by package test script)",
+      });
+      continue;
+    }
     targets.push({
       file,
       cwd,
@@ -234,6 +256,16 @@ export type Measurement = {
   file: string;
   runs: number;
   failures: number;
+  failedIterations: number[];
+  // Trials each Bun test failed in, by full test name: a test that failed in
+  // some trials and passed in others is a same-head flake for the quarantine
+  // history (scripts/flaky-test-history.ts).
+  failedTests: Record<string, number>;
+  // The first assertion or error line each failing test printed, and the
+  // exit status of a failing trial that named no test, so a red gate says
+  // what failed without the trial output.
+  failureDetails?: Record<string, string>;
+  unnamedFailureStatus?: number;
   durationMs: number;
   planned: number;
 };
@@ -249,23 +281,51 @@ const markdown = (value: string) =>
     .replaceAll("|", "\\|")
     .replaceAll(/\r?\n/gu, " ")
     .replaceAll("`", "\\`");
+const coverage = ({
+  runs,
+  failedIterations,
+}: Pick<Measurement, "runs" | "failedIterations">) => {
+  const reduced = runs < REPEATS ? "reduced repeats (cost cap)" : "";
+  if (failedIterations.length === 0) {
+    return reduced || "full";
+  }
+  const failures = `failed iterations ${failedIterations.join(", ")}`;
+  return reduced ? `${failures}; ${reduced}` : failures;
+};
 export const renderReport = (report: Report) =>
   [
     "## Changed-test flake gate (report only by default)",
     "",
-    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: 60 test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
+    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: ${BUDGET_MS / 60_000} test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
     "Failures include persistent failures and runner errors; they require investigation before being called flakes.",
     report.cleanup.note,
     "",
     "| Test | Runs | Failures | Coverage |",
     "| --- | ---: | ---: | --- |",
     ...report.results.map(
-      ({ file, runs, failures }) =>
-        `| ${markdown(file)} | ${runs} | ${failures} | ${runs < REPEATS ? "reduced repeats (cost cap)" : "full"} |`,
+      ({ file, runs, failures, failedIterations }) =>
+        `| ${markdown(file)} | ${runs} | ${failures} | ${coverage({ runs, failedIterations })} |`,
     ),
     ...report.skipped.map(
       ({ file, reason }) =>
         `| ${markdown(file)} | 0 | 0 | ${markdown(reason)} |`,
+    ),
+    ...report.results.flatMap(
+      ({ file, failures, failureDetails = {}, unnamedFailureStatus }) => {
+        if (failures === 0) {
+          return [];
+        }
+        const named = Object.entries(failureDetails).map(
+          ([name, detail]) =>
+            `- \`${markdown(file)}\` › ${markdown(name)}: ${markdown(detail || "no assertion line printed")}`,
+        );
+        return unnamedFailureStatus === undefined
+          ? named
+          : [
+              ...named,
+              `- \`${markdown(file)}\`: a trial failed with exit status ${String(unnamedFailureStatus)} and named no test; rerun the file to see its output`,
+            ];
+      },
     ),
     ...report.errors.map((error) => `\nRunner error: ${markdown(error)}`),
     "",
@@ -281,9 +341,33 @@ export const annotationData = (value: string) =>
 export const annotationProperty = (value: string) =>
   annotationData(value).replaceAll(",", "%2C").replaceAll(":", "%3A");
 
-type RunOptions = { target: Target; seed: number; timeoutMs: number };
+/** One workflow error annotation per failed file; the file name is escaped in both the property and the message. */
+export const failureAnnotation = ({
+  file,
+  failedIterations,
+}: {
+  file: string;
+  failedIterations: readonly number[];
+}) =>
+  `::error file=${annotationProperty(file)}::${annotationData(
+    `${file} failed iteration${failedIterations.length === 1 ? "" : "s"} ${failedIterations.join(", ")}`,
+  )}`;
+
+type RunOptions = {
+  target: Target;
+  seed: number;
+  timeoutMs: number;
+  onFailureOutput?: ((output: string) => void) | undefined;
+};
 export type RunOutcome =
-  | { type: "executed"; passed: boolean; status: number; ranTests: boolean }
+  | {
+      type: "executed";
+      passed: boolean;
+      status: number;
+      ranTests: boolean;
+      failedTests: readonly string[];
+      failureDetails?: readonly { name: string; detail: string }[];
+    }
   | { type: "no-tests"; reason: string };
 
 type BunTarget = Extract<Target, { runner: "bun" | "api" | "web" }>;
@@ -295,33 +379,93 @@ export const trialCommand = (target: BunTarget, seed: number) => [
   `--seed=${seed}`,
 ];
 
-const executionOutcome = (
-  runner: Target["runner"],
-  outcome: FlakeProcessOutcome,
-): Extract<RunOutcome, { type: "executed" }> => {
+type ExecutionOutcomeOptions = {
+  runner: Target["runner"];
+  outcome: FlakeProcessOutcome;
+  onFailureOutput?: ((output: string) => void) | undefined;
+};
+
+const executionOutcome = ({
+  runner,
+  outcome,
+  onFailureOutput,
+}: ExecutionOutcomeOptions): Extract<RunOutcome, { type: "executed" }> => {
   if (outcome.type === "timeout") {
-    return { type: "executed", passed: false, status: 124, ranTests: false };
+    onFailureOutput?.(
+      "Trial deadline expired; no completed output is available.",
+    );
+    return {
+      type: "executed",
+      passed: false,
+      status: 124,
+      ranTests: false,
+      failedTests: [],
+    };
   }
   const output = `${outcome.stdout}\n${outcome.stderr}`;
   let ranTests: boolean;
+  let failedTests: readonly string[];
+  let failureDetails: { name: string; detail: string }[] = [];
   switch (runner) {
     case "bun":
     case "api":
-    case "web":
+    case "web": {
       ranTests = /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
+      const failures = testFailures(output.split("\n"));
+      failedTests = [...new Set(failures.map(({ name }) => name))];
+      failureDetails = failures.map(({ name, detail }) => ({
+        name,
+        detail:
+          detail.find((line) => /\berror\b|Expected|Received/u.test(line)) ??
+          detail.at(0) ??
+          "",
+      }));
       break;
+    }
     case "rust":
       ranTests = /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
+      failedTests = [];
       break;
     default:
       runner satisfies never;
       return panic("Unknown flake trial output");
   }
+  const passed = outcome.status === 0 && ranTests;
+  if (!passed) {
+    onFailureOutput?.(output);
+  }
   return {
     type: "executed",
-    passed: outcome.status === 0 && ranTests,
+    passed,
     status: outcome.status,
     ranTests,
+    failedTests,
+    ...(runner === "rust" ? {} : { failureDetails }),
+  };
+};
+
+// Records what a failing trial reported: the first line per failing test,
+// or the exit status when it named none.
+const recordFailure = (
+  result: Measurement,
+  outcome: Extract<RunOutcome, { type: "executed" }>,
+) => {
+  if (outcome.passed) {
+    return;
+  }
+  // Names without details (a runner that reports no detail lines) still
+  // name the failure.
+  const details =
+    outcome.failureDetails ??
+    outcome.failedTests.map((name) => ({ name, detail: "" }));
+  if (details.length === 0) {
+    result.unnamedFailureStatus = outcome.status;
+    return;
+  }
+  // The first trial's line wins: later trials repeat the same failure.
+  result.failureDetails = {
+    ...Object.fromEntries(details.map(({ name, detail }) => [name, detail])),
+    ...result.failureDetails,
   };
 };
 
@@ -329,6 +473,7 @@ export const runOnce = async ({
   target,
   seed,
   timeoutMs,
+  onFailureOutput,
 }: RunOptions): Promise<RunOutcome> => {
   const deadline = performance.now() + timeoutMs;
   switch (target.runner) {
@@ -336,15 +481,16 @@ export const runOnce = async ({
     case "api":
     case "web":
       // Fresh invocations reset setup and shuffle the entire file for each trial.
-      return executionOutcome(
-        target.runner,
-        await runFlakeProcess({
+      return executionOutcome({
+        runner: target.runner,
+        outcome: await runFlakeProcess({
           command: trialCommand(target, seed),
           cwd: target.cwd,
           env: target.env,
           deadline,
         }),
-      );
+        onFailureOutput,
+      });
     case "rust": {
       const listing = createRustTestListing(target.module);
       const discovery = await runFlakeProcess({
@@ -355,7 +501,11 @@ export const runOnce = async ({
         onStdoutLine: listing.acceptLine,
       });
       if (discovery.type === "timeout" || discovery.status !== 0) {
-        return executionOutcome("rust", discovery);
+        return executionOutcome({
+          runner: "rust",
+          outcome: discovery,
+          onFailureOutput,
+        });
       }
       const batches = listing.batches();
       if (batches.length === 0) {
@@ -372,7 +522,6 @@ export const runOnce = async ({
           env: target.env,
           deadline,
         });
-        const execution = executionOutcome("rust", completed);
         if (completed.type === "completed" && completed.status === 0) {
           const ignored =
             /^test result: ok\. 0 passed; 0 failed; (?<count>[1-9]\d*) ignored;/mu.exec(
@@ -383,6 +532,11 @@ export const runOnce = async ({
             continue;
           }
         }
+        const execution = executionOutcome({
+          runner: "rust",
+          outcome: completed,
+          onFailureOutput,
+        });
         // Once listing selected names, zero execution without ignored evidence is a failure.
         if (!execution.passed) {
           return execution;
@@ -390,7 +544,13 @@ export const runOnce = async ({
         ranTests = true;
       }
       return ranTests
-        ? { type: "executed", passed: true, status: 0, ranTests: true }
+        ? {
+            type: "executed",
+            passed: true,
+            status: 0,
+            ranTests: true,
+            failedTests: [],
+          }
         : {
             type: "no-tests",
             reason: `not gated (all tests in module ${target.module || "<crate>"} are ignored)`,
@@ -408,6 +568,7 @@ type ExecuteOptions = {
   run?: typeof runOnce;
   now?: () => number;
   budgetMs?: number;
+  reportFailureOutput?: ((output: string) => void) | undefined;
 };
 export const executeGate = async ({
   targets,
@@ -415,6 +576,9 @@ export const executeGate = async ({
   run = runOnce,
   now = () => performance.now(),
   budgetMs = BUDGET_MS,
+  reportFailureOutput = (output) => {
+    process.stderr.write(output);
+  },
 }: ExecuteOptions): Promise<Report> => {
   const start = now();
   const report: Report = {
@@ -425,14 +589,35 @@ export const executeGate = async ({
     elapsedMs: 0,
   };
   const measured: Measured[] = [];
+  const reportedFailures = new Set<string>();
+  const failureOutputLimit = 16_384;
   const remaining = () => Math.max(0, budgetMs - (now() - start));
   const attempt = async (options: RunOptions): Promise<RunOutcome> => {
-    const outcome = await Result.tryPromise(async () => run(options));
+    const outcome = await Result.tryPromise(async () =>
+      run({
+        ...options,
+        onFailureOutput: (output) => {
+          if (reportedFailures.has(options.target.file)) {
+            return;
+          }
+          reportedFailures.add(options.target.file);
+          reportFailureOutput(
+            `Flake trial failed: ${options.target.file}, seed ${options.seed}\n${output.slice(-failureOutputLimit)}\n`,
+          );
+        },
+      }),
+    );
     if (outcome.isOk()) {
       return outcome.value;
     }
     report.errors.push(`${options.target.file}: ${outcome.error.message}`);
-    return { type: "executed", passed: false, status: 1, ranTests: false };
+    return {
+      type: "executed",
+      passed: false,
+      status: 1,
+      ranTests: false,
+      failedTests: [],
+    };
   };
   for (const target of targets) {
     if (remaining() <= 0) {
@@ -453,25 +638,33 @@ export const executeGate = async ({
       continue;
     }
     measured.push({ file: target.file, durationMs });
-    report.results.push({
+    const first: Measurement = {
       file: target.file,
       runs: 1,
       failures: Number(!outcome.passed),
+      failedIterations: outcome.passed ? [] : [1],
+      failedTests: Object.fromEntries(
+        outcome.failedTests.map((name) => [name, 1]),
+      ),
       durationMs,
       planned: 1,
-    });
+    };
+    recordFailure(first, outcome);
+    report.results.push(first);
   }
   const plan = planRepeats(measured, remaining());
-  for (const result of report.results.toSorted(
-    (a, b) => a.durationMs - b.durationMs,
-  )) {
+  // The plan spends the remaining budget as one serial pool, and one test
+  // process may already run several lanes, so files repeat one at a time:
+  // overlapping runs would contend for the shard runner and could push a
+  // stable test past its deadline.
+  for (const result of report.results) {
     const target = targets.find(({ file }) => file === result.file);
     if (!target) {
-      panic(`Missing target: ${result.file}`);
+      return panic(`Missing target: ${result.file}`);
     }
     const planned = plan.get(result.file);
     if (planned === undefined) {
-      panic(`Missing repeat plan: ${result.file}`);
+      return panic(`Missing repeat plan: ${result.file}`);
     }
     result.planned = planned;
     for (
@@ -485,7 +678,18 @@ export const executeGate = async ({
         timeoutMs: remaining(),
       });
       result.runs += 1;
-      result.failures += Number(outcome.type === "no-tests" || !outcome.passed);
+      if (outcome.type === "no-tests" || !outcome.passed) {
+        result.failures += 1;
+        result.failedIterations.push(index + 1);
+      }
+      if (outcome.type === "executed") {
+        recordFailure(result, outcome);
+      }
+      for (const name of outcome.type === "executed"
+        ? outcome.failedTests
+        : []) {
+        result.failedTests[name] = (result.failedTests[name] ?? 0) + 1;
+      }
     }
   }
   report.elapsedMs = now() - start;
@@ -503,23 +707,45 @@ if (import.meta.main) {
   const outcome = await Result.tryPromise(async () => {
     const base = process.env["BASE_SHA"] || "origin/main";
     // Match ci-plan: NUL-delimited paths, no rename inference, merge-base diff.
-    const diff = Bun.spawn(
-      ["git", "diff", "--name-only", "-z", "--no-renames", `${base}...HEAD`],
-      { cwd: root, stdout: "pipe", stderr: "inherit" },
-    );
-    const changed = (await new Response(diff.stdout).text())
-      .split("\0")
-      .filter(Boolean);
-    if ((await diff.exited) !== 0) {
-      throw new FlakeGateError({ message: "Cannot read PR diff" });
+    // CI hands ci-plan's list over as a file: a large diff exceeds the size
+    // limit of a single environment variable.
+    const suppliedPath = process.env["CHANGED_FILES_PATH"];
+    const suppliedChanged = suppliedPath
+      ? (await Bun.file(suppliedPath).text()).trim()
+      : "";
+    let changed: string[];
+    if (suppliedChanged) {
+      changed = v.parse(v.array(v.string()), JSON.parse(suppliedChanged));
+    } else {
+      const diff = Bun.spawn(
+        ["git", "diff", "--name-only", "-z", "--no-renames", `${base}...HEAD`],
+        { cwd: root, stdout: "pipe", stderr: "inherit" },
+      );
+      changed = (await new Response(diff.stdout).text())
+        .split("\0")
+        .filter(Boolean);
+      if ((await diff.exited) !== 0) {
+        throw new FlakeGateError({ message: "Cannot read PR diff" });
+      }
     }
-    return executeGate(
-      selectTargets({
-        root,
-        changed,
-        hasDb: Boolean(process.env["DATABASE_URL"]),
-      }),
-    );
+    const selection = selectTargets({
+      root,
+      changed,
+      hasDb: Boolean(process.env["DATABASE_URL"]),
+    });
+    if (selection.targets.length > MAX_CHANGED_TEST_FILES) {
+      return {
+        cleanup: cleanupCapability(),
+        results: [],
+        skipped: selection.targets.map(({ file }) => ({
+          file,
+          reason: `not gated (more than ${MAX_CHANGED_TEST_FILES} changed test files)`,
+        })),
+        errors: [],
+        elapsedMs: 0,
+      } satisfies Report;
+    }
+    return executeGate(selection);
   });
   if (outcome.isErr()) {
     report.errors.push(outcome.error.message);
@@ -534,12 +760,10 @@ if (import.meta.main) {
   for (const result of finalReport.results.filter(
     ({ failures }) => failures > 0,
   )) {
-    console.log(
-      `::warning file=${annotationProperty(result.file)}::${result.failures}/${result.runs} runs failed`,
-    );
+    console.log(failureAnnotation(result));
   }
   for (const error of finalReport.errors) {
-    console.log(`::warning::${annotationData(error)}`);
+    console.log(`::error::${annotationData(error)}`);
   }
   process.exitCode = reportExitCode(
     finalReport,

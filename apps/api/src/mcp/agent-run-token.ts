@@ -3,6 +3,7 @@ import { Temporal } from "@stll/time";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { SafeId } from "@/api/lib/branded-types";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import {
   getMcpResourceUrl,
   MCP_OAUTH_SCOPES,
@@ -46,6 +47,7 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   "stella:matters_write": "default",
   "stella:contacts_write": "excluded",
   "stella:chat": "default",
+  "stella:memory_write": "excluded",
   "stella:knowledge_write": "default",
   "stella:billing_write": "excluded",
   "stella:admin_read": "excluded",
@@ -148,6 +150,7 @@ export type MintedAgentRunToken = {
 export const mintAgentRunToken = async (
   input: MintAgentRunTokenInput,
 ): Promise<MintedAgentRunToken> => {
+  requireSessionCredentialIssuer("agentRun", input);
   const nowSeconds = Math.floor(
     Temporal.Now.instant().epochMilliseconds / 1000,
   );

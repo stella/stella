@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -181,6 +181,7 @@ const createRepository = (directory: string) => {
     GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z",
     GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z",
     PROOF_TEST_RESPONSES: responses,
+    PROOF_TEST_TARGET: "",
     GH_RETRY_SCRIPT: path.join(directory, "gh-retry.sh"),
   };
   const git = (...args: string[]) => {
@@ -209,6 +210,7 @@ const createRepository = (directory: string) => {
   git("checkout", "--quiet", "main");
   writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
   const target = commit("b", "squash release");
+  environment.PROOF_TEST_TARGET = target;
   git("update-ref", "refs/remotes/origin/main", target);
   const publishCommit = (sha: string) => {
     writeFileSync(
@@ -324,6 +326,40 @@ case "$endpoint" in
     else
       jq -c 'add // []' "$PROOF_TEST_RESPONSES/$sha-pulls"
     fi
+    ;;
+  query=*ReleaseCommitHistory*)
+    jq -nc \
+      --arg sha "$PROOF_TEST_TARGET" \
+      --slurpfile pulls "$PROOF_TEST_RESPONSES/$PROOF_TEST_TARGET-pulls" \
+      --slurpfile timeline "$PROOF_TEST_RESPONSES/timeline-1" \
+      --slurpfile runs "$PROOF_TEST_RESPONSES/$PROOF_TEST_TARGET-merge-group-runs" '
+      {
+        data: {
+          repository: {
+            c0: {
+              oid: $sha,
+              associatedPullRequests: {
+                pageInfo: {hasNextPage: false},
+                nodes: ($pulls[0][0] | map({
+                  number,
+                  title,
+                  url: .html_url,
+                  mergedAt: .merged_at,
+                  mergeCommit: {oid: .merge_commit_sha},
+                  timelineItems: $timeline[0].data.repository.pullRequest.timelineItems
+                }))
+              },
+              checkSuites: {
+                pageInfo: {hasNextPage: false, endCursor: null},
+                nodes: ($runs[0].workflow_runs | map({
+                  conclusion: (if .conclusion == "success" then "SUCCESS" else (.conclusion | ascii_upcase) end),
+                  workflowRun: {event, file: {path: ".github/workflows/ci.yml"}}
+                }))
+              }
+            }
+          }
+        }
+      }'
     ;;
   number=*)
     cat "$PROOF_TEST_RESPONSES/timeline-\${endpoint#number=}"
@@ -616,6 +652,7 @@ describe("release proof trust boundary", () => {
     "fork head",
     "fork base",
     "unmerged PR",
+    "ordinary PR",
   ] as const)(
     "refuses identical trees with an unverified chain: %s",
     async (failure) =>
@@ -642,6 +679,10 @@ describe("release proof trust boundary", () => {
               break;
             case "fork base":
               pullRequest.base.repo.full_name = "outsider/stella";
+              publishPullRequests(target, [pullRequest]);
+              break;
+            case "ordinary PR":
+              pullRequest.title = "fix: ordinary change";
               publishPullRequests(target, [pullRequest]);
               break;
             case "unmerged PR":
@@ -723,13 +764,13 @@ describe("release proof trust boundary", () => {
       expect(verify(target, target).exitCode).toBe(0);
     }));
 
-  test("accepts an ancestor only while every intervening first-parent tree is identical", async () =>
+  test("refuses other main commits as proof even when their trees are identical", async () =>
     withRepository(({ commit, git, target, publishCommit, verify }) => {
       git("commit", "--quiet", "--allow-empty", "--message", "unchanged tree");
       const unchanged = git("rev-parse", "HEAD");
       publishCommit(unchanged);
       git("update-ref", "refs/remotes/origin/main", unchanged);
-      expect(verify(unchanged, target).exitCode).toBe(0);
+      expect(verify(unchanged, target).exitCode).not.toBe(0);
       commit("c", "different intervening tree");
       const reverted = commit("b", "restore release tree");
       publishCommit(reverted);
@@ -762,7 +803,9 @@ describe("release proof trust boundary", () => {
         expect(verify(proof, proof, true).exitCode).toBe(0);
         expect(verify(proof, proof).exitCode).not.toBe(0);
         git("update-ref", "refs/remotes/origin/main", target);
-        expect(verify(proof, proof, true).exitCode).not.toBe(0);
+        const stale = verify(proof, proof, true);
+        expect(stale.exitCode).toBe(3);
+        expect(stale.stderr.toString()).toContain("RELEASE_TREE_PROOF_STALE");
       },
     ));
 });

@@ -1,10 +1,30 @@
 import { describe, expect, test } from "bun:test";
 
-import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_BROWSER_COUNTRIES,
+  type CaseLawBrowserCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import { formatDecisionCitation } from "@/features/case-law/citation-format";
+import {
+  formatDecisionCitation,
+  formatJurisdictionQuotation,
+} from "@/features/case-law/citation-format";
 import type { CitationInput } from "@/features/case-law/citation-format";
+import type { StatuteCountry } from "@/lib/statutes/statute-route";
+
+const EXPECTED_QUOTATIONS = {
+  CZE: "„text“",
+  EU: "“text”",
+  HUN: "„text”",
+  POL: "„text”",
+  SVK: "„text“",
+} as const satisfies Record<CaseLawBrowserCountry, string>;
+
+const EXPECTED_STATUTE_QUOTATIONS = {
+  cze: EXPECTED_QUOTATIONS.CZE,
+  svk: EXPECTED_QUOTATIONS.SVK,
+} as const satisfies Record<StatuteCountry, string>;
 
 describe("decision citation jurisdiction", () => {
   test("route and corpus country forms select the same style", () => {
@@ -18,6 +38,7 @@ describe("decision citation jurisdiction", () => {
         decisionType: "rozsudek",
         ecli: null,
         name: null,
+        paragraph: null,
         pincite: null,
       };
 
@@ -38,10 +59,32 @@ describe("decision citation jurisdiction", () => {
         decisionType: "rozsudek",
         ecli: null,
         name: null,
+        paragraph: null,
         pincite: null,
       }),
     ).toBe(
       "rozsudek Krajského soudu v Plzni ze dne 18. 3. 2026, sp. zn. 56 Co 24/2026",
+    );
+  });
+});
+
+describe("a Czech or Slovak citation pinpoints the court's paragraph", () => {
+  test("a located paragraph is cited as bod N", () => {
+    expect(
+      formatDecisionCitation({
+        caseNumber: "III.ÚS 2429/24",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
+        court: "Ústavní soud",
+        decisionDate: "2026-04-15",
+        decisionType: "nález",
+        ecli: null,
+        name: null,
+        paragraph: 27,
+        pincite: null,
+      }),
+    ).toBe(
+      "nález Ústavního soudu ze dne 15. 4. 2026, sp. zn. III.ÚS 2429/24, bod 27",
     );
   });
 });
@@ -62,6 +105,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
         decisionDate: "1954-05-17",
         name: "Brown v. Board of Education",
+        paragraph: null,
         pincite: "495",
       }),
     ).toBe("Brown v. Board of Education, 347 U.S. 483, 495 (1954)");
@@ -75,6 +119,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         decisionDate: "2020-06-15",
         name: "Bostock v. Clayton County",
+        paragraph: null,
         pincite: "12",
       }),
     ).toBe("Bostock v. Clayton County, No. 17-1618 (U.S. June 15, 2020)");
@@ -88,6 +133,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         decisionDate: "2024-09-03",
         name: null,
+        paragraph: null,
         pincite: null,
       }),
     ).toBe("No. 22-451 (U.S. Sept. 3, 2024)");
@@ -101,8 +147,95 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         decisionDate: null,
         name: "Loper Bright Enterprises v. Raimondo",
+        paragraph: null,
         pincite: null,
       }),
     ).toBe("Loper Bright Enterprises v. Raimondo, No. 22-451 (U.S.)");
+  });
+});
+
+describe("Hungarian citation typography", () => {
+  const input = {
+    caseNumber: "Pfv.21.123/2019/5.",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    country: "HUN",
+    court: "Kúria",
+    decisionDate: "2019-03-21",
+    decisionType: "ítélet",
+    ecli: null,
+    name: null,
+    paragraph: null,
+    pincite: null,
+  } satisfies CitationInput;
+
+  test("keeps docket punctuation and Hungarian calendar order", () => {
+    expect(formatDecisionCitation(input)).toBe(
+      "Kúria, Pfv.21.123/2019/5., 2019. március 21.",
+    );
+    expect(formatDecisionCitation({ ...input, decisionDate: null })).toBe(
+      "Kúria, Pfv.21.123/2019/5.",
+    );
+  });
+
+  test.each([
+    {
+      decisionDate: "2019-03-21",
+      expected: "Kúria, Pfv.21.123/2019/5., 2019. március 21. [12]",
+    },
+    { decisionDate: null, expected: "Kúria, Pfv.21.123/2019/5. [12]" },
+  ])("preserves a supplied locator", ({ decisionDate, expected }) => {
+    expect(
+      formatDecisionCitation({ ...input, decisionDate, pincite: "12" }),
+    ).toBe(expected);
+  });
+
+  test("quotation typography is invariant to route or corpus country form", () => {
+    for (const country of CASE_LAW_BROWSER_COUNTRIES) {
+      expect(formatJurisdictionQuotation("text", country)).toBe(
+        EXPECTED_QUOTATIONS[country],
+      );
+      expect(formatJurisdictionQuotation("text", country.toLowerCase())).toBe(
+        EXPECTED_QUOTATIONS[country],
+      );
+    }
+    expect(formatJurisdictionQuotation("teljesítés", "HUN")).toBe(
+      "„teljesítés”",
+    );
+  });
+
+  test("every statute country uses its jurisdiction marks", () => {
+    for (const [country, expected] of Object.entries(
+      EXPECTED_STATUTE_QUOTATIONS,
+    )) {
+      expect(formatJurisdictionQuotation("text", country)).toBe(expected);
+    }
+  });
+});
+
+describe("British neutral citations", () => {
+  test.each(["GBR", "gbr", "GB", "gb"])(
+    "%s keeps the neutral citation and adds a paragraph locator",
+    (country) => {
+      expect(
+        formatDecisionCitation({
+          caseNumber: "[2024] UKSC 12",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          country,
+          court: "UKSC",
+          decisionDate: "2024-03-18",
+          decisionType: null,
+          ecli: null,
+          name: "Example v Example",
+          paragraph: null,
+          pincite: "42",
+        }),
+      ).toBe("Example v Example [2024] UKSC 12 [42]");
+    },
+  );
+
+  test("uses English quotation marks for corpus and region codes", () => {
+    for (const country of ["GBR", "gbr", "GB"]) {
+      expect(formatJurisdictionQuotation("text", country)).toBe("“text”");
+    }
   });
 });

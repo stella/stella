@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
-import { savedTimeNarratives, featureEnrolments } from "@/api/db/schema";
+import { featureEnrolments, savedTimeNarratives } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";

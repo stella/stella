@@ -1,3 +1,24 @@
+// parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-ncourt] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-courts] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-vfgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-vwgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-bvwg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-lvwg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-asylgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-ubas] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-uvs] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-verg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-umse] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-bks] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-findok] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [eu-ecj] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-kis] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-uodo] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-uokik] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [us-courtlistener] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
@@ -120,7 +141,12 @@ export type HandlerErrorValidationIssue = {
   message: string;
 };
 
-export type HandlerErrorProps<
+// parser-output-unchanged: retry advice only shapes HTTP and capability error responses.
+type HandlerErrorRetryAdvice =
+  | { retryable: true; retryAfterMs: number }
+  | { retryable?: boolean | undefined; retryAfterMs?: undefined };
+
+type HandlerErrorBaseProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
   code?: HandlerErrorCode | undefined;
@@ -132,7 +158,6 @@ export type HandlerErrorProps<
     | { slotKey: string; id?: string | undefined; name?: string | undefined }
     | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
-  retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
@@ -155,20 +180,27 @@ export type HandlerErrorProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
 };
+
+export type HandlerErrorProps<
+  TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
+> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
 // `status` back down for callers.
 export class HandlerError<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> extends TaggedError("HandlerError")<HandlerErrorProps> {
+> extends TaggedError("HandlerError")<HandlerErrorBaseProps> {
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare hint?: string | undefined;
   declare clause?: HandlerErrorProps["clause"];
   declare contactUrl?: string | undefined;
   declare retryable?: boolean | undefined;
+  declare retryAfterMs?: number | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
@@ -185,6 +217,7 @@ export class HandlerError<
     this.clause = props.clause;
     this.contactUrl = props.contactUrl;
     this.retryable = props.retryable;
+    this.retryAfterMs = props.retryAfterMs;
     this.usage = props.usage;
     this.confirmation = props.confirmation;
     this.error = props.error;
@@ -228,17 +261,14 @@ export class Unreachable extends TaggedError("Unreachable")<{
 
 export const unreachable = (message: string): never => panic(message);
 
-export class ParseXmlError extends TaggedError("ParseXmlError")<{
-  message: string;
-  cause: unknown;
-}> {}
-
 export class ConfigurationError extends TaggedError("ConfigurationError")<{
   message: string;
   cause?: unknown;
 }> {}
 
 export class TelemetryError extends TaggedError("TelemetryError")<{
+  /** Stable outcome code; it becomes `error.code`, so it splits the issue. */
+  code?: string | undefined;
   message: string;
   cause?: unknown;
 }> {}
@@ -469,8 +499,7 @@ export class ChatLoopDetectedError extends TaggedError(
  * `isAnticipatedAIFailure`.
  */
 export type ChatTerminalError =
-  | ChatEmptyCompletionError
-  | ChatLoopDetectedError;
+  ChatEmptyCompletionError | ChatLoopDetectedError;
 
 /**
  * A text generation ended because the abort signal its caller passed fired:
@@ -753,6 +782,8 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
 }> {}
 
 /**

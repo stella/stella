@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
-import { SQL } from "bun";
+
+import { createSqlClient } from "@/api/db/sql-client";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { terminateReserved } from "./sql-close";
 
 type BoundedDatabaseObserverOptions = {
   url: string;
@@ -23,7 +25,7 @@ export const openBoundedDatabaseObserver = async ({
       panic("Database observer timeouts must be positive integer milliseconds");
     }
   }
-  const client = new SQL({
+  const client = createSqlClient({
     url,
     max: 1,
     idleTimeout: 0,
@@ -51,7 +53,7 @@ export const openBoundedDatabaseObserver = async ({
     query: async (query, params = []) =>
       await reserved.unsafe(query, [...params]),
     release: async () => {
-      reserved.release();
+      await reserved.release();
       await client.close();
     },
   };
@@ -82,7 +84,7 @@ export const openOnlineIndexObserver = async (
 export const openOnlineRepairConnection = async (
   url: string,
 ): Promise<OnlineMigrationConnection> => {
-  const client = new SQL({ url, max: 1 });
+  const client = createSqlClient({ url, max: 1 });
   const reservation = await Result.tryPromise(
     async () => await client.reserve(),
   );
@@ -91,6 +93,7 @@ export const openOnlineRepairConnection = async (
     throw reservation.error;
   }
   const reserved = reservation.value;
+  let session: "open" | "terminated" = "open";
   return {
     execute: async (query, params = []) => {
       await reserved.unsafe(query, [...params]);
@@ -98,8 +101,16 @@ export const openOnlineRepairConnection = async (
     query: async (query, params = []) =>
       await reserved.unsafe<unknown[]>(query, [...params]),
     release: async () => {
-      reserved.release();
+      if (session === "open") {
+        await reserved.release();
+      }
       await client.close();
+    },
+    // The table gate closes a session whose stalled statement it could not
+    // cancel; the repair then fails rather than hold the table.
+    terminate: async () => {
+      session = "terminated";
+      await terminateReserved(reserved);
     },
   };
 };

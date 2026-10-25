@@ -1,12 +1,12 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const ROUTES_DIRECTORY = path.resolve(import.meta.dirname, "../../src/routes");
 const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";
 const MIXED_ROUTE_REASONS = new Map([
   [
-    "/_protected/settings/organization",
+    "/_protected/admin",
     "Only matched settings admission and the time-policy prefetch are gated.",
   ],
   [

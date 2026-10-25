@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
-  type DecisionParagraphRange,
   decisionParagraphFragment,
+  type DecisionParagraphRange,
 } from "@stll/api-contract/decision-paragraph-range";
 import { DECISION_READER_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -22,8 +22,8 @@ import {
   openDecisionOutput,
   previewProvisionArgs,
   provisionPreviewOutput,
-  READER_PAGE_MAX_CHARS,
   readDecisionBlocksArgs,
+  READER_PAGE_MAX_CHARS,
 } from "./decision-reader-contract";
 import {
   decodeReaderCursor,
@@ -75,7 +75,7 @@ const metadataOf = ({ decision }: ReaderSource) => ({
   country: decision.country,
   date: decision.decisionDate,
   ecli: decision.ecli,
-  appUrl: buildCaseLawDecisionAppUrl({
+  url: buildCaseLawDecisionAppUrl({
     decisionId: decision.id,
     caseNumber: decision.caseNumber,
     country: decision.country,
@@ -90,10 +90,10 @@ const metadataWithFragment = (
   paragraphs: DecisionParagraphRange | undefined,
 ) => ({
   ...metadata,
-  appUrl:
-    metadata.appUrl === null || paragraphs === undefined
-      ? metadata.appUrl
-      : `${metadata.appUrl}#${decisionParagraphFragment(paragraphs)}`,
+  url:
+    metadata.url === null || paragraphs === undefined
+      ? metadata.url
+      : `${metadata.url}#${decisionParagraphFragment(paragraphs)}`,
 });
 const readSource = async (
   context: McpRequestContext,
@@ -115,7 +115,7 @@ const tooLarge = () =>
   structuredErrorResult({
     code: "result_too_large",
     message: "This reader selection exceeds the page limit.",
-    hint: "Open the decision using appUrl in stella, or call open_case_law_decision with a smaller paragraph range.",
+    hint: "Open the decision using url in stella, or call open_case_law_decision with a smaller paragraph range.",
   });
 const missing = () =>
   notFoundResult(
@@ -141,7 +141,7 @@ const OPEN_DECISION_TOOL_DEFINITION = defineValibotMcpTool({
   name: "open_case_law_decision",
   annotations: { ...readOnlyAnnotations, title: "Open case-law decision" },
   description:
-    "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); appUrl opens the web reader at that range. At most once per answer.",
+    "Open one decision when the user asks to read or open it. Returns metadata, outline and a small target window. paragraphs names the court's printed numbers (48 or 48-53); url opens the web reader at that range. At most once per answer.",
   inputSchema: openDecisionArgs,
   _meta: {
     ui: {
@@ -185,7 +185,7 @@ const openTool: TypedMcpToolHandler<
     decisionId: brandPersistedCaseLawDecisionId(parsed.output.decision_id),
     phase: "blocks",
     audience: "model",
-    surface: "search",
+    surface: "identity",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);
@@ -260,7 +260,7 @@ const blocksTool: TypedMcpToolHandler<
     phase,
     ...(referenceCursor === undefined ? {} : { referenceCursor }),
     audience: "app",
-    surface: "search",
+    surface: "identity",
   });
   if (Result.isError(read)) {
     return internalFailureResult(read.error);

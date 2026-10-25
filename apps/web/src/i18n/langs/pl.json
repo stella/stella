@@ -9,8 +9,29 @@
       "noOtherSessions": "Brak innych aktywnych sesji",
       "revokeOtherSessions": "Wyloguj inne urządzenia",
       "revokeOtherSessionsConfirm": "Spowoduje to zakończenie wszystkich sesji z wyjątkiem bieżącej.",
+      "signedInFrom": "Zalogowano przez {clientName}",
       "unknownDevice": "Nieznane urządzenie"
     }
+  },
+  "admin": {
+    "ai": "AI",
+    "billingProfiles": "Profile rozliczeniowe",
+    "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
+    "deleteOrganization": "Usuń organizację",
+    "deleteRefusedSubscription": "Ta organizacja ma subskrypcję, która się odnawia. Najpierw anuluj ją w sekcji Plan i wykorzystanie, a następnie usuń organizację.",
+    "deleteTypeToConfirm": "Wpisz {name}, aby potwierdzić.",
+    "firmSetup": "Ustawienia kancelarii",
+    "general": "Ogólne",
+    "leaveDescription": "Utracisz dostęp do spraw i danych tej organizacji.",
+    "leaveOrganization": "Opuść organizację",
+    "leaveRefusedOnlyOwner": "Jesteś jedynym właścicielem. Zanim odejdziesz, nadaj rolę właściciela innemu członkowi.",
+    "modelsAndProviders": "Modele i dostawcy",
+    "organizationDeleted": "Organizacja została usunięta.",
+    "organizationId": "ID organizacji",
+    "organizationLeft": "Opuszczono organizację.",
+    "planAndUsage": "Plan i wykorzystanie",
+    "title": "Administracja organizacji",
+    "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
   },
   "agentClaim": {
     "access": "Uzyskany dostęp",
@@ -29,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asystent poprosi o ten adres",
-    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
     "copy": "Skopiuj mu instrukcje",
     "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
     "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
     "openGuide": "Otwórz instrukcję dla {assistant}",
+    "pasteHint": "Wklej je do czatu z asystentem.",
     "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
     "title": "Korzystaj ze stelli w swoim asystencie AI"
   },
@@ -41,8 +62,12 @@
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
+      "accountRestricted": "Ustawienia dostawcy AI są niedostępne dla tego konta.",
+      "configUnreadable": "Nie można odczytać konfiguracji dostawcy AI. Poproś administratora organizacji o ponowne połączenie.",
       "cta": "Otwórz ustawienia AI",
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
+      "permissionRequired": "Tylko administrator organizacji może połączyć dostawcę AI.",
+      "seatRequired": "Poproś administratora organizacji o przydzielenie Ci miejsca.",
       "title": "Połącz dostawcę AI"
     },
     "refinePlaceholder": "Jak AI ma dostosować sformułowanie?",
@@ -64,6 +89,9 @@
     "runRemainingPage": "Uruchom pozostałe (ta strona)",
     "runSelectedRows": "Uruchom dla {count, plural, one {# wybranego wiersza} few {# wybranych wierszy} many {# wybranych wierszy} other {# wybranego wiersza}}",
     "selectedRun": "Uruchom kolumny AI dla {count, plural, one {# wiersza} few {# wierszy} many {# wierszy} other {# wiersza}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "Podsumowania, notatki i analizy orzeczeń sądowych przygotowane przez AI generuje stella; nie są one zatwierdzone przez sądy i nie odzwierciedlają własnego rozumowania sądów. Stanowią pomoc dla prawników, a rozstrzygającym źródłem pozostaje tekst orzeczenia."
   },
   "appearance": {
     "calendar": "Kalendarz",
@@ -114,6 +142,8 @@
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
       "title": "Nie udało się Cię zalogować"
     },
+    "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
+    "handoffTitle": "Przejdź do stella",
     "headline": "Jasność w każdej sprawie.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
@@ -129,11 +159,11 @@
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
     "professionalUse": {
-      "description": "Podczas zakładania konta nie wyświetliliśmy Ci tego oświadczenia. Zaakceptuj je, aby kontynuować.",
       "title": "Potwierdź korzystanie w celach zawodowych"
     },
     "professionalUseStatement": "Tworząc konto, potwierdzasz, że korzystasz ze stelli w celach zawodowych, i przyjmujesz do wiadomości, że stella jest narzędziem dla profesjonalistów z branży prawnej i nie zastępuje porady prawnej.",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
+    "reauthenticationRequired": "Zaloguj się ponownie, aby kontynuować tę czynność.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
@@ -352,6 +382,13 @@
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
+      "documentView": {
+        "label": "Widok dokumentu",
+        "original": "Oryginał",
+        "reading": "Widok do czytania"
+      },
+      "notLocated": "{count, plural, one {Nie znaleziono # twierdzenia w oryginale} few {Nie znaleziono # twierdzeń w oryginale} many {Nie znaleziono # twierdzeń w oryginale} other {Nie znaleziono # twierdzenia w oryginale}}",
+      "pdfTextFailed": "Nie udało się odczytać tekstu pliku PDF, dlatego twierdzenia nie są zaznaczone na stronach.",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {
@@ -608,6 +645,7 @@
         "eso9": "Arkusz importu ESO9 (XLSX)",
         "exporting": "Przygotowywanie eksportu…",
         "isdoc": "E-faktura ISDOC (ABRA Gen i inne)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Arkusze",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Pozycje faktur (XLSX)"
@@ -721,6 +759,7 @@
     "sellerProfiles": {
       "add": "Dodaj profil sprzedawcy",
       "archiveConfirm": "Zarchiwizować ten profil sprzedawcy? Nie będzie już dostępny dla nowych faktur.",
+      "barRegistration": "Wpis na listę adwokatów",
       "bic": "Kod BIC / SWIFT",
       "default": "Domyślny sprzedawca",
       "defaultCurrency": "Domyślna waluta",
@@ -732,11 +771,10 @@
       "invalidCurrency": "Wprowadź trzyliterowy kod waluty.",
       "invalidIban": "Wprowadź prawidłowy IBAN.",
       "legalName": "Nazwa prawna",
+      "registerEntry": "Wpis do rejestru",
       "registrationId": "Numer rejestracyjny",
       "setDefault": "Ustaw jako domyślny",
       "title": "Profile sprzedawcy",
-      "vatId": "Numer VAT",
-      "vatPayer": "Czynny podatnik VAT",
       "vatPayerHelp": "Faktury tego sprzedawcy naliczają VAT. Wyłącz dla osoby zarejestrowanej, która ma numer VAT, ale nie jest czynnym podatnikiem.",
       "vatPayerRequiresVatId": "Podaj numer VAT, aby wystawiać faktury jako czynny podatnik VAT."
     },
@@ -771,6 +809,8 @@
     "total": "Razem",
     "vatRates": {
       "add": "Dodaj stawkę VAT",
+      "addCzechia": "Dodaj stawki dla Czech",
+      "addSlovakia": "Dodaj stawki dla Słowacji",
       "archiveConfirm": "Zarchiwizować tę stawkę VAT? Nie będzie już dostępna dla nowych dokumentów.",
       "code": "Kod stawki",
       "current": "Bieżąca stawka",
@@ -785,6 +825,7 @@
       "overlap": "Okresy obowiązywania tego samego kodu stawki nie mogą się nakładać.",
       "past": "Poprzednia stawka",
       "periodHelp": "Data początkowa jest włączona; data końcowa jest wyłączona. Pozostaw datę końcową pustą, aby okres był otwarty.",
+      "presetResult": "Dodano: {added}; pominięto: {skipped}.",
       "rate": "Procent VAT",
       "title": "Stawki VAT",
       "validFrom": "Obowiązuje od",
@@ -821,7 +862,6 @@
         "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
       },
       "generate": "Ułóż tezy w AI",
-      "holdingAnchor": "Przejdź do akapitu",
       "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
       "topics": "Tematy",
       "treatment": "Późniejsze orzecznictwo"
@@ -898,13 +938,10 @@
     },
     "coverage": {
       "completeness": "Kompletność",
-      "countedOn": "Policzono {date}",
       "courtsHeading": "Według sądu",
       "courtsUnavailable": "Zestawienie według sądów jest obecnie niedostępne.",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
-      "exceedsReportedTotal": "Zawiera więcej, niż wydawca podał ostatnio na {date}",
-      "gapStatusUnknown": "Stan luk nieznany",
       "generatedAt": "Dane na {date}",
       "globeLabel": "Państwa, których orzecznictwo zawiera korpus, na globusie",
       "healthCurrent": "Aktualne",
@@ -925,7 +962,8 @@
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne."
+      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
+      "unreadListingPeriods": "Nieodczytane okresy wykazu"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {
@@ -981,6 +1019,9 @@
       "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
     },
     "newestDecisions": "Najnowsze orzeczenia",
+    "noResults": {
+      "hint": "Spróbuj innych słów, popraw zapytanie za pomocą AI lub zadaj pytanie na czacie."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ludzkie"
@@ -991,7 +1032,10 @@
       "pageOfCount": "Strona {page} z {pageCount}",
       "pageOfEstimatedCount": "Strona {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Strona {page} z około {pageCount}",
+      "pageWithEstimatedMatchCounts": "Strona {page} · około {exactCount, plural, one {# dokładne dopasowanie} few {# dokładne dopasowania} many {# dokładnych dopasowań} other {# dokładnego dopasowania}} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
       "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "pageWithMatchCounts": "Strona {page} · {exactCount, plural, one {# dokładne dopasowanie} few {# dokładne dopasowania} many {# dokładnych dopasowań} other {# dokładnego dopasowania}} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
+      "pageWithPartialMatchCount": "Strona {page} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
       "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
       "perPage": "Na stronę",
       "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
@@ -1054,8 +1098,11 @@
         "short": "Krótki"
       }
     },
+    "rewritten": {
+      "line": "Brak dokładnych wyników dla <bdi>{original}</bdi>; wyniki dla <bdi>{query}</bdi>",
+      "searchOriginal": "Szukaj moich oryginalnych słów"
+    },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
-    "searchAskPrompt": "{query} (orzecznictwo, {country})",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
     "searchUnavailable": {
@@ -1071,6 +1118,8 @@
         "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
         "message": "Nic nie odpowiada wybranym filtrom."
       },
+      "partialMatch": "Częściowe dopasowanie",
+      "partialMatches": "Częściowe dopasowania dla: <bdi>{query}</bdi>",
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },
@@ -1108,6 +1157,7 @@
       "judges": "Sędziowie",
       "legalArea": "Dziedzina prawa",
       "legalSentence": "Teza orzeczenia",
+      "paragraphReference": "Akapit {number}",
       "popularName": "Nazwa potoczna",
       "portraitCredit": "Źródło portretów: {source}",
       "provisionMentions": "{count, number}×",
@@ -1203,15 +1253,37 @@
     },
     "answerEdit": {
       "acceptFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "aiKind": "Zlecona edycja",
       "ask": "Poproś o zmiany",
+      "authorUnknown": "Nieznany autor",
+      "autolinkLabel": "Ten tekst automatycznie stanie się linkiem. Zmień etykietę przed usunięciem linku.",
+      "change": "Zmiana {revision}",
+      "editedLabel": "Edytowana odpowiedź",
       "failed": "Nie udało się przygotować zmiany. Spróbuj ponownie.",
+      "formatKind": "Formatowanie",
+      "heading": "Nagłówek {level}",
+      "history": "Historia odpowiedzi",
+      "historyEmpty": "Brak wcześniejszych wersji.",
       "instruction": "Opisz zmianę",
       "instructionRequired": "Opisz, jak zmienić zaznaczony tekst.",
       "invalidSelection": "Nie można edytować tego zaznaczenia. Zaznacz ciągły fragment tekstu.",
+      "invalidUrl": "Wprowadź prawidłowy adres HTTP lub HTTPS.",
+      "linkAddress": "Adres linku",
+      "orderedList": "Lista numerowana",
       "proposal": "Proponowana zmiana",
       "requesting": "Przygotowywanie zmian…",
+      "restoreRefreshFailed": "Odpowiedź została przywrócona, ale nie udało się jej odświeżyć. Odśwież, aby wczytać przywróconą odpowiedź.",
+      "revertKind": "Przywrócona wersja",
       "stale": "Ta odpowiedź się zmieniła. Zaznacz tekst ponownie.",
-      "submit": "Poproś o zmianę"
+      "submit": "Poproś o zmianę",
+      "textStyle": "Styl tekstu",
+      "unorderedList": "Lista punktowana",
+      "wholeBlockRequired": "Aby zmienić styl, zaznacz cały akapit lub listę."
+    },
+    "answerQuote": {
+      "showInDecision": "Pokaż w orzeczeniu",
+      "verified": "Zweryfikowany cytat",
+      "verifiedHint": "Dosłownie w {source}"
     },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
@@ -1332,6 +1404,7 @@
     "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
     "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
+    "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",
       "autoDirectDescription": "Zmiany AI są stosowane natychmiast przez bezpośrednie przepisanie dokumentu (bez śledzenia zmian).",
@@ -1397,7 +1470,12 @@
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
-        "entities": "W tej sprawie"
+        "entities": "W tej sprawie",
+        "sources": "Źródła"
+      },
+      "corpus": {
+        "caseLaw": "Orzecznictwo · {country}",
+        "legislation": "Ustawodawstwo · {country}"
       },
       "loadError": "Nie udało się załadować elementów"
     },
@@ -1451,6 +1529,12 @@
       "title": "Wklejony tekst"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}",
+      "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
+      "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Dzieli złożone zadanie na uporządkowane podzadania.",
@@ -1520,6 +1604,7 @@
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorConnectionFailed": "Nie udało się połączyć z czatem. Sprawdź połączenie i spróbuj ponownie.",
+    "sendErrorContinuationRejected": "Nie udało się kontynuować czatu. Wyślij nową wiadomość, aby zacząć od nowa.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
     "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
     "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
@@ -1541,6 +1626,9 @@
         "private": "Twoje umiejętności AI",
         "team": "Umiejętności AI zespołu"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "Również sprawdzono ({count, number})"
     },
     "sourcePlaceholder": "Czat o {title}",
     "sourcePlaceholderAction": "Czat o",
@@ -1696,6 +1784,7 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
+      "statusWaiting": "Oczekuje",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
@@ -1721,7 +1810,8 @@
       "toggleLabel": "Wyszukiwanie w sieci",
       "toggleOff": "Wyłącz wyszukiwanie w sieci",
       "toggleOn": "Włącz wyszukiwanie w sieci"
-    }
+    },
+    "workedFor": "Czas pracy: {duration}"
   },
   "clauses": {
     "addVariant": "Dodaj wariant",
@@ -2039,6 +2129,7 @@
       "ZH-HANT": "chiński (tradycyjny)"
     },
     "lastUpdated": "Ostatnia aktualizacja",
+    "layoutResetAfterProblem": "Po wystąpieniu problemu przywrócono domyślny układ.",
     "legalDatabase": "Baza danych prawnych",
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
@@ -2137,6 +2228,7 @@
     "suggested": "Sugestia",
     "summarizeChanges": "Podsumuj zmiany",
     "target": "Cel",
+    "taxId": "Identyfikator podatkowy",
     "timeBilling": "Czas i rozliczenia",
     "today": "Dzisiaj",
     "translate": "Przetłumacz",
@@ -2160,6 +2252,8 @@
     "urlIdentifierPlaceholder": "moja-organizacja",
     "user": "Użytkownik",
     "value": "Wartość",
+    "vatId": "Numer VAT",
+    "vatPayer": "Czynny podatnik VAT",
     "verified": "Zweryfikowane",
     "verify": "Zweryfikuj",
     "version": "Wersja",
@@ -2201,6 +2295,7 @@
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
     "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
     "scopeMattersWrite": "Tworzenie i edytowanie Twoich spraw i zadań",
+    "scopeMemoryWrite": "Tworzenie i aktualizowanie pamięci asystenta",
     "scopeOfflineAccess": "Utrzymywanie Cię zalogowanym bez konieczności ponownej zgody",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
     "scopeProfile": "Dostęp do Twoich danych profilowych",
@@ -2228,6 +2323,7 @@
     "summaryLineRead": "<group>Odczyt:</group> {items}",
     "summaryLineUse": "<group>Korzystanie:</group> {items}",
     "summaryMattersWrite": "sprawy i zadania",
+    "summaryMemoryWrite": "pamięć asystenta",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, sprawy i kontakty",
     "summaryReadAnonymized": "zanonimizowane dokumenty i sprawy",
@@ -2348,7 +2444,9 @@
       "prefix": "Prefiks",
       "registrationNumber": "Numer KRS",
       "suffix": "Sufiks",
-      "taxId": "NIP",
+      "vatPayer": "Status podatnika VAT",
+      "vatPayerNo": "Nie jest płatnikiem VAT",
+      "vatPayerUnknown": "Nieznany",
       "year": "Rok"
     },
     "filterOrganizations": "Organizacje",
@@ -2388,7 +2486,6 @@
         "primary_phone": "Główny numer telefonu",
         "state": "Województwo lub region",
         "suffix": "Sufiks",
-        "tax_id": "NIP",
         "type": "Typ kontaktu"
       },
       "fileInvalid": "Wybierz jeden plik CSV, TSV lub TXT.",
@@ -2593,17 +2690,23 @@
       "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
       "contact": "Skontaktuj się z nami",
+      "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
       "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
     },
     "actionFailed": "Akcja nie powiodła się",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
+      "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
+      "caseLawIdentityOnly": "Dla tego kraju dostępne są tylko dokładne wyszukiwanie i odczytywanie orzeczeń.",
+      "caseLawSearchUnavailable": "Wyszukiwanie orzecznictwa tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne orzeczenia.",
       "conflict": "Żądanie jest sprzeczne z bieżącym stanem.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "legislationCountryUnavailable": "Przepisy tego kraju nie są dostępne. Wybierz inny kraj.",
+      "legislationIdentityOnly": "Dla tego kraju dostępne są tylko dokładne wyszukiwanie i odczytywanie przepisów.",
+      "legislationSearchUnavailable": "Wyszukiwanie przepisów tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne przepisy.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
-      "publicCountryUnavailable": "Przepisy i orzecznictwo tego kraju nie są dostępne. Wybierz inny kraj.",
       "rateLimited": "Zbyt wiele żądań. Spróbuj ponownie później.",
       "server": "Coś poszło nie tak. Spróbuj ponownie.",
       "serviceUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie.",
@@ -2623,6 +2726,11 @@
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
+      "aiDeadlineExceeded": "AI nie odpowiedziała na czas. Spróbuj ponownie za chwilę.",
+      "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
+      "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
+      "aiProviderTaskUnsupported": "Skonfigurowany dostawca AI nie może wykonać tego zadania. Wybierz dostawcę, który może.",
+      "aiUnknown": "Żądanie AI nie powiodło się. Spróbuj ponownie.",
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",
@@ -3438,6 +3546,12 @@
       "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
+      "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
+      "unsupportedField": "Ten dokument zawiera pole {fieldType}, którego nie można przekonwertować.",
+      "unsupportedReference": "Ten dokument odwołuje się do zasobu zewnętrznego w {element} {attribute}, dlatego nie można go przekonwertować."
+    },
     "external": {
       "confirmDescription": "Za chwilę przejdziesz do zewnętrznej strony internetowej.",
       "confirmTitle": "Otworzyć link zewnętrzny?",
@@ -4108,7 +4222,9 @@
     "prompt": "Czego szukasz?",
     "recent": "Ostatnie",
     "recentCasesFilter": "Orzeczenia",
+    "recentLoadFailed": "Nie udało się wczytać ostatniej aktywności.",
     "recentSearchFilter": "Wyszukiwania",
+    "recentUpdateFailed": "Nie udało się zaktualizować ostatniej aktywności.",
     "recentlyInForce": "Niedawno weszło w życie",
     "searchLabel": "Szukaj w bazie prawnej",
     "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",
@@ -4135,6 +4251,22 @@
       "guestStorageUnavailable": "Nie udało się zapisać wyróżnień i notatek na tej karcie.",
       "highlight": "Wyróżnij",
       "highlightedPassage": "Wyróżniony fragment",
+      "history": {
+        "colorRestored": "Przywrócono kolor",
+        "commentRemoved": "Usunięto komentarz",
+        "commentRestored": "Przywrócono komentarz",
+        "highlightRemoved": "Usunięto wyróżnienie",
+        "highlightRestored": "Przywrócono wyróżnienie",
+        "markChanged": "To wyróżnienie lub komentarz zmieniono w międzyczasie w innym miejscu, więc pozostawiono je bez zmian.",
+        "markGone": "To wyróżnienie lub komentarz już nie istnieje.",
+        "nothingToRedo": "Nie ma czego ponowić",
+        "nothingToUndo": "Nie ma czego cofnąć",
+        "redoShortcut": "Ponów zmianę wyróżnienia lub komentarza",
+        "styleRestored": "Przywrócono styl",
+        "textRestored": "Przywrócono treść komentarza",
+        "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
+        "visibilityRestored": "Przywrócono udostępnianie"
+      },
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
       "styleHighlight": "Wyróżnienie",
@@ -4169,6 +4301,10 @@
     "archivedEmpty": "Brak zarchiwizowanych wspomnień.",
     "archivedToast": "Pamięć zarchiwizowana",
     "createdToast": "Zapisano w pamięci",
+    "deleteConfirmation": "Wpisz {confirmation}, aby potwierdzić",
+    "deleteDescription": "Spowoduje to trwałe usunięcie tej pamięci. Tej czynności nie można cofnąć.",
+    "deleteTitle": "Usunąć pamięć?",
+    "deletedToast": "Pamięć usunięta",
     "empty": "Nic jeszcze w pamięci.",
     "kinds": {
       "decision": "Decyzja",
@@ -4642,6 +4778,7 @@
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
+    "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
     "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
     "continueInChat": "Kontynuuj na czacie",
@@ -4676,6 +4813,8 @@
     "recentDocuments": "Ostatnie dokumenty",
     "recentSearches": "Ostatnie wyszukiwania",
     "recentlyOpenedFiles": "Ostatnio otwarte pliki",
+    "registryCandidateNameMismatch": "Oficjalna nazwa to „{officialName}” i nie jest zgodna",
+    "registryCandidateNoOfficialRecord": "W oficjalnym rejestrze nie ma wpisu dla tego numeru",
     "registryChoose": "Wybierz rejestr przedsiębiorstw",
     "registryCredentialAskAdmin": "Poproś administratora organizacji o skonfigurowanie dostępu do tego rejestru.",
     "registryCredentialSaved": "Zapisano dostęp do rejestru",
@@ -4686,6 +4825,7 @@
       "enrichmentUnavailable": "Dane z rejestru przedsiębiorstw są tymczasowo niedostępne"
     },
     "registryKrsHint": "KRS wyszukuje według numeru rejestrowego, a nie nazwy firmy. Wpisz 10-cyfrowy numer KRS, włącznie z zerami na początku (np. 0000006865).",
+    "registryNameSearchNotFound": "Żadna zweryfikowana firma nie odpowiada tej nazwie. Odrzucono następujących kandydatów:",
     "registryVatHint": "VIES sprawdza numery VAT, a nie nazwy firm. Wpisz numer VAT z prefiksem kraju (np. CZ27082440); format zależy od kraju.",
     "renameSearchTitle": "Zmień nazwę zapisanego wyszukiwania",
     "requestCountry": "Poproś o dodanie nowego kraju",
@@ -4699,6 +4839,7 @@
     "savedSearchesEmpty": "Zapisz wyszukiwanie, aby użyć go ponownie.",
     "scopeFilter": "Zakres wyszukiwania",
     "scopePlaceholderAll": "Przeszukaj wszystkie <scope>źródła</scope>…",
+    "scopePlaceholderCaseLaw": "Przeszukaj <scope>orzecznictwo</scope>…",
     "scopePlaceholderMatters": "Przeszukaj wszystkie <scope>sprawy</scope>…",
     "scopePlaceholderRegistries": "Przeszukaj <scope>rejestry</scope>…",
     "scopeRegistries": "Rejestry",
@@ -4848,7 +4989,7 @@
       "description": "Korzystaj ze stelli w asystencie AI i sprawdzaj, co ma dostęp do Twojego konta.",
       "developerDescription": "Adresy serwera i narzędzie wiersza poleceń do konfiguracji technicznych.",
       "developerTitle": "Dostęp dla programistów",
-      "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie.",
+      "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie. Sesje przeglądarki utworzone przez to połączenie również zostaną wylogowane.",
       "disconnectConfirmTitle": "Rozłączyć {clientName}?",
       "disconnectSuccess": "Rozłączono {clientName}",
       "integrationsDescription": "Zewnętrzne usługi, z których AI może korzystać w Twoim imieniu, np. repozytorium dokumentów.",
@@ -5097,6 +5238,8 @@
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
+    "pendingChanges": "Nadchodzące nowelizacje",
+    "pendingChangesIncomplete": "Dane wydawcy mogą nie obejmować wszystkich nadchodzących nowelizacji.",
     "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskPlaceholder": "Zapytaj o ten przepis",
     "provisionAskQuestionPrompt": "W sprawie {subject}: {question}",
@@ -5114,7 +5257,6 @@
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
-    "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
@@ -5900,6 +6042,7 @@
       "downloadFailed": "Pobieranie nie powiodło się",
       "downloadPdf": "Pobierz jako PDF",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "emptyFile": "Plik jest pusty.",
       "includeReferenceNumber": "Dołącz numer referencyjny",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
@@ -6243,7 +6386,6 @@
         }
       },
       "atAGlance": "W skrócie",
-      "edited": "edytował(a)",
       "getStarted": "Zacznij od przesłania dokumentów lub utworzenia pierwszego folderu.",
       "matterDetails": "Szczegóły sprawy",
       "membersCount": "{count, plural, one {# członek} few {# członkowie} many {# członków} other {# członków}}",

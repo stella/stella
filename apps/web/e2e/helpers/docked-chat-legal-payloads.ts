@@ -13,6 +13,7 @@ const decision = {
   extractionWarnings: [],
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 0,
   citationsFrom: [],
   citationsNextCursor: null,
   citationsTo: [],
@@ -99,10 +100,12 @@ const bilingualCzechDecision = {
 const statute = {
   ...currentStatuteViewerFixture,
   id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000105"),
+  pendingChanges: null,
 };
 const olderStatute = {
   ...historicalStatuteViewerFixture,
   id: toSafeId<"legislationDocument">("019a0000-0000-7000-8000-000000000107"),
+  pendingChanges: null,
 };
 
 const noProvisions = {
@@ -150,9 +153,10 @@ const {
 } = statute;
 const versions = {
   items: [
-    { ...version, isDefault: true },
+    { ...version, amendedBy: null, isDefault: true },
     {
       ...version,
+      amendedBy: null,
       id: olderStatute.id,
       status: olderStatute.status,
       effectiveDate: olderStatute.effectiveDate,

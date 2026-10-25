@@ -226,7 +226,7 @@ describe("the column cap counts per organization", () => {
         position: index + 1,
         question: `Question ${index}`,
         content: YES_NO_CONTENT,
-        tool: { version: 1 as const, role: "fast" as const },
+        tool: { version: 1 as const, task: "short-text" as const },
       })),
     );
 
@@ -270,7 +270,7 @@ describe("an organization holding more columns than it may add", () => {
         position: index + 1,
         question: `Grandfathered ${index}`,
         content: YES_NO_CONTENT,
-        tool: { version: 1 as const, role: "fast" as const },
+        tool: { version: 1 as const, task: "short-text" as const },
       })),
     );
     return columnIds;

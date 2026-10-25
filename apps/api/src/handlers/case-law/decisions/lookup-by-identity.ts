@@ -29,9 +29,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  type DecisionDocketSelector,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
-  type DecisionDocketSelector,
 } from "@stll/api-contract/decision-docket-reference";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
 import {
@@ -42,8 +42,8 @@ import {
 
 import {
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import {
   bareCitationKey,
@@ -61,8 +61,9 @@ import {
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -190,6 +191,7 @@ export type DecisionIdentityRow = {
 type LookupDecisionsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
+  countries?: readonly string[];
   locator: DecisionIdentityLocator;
 };
 
@@ -256,11 +258,11 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
   switch (locator.kind) {
     case "docket":
       return inArray(
-        caseLawDecisions.citationKey,
+        publishedCaseLawDecisions.citationKey,
         docketFamilyCitationKeys(locator),
       );
     case "ecli":
-      return inArray(caseLawDecisions.ecli, [
+      return inArray(publishedCaseLawDecisions.ecli, [
         locator.value,
         locator.value.toUpperCase(),
       ]);
@@ -359,16 +361,16 @@ export const decisionIdsNamedBy = ({
     return published;
   }
   const own = tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
+    .select({ id: publishedCaseLawDecisions.id })
+    .from(publishedCaseLawDecisions)
     .where(ownCondition);
   if (familyKey === null) {
     return unionAll(own, published);
   }
   const family = tx
-    .select({ id: caseLawDecisions.id })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.docketFamilyKey, familyKey));
+    .select({ id: publishedCaseLawDecisions.id })
+    .from(publishedCaseLawDecisions)
+    .where(and(eq(publishedCaseLawDecisions.docketFamilyKey, familyKey)));
   return unionAll(own, published, family);
 };
 
@@ -416,10 +418,10 @@ const readIdentifiersByDecision = async (
 const publishedSheetColumns = {
   publishedCaseNumber: sql<
     string | null
-  >`${caseLawDecisions.metadata} ->> 'publishedCaseNumber'`,
+  >`${publishedCaseLawDecisions.metadata} ->> 'publishedCaseNumber'`,
   sheetNumber: sql<
     string | null
-  >`${caseLawDecisions.metadata} ->> 'sheetNumber'`,
+  >`${publishedCaseLawDecisions.metadata} ->> 'sheetNumber'`,
 };
 
 /** What a decision answers to, enough to resolve a reference among several. */
@@ -447,13 +449,13 @@ export const readDecisionIdentityHits = async (
   }
   const rows = await tx
     .select({
-      caseNumber: caseLawDecisions.caseNumber,
-      ecli: caseLawDecisions.ecli,
-      id: caseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      ecli: publishedCaseLawDecisions.ecli,
+      id: publishedCaseLawDecisions.id,
       ...publishedSheetColumns,
     })
-    .from(caseLawDecisions)
-    .where(inArray(caseLawDecisions.id, [...decisionIds]));
+    .from(publishedCaseLawDecisions)
+    .where(and(inArray(publishedCaseLawDecisions.id, [...decisionIds])));
   const byId = new Map(rows.map((row) => [String(row.id), row]));
   const identifiersByDecision = await readIdentifiersByDecision(
     tx,
@@ -477,38 +479,38 @@ export const readDecisionIdentityHits = async (
 export const lookupDecisionsByIdentity = async ({
   caseLawDb,
   country,
+  countries = CASE_LAW_SURFACE_COUNTRIES.pages,
   locator,
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
     const familyKey = await docketFamilyKeyToRead({ country, locator, tx });
     const decisions = await tx
       .select({
-        caseNumber: caseLawDecisions.caseNumber,
-        caseNumberType: caseLawDecisions.caseNumberType,
-        country: caseLawDecisions.country,
-        court: caseLawDecisions.court,
-        courtId: caseLawDecisions.courtId,
-        decisionDate: caseLawDecisions.decisionDate,
-        ecli: caseLawDecisions.ecli,
-        id: caseLawDecisions.id,
-        language: caseLawDecisions.language,
-        languageGroupKey: caseLawDecisions.languageGroupKey,
+        caseNumber: publishedCaseLawDecisions.caseNumber,
+        caseNumberType: publishedCaseLawDecisions.caseNumberType,
+        country: publishedCaseLawDecisions.country,
+        court: publishedCaseLawDecisions.court,
+        courtId: publishedCaseLawDecisions.courtId,
+        decisionDate: publishedCaseLawDecisions.decisionDate,
+        ecli: publishedCaseLawDecisions.ecli,
+        id: publishedCaseLawDecisions.id,
+        language: publishedCaseLawDecisions.language,
+        languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
         ...publishedSheetColumns,
-        slug: caseLawDecisions.slug,
+        slug: publishedCaseLawDecisions.slug,
       })
-      .from(caseLawDecisions)
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(
         and(
           inArray(
-            caseLawDecisions.id,
+            publishedCaseLawDecisions.id,
             decisionIdsNamedBy({ country, familyKey, locator, tx }),
           ),
-          eq(caseLawDecisions.country, country),
-          publishedCaseLawDecision,
+          eq(publishedCaseLawDecisions.country, country),
           redistributableCaseLawSourceFor(caseLawSources.descriptor),
         ),
       )
@@ -516,9 +518,9 @@ export const lookupDecisionsByIdentity = async ({
       // between come back in the same order twice, and in the order the choice
       // is actually made in.
       .orderBy(
-        caseLawDecisions.court,
-        caseLawDecisions.decisionDate,
-        caseLawDecisions.id,
+        publishedCaseLawDecisions.court,
+        publishedCaseLawDecisions.decisionDate,
+        publishedCaseLawDecisions.id,
       )
       .limit(IDENTITY_CANDIDATE_SCAN_MAX);
 
@@ -534,12 +536,27 @@ export const lookupDecisionsByIdentity = async ({
     const alternates = await readPublicDecisionLanguageAlternatesInTx(
       tx,
       decisions.map((decision) => decision.languageGroupKey),
+      countries,
     );
 
     const registry = await readCourtRegistry(
       async () => await loadPublicCourtWeightsWithin(tx),
     );
-    return decisions.map(
+    const groupById = new Map(
+      decisions.map(({ id, languageGroupKey }) => [
+        String(id),
+        languageGroupKey,
+      ]),
+    );
+    // Translations share one decision identity; distinct language groups still
+    // require the caller to choose between decisions.
+    const { representatives } = collapseByLanguageGroup(decisions, (id) => {
+      const group = groupById.get(id);
+      return group === undefined
+        ? panic("Lost an identity's language group")
+        : group;
+    });
+    return representatives.map(
       ({ languageGroupKey, courtId, ...decision }): DecisionIdentityRow =>
         Object.assign(decision, {
           courtAbbreviation: courtPresentation(registry, {

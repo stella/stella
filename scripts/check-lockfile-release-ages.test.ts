@@ -4,8 +4,8 @@ import {
   checkLockfileReleaseAges,
   createRegistryLookup,
   governingBunfigPath,
-  readLockfilePins,
   type LockfileInput,
+  readLockfilePins,
 } from "./check-lockfile-release-ages";
 
 const NOW = new Date("2026-09-28T12:00:00.000Z");
@@ -168,13 +168,16 @@ describe("new lockfile pins against the release-age quarantine", () => {
     );
   });
 
-  test("still honours a temporary exclude whose admission instant has passed", async () => {
-    // Bun matches the name and ignores the comment; retiring the entry is the
-    // quarantine-exclude guard's job, not this check's.
+  test("gates a new pin again once its temporary exclude has expired", async () => {
+    // Bun matches the name and ignores the comment, so an elapsed entry would
+    // still let a fresh version in; the waiver grants nothing once it lapses.
     const registry = fakeRegistry({
-      "lapsed-excluded": { "1.0.0": daysBefore(1) },
+      "lapsed-excluded": {
+        "1.0.0": daysBefore(1),
+        "0.9.0": "2026-01-01T00:00:00.000Z",
+      },
     });
-    const report = await check(
+    const young = await check(
       [
         rootLockfile(
           {},
@@ -183,10 +186,22 @@ describe("new lockfile pins against the release-age quarantine", () => {
       ],
       registry.lookup,
     );
+    const old = await check(
+      [
+        rootLockfile(
+          {},
+          { "lapsed-excluded": npm("lapsed-excluded", "0.9.0") },
+        ),
+      ],
+      registry.lookup,
+    );
 
     expect(Date.parse("2026-09-27T00:00:00.000Z")).toBeLessThan(NOW.getTime());
-    expect(report.quarantined).toEqual([]);
-    expect(registry.requested).toEqual([]);
+    expect(registry.requested).toEqual(["lapsed-excluded"]);
+    expect(young.quarantined).toEqual([
+      expect.stringContaining("bun.lock: lapsed-excluded@1.0.0 was published"),
+    ]);
+    expect(old.quarantined).toEqual([]);
   });
 
   test("never looks up a pin the merge base already had", async () => {
@@ -392,13 +407,19 @@ describe("registry lookup", () => {
     const requested: string[] = [];
     let inFlight = 0;
     let peak = 0;
+    // Install-free: this test runs before the dependency install.
+    const twoStarted = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
     const lookup = createRegistryLookup({
       concurrency: 2,
       fetch: async (url) => {
         requested.push(url);
         inFlight += 1;
         peak = Math.max(peak, inFlight);
-        await Bun.sleep(5);
+        if (inFlight === 2) {
+          twoStarted.resolve(undefined);
+        }
+        await release.promise;
         inFlight -= 1;
         return Response.json({
           time: { "1.0.0": daysBefore(9), "2.0.0": daysBefore(8) },
@@ -407,12 +428,16 @@ describe("registry lookup", () => {
     });
 
     const names = ["@scope/a", "b", "c", "d", "e"];
-    await Promise.all(
+    const lookups = Promise.all(
       names.flatMap((name) => [
         lookup({ name, version: "1.0.0" }),
         lookup({ name, version: "2.0.0" }),
       ]),
     );
+    await twoStarted.promise;
+    expect(peak).toBe(2);
+    release.resolve(undefined);
+    await lookups;
 
     expect(requested.toSorted()).toEqual([
       "https://registry.npmjs.org/@scope%2Fa",

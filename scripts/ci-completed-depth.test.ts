@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { Script } from "node:vm";
@@ -11,6 +18,7 @@ import { assertProperty } from "@stll/property-testing";
 import { createSha256 } from "@stll/sha256/node";
 
 import { PILOT_ALWAYS } from "./ci-pr-pilot-plan";
+import { renderResultInputs } from "./ci-result-inputs";
 import { contextWithPlanOutputs, evaluate } from "./github-expression";
 import { prDepthJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
 
@@ -94,6 +102,7 @@ const evidenceFor = (depth: string, profile = "normal-v1") => ({
   version: 6,
   marker: marker(depth, profile),
   event: "pull_request",
+  plan_config: scope,
   run_id: 99,
   run_attempt: 1,
   pr_number: 123,
@@ -171,11 +180,15 @@ type LookupOptions = {
   evidence?: unknown;
   archive?: Buffer;
   downloadFailure?: boolean;
+  /** The earlier head a merge of the base sits on, as the patch-id step names it. */
+  mergeParent?: string;
 };
 const decide = async ({
   depth = "full",
   profile = "normal-v1",
-  action = "labeled",
+  // A code-run event that may reuse evidence; metadata events never start
+  // suites (see the metadata test below).
+  action = "reopened",
   event = "pull_request",
   artifacts = [artifact(depth, profile)],
   failure = false,
@@ -193,9 +206,13 @@ const decide = async ({
   archive = zipEvidence(JSON.stringify(evidence)),
   downloadFailure = false,
   currentPatchId = patchId,
+  mergeParent = "",
 }: LookupOptions = {}) => {
   const outputs = new Map<string, string>();
   const requests: unknown[] = [];
+  // Metadata events mirror the head's earlier code run; one exists here.
+  const listWorkflowRuns = () => {};
+  const listJobsForWorkflowRun = () => {};
   await new Script(`(async () => {${lookup}\n})()`).runInNewContext({
     Buffer,
     require: (name: string) => {
@@ -219,6 +236,7 @@ const decide = async ({
         QUEUE_DEPTH: queueDepth,
         GITHUB_RUN_ATTEMPT: "1",
         PATCH_ID: currentPatchId,
+        MERGE_PARENT: mergeParent,
         WORKFLOW_VERSION: pr.head.sha,
         PR_DEPTH_JOBS: JSON.stringify(prDepth),
       },
@@ -238,6 +256,18 @@ const decide = async ({
       info: () => {},
     },
     github: {
+      paginate: async (method: unknown) =>
+        method === listWorkflowRuns
+          ? [
+              {
+                id: 50,
+                head_sha: pull.head.sha,
+                status: "completed",
+                conclusion: "success",
+                pull_requests: [{ number: pull.number }],
+              },
+            ]
+          : [{ name: "ci-plan" }, { name: "ci-result" }],
       rest: {
         pulls: {
           get: async (request: unknown) => {
@@ -258,6 +288,8 @@ const decide = async ({
           },
         },
         actions: {
+          listWorkflowRuns,
+          listJobsForWorkflowRun,
           downloadArtifact: async (request: unknown) => {
             requests.push(request);
             if (downloadFailure) {
@@ -316,11 +348,15 @@ test("unchanged-head events reuse only the exact completed depth", async () => {
       expect(outputs.get("completed_run_id")).toBe("99");
       expect(requests).toHaveLength(3);
       const opposite = depth === "fast" ? "full" : "fast";
+      // A metadata event never starts suites; the code run owns them.
+      const metadata = ["labeled", "unlabeled", "auto_merge_enabled"].includes(
+        action,
+      );
       expect(
         (
           await decide({ action, depth, artifacts: [artifact(opposite)] })
         ).outputs.get("run_required"),
-      ).toBe("true");
+      ).toBe(metadata ? "false" : "true");
     }
   }
 });
@@ -371,12 +407,6 @@ test("missing, expired, mismatched or failed evidence runs CI", async () => {
   expect((await decide({ failure: true })).outputs.get("run_required")).toBe(
     "true",
   );
-  // A whole pull request run is reused only on the base it ran against.
-  expect(
-    (
-      await decide({ pull: { ...pr, base: { sha: "c".repeat(40) } } })
-    ).outputs.get("run_required"),
-  ).toBe("true");
   expect(
     (
       await decide({ pull: { ...pr, labels: [{ name: "prove-fix" }] } })
@@ -408,6 +438,7 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
       status: { cancelled: false },
       values: {
         "github.event_name": "pull_request",
+        "github.event.action": "reopened",
         "github.event.pull_request.draft": false,
         "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
@@ -416,7 +447,11 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
     outputs: planner.outputs,
   });
   for (const [name, job] of Object.entries(jobs)) {
-    if (name === "ci-plan" || name === "ci-result") {
+    if (
+      name === "ci-plan" ||
+      name === "ci-result" ||
+      name.endsWith("-cancel")
+    ) {
       continue;
     }
     expect(evaluate(job.if ?? "true", reused), name).toBe(
@@ -535,10 +570,20 @@ const recordEvidence = (
     head = pr.head.sha,
     script = evidenceBlock,
     runRequired = "true",
+    env = {},
   } = {},
 ) => {
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-evidence-"));
   const output = nodePath.join(directory, "output");
+  // The gate's prelude writes the plan outputs to PLAN_FILE; this block runs on its own.
+  const planFile = nodePath.join(directory, "plan.json");
+  writeFileSync(
+    planFile,
+    JSON.stringify({
+      ci_tests_required: "true",
+      package_checks_required: "true",
+    }),
+  );
   try {
     const child = Bun.spawnSync(["bash", "-eu", "-c", script], {
       env: {
@@ -549,6 +594,7 @@ const recordEvidence = (
         EVENT: "pull_request",
         RUN_REQUIRED: runRequired,
         COMPLETION_MARKER: marker(depth),
+        PLAN_CONFIG: scope,
         PR_NUMBER: "123",
         HEAD_REPO_ID: "456",
         HEAD_SHA: head,
@@ -561,7 +607,7 @@ const recordEvidence = (
         JOB_SCOPES: resultEnv["JOB_SCOPES"] ?? "",
         FAST_JOB_SCOPES: resultEnv["FAST_JOB_SCOPES"] ?? "",
         FAST_REQUIRED: resultEnv["FAST_REQUIRED"] ?? "",
-        PLAN: JSON.stringify({ package_checks_required: "true" }),
+        PLAN_FILE: planFile,
         NEEDS: JSON.stringify(
           Object.fromEntries(
             Object.entries(results).map(([job, outcome]) => [
@@ -570,6 +616,7 @@ const recordEvidence = (
             ]),
           ),
         ),
+        ...env,
       },
     });
     expect(child.exitCode, child.stderr.toString()).toBe(0);
@@ -591,6 +638,21 @@ const allSucceeded = Object.fromEntries([
   ...fastRequired.map((job) => [job, "success"]),
   ["web-build", "skipped"],
 ]);
+
+test("completion evidence inputs contain exactly one JSON document", () => {
+  for (const [name, value] of [
+    ["FAST_REQUIRED", "[] []"],
+    ["PR_DEPTH_JOBS", "[] []"],
+    ["JOB_SCOPES", "{} {}"],
+    ["FAST_JOB_SCOPES", "{} {}"],
+    ["NEEDS", "{} {}"],
+  ] as const) {
+    expect(
+      recordEvidence(allSucceeded, { env: { [name]: value } }),
+      name,
+    ).toBeUndefined();
+  }
+});
 
 test("a superseded, cancelled or failed run records no completion evidence", () => {
   expect(recordEvidence(allSucceeded)).toBeDefined();
@@ -731,6 +793,8 @@ test("a marker whose contents do not prove a complete run is ignored", async () 
     ["bad attempt", { ...valid, run_attempt: 0 }],
     ["other patch", { ...valid, patch_id: "e".repeat(40) }],
     ["other workflow", { ...valid, workflow_version: "e".repeat(40) }],
+    ["other plan config", { ...valid, plan_config: "e".repeat(64) }],
+    ["no plan config", { ...valid, plan_config: undefined }],
     [
       "failed PR-depth job",
       {
@@ -977,18 +1041,19 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
         "github.event.pull_request.draft": false,
         "inputs.heavy_only": false,
         "needs.ci-plan.outputs.run_required": "false",
+        "github.event.action": "enqueued",
         "needs.ci-plan.outputs.coverage_profile": "normal-v1",
       },
     },
     outputs: planner.outputs,
   });
+  // Even the wall-clock quick checks skip: the merge group runs them on the
+  // queued tree, so an enqueued head starts no job besides the plan and result.
   for (const [name, job] of Object.entries(jobs)) {
-    if (["ci-plan", "ci-result"].includes(name)) {
+    if (["ci-plan", "ci-result"].includes(name) || name.endsWith("-cancel")) {
       continue;
     }
-    expect(evaluate(job.if ?? "true", enqueued), name).toBe(
-      ALWAYS_RUN.includes(name),
-    );
+    expect(evaluate(job.if ?? "true", enqueued), name).toBe(false);
   }
 });
 
@@ -1075,6 +1140,7 @@ test("thin groups certify only normal-profile completion on a head included in t
   }
 });
 
+// Measured p95 is 33.8 s; this test must evaluate every queued job through the real aggregator.
 test("thin groups require queued code checks regardless of normal PR completion", async () => {
   const admitted = queueAdmittedJobs(workflow);
   expect(admitted).toContain("ci-browser");
@@ -1130,6 +1196,9 @@ test("thin groups require queued code checks regardless of normal PR completion"
           "needs.ci-plan.outputs.trusted": "true",
           "needs.ci-plan.outputs.suite_depth": "full",
           "needs.ci-plan.outputs.queue_depth": "thin",
+          "needs.ci-plan.result": "success",
+          "needs.pr-heavy-gate.result": "skipped",
+          "needs.generated-sources.result": "success",
           "needs.web-build.result": "success",
           "needs.heavy-web-build.result": "skipped",
           "inputs.pr_depth_only": false,
@@ -1179,31 +1248,40 @@ test("thin groups require queued code checks regardless of normal PR completion"
     );
     dependencies["ci-plan"] = { result: "success" };
     const runAggregation = (needs: typeof dependencies, plan = allScopes) =>
-      Bun.spawnSync(["bash", "-e", "-c", aggregation.run ?? ""], {
-        env: {
-          ...process.env,
-          ...env,
-          EVENT: "merge_group",
-          QUEUE_DEPTH: "thin",
-          SUITE_DEPTH: "full",
-          HEAVY_ONLY: "false",
-          COVERAGE_PROFILE: "normal-v1",
-          PATCH_ID: patchId,
-          WORKFLOW_VERSION: pr.head.sha,
-          PR_DEPTH_JOBS: JSON.stringify(prDepth),
-          GITHUB_STEP_SUMMARY: "/dev/null",
-          PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
-          PR_DEPTH_SOURCE_RUN_ID:
-            evidence.outputs.get("pr_depth_source_run_id") ?? "",
-          QUEUE_VALIDATION: "false",
-          PLAN_RESULT: "success",
-          TRUSTED: "true",
-          THIN_JOBS: JSON.stringify(thin),
-          QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
-          PLAN: JSON.stringify(plan),
-          NEEDS: JSON.stringify(needs),
+      Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          renderResultInputs(aggregation.run ?? "", {
+            needs: JSON.stringify(needs),
+            plan: JSON.stringify(plan),
+          }),
+        ],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            EVENT: "merge_group",
+            QUEUE_DEPTH: "thin",
+            SUITE_DEPTH: "full",
+            HEAVY_ONLY: "false",
+            COVERAGE_PROFILE: "normal-v1",
+            PATCH_ID: patchId,
+            WORKFLOW_VERSION: pr.head.sha,
+            PR_DEPTH_JOBS: JSON.stringify(prDepth),
+            GITHUB_STEP_SUMMARY: "/dev/null",
+            PR_DEPTH_REUSED: evidence.outputs.get("pr_depth_reused") ?? "false",
+            PR_DEPTH_SOURCE_RUN_ID:
+              evidence.outputs.get("pr_depth_source_run_id") ?? "",
+            QUEUE_VALIDATION: "false",
+            PLAN_RESULT: "success",
+            TRUSTED: "true",
+            THIN_JOBS: JSON.stringify(thin),
+            QUEUE_REQUIRED_JOBS: JSON.stringify(queueJobs),
+          },
         },
-      });
+      );
     const successfulAggregation = runAggregation(dependencies);
     expect(
       successfulAggregation.exitCode,
@@ -1235,4 +1313,253 @@ test("thin groups require queued code checks regardless of normal PR completion"
       }
     }
   }
-}, 35_000);
+}, 70_000);
+
+test("a metadata event without completed evidence starts no suites", async () => {
+  for (const action of ["labeled", "unlabeled", "auto_merge_enabled"]) {
+    const { outputs } = await decide({ action, artifacts: [] });
+    expect(outputs.get("run_required"), action).toBe("false");
+    expect(outputs.get("metadata_only"), action).toBe("true");
+  }
+});
+
+test("a moved base never forces a re-test of an identical head", async () => {
+  for (const action of ["reopened", "ready_for_review"]) {
+    const { outputs } = await decide({
+      action,
+      depth: "fast",
+      pull: { ...pr, base: { sha: "c".repeat(40) } },
+    });
+    expect(outputs.get("run_required"), action).toBe("false");
+    expect(outputs.get("completed_run_id"), action).toBe("99");
+  }
+});
+
+// The head a merge of the base sits on, and the evidence its run published.
+const parentSha = "e".repeat(40);
+const parentMarker = `ci-completed-v6-normal-v1-123-456-${parentSha}-fast-${scope}`;
+const parentArtifact = {
+  ...artifact("fast"),
+  name: parentMarker,
+  workflow_run: { ...artifact("fast").workflow_run, head_sha: parentSha },
+};
+const parentRun = { ...successfulRun, head_sha: parentSha };
+const parentEvidence = {
+  ...evidenceFor("fast"),
+  marker: parentMarker,
+  head_sha: parentSha,
+  base_sha: "f".repeat(40),
+};
+const mergeFromBase = async (options: LookupOptions = {}) =>
+  decide({
+    action: "synchronize",
+    depth: "fast",
+    mergeParent: parentSha,
+    artifacts: [parentArtifact],
+    sourceRun: parentRun,
+    evidence: parentEvidence,
+    ...options,
+  });
+
+test("a head that only merges the base reuses its parent's heavy suites", async () => {
+  const { outputs, requests } = await mergeFromBase();
+  expect(outputs.get("pr_heavy_suites")).toBe("reused");
+  expect(outputs.get("pr_heavy_source_run_id")).toBe("99");
+  expect(outputs.get("pr_heavy_source_sha")).toBe(parentSha);
+  // The merged head still runs its quick and PR-depth checks and publishes
+  // its own evidence, so a later merge of the base can chain from it.
+  expect(outputs.get("run_required")).toBe("true");
+  expect(outputs.get("completed_run_id")).toBeUndefined();
+  expect(outputs.get("marker")).toBe(marker("fast"));
+  expect(requests).toEqual([
+    expect.objectContaining({ name: parentMarker }),
+    expect.objectContaining({ run_id: 99 }),
+    expect.objectContaining({ artifact_id: 7 }),
+  ]);
+});
+
+test("a merge that changes the pull request side, or lacks parent evidence, runs the heavy suites", async () => {
+  const cases: [string, LookupOptions][] = [
+    ["changed patch id", { currentPatchId: "f".repeat(40) }],
+    ["no patch id", { currentPatchId: "" }],
+    ["evidence for the merged head", { artifacts: [artifact("fast")] }],
+    ["no evidence", { artifacts: [] }],
+    [
+      "failed parent run",
+      { sourceRun: { ...parentRun, conclusion: "failure" } },
+    ],
+    ["parent run for another head", { sourceRun: successfulRun }],
+    [
+      "evidence for another head",
+      { evidence: { ...parentEvidence, head_sha: pr.head.sha } },
+    ],
+    [
+      "other CI version",
+      { evidence: { ...parentEvidence, workflow_version: "f".repeat(40) } },
+    ],
+    ["other depth", { depth: "full" }],
+    ["changed scope", { pull: { ...pr, title: "fix: another scope" } }],
+    ["parent is the head", { mergeParent: pr.head.sha }],
+    ["malformed parent", { mergeParent: "main" }],
+    ["evidence lookup failure", { artifactFailure: true }],
+  ];
+  for (const [label, options] of cases) {
+    const { outputs } = await mergeFromBase(options);
+    expect(outputs.get("pr_heavy_suites"), label).toBe("run");
+    expect(outputs.get("run_required"), label).toBe("true");
+    expect(outputs.has("pr_heavy_source_run_id"), label).toBe(false);
+  }
+  for (const options of [{ mergeParent: "" }, { action: "opened" }]) {
+    const { outputs, requests } = await mergeFromBase(options);
+    expect(outputs.get("pr_heavy_suites")).toBe("run");
+    expect(requests).toHaveLength(0);
+  }
+});
+
+type PatchIdStepOptions = {
+  repository: string;
+  event?: string;
+  base: string;
+  head: string;
+};
+const patchIdStep = planner.steps.find((step) => step.id === "patch-id")?.run;
+const runPatchIdStep = ({
+  repository,
+  event = "pull_request",
+  base,
+  head,
+}: PatchIdStepOptions) => {
+  const output = nodePath.join(repository, ".git", "step-output");
+  writeFileSync(output, "");
+  const step = Bun.spawnSync(
+    ["bash", "-e", "-o", "pipefail", "-c", patchIdStep ?? ""],
+    {
+      cwd: repository,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        EVENT_NAME: event,
+        PR_BASE_SHA: base,
+        PR_HEAD_SHA: head,
+        GROUP_BASE_SHA: base,
+        GROUP_HEAD_SHA: head,
+        WORKFLOW_SHA: head,
+        GITHUB_OUTPUT: output,
+      },
+    },
+  );
+  expect(step.exitCode, step.stderr.toString()).toBe(0);
+  return Object.fromEntries(
+    readFileSync(output, "utf-8")
+      .trim()
+      .split("\n")
+      .map((line) => [
+        line.slice(0, line.indexOf("=")),
+        line.slice(line.indexOf("=") + 1),
+      ]),
+  );
+};
+
+test("the patch-id step names the parent only of a merge of the base, with the parent's patch id when the merge is clean", () => {
+  const repository = mkdtempSync(nodePath.join(tmpdir(), "ci-merge-parent-"));
+  const git = (...args: string[]) => {
+    const command = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GIT_AUTHOR_NAME: "CI",
+        GIT_AUTHOR_EMAIL: "ci@example.test",
+        GIT_COMMITTER_NAME: "CI",
+        GIT_COMMITTER_EMAIL: "ci@example.test",
+      },
+    });
+    expect(command.exitCode, command.stderr.toString()).toBe(0);
+    return command.stdout.toString().trim();
+  };
+  const write = (file: string, lines: readonly string[]) =>
+    writeFileSync(nodePath.join(repository, file), `${lines.join("\n")}\n`);
+  const numbered = Array.from({ length: 40 }, (_, line) => String(line + 1));
+  const commit = (message: string) => {
+    git("add", "--all");
+    git("commit", "--quiet", "--message", message);
+    return git("rev-parse", "HEAD");
+  };
+  try {
+    git("init", "--quiet", "--initial-branch=main");
+    mkdirSync(nodePath.join(repository, ".github", "workflows"), {
+      recursive: true,
+    });
+    write(".github/workflows/ci.yml", ["name: CI"]);
+    write("feature.txt", numbered);
+    write("unrelated.txt", ["one"]);
+    const root = commit("base");
+    git("checkout", "--quiet", "-b", "feature");
+    write(
+      "feature.txt",
+      numbered.map((line) => (line === "20" ? "twenty" : line)),
+    );
+    const parent = commit("feature");
+    git("checkout", "--quiet", "main");
+    write("unrelated.txt", ["one", "two"]);
+    const far = commit("unrelated change on main");
+    git("checkout", "--quiet", "feature");
+    git("merge", "--quiet", "--no-edit", far);
+    const merged = git("rev-parse", "HEAD");
+
+    const before = runPatchIdStep({ repository, base: root, head: parent });
+    expect(before["merge_parent"]).toBe("");
+    const after = runPatchIdStep({ repository, base: far, head: merged });
+    expect(after["merge_parent"]).toBe(parent);
+    expect(after["patch_id"]).toMatch(/^[0-9a-f]{40}$/u);
+    expect(after["patch_id"]).toBe(before["patch_id"]);
+
+    // A merge-queue run never names a parent.
+    expect(
+      runPatchIdStep({
+        repository,
+        event: "merge_group",
+        base: far,
+        head: merged,
+      })["merge_parent"],
+    ).toBe("");
+
+    // Main edits next to the change: the parent is named, but the patch id
+    // moves, so the planner's lookup finds no matching evidence.
+    git("checkout", "--quiet", "main");
+    write(
+      "feature.txt",
+      numbered.map((line) => (line === "22" ? "22b" : line)),
+    );
+    const near = commit("nearby change on main");
+    git("checkout", "--quiet", "feature");
+    git("merge", "--quiet", "--no-edit", near);
+    const nearMerge = runPatchIdStep({
+      repository,
+      base: near,
+      head: git("rev-parse", "HEAD"),
+    });
+    expect(nearMerge["merge_parent"]).toBe(git("rev-parse", "HEAD^1"));
+    expect(nearMerge["patch_id"]).not.toBe(before["patch_id"]);
+
+    // A merge of anything outside the base, or an ordinary commit, names none.
+    git("checkout", "--quiet", "-b", "other", root);
+    write("other.txt", ["other"]);
+    const other = commit("another branch");
+    git("checkout", "--quiet", "feature");
+    git("merge", "--quiet", "--no-edit", other);
+    expect(
+      runPatchIdStep({
+        repository,
+        base: near,
+        head: git("rev-parse", "HEAD"),
+      })["merge_parent"],
+    ).toBe("");
+    write("feature.txt", ["rewritten"]);
+    expect(
+      runPatchIdStep({ repository, base: near, head: commit("ordinary") })[
+        "merge_parent"
+      ],
+    ).toBe("");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});

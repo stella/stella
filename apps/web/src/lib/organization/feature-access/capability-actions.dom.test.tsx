@@ -66,6 +66,8 @@ test("confirmed capability and role observations survive failed background refre
   const aiKey = aiAvailabilityOptions({ organizationId }).queryKey;
   client.setQueryData(aiKey, {
     available: true,
+    unavailableReason: null,
+    providerConfiguration: "allowed",
     deferredServiceTierAvailable: false,
     instanceProvisioned: false,
     mockAnswers: false,
@@ -225,16 +227,7 @@ for (const fixture of surfaces) {
               case "command palette":
                 return (
                   <CommandActionItem
-                    entry={{
-                      type: "command-action",
-                      title: "Run action",
-                      action: {
-                        ...commandAction,
-                        title: "Run action",
-                        keywordLabels: [],
-                      },
-                    }}
-                    navigation={{ type: "button" }}
+                    action={{ ...commandAction, title: "Run action" }}
                     onSelect={() => {
                       calls += 1;
                     }}

@@ -1,6 +1,8 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export type { ConversionRefusal } from "./conversion-refusal";
+
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
   currencyCodeSchema,
@@ -22,8 +24,8 @@ export {
   SKILL_RESOURCE_PATH_PATTERN,
 } from "./agent-skills";
 export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
-export { AI_ERROR_KINDS } from "./ai-errors";
-export type { AIErrorKind } from "./ai-errors";
+export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
+export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
@@ -62,6 +64,7 @@ export {
   DEFAULT_INVOICE_DUE_DAYS,
   INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
@@ -77,6 +80,7 @@ export {
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLanguage,
   InvoiceLineSource,
   InvoiceStatus,
   TimeEntrySource,
@@ -151,6 +155,29 @@ export type {
   ChatDecisionPassageHref,
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
+export {
+  CHAT_CORPORA,
+  CHAT_CORPUS_HREF_PREFIX,
+  formatChatCorpusId,
+  parseChatCorpusHref,
+  parseChatCorpusId,
+  toChatCorpusHref,
+} from "./chat-corpus-scope";
+export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
+export {
+  CHAT_CONNECTOR_HREF_PREFIX,
+  CHAT_REGISTRY_HREF_PREFIX,
+  CHAT_SOURCE_SCOPE_KINDS,
+  chatSourceScopeKey,
+  chatSourceScopeKindOfHref,
+  formatChatSourceScopeId,
+  isChatConnectorSlug,
+  isChatSourceScopeKind,
+  parseChatSourceScopeHref,
+  parseChatSourceScopeId,
+  toChatSourceScopeHref,
+} from "./chat-source-scope";
+export type { ChatSourceScope, ChatSourceScopeKind } from "./chat-source-scope";
 export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,
@@ -338,6 +365,7 @@ export {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./document-version-upload";
@@ -371,6 +399,7 @@ export {
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
   DOCX_SUGGESTIONS_PENDING_MAX,
   ENTITIES_PER_WORKSPACE_MAX,
@@ -434,6 +463,7 @@ export {
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
+  REALTIME_CHANNEL_EVENT_TYPES,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
   resourceDeletedChange,
@@ -504,6 +534,7 @@ export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
   UserRealtimeEvent,
@@ -972,3 +1003,6 @@ export type {
   RulingIdentityKeys,
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
+export * from "./vat-rate-presets";
+export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
+export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";

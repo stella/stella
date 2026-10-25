@@ -20,6 +20,21 @@ export const browserStyleUuid = crypto.randomUUID();
 // oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: globalThis crypto calls must use the runtime UUIDv7 owner
 export const globalBrowserStyleUuid = globalThis.crypto.randomUUID();
 
+// MUST flag: browser dependencies cannot bypass the runtime UUID owner.
+export const nestedBrowserUuid = (browser: Pick<Window, "crypto">) =>
+  // oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: injected browser crypto must use the runtime UUID owner
+  browser.crypto.randomUUID();
+
+export const aliasedBrowserUuid = (browser: Pick<Window, "crypto">) => {
+  const source = browser.crypto;
+  // oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: crypto aliases must use the runtime UUID owner
+  return source.randomUUID();
+};
+
+export const parameterUuid = (source: Crypto) =>
+  // oxlint-disable-next-line no-crypto-random-uuid/no-crypto-random-uuid -- fixture: injected Crypto parameters must use the runtime owner
+  source.randomUUID();
+
 export const directV4Uuid = v4();
 export const directV7Uuid = makeUuidV7();
 

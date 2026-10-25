@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
-  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 
@@ -531,6 +531,7 @@ describe("empty-result onboarding next step", () => {
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
           matchingPassages: 1,
+          match: "all_terms",
           sourceUrl: "https://example.test",
         },
       ],

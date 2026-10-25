@@ -3,16 +3,24 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import {
+  type AppTotal,
   appTotals,
   documentName,
   roundedTenthsOfHour,
-  totalDurationMs,
-  type AppTotal,
   type TimedSegment,
+  totalDurationMs,
 } from "./activity-logic";
 import type { ActivityManualAssignment } from "./activity-types";
 
 type ActivityRange = { start: string; end: string };
+type CanAssignOptions = {
+  editable: boolean;
+  timeBillingEnabled: boolean;
+};
+
+export const canAssign = ({ editable, timeBillingEnabled }: CanAssignOptions) =>
+  editable && timeBillingEnabled;
+
 export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;
@@ -30,8 +38,6 @@ export type DayReviewGroup = {
   ranges: ActivityRange[];
   durationMs: number;
   roundedTenths: number;
-  /** Evidence alone forms the initial narrative; no activity metadata is sent automatically. */
-  narrative: string;
 };
 
 type MatchDayOptions = {
@@ -325,10 +331,6 @@ export const matchDay = ({
       })),
       durationMs,
       roundedTenths: roundedTenthsOfHour(durationMs),
-      narrative: (evidence.length > 0
-        ? evidence
-        : appTotals(group).map(({ name }) => name)
-      ).join("; "),
     });
   }
   return {

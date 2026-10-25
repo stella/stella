@@ -15,10 +15,12 @@
     "./cited-provision": "./src/cited-provision.tsx",
     "./court-name": "./src/court-name.tsx",
     "./decision-identity": "./src/decision-identity.tsx",
+    "./decision-title": "./src/decision-title.ts",
     "./court-tier-badge": "./src/court-tier-badge.tsx",
     "./decision-body-state.logic": "./src/decision-body-state.logic.ts",
     "./decision-text": "./src/decision-text.tsx",
     "./decision-text.logic": "./src/decision-text.logic.ts",
+    "./display-elision-policy": "./src/display-elision-policy.tsx",
     "./document-ast-text": "./src/document-ast-text.tsx",
     "./fallback-legal-anchors": "./src/fallback-legal-anchors.ts",
     "./headnote-block": "./src/headnote-block.tsx",
@@ -26,6 +28,7 @@
     "./provision-card.logic": "./src/provision-card.logic.ts",
     "./query-marks": "./src/query-marks.ts",
     "./reader-adapters": "./src/reader-adapters.tsx",
+    "./reader-ai-label": "./src/reader-ai-label.tsx",
     "./reader-inset-box": "./src/reader-inset-box.tsx",
     "./reader-landing": "./src/reader-landing.ts",
     "./reader-message-types": "./src/reader-message-types.ts",
@@ -44,8 +47,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/decision-reader",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/decision-reader",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/decision-reader"
   },
   "dependencies": {
     "@fontsource-variable/source-serif-4": "^5.3.0",
@@ -58,7 +60,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.14.5",
+    "@happy-dom/global-registrator": "21.0.1",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",

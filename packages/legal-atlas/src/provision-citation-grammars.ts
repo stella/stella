@@ -25,6 +25,15 @@ import type {
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
+import {
+  EU_PROVISION_ANCHOR_SEPARATOR,
+  euProvisionAnchor,
+  locateEuProvisionCitations,
+  normalizeEuProvisionReference,
+  parseEuProvisionAnchor,
+  parseEuProvisionReference,
+  parseEuWorkIdentifier,
+} from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";
 
 export type StatuteAbbreviationEntry = {
@@ -107,10 +116,14 @@ export type SupportedProvisionCitationGrammar<
   TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
 > = {
   anchor: (reference: ProvisionReference) => string;
+  /**
+   * Joins the levels of an anchor this grammar mints: every prefix of an
+   * anchor that ends before one names the enclosing provision.
+   */
+  anchorSeparator: string;
   parseAnchor: (raw: string) => ProvisionReference | null;
   unit: ProvisionUnit;
   gazette: {
-    eli: (work: GazetteWork) => string;
     parse: (raw: string) => { identifier: string; eli: string } | null;
   };
   jurisdiction: TJurisdiction;
@@ -120,6 +133,8 @@ export type SupportedProvisionCitationGrammar<
   normalizeReference: (
     reference: ProvisionReference,
   ) => ProvisionReference | null;
+  /** Where this grammar's references can be opened. */
+  target: "hosted" | "publisher";
   status: "supported";
 };
 
@@ -243,7 +258,9 @@ export const createProvisionCitationGrammar = <
   jurisdiction,
   levels,
   unit,
-}: ProvisionCitationGrammarSpec<TJurisdiction>): SupportedProvisionCitationGrammar<TJurisdiction> => {
+}: ProvisionCitationGrammarSpec<TJurisdiction>): SupportedProvisionCitationGrammar<TJurisdiction> & {
+  gazette: { eli: (work: GazetteWork) => string };
+} => {
   const compiledLevels: CompiledLevel[] = levels.map(
     ({ key, marker, value }) => ({
       key,
@@ -510,6 +527,7 @@ export const createProvisionCitationGrammar = <
       return referenceOf(compiledLevels, element.values, unit);
     },
     anchor,
+    anchorSeparator,
     parseAnchor,
     gazette: {
       eli: gazette.eli,
@@ -577,6 +595,7 @@ export const createProvisionCitationGrammar = <
       return citations;
     },
     status: "supported",
+    target: "hosted",
   };
 };
 
@@ -585,9 +604,8 @@ const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
 ) => ({ jurisdiction, status: "unsupported" as const });
 
 /**
- * The public legislation corpus holds Czech acts only. A grammar for a
- * jurisdiction whose acts no reader can open would locate links that resolve
- * nowhere, so the other entries stay unsupported until their corpus lands.
+ * Czech acts open in the hosted corpus; EU works open at their publisher.
+ * Other jurisdictions remain unsupported until they have a target reader.
  */
 export const PROVISION_CITATION_GRAMMARS = {
   AUT: unsupported("AUT"),
@@ -648,7 +666,36 @@ export const PROVISION_CITATION_GRAMMARS = {
     ],
     unit: "section",
   }),
-  EU: unsupported("EU"),
+  EU: {
+    jurisdiction: "EU",
+    status: "supported",
+    target: "publisher",
+    unit: "article",
+    anchor: euProvisionAnchor,
+    anchorSeparator: EU_PROVISION_ANCHOR_SEPARATOR,
+    parseAnchor: parseEuProvisionAnchor,
+    normalizeReference: normalizeEuProvisionReference,
+    parseReference: parseEuProvisionReference,
+    locateGazetteCitations: () => [],
+    gazette: {
+      parse: (raw: string) => {
+        const work = parseEuWorkIdentifier(raw);
+        return work === null ? null : { identifier: work.celex, eli: work.eli };
+      },
+    },
+    locateAbbreviatedProvisions: (text: string) =>
+      locateEuProvisionCitations(text).map(
+        ({ act, reference, start, end }) => ({
+          abbreviation: { canonicalAbbreviation: act.celex, eli: act.eli },
+          jurisdiction: "EU" as const,
+          reference,
+          start,
+          end,
+          anchor: euProvisionAnchor(reference),
+        }),
+      ),
+  },
+  GBR: unsupported("GBR"),
   HUN: unsupported("HUN"),
   POL: unsupported("POL"),
   SVK: unsupported("SVK"),

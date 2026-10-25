@@ -2,9 +2,9 @@ import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import {
+  type SpawnSubagentsInput,
   spawnSubagentsInputSchema,
   spawnSubagentsOutputSchema,
-  type SpawnSubagentsInput,
 } from "@stll/api-contract/spawn-subagents";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -33,12 +33,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import {
-  requireChatToolModelAdmission,
   type ModelDispatchAdmission,
+  requireChatToolModelAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  getTanStackTextModelInfoForRole,
-  isAllowedBYOKModelForRole,
+  getTanStackTextModelInfoForTask,
+  isAllowedBYOKModelForTask,
   resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
@@ -167,7 +167,7 @@ const buildSubagentUserMessage = ({
   ],
 });
 
-type SubagentModelInfo = ReturnType<typeof getTanStackTextModelInfoForRole>;
+type SubagentModelInfo = ReturnType<typeof getTanStackTextModelInfoForTask>;
 
 type ResolveValidatedSubagentModelIdArgs = {
   subModel: string | undefined;
@@ -197,10 +197,10 @@ export const resolveValidatedSubagentModelId = ({
     return undefined;
   }
   if (modelInfo.keySource === "byok") {
-    return isAllowedBYOKModelForRole({
+    return isAllowedBYOKModelForTask({
       provider: modelInfo.provider,
       modelId: subModel,
-      role: "fast",
+      task: "short-text",
     })
       ? subModel
       : undefined;
@@ -209,8 +209,7 @@ export const resolveValidatedSubagentModelId = ({
 };
 
 type SubagentBatchPreflightResult =
-  | { ok: true }
-  | { ok: false; message: string };
+  { ok: true } | { ok: false; message: string };
 
 type PreflightSubagentBatchUsageArgs = {
   safeDb: SafeDb;
@@ -373,7 +372,7 @@ export const runCheckedSubagentBatch = async <N>({
         organizationId: props.organizationId,
         orgAIConfig: props.orgAIConfig,
         managedAIResidency: props.managedAIResidency,
-        role: "fast",
+        task: "short-text",
         modelId: resolveValidatedSubagentModelId({
           subModel: sub.model,
           modelInfo: fastModelInfo,
@@ -462,8 +461,8 @@ export const createSpawnSubagentsTool = (
       async ({ subagents }, ctx) => {
         // Resolve the fast role's model info once for the whole batch; each
         // per-subagent `model` override is validated against it.
-        const fastModelInfo = getTanStackTextModelInfoForRole(
-          "fast",
+        const fastModelInfo = getTanStackTextModelInfoForTask(
+          "short-text",
           props.orgAIConfig,
           {
             organizationId: props.organizationId,

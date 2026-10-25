@@ -13,6 +13,7 @@ import path from "node:path";
 
 import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
 import {
+  NETWORK_DEPTH_METHOD,
   prepareComparisonBaseline,
   validateBaselineFile,
 } from "./network-baseline-scope";
@@ -144,6 +145,60 @@ describe("network baseline scope", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   }, 60_000);
+
+  test.each([undefined, "timing-v1", "round-barrier-v1"])(
+    "validates and preserves the recording depth method (%s)",
+    (depthMethod) => {
+      const directory = mkdtempSync(path.join(os.tmpdir(), "network-method-"));
+      const file = path.join(directory, "baseline.json");
+      const recorded = {
+        "/chat": {
+          ...entry(2),
+          ...(depthMethod === undefined ? {} : { depthMethod }),
+        },
+      };
+      try {
+        writeFileSync(file, JSON.stringify(recorded));
+        const validated = validateBaselineFile(file);
+        expect(validated).toEqual(recorded);
+        expect(
+          prepareComparisonBaseline({
+            base: validated,
+            changedPaths: [],
+            baseRouteTree: routeTree,
+            routeTree,
+            declarations: [],
+          }).baseline,
+        ).toEqual(recorded);
+        // A declaration carries the current method (stamped when absent); a
+        // stale method is refused, covered by the fail-closed cases below.
+        if (depthMethod !== "timing-v1") {
+          expect(
+            prepareComparisonBaseline({
+              base: {},
+              changedPaths: [],
+              baseRouteTree: routeTree,
+              routeTree,
+              declarations: [
+                {
+                  route: "/chat",
+                  reason: "Recorded budget",
+                  budget: recorded["/chat"],
+                },
+              ],
+            }).baseline,
+          ).toEqual({
+            "/chat": {
+              ...recorded["/chat"],
+              depthMethod: NETWORK_DEPTH_METHOD,
+            },
+          });
+        }
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("validates schema and rejects oversized files and symlinks", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
@@ -401,11 +456,10 @@ describe("network baseline workflows", () => {
       // Every event that compares also loads the published budget; an event
       // filter here would compare against the frozen committed JSON instead.
       expect(job.steps[prepare]?.if ?? "", name).not.toContain("event_name");
+      // The planner's comparison base: the PR base, or the target branch for
+      // a merge group, so a group compares every entry it merges.
       expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.pull_request.base.sha",
-      );
-      expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.merge_group.base_sha",
+        "needs.ci-plan.outputs.target_base_sha",
       );
       const checkout = job.steps.find((step) =>
         step.uses?.startsWith("actions/checkout@"),
@@ -439,11 +493,101 @@ describe("reviewed network budgets", () => {
     const result = prepare([
       { route: "/chat", reason: "Additional endpoint", budget: entry(3) },
     ]);
+    // The declared depth is stamped with the current method, so the main
+    // recording keeps it as a floor rather than replacing it with one sample.
     expect(result.baseline).toEqual({
-      "/chat": entry(3),
+      "/chat": {
+        depth: 3,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /1", "GET /3"],
+      },
       "/settings": entry(2),
     });
     expect(result.notices).toEqual(["- `/chat`: `Additional endpoint`"]);
+  });
+
+  test("a budget keeps every request and count main recorded after it was written", () => {
+    // stella#6560: a settings budget written before main added
+    // GET /v1/organization-settings to every settings page made that request
+    // read as new on the PR that edited the budget.
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 2,
+          requests: ["GET /v1/session", "GET /v1/organization-settings"],
+          requestCounts: {
+            "GET /v1/session": 1,
+            "GET /v1/organization-settings": 1,
+          },
+          dbQueries: { "GET /v1/organization-settings": 2 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Connector list",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session", "GET /v1/connectors"],
+            requestCounts: { "GET /v1/session": 2, "GET /v1/connectors": 1 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 3,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: [
+        "GET /v1/session",
+        "GET /v1/organization-settings",
+        "GET /v1/connectors",
+      ],
+      requestCounts: {
+        "GET /v1/session": 2,
+        "GET /v1/organization-settings": 1,
+        "GET /v1/connectors": 1,
+      },
+      dbQueries: { "GET /v1/organization-settings": 2 },
+    });
+  });
+
+  test("a budget written against older main never lowers a recorded value", () => {
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 4,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /v1/session"],
+          requestCounts: { "GET /v1/session": 3 },
+          responseSizes: { "GET /v1/session": 4096 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Older budget",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session"],
+            requestCounts: { "GET /v1/session": 2 },
+            responseSizes: { "GET /v1/session": 1024 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 4,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: ["GET /v1/session"],
+      requestCounts: { "GET /v1/session": 3 },
+      responseSizes: { "GET /v1/session": 4096 },
+    });
   });
 
   test.each([
@@ -451,6 +595,20 @@ describe("reviewed network budgets", () => {
     [{ route: "/chat", reason: " ", budget: entry(1) }],
     [{ route: "chat", reason: "Change", budget: entry(1) }],
     [{ route: "/chat", reason: "Change", budget: { depth: -1, requests: [] } }],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), depthMethod: 1 },
+      },
+    ],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), depthMethod: "timing-v1" },
+      },
+    ],
     [
       {
         route: "/chat",
@@ -624,7 +782,8 @@ describe("merge-base preparation integration", () => {
       const gh = path.join(directory, "bin/gh");
       writeFileSync(
         gh,
-        '#!/usr/bin/env bash\nprintf \'%s\\n\' \'{"total_count":0,"artifacts":[],"workflow_runs":[]}\'\n',
+        // A paginated (--slurp) request receives its pages as one array.
+        '#!/usr/bin/env bash\nresponse=\'{"total_count":0,"artifacts":[],"workflow_runs":[]}\'\n[[ " $* " != *" --slurp "* ]] || response="[$response]"\nprintf \'%s\\n\' "$response"\n',
       );
       chmodSync(gh, 0o755);
       const summary = path.join(directory, "summary");
@@ -771,10 +930,11 @@ describe("merge-base preparation integration", () => {
 set -euo pipefail
 if [[ "$TEST_ARTIFACTS" == fail ]]; then exit 42; fi
 case "$*" in
+  *status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
   *actions/artifacts/3/zip*) cat "$TEST_ZIP_NEW" ;;
   *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
   *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
-  *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
+  *actions/workflows/*) printf '[%s]\\n' "$TEST_RUNS" ;;
   *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
   *) exit 1 ;;
 esac
@@ -871,7 +1031,9 @@ esac
           ],
         }),
         TEST_RUNS: JSON.stringify({
-          workflow_runs: [{ event: "push", head_sha: firstBase }],
+          workflow_runs: [
+            { event: "push", head_sha: firstBase, conclusion: "success" },
+          ],
         }),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/network-baseline-deliver.yml",
@@ -911,8 +1073,13 @@ esac
       );
       checked(["git", "add", "apps/web/e2e/network-budgets/change.json"]);
       checked(["git", "commit", "-m", "declare budget"]);
+      // The budget raises main's recorded /chat entry; GET /1 stays known.
       expect(prepare(nextBase)).toEqual({
-        "/chat": entry(9),
+        "/chat": {
+          depth: 9,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /1", "GET /9"],
+        },
         "/settings": entry(2),
       });
       const inheritedBase = checked(["git", "rev-parse", "HEAD"]);
@@ -921,16 +1088,29 @@ esac
         "/settings": entry(2),
       });
       // Main must seed declarations even when no request observes them yet.
-      const declared = { "/chat": entry(9), "/settings": entry(2) };
+      // The recording seed keeps the declared depth as a floor (current method)
+      // and, like the recorder, keeps every request main already recorded.
+      const declared = {
+        "/chat": {
+          depth: 9,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /1", "GET /9"],
+        },
+        "/settings": entry(2),
+      };
       expect(
         prepare(inheritedBase, { NETWORK_BASELINE_PURPOSE: "recording" }),
       ).toEqual(declared);
+      // Seeded from the published recording, the declaration keeps its GET /8.
       expect(
         prepare(inheritedBase, {
           ...artifactEnv,
           NETWORK_BASELINE_PURPOSE: "recording",
         }),
-      ).toEqual(declared);
+      ).toEqual({
+        ...declared,
+        "/chat": { ...declared["/chat"], requests: ["GET /8", "GET /9"] },
+      });
       // The next publication contains the declaration plus a measured peak.
       const newerPublication = { "/chat": entry(10), "/settings": entry(2) };
       writeFileSync(
@@ -980,6 +1160,7 @@ esac
             workflow_runs: sources.map((head_sha) => ({
               event: "push",
               head_sha,
+              conclusion: "success",
             })),
           }),
         };
@@ -1090,9 +1271,10 @@ esac
         `#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
+  *status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
   *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
   *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
-  *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
+  *actions/workflows/*) printf '[%s]\\n' "$TEST_RUNS" ;;
   *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
   *) exit 1 ;;
 esac
@@ -1136,7 +1318,9 @@ esac
               ],
             }),
             TEST_RUNS: JSON.stringify({
-              workflow_runs: [{ event: "push", head_sha: source }],
+              workflow_runs: [
+                { event: "push", head_sha: source, conclusion: "success" },
+              ],
             }),
             TEST_RUN: JSON.stringify({
               path: ".github/workflows/network-baseline-deliver.yml",

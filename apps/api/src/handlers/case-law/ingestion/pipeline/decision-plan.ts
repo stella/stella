@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { InferOk } from "better-result";
 import { eq } from "drizzle-orm";
 
@@ -24,8 +24,8 @@ import type { DecisionCitationExtraction } from "@/api/handlers/case-law/ingesti
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import {
   CITATION_SCOPE_METADATA_KEY,
-  CitationScopesRejectedError,
   citationScopeEnvelope,
+  CitationScopesRejectedError,
   validatedCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
 import {
@@ -71,8 +71,8 @@ import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombst
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import {
-  markupResidueWarnings,
   markupResidueIn,
+  markupResidueWarnings,
 } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   TEXT_ENCODING_INCOMPLETE,

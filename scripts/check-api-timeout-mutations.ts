@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -16,8 +16,8 @@ const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/migration-runner.ts`,
   `${API_SOURCE}db/online-migrations.ts`,
   `${API_SOURCE}db/online-index-gate.ts`,
+  `${API_SOURCE}db/online-ddl.ts`,
   `${API_SOURCE}db/corpus-schema-lane.ts`,
-  `${API_SOURCE}db/corpus-projection-cleanup-stall-repair.ts`,
   `${API_SOURCE}db/corpus-projection-delete-receipt-repair.ts`,
   `${API_SOURCE}db/better-auth-oauth-resource-repair.ts`,
   `${API_SOURCE}db/decision-date-ceiling-repair.ts`,

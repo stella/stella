@@ -43,8 +43,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
@@ -76,6 +76,14 @@ export const tVatTreatment = t.Union([
   t.Literal("exempt"),
 ]);
 
+/**
+ * The statutory exemption basis a line prints; it must carry text, so a
+ * whitespace-only value cannot stand in for the basis finalize requires.
+ */
+export const tExemptionReason = t.Nullable(
+  t.String({ minLength: 1, maxLength: 500, pattern: "\\S" }),
+);
+
 true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
   ? [Static<typeof tVatTreatment>] extends [VatTreatment]
     ? true
@@ -92,6 +100,7 @@ export const tLineUnit = t.String({ minLength: 1, maxLength: 32 });
 export type LineVat = {
   vatRateBps: number;
   vatTreatment: VatTreatment;
+  exemptionReason: string | null;
 };
 
 /**
@@ -102,6 +111,7 @@ export type LineVat = {
 export const ATTACHED_ENTRY_LINE_VAT = {
   vatRateBps: 0,
   vatTreatment: "domestic_vat",
+  exemptionReason: null,
 } as const satisfies LineVat;
 
 export type InvoiceLineDraft = LineVat & {
@@ -211,6 +221,44 @@ export const expenseLineDraft = (
   };
 };
 
+// Plain dates (YYYY-MM-DD) and lowercase UUIDs both sort by code unit, the
+// order the `(date, id)` ORDER BY clauses elsewhere in this module produce.
+const compareCodeUnits = (left: string, right: string) =>
+  Number(left > right) - Number(left < right);
+
+export type AttachedEntryLineDraftsOptions = {
+  timeEntryRows: readonly (TimeEntryForLine & { dateWorked: string })[];
+  expenseRows: readonly (ExpenseForLine & { dateIncurred: string })[];
+  vat: LineVat;
+};
+
+/**
+ * Lines for entries just attached to an invoice: time entries by date worked,
+ * then expenses by date incurred, each tie broken by id. Line positions follow
+ * this order, so the invoice document lists work chronologically whatever
+ * order the claiming `UPDATE ... RETURNING` produced.
+ */
+export const attachedEntryLineDrafts = ({
+  timeEntryRows,
+  expenseRows,
+  vat,
+}: AttachedEntryLineDraftsOptions) => [
+  ...timeEntryRows
+    .toSorted(
+      (left, right) =>
+        compareCodeUnits(left.dateWorked, right.dateWorked) ||
+        compareCodeUnits(left.id, right.id),
+    )
+    .map((entry) => timeEntryLineDraft(entry, vat)),
+  ...expenseRows
+    .toSorted(
+      (left, right) =>
+        compareCodeUnits(left.dateIncurred, right.dateIncurred) ||
+        compareCodeUnits(left.id, right.id),
+    )
+    .map((expense) => expenseLineDraft(expense, vat)),
+];
+
 export const manualLineDraft = (
   input: LineVat & {
     description: string;
@@ -238,7 +286,7 @@ export const manualLineDraft = (
   });
 };
 
-type LineAmountInput = LineVat & {
+type LineAmountInput = Pick<LineVat, "vatRateBps" | "vatTreatment"> & {
   description: string;
   netAmount: CentsAmount;
 };
@@ -349,6 +397,7 @@ export const insertInvoiceLines = async (
         unitPrice: line.unitPrice,
         vatRateBps: line.vatRateBps,
         vatTreatment: line.vatTreatment,
+        exemptionReason: line.exemptionReason,
         netAmount: line.netAmount,
         vatAmount: line.vatAmount,
         grossAmount: line.grossAmount,
@@ -606,11 +655,12 @@ type InvoiceForReadTotals = {
   /** NULL marks totals written before invoice lines existed. */
   netAmount: CentsAmount | null;
   totalAmount: CentsAmount;
-  lines: readonly (LineAmountInput & {
-    timeEntryId: SafeId<"timeEntry"> | null;
-    expenseId: SafeId<"expense"> | null;
-    releasedAt: Date | null;
-  })[];
+  lines: readonly (LineAmountInput &
+    Partial<Pick<LineVat, "exemptionReason">> & {
+      timeEntryId: SafeId<"timeEntry"> | null;
+      expenseId: SafeId<"expense"> | null;
+      releasedAt: Date | null;
+    })[];
   timeEntries: readonly (TimeEntryForLine &
     Pick<typeof timeEntries.$inferSelect, "invoiceAttachment">)[];
   expenses: readonly ExpenseForLine[];
@@ -628,7 +678,10 @@ type LineOrigin = {
   expenseId?: SafeId<"expense"> | null;
 };
 
-type InvoiceSourceLine = LineAmountInput & Partial<LineQuantity> & LineOrigin;
+type InvoiceSourceLine = LineAmountInput &
+  Partial<Pick<LineVat, "exemptionReason">> &
+  Partial<LineQuantity> &
+  LineOrigin;
 
 /**
  * The lines an invoice read counts. An invoice with stored totals (`netAmount`
@@ -716,6 +769,7 @@ export const readInvoiceDocumentLines = (invoice: InvoiceForDocumentLines) => {
               : cents(sign * Math.abs(billed.unitPrice) || 0),
           timeEntryId: billed.timeEntryId ?? null,
           expenseId: billed.expenseId ?? null,
+          exemptionReason: billed.exemptionReason ?? null,
         };
       }),
       totals,
@@ -832,6 +886,7 @@ export const INVOICE_LINE_COLUMNS = {
   unitPrice: true,
   vatRateBps: true,
   vatTreatment: true,
+  exemptionReason: true,
   netAmount: true,
   vatAmount: true,
   grossAmount: true,

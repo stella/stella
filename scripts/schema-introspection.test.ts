@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  readFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,8 +12,8 @@ import path from "node:path";
 import {
   OWNERSHIP,
   SCHEMA_INTROSPECTION,
-  withSchemaIntrospection,
   validateOwnership,
+  withSchemaIntrospection,
 } from "./ownership.ts";
 import { assessMeasurements, RATCHET_METRICS } from "./ratchet.ts";
 import {
@@ -296,6 +296,37 @@ describe("schema-only dependency validation", () => {
       dispose();
     }
   });
+});
+
+test("treats schema-owned Drizzle view callbacks as declarations, not runtime reads", () => {
+  const schemaFile = "apps/api/src/db/schema/case-law.ts";
+  const source = [
+    FULL_IMPORT,
+    'export const view = pg.pgView("published").with({ securityBarrier: true }).as((qb) => qb.select().from(schema.caseLawDecisions));',
+  ].join("\n");
+  const { root, dispose } = fixture({ [schemaFile]: source });
+  try {
+    expect(
+      validateSchemaIntrospection({
+        entries: [{ path: schemaFile, reason: "Declares a schema view." }],
+        repoRoot: root,
+      }),
+    ).toEqual([]);
+
+    const ordinaryQuery = source.replace(
+      ".as((qb) => qb.select().from(schema.caseLawDecisions))",
+      ".as(() => db.select())",
+    );
+    writeFileSync(path.join(root, schemaFile), ordinaryQuery);
+    expect(
+      validateSchemaIntrospection({
+        entries: [{ path: schemaFile, reason: "Declares a schema view." }],
+        repoRoot: root,
+      }),
+    ).toContain(`${schemaFile}: database operation in ${schemaFile}: select`);
+  } finally {
+    dispose();
+  }
 });
 
 test("every schema owner inherits exactly the shared set once", () => {

@@ -4,11 +4,13 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { aiMemories } from "@/api/db/schema";
+import { toMemoryResponse } from "@/api/handlers/memories/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { Page } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
@@ -16,13 +18,27 @@ import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 const DEFAULT_LIMIT = 50;
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  description:
+    "List the assistant memories you can see, newest first: firm-wide " +
+    "memory, your own, and memory of matters you can access. Archived " +
+    "memories are left out unless status asks for them. Narrow by scope " +
+    "(organization, user, workspace = a matter), status, or matterId.",
   // Memory is an AI-assistant capability; gate reads on chat access.
   // Row visibility (firm / own / accessible matters) is enforced by RLS,
   // so firm memory still reads org-wide for any chat-capable member.
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
+  // The `chat:create` gate is the caller floor, not the operation: this only
+  // reads.
+  access: "read",
   query: t.Object({
     scope: t.Optional(
       t.Union([
@@ -45,20 +61,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-type MemoryListItem = {
-  id: string;
-  scope: "organization" | "user" | "workspace";
-  kind: "preference" | "instruction" | "fact" | "decision" | "relationship";
-  content: string;
-  language: string | null;
-  status: "suggested" | "active" | "stale" | "archived";
-  pinned: boolean;
-  source: "user" | "tool" | "extracted";
-  workspaceId: string | null;
-  sourceDataWorkspaceIds: string[];
-  createdAt: string;
-  updatedAt: string;
-};
+type MemoryListItem = ReturnType<typeof toMemoryResponse>;
 
 const memoryCursor = createTimestampIdCursorCodec({
   column: aiMemories.createdAt,
@@ -163,20 +166,7 @@ const listMemories = createSafeRootHandler(
         ? memoryCursor.encode(lastItem.createdAtCursor, lastItem.id)
         : null;
 
-    const items: MemoryListItem[] = pageRows.map((row) => ({
-      id: row.id,
-      scope: row.scope,
-      kind: row.kind,
-      content: row.content,
-      language: row.language,
-      status: row.status,
-      pinned: row.pinned,
-      source: row.source,
-      workspaceId: row.workspaceId,
-      sourceDataWorkspaceIds: row.sourceDataWorkspaceIds,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    }));
+    const items = pageRows.map(toMemoryResponse);
 
     return Result.ok({
       items,

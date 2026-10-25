@@ -5,9 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { INVOICE_DUE_DAY_PRESETS } from "@stll/api-contract";
+import { INVOICE_DUE_DAY_PRESETS, INVOICE_LANGUAGES } from "@stll/api-contract";
+import type { InvoiceLanguage } from "@stll/api-contract";
 import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
-import { parsePlainDate } from "@stll/time";
+import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
@@ -27,6 +28,13 @@ import {
   InfoIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Switch } from "@stll/ui/switch";
 import {
   Table,
@@ -54,6 +62,11 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoicePrefill } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+  SHORT_DATE,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 
 import {
@@ -119,18 +132,8 @@ type IssuedInvoice = {
   dueDate: string | null;
 };
 
-const epochOf = (date: string) =>
-  parsePlainDate(date)?.toZonedDateTime("UTC").epochMilliseconds ?? 0;
-
-const SHORT_DATE = {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-} as const satisfies Intl.DateTimeFormatOptions;
-const MEDIUM_DATE = {
-  dateStyle: "medium",
-  timeZone: "UTC",
-} as const satisfies Intl.DateTimeFormatOptions;
+const isInvoiceLanguage = (value: string | null): value is InvoiceLanguage =>
+  INVOICE_LANGUAGES.some((language) => language === value);
 
 /** A muted note saying where a prefilled value came from. */
 const SourceHint = ({ children }: { children: ReactNode }) => (
@@ -193,6 +196,7 @@ export const InvoiceComposer = ({
   >(() => new Set(expenses.map((expense) => expense.id)));
   const [invoiceDate, setInvoiceDate] = useState(prefill.invoiceDate);
   const [dueDays, setDueDays] = useState(prefill.dueDays);
+  const [language, setLanguage] = useState(prefill.language);
   const [issued, setIssued] = useState<IssuedInvoice | null>(null);
 
   const selection = { entries, choices, expenses, includedExpenseIds };
@@ -260,6 +264,7 @@ export const InvoiceComposer = ({
           ? {}
           : { expectedTotalAmount: totals.grossAmountMinor }),
         currency,
+        language,
         // The seller the person reviewed, even if the default changes meanwhile.
         ...(prefill.seller === null
           ? {}
@@ -315,8 +320,10 @@ export const InvoiceComposer = ({
             dueDate={dueDate}
             dueDays={dueDays}
             invoiceDate={invoiceDate}
+            language={language}
             onDueDays={setDueDays}
             onInvoiceDate={setInvoiceDate}
+            onLanguage={setLanguage}
             prefill={prefill}
             supplyDate={supplyDate}
           />
@@ -638,7 +645,10 @@ const TimeEntriesTable = ({
                   className="text-muted-foreground tabular-nums"
                   excluded={excluded}
                 >
-                  {format.dateTime(epochOf(entry.dateWorked), SHORT_DATE)}
+                  {format.dateTime(
+                    plainDateEpoch(entry.dateWorked),
+                    SHORT_DATE,
+                  )}
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
@@ -735,7 +745,10 @@ const ExpensesTable = ({
                   className="text-muted-foreground tabular-nums"
                   excluded={!included}
                 >
-                  {format.dateTime(epochOf(expense.dateIncurred), SHORT_DATE)}
+                  {format.dateTime(
+                    plainDateEpoch(expense.dateIncurred),
+                    SHORT_DATE,
+                  )}
                 </RowText>
               </TableCell>
               <TableCell className="min-w-0">
@@ -767,8 +780,10 @@ type DetailsStepProps = {
   supplyDate: string;
   dueDays: number;
   dueDate: string | null;
+  language: InvoiceLanguage;
   onInvoiceDate: (date: string) => void;
   onDueDays: (days: number) => void;
+  onLanguage: (language: InvoiceLanguage) => void;
 };
 
 const DetailsStep = ({
@@ -779,11 +794,14 @@ const DetailsStep = ({
   supplyDate,
   dueDays,
   dueDate,
+  language,
   onInvoiceDate,
   onDueDays,
+  onLanguage,
 }: DetailsStepProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
   const dueChoices = [
     ...new Set([...INVOICE_DUE_DAY_PRESETS, prefill.dueDays]),
   ].toSorted((left, right) => left - right);
@@ -807,7 +825,7 @@ const DetailsStep = ({
               {seller === null ? (
                 <Link
                   className="underline underline-offset-4"
-                  to="/settings/organization/billing"
+                  to="/admin/billing"
                 >
                   {t("billing.invoiceComposer.addSellerProfile")}
                 </Link>
@@ -863,7 +881,7 @@ const DetailsStep = ({
                 {t("billing.invoiceComposer.taxableSupplyDate")}
               </span>
               <span className="text-sm tabular-nums">
-                {format.dateTime(epochOf(supplyDate), MEDIUM_DATE)}
+                {format.dateTime(plainDateEpoch(supplyDate), MEDIUM_DATE)}
               </span>
               <SourceHint>
                 {t("billing.invoiceComposer.sources.lastWorkDay")}
@@ -892,7 +910,7 @@ const DetailsStep = ({
               ))}
               {dueDate !== null && (
                 <span className="text-muted-foreground text-xs tabular-nums">
-                  {format.dateTime(epochOf(dueDate), MEDIUM_DATE)}
+                  {format.dateTime(plainDateEpoch(dueDate), MEDIUM_DATE)}
                 </span>
               )}
             </div>
@@ -903,6 +921,28 @@ const DetailsStep = ({
                   : "billing.invoiceComposer.sources.defaultTerm",
               )}
             </SourceHint>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">{t("common.language")}</span>
+            <Select
+              onValueChange={(value) => {
+                if (isInvoiceLanguage(value)) {
+                  onLanguage(value);
+                }
+              }}
+              value={language}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {INVOICE_LANGUAGES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {displayLanguageName(value, { displayLocale: locale })}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
         </FramePanel>
       </Frame>
@@ -971,7 +1011,7 @@ const IssueStep = ({
           <DetailsItem label={t("billing.invoices.dueDate")}>
             {dueDate === null
               ? "—"
-              : format.dateTime(epochOf(dueDate), MEDIUM_DATE)}
+              : format.dateTime(plainDateEpoch(dueDate), MEDIUM_DATE)}
           </DetailsItem>
           <DetailsItem label={t("billing.invoices.totalAmount")}>
             <span className="font-medium tabular-nums">
@@ -1132,7 +1172,7 @@ const IssuedState = ({ workspaceId, invoice, buyerName }: IssuedStateProps) => {
     invoice.dueDate === null
       ? null
       : t("billing.invoiceComposer.dueOn", {
-          date: format.dateTime(epochOf(invoice.dueDate), MEDIUM_DATE),
+          date: format.dateTime(plainDateEpoch(invoice.dueDate), MEDIUM_DATE),
         }),
   ].filter((part) => part !== null);
   return (

@@ -5,6 +5,7 @@ import nodePath from "node:path";
 import {
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
+  PUBLIC_COUNTRY_SURFACE_OPEN,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
 } from "@stll/api-contract/public-country-capability";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -24,14 +25,20 @@ const readHandlerSource = async (file: string) =>
 describe("public statute routes", () => {
   test.each(
     PUBLIC_COUNTRIES.filter(
-      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+      (country) =>
+        PUBLIC_COUNTRY_CAPABILITIES[country].legislation !== "admitted",
     ),
   )(
     "advertised %s reports its capability before reading data",
     async (country) => {
       const urls = [
         `/law/statutes?country=${country}`,
-        `/law/sitemap/statutes/shard?country=${country.toLowerCase()}`,
+        // A sitemap is a page route: it is served wherever pages are open.
+        ...(PUBLIC_COUNTRY_SURFACE_OPEN.pages[
+          PUBLIC_COUNTRY_CAPABILITIES[country].legislation
+        ]
+          ? []
+          : [`/law/sitemap/statutes/shard?country=${country.toLowerCase()}`]),
       ];
       for (const url of urls) {
         const response = await publicLegislationRoute.handle(
@@ -41,22 +48,20 @@ describe("public statute routes", () => {
         expect(await response.json()).toMatchObject({
           status: "unavailable",
           country,
-          reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country].legislation,
         });
       }
     },
   );
 
-  test("pending public countries return typed unavailable for statute search and lookup", async () => {
+  test("an unlaunched country returns typed unavailable for statute search and listing", async () => {
     const urls = [
-      "/law/statutes?country=SVK",
-      "/law/statutes/facets?country=SVK",
-      "/law/statutes/by-slug/2012-89?country=SVK",
-      "/law/sitemap/statutes/shard?country=svk",
+      "/law/statutes?country=AUT",
+      "/law/statutes/facets?country=AUT",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     const search = await searchLegislationHandler(
-      { jurisdiction: "SVK", query: "synthetic" },
+      { jurisdiction: "AUT", query: "synthetic" },
       () => panic("Unavailable country must not reach the database"),
       "unobserved",
     );
@@ -64,7 +69,7 @@ describe("public statute routes", () => {
       code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
       response: {
         status: "unavailable",
-        country: "SVK",
+        country: "AUT",
         reason: "pending_public",
       },
     });
@@ -75,7 +80,7 @@ describe("public statute routes", () => {
       );
       expect(await response.json()).toMatchObject({
         status: "unavailable",
-        country: "SVK",
+        country: "AUT",
         reason: "pending_public",
       });
     }

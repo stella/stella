@@ -38,6 +38,12 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "PDF page text worker",
+    pattern: "dist/client/assets/pdf-page-text-worker-????????.js",
+    sourceEntry: "src/workers/pdf-page-text-worker.ts",
+  },
+  {
+    expectedCount: 1,
     label: "PDF page editor worker",
     pattern: "dist/client/assets/pdf-page-editor-worker-????????.js",
     sourceEntry: "src/workers/pdf-page-editor-worker.ts",
@@ -81,10 +87,28 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "Aho-Corasick search WASM",
+    pattern: "dist/client/assets/aho-corasick.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
+    // The threaded WASI runtime of the engine starts its threads from this
+    // emitted worker; the app is cross-origin isolated (COOP/COEP), so the
+    // threaded build runs in the browser.
+    label: "Engine WASI browser thread worker",
+    pattern: "dist/client/assets/wasi-worker-browser-????????.js",
+  },
+  {
+    expectedCount: 1,
     // @vscode/diff (the markdown editor's baseline diff) loads its binary via
     // `new URL(..., import.meta.url)`, so Vite emits it as a hashed asset.
     label: "markdown editor diff WASM",
     pattern: "dist/client/assets/diff_wasm_bg-*.wasm",
+  },
+  {
+    expectedCount: 1,
+    label: "RegexSet search WASM",
+    pattern: "dist/client/assets/regex-set.wasm32-wasi-????????.wasm",
   },
   {
     expectedCount: 1,

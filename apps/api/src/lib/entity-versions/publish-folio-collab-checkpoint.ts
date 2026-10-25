@@ -22,6 +22,7 @@ import {
   lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -159,6 +160,8 @@ export const loadPublicationPreliminary = async ({
       checkpointFileId: folioCollabRooms.docxCheckpointFileId,
       checkpointScanWarnings: folioCollabRooms.docxCheckpointScanWarnings,
       checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
+      checkpointSnapshotSha256Hex:
+        folioCollabRooms.docxCheckpointSnapshotSha256Hex,
       checkpointSizeBytes: folioCollabRooms.docxCheckpointSizeBytes,
       checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
       entityId: folioCollabRooms.entityId,
@@ -207,25 +210,28 @@ const lockPublicationRoom = async ({
   tx,
   workspaceId,
 }: RoomScopeOptions) => {
-  const rooms = await tx
-    .select({
-      baseVersionId: folioCollabRooms.baseVersionId,
-      checkpointFileId: folioCollabRooms.docxCheckpointFileId,
-      checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
-      checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
-      entityId: folioCollabRooms.entityId,
-      generation: folioCollabRooms.generation,
-      propertyId: folioCollabRooms.propertyId,
-    })
-    .from(folioCollabRooms)
-    .where(
-      and(
-        eq(folioCollabRooms.id, roomId),
-        eq(folioCollabRooms.workspaceId, workspaceId),
-      ),
-    )
-    .limit(1)
-    .for("update");
+  const { rows: rooms } = await withAggregateRowQuery({
+    aggregate: "folioCollabRoom",
+    id: { id: roomId, workspaceId },
+    tx,
+    mode: "update",
+    select: (lockTx) =>
+      lockTx
+        .select({
+          id: folioCollabRooms.id,
+          workspaceId: folioCollabRooms.workspaceId,
+          baseVersionId: folioCollabRooms.baseVersionId,
+          checkpointFileId: folioCollabRooms.docxCheckpointFileId,
+          checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
+          checkpointSnapshotSha256Hex:
+            folioCollabRooms.docxCheckpointSnapshotSha256Hex,
+          checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          entityId: folioCollabRooms.entityId,
+          generation: folioCollabRooms.generation,
+          propertyId: folioCollabRooms.propertyId,
+        })
+        .from(folioCollabRooms),
+  });
   return rooms.at(0);
 };
 
@@ -297,9 +303,14 @@ const recordRoomPublication = async ({
     .update(folioCollabRooms)
     .set({
       baseVersionId: versionId,
+      savedSnapshotCut:
+        room.checkpointSnapshotSha256Hex === null
+          ? null
+          : { versionId, sha256Hex: room.checkpointSnapshotSha256Hex },
       docxCheckpointFileId: nextCheckpointFileId,
       docxCheckpointScanWarnings: null,
       docxCheckpointSha256Hex: null,
+      docxCheckpointSnapshotSha256Hex: null,
       docxCheckpointSizeBytes: null,
       docxCheckpointUpdatedAt: null,
     })
@@ -313,6 +324,7 @@ const recordRoomPublication = async ({
     );
   await tx.insert(folioCollabPublications).values({
     checkpointSha256Hex: expectedSha256Hex,
+    snapshotSha256Hex: room.checkpointSnapshotSha256Hex,
     entityId: room.entityId,
     entityVersionId: versionId,
     generation: expectedGeneration,

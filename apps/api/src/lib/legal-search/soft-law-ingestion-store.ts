@@ -5,11 +5,11 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  softLawSources,
-  softLawIngestionAttempts,
+  softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
-  softLawDocumentLocators,
+  softLawIngestionAttempts,
+  softLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -21,24 +21,45 @@ import {
 import {
   SOFT_LAW_AUTHORITIES,
   SOFT_LAW_BATCH_LIMIT,
+  SOFT_LAW_EXTRACTION_QUALITIES,
+  SOFT_LAW_EXTRACTION_QUALITY_RANK,
   SoftLawIngestionError,
+  storedSoftLawDiscoveryEntry,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
-  SoftLawEntry,
+  SoftLawDiscoveryEntry,
   SoftLawDocumentInput,
+  SoftLawEntry,
+  SoftLawRawObject,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const LEASE_SECONDS = 300;
 const MINIMUM_LISTING_FRACTION = 0.8;
+const extractionQualityRank = (quality: SQL) =>
+  sqlCaseFragment({
+    operand: quality,
+    branches: SOFT_LAW_EXTRACTION_QUALITIES.map(
+      (value) =>
+        sql`WHEN ${value} THEN ${SOFT_LAW_EXTRACTION_QUALITY_RANK[value]}`,
+    ),
+    fallback: sql`-1`,
+  });
 export type SoftLawObservation = {
   entry: SoftLawEntry;
   input: SoftLawDocumentInput;
   documentId: SafeId<"softLawDocument">;
   identityKey: string;
   contentHash: string;
-  rawObjects: { role: string; key: string; contentType: string }[];
+  rawObjects: SoftLawRawObject[];
+  identityResolution:
+    | { kind: "create" | "attach" }
+    | {
+        kind: "merge_repaired_placeholder";
+        placeholderDocumentId: SafeId<"softLawDocument">;
+      };
 };
 type SoftLawIngestionStoreOptions = {
   sourceId: SafeId<"softLawSource">;
@@ -165,8 +186,10 @@ const renewSoftLawLease = async ({
   return Result.ok();
 };
 export type SoftLawAttempt = {
-  entry: SoftLawEntry;
+  entry: SoftLawDiscoveryEntry;
   count: number;
+  /** Exact discovery snapshots are retained even when the instrument's content is unchanged. */
+  rawObjects: SoftLawObservation["rawObjects"];
 } & (
   | { status: "applied" | "unchanged" | "retryable"; tag: null }
   | { status: "rejected"; tag: "identity_collision"; identityKey: string }
@@ -212,29 +235,37 @@ const loadSoftLawCollisions = async (
   );
 const loadSoftLawAttempts = async (
   { sourceId, scopedDb }: SoftLawStoreContext,
-  { runId, entries }: { runId: string; entries: readonly SoftLawEntry[] },
+  {
+    runId,
+    entries,
+  }: { runId: string; entries: readonly SoftLawDiscoveryEntry[] },
 ) =>
-  await scopedDb(
-    async (tx) =>
-      await tx
-        .select()
-        .from(softLawIngestionAttempts)
-        .where(
-          and(
-            eq(softLawIngestionAttempts.sourceId, sourceId),
-            eq(softLawIngestionAttempts.runId, runId),
-            or(
-              inArray(
-                softLawIngestionAttempts.url,
-                entries.map((entry) => entry.url),
+  (
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(softLawIngestionAttempts)
+          .where(
+            and(
+              eq(softLawIngestionAttempts.sourceId, sourceId),
+              eq(softLawIngestionAttempts.runId, runId),
+              or(
+                inArray(
+                  softLawIngestionAttempts.url,
+                  entries.map((entry) => entry.url),
+                ),
+                eq(softLawIngestionAttempts.status, "retryable"),
               ),
-              eq(softLawIngestionAttempts.status, "retryable"),
             ),
-          ),
-        )
-        .orderBy(softLawIngestionAttempts.url)
-        .limit(SOFT_LAW_BATCH_LIMIT * 2),
-  );
+          )
+          .orderBy(softLawIngestionAttempts.url)
+          .limit(SOFT_LAW_BATCH_LIMIT * 2),
+    )
+  ).map((attempt) => ({
+    ...attempt,
+    entry: storedSoftLawDiscoveryEntry(attempt.entry),
+  }));
 const loadSoftLawMatches = async (
   { sourceId, scopedDb }: SoftLawStoreContext,
   { entries, identityKeys }: LoadSoftLawMatchesOptions,
@@ -259,7 +290,13 @@ const loadSoftLawMatches = async (
           softLawDocumentLocators,
           and(
             eq(softLawDocumentLocators.documentId, softLawDocuments.id),
-            eq(softLawDocumentLocators.state, "current"),
+            or(
+              eq(softLawDocumentLocators.state, "current"),
+              inArray(
+                softLawDocumentLocators.url,
+                entries.map((entry) => entry.url),
+              ),
+            ),
           ),
         )
         .where(
@@ -339,6 +376,7 @@ const persistSoftLawRows = async (
       .onConflictDoUpdate({
         target: softLawDocuments.id,
         set: {
+          identityKey: sql`excluded.identity_key`,
           title: sql`excluded.title`,
           kind: sql`excluded.kind`,
           statedReference: sql`excluded.stated_reference`,
@@ -352,6 +390,62 @@ const persistSoftLawRows = async (
           lastSeenRun: sql`excluded.last_seen_run`,
         },
       });
+    // A repaired placeholder may merge into an owner inserted just above on
+    // this page, so its versions and locators move only once that row exists.
+    // db-await-in-loop-disable: only repaired placeholders merge, rarely and one at a time; each merge's steps must run in order inside this transaction
+    for (const item of items) {
+      switch (item.identityResolution.kind) {
+        case "create":
+        case "attach":
+          break;
+        case "merge_repaired_placeholder": {
+          const { placeholderDocumentId } = item.identityResolution;
+          const maximumSequence = (
+            await tx
+              .select({
+                value: sql<number>`coalesce(max(${softLawDocumentVersions.sequence}), 0)::integer`,
+              })
+              .from(softLawDocumentVersions)
+              .where(eq(softLawDocumentVersions.documentId, item.documentId))
+          ).at(0)?.value;
+          if (maximumSequence === undefined) {
+            panic("Could not read repaired document version sequence");
+          }
+          await tx
+            .update(softLawDocumentVersions)
+            .set({ observedTo: observedAt })
+            .where(
+              and(
+                eq(softLawDocumentVersions.documentId, placeholderDocumentId),
+                sql`${softLawDocumentVersions.observedTo} IS NULL`,
+              ),
+            );
+          await tx
+            .update(softLawDocumentVersions)
+            .set({
+              documentId: item.documentId,
+              sequence: sql`${softLawDocumentVersions.sequence} + ${maximumSequence}`,
+            })
+            .where(
+              eq(softLawDocumentVersions.documentId, placeholderDocumentId),
+            );
+          await tx
+            .update(softLawDocumentLocators)
+            .set({ documentId: item.documentId })
+            .where(
+              eq(softLawDocumentLocators.documentId, placeholderDocumentId),
+            );
+          await tx
+            .delete(softLawDocuments)
+            .where(eq(softLawDocuments.id, placeholderDocumentId));
+          break;
+        }
+        default:
+          item.identityResolution satisfies never;
+          panic("Unknown soft-law identity resolution");
+      }
+    }
+    // db-await-in-loop-enable
     await tx
       .insert(softLawDocumentLocators)
       .values(
@@ -397,6 +491,18 @@ const persistSoftLawVersions = async (
       ),
     );
   const byDocument = new Map(latest.map((row) => [row.documentId, row]));
+  const maximumSequences = new Map(
+    (
+      await tx
+        .select({
+          documentId: softLawDocumentVersions.documentId,
+          sequence: sql<number>`max(${softLawDocumentVersions.sequence})::integer`,
+        })
+        .from(softLawDocumentVersions)
+        .where(inArray(softLawDocumentVersions.documentId, ids))
+        .groupBy(softLawDocumentVersions.documentId)
+    ).map((row) => [row.documentId, row.sequence]),
+  );
   const changes = [
     ...new Map(items.map((item) => [item.documentId, item])).values(),
   ].filter(
@@ -412,20 +518,56 @@ const persistSoftLawVersions = async (
       .set({ observedTo: observedAt })
       .where(inArray(softLawDocumentVersions.id, closing));
   }
-  if (changes.length) {
-    await tx.insert(softLawDocumentVersions).values(
-      changes.map((item) => ({
-        documentId: item.documentId,
-        sequence: (byDocument.get(item.documentId)?.sequence ?? 0) + 1,
-        contentHash: item.contentHash,
-        metadata: item.input.metadata,
-        rawObjects: item.rawObjects,
-        extractedText: item.input.text,
-        extractionQuality: item.input.extractionQuality,
-        sourceDates: item.input.sourceDates,
-        observedFrom: observedAt,
-      })),
+  const currentObservations = [
+    ...new Map(items.map((item) => [item.documentId, item])).values(),
+  ];
+  if (currentObservations.length) {
+    // Quality rank decides: a worse extraction never replaces a better one,
+    // and a textless one never replaces stored text of equal rank. A failed
+    // extraction still yields to a later textless parse (needs_ocr), which
+    // clears the stale failure.
+    const incomingRank = extractionQualityRank(
+      sql`excluded.extraction_quality`,
     );
+    const storedRank = extractionQualityRank(
+      sql`${softLawDocumentVersions.extractionQuality}`,
+    );
+    const preserveStoredExtraction = sql`(${incomingRank} < ${storedRank} OR (${incomingRank} = ${storedRank} AND excluded.extracted_text IS NULL))`;
+    await tx
+      .insert(softLawDocumentVersions)
+      .values(
+        currentObservations.map((item) => ({
+          documentId: item.documentId,
+          sequence:
+            byDocument.get(item.documentId)?.contentHash === item.contentHash
+              ? (byDocument.get(item.documentId)?.sequence ??
+                panic("Unchanged expression has no version"))
+              : (maximumSequences.get(item.documentId) ?? 0) + 1,
+          contentHash: item.contentHash,
+          metadata: item.input.metadata,
+          rawObjects: item.rawObjects,
+          extractedText: item.input.text,
+          extractionFailure: item.input.extractionFailure ?? null,
+          extractionQuality: item.input.extractionQuality,
+          sourceDates: item.input.sourceDates,
+          observedFrom:
+            byDocument.get(item.documentId)?.contentHash === item.contentHash
+              ? (byDocument.get(item.documentId)?.observedFrom ??
+                panic("Unchanged expression has no observation date"))
+              : observedAt,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          softLawDocumentVersions.documentId,
+          softLawDocumentVersions.sequence,
+        ],
+        set: {
+          extractedText: sql`CASE WHEN ${preserveStoredExtraction} THEN ${softLawDocumentVersions.extractedText} ELSE excluded.extracted_text END`,
+          extractionQuality: sql`CASE WHEN ${preserveStoredExtraction} THEN ${softLawDocumentVersions.extractionQuality} ELSE excluded.extraction_quality END`,
+          extractionFailure: sql`CASE WHEN ${preserveStoredExtraction} THEN ${softLawDocumentVersions.extractionFailure} ELSE excluded.extraction_failure END`,
+        },
+      });
   }
 };
 type PersistRejectedSoftLawListingsOptions = {
@@ -588,20 +730,28 @@ const persistSoftLawPage = async (
         await tx
           .insert(softLawIngestionAttempts)
           .values(
-            attempts.map((attempt) => ({
-              sourceId,
-              runId,
-              url: attempt.entry.url,
-              entry: attempt.entry,
-              status: attempt.status,
-              tag: attempt.tag,
-              identityKey:
-                attempt.tag === "identity_collision"
-                  ? attempt.identityKey
-                  : null,
-              count: attempt.count,
-              observedAt,
-            })),
+            attempts.map((attempt) => {
+              const { sourceRaw: _sourceRaw, ...entryWithoutRaw } =
+                attempt.entry;
+              return {
+                sourceId,
+                runId,
+                url: attempt.entry.url,
+                entry:
+                  attempt.status === "applied" || attempt.status === "unchanged"
+                    ? entryWithoutRaw
+                    : attempt.entry,
+                rawObjects: attempt.rawObjects,
+                status: attempt.status,
+                tag: attempt.tag,
+                identityKey:
+                  attempt.tag === "identity_collision"
+                    ? attempt.identityKey
+                    : null,
+                count: attempt.count,
+                observedAt,
+              };
+            }),
           )
           .onConflictDoUpdate({
             target: [
@@ -612,6 +762,7 @@ const persistSoftLawPage = async (
             set: {
               status: sql`excluded.status`,
               entry: sql`excluded.entry`,
+              rawObjects: sql`excluded.raw_objects`,
               tag: sql`excluded.tag`,
               identityKey: sql`excluded.identity_key`,
               count: sql`excluded.count`,
@@ -796,7 +947,7 @@ export const createSoftLawIngestionStore = (
       await storeResult(async () => await renewSoftLawLease(context)),
     loadAttempts: async (query: {
       runId: string;
-      entries: readonly SoftLawEntry[];
+      entries: readonly SoftLawDiscoveryEntry[];
     }) => await loadSoftLawAttempts(context, query),
     loadMatches: async (query: LoadSoftLawMatchesOptions) =>
       await loadSoftLawMatches(context, query),

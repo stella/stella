@@ -35,6 +35,7 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -64,6 +65,8 @@ const dependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => undefined,
   enqueuePdfDerivativeOrMarkFailed: async () => undefined,
   processExtraction: async () => undefined,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 } satisfies CreateEntityFromBufferDependencies;
 

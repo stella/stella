@@ -253,7 +253,7 @@ test("citation reads reject malformed cursors", async () => {
 });
 
 test("reader citation URLs use canonical public identities and unresolved references have no URL", async () => {
-  const items: { citationText: string; appUrl: string | null }[] = [];
+  const items: { citationText: string; url: string | null }[] = [];
   let cursor: string | undefined;
   for (let request = 0; request < 3; request += 1) {
     const pageCursor = cursor;
@@ -281,10 +281,10 @@ test("reader citation URLs use canonical public identities and unresolved refere
     citationText.startsWith("outgoing"),
   );
   expect(linked).toHaveLength(55);
-  expect(new Set(linked.map(({ appUrl }) => appUrl))).toEqual(
+  expect(new Set(linked.map(({ url }) => url))).toEqual(
     new Set(["http://localhost:3000/law/cze/cases/court/open-related"]),
   );
   expect(
-    items.find(({ citationText }) => citationText === "unresolved")?.appUrl,
+    items.find(({ citationText }) => citationText === "unresolved")?.url,
   ).toBeNull();
 });

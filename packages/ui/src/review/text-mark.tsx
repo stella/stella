@@ -30,11 +30,7 @@ export const TextMark = ({
 );
 
 export type TextMarkVariant =
-  | "fill"
-  | "underline"
-  | "dotted"
-  | "wavy"
-  | "strike";
+  "fill" | "underline" | "dotted" | "wavy" | "strike";
 
 export type TextMarkTone =
   | "warning"
@@ -108,6 +104,25 @@ export const textMarkClass = ({
     .join(" ");
 
 /**
+ * The classes of one mark drawn as an empty box over painted text (a PDF
+ * page's canvas), where no text decoration can reach the words: a line
+ * variant becomes the box's bottom edge (wavy reads as dashed) or, for a
+ * strike, a rule through its middle; hue, wash and ring are the text mark's.
+ */
+export const textMarkBoxClass = ({
+  variant,
+  tone,
+  state = "rest",
+}: Omit<TextMarkOptions, "weight">): string =>
+  [
+    BOX_LINE_CLASS[variant],
+    TONE_CLASS[tone],
+    WASH_CLASS[variant === "fill" ? "fill" : "line"][state],
+  ]
+    .filter((part) => part !== "")
+    .join(" ");
+
+/**
  * The search-hit mark reached through a descendant selector, for markup that
  * arrives already highlighted (the search endpoints' `<mark>` snippets).
  * Spelled out because Tailwind emits only the classes it can read in the
@@ -119,26 +134,41 @@ export const SEARCH_HIT_DESCENDANT_MARK_CLASS =
 type TextMarkHighlightRuleOptions = {
   /** The registered `CSS.highlights` name. */
   name: string;
+  /** Defaults to a fill, the find mark. */
+  variant?: TextMarkVariant | undefined;
   tone: TextMarkTone;
-  state: Exclude<TextMarkState, "matched">;
+  state: TextMarkState;
 };
 
 /**
- * A fill mark for the CSS Custom Highlight API. `::highlight()` takes colours
- * but no classes, custom properties or rings, so a find that marks ranges
- * rather than elements gets the fill's wash as a rule; the active range is
- * told apart by its stronger wash alone.
+ * A mark for the CSS Custom Highlight API, for text a surface marks as ranges
+ * rather than elements (a find over a reader, verdicts over painted document
+ * pages). `::highlight()` takes colours and text decorations but no classes,
+ * custom properties, offsets or rings, so the rule restates the variant's
+ * line and the state's wash; the active range is told apart by its stronger
+ * wash alone.
  */
 export const textMarkHighlightRule = ({
   name,
+  variant = "fill",
   tone,
   state,
 }: TextMarkHighlightRuleOptions): string => {
   const color = TEXT_MARK_TONE_COLOR[tone];
-  const { light, dark } = FILL_PERCENT[state];
+  const { light, dark } =
+    HIGHLIGHT_WASH_PERCENT[variant === "fill" ? "fill" : "line"][state];
+  const wash = (percent: number) =>
+    percent === 0
+      ? "transparent"
+      : `color-mix(in oklab, ${color} ${String(percent)}%, transparent)`;
+  const line = HIGHLIGHT_LINE[variant];
+  const decoration =
+    line === null
+      ? ""
+      : ` text-decoration-line: ${line.line}; text-decoration-style: ${line.style}; text-decoration-color: ${color}; text-decoration-thickness: 2px;`;
   return [
-    `::highlight(${name}) { background-color: color-mix(in oklab, ${color} ${light}%, transparent); color: inherit; }`,
-    `.dark ::highlight(${name}) { background-color: color-mix(in oklab, ${color} ${dark}%, transparent); }`,
+    `::highlight(${name}) { background-color: ${wash(light)}; color: inherit;${decoration} }`,
+    `.dark ::highlight(${name}) { background-color: ${wash(dark)}; }`,
   ].join("\n");
 };
 
@@ -156,6 +186,15 @@ const VARIANT_CLASS = {
     "text-inherit line-through decoration-2 decoration-[color:var(--text-mark)]",
 } as const satisfies Record<TextMarkVariant, string>;
 
+const BOX_LINE_CLASS = {
+  fill: "",
+  underline: "border-b-2 border-(--text-mark)",
+  dotted: "border-b-2 border-dotted border-(--text-mark)",
+  wavy: "border-b-2 border-dashed border-(--text-mark)",
+  strike:
+    "bg-[linear-gradient(transparent_calc(50%-1px),var(--text-mark)_calc(50%-1px),var(--text-mark)_calc(50%+1px),transparent_calc(50%+1px))]",
+} as const satisfies Record<TextMarkVariant, string>;
+
 // Literal per tone rather than built from `TEXT_MARK_TONE_COLOR`: Tailwind
 // only generates classes it can read in the source.
 const TONE_CLASS = {
@@ -170,15 +209,6 @@ const TONE_CLASS = {
   "option-red": "[--text-mark:var(--option-red)]",
   "option-purple": "[--text-mark:var(--option-purple)]",
 } as const satisfies Record<TextMarkTone, string>;
-
-/** The fill's wash, in percent of the hue, for the highlight rule. */
-const FILL_PERCENT = {
-  rest: { light: 30, dark: 20 },
-  active: { light: 45, dark: 35 },
-} as const satisfies Record<
-  TextMarkHighlightRuleOptions["state"],
-  { light: number; dark: number }
->;
 
 type TextMarkLayer = "fill" | "line";
 
@@ -196,6 +226,36 @@ const WASH_CLASS = {
       "bg-(--text-mark)/30 dark:bg-(--text-mark)/20 ring-1 ring-(--text-mark)",
   },
 } as const satisfies Record<TextMarkLayer, Record<TextMarkState, string>>;
+
+/** Each layer's wash in percent of the hue, as `WASH_CLASS` spells it, for
+ *  the highlight rule. */
+const HIGHLIGHT_WASH_PERCENT = {
+  fill: {
+    rest: { light: 30, dark: 20 },
+    matched: { light: 30, dark: 20 },
+    active: { light: 45, dark: 35 },
+  },
+  line: {
+    rest: { light: 0, dark: 0 },
+    matched: { light: 15, dark: 15 },
+    active: { light: 30, dark: 20 },
+  },
+} as const satisfies Record<
+  TextMarkLayer,
+  Record<TextMarkState, { light: number; dark: number }>
+>;
+
+/** Each variant's line, as `VARIANT_CLASS` draws it; a fill has none. */
+const HIGHLIGHT_LINE = {
+  fill: null,
+  underline: { line: "underline", style: "solid" },
+  dotted: { line: "underline", style: "dotted" },
+  wavy: { line: "underline", style: "wavy" },
+  strike: { line: "line-through", style: "solid" },
+} as const satisfies Record<
+  TextMarkVariant,
+  { line: "underline" | "line-through"; style: string } | null
+>;
 
 const WEIGHT_CLASS = {
   inherit: "",

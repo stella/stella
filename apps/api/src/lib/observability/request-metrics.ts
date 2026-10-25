@@ -1,21 +1,20 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
 import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
 import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
-import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 /**
  * Per-request latency, split by request class, emitted as a CloudWatch
  * Embedded Metric Format (EMF) line on stdout.
  *
- * Why EMF on stdout rather than the structured `logger`: the OTel logs
- * pipeline has no exporter wired (see `otel.ts`), so `logger.info`
- * records never leave the process. EMF instead rides the container's
- * stdout into the awslogs driver, where CloudWatch auto-extracts the
- * embedded metric — no agent, no metric filter, no log exporter needed.
+ * Direct stdout preserves the nested `_aws` object CloudWatch extracts.
+ * Structured logging serializes nested attributes, while EMF needs the
+ * directive as an object. The container's awslogs driver delivers these
+ * records without a metric filter or log exporter.
  *
  * The `class` dimension is the whole point: it lets the p95 latency
  * alarm watch `class=crud` in isolation, so an inherently multi-second
@@ -28,11 +27,110 @@ import type { PublicCorpusClass } from "@/api/public-corpus-policy";
  * class regardless of route cardinality; `http.route` and
  * `http.status_code` ride along as queryable properties, not dimensions.
  */
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+const REQUEST_STAGE_FAMILIES = {
+  legislation_search: [
+    "index_scan",
+    "candidate_hydration",
+    "work_collapse_ranking",
+    "response_serialization",
+  ],
+  chat_turn: ["request_setup", "provider_first_token", "stream_finish"],
+} as const;
+
+export type RequestStage =
+  (typeof REQUEST_STAGE_FAMILIES)[keyof typeof REQUEST_STAGE_FAMILIES][number];
+
+const REQUEST_STAGE_FAMILY = {
+  index_scan: "legislation_search",
+  candidate_hydration: "legislation_search",
+  work_collapse_ranking: "legislation_search",
+  response_serialization: "legislation_search",
+  request_setup: "chat_turn",
+  provider_first_token: "chat_turn",
+  stream_finish: "chat_turn",
+} as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
+
+export type RequestStageOutcome =
+  "completed" | "failed" | "refused" | "cancelled";
+
+type RequestStageRecordInput = {
+  route: string;
+  tool?: string;
+  stage: RequestStage;
+  durationMs: number;
+  rounds?: number;
+  candidateCount?: number;
+  resultCount?: number;
+  outcome: RequestStageOutcome;
+};
+
+/** Log-only stage detail: no stage, route, tool, or outcome becomes an EMF dimension. */
+export const buildRequestStageRecord = ({
+  route,
+  tool,
+  stage,
+  durationMs,
+  rounds,
+  candidateCount,
+  resultCount,
+  outcome,
+}: RequestStageRecordInput) => ({
+  event: "request.stage",
+  class: REQUEST_STAGE_FAMILY[stage],
+  "http.route": route,
+  ...(tool === undefined ? {} : { tool }),
+  stage,
+  durationMs: Math.max(0, Math.round(durationMs)),
+  ...(rounds === undefined ? {} : { rounds }),
+  ...(candidateCount === undefined ? {} : { candidateCount }),
+  ...(resultCount === undefined ? {} : { resultCount }),
+  outcome,
+});
+
+export const emitRequestStage = (input: RequestStageRecordInput): void => {
+  writeMetricLine(buildRequestStageRecord(input));
+};
+
+type McpRequestMetricInput = {
+  method: string;
+  mode: string;
+  overlap: boolean;
+  path: string;
+  toolName?: string;
+  phases: Record<
+    "auth" | "context" | "server_build" | "tool_projection" | "dispatch",
+    number
+  >;
+  queryCount: number;
+  totalMs: number;
+};
+
+export const buildMcpRequestMetricRecord = ({
+  phases,
+  totalMs,
+  ...fields
+}: McpRequestMetricInput) => ({
+  event: "mcp.request.phases",
+  ...fields,
+  auth: Math.floor(phases.auth),
+  context: Math.floor(phases.context),
+  server_build: Math.floor(phases.server_build),
+  tool_projection: Math.floor(phases.tool_projection),
+  dispatch: Math.floor(phases.dispatch),
+  total: Math.ceil(totalMs),
+});
+
+export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
+  writeMetricLine(buildMcpRequestMetricRecord(input));
+};
 
 /** One rejection per budget name; caller identifiers are never dimensions. */
 export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
@@ -170,16 +268,87 @@ export const emitSanctionsScreeningWorkMetric = ({
   });
 };
 
+const SANCTIONS_SCREENING_COMPLETION_METRIC =
+  "SanctionsScreeningListCompletion";
+
+/** One complete or incomplete result per source; subjects never become dimensions. */
+export const emitSanctionsScreeningCompletionMetric = ({
+  source,
+  outcome,
+}: {
+  source: SanctionsSource;
+  outcome: "complete" | "incomplete";
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["source", "outcome"]],
+          Metrics: [
+            { Name: SANCTIONS_SCREENING_COMPLETION_METRIC, Unit: "Count" },
+          ],
+        },
+      ],
+    },
+    source,
+    outcome,
+    [SANCTIONS_SCREENING_COMPLETION_METRIC]: 1,
+  });
+};
+
+const DATA_INVARIANT_METRIC = "DataInvariantUnhealthy";
+
+type DataInvariantMetricInput = {
+  /** A stable id from `DATA_INVARIANT_ID`: a closed set, so a safe dimension. */
+  invariant: string;
+  owner: string;
+  severity: string;
+  status: "held" | "violated" | "errored";
+  checked: number;
+  findings: number;
+};
+
+/**
+ * One evaluated data invariant: 0 when it held, 1 when it was violated or
+ * could not be checked. Emitted on every run, so an alarm can also treat a
+ * missing datapoint as breaching: a runner that stopped is not a healthy one.
+ */
+export const emitDataInvariantMetric = ({
+  invariant,
+  owner,
+  severity,
+  status,
+  checked,
+  findings,
+}: DataInvariantMetricInput): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["invariant", "severity"]],
+          Metrics: [{ Name: DATA_INVARIANT_METRIC, Unit: "Count" }],
+        },
+      ],
+    },
+    event: "data_invariant.evaluated",
+    invariant,
+    severity,
+    // Plain log properties; deliberately absent from the dimensions.
+    owner,
+    status,
+    checked,
+    findings,
+    [DATA_INVARIANT_METRIC]: status === "held" ? 0 : 1,
+  });
+};
+
 const EVENT_LOOP_DELAY_METRIC = {
   max: "EventLoopDelayMax",
   p99: "EventLoopDelayP99",
-} as const;
-
-const PROCESS_MEMORY_METRIC = {
-  rss: "ProcessRssBytes",
-  heapUsed: "ProcessHeapUsedBytes",
-  arrayBuffers: "ProcessArrayBuffersBytes",
-  uploadFinalizeInFlight: "UploadFinalizeInFlightBytes",
 } as const;
 
 /**
@@ -191,7 +360,37 @@ export type ProcessMemoryReport = {
   rssBytes: number;
   heapUsedBytes: number;
   arrayBuffersBytes: number;
-  uploadFinalizeInFlightBytes: number;
+  workPools: Record<
+    string,
+    {
+      inFlight: number;
+      queued: number;
+      bytesInFlight: number;
+      refusedBusy: number;
+      refusedMemory: number;
+      deadlineCancelled: number;
+    }
+  >;
+};
+
+/** Log-only: memory diagnostics must not create billable custom metrics. */
+export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  const poolFields = Object.fromEntries(
+    Object.entries(memory.workPools).flatMap(([pool, metrics]) =>
+      Object.entries(metrics).map(([field, value]) => [
+        `work_pool.${pool}.${field}`,
+        value,
+      ]),
+    ),
+  );
+  writeMetricLine({
+    severity: "INFO",
+    message: "runtime.process_memory",
+    rssBytes: memory.rssBytes,
+    heapUsedBytes: memory.heapUsedBytes,
+    arrayBuffersBytes: memory.arrayBuffersBytes,
+    ...poolFields,
+  });
 };
 
 /**
@@ -202,12 +401,10 @@ export const emitEventLoopDelayMetric = ({
   maxMs,
   p99Ms,
   rootPool,
-  memory,
 }: {
   maxMs: number;
   p99Ms: number;
   rootPool?: RootPoolReport;
-  memory?: ProcessMemoryReport;
 }): void => {
   writeMetricLine({
     _aws: {
@@ -219,12 +416,6 @@ export const emitEventLoopDelayMetric = ({
           Metrics: [
             { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
             { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
-            ...(memory === undefined
-              ? []
-              : Object.values(PROCESS_MEMORY_METRIC).map((Name) => ({
-                  Name,
-                  Unit: "Bytes",
-                }))),
           ],
         },
       ],
@@ -233,15 +424,6 @@ export const emitEventLoopDelayMetric = ({
     ...(rootPool === undefined ? {} : { rootPool }),
     [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
     [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
-    ...(memory === undefined
-      ? {}
-      : {
-          [PROCESS_MEMORY_METRIC.rss]: memory.rssBytes,
-          [PROCESS_MEMORY_METRIC.heapUsed]: memory.heapUsedBytes,
-          [PROCESS_MEMORY_METRIC.arrayBuffers]: memory.arrayBuffersBytes,
-          [PROCESS_MEMORY_METRIC.uploadFinalizeInFlight]:
-            memory.uploadFinalizeInFlightBytes,
-        }),
   });
 };
 
@@ -260,7 +442,7 @@ export const resetMetricLineSinkForTesting = (): void => {
   metricLineSink = null;
 };
 
-const writeMetricLine = (record: object): void => {
+export const writeMetricLine = (record: object): void => {
   const line = JSON.stringify(record);
   if (metricLineSink !== null) {
     metricLineSink(line);
@@ -274,6 +456,76 @@ const writeMetricLine = (record: object): void => {
   }
   process.stdout.write(`${line}\n`);
 };
+
+export const CASE_LAW_FRESHNESS_METRIC = {
+  projectionBacklogItems: "CaseLawProjectionBacklogItems",
+  oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
+  sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
+  projectionConvergence: "CaseLawProjectionConvergence",
+} as const satisfies Record<string, string>;
+
+const buildCaseLawMetricRecord = ({
+  dimensions,
+  name,
+  unit,
+  value,
+}: {
+  dimensions: readonly string[];
+  name: (typeof CASE_LAW_FRESHNESS_METRIC)[keyof typeof CASE_LAW_FRESHNESS_METRIC];
+  unit: "Count" | "Seconds";
+  value: number;
+}) => ({
+  _aws: {
+    Timestamp: Temporal.Now.instant().epochMilliseconds,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [[...dimensions]],
+        Metrics: [{ Name: name, Unit: unit }],
+      },
+    ],
+  },
+  [name]: value,
+});
+
+export const buildCaseLawProjectionBacklogMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.projectionBacklogItems,
+    unit: "Count",
+    value,
+  });
+
+export const buildCaseLawOldestUnpublishedAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    dimensions: [],
+    name: CASE_LAW_FRESHNESS_METRIC.oldestUnpublishedAgeSeconds,
+    unit: "Seconds",
+    value,
+  });
+
+export const buildCaseLawSourceSyncAgeMetric = (
+  source: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["source"],
+    name: CASE_LAW_FRESHNESS_METRIC.sourceSyncAgeSeconds,
+    unit: "Seconds",
+    value,
+  }),
+  source,
+});
+
+export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["status"],
+    name: CASE_LAW_FRESHNESS_METRIC.projectionConvergence,
+    unit: "Count",
+    value: 1,
+  }),
+  status,
+});
 
 export const REQUEST_CLASSES = [
   "ai",
@@ -414,7 +666,9 @@ type FailureMetricInput = {
  * sustained rate. Emitted per observation, before any log or capture
  * suppression, so the count is the failure rate rather than the admitted
  * rate. Cardinality is bounded by the closed handle and reason sets; a frame,
- * request id or tenant id never becomes a dimension.
+ * request id or tenant id never becomes a dimension. The release rides along
+ * as a queryable property, never a dimension: each release would otherwise
+ * open new series.
  */
 const buildFailureMetricRecord = ({
   sink,
@@ -433,6 +687,7 @@ const buildFailureMetricRecord = ({
   },
   sink,
   reason,
+  [SERVICE_VERSION_KEY]: APP_VERSION,
   [FAILURE_METRIC_NAME]: 1,
 });
 

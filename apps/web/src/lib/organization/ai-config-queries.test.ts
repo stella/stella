@@ -41,6 +41,11 @@ describe("cached AI availability after config mutations", () => {
       const current = {
         available: !(currentInstanceProvisioned || orgConfigured),
         deferredServiceTierAvailable,
+        unavailableReason:
+          currentInstanceProvisioned || !orgConfigured
+            ? null
+            : ("provider_not_configured" as const),
+        providerConfiguration: "allowed" as const,
         instanceProvisioned: currentInstanceProvisioned,
         mockAnswers: false,
         orgConfigured: !orgConfigured,
@@ -55,6 +60,11 @@ describe("cached AI availability after config mutations", () => {
       ).toEqual({
         available: instanceProvisioned || orgConfigured,
         deferredServiceTierAvailable,
+        unavailableReason:
+          instanceProvisioned || orgConfigured
+            ? null
+            : ("provider_not_configured" as const),
+        providerConfiguration: "allowed" as const,
         instanceProvisioned,
         mockAnswers: false,
         orgConfigured,
@@ -72,5 +82,33 @@ describe("cached AI availability after config mutations", () => {
         orgConfigured: true,
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("AI defaults preview cache", () => {
+  test("keys previews by organization and ordered provider list", async () => {
+    const { aiDefaultsPreviewOptions } = await import("./ai-config-queries");
+    const googleThenAnthropic = aiDefaultsPreviewOptions({
+      organizationId: "org-1",
+      providers: ["google", "anthropic"],
+    }).queryKey;
+    expect(googleThenAnthropic).not.toEqual(
+      aiDefaultsPreviewOptions({
+        organizationId: "org-1",
+        providers: ["anthropic", "google"],
+      }).queryKey,
+    );
+    expect(googleThenAnthropic).not.toEqual(
+      aiDefaultsPreviewOptions({
+        organizationId: "org-2",
+        providers: ["google", "anthropic"],
+      }).queryKey,
+    );
+    expect(googleThenAnthropic).toEqual(
+      aiDefaultsPreviewOptions({
+        organizationId: "org-1",
+        providers: ["google", "anthropic"],
+      }).queryKey,
+    );
   });
 });

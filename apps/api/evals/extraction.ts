@@ -23,7 +23,7 @@
  *   schemaViolations  answers `validateAIOutput` rejected
  *
  * `generateWorkflowData` always resolves its model through the "pdf" model
- * role (`streamTanStackObjectForRole({ role: "pdf", ... })`); it exposes no
+ * role (`streamTanStackObjectForTask({ task: "pdf", ... })`); it exposes no
  * per-call model id. The only lever it takes is `orgAIConfig`, which pins a
  * BYOK model per role (`overrideModels.pdf`) — the same mechanism org
  * settings use to choose a model. `--models` builds one such config per
@@ -45,7 +45,7 @@ import { Panic, panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
 import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
-import type { BYOKProvider, ModelRole } from "@stll/ai-catalog";
+import type { BYOKProvider, ModelOverrideGroup } from "@stll/ai-catalog";
 
 import type {
   AiExtractablePropertyContent,
@@ -630,7 +630,7 @@ const buildOrgAIConfig = (selection: ModelSelection): OrgAIConfig => {
     provider: selection.provider,
     modelId: selection.modelId,
   };
-  const overrideModels: Record<ModelRole, OrgAIModelSelection> = {
+  const overrideModels: Record<ModelOverrideGroup, OrgAIModelSelection> = {
     fast: modelSelection,
     chat: modelSelection,
     reasoning: modelSelection,
@@ -673,11 +673,7 @@ const resolveModelTargets = (specs: readonly string[]): ModelTarget[] =>
 // --------------- Scoring ---------------
 
 type FieldOutcome =
-  | "correct"
-  | "wrong"
-  | "hallucinated"
-  | "missing"
-  | "schema-violation";
+  "correct" | "wrong" | "hallucinated" | "missing" | "schema-violation";
 
 type FieldGrade = {
   key: string;
@@ -929,6 +925,7 @@ const runTask = async ({
     organizationId: EVAL_ORGANIZATION_ID,
     // An offline evaluation runs no admission: it mints the proof itself.
     admission: admitFixtureModelDispatch({
+      userId: null,
       organizationId: EVAL_ORGANIZATION_ID,
       actionKind: "workflow.background",
       modelTier: MANAGED_MODEL_TIER.standard,

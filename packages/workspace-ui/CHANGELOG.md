@@ -1,5 +1,65 @@
 # @stll/workspace-ui
 
+## 0.13.0
+
+### Minor Changes
+
+- [#6268](https://github.com/stella/stella/pull/6268) [`5fb50f0`](https://github.com/stella/stella/commit/5fb50f0fe6c2161d41c50a46cb961aaa8f037494) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow hosts to provide typed content for workspace feature previews while retaining the default scenes.
+
+- [#6247](https://github.com/stella/stella/pull/6247) [`d2ad946`](https://github.com/stella/stella/commit/d2ad946f78aa870f47a2f3e7cddf4028e7481c0c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/feature-previews`: static product scenes (matters, documents, research, billing, contacts, time tracking) composed from the app's own components, for marketing pages, menus and slides. Each scene takes its interface labels and a formatting locale. Add `@stll/workspace-ui/task-status`, the glyph and colour of each task status.
+
+### Patch Changes
+
+- [#6472](https://github.com/stella/stella/pull/6472) [`83e4634`](https://github.com/stella/stella/commit/83e4634ae41525365ddcca368db1d128e6448729) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Paginate filesystem tree reads and expose bounded text previews in entity lists.
+- Updated dependencies [[`7835dfd`](https://github.com/stella/stella/commit/7835dfd514ad56fce2a4f00fd4bf0bd522188d34), [`281665b`](https://github.com/stella/stella/commit/281665baa193e2ab2b3acba0da3a259ec16a770a), [`a765cda`](https://github.com/stella/stella/commit/a765cdaeb5718de31b707958364dfde7b6c98594), [`2dd1699`](https://github.com/stella/stella/commit/2dd16994dfba74f35540d47b1582e428ba7b4bc1), [`85a56db`](https://github.com/stella/stella/commit/85a56dbbf73156b5b7e4a0e37c73db382aa02ada)]:
+  - @stll/ui@0.51.0
+
+## 0.12.7
+
+### Patch Changes
+
+- Updated dependencies [[`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64), [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a), [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8), [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952)]:
+  - @stll/ui@0.50.0
+
+## 0.12.6
+
+### Patch Changes
+
+- Updated dependencies [[`6787bf4`](https://github.com/stella/stella/commit/6787bf4a6e33a5fa97538d91428d928ffffaabc8), [`f68baf7`](https://github.com/stella/stella/commit/f68baf7f2240db328e62201120dde71f3baf2b7b)]:
+  - @stll/ui@0.49.0
+
+## 0.12.5
+
+### Patch Changes
+
+- Updated dependencies [[`ed25af1`](https://github.com/stella/stella/commit/ed25af1211e6e5f091842ddf553f2795f5c16622)]:
+  - @stll/ui@0.48.0
+
+## 0.12.4
+
+### Patch Changes
+
+- [#5740](https://github.com/stella/stella/pull/5740) [`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A destructive confirm dialog stays open when its confirm settles to `"keep-open"`, and a host-responsive workspace frame may omit its end dock.
+- Updated dependencies [[`39eac6e`](https://github.com/stella/stella/commit/39eac6e360d0e4bbe23f61c6970ade7852f3927d)]:
+  - @stll/ui@0.47.1
+
+## 0.12.3
+
+### Patch Changes
+
+- Updated dependencies [[`55d62c9`](https://github.com/stella/stella/commit/55d62c989b81bf063cc4cef899aae4a3efe00077)]:
+  - @stll/ui@0.47.0
+
+## 0.12.2
+
+### Patch Changes
+
+- [#5858](https://github.com/stella/stella/pull/5858) [`a67d306`](https://github.com/stella/stella/commit/a67d306deebd7e5d6bdec53e907996990dcee819) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update runtime dependencies.
+
+- [#5646](https://github.com/stella/stella/pull/5646) [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pad edge-attached surfaces (workspace shell, rails, sheets, bottom-stuck dialogs, toasts) with the device safe-area insets, contain overscroll in shared scrollers, keep long-press from selecting control labels, use a strong ease-out for entering and exiting motion, and give `Button` a short press scale while it is enabled.
+- Updated dependencies [[`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1), [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94), [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870), [`1b7773e`](https://github.com/stella/stella/commit/1b7773effd472e11422bc82d0d417fdf22ce9ff1), [`ad3cd0a`](https://github.com/stella/stella/commit/ad3cd0a68ebcb2bee63dc8a8d12a0fb3c9783975)]:
+  - @stll/ui@0.46.0
+
 ## 0.12.1
 
 ### Patch Changes
@@ -241,8 +301,8 @@
 
 ### Minor Changes
 
-- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
-  amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency.
+  `toMinorUnits({ amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
   `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
 
@@ -252,8 +312,8 @@
   an amount it cannot store; `tryToMinorUnits` returns null instead, for callers
   holding text nobody has vouched for yet.
 
-  BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
-  === x` and a running total silently stops moving. `@stll/workspace-ui` no
+  BREAKING: `cents()` now rejects an integer outside the safe range, where
+  `x + 1 === x` and a running total silently stops moving. `@stll/workspace-ui` no
   longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
   `FormatMoneyCentsParams`; import them from `@stll/money`.
 

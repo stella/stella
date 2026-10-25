@@ -4,6 +4,7 @@ export const READER_MESSAGE_KEYS = {
   "statutes.diffRemoved": "statutes.diffRemoved",
   "statutes.diffInserted": "statutes.diffInserted",
   "common.copyLink": "common.copyLink",
+  "common.copied": "common.copied",
   "common.back": "common.back",
   "caseLaw.viewer.legalSentence": "caseLaw.viewer.legalSentence",
   "caseLaw.viewer.abstract": "caseLaw.viewer.abstract",
@@ -17,6 +18,7 @@ export const READER_MESSAGE_KEYS = {
   "statutes.provisionTextUnavailable": "statutes.provisionTextUnavailable",
   "statutes.showCitedPartOnly": "statutes.showCitedPartOnly",
   "statutes.showFullProvision": "statutes.showFullProvision",
+  "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
 } as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
 
 export const READER_TEMPLATE_KEYS = [

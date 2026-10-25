@@ -21,18 +21,18 @@ import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   ArchiveIcon,
-  CopyIcon,
   DownloadIcon,
+  DuplicateIcon,
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
-  FilePenLineIcon,
   FileOutputIcon,
+  FilePenLineIcon,
   FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
-  LaptopIcon,
   LanguagesIcon,
+  LaptopIcon,
   LockOpenIcon,
   Maximize2Icon,
   MessageSquareIcon,
@@ -63,9 +63,9 @@ import { DownloadRenditionMenuItems } from "@/components/inspector/download-rend
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
   canDownloadScrubbed,
-  getDownloadRenditions,
   type DownloadRendition,
   type DownloadVariant,
+  getDownloadRenditions,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
@@ -82,8 +82,8 @@ import {
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
-  resolveAncestorIds,
   type CopyToMatterEntity,
+  resolveAncestorIds,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
   getEntityName,
@@ -102,6 +102,7 @@ import {
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
+  planFolderFromSelection,
   requestDesktopEditTakeover,
   type RowActionContext,
 } from "@/components/workspaces/row-actions.logic";
@@ -125,8 +126,8 @@ import {
   type OpenFileInDesktopResult,
 } from "@/lib/desktop-bridge";
 import {
-  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   canOpenDesktopEdit,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
@@ -149,6 +150,7 @@ import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
   useCreateEntities,
+  useCreateFolderFromSelection,
   useDeleteEntities,
 } from "@/lib/workspaces/mutations/entities";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
@@ -170,9 +172,10 @@ type RowActionsProps = {
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
   onRename?: (() => void) | undefined;
+  /** A folder was created from this menu under `parentId` (null: the matter
+   *  root); the caller reveals it and starts renaming it. */
   onSubfolderCreated?:
-    | ((entityId: string, parentId: string) => void)
-    | undefined;
+    ((entityId: string, parentId: string | null) => void) | undefined;
   triggerClassName?: string | undefined;
   triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
@@ -202,8 +205,7 @@ type GetRowFileTargetOptions = {
 };
 
 type TranslationDialogState =
-  | { type: "closed" }
-  | { target: TranslationTarget; type: "open" };
+  { type: "closed" } | { target: TranslationTarget; type: "open" };
 
 /** What a confirmed deletion removes, captured when it was requested. */
 type DeleteRequest = {
@@ -1056,6 +1058,14 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
+        {isBulk && !isCellContext && (
+          <CreateFolderFromSelectionMenuItem
+            getAncestorIds={getAncestorIds}
+            onFolderCreated={onSubfolderCreated}
+            targets={bulkTargets}
+            workspaceId={workspaceId}
+          />
+        )}
         {/* --- View / Edit --- */}
         <RowOpenMenuActions
           canUploadVersion={canUploadVersion}
@@ -1213,7 +1223,7 @@ const RowDuplicatePrimaryAction = ({
       tooltip={label}
       variant="ghost"
     >
-      {pending ? <Loader label={label} size="sm" /> : <CopyIcon />}
+      {pending ? <Loader label={label} size="sm" /> : <DuplicateIcon />}
     </Button>
   );
 };
@@ -1718,7 +1728,7 @@ const RowFileOperationsMenu = ({
         disabled={duplicatePending}
         onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
       >
-        <CopyIcon />
+        <DuplicateIcon />
         {duplicatePending ? t("common.duplicating") : t("common.duplicate")}
       </MenuItem>
       <MenuItem onClick={onCopyToMatter}>
@@ -1789,7 +1799,7 @@ const RowDeleteDialog = ({
 type CreateSubfolderMenuItemProps = {
   entity: WorkspaceEntity;
   workspaceId: string;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: NonNullable<RowActionsProps["onSubfolderCreated"]>;
 };
 
 const CreateSubfolderMenuItem = ({
@@ -1841,6 +1851,75 @@ const CreateSubfolderMenuItem = ({
         <FolderPlusIcon />
         {t("workspaces.filesystem.newSubfolder")}
       </MenuItem>
+    </>
+  );
+};
+
+type CreateFolderFromSelectionMenuItemProps = {
+  getAncestorIds: RowActionsProps["getAncestorIds"];
+  onFolderCreated: RowActionsProps["onSubfolderCreated"];
+  targets: readonly WorkspaceEntity[];
+  workspaceId: string;
+};
+
+const CreateFolderFromSelectionMenuItem = ({
+  getAncestorIds,
+  onFolderCreated,
+  targets,
+  workspaceId,
+}: CreateFolderFromSelectionMenuItemProps) => {
+  const t = useTranslations();
+  const createFolder = useCreateFolderFromSelection();
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
+  const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
+  const canCreateAndMove = usePermissions({ entity: ["create", "update"] });
+  const plan = planFolderFromSelection(
+    toCopyToMatterEntities(targets, getAncestorIds),
+  );
+  const movedIds = new Set(plan.entityIds);
+  const movesReadOnly = targets.some(
+    (target) => target.readOnly && movedIds.has(target.entityId),
+  );
+
+  if (isEntitiesLimitReached || !canCreateAndMove || movesReadOnly) {
+    return null;
+  }
+
+  // The menu closes, and the selection with it, before the request settles,
+  // so the outcome is read from the request itself rather than from
+  // per-call mutation callbacks bound to this item.
+  const handleCreate = async () => {
+    const created = await Result.tryPromise(
+      async () =>
+        await createFolder.mutateAsync({
+          workspaceId,
+          name: t("workspaces.newFolder"),
+          parentId: plan.parentId,
+          entityIds: plan.entityIds,
+        }),
+    );
+    if (Result.isError(created)) {
+      notifyUserError(created.error, t("errors.actionFailed"));
+      return;
+    }
+    stellaToast.add({ title: t("success.folderCreated"), type: "success" });
+    onFolderCreated?.(created.value.entityId, plan.parentId);
+  };
+
+  return (
+    <>
+      <WorkflowQueryFeedback display="menu" view={workflowView} />
+      <MenuItem
+        disabled={workflowDisabled || createFolder.isPending}
+        onClick={() =>
+          detached(handleCreate(), "row-actions.create-folder-from-selection")
+        }
+      >
+        <FolderPlusIcon />
+        {t("workspaces.newFolder")}
+      </MenuItem>
+      <MenuSeparator />
     </>
   );
 };

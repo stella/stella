@@ -19,7 +19,7 @@ import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import {
   resolveTanStackTextModel,
-  streamTanStackObjectForRole,
+  streamTanStackObjectForTask,
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
 import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
@@ -80,8 +80,7 @@ type GenerateWorkflowDataProps = {
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
   /** Injected by tests; the org's resolved decision model otherwise, null for none. */
   decisionModel?: DecisionModel | null | undefined;
   /** External model-resolution boundary, injected by focused integration tests. */
@@ -154,7 +153,7 @@ export const buildWorkflowAIAnalyticsProps = ({
 }: BuildWorkflowAIAnalyticsPropsInput): WorkflowAIAnalyticsProps => ({
   dataClass: "customer" as const,
   feature: "workflow.generate-batch",
-  modelRole: "pdf",
+  modelTask: "pdf",
   orgAIConfig,
   properties: {
     entity_version_id: entityVersionId,
@@ -181,8 +180,7 @@ type SystemOnePhaseOptions = {
   textInputs: TextInput[];
   abortSignal: AbortSignal;
   onPartialAnswer:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
 
 type SystemOnePhaseResult = {
@@ -319,13 +317,12 @@ export const generateWorkflowData = async ({
 > => {
   const cachingDecision = resolveCaching({
     promptCachingEnabled,
-    role: "pdf",
+    task: "pdf",
     scopeKey: entityVersionId,
   });
 
   type WorkflowMessagePart =
-    | DocumentPart<AnthropicDocumentMetadata>
-    | TextPart<AnthropicTextMetadata>;
+    DocumentPart<AnthropicDocumentMetadata> | TextPart<AnthropicTextMetadata>;
 
   const messageContent: WorkflowMessagePart[] = [];
   const extractedTextFileCount = files.filter(
@@ -395,8 +392,9 @@ export const generateWorkflowData = async ({
 
   const typedPhase = await askSystemOne({
     generation: (plannedProperties) => ({
+      userId: admission.userId,
       dataClass: "customer",
-      role: "pdf",
+      task: "pdf",
       resolveTextModel,
       orgAIConfig,
       managedAIResidency,
@@ -455,9 +453,10 @@ export const generateWorkflowData = async ({
   const model = await Result.tryPromise({
     try: async () =>
       await (resolveTextModel ?? resolveTanStackTextModel)({
+        userId: admission.userId,
         dataClass: "customer",
         managedAIResidency,
-        role: "pdf",
+        task: "pdf",
         orgAIConfig,
         organizationId,
         admission,
@@ -530,9 +529,10 @@ export const generateWorkflowData = async ({
 
     return await Result.tryPromise({
       try: async () => {
-        const stream = streamTanStackObjectForRole({
+        const stream = streamTanStackObjectForTask({
+          userId: admission.userId,
           dataClass: "customer",
-          role: "pdf",
+          task: "pdf",
           resolveTextModel,
           orgAIConfig,
           managedAIResidency,

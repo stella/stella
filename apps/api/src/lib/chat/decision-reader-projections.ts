@@ -4,8 +4,8 @@ import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
   READER_PAGE_MAX_CHARS,
-  READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
 } from "@stll/api-contract/limits";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -23,7 +23,7 @@ const readerMetadataSchema = v.strictObject({
   country: v.string(),
   date: v.nullable(v.string()),
   ecli: v.nullable(v.string()),
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
 });
 const withheldReasonSchema = v.strictObject({
   code: v.literal("source_licence"),
@@ -63,10 +63,10 @@ const citationAnchorSchema = v.strictObject({
   end: v.number(),
   citationId: v.string(),
   decisionId: v.string(),
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
 });
 const provisionAnchorSchema = v.strictObject({
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
   pieceId: v.string(),
   start: v.number(),
   end: v.number(),
@@ -123,7 +123,7 @@ const previewHeading = v.strictObject({
   text: v.string(),
 });
 export const provisionPreviewOutput = v.strictObject({
-  appUrl: v.nullable(v.string()),
+  url: v.nullable(v.string()),
   documentId: v.string(),
   language: v.string(),
   anchorId: v.string(),

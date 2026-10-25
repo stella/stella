@@ -2,9 +2,9 @@
 import { decodeHTMLStrict } from "entities";
 
 import {
-  MARKUP_RESIDUE_RULE_IDS,
   EXTRACTION_WARNING_FIRST_OFFSETS_MAX,
   type ExtractionWarnings,
+  MARKUP_RESIDUE_RULE_IDS,
 } from "@stll/api-contract/case-law-extraction-warnings";
 
 /**

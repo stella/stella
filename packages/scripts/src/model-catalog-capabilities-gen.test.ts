@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
@@ -26,7 +26,7 @@ const upstreamWithToolCall = (
         releaseDate: null,
         reasoning: false,
         effortValues: null,
-        inputModalities: ["text"],
+        inputModalities: provider === "mistral" ? ["text", "pdf"] : ["text"],
         outputTokens: 8192,
         temperature: false,
         toolCall: toolCallFor(modelId),

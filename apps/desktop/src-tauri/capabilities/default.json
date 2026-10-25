@@ -16,8 +16,8 @@
     "allow-copy-diagnostics",
     "allow-email-support",
     "allow-reveal-support-root",
-    "allow-is-autostart-enabled",
     "allow-set-autostart",
+    "allow-onboarding-restart",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
@@ -32,6 +32,14 @@
     "allow-account-get-state",
     "allow-account-disconnect",
     "allow-get-desktop-telemetry-enabled",
-    "allow-set-desktop-telemetry-enabled"
+    "allow-set-desktop-telemetry-enabled",
+    "allow-shortcut-get-snapshot",
+    "allow-shortcut-check",
+    "allow-shortcut-pause",
+    "allow-shortcut-resume",
+    "allow-shortcut-set",
+    "allow-permissions-get-snapshot",
+    "allow-permissions-request",
+    "allow-permissions-open-settings"
   ]
 }

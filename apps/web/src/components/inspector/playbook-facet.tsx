@@ -110,8 +110,8 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
-  restoreReviewRun,
   restoredRunId,
+  restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
@@ -195,6 +195,7 @@ import type {
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { filterPlaybooksByName } from "@/components/inspector/playbook-facet.logic";
 import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
@@ -237,8 +238,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type {
   Negotiation,
   PlaybookListItem,
-  Position,
   PlaybookPositionsValue,
+  Position,
 } from "@/lib/knowledge/playbook-types";
 import { positionReferencePassages } from "@/lib/knowledge/playbook-types";
 import {
@@ -637,6 +638,7 @@ export const PlaybookFacet = ({
         return { type: "failed" } as const;
       }
       const result = editor.applyAIEditOperations({
+        undefinedReferences: "refuse",
         snapshot,
         operations: [
           {
@@ -2060,13 +2062,7 @@ const PlaybookPicker = ({
 }: PlaybookPickerProps) => {
   const t = useTranslations();
   const [filter, setFilter] = useState("");
-  const normalizedFilter = filter.trim().toLocaleLowerCase();
-  const visiblePlaybooks =
-    normalizedFilter.length === 0
-      ? playbooks
-      : playbooks.filter((playbook) =>
-          playbook.name.toLocaleLowerCase().includes(normalizedFilter),
-        );
+  const visiblePlaybooks = filterPlaybooksByName(playbooks, filter);
 
   return (
     <section className="space-y-2">
@@ -2410,7 +2406,6 @@ const PositionConfirmStep = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 onChange={(next) => updateAt(index, next)}
                 onRemove={() =>
                   onChange(positions.filter((_, at) => at !== index))
@@ -2511,7 +2506,6 @@ const ProposalStreamView = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 passageTexts={passageTexts}
                 position={position}
                 referenceNames={referenceNames}

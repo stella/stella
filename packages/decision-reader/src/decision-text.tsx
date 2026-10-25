@@ -47,8 +47,8 @@ import {
   FulltextFallback,
   HighlightedText,
   InlineContent,
-  WrappedParagraphRun,
   rangesForPiece,
+  WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
 import { locateExternalCjeuCitations } from "./fallback-legal-anchors";
@@ -57,6 +57,7 @@ import type { HeadnoteOrigin } from "./headnote-block";
 import type { ProvisionAnchorSpan } from "./provision-anchors";
 import { locateProvisionAnchors } from "./provision-anchors";
 import { provisionCardsOf } from "./provision-card.logic";
+import type { ProvisionCardCitations } from "./provision-card.logic";
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
@@ -66,6 +67,7 @@ import type {
   CitedProvisionTarget,
   DecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
   ReaderDecision,
 } from "./reader-types";
 import { sanitizeHref } from "./sanitize-href";
@@ -496,6 +498,7 @@ const buildAnchorsByPieceId = ({
   blocks,
   citations,
   provisionSpans,
+  externalProvisionSpans,
   statutes,
 }: {
   adapters: Pick<
@@ -506,6 +509,10 @@ const buildAnchorsByPieceId = ({
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
   provisionSpans: Record<string, ProvisionAnchorSpan<CitedProvisionTarget>[]>;
+  externalProvisionSpans: Record<
+    string,
+    ProvisionAnchorSpan<{ href: string }>[]
+  >;
   statutes: readonly DecisionStatuteCitationAnchor[];
 }): DecisionTextAnchorPlacements => {
   const failures: ProvisionPlacementFailure[] = [];
@@ -551,6 +558,7 @@ const buildAnchorsByPieceId = ({
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(provisionSpans),
+    ...Object.keys(externalProvisionSpans),
     ...statuteSpans.keys(),
     ...externalCjeuSpansByBlock.keys(),
     ...annotationsByBlock.keys(),
@@ -610,6 +618,24 @@ const buildAnchorsByPieceId = ({
           });
         },
         start: span.start,
+      });
+    }
+    for (const span of externalProvisionSpans[blockId] ?? []) {
+      anchors.push({
+        start: span.start,
+        end: span.end,
+        key: `provision:${span.source.id}`,
+        render: (children): ReactElement => (
+          <ExternalCitationLink href={span.source.target.href}>
+            {renderLinkAnnotations({
+              annotations: annotationsOverlappingTextSpan(
+                blockAnnotations ?? [],
+                span,
+              ),
+              children,
+            })}
+          </ExternalCitationLink>
+        ),
       });
     }
     for (const span of statuteSpans.get(blockId) ?? []) {
@@ -718,7 +744,40 @@ export type PrepareDecisionTextPlacementsOptions = {
   blocks: readonly Block[];
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
+  externalProvisionAnchors?:
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
+};
+
+export type DecisionProvisionCard = ProvisionCardCitations & {
+  startAnchorId: string;
+};
+
+/** Provision cards grouped by the paragraph whose text cites them. */
+export const prepareDecisionProvisionCards = ({
+  blocks,
+  provisionAnchors,
+}: Pick<
+  PrepareDecisionTextPlacementsOptions,
+  "blocks" | "provisionAnchors"
+>): DecisionProvisionCard[] => {
+  const placement = locateProvisionAnchors({
+    blocks,
+    provisions: provisionAnchors,
+  });
+  const cards: DecisionProvisionCard[] = [];
+  for (const block of blocks) {
+    if (!hasBlockInlines(block)) {
+      continue;
+    }
+    const spans = (placement.anchorsByPieceId[block.id] ?? []).toSorted(
+      (left, right) => left.start - right.start,
+    );
+    for (const card of provisionCardsOf(spans.map(({ source }) => source))) {
+      cards.push({ ...card, startAnchorId: block.anchorId });
+    }
+  }
+  return cards;
 };
 
 export const prepareDecisionTextPlacements = ({
@@ -727,11 +786,16 @@ export const prepareDecisionTextPlacements = ({
   blocks,
   citationAnchors,
   provisionAnchors,
+  externalProvisionAnchors = [],
   statuteCitationAnchors,
 }: PrepareDecisionTextPlacementsOptions): DecisionTextAnchorPlacements => {
   const provisionPlacement = locateProvisionAnchors({
     blocks,
     provisions: provisionAnchors,
+  });
+  const externalPlacement = locateProvisionAnchors({
+    blocks,
+    provisions: externalProvisionAnchors,
   });
   const placements = buildAnchorsByPieceId({
     adapters,
@@ -739,12 +803,17 @@ export const prepareDecisionTextPlacements = ({
     blocks,
     citations: citationAnchors,
     provisionSpans: provisionPlacement.anchorsByPieceId,
+    externalProvisionSpans: externalPlacement.anchorsByPieceId,
     statutes: statuteCitationAnchors,
   });
   return {
     anchorsByPieceId: placements.anchorsByPieceId,
     provisionsByAnchorId: placements.provisionsByAnchorId,
-    failures: [...provisionPlacement.failures, ...placements.failures],
+    failures: [
+      ...provisionPlacement.failures,
+      ...externalPlacement.failures,
+      ...placements.failures,
+    ],
   };
 };
 

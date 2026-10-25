@@ -18,10 +18,10 @@ import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
-  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
@@ -38,7 +38,10 @@ import {
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
+} from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -89,13 +92,17 @@ import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
+import {
+  type AuthorizedWorkspaceIds,
+  authorizedWorkspaceIds,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -157,7 +164,7 @@ export const executeFlowStep = async (
   {
     admission,
     database,
-    generateTextForRole = generateTanStackTextForRole,
+    generateTextForTask = generateTanStackTextForTask,
     makeScopedDb = createRootScopedDb,
     makeSafeDb = createRootSafeDb,
     enqueueStep = enqueueFlowStep,
@@ -175,7 +182,7 @@ export const executeFlowStep = async (
     /** The worker's connection, for the run, step and scope reads. */
     database: Pick<typeof rootDb, "query">;
     /** External model-dispatch boundary; supplied by focused integration tests. */
-    generateTextForRole?: typeof generateTanStackTextForRole | undefined;
+    generateTextForTask?: typeof generateTanStackTextForTask | undefined;
     makeScopedDb?: typeof createRootScopedDb | undefined;
     makeSafeDb?: typeof createRootSafeDb | undefined;
     enqueueStep?: typeof enqueueFlowStep | undefined;
@@ -309,7 +316,7 @@ export const executeFlowStep = async (
           workspaceIds: [run.workspaceId],
         }),
         signal,
-        generateTextForRole,
+        generateTextForTask,
         loadAIConfig,
       });
       await completeStepAndAdvance({
@@ -426,7 +433,7 @@ type RunAiStepArgs = {
   scopedDb: ReturnType<typeof createRootScopedDb>;
   safeDb: SafeDb;
   signal: AbortSignal;
-  generateTextForRole: typeof generateTanStackTextForRole;
+  generateTextForTask: typeof generateTanStackTextForTask;
   loadAIConfig: typeof loadOrgAIConfig;
 };
 
@@ -443,14 +450,26 @@ const runAiStep = async ({
   scopedDb,
   safeDb,
   signal,
-  generateTextForRole,
+  generateTextForTask,
   loadAIConfig,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
-    ? await loadInputDocuments(scopedDb, organizationId, run.inputEntityIds)
+    ? await loadInputDocuments(
+        scopedDb,
+        organizationId,
+        await scopedDb(async (tx) =>
+          (
+            await authorizedWorkspaceIds(tx, {
+              organizationId,
+              workspaceIds: [run.workspaceId],
+            })
+          ).unwrap("The scoped workspace authorization read must succeed"),
+        ),
+        run.inputEntityIds,
+      )
     : [];
 
   const prompt = buildAiStepPrompt({
@@ -475,7 +494,7 @@ const runAiStep = async ({
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "flows.ai-step",
-    modelRole: "chat",
+    modelTask: "chat",
     orgAIConfig,
     modelTier: admission.modelTier,
     properties: {
@@ -494,13 +513,14 @@ const runAiStep = async ({
     },
   });
 
-  // `generateTanStackTextForRole` throws on provider/config failure; that is
+  // `generateTanStackTextForTask` throws on provider/config failure; that is
   // exactly the retry signal the worker wants, so we let it propagate. Works
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
-  const markdown = await generateTextForRole({
+  const markdown = await generateTextForTask({
+    userId: admission.userId,
     dataClass: "customer",
-    role: "chat",
+    task: "chat",
     organizationId,
     admission,
     tenantWorkspaceIds: [run.workspaceId],
@@ -515,14 +535,12 @@ const runAiStep = async ({
     maxOutputTokens: FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "chat",
+      task: "chat",
       scopeKey: organizationId,
     }),
     serviceTier: "standard",
-    abortSignal: AbortSignal.any([
-      signal,
-      AbortSignal.timeout(FLOW_AI_GENERATION_TIMEOUT_MS),
-    ]),
+    abortSignal: signal,
+    deadlineMs: FLOW_AI_GENERATION_TIMEOUT_MS,
   });
 
   return { kind: "ai", markdown };
@@ -599,28 +617,18 @@ const readPriorAiMarkdown = async (
 export const loadInputDocuments = async (
   scopedDb: ReturnType<typeof createRootScopedDb>,
   organizationId: SafeId<"organization">,
+  workspaceIds: AuthorizedWorkspaceIds,
   entityIds: SafeId<"entity">[],
 ): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
     return [];
   }
 
-  // Detect unavailable inputs before reading or decrypting any content. A
-  // selected input without an `extracted_content` row (extraction still pending
-  // or failed, or a non-extraction entity that the summaries picker surfaced)
-  // would otherwise drop out silently and let the step generate legal output
-  // from an incomplete document set. Fail the step, naming the unavailable
-  // inputs, instead of proceeding with fewer documents.
-  const available = await scopedDb((tx) =>
-    tx.query.extractedContent.findMany({
-      where: { entityId: { in: entityIds } },
-      columns: { entityId: true },
-      limit: entityIds.length,
-    }),
-  );
-  if (available.length < entityIds.length) {
-    const loaded = new Set(available.map((row) => row.entityId));
-    const missingIds = entityIds.filter((id) => !loaded.has(id));
+  const refuseUnavailable = async (loadedIds: ReadonlySet<string>) => {
+    const missingIds = entityIds.filter((id) => !loadedIds.has(id));
+    if (missingIds.length === 0) {
+      return;
+    }
     const missingEntities = await scopedDb((tx) =>
       tx.query.entities.findMany({
         where: { id: { in: missingIds } },
@@ -635,26 +643,39 @@ export const loadInputDocuments = async (
     throw new FlowStepError({
       message: `${missingIds.length} selected input document(s) could not be loaded because their content is not available yet (extraction is still pending or has failed)${named}. Re-run this workflow once the document(s) have finished processing.`,
     });
-  }
+  };
 
-  const rows = await scopedDb((tx) =>
-    tx.query.extractedContent.findMany({
-      where: { entityId: { in: entityIds } },
-      columns: { ciphertext: true, iv: true },
-      with: { entity: { columns: { name: true } } },
-      limit: entityIds.length,
-    }),
+  // Availability is decided from provenance alone; text is decrypted only for
+  // a complete input set, and a document that became unavailable in between
+  // gets the same refusal.
+  const sources = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedSources(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
   );
+  await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
+  const available = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedContents(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
+  );
+  await refuseUnavailable(new Set(available.map((row) => row.entityId)));
 
   const drained = await drainFanOut({
-    items: rows,
+    items: available,
     signal: new AbortController().signal,
     operation: async (row, signal) => {
       signal.throwIfAborted();
-      return {
-        label: row.entity?.name ?? "Document",
-        text: await decryptContent(organizationId, row.ciphertext, row.iv),
-      };
+      return await Promise.resolve({
+        label: row.name,
+        text: row.text,
+      });
     },
   });
   if (Result.isError(drained)) {

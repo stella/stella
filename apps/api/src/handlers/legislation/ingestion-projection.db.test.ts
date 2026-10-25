@@ -10,8 +10,8 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import {
-  processLegislationDocument,
   type LegislationCorpusDependencies,
+  processLegislationDocument,
 } from "@/api/handlers/legislation/ingestion";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
@@ -19,8 +19,8 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  planCorpusDocumentWrite,
   type CorpusWriteOutcome,
+  planCorpusDocumentWrite,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

@@ -3,22 +3,40 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { aiMemories } from "@/api/db/schema";
+import { canManageMemory } from "@/api/handlers/memories/authorization";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  description:
+    "Change one assistant memory: accept a suggested memory (status " +
+    "active), retire it (status archived), pin or unpin it, or edit its " +
+    "content. Archiving is how a memory is removed; an archived memory must " +
+    "be set active again before its content can change. Firm-wide memory " +
+    "needs firm-memory permission, matter memory needs permission to update " +
+    "that active matter.",
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    confirmation: "required",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
+  realtime: noResourceSetUpdates(
+    "Memory mutation callers invalidate the caller-scoped memory queries after a successful write.",
+  ),
   params: t.Object({ memoryId: tSafeId("aiMemory") }),
   body: t.Object({
     // Accept a suggestion (-> active) or dismiss/retire it (-> archived).
@@ -45,6 +63,7 @@ const updateMemory = createSafeRootHandler(
     params,
     recordAuditEvent,
     safeDb,
+    user,
   }) {
     // An edited body re-enters future prompts, so re-run the same fail-closed
     // sanitizer the create paths use before opening the transaction.
@@ -91,21 +110,13 @@ const updateMemory = createSafeRootHandler(
         return { type: "not_found" } as const;
       }
 
-      // Firm memory is governance-gated. The row's scope is only known after
-      // the locked fetch, so this permission cannot be static in `config`.
       if (
-        row.scope === "organization" &&
-        !hasMemberPermission(memberRole, { firmMemory: ["update"] })
-      ) {
-        return { type: "forbidden" } as const;
-      }
-
-      if (
-        row.scope === "workspace" &&
-        (!hasMemberPermission(memberRole, { workspace: ["update"] }) ||
-          !accessibleWorkspaces.some(
-            ({ id, status }) => id === row.workspaceId && status === "active",
-          ))
+        !canManageMemory({
+          accessibleWorkspaces,
+          currentUserId: user.id,
+          memberRole,
+          memory: row,
+        })
       ) {
         return { type: "forbidden" } as const;
       }

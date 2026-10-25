@@ -15,7 +15,7 @@ import { Result, TaggedError } from "better-result";
 // per tokenizer, so a ratio holds for the model family it was measured on.
 import * as v from "valibot";
 
-import { DEFAULT_MODELS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import { printError } from "@stll/errors";
 
 import { MCP_MODES } from "@/api/mcp/constants";
@@ -192,8 +192,9 @@ const formatCalibration = (calibration: SurfaceCalibration): string =>
 const readModelArgument = (): string => {
   const index = process.argv.indexOf("--model");
   return index === -1
-    ? DEFAULT_MODELS.anthropic.chat
-    : (process.argv.at(index + 1) ?? DEFAULT_MODELS.anthropic.chat);
+    ? MODEL_DEFAULTS_LEDGER.chat.anthropic.candidate.modelId
+    : (process.argv.at(index + 1) ??
+        MODEL_DEFAULTS_LEDGER.chat.anthropic.candidate.modelId);
 };
 
 const main = async (): Promise<number> => {

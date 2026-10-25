@@ -10,7 +10,7 @@
  *
  * Install detection is exact rather than by step name:
  * - An install is a `bun install` / `bun i` / `bun ci` / `bun add` command
- *   (directly or through `bash scripts/retry.sh`) that is not global. It
+ *   (directly or through `bash <path>/retry.sh`) that is not global. It
  *   covers the commands that run in its directory or below it.
  * - Inside a step, the commands after the install are covered. A later step
  *   is covered when its `if:` implies the install step's `if:`: every
@@ -37,9 +37,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import {
   mergeWorkflowParallelProofs,
   synchronizeWorkflowBackgroundSteps,
+  withPooledChecks,
 } from "./workflow-steps";
 
 export type Classification =
@@ -726,6 +728,43 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
 
 const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
+/**
+ * The repository retry helper, wherever the step finds it: `scripts/retry.sh`
+ * from the root, or a copy kept elsewhere such as a release tooling checkout.
+ * It runs the rest of its words as the command, so it is unwrapped like
+ * `timeout`.
+ */
+const isRetryHelper = (word: string | undefined): boolean =>
+  word === "retry.sh" || word?.endsWith("/retry.sh") === true;
+
+/**
+ * The release gate recorder (`scripts/release-gate.sh`, or its copy in the
+ * runner's temp directory): `run <gate>` runs the rest of its words as the
+ * command, so it is unwrapped like the retry helper.
+ */
+const isReleaseGateRun = (words: readonly string[]): boolean => {
+  const helper = words.at(1);
+  return (
+    (helper === "release-gate.sh" ||
+      helper?.endsWith("/release-gate.sh") === true) &&
+    words.at(2) === "run" &&
+    words.at(3) !== undefined
+  );
+};
+
+/** The command a repository wrapper run through bash hands its words to. */
+const bashWrapperCommand = (
+  words: readonly string[],
+): readonly string[] | undefined => {
+  if (words.at(0) !== "bash") {
+    return undefined;
+  }
+  if (isRetryHelper(words.at(1))) {
+    return words.slice(2);
+  }
+  return isReleaseGateRun(words) ? words.slice(4) : undefined;
+};
+
 /** The program and its arguments, past keywords, assignments and wrappers. */
 export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
@@ -781,10 +820,12 @@ export const programWords = (words: readonly string[]): readonly string[] => {
         return words;
       }
       rest = rest.slice(1); // Duration precedes the wrapped command.
-    } else if (first === "bash" && rest.at(1) === "scripts/retry.sh") {
-      rest = rest.slice(2);
     } else {
-      return rest;
+      const wrapped = bashWrapperCommand(rest);
+      if (wrapped === undefined) {
+        return rest;
+      }
+      rest = wrapped;
     }
   }
 };
@@ -828,12 +869,21 @@ type ResolveRepoPathOptions = {
   readonly checkouts: readonly CheckoutSource[];
 };
 
+const preservedToolingFile = (target: string) =>
+  target === "$RUNNER_TEMP/ci-pr-jobs-cli.ts"
+    ? "scripts/ci-pr-jobs-cli.ts"
+    : undefined;
+
 const resolveRepoPath = ({
   cwd,
   root,
   target,
   checkouts,
 }: ResolveRepoPathOptions): ResolvedPath => {
+  const preserved = preservedToolingFile(target);
+  if (preserved !== undefined) {
+    return { path: preserved, type: "file" };
+  }
   if (isComputed(target) || isComputed(cwd)) {
     return { reason: `${target} is computed at run time`, type: "invalid" };
   }
@@ -1245,7 +1295,10 @@ const classifyBun = ({
   if (subcommand === undefined) {
     return single(unclassified("names no script, file or subcommand"));
   }
-  if (isComputed(subcommand)) {
+  if (
+    isComputed(subcommand) &&
+    preservedToolingFile(subcommand) === undefined
+  ) {
     return single(unclassified(`${subcommand} is computed at run time`));
   }
   if (filter !== undefined) {
@@ -1915,7 +1968,12 @@ export const installFreeInvocations = ({
       initial: [],
       job: id,
       prefix: "",
-      steps: Array.isArray(job["steps"]) ? job["steps"] : [],
+      // Pooled checks run as steps of their job (scripts/workflow-steps.ts).
+      steps: Array.isArray(job["steps"])
+        ? withPooledChecks(job["steps"], (pool) =>
+            readFileSync(path.join(root, checkPoolRegistryPath(pool)), "utf-8"),
+          )
+        : [],
     }).invocations;
   });
 };

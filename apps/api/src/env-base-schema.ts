@@ -1,8 +1,10 @@
+// parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 // parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
 // parser-output-unchanged: Case-law search guidance affects the MCP tool text only, not parsed records.
+// parser-output-unchanged: The derived-AI gate controls post-ingestion analysis only, not parsed records.
 /**
  * Base environment variables shared by all entrypoints
  * (API server, ingestion scripts, CLI tools).
@@ -21,15 +23,17 @@ import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
 } from "@/api/db-url";
+import { CASE_LAW_DERIVED_AI_MODES } from "@/api/lib/case-law/derived-ai-mode";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
-  type CorpusStorageMode,
   corpusStorageInvariantViolation,
+  type CorpusStorageMode,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
+import { killSwitchesEnvSchema } from "@/api/lib/kill-switches/registry";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -120,6 +124,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 
 export const envBaseServerSchema = {
   API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
+  KILL_SWITCHES: killSwitchesEnvSchema,
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),
@@ -215,6 +220,10 @@ export const envBaseServerSchema = {
     v.picklist(CASE_LAW_SEARCH_GUIDANCE_MODES),
     "off",
   ),
+  // Model calls for case-law derived layers (analysis on open, significance).
+  // Off unless the deployment opts in, so local, seeded and CI stacks never
+  // reach a model when they serve a decision.
+  CASE_LAW_DERIVED_AI: v.optional(v.picklist(CASE_LAW_DERIVED_AI_MODES), "off"),
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_Q09_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),

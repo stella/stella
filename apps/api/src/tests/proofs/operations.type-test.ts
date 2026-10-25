@@ -10,8 +10,8 @@ import {
   runCheckedScopedHandler,
 } from "@/api/lib/api-handlers";
 import {
-  runCheckedOrganizationFileWrite,
   runCheckedOrganizationFileCopy,
+  runCheckedOrganizationFileWrite,
 } from "@/api/lib/files/organization-file-usage";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import type { OperationAuthorization } from "@/api/lib/proofs/checked-transaction";
@@ -24,7 +24,7 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 type Context = Parameters<

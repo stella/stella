@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   chmodSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -383,6 +383,7 @@ test("listing batches preserve every selected name within bounded arguments and 
   }).toThrow("selected-name budget");
 });
 
+// Measured p95 is 39.4 s; this test must compile and run a real Cargo fixture.
 test("a real Cargo module excludes failing substring siblings and unrelated binary tests", async () => {
   await withAsyncFixture(async (root) => {
     write(root, "src/lib.rs", "mod feature; mod other_feature;\n");
@@ -429,9 +430,10 @@ test("a real Cargo module excludes failing substring siblings and unrelated bina
       passed: true,
       status: 0,
       ranTests: true,
+      failedTests: [],
     });
   });
-}, 90_000);
+}, 80_000);
 
 test("real Cargo modules absent on this target and ignored-only modules are reported as typed skips", async () => {
   await withAsyncFixture(async (root) => {
@@ -499,6 +501,7 @@ test("successful listing followed by zero exact executions fails rather than bec
       passed: false,
       status: 0,
       ranTests: false,
+      failedTests: [],
     });
   });
 });
@@ -518,6 +521,7 @@ test("listing and exact execution consume one shared deadline", async () => {
       passed: false,
       status: 124,
       ranTests: false,
+      failedTests: [],
     });
     expect(await Bun.file(path.join(root, "listed")).exists()).toBe(true);
     expect(await Bun.file(path.join(root, "executed")).exists()).toBe(true);
@@ -532,6 +536,7 @@ test("a hanging Cargo listing is terminated by the trial deadline", async () => 
       passed: false,
       status: 124,
       ranTests: false,
+      failedTests: [],
     });
   });
 });

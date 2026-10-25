@@ -7,8 +7,8 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
-  searchPageEnd,
   type SearchExcerpt,
+  searchPageEnd,
   type SearchSort,
 } from "@stll/api-contract/search";
 
@@ -106,6 +106,11 @@ const caseLawDecisionKeys = {
     } satisfies Record<keyof DecisionListKey, unknown>,
   ],
   byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
+  summary: (decisionId: string) => [
+    ...caseLawDecisionKeys.all,
+    "summary",
+    decisionId,
+  ],
   bySlug: (key: DecisionBySlugKey) => [
     ...caseLawDecisionKeys.all,
     "slug",
@@ -302,6 +307,7 @@ export const decisionsPageOptions = ({
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            match: h.match,
             anchorId: h.anchorId,
             citationCount: h.citationCount,
             createdAt: h.createdAt,
@@ -315,6 +321,7 @@ export const decisionsPageOptions = ({
             reach: data.pageReach,
           }),
           total: data.total,
+          relaxedHitCount: data.relaxedHitCount,
           // What the search answered, beside what it found: the query it
           // required and what it did not require of the one it was given.
           answered: { queryUsed: data.queryUsed, warnings: data.warnings },
@@ -360,6 +367,7 @@ export const decisionsPageOptions = ({
           reach: SEARCH_PAGE_REACH.REACHED,
         }),
         total: SEARCH_TOTAL_NOT_COUNTED,
+        relaxedHitCount: 0,
         // A listing answers no query, so there is nothing it could have
         // required less of and nothing to report about it.
         answered: null,
@@ -503,6 +511,19 @@ export const decisionOptions = (decisionId: string) =>
 
       return data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+export const decisionCardSummaryOptions = (decisionId: string) =>
+  queryOptions({
+    queryKey: caseLawDecisionKeys.summary(decisionId),
+    queryFn: async ({ signal }) =>
+      unwrapPublicLawEden(
+        await api.case
+          .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+          .summary.get({ fetch: { signal } }),
+        "readPublicCaseLawDecisionSummary",
+      ),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

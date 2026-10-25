@@ -1,19 +1,19 @@
 import { panic } from "better-result";
 import {
   existsSync,
-  readdirSync,
-  readFileSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 import { specifierCandidates } from "./generated-imports";
 import { lexShell } from "./install-free-ci";
 
@@ -659,6 +659,8 @@ type EnvironmentValue = { type: "known"; value: string } | { type: "unknown" };
 
 type Stage = {
   files: SourceTree;
+  /** Destinations of opaque COPYs from build stages and external images. */
+  packaged: Set<string>;
   cwd: string;
   seen: Set<string>;
   checker?: ReturnType<typeof sourceClosureChecker>;
@@ -1446,13 +1448,32 @@ const generatorEntries = (
       }
     }
     const filter = words.indexOf("--filter");
+    // A generator only runs in an image that holds its package and the package
+    // script it invokes; without either, the image cannot produce the output.
     if (
       filter !== -1 &&
-      ![...inventory].some(
-        ([file, origin]) =>
-          file.endsWith("/package.json") &&
-          JSON.parse(text(root, origin)).name === words.at(filter + 1),
-      )
+      ![...inventory].some(([file, origin]) => {
+        if (!file.endsWith("/package.json")) {
+          return false;
+        }
+        const manifest: unknown = JSON.parse(text(root, origin));
+        if (
+          typeof manifest !== "object" ||
+          manifest === null ||
+          !("name" in manifest) ||
+          manifest.name !== words.at(filter + 1)
+        ) {
+          return false;
+        }
+        const script = words.at(filter + 2);
+        return (
+          script === undefined ||
+          ("scripts" in manifest &&
+            typeof manifest.scripts === "object" &&
+            manifest.scripts !== null &&
+            Object.hasOwn(manifest.scripts, script))
+        );
+      })
     ) {
       return [];
     }
@@ -1491,6 +1512,10 @@ const copyInstruction = ({
   const from = words.find((word) => word.startsWith("--from="))?.slice(7);
   // External images and runtime stages provide opaque packaged assets.
   if (from !== undefined && !["pruner", "install-inputs"].includes(from)) {
+    const destination = words.findLast((word) => !word.startsWith("--"));
+    if (destination !== undefined) {
+      stage.packaged.add(absolute(stage.cwd, destination));
+    }
     return;
   }
   const paths = words.filter((word) => !word.startsWith("--"));
@@ -1684,10 +1709,23 @@ const sourceMutation = ({
   }
 };
 
+// A packaged build output has no source closure to check; the RUN that
+// executes it fails the build when the artifact is missing.
+const isPackagedArtifact = (stage: Stage, file: string) =>
+  !stage.files.has(file) &&
+  [...stage.packaged].some(
+    (destination) =>
+      file === destination ||
+      file.startsWith(
+        destination.endsWith("/") ? destination : `${destination}/`,
+      ),
+  );
+
 const createStage = (parent?: Stage) =>
   ({
     cwd: parent?.cwd ?? "/",
     files: new Map(parent?.files),
+    packaged: new Set(parent?.packaged),
     seen: new Set<string>(),
     hazards: new Set(parent?.hazards),
     environment: new Map(parent?.environment),
@@ -1817,6 +1855,9 @@ export const checkDockerSource = (
               panic([...runStage.hazards].join("\n"));
             }
             if (entry.file.includes("/dist/")) {
+              return;
+            }
+            if (isPackagedArtifact(runStage, entry.file)) {
               return;
             }
             const closure = stageClosureProblems({

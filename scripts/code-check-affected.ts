@@ -13,7 +13,7 @@
 // fails safe to the full check.
 
 import { panic, Result, TaggedError } from "better-result";
-import { appendFileSync, existsSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { totalmem } from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -21,8 +21,8 @@ import { stripVTControlCharacters } from "node:util";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   CODE_CHECK_LEGS,
-  ownsCodeCheckPath,
   type CodeCheckLeg,
+  ownsCodeCheckPath,
 } from "../packages/scripts/src/code-quality-partition";
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
@@ -34,6 +34,10 @@ import {
   isResultConventionExcludedFile,
   isResultConventionSourceFile,
 } from "./result-boundary-globs";
+import {
+  isRootScriptLintPath,
+  rootTypeAwareLintCommand,
+} from "./root-script-lint";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -82,9 +86,12 @@ export const WORKSPACE_TYPECHECK_CACHE_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
   "$TURBO_ROOT$/package.json",
 ] as const;
-// Every module `oxlint.config.ts` imports is rule configuration: a row edited
-// in the ownership table, a glob in the result-boundary scope, or a file in the
-// design-system backlog changes what every workspace lint reports.
+// Every entry here can change lint output outside its owning workspace: a row
+// edited in the ownership table, a glob in the result-boundary scope, or a file
+// in the design-system backlog changes what multiple workspace lints report.
+// Workspace-local files that the config imports belong to that workspace's
+// `$TURBO_DEFAULT$` inputs instead; merely evaluating the config does not make
+// their contents an input to unrelated lint scopes.
 // scripts/oxlint-config-inputs.test.ts holds this list to the config's imports
 // and to turbo.json.
 export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
@@ -102,14 +109,12 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
-  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/public-corpus-audit/**",
-  "$TURBO_ROOT$/apps/api/drizzle/**",
   "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
   "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
@@ -145,6 +150,9 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.test.ts",
+  // The status-column map the no-direct-status-set fixture is linted against;
+  // it stays a fixture input although it no longer forces lint everywhere.
+  "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
@@ -157,6 +165,8 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
+  "$TURBO_ROOT$/scripts/lint-root-scripts.ts",
+  "$TURBO_ROOT$/scripts/root-script-lint.ts",
   "$TURBO_ROOT$/scripts/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.scripts.json",
 ] as const;
@@ -224,6 +234,22 @@ const matchesTurboInput = (file: string, input: string): boolean => {
   }
   const relativeInput = input.slice(TURBO_ROOT_INPUT_PREFIX.length);
   return matches(relativeInput, file);
+};
+
+export const matchedLintAllInputs = (
+  changedPaths: readonly string[],
+): string[] =>
+  [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].filter((input) =>
+    changedPaths.some((changedPath) => matchesTurboInput(changedPath, input)),
+  );
+
+export const lintAllTrace = (
+  changedPaths: readonly string[],
+): string | null => {
+  const matchedInputs = matchedLintAllInputs(changedPaths);
+  return matchedInputs.length === 0
+    ? null
+    : `code-check: lint all shared inputs: ${matchedInputs.join(", ")}\n`;
 };
 
 const invalidatesAllWorkspaceChecks = (file: string): boolean =>
@@ -337,7 +363,9 @@ export const planCheck = ({
         presentChangedPaths.filter(
           (changedPath) =>
             workspaceForPath(changedPath) === null &&
-            isChangedLintPath(changedPath) &&
+            (changedPath.startsWith("scripts/")
+              ? isRootScriptLintPath(changedPath)
+              : isChangedLintPath(changedPath)) &&
             !(rootScriptLintRuns && changedPath.startsWith("scripts/")) &&
             !(pluginFixturesRun && changedPath.startsWith(".oxlint-plugins/")),
         ),
@@ -781,8 +809,7 @@ type TurboOutput = {
 };
 
 type AffectedWorkspaceDiscovery =
-  | { type: "scoped"; paths: string[] }
-  | { type: "fallback"; reason: string };
+  { type: "scoped"; paths: string[] } | { type: "fallback"; reason: string };
 type DiscoverAffectedWorkspacesOptions = {
   mergeBase: string;
   command?: readonly string[];
@@ -869,6 +896,184 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
+const CGROUP_ROOT = "/sys/fs/cgroup";
+
+type CgroupMount = { version: 1 | 2; root: string; mountpoint: string };
+
+/**
+ * cgroup mounts from /proc/self/mountinfo: v2, and v1 hierarchies carrying
+ * the memory controller (alone or combined, wherever they are mounted).
+ */
+export const cgroupMounts = (mountinfo: string): CgroupMount[] =>
+  mountinfo.split("\n").flatMap((line): CgroupMount[] => {
+    const [mounted, filesystem] = line.split(" - ");
+    const fields = mounted?.split(" ") ?? [];
+    const [type, , options] = filesystem?.split(" ") ?? [];
+    const root = fields[3];
+    const mountpoint = fields[4];
+    if (root === undefined || mountpoint === undefined) {
+      return [];
+    }
+    if (type === "cgroup2") {
+      return [{ version: 2 as const, root, mountpoint }];
+    }
+    if (type === "cgroup" && options?.split(",").includes("memory")) {
+      return [{ version: 1 as const, root, mountpoint }];
+    }
+    return [];
+  });
+
+/**
+ * Memory-limit files for this process's cgroup and every ancestor, v2 then
+ * v1. A nested cgroup can be limited while the mount root reports `max`. A
+ * cgroup path maps through its mount (its root and mount point), so a v1
+ * memory controller mounted elsewhere or combined with others still counts.
+ */
+export const cgroupMemoryLimitFiles = (
+  procSelfCgroup: string,
+  mountinfo = "",
+): string[] => {
+  const files: string[] = [];
+  const mounts = cgroupMounts(mountinfo);
+  const mountsFor = (version: 1 | 2): CgroupMount[] => {
+    const found = mounts.filter((mount) => mount.version === version);
+    if (found.length > 0) {
+      return found;
+    }
+    // Without mount information, assume the conventional layout.
+    return [
+      {
+        version,
+        root: "/",
+        mountpoint: version === 2 ? CGROUP_ROOT : `${CGROUP_ROOT}/memory`,
+      },
+    ];
+  };
+  const mountRelative = (cgroupPath: string, root: string) => {
+    if (cgroupPath === root || cgroupPath.startsWith(`${root}/`)) {
+      return cgroupPath.slice(root.length);
+    }
+    // Inside a cgroup namespace the path is relative to the namespace root,
+    // which is the root of a mount inherited with its host path.
+    return cgroupPath;
+  };
+  const ancestry = (cgroupPath: string) => {
+    const parts = cgroupPath.split("/").filter((part) => part !== "");
+    return parts.map(
+      (_, index) => `/${parts.slice(0, parts.length - index).join("/")}`,
+    );
+  };
+  for (const line of procSelfCgroup.split("\n")) {
+    const [, controllers, cgroupPath] = line.split(":");
+    if (controllers === undefined || cgroupPath === undefined) {
+      continue;
+    }
+    const memoryV1 = controllers.split(",").includes("memory");
+    if (controllers !== "" && !memoryV1) {
+      continue;
+    }
+    const version = controllers === "" ? 2 : 1;
+    const file = version === 2 ? "memory.max" : "memory.limit_in_bytes";
+    for (const mount of mountsFor(version)) {
+      const inside = mountRelative(cgroupPath, mount.root);
+      files.push(
+        ...ancestry(inside).map((dir) => `${mount.mountpoint}${dir}/${file}`),
+        // The mount root: a namespaced container sees its own cgroup there.
+        `${mount.mountpoint}/${file}`,
+      );
+    }
+  }
+  files.push(
+    `${CGROUP_ROOT}/memory.max`,
+    `${CGROUP_ROOT}/memory/memory.limit_in_bytes`,
+  );
+  return [...new Set(files)];
+};
+
+/**
+ * The memory the checks may use: the machine's, or a lower container limit.
+ * A cloud sandbox reports its host's memory through `totalmem()` while its
+ * cgroup enforces far less.
+ */
+export const memoryLimitBytes = ({
+  total = totalmem(),
+  read = (file: string) =>
+    existsSync(file) ? readFileSync(file, "utf-8") : undefined,
+  requested = process.env["CODE_CHECK_MEMORY_BYTES"],
+}: {
+  total?: number;
+  read?: (file: string) => string | undefined;
+  requested?: string | undefined;
+} = {}): number => {
+  // An explicit byte count replaces detection (tests pin the plan with it).
+  const override = Number(requested);
+  if (
+    requested !== undefined &&
+    Number.isSafeInteger(override) &&
+    override > 0
+  ) {
+    return override;
+  }
+  let limit = total;
+  const selfCgroup =
+    Result.try(() => read("/proc/self/cgroup")).unwrapOr(undefined) ?? "";
+  const mountinfo =
+    Result.try(() => read("/proc/self/mountinfo")).unwrapOr(undefined) ?? "";
+  for (const file of cgroupMemoryLimitFiles(selfCgroup, mountinfo)) {
+    const value = Number(
+      Result.try(() => read(file))
+        .unwrapOr(undefined)
+        ?.trim() ?? Number.NaN,
+    );
+    if (Number.isSafeInteger(value) && value > 0) {
+      limit = Math.min(limit, value);
+    }
+  }
+  return limit;
+};
+
+// Type-aware API lint (about 14 GiB resident on a cold run) and the API
+// typecheck each need most of a small machine; together they push a 16 GiB
+// sandbox into its memory limit and stall for many minutes.
+const SEPARATE_API_CHECKS_BELOW_BYTES = 24 * 1024 ** 3;
+const API_FILTER = "--filter=./apps/api";
+
+/**
+ * Below 24 GiB, a Turbo command that runs both lint and typecheck over the
+ * API runs typecheck and then lint, so the two API programs never share the
+ * memory. Other commands, and larger machines, keep lint and typecheck
+ * overlapped.
+ */
+export const separateApiLintFromTypecheck = (
+  commands: readonly string[][],
+  memoryBytes: number,
+): string[][] =>
+  commands.flatMap((command) => {
+    if (
+      memoryBytes >= SEPARATE_API_CHECKS_BELOW_BYTES ||
+      command[2] !== "turbo"
+    ) {
+      return [command];
+    }
+    const lintAt = command.indexOf("lint");
+    const typecheckAt = command.indexOf("typecheck");
+    if (lintAt === -1 || typecheckAt === -1) {
+      return [command];
+    }
+    const targets = command.filter((argument) =>
+      argument.startsWith("--filter=./"),
+    );
+    const coversApi =
+      !command.includes("--filter=!./apps/api") &&
+      (targets.length === 0 || targets.includes(API_FILTER));
+    if (!coversApi) {
+      return [command];
+    }
+    return [
+      command.filter((_, index) => index !== lintAt),
+      command.filter((_, index) => index !== typecheckAt),
+    ];
+  });
 /** Memory-based task count; a valid request may only lower it. */
 export const codeCheckConcurrency = (
   memoryBytes: number,
@@ -889,7 +1094,10 @@ export const codeCheckConcurrency = (
 // CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
 // one task at a time); child Turbo runs inherit it.
 export const configuredCodeCheckConcurrency = (): number =>
-  codeCheckConcurrency(totalmem(), process.env["CODE_CHECK_CONCURRENCY"]);
+  codeCheckConcurrency(
+    memoryLimitBytes(),
+    process.env["CODE_CHECK_CONCURRENCY"],
+  );
 
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
@@ -1057,17 +1265,7 @@ export const scopedCommands = (
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
       commands.push(["bun", "scripts/ci-generated-sources.ts", "prepare"]);
     }
-    commands.push([
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--report-unused-disable-directives-severity=error",
-      "--type-aware",
-      "--type-check",
-      ...plan.rootLintPaths,
-    ]);
+    commands.push(rootTypeAwareLintCommand(plan.rootLintPaths));
   }
   const lintRuns = hasTargets(plan.lint);
   const typecheckRuns = hasTargets(plan.typecheck);
@@ -1139,6 +1337,7 @@ const presentPaths = (paths: readonly string[]): string[] =>
 
 type ScopeCheck = {
   plan: CheckPlan;
+  changedPaths: string[];
   presentChangedPaths: string[];
   mergeBase: string | null;
 };
@@ -1155,6 +1354,7 @@ const planScope = async (
             files,
             workspacePaths: workspacePaths(),
           }),
+          changedPaths: paths,
           presentChangedPaths: files,
           mergeBase: null,
         };
@@ -1180,6 +1380,7 @@ const planScope = async (
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
                 }),
+          changedPaths: changed.value.paths,
           presentChangedPaths,
           mergeBase: changed.value.mergeBase,
         };
@@ -1210,7 +1411,12 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (scoped.isErr()) {
     return scoped;
   }
-  const { plan, presentChangedPaths, mergeBase } = scoped.value;
+  const {
+    plan,
+    changedPaths: selectedChangedPaths,
+    presentChangedPaths,
+    mergeBase,
+  } = scoped.value;
   const leg = options.leg;
   const resultBoundaryCommand = planResultBoundaryLint({
     files:
@@ -1307,6 +1513,12 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
+  if (plan.lint.type === "all") {
+    const trace = lintAllTrace(selectedChangedPaths);
+    if (trace !== null) {
+      process.stdout.write(trace);
+    }
+  }
   commands.push(
     ...scopedCommands(
       plan,
@@ -1315,7 +1527,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   );
   return Result.ok(
     await executeCheckCommands({
-      commands,
+      commands: separateApiLintFromTypecheck(commands, memoryLimitBytes()),
       dryRun: options.dryRun,
       budgetDeadlineMs,
     }),

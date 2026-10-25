@@ -7,13 +7,13 @@ import {
 } from "@stll/api-contract/legislation-expression";
 
 import {
-  PROVISION_STATUS,
   PROVISION_ABSENCE_STATUSES,
+  PROVISION_STATUS,
 } from "../legal-search/legislation-provision-vocabulary";
 import {
   passthroughId,
-  publicUrl,
   projectionBranch,
+  publicUrl,
 } from "./projection-fields";
 
 /**
@@ -35,6 +35,10 @@ const provisionEntrySubject = {
   eli: v.string(),
 } as const;
 
+// The provision's printed citation beside its reader link, absent where its
+// jurisdiction has no citation profile.
+const provisionCitation = { citation: v.optional(v.string()) } as const;
+
 /**
  * read_statute_provisions. Source of truth:
  * `handleReadStatuteProvisionsTool` (`legislation-tools.ts`). One entry per
@@ -48,9 +52,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
       projectionBranch(
         v.strictObject({
           ...provisionEntrySubject,
-          appUrl: v.nullable(v.string()),
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
+          ...provisionCitation,
           documentId: passthroughId(),
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
@@ -65,9 +69,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
         projectionBranch(
           v.strictObject({
             ...provisionEntrySubject,
-            appUrl: v.optional(v.nullable(v.string())),
             url: v.optional(v.nullable(publicUrl())),
             source_url: v.optional(publicUrl()),
+            ...provisionCitation,
             message: v.string(),
             status: v.literal(status),
           }),
@@ -91,9 +95,9 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
 });
 
 const statuteProvisionVersion = {
-  appUrl: v.nullable(v.string()),
   url: v.nullable(publicUrl()),
   source_url: v.optional(publicUrl()),
+  ...provisionCitation,
   documentId: passthroughId(),
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),

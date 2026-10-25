@@ -81,16 +81,19 @@ const Select = <Value, Multiple extends boolean | undefined = false>({
 
 const SelectTrigger = ({
   className,
+  align = "center",
   size = CONTROL_SIZE.default,
   children,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: ControlSize;
+  align?: "start" | "center";
 }) => (
   <SelectPrimitive.Trigger
     className={cn(
       FIELD_TRIGGER_CLASS_NAME,
       SELECT_TRIGGER_SIZE_CLASS_NAMES[size],
+      align === "start" && "justify-start",
       className,
     )}
     data-slot="select-trigger"
@@ -199,7 +202,7 @@ const SelectPopup = ({
         <div className="bg-popover text-popover-foreground relative h-full min-w-(--anchor-width) rounded-lg border shadow-lg/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
           <SelectPrimitive.List
             className={cn(
-              "max-h-(--available-height) overflow-y-auto p-1",
+              "max-h-(--available-height) overflow-y-auto overscroll-contain p-1",
               className,
             )}
             data-slot="select-list"

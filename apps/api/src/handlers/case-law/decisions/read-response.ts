@@ -1,12 +1,12 @@
-import { Type, type TSchema } from "@sinclair/typebox";
+import { type TSchema, Type } from "@sinclair/typebox";
 import { panic } from "better-result";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
-  EXTRACTION_WARNING_RULES,
   EXTRACTION_WARNING_FIRST_OFFSETS_MAX,
+  EXTRACTION_WARNING_RULES,
 } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
@@ -62,8 +62,7 @@ const DECISION_READER_TEXT_BYTES = {
   Exclude<
     {
       [Key in keyof ReadableDecision]: ReadableDecision[Key] extends
-        | string
-        | null
+        string | null
         ? Key
         : never;
     }[keyof ReadableDecision],
@@ -183,6 +182,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ),
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
+  citationCount: t.Number(),
   // Whole official decision text is intentional. These and `sections[].text`
   // are the only fields exempted by the public-response ledger; a windowed
   // reader is separate.
@@ -414,6 +414,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ),
     decisionDate: nullableText(decision.decisionDate, text.decisionDate),
     decisionType: nullableText(decision.decisionType, text.decisionType),
+    citationCount: decision.citationCount,
     projectionDigest: nullableText(
       decision.projectionDigest,
       text.projectionDigest,

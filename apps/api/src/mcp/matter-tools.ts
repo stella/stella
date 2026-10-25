@@ -5,10 +5,11 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { vApiDate } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -52,15 +53,15 @@ import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nat
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
+  CHECK_COUNTERPARTY_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LINK_MATTER_CONTACT_LINK_PROJECTION,
-  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
+  LINK_MATTER_CONTACT_UNLINK_PROJECTION,
   LIST_CONTACTS_PROJECTION,
   LIST_TASKS_DETAIL_PROJECTION,
   LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
-  CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -93,6 +94,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
@@ -114,17 +116,16 @@ import {
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
+  entityIdInputSchema,
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
   uuidInputSchema,
-  entityIdInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -1000,7 +1001,7 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(256),
       v.description(
-        "Canonical identifier (e.g. company number, VAT number) or company name",
+        "Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified)",
       ),
     ),
     detail: v.optional(
@@ -1037,6 +1038,26 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     q: parsed.output.query,
     detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
+    loadWebSearch: async () => {
+      const webSearch = await context.loadWebSearchProvider?.();
+      if (webSearch === undefined) {
+        return Result.ok(null);
+      }
+      if (webSearch.isErr()) {
+        return webSearch;
+      }
+      const provider = providerFromMcpWebSearchAvailability(webSearch.value);
+      if (provider === null) {
+        return Result.ok(null);
+      }
+      return Result.ok({
+        provider,
+        observer: actionRequestObserver(
+          context.organizationId,
+          ACTION_COST_CALL_KIND.webSearchRequest,
+        ).onRequest,
+      });
+    },
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
@@ -1093,7 +1114,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1320,7 +1341,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1329,7 +1350,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        vApiDate,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1636,7 +1657,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
+          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),
@@ -2534,7 +2555,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Look up a company in a public business register. Pass a canonical " +
       "identifier (company/registration number, VAT number) for an exact " +
-      "match, or a company name to search where the register supports it. " +
+      "match, or a company name to search where supported; KRS matches are verified. " +
       "Result IDs belong to the external registry, not stella's contact " +
       "directory. Create a contact with save_contact before using " +
       "read_contact.",

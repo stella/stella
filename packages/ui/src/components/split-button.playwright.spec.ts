@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const fixturePath = "/src/components/fixtures/split-button.fixture.html";
 const primaryName = "Create document";
@@ -15,6 +15,28 @@ const openFixture = async (page: Page, query = "") => {
   await page.goto(`${fixturePath}${query}`);
   await expect(page.getByRole("button", { name: primaryName })).toBeVisible();
 };
+
+test("shared button press transitions respect reduced motion", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await openFixture(page);
+  for (const name of [primaryName, menuName]) {
+    await expect(page.getByRole("button", { name })).toHaveCSS(
+      "transition-duration",
+      "0.15s",
+    );
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const name of [primaryName, menuName]) {
+    const button = page.getByRole("button", { name });
+    await expect(button).toHaveCSS("transition-duration", "0s");
+    await button.hover();
+    await page.mouse.down();
+    await expect(button).toHaveCSS("scale", "none");
+    await page.mouse.up();
+  }
+});
 
 test("tabs to each action separately in document order", async ({ page }) => {
   await openFixture(page);

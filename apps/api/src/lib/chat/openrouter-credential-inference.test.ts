@@ -6,7 +6,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { DEFAULT_MODELS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -15,15 +15,15 @@ import { createManagedOpenRouterCredentialProvider } from "@/api/lib/chat/openro
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
 import {
-  setMetricLineSinkForTesting,
   resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-const MODEL = DEFAULT_MODELS.openrouter.chat;
+const MODEL = MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId;
 const POLICY_ID = "credential-inference-fixture";
 const AUDIENCE = "https://openrouter.ai";
 const REGION = "eu-west-1";
@@ -252,10 +252,11 @@ const runFederated401 = async (
       {
         modelId: MODEL,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: undefined,
         reasoningEffort: undefined,
-        role: "chat",
+        task: "chat",
         ...policy,
       },
       providerState.provider,

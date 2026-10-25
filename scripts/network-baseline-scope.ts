@@ -8,9 +8,13 @@ import {
 import path from "node:path";
 
 const MAX_BASELINE_BYTES = 5 * 1024 * 1024;
+// The route waterfall depth method of apps/web/e2e/helpers/network.ts; this
+// script runs standalone, and a test keeps the two equal.
+export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
 
 type BaselineEntry = {
   depth: number;
+  depthMethod?: string;
   requests: string[];
   requestCounts?: Record<string, number>;
   dbQueries?: Record<string, number>;
@@ -45,6 +49,8 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
     typeof value["depth"] !== "number" ||
     !Number.isInteger(value["depth"]) ||
     value["depth"] < 0 ||
+    (value["depthMethod"] !== undefined &&
+      typeof value["depthMethod"] !== "string") ||
     !Array.isArray(value["requests"]) ||
     !value["requests"].every(
       (item) => typeof item === "string" && item.length > 0,
@@ -74,6 +80,7 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
   return Object.keys(value).every((field) =>
     [
       "depth",
+      "depthMethod",
       "requests",
       "requestCounts",
       "dbQueries",
@@ -190,6 +197,55 @@ const touchedRoutesInTree = (
   return touched;
 };
 
+const PER_REQUEST_KEYS = [
+  "requestCounts",
+  "dbQueries",
+  "responseSizes",
+] as const;
+
+// A budget file is written once while main keeps recording the route, so the
+// budget raises main's entry instead of replacing it: a request main gained
+// after the file was written must not read as new on a PR that edits it.
+const raiseRecorded = (
+  recorded: BaselineEntry | undefined,
+  budget: BaselineEntry,
+): BaselineEntry => {
+  if (recorded === undefined) {
+    return budget;
+  }
+  // Like the main recorder (mergeNetworkBaseline), overlapping values keep the
+  // higher one, so a budget written against older main never lowers a value.
+  const perRequest = new Map<
+    (typeof PER_REQUEST_KEYS)[number],
+    Record<string, number>
+  >();
+  for (const key of PER_REQUEST_KEYS) {
+    const values = [recorded[key], budget[key]].filter(
+      (value) => value !== undefined,
+    );
+    if (values.length === 0) {
+      continue;
+    }
+    const merged = new Map<string, number>();
+    for (const source of values) {
+      for (const [request, value] of Object.entries(source)) {
+        merged.set(request, Math.max(merged.get(request) ?? 0, value));
+      }
+    }
+    perRequest.set(key, Object.fromEntries(merged));
+  }
+  return {
+    ...recorded,
+    ...budget,
+    ...Object.fromEntries(perRequest),
+    depth:
+      recorded.depthMethod === budget.depthMethod
+        ? Math.max(recorded.depth, budget.depth)
+        : budget.depth,
+    requests: [...new Set([...recorded.requests, ...budget.requests])],
+  };
+};
+
 const applyNetworkBudgetDeclarations = (
   base: Baseline,
   declarations: unknown[],
@@ -218,7 +274,22 @@ const applyNetworkBudgetDeclarations = (
       fail(`Duplicate network budget declaration for ${route}`);
     }
     declared.add(route);
-    baseline[route] = declaration["budget"];
+    const budget = declaration["budget"];
+    // A declaration is written against the current depth method, so the
+    // recording keeps its depth as a floor instead of replacing it with one
+    // timing-dependent sample. A declaration for another method is stale.
+    if (
+      budget.depthMethod !== undefined &&
+      budget.depthMethod !== NETWORK_DEPTH_METHOD
+    ) {
+      fail(
+        `Invalid network budget declaration: ${route} uses depth method ${budget.depthMethod}; declare depth for ${NETWORK_DEPTH_METHOD}`,
+      );
+    }
+    baseline[route] = raiseRecorded(base[route], {
+      ...budget,
+      depthMethod: NETWORK_DEPTH_METHOD,
+    });
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
   return { baseline, notices };

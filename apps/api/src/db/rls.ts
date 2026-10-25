@@ -54,6 +54,9 @@ export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
 export const SETTING_USER_ID = "app.user_id";
+export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
+  "app.account_export_organization_id";
+export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
@@ -594,6 +597,48 @@ export const authoredNotePolicies = () => [
   }),
 ];
 
+/**
+ * A reader's own notes, some of which belong to a matter. A note without a
+ * workspace is an organization note exactly as in `authoredNotePolicies`; one
+ * with a workspace is reachable only while the caller may open that matter
+ * and `matterRowCheck` (the row the note sits on) admits it, so the matter's
+ * walls bind every author, a shared note included. A new note checks
+ * `matterRowHold` instead: the same test, holding the row until the insert's
+ * transaction ends so the row cannot be deleted under a note being written.
+ */
+export const authoredOptionalMatterNotePolicies = ({
+  matterRowCheck,
+  matterRowHold,
+}: {
+  matterRowCheck: SQL;
+  matterRowHold: SQL;
+}) => {
+  const scope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowCheck}))`;
+  const insertScope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowHold}))`;
+  return [
+    p.pgPolicy("organization_select", {
+      for: "select",
+      to: stella,
+      using: sql`${scope} AND (visibility = 'shared' OR ${userCheck})`,
+    }),
+    p.pgPolicy("author_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${insertScope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_update", {
+      for: "update",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_delete", {
+      for: "delete",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+  ];
+};
+
 const organizationOptionalWorkspaceCheck = sql`(
   ${organizationCheck} AND
   (workspace_id IS NULL OR ${workspaceCheck})
@@ -1130,6 +1175,47 @@ export const sharepointOAuthStatePolicies = () => [
   }),
 ];
 
+// Stored chat tool approval grants are per user+org: only the owning user in
+// the active org reads, adds or removes them. A grant is never edited in
+// place; changing one is a delete and a new insert.
+const chatToolGrantCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+// Row security is forced on this table, so the owner role used by member
+// offboarding needs its own policy to reach other users' rows.
+const chatToolGrantOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_tool_grants'::regclass)`;
+
+export const chatToolGrantPolicies = () => [
+  p.pgPolicy("chat_tool_grant_owner", {
+    for: "all",
+    to: "public",
+    using: chatToolGrantOwnerCheck,
+    withCheck: chatToolGrantOwnerCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_select", {
+    for: "select",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_delete", {
+    for: "delete",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
@@ -1484,11 +1570,6 @@ const aiMemoryScopeCheck = sql`(
   )
 )`;
 
-// Memories are archive-only (status='archived'), never hard-deleted.
-// The RESTRICTIVE `false` DELETE policy makes that durable: a
-// RESTRICTIVE policy is AND-ed with every permissive one, so a later
-// migration adding a permissive DELETE cannot silently unlock removal
-// (same pattern as audit_logs).
 export const aiMemoryPolicies = () => [
   p.pgPolicy("ai_memory_select", {
     for: "select",
@@ -1505,11 +1586,10 @@ export const aiMemoryPolicies = () => [
     to: stella,
     using: aiMemoryScopeCheck,
   }),
-  p.pgPolicy("ai_memory_no_delete", {
-    as: "restrictive",
+  p.pgPolicy("ai_memory_delete", {
     for: "delete",
     to: stella,
-    using: denyAllRows,
+    using: aiMemoryScopeCheck,
   }),
 ];
 

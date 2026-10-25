@@ -1,13 +1,19 @@
 import { EventType, toServerSentEventsResponse } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import {
+  readChatTurnTiming,
+  settleChatTurnOnTx,
+  USER_STOP_OUTCOME,
+} from "@/api/handlers/chat/chat-turn-persistence";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   createChatRunLog,
@@ -18,9 +24,37 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+// Keep the real statements and READ COMMITTED sessions: the producer commits
+// after the reader's header SELECT and before its entries SELECT executes.
+const beforeQuery = <Builder extends object>(
+  builder: Builder,
+  before: () => Promise<void>,
+): Builder =>
+  new Proxy(builder, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property);
+      if (typeof value !== "function") {
+        return value;
+      }
+      if (property === "then") {
+        return async (...args: unknown[]) => {
+          await before();
+          return await Reflect.apply(value, target, args);
+        };
+      }
+      return (...args: unknown[]) => {
+        const next: unknown = Reflect.apply(value, target, args);
+        return typeof next === "object" && next !== null
+          ? beforeQuery(next, before)
+          : next;
+      };
+    },
+  });
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("chat delivery durability (postgres)", () => {
@@ -34,6 +68,7 @@ if (!databaseUrl || !runPostgresTests) {
     const organizationId = mintAuthProviderId<"organization">();
     const userId = mintAuthProviderId<"user">();
     const threadId = createSafeId<"chatThread">();
+    const racedThreadId = createSafeId<"chatThread">();
     const turnId = createSafeId<"chatTurn">();
     const messageId = createSafeId<"chatMessage">();
     const runId = Bun.randomUUIDv7();
@@ -95,9 +130,164 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
     cleanUp(async () => {
-      await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
+      await db
+        .delete(chatThreads)
+        .where(inArray(chatThreads.id, [threadId, racedThreadId]));
       await db.delete(organization).where(eq(organization.id, organizationId));
       await db.delete(user).where(eq(user.id, userId));
+    });
+
+    test("replay fences a final batch committed between header and entries until settlement", async () => {
+      const execution = {
+        id: createSafeId<"chatTurn">(),
+        executionId: Bun.randomUUIDv7(),
+      };
+      const racedRunId = Bun.randomUUIDv7();
+      const incomingMessageId = createSafeId<"chatMessage">();
+      await db.insert(chatThreads).values({
+        id: racedThreadId,
+        organizationId,
+        userId,
+        title: "Replay fence test",
+      });
+      await db.insert(chatMessages).values({
+        id: incomingMessageId,
+        threadId: racedThreadId,
+        userId,
+        role: "user",
+        content: toPersistedChatMessageContentV3({
+          data: [{ type: "text", content: "Race" }],
+        }),
+      });
+      await db.insert(chatTurns).values({
+        id: execution.id,
+        organizationId,
+        userId,
+        threadId: racedThreadId,
+        userMessageId: incomingMessageId,
+        runId: racedRunId,
+        executionId: execution.executionId,
+        status: "running",
+        activeDurationMs: 0,
+        activeStartedAt: new Date(),
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      });
+      const log = createChatRunLog({
+        db: scopedDb,
+        execution,
+        organizationId,
+        runId: racedRunId,
+      });
+      const prefix = {
+        type: EventType.TEXT_MESSAGE_START,
+        role: "assistant",
+        messageId: "answer",
+      } satisfies StreamChunk;
+      const end = {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: "answer",
+        metadata: { turnTiming: null },
+      } satisfies StreamChunk;
+      const terminal = {
+        type: EventType.RUN_FINISHED,
+        runId: racedRunId,
+        threadId: racedThreadId,
+      } satisfies StreamChunk;
+      await log.append([prefix]);
+      let selections = 0;
+      let committed = false;
+      const racingDb: ScopedDb = async (callback) =>
+        await scopedDb(
+          async (tx) =>
+            await callback(
+              new Proxy(tx, {
+                get(target, property) {
+                  if (property !== "select") {
+                    return Reflect.get(target, property);
+                  }
+                  return new Proxy(target.select, {
+                    apply(call, thisArg, args) {
+                      const builder: unknown = Reflect.apply(
+                        call,
+                        thisArg,
+                        args,
+                      );
+                      selections += 1;
+                      if (
+                        selections !== 2 ||
+                        typeof builder !== "object" ||
+                        builder === null
+                      ) {
+                        return builder;
+                      }
+                      return beforeQuery(builder, async () => {
+                        await log.append([end, terminal]);
+                        committed = true;
+                      });
+                    },
+                  });
+                },
+              }),
+            ),
+        );
+      const replayStream = createChatRunLog({
+        db: racingDb,
+        execution,
+        organizationId,
+        runId: racedRunId,
+      }).read("-1");
+      const reader = replayStream[Symbol.asyncIterator]();
+      expect(await reader.next()).toEqual({
+        done: false,
+        value: { offset: "1", chunk: prefix },
+      });
+      expect(committed).toBe(true);
+      expect((await log.snapshot()).map(({ chunk }) => chunk)).toEqual([
+        prefix,
+        end,
+        terminal,
+      ]);
+      const received: { value: unknown } = { value: null };
+      const pending = reader.next().then((value) => {
+        received.value = value;
+        return value;
+      });
+      await Bun.sleep(50);
+      const beforeSettlement = received.value;
+      expect(
+        await scopedDb(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              assistantMessageId: null,
+              execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
+      ).toBe("settled");
+      const timing = await readChatTurnTiming({
+        execution,
+        safeDb: toSafeDbMock(scopedDb),
+      });
+      if (Result.isError(timing)) {
+        panic("Could not read settled replay timing", timing.error);
+      }
+      const deliveredEnd = await pending;
+      const deliveredTerminal = await reader.next();
+      expect(await reader.next()).toEqual({ done: true, value: undefined });
+      expect(beforeSettlement).toBeNull();
+      expect(timing.value?.status).toBe("finished");
+      expect(deliveredEnd).toEqual({
+        done: false,
+        value: {
+          offset: "2",
+          chunk: { ...end, metadata: { turnTiming: timing.value } },
+        },
+      });
+      expect(deliveredTerminal).toEqual({
+        done: false,
+        value: { offset: "3", chunk: terminal },
+      });
     });
 
     test("keeps the producer alive after delivery disconnect and replays the exact remaining bytes across scoped sessions", async () => {

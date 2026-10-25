@@ -9,28 +9,42 @@ type PartitionCorpusRehydrationOptions<Row> = {
   records: readonly { id: string; row: Row | null }[];
 };
 
-/** Content is selected only by the SQL-gated branch; omissions carry ids only. */
-export const partitionCorpusRehydration = <Row>({
-  ids,
-  records,
-}: PartitionCorpusRehydrationOptions<Row>) => {
+type ReturnedCorpusDisposition = Omit<CorpusRehydrationDisposition, "type"> & {
+  type: "excluded";
+};
+
+/** Explicit null records withhold content without probing another relation. */
+export const partitionReturnedCorpusRecords = <Row>(
+  records: readonly { id: string; row: Row | null }[],
+) => {
   const rows: Row[] = [];
-  const dispositions: CorpusRehydrationDisposition[] = [];
-  const found = new Set<string>();
+  const dispositions: ReturnedCorpusDisposition[] = [];
   for (const { id, row } of records) {
-    found.add(id);
     if (row === null) {
       dispositions.push({ id, type: "excluded" });
     } else {
       rows.push(row);
     }
   }
+  return { rows, dispositions };
+};
+
+/** Readers whose relation can omit requested ids also report those omissions. */
+export const partitionCorpusRehydration = <Row>({
+  ids,
+  records,
+}: PartitionCorpusRehydrationOptions<Row>) => {
+  const returned = partitionReturnedCorpusRecords(records);
+  const dispositions: CorpusRehydrationDisposition[] = [
+    ...returned.dispositions,
+  ];
+  const found = new Set(records.map(({ id }) => id));
   for (const id of new Set(ids)) {
     if (!found.has(id)) {
       dispositions.push({ id, type: "drift" });
     }
   }
-  return { rows, dispositions };
+  return { rows: returned.rows, dispositions };
 };
 
 export const recordCorpusRehydrationDispositions = (

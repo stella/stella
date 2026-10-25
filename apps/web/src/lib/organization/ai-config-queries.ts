@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { InferDataFromTag } from "@tanstack/react-query";
+
+import type { TanStackAIProvider } from "@stll/ai-catalog";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -12,6 +14,11 @@ type OrganizationAIConfigKey = {
 
 export const aiConfigKeys = {
   all: ["organization-ai-config"] as const,
+  defaultsPreview: ({
+    organizationId,
+    providers,
+  }: OrganizationAIConfigKey & { providers: readonly TanStackAIProvider[] }) =>
+    ["organization-ai-defaults-preview", organizationId, providers] as const,
   availabilityRoot: ["organization-ai-availability"] as const,
   byOrganization: ({ organizationId }: OrganizationAIConfigKey) => [
     ...aiConfigKeys.all,
@@ -44,6 +51,27 @@ export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
+type AIDefaultsPreviewOptionsInput = QueryOptionsInput<
+  OrganizationAIConfigKey & {
+    providers: readonly TanStackAIProvider[];
+  }
+>;
+
+export const aiDefaultsPreviewOptions = ({
+  organizationId,
+  providers,
+}: AIDefaultsPreviewOptionsInput) =>
+  queryOptions({
+    queryKey: aiConfigKeys.defaultsPreview({ organizationId, providers }),
+    queryFn: async ({ signal }) =>
+      unwrapEden(
+        await api["organization-settings"]["ai-config"][
+          "defaults-preview"
+        ].post({ providers: [...providers] }, { fetch: { signal } }),
+      ),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
 /**
  * AI availability for any org member, regardless of admin
  * permissions on the full AI config. Returns just the booleans
@@ -66,11 +94,6 @@ export const aiAvailabilityOptions = ({
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-type OrganizationAIAvailability = InferDataFromTag<
-  unknown,
-  ReturnType<typeof aiAvailabilityOptions>["queryKey"]
->;
-
 type UpdateCachedAIAvailabilityOptions = {
   current: OrganizationAIAvailability | undefined;
   instanceProvisioned?: boolean;
@@ -90,8 +113,7 @@ export const updateCachedAIAvailability = ({
   instanceProvisioned,
   orgConfigured,
 }: UpdateCachedAIAvailabilityOptions):
-  | OrganizationAIAvailability
-  | undefined => {
+  OrganizationAIAvailability | undefined => {
   if (current === undefined) {
     return current;
   }
@@ -101,6 +123,10 @@ export const updateCachedAIAvailability = ({
   return {
     ...current,
     available: nextInstanceProvisioned || orgConfigured,
+    unavailableReason:
+      nextInstanceProvisioned || orgConfigured
+        ? null
+        : "provider_not_configured",
     instanceProvisioned: nextInstanceProvisioned,
     orgConfigured,
   };

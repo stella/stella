@@ -1,14 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { readCiCheckCommandText } from "./ci-check-pool-registry";
 import {
   listE2eSpecs,
   selectE2eSpecs,
@@ -41,7 +36,9 @@ const fixture = () => {
 
 describe("e2e spec shard selection", () => {
   test("full depth delegates distribution to both Playwright shards", () => {
-    expect(allE2eMatrix()).toEqual({ shard: [1, 2, "network-baseline"] });
+    expect(allE2eMatrix()).toEqual({
+      shard: [1, 2, 3, 4, "network-baseline"],
+    });
   });
 
   test.each(["a", "b"])("a changed spec %s runs in one PR leg", (name) => {
@@ -379,10 +376,7 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
 });
 
 test("CI executes both spec selection and the geometry shard plan guard", () => {
-  const source = readFileSync(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-    "utf-8",
-  );
+  const source = readCiCheckCommandText();
   expect(source).toContain("run: bun test scripts/e2e-spec-shards.test.ts");
   expect(source).toContain("run: bun test scripts/e2e-geometry-shards.test.ts");
 });

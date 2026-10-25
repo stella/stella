@@ -3,6 +3,7 @@ import { and, eq, gt, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
 import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
@@ -21,13 +22,17 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { getS3 } from "@/api/lib/s3";
-import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
+import {
+  headObject,
+  readTenantS3ArrayBuffer,
+  S3ObjectMissingError,
+} from "@/api/lib/s3-presign";
 import {
   extractFileText,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_SOURCE_CHARS = 30_000;
@@ -97,7 +102,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: extractProcuracaoBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -121,11 +126,11 @@ const extractProcuracao = createSafeRootHandler(
   }) {
     const organizationId = session.activeOrganizationId;
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const claimToken = Bun.randomUUIDv7();
@@ -197,11 +202,20 @@ const extractProcuracao = createSafeRootHandler(
       const objectHead = await headObject(key);
       if (Result.isError(objectHead)) {
         return Result.err(
-          new HandlerError({
-            status: 422,
-            message: "The source upload is incomplete",
-            cause: objectHead.error,
-          }),
+          S3ObjectMissingError.is(objectHead.error)
+            ? new HandlerError({
+                status: 422,
+                message: "The source upload is incomplete",
+                cause: objectHead.error,
+              })
+            : classifyFailure(
+                new HandlerError({
+                  status: 500,
+                  message: "Failed to read the source upload",
+                  cause: objectHead.error,
+                }),
+                "upstream_unavailable",
+              ),
         );
       }
       if (
@@ -284,7 +298,7 @@ const extractProcuracao = createSafeRootHandler(
           workspaceId: null,
         },
         feature: "contacts.extractProcuracao",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
         modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
@@ -295,10 +309,11 @@ const extractProcuracao = createSafeRootHandler(
       const truncated = normalizedText.length > MAX_SOURCE_CHARS;
       const generated = await Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
-            role: "fast",
+            task: "short-text",
             orgAIConfig,
             managedAIResidency,
             organizationId,
@@ -306,13 +321,13 @@ const extractProcuracao = createSafeRootHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "fast",
+              task: "short-text",
               scopeKey: organizationId,
             }),
             system: SYSTEM_PROMPT,
             prompt: buildPrompt(normalizedText.slice(0, MAX_SOURCE_CHARS)),
             outputSchema: extractProcuracaoOutputSchema,
-            abortSignal: AbortSignal.timeout(EXTRACT_TIMEOUT_MS),
+            deadlineMs: EXTRACT_TIMEOUT_MS,
             serviceTier: "standard",
           }),
         catch: (cause) => {

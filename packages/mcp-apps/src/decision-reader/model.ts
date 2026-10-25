@@ -6,11 +6,10 @@ import type { DecisionParagraphRange } from "@stll/api-contract/decision-paragra
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
-import { stableStringify } from "@stll/stable-stringify";
 
 import {
-  APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
+  APP_OPEN_DECISION_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
 } from "../shared/generated/contracts";
 
@@ -160,15 +159,17 @@ export const appendReaderPage = ({
   if (state.complete || cursor !== state.nextCursor) {
     return invalidPage("Unexpected reader page cursor");
   }
+  const metadataEntries = new Map(Object.entries(page.metadata));
   const stripFragment = (url: string | null) => url?.split("#", 1).at(0);
-  const comparableMetadata = (metadata: ReaderPage["metadata"]) =>
-    stableStringify({
-      ...metadata,
-      appUrl: stripFragment(metadata.appUrl),
-    });
-  const sameMetadata =
-    comparableMetadata(state.metadata) === comparableMetadata(page.metadata);
-  if (!sameMetadata) {
+  // Values are compared as validated JSON, so a warning list compares by value.
+  if (
+    Object.entries(state.metadata).some(
+      ([key, value]) =>
+        key !== "url" &&
+        JSON.stringify(metadataEntries.get(key)) !== JSON.stringify(value),
+    ) ||
+    stripFragment(state.metadata.url) !== stripFragment(page.metadata.url)
+  ) {
     return invalidPage("Decision metadata changed between pages");
   }
   const content = page.content;
@@ -299,7 +300,7 @@ const readerDocumentAst = ({ metadata, blocks }: ReaderPager): DocumentAst => ({
   source: {
     system: metadata.country,
     documentId: metadata.decisionId,
-    webUrl: metadata.appUrl ?? "",
+    webUrl: metadata.url ?? "",
     printUrl: "",
   },
   metadata: {

@@ -176,20 +176,6 @@ const chainableRows = (rows: readonly unknown[]): ChainableRows => {
 };
 
 /**
- * A `tx.select` stand-in for a join query with no page limit, terminating at
- * `.where()` (the compat `search` tool's fetchable-entity join). Mirrors
- * `chainableRows` but with an awaitable terminal `.where()` instead of
- * `.limit()`.
- */
-const chainableJoinRows = (rows: readonly unknown[]) => ({
-  from: () => ({
-    innerJoin: () => ({
-      leftJoin: () => ({ where: async () => rows }),
-    }),
-  }),
-});
-
-/**
  * A `tx.select` stand-in for `list_time_entries`, whose handler runs two
  * distinct select queries against one scopedDb double inside a single call:
  * the entries page (terminates at `.limit()`), then a join resolving each
@@ -243,7 +229,9 @@ const buildContext = ({
   tx?: unknown;
   workspaceIds?: readonly string[];
 } = {}): McpRequestContext => {
-  const { safeDb, scopedDb } = createScopedDbMock(tx);
+  const { safeDb, scopedDb } = createScopedDbMock(tx, {
+    authorizedWorkspaceIds: workspaceIds,
+  });
   return {
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: new Set(workspaceIds),
@@ -396,12 +384,14 @@ describe("MCP anonymization canary corpus", () => {
       status: "active",
       client: null,
     });
-    readOverviewHandlerMock.mockResolvedValue({
-      entityCount: 0,
-      documentCount: 0,
-      taskCount: 0,
-      recentEntities: [],
-    });
+    readOverviewHandlerMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 0,
+        documentCount: 0,
+        taskCount: 0,
+        recentEntities: [],
+      }),
+    );
     readWorkspaceMembersHandlerMock.mockResolvedValue([]);
     readWorkspaceContactsHandlerMock.mockResolvedValue(
       Result.ok({
@@ -470,15 +460,42 @@ describe("MCP anonymization canary corpus", () => {
       totalCount: 1,
     });
     const tx = {
-      query: { organizationSettings: { findFirst: async () => undefined } },
-      select: () =>
-        chainableJoinRows([
-          {
-            entityId: "00000000-0000-4000-8000-0000000e0001",
-            workspaceId: "00000000-0000-4000-8000-0000000a0001",
-            fieldId: "field_1",
-          },
-        ]),
+      query: {
+        organizationSettings: { findFirst: async () => undefined },
+        extractedContent: {
+          findMany: async () => [
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              workspaceId: "00000000-0000-4000-8000-0000000a0001",
+              extractedAt: new Date("2026-01-02T00:00:00.000Z"),
+              sourceEntityVersionId: "ver_current",
+              sourceFieldId: "field_1",
+              sourceFileId: "file_current",
+              sourceSha256Hex: "a".repeat(64),
+              entity: {
+                name: titleSeed,
+                workspace: { status: "active" },
+                versions: [{ id: "ver_current" }],
+                currentVersion: {
+                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                  deletedAt: null,
+                  id: "ver_current",
+                  fields: [
+                    {
+                      id: "field_1",
+                      content: {
+                        type: "file",
+                        id: "file_current",
+                        sha256Hex: "a".repeat(64),
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
     };
     const context = buildContext({ tx });
 
@@ -502,15 +519,40 @@ describe("MCP anonymization canary corpus", () => {
       query: {
         entities: { findFirst: async () => null },
         extractedContent: {
-          findFirst: async () => ({
-            charCount: textSeed.length,
-            ciphertext: extracted.ciphertext,
-            iv: extracted.iv,
-            entity: {
-              name: titleSeed,
+          findMany: async () => [
+            {
+              charCount: textSeed.length,
+              ciphertext: extracted.ciphertext,
+              iv: extracted.iv,
+              entityId: "00000000-0000-4000-8000-0000000e0001",
               workspaceId: "00000000-0000-4000-8000-0000000a0001",
+              extractedAt: new Date("2026-01-02T00:00:00.000Z"),
+              sourceEntityVersionId: "ver_current",
+              sourceFieldId: "field_current",
+              sourceFileId: "file_current",
+              sourceSha256Hex: "a".repeat(64),
+              entity: {
+                name: titleSeed,
+                workspace: { status: "active" },
+                versions: [{ id: "ver_current" }],
+                currentVersion: {
+                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                  deletedAt: null,
+                  id: "ver_current",
+                  fields: [
+                    {
+                      id: "field_current",
+                      content: {
+                        type: "file",
+                        id: "file_current",
+                        sha256Hex: "a".repeat(64),
+                      },
+                    },
+                  ],
+                },
+              },
             },
-          }),
+          ],
         },
       },
     };
@@ -595,34 +637,36 @@ describe("MCP anonymization canary corpus", () => {
         status: "active",
         client: { displayName: clientNameSeed },
       });
-      readOverviewHandlerMock.mockResolvedValue({
-        entityCount: 1,
-        documentCount: 1,
-        taskCount: 0,
-        recentEntities: [
-          {
-            entityId: "00000000-0000-4000-8000-0000000e0001",
-            name: recentNameSeed,
-            kind: "document",
-            status: null,
-            priority: null,
-            dueDate: null,
-            mimeType: null,
-            fieldId: null,
-            propertyId: null,
-            pdfFileId: null,
-            encrypted: false,
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: null,
-            createdBy: createdBySeed,
-            createdByImage: null,
-            createdByDeletedAt: null,
-            assignedTo: assignedToSeed,
-            assignedToImage: null,
-            assignedToDeletedAt: null,
-          },
-        ],
-      });
+      readOverviewHandlerMock.mockResolvedValue(
+        Result.ok({
+          entityCount: 1,
+          documentCount: 1,
+          taskCount: 0,
+          recentEntities: [
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              name: recentNameSeed,
+              kind: "document",
+              status: null,
+              priority: null,
+              dueDate: null,
+              mimeType: null,
+              fieldId: null,
+              propertyId: null,
+              pdfFileId: null,
+              encrypted: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: null,
+              createdBy: createdBySeed,
+              createdByImage: null,
+              createdByDeletedAt: null,
+              assignedTo: assignedToSeed,
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+        }),
+      );
       readWorkspaceContactsHandlerMock.mockResolvedValue(
         Result.ok({
           contacts: [
@@ -750,15 +794,37 @@ describe("MCP anonymization canary corpus", () => {
             }),
           },
           extractedContent: {
-            findFirst: async () => ({
-              ciphertext: extracted.ciphertext,
-              extractedAt: new Date("2026-01-02T00:00:00.000Z"),
-              iv: extracted.iv,
-              sourceEntityVersionId: "ver_current",
-              sourceFieldId: "field_current",
-              sourceFileId: "file_current",
-              sourceSha256Hex: "a".repeat(64),
-            }),
+            findMany: async () => [
+              {
+                ciphertext: extracted.ciphertext,
+                extractedAt: new Date("2026-01-02T00:00:00.000Z"),
+                iv: extracted.iv,
+                sourceEntityVersionId: "ver_current",
+                sourceFieldId: "field_current",
+                sourceFileId: "file_current",
+                sourceSha256Hex: "a".repeat(64),
+                entity: {
+                  name: nameSeed,
+                  workspace: { status: "active" },
+                  versions: [{ id: "ver_current" }],
+                  currentVersion: {
+                    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                    deletedAt: null,
+                    id: "ver_current",
+                    fields: [
+                      {
+                        id: "field_current",
+                        content: {
+                          type: "file",
+                          id: "file_current",
+                          sha256Hex: "a".repeat(64),
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
           },
           entityVersions: {
             findFirst: async () => ({ id: "ver_current" }),

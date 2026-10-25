@@ -18,7 +18,7 @@ permissions: {}
 jobs:
   check-latest:
     name: Check latest desktop release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read # query the repository's GitHub Release API
@@ -29,6 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify GitHub latest is a complete desktop release
+        timeout-minutes: 4
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -9,8 +9,29 @@
       "noOtherSessions": "لا توجد جلسات نشطة أخرى",
       "revokeOtherSessions": "تسجيل الخروج من الأجهزة الأخرى",
       "revokeOtherSessionsConfirm": "سيؤدي هذا إلى إنهاء جميع الجلسات باستثناء جلستك الحالية.",
+      "signedInFrom": "تم تسجيل الدخول عبر {clientName}",
       "unknownDevice": "جهاز غير معروف"
     }
+  },
+  "admin": {
+    "ai": "الذكاء الاصطناعي",
+    "billingProfiles": "ملفات الفوترة",
+    "deleteDescription": "حذف هذه المؤسسة وبياناتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteOrganization": "حذف المؤسسة",
+    "deleteRefusedSubscription": "لدى هذه المؤسسة اشتراك يتجدد. ألغِه أولًا من صفحة الخطة والاستخدام، ثم احذف المؤسسة.",
+    "deleteTypeToConfirm": "اكتب {name} للتأكيد.",
+    "firmSetup": "إعداد المكتب",
+    "general": "عام",
+    "leaveDescription": "ستفقد الوصول إلى الملفات القانونية والبيانات الخاصة بهذه المؤسسة.",
+    "leaveOrganization": "مغادرة المؤسسة",
+    "leaveRefusedOnlyOwner": "أنت المالك الوحيد. اجعل عضوًا آخر مالكًا قبل المغادرة.",
+    "modelsAndProviders": "النماذج ومقدمو الخدمات",
+    "organizationDeleted": "تم حذف المؤسسة.",
+    "organizationId": "معرّف المؤسسة",
+    "organizationLeft": "لقد غادرت المؤسسة.",
+    "planAndUsage": "الخطة والاستخدام",
+    "title": "إدارة المؤسسة",
+    "toolsDescription": "تفعيل الأدوات المدمجة أو تعطيلها لجميع الأشخاص في هذه المؤسسة."
   },
   "agentClaim": {
     "access": "الصلاحيات التي سيحصل عليها",
@@ -29,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "سيطلب مساعدك هذا العنوان",
-    "copiedToast": "تم نسخ التعليمات. الصقها في دردشة مع مساعدك.",
     "copy": "انسخ له التعليمات",
     "description": "اسأل Claude أو ChatGPT عن ملفاتك القانونية ومستنداتك. اختر مساعدك لفتح دليل قصير؛ يستغرق الأمر نحو دقيقة.",
     "instructions": "اربطني بـ stella، مساحة عملي القانونية. اتّبع تعليمات وكلاء الذكاء الاصطناعي في {guideUrl} واستخدم عنوان الخادم هذا: {mcpUrl}",
     "openGuide": "افتح دليل {assistant}",
+    "pasteHint": "الصقها في دردشة مع مساعدك.",
     "selfSetupHint": "هل تستخدم Claude Code أو Codex؟",
     "title": "استخدم stella في مساعد الذكاء الاصطناعي"
   },
@@ -41,8 +62,12 @@
     "chooseRewriteInstruction": "خيارات إعادة الصياغة",
     "editWithAI": "التعديل بالذكاء الاصطناعي",
     "keyRequired": {
+      "accountRestricted": "إعدادات موفر الذكاء الاصطناعي غير متاحة لهذا الحساب.",
+      "configUnreadable": "تعذرت قراءة إعدادات موفر الذكاء الاصطناعي. اطلب من مسؤول المؤسسة إعادة توصيله.",
       "cta": "فتح إعدادات الذكاء الاصطناعي",
       "description": "أضِف بيانات اعتماد المزوّد لبدء استخدام ميزات الذكاء الاصطناعي.",
+      "permissionRequired": "يمكن لمسؤول المؤسسة فقط توصيل موفر ذكاء اصطناعي.",
+      "seatRequired": "اطلب من مسؤول المؤسسة تخصيص مقعد لك.",
       "title": "ربط مزوّد الذكاء الاصطناعي"
     },
     "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟",
@@ -64,6 +89,9 @@
     "runRemainingPage": "تشغيل المتبقي (هذه الصفحة)",
     "runSelectedRows": "تشغيل لـ {count, plural, zero {# صف محدد} one {# صف محدد} two {# صفين محددين} few {# صفوف محددة} many {# صفًا محددًا} other {# صف محدد}}",
     "selectedRun": "تشغيل أعمدة الذكاء الاصطناعي لـ {count, plural, zero {# صف} one {# صف} two {# صفين} few {# صفوف} many {# صفًا} other {# صف}}"
+  },
+  "aiDisclosure": {
+    "caseLaw": "تُنشئ stella الملخصات والملاحظات والتحليلات المولَّدة بالذكاء الاصطناعي للأحكام القضائية، وهي غير معتمدة من المحاكم ولا تمثّل تعليل المحاكم ذاتها؛ فهي أدوات مساعدة للمهنيين القانونيين، ويظل نص الحكم هو المرجع الأصيل."
   },
   "appearance": {
     "calendar": "تقويم",
@@ -114,6 +142,8 @@
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
       "title": "تعذّر تسجيل دخولك"
     },
+    "handoffAccount": "هل تريد المتابعة باسم <account>{email}</account> في <organization>{organizationName}</organization>؟",
+    "handoffTitle": "المتابعة إلى stella",
     "headline": "وضوح لكل قضية.",
     "invitation": {
       "declined": "تم رفض الدعوة",
@@ -129,11 +159,11 @@
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
     "professionalUse": {
-      "description": "لم يُعرض عليك هذا البيان عند إنشاء حسابك. اقبله للمتابعة.",
       "title": "تأكيد الاستخدام المهني"
     },
     "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
+    "reauthenticationRequired": "سجّل الدخول مرة أخرى للمتابعة بهذا الإجراء.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
@@ -352,6 +382,13 @@
       "attentionComplete": "<strong>تم التعامل مع كل ادعاء يحتاج إلى قرار.</strong> {count, plural, zero {لا توجد نتائج روتينية تتطلب مراجعة فردية.} one {النتيجة الروتينية الواحدة لا تتطلب مراجعة فردية.} two {النتيجتان الروتينيتان لا تتطلبان مراجعة فردية.} few {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} many {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.} other {النتائج الروتينية وعددها # لا تتطلب مراجعة فردية.}}",
       "attentionOpen": "<strong>{count, plural, zero {لا توجد ادعاءات تحتاج إلى} one {ادعاء واحد يحتاج إلى} two {ادعاءان يحتاجان إلى} few {# ادعاءات تحتاج إلى} many {# ادعاءً يحتاج إلى} other {# ادعاء يحتاج إلى}} قرارك</strong>؛ تعارضات وتفسيرات محل نزاع. {routineCount, plural, zero {لا توجد ادعاءات روتينية أخرى تحتاج إلى اعتماد فردي.} one {الادعاء الآخر روتيني ولا يحتاج إلى اعتماد فردي.} two {الادعاءان الآخران روتينيان ولا يحتاجان إلى اعتماد فردي.} few {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} many {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.} other {الادعاءات الأخرى وعددها # روتينية ولا تحتاج إلى اعتماد فردي.}}",
       "claimAnnouncement": " ({state}{contested, select, true {، محل نزاع} other {}}{reviewStatus, select, reviewed {، روجع} disputed {، متنازع عليه} other {}})",
+      "documentView": {
+        "label": "عرض المستند",
+        "original": "الأصل",
+        "reading": "عرض القراءة"
+      },
+      "notLocated": "{count, plural, zero {لم يُعثر على # ادعاء في الأصل} one {لم يُعثر على ادعاء واحد في الأصل} two {لم يُعثر على ادعاءين في الأصل} few {لم يُعثر على # ادعاءات في الأصل} many {لم يُعثر على # ادعاءً في الأصل} other {لم يُعثر على # ادعاء في الأصل}}",
+      "pdfTextFailed": "تعذّرت قراءة نص ملف PDF، لذلك لم تُعلَّم الادعاءات على صفحاته.",
       "selectClaim": "اختر ادعاءً لفحص السجل الذي يستند إليه.",
       "showQueue": "عرض قائمة الانتظار",
       "stats": {
@@ -608,6 +645,7 @@
         "eso9": "جدول استيراد ESO9 (XLSX)",
         "exporting": "جارٍ تجهيز التصدير…",
         "isdoc": "فاتورة ISDOC الإلكترونية (ABRA Gen وغيره)",
+        "ksefFa3": "فاتورة KSeF الإلكترونية FA(3) (XML)",
         "spreadsheets": "جداول البيانات",
         "xlsx": "الفواتير (XLSX)",
         "xlsxLines": "بنود الفواتير (XLSX)"
@@ -721,6 +759,7 @@
     "sellerProfiles": {
       "add": "إضافة ملف بائع",
       "archiveConfirm": "هل تريد أرشفة ملف البائع هذا؟ لن يعود متاحًا للفواتير الجديدة.",
+      "barRegistration": "القيد في نقابة المحامين",
       "bic": "رمز BIC / SWIFT",
       "default": "البائع الافتراضي",
       "defaultCurrency": "العملة الافتراضية",
@@ -732,11 +771,10 @@
       "invalidCurrency": "أدخل رمز عملة من ثلاثة أحرف.",
       "invalidIban": "أدخل رقم IBAN صالحًا.",
       "legalName": "الاسم القانوني",
+      "registerEntry": "القيد في السجل",
       "registrationId": "رقم التسجيل",
       "setDefault": "تعيين كافتراضي",
       "title": "ملفات البائع",
-      "vatId": "رقم ضريبة القيمة المضافة",
-      "vatPayer": "مكلف بضريبة القيمة المضافة",
       "vatPayerHelp": "تفرض فواتير هذا البائع ضريبة القيمة المضافة. أوقفه لشخص مسجل لديه رقم ضريبة القيمة المضافة لكنه غير مكلف بها.",
       "vatPayerRequiresVatId": "أدخل رقم ضريبة القيمة المضافة لإصدار الفواتير بصفتك مكلفًا بها."
     },
@@ -771,6 +809,8 @@
     "total": "الإجمالي",
     "vatRates": {
       "add": "إضافة معدل ضريبة القيمة المضافة",
+      "addCzechia": "إضافة أسعار التشيك",
+      "addSlovakia": "إضافة أسعار سلوفاكيا",
       "archiveConfirm": "هل تريد أرشفة معدل ضريبة القيمة المضافة هذا؟ لن يعود متاحًا للمستندات الجديدة.",
       "code": "رمز المعدل",
       "current": "المعدل الحالي",
@@ -785,6 +825,7 @@
       "overlap": "لا يمكن أن تتداخل فترات السريان لرمز المعدل نفسه.",
       "past": "المعدل السابق",
       "periodHelp": "تاريخ البداية مشمول؛ تاريخ النهاية غير مشمول. اترك تاريخ النهاية فارغًا لفترة مفتوحة.",
+      "presetResult": "تمت الإضافة: {added}؛ تم التخطي: {skipped}.",
       "rate": "النسبة المئوية لضريبة القيمة المضافة",
       "title": "معدلات ضريبة القيمة المضافة",
       "validFrom": "سارٍ منذ",
@@ -821,7 +862,6 @@
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
-      "holdingAnchor": "الانتقال إلى الفقرة",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
@@ -898,13 +938,10 @@
     },
     "coverage": {
       "completeness": "الاكتمال",
-      "countedOn": "أُحصي بتاريخ {date}",
       "courtsHeading": "حسب المحكمة",
       "courtsUnavailable": "التقسيم حسب المحكمة غير متاح حاليًا.",
       "decisionYears": "سنوات الأحكام",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
-      "exceedsReportedTotal": "يحتوي على أكثر من آخر إجمالي أعلنته الجهة الناشرة في {date}",
-      "gapStatusUnknown": "حالة الفجوات غير معروفة",
       "generatedAt": "أرقام بتاريخ {date}",
       "globeLabel": "الدول التي يحتوي المخزن على سوابقها القضائية، على كرة أرضية",
       "healthCurrent": "محدّثة",
@@ -925,7 +962,8 @@
       "searchable": "قابلة للبحث",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
-      "unavailable": "أرقام التغطية غير متاحة حاليًا."
+      "unavailable": "أرقام التغطية غير متاحة حاليًا.",
+      "unreadListingPeriods": "فترات القائمة غير المقروءة"
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "decisionTypes": {
@@ -981,6 +1019,9 @@
       "saved": "{count, plural, zero {لم يُحفظ أي حكم} one {تم حفظ حكم واحد} two {تم حفظ حكمين} few {تم حفظ # أحكام} many {تم حفظ # حكمًا} other {تم حفظ # حكم}} في {matter}"
     },
     "newestDecisions": "أحدث الأحكام",
+    "noResults": {
+      "hint": "جرّب كلمات أخرى، أو حسّن الاستعلام بالذكاء الاصطناعي، أو اطرح السؤال في الدردشة."
+    },
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
       "human": "بشرية"
@@ -991,7 +1032,10 @@
       "pageOfCount": "الصفحة {page} من {pageCount}",
       "pageOfEstimatedCount": "الصفحة {page} من ~{pageCount}",
       "pageOfEstimatedCountLabel": "الصفحة {page} من نحو {pageCount}",
+      "pageWithEstimatedMatchCounts": "الصفحة {page} · نحو {exactCount, plural, zero {صفر تطابق تام} one {تطابق تام واحد} two {تطابقين تامين} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
       "pageWithEstimatedResultCount": "الصفحة {page} · {count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
+      "pageWithMatchCounts": "الصفحة {page} · {exactCount, plural, zero {لا تطابقات تامة} one {تطابق تام واحد} two {تطابقان تامان} few {# تطابقات تامة} many {# تطابقًا تامًا} other {# تطابق تام}} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
+      "pageWithPartialMatchCount": "الصفحة {page} · {relaxedCount, plural, zero {لا تطابقات جزئية} one {تطابق جزئي واحد} two {تطابقان جزئيان} few {# تطابقات جزئية} many {# تطابقًا جزئيًا} other {# تطابق جزئي}} في هذه الصفحة",
       "pageWithResultCount": "الصفحة {page} · {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
       "perPage": "لكل صفحة",
       "refineForMore": "ضيّق نطاق البحث لعرض مزيد من النتائج"
@@ -1054,8 +1098,11 @@
         "short": "قصير"
       }
     },
+    "rewritten": {
+      "line": "لا توجد نتائج مطابقة تمامًا لـ <bdi>{original}</bdi>؛ تُعرض نتائج <bdi>{query}</bdi>",
+      "searchOriginal": "البحث بكلماتي الأصلية"
+    },
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
-    "searchAskPrompt": "{query} (السوابق القضائية في {country})",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1071,6 +1118,8 @@
         "hint": "أزل أحد عوامل التصفية أو وسّعه ثم ابحث مرة أخرى.",
         "message": "لا شيء يطابق عوامل التصفية المحددة."
       },
+      "partialMatch": "تطابق جزئي",
+      "partialMatches": "نتائج تطابق جزئي للبحث: <bdi>{query}</bdi>",
       "resultsFor": "نتائج البحث عن: <bdi>{query}</bdi>",
       "searchEveryWord": "البحث عن كل الكلمات"
     },
@@ -1108,6 +1157,7 @@
       "judges": "القضاة",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
+      "paragraphReference": "الفقرة {number}",
       "popularName": "الاسم الشائع",
       "portraitCredit": "مصدر الصور: {source}",
       "provisionMentions": "{count, number}×",
@@ -1203,15 +1253,37 @@
     },
     "answerEdit": {
       "acceptFailed": "تعذّر حفظ التعديل. حاول مرة أخرى.",
+      "aiKind": "تعديل مطلوب",
       "ask": "طلب تعديلات",
+      "authorUnknown": "مؤلف غير معروف",
+      "autolinkLabel": "يصبح هذا النص رابطًا تلقائيًا. غيّر التسمية قبل إزالة الرابط.",
+      "change": "التغيير {revision}",
+      "editedLabel": "إجابة معدّلة",
       "failed": "تعذّر إعداد التعديل. حاول مرة أخرى.",
+      "formatKind": "تنسيق",
+      "heading": "عنوان {level}",
+      "history": "سجل الإجابة",
+      "historyEmpty": "لا توجد نسخ سابقة.",
       "instruction": "صِف التعديل",
       "instructionRequired": "صِف كيفية تعديل النص المحدد.",
       "invalidSelection": "لا يمكن تعديل هذا التحديد. حدد مقطعًا متصلًا من النص.",
+      "invalidUrl": "أدخل عنوان HTTP أو HTTPS صالحًا.",
+      "linkAddress": "عنوان الرابط",
+      "orderedList": "قائمة مرقمة",
       "proposal": "التعديل المقترح",
       "requesting": "جارٍ إعداد التعديلات…",
+      "restoreRefreshFailed": "تمت استعادة الإجابة، لكن تعذّر تحديثها. حدّثها لتحميل الإجابة المستعادة.",
+      "revertKind": "نسخة مستعادة",
       "stale": "تغيّرت هذه الإجابة. حدد النص مرة أخرى.",
-      "submit": "طلب تعديل"
+      "submit": "طلب تعديل",
+      "textStyle": "نمط النص",
+      "unorderedList": "قائمة نقطية",
+      "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
+    },
+    "answerQuote": {
+      "showInDecision": "عرض في القرار",
+      "verified": "اقتباس موثَّق",
+      "verifiedHint": "حرفيًا في {source}"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -1332,6 +1404,7 @@
     "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
     "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
+    "diagramUnavailable": "تعذّر عرض هذا المخطط. تظهر شيفرته المصدرية أدناه.",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",
       "autoDirectDescription": "تُطبَّق تعديلات الذكاء الاصطناعي فورًا بإعادة كتابة المستند مباشرةً (من دون تعقّب التغييرات).",
@@ -1397,7 +1470,12 @@
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
-        "entities": "في هذا الملف القانوني"
+        "entities": "في هذا الملف القانوني",
+        "sources": "المصادر"
+      },
+      "corpus": {
+        "caseLaw": "السوابق القضائية · {country}",
+        "legislation": "التشريعات · {country}"
       },
       "loadError": "تعذّر تحميل العناصر"
     },
@@ -1451,6 +1529,12 @@
       "title": "نص ملصق"
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
+    "processSummary": {
+      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
+      "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "يحوّل العمل المعقد إلى مهام فرعية مرتبة.",
@@ -1520,6 +1604,7 @@
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",
     "sendErrorAnonymizationBlocked": "تعذّر على stella تجهيل أحد المرفقات، لذا لم يُرسَل شيء. أزِل الملف أو أرسِل هذه الرسالة دون تجهيل.",
     "sendErrorConnectionFailed": "تعذّر الاتصال بالدردشة. تحقّق من اتصالك وحاول مرة أخرى.",
+    "sendErrorContinuationRejected": "تعذّر متابعة الدردشة. أرسل رسالة جديدة للبدء من جديد.",
     "sendErrorEmptyCompletion": "أعاد الذكاء الاصطناعي ردّاً فارغاً. حاول مجدداً أو أعد صياغة رسالتك.",
     "sendErrorLoopDetected": "تكرّر ردّ الذكاء الاصطناعي مرّات كثيرة جداً. حاول مجدداً بطلب أكثر تحديداً.",
     "sendErrorModelUnavailable": "نموذج الذكاء الاصطناعي المُهيّأ لم يعد متاحاً. اطلب من مسؤول مساحة العمل تحديث النموذج في إعدادات المؤسسة.",
@@ -1541,6 +1626,9 @@
         "private": "مهاراتك",
         "team": "مهارات الفريق"
       }
+    },
+    "sourceChips": {
+      "alsoConsulted": "تمت مراجعتها أيضًا ({count, number})"
     },
     "sourcePlaceholder": "تحدّث عن {title}",
     "sourcePlaceholderAction": "تحدّث عن",
@@ -1696,6 +1784,7 @@
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
       "sourceCode": "الشيفرة المصدرية",
+      "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
       "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
     },
@@ -1721,7 +1810,8 @@
       "toggleLabel": "البحث على الويب",
       "toggleOff": "إيقاف البحث على الويب",
       "toggleOn": "تشغيل البحث على الويب"
-    }
+    },
+    "workedFor": "مدة العمل: {duration}"
   },
   "clauses": {
     "addVariant": "إضافة صيغة",
@@ -2039,6 +2129,7 @@
       "ZH-HANT": "الصينية (التقليدية)"
     },
     "lastUpdated": "آخر تحديث",
+    "layoutResetAfterProblem": "تمت إعادة ضبط التخطيط بعد حدوث مشكلة.",
     "legalDatabase": "قاعدة البيانات القانونية",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
@@ -2137,6 +2228,7 @@
     "suggested": "اقتراح",
     "summarizeChanges": "تلخيص التغييرات",
     "target": "الهدف",
+    "taxId": "الرقم الضريبي",
     "timeBilling": "الوقت والفوترة",
     "today": "اليوم",
     "translate": "ترجمة",
@@ -2160,6 +2252,8 @@
     "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
     "value": "القيمة",
+    "vatId": "رقم ضريبة القيمة المضافة",
+    "vatPayer": "مكلف بضريبة القيمة المضافة",
     "verified": "تم التحقق منه",
     "verify": "تحقّق",
     "version": "الإصدار",
@@ -2201,6 +2295,7 @@
     "scopeKnowledgeWrite": "إنشاء بنودك وتعديلها وحذفها وتشغيل أدلّة المراجعة",
     "scopeLawRead": "قراءة التشريعات العامة وأحكام القضاء",
     "scopeMattersWrite": "إنشاء وتعديل ملفاتك ومهامك",
+    "scopeMemoryWrite": "إنشاء ذكريات المساعد وتحديثها",
     "scopeOfflineAccess": "إبقاء تسجيل دخولك نشطًا دون الحاجة إلى موافقة متكررة",
     "scopeOnboarding": "ضبط الولايات القضائية للممارسة لمؤسستك",
     "scopeProfile": "الوصول إلى معلومات ملفك الشخصي",
@@ -2228,6 +2323,7 @@
     "summaryLineRead": "<group>قراءة:</group> {items}",
     "summaryLineUse": "<group>استخدام:</group> {items}",
     "summaryMattersWrite": "الملفات والمهام",
+    "summaryMemoryWrite": "ذكريات المساعد",
     "summaryProfile": "الملف الشخصي",
     "summaryRead": "المستندات والملفات القانونية وجهات الاتصال",
     "summaryReadAnonymized": "المستندات والملفات المُخفاة الهوية",
@@ -2348,7 +2444,9 @@
       "prefix": "اللقب",
       "registrationNumber": "رقم التسجيل",
       "suffix": "اللاحقة",
-      "taxId": "الرقم الضريبي",
+      "vatPayer": "حالة التسجيل في ضريبة القيمة المضافة",
+      "vatPayerNo": "غير خاضع لضريبة القيمة المضافة",
+      "vatPayerUnknown": "غير معروف",
       "year": "السنة"
     },
     "filterOrganizations": "المؤسسات",
@@ -2388,7 +2486,6 @@
         "primary_phone": "رقم الهاتف الأساسي",
         "state": "الولاية أو المنطقة",
         "suffix": "لاحقة الاسم",
-        "tax_id": "الرقم الضريبي",
         "type": "نوع جهة الاتصال"
       },
       "fileInvalid": "اختر ملف CSV أو TSV أو TXT واحدًا.",
@@ -2593,17 +2690,23 @@
       "admissionUnavailable": "هذا الإجراء متوقف مؤقتًا. يُرجى المحاولة مجددًا بعد قليل.",
       "concurrencyBusy": "هناك أعمال أخرى قيد التنفيذ. يُرجى المحاولة مجددًا بعد قليل.",
       "contact": "تواصل معنا",
+      "featureDisabled": "هذه الميزة متوقفة مؤقتًا.",
       "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
       "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
     },
     "actionFailed": "فشل الإجراء",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
+      "caseLawCountryUnavailable": "الأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "caseLawIdentityOnly": "لا يتوفر لهذا البلد سوى البحث عن الأحكام القضائية بمعرّفها الدقيق وقراءتها.",
+      "caseLawSearchUnavailable": "البحث في الأحكام القضائية لهذا البلد غير متاح. لا يزال بإمكانك قراءة أحكامه القضائية العامة.",
       "conflict": "يتعارض الطلب مع الحالة الحالية.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "legislationCountryUnavailable": "التشريعات لهذا البلد غير متاحة. اختر بلدًا آخر.",
+      "legislationIdentityOnly": "لا يتوفر لهذا البلد سوى البحث عن التشريعات بمعرّفها الدقيق وقراءتها.",
+      "legislationSearchUnavailable": "البحث في التشريعات لهذا البلد غير متاح. لا يزال بإمكانك قراءة تشريعاته العامة.",
       "notFound": "تعذر العثور على ما طلبته.",
       "payloadTooLarge": "الطلب كبير جدًا.",
-      "publicCountryUnavailable": "التشريعات والأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
       "rateLimited": "طلبات كثيرة جدًا. يرجى المحاولة لاحقًا.",
       "server": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "serviceUnavailable": "الخدمة غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى.",
@@ -2623,6 +2726,11 @@
       "aiConfigModelInvalid": "إعداد نموذج الذكاء الاصطناعي غير صالح. تحقق من النماذج المحددة.",
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
+      "aiDeadlineExceeded": "لم يُجب الذكاء الاصطناعي في الوقت المحدّد. يُرجى المحاولة مرة أخرى بعد لحظات.",
+      "aiOutputInvalid": "كانت إجابة الذكاء الاصطناعي بتنسيق غير متوقع. حاول مرة أخرى.",
+      "aiOutputModerated": "قام مزود الذكاء الاصطناعي بحجب المخرجات. أعد صياغة الطلب أو اختر نموذجًا آخر.",
+      "aiProviderTaskUnsupported": "لا يستطيع مزود الذكاء الاصطناعي المُعدّ تنفيذ هذه المهمة. اختر مزودًا يمكنه ذلك.",
+      "aiUnknown": "فشل طلب الذكاء الاصطناعي. حاول مرة أخرى.",
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
       "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "clauseDirectivesOverrideInvalidDetails": "يحتوي النص البديل للبند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. صحّح النص البديل لهذا التعبئة قبل المحاولة مرة أخرى.",
@@ -3438,6 +3546,12 @@
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
+      "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
+      "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
+      "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
+    },
     "external": {
       "confirmDescription": "أنت على وشك زيارة موقع إلكتروني خارجي.",
       "confirmTitle": "فتح الرابط الخارجي؟",
@@ -4108,7 +4222,9 @@
     "prompt": "عمّ تبحث؟",
     "recent": "الأخيرة",
     "recentCasesFilter": "الأحكام",
+    "recentLoadFailed": "تعذّر تحميل النشاط الحديث.",
     "recentSearchFilter": "عمليات البحث",
+    "recentUpdateFailed": "تعذّر تحديث النشاط الحديث.",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",
@@ -4135,6 +4251,22 @@
       "guestStorageUnavailable": "تعذر حفظ التمييزات والملاحظات في هذا التبويب.",
       "highlight": "تمييز",
       "highlightedPassage": "المقطع المميّز",
+      "history": {
+        "colorRestored": "تمت استعادة اللون",
+        "commentRemoved": "تمت إزالة التعليق",
+        "commentRestored": "تمت استعادة التعليق",
+        "highlightRemoved": "تمت إزالة التمييز",
+        "highlightRestored": "تمت استعادة التمييز",
+        "markChanged": "تم تغيير هذا التمييز أو التعليق في مكان آخر في هذه الأثناء، لذا تُرك كما هو.",
+        "markGone": "لم يعد هذا التمييز أو التعليق موجودًا.",
+        "nothingToRedo": "لا يوجد ما يمكن إعادته",
+        "nothingToUndo": "لا يوجد ما يمكن التراجع عنه",
+        "redoShortcut": "إعادة تغيير التمييز أو التعليق",
+        "styleRestored": "تمت استعادة النمط",
+        "textRestored": "تمت استعادة نص التعليق",
+        "undoShortcut": "التراجع عن تغيير التمييز أو التعليق",
+        "visibilityRestored": "تمت استعادة المشاركة"
+      },
       "removeHighlight": "إزالة التمييز",
       "sharedBadge": "مشارك",
       "styleHighlight": "تمييز",
@@ -4169,6 +4301,10 @@
     "archivedEmpty": "لا توجد ذاكرة مؤرشفة.",
     "archivedToast": "تمت أرشفة الذاكرة",
     "createdToast": "تم الحفظ في الذاكرة",
+    "deleteConfirmation": "اكتب {confirmation} للتأكيد",
+    "deleteDescription": "سيؤدي هذا إلى حذف هذه الذاكرة نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteTitle": "حذف الذاكرة؟",
+    "deletedToast": "تم حذف الذاكرة",
     "empty": "لا توجد ذاكرة بعد.",
     "kinds": {
       "decision": "قرار",
@@ -4642,6 +4778,7 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
+    "caseLawEmptyState": "ابدأ الكتابة للبحث في الأحكام القضائية.",
     "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "continueInChat": "المتابعة في الدردشة",
@@ -4676,6 +4813,8 @@
     "recentDocuments": "المستندات الحديثة",
     "recentSearches": "عمليات البحث الأخيرة",
     "recentlyOpenedFiles": "الملفات المفتوحة مؤخراً",
+    "registryCandidateNameMismatch": "الاسم الرسمي هو «{officialName}» ولا يتطابق",
+    "registryCandidateNoOfficialRecord": "لا يحتوي السجل الرسمي على قيد لهذا الرقم",
     "registryChoose": "اختر سجل شركات",
     "registryCredentialAskAdmin": "اطلب من مسؤول المؤسسة إعداد الوصول إلى هذا السجل.",
     "registryCredentialSaved": "تم حفظ إعدادات الوصول إلى السجل",
@@ -4686,6 +4825,7 @@
       "enrichmentUnavailable": "تفاصيل السجل التجاري غير متاحة مؤقتًا"
     },
     "registryKrsHint": "يبحث KRS برقم التسجيل، وليس باسم الشركة. أدخل رقم KRS المكوّن من 10 أرقام، بما في ذلك الأصفار في البداية (مثل 0000006865).",
+    "registryNameSearchNotFound": "لم تتطابق أي شركة موثّقة مع هذا الاسم. رُفض المرشحون الآتون:",
     "registryVatHint": "يتحقق VIES من أرقام ضريبة القيمة المضافة، وليس أسماء الشركات. أدخل الرقم مع رمز البلد (مثل CZ27082440)؛ تختلف الصيغة حسب البلد.",
     "renameSearchTitle": "إعادة تسمية البحث المحفوظ",
     "requestCountry": "طلب إضافة بلد جديد",
@@ -4699,6 +4839,7 @@
     "savedSearchesEmpty": "احفظ بحثاً لإعادة استخدامه.",
     "scopeFilter": "نطاق البحث",
     "scopePlaceholderAll": "البحث في جميع <scope>المصادر</scope>…",
+    "scopePlaceholderCaseLaw": "البحث في <scope>الاجتهاد القضائي</scope>…",
     "scopePlaceholderMatters": "البحث في جميع <scope>الملفات القانونية</scope>…",
     "scopePlaceholderRegistries": "البحث في <scope>السجلات</scope>…",
     "scopeRegistries": "السجلات",
@@ -4848,7 +4989,7 @@
       "description": "استخدم stella من مساعد الذكاء الاصطناعي واطّلع على ما يمكنه الوصول إلى حسابك.",
       "developerDescription": "عناوين الخادم وأداة سطر الأوامر للإعدادات التقنية.",
       "developerTitle": "وصول المطوّرين",
-      "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت.",
+      "disconnectConfirmDescription": "سيؤدي هذا إلى إلغاء وصول {clientName} إلى حسابك، بالإضافة إلى أي رموز أصدرها. يمكنك إعادة الاتصال في أي وقت. سيتم أيضًا تسجيل الخروج من جلسات المتصفح التي أُنشئت عبر هذا الاتصال.",
       "disconnectConfirmTitle": "هل تريد قطع الاتصال بـ {clientName}؟",
       "disconnectSuccess": "تم قطع الاتصال بـ {clientName}",
       "integrationsDescription": "خدمات خارجية يمكن للذكاء الاصطناعي استخدامها نيابةً عنك، مثل مستودع مستنداتك.",
@@ -5097,6 +5238,8 @@
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
+    "pendingChanges": "التعديلات المرتقبة",
+    "pendingChangesIncomplete": "قد لا تتضمن بيانات الجهة الناشرة جميع التعديلات المرتقبة.",
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskPlaceholder": "اسأل عن هذه المادة",
     "provisionAskQuestionPrompt": "بخصوص {subject}: {question}",
@@ -5114,7 +5257,6 @@
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
-    "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
@@ -5900,6 +6042,7 @@
       "downloadFailed": "فشل التنزيل",
       "downloadPdf": "تنزيل بصيغة PDF",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
+      "emptyFile": "الملف فارغ.",
       "includeReferenceNumber": "تضمين الرقم المرجعي",
       "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
@@ -6243,7 +6386,6 @@
         }
       },
       "atAGlance": "لمحة سريعة",
-      "edited": "تم التعديل",
       "getStarted": "ابدأ برفع المستندات أو إنشاء أول مجلد لك.",
       "matterDetails": "تفاصيل الملف القانوني",
       "membersCount": "{count, plural, zero {لا أعضاء} one {عضو واحد} two {عضوان} few {# أعضاء} many {# عضوًا} other {# عضو}}",

@@ -405,7 +405,7 @@ const BulkColumnsForm = ({
         </DialogTitle>
       </header>
 
-      <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
+      <div className="flex max-h-[60dvh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
         {children}
         {onAddDraft !== undefined && (
           <Button
@@ -928,7 +928,7 @@ const DraftCard = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-[15px] font-semibold tracking-tight"
           // A workspace draft becomes a column name; a research draft is a
           // question with its own bound.
           maxLength={isWorkspace ? DEFAULT_VARCHAR_MAX_LENGTH : undefined}

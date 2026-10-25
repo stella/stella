@@ -50,7 +50,10 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import type { CheckedFileCopy } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -58,11 +61,18 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -365,7 +375,12 @@ const copyWorkspaceFiles = async ({
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
-}) => {
+}): Promise<
+  Result<
+    undefined,
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
+> => {
   const prepareFile = async (copy: FileCopy) => {
     const sourceKey = createFileKey({
       organizationId,
@@ -441,6 +456,67 @@ const cleanupCopiedS3Keys = async ({
   if (Result.isError(cleanupResult)) {
     captureError(cleanupResult.error, { targetWorkspaceId });
   }
+};
+
+type DuplicatedDependency = typeof propertyDependencies.$inferInsert;
+type DuplicatedProperty = Omit<typeof properties.$inferInsert, "tool"> & {
+  tool: (typeof properties.$inferInsert)["tool"] | null;
+};
+
+/** "Name (n)" when earlier copies exist, else the original name. */
+const duplicatedMatterName = (name: string, earlierCopies: number) =>
+  earlierCopies > 0 ? `${name} (${earlierCopies})` : name;
+/**
+ * Every duplicated computed column keeps an input: copied edges stay, and a column
+ * that arrives without one is wired by the computed-column input owner (or refused).
+ */
+const wireDuplicatedComputedInputs = ({
+  newProperties,
+  dependencies,
+  workspaceId,
+}: {
+  newProperties: readonly DuplicatedProperty[];
+  dependencies: readonly DuplicatedDependency[];
+  workspaceId: DuplicatedDependency["workspaceId"];
+}): Result<DuplicatedDependency[], HandlerError> => {
+  const wired = [...dependencies];
+  const candidates = newProperties.flatMap((candidate) =>
+    candidate.id ? [{ id: candidate.id, content: candidate.content }] : [],
+  );
+  for (const property of newProperties) {
+    if (property.tool?.type !== "ai-model") {
+      continue;
+    }
+    if (!property.id) {
+      panic("Duplicated property is missing its minted id");
+    }
+    const propertyId = property.id;
+    const existingInputs = wired
+      .filter((dependency) => dependency.propertyId === propertyId)
+      .map(({ dependsOnPropertyId, condition }) => ({
+        dependsOnPropertyId,
+        condition: condition ?? null,
+      }));
+    const inputs = requireComputedColumnInputs({
+      candidates,
+      inputs: existingInputs,
+    });
+    if (Result.isError(inputs)) {
+      return Result.err(computedColumnInputHandlerError(inputs.error));
+    }
+    if (existingInputs.length === 0) {
+      wired.push(
+        ...inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+          id: createSafeId<"propertyDependency">(),
+          workspaceId,
+          propertyId,
+          dependsOnPropertyId,
+          condition,
+        })),
+      );
+    }
+  }
+  return Result.ok(wired);
 };
 
 export const createDuplicateWorkspace = (
@@ -608,8 +684,10 @@ export const createDuplicateWorkspace = (
           });
           return Result.err(
             new HandlerError({
-              status: 500,
-              message: "Failed to copy matter files",
+              status: S3ObjectMissingError.is(copyResult.error) ? 404 : 500,
+              message: S3ObjectMissingError.is(copyResult.error)
+                ? "Matter file not found"
+                : "Failed to copy matter files",
               cause: copyResult.error,
             }),
           );
@@ -681,10 +759,10 @@ export const createDuplicateWorkspace = (
           });
         }
 
-        const newName =
-          duplicatedNames.length > 0
-            ? `${snapshot.workspace.name} (${duplicatedNames.length})`
-            : snapshot.workspace.name;
+        const newName = duplicatedMatterName(
+          snapshot.workspace.name,
+          duplicatedNames.length,
+        );
         const pattern =
           settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
         const padding =
@@ -728,8 +806,9 @@ export const createDuplicateWorkspace = (
         }
 
         const propertyIdMap = new Map<string, SafeId<"property">>();
+        let newProperties: (typeof properties.$inferInsert)[] = [];
         if (snapshot.properties.length > 0) {
-          const newProperties = snapshot.properties.map((property) => {
+          newProperties = snapshot.properties.map((property) => {
             const id = createSafeId<"property">();
             propertyIdMap.set(property.id, id);
             return {
@@ -771,8 +850,17 @@ export const createDuplicateWorkspace = (
             };
           })
           .filter((dependency) => dependency !== null);
-        if (newDependencies.length > 0) {
-          await tx.insert(propertyDependencies).values(newDependencies);
+
+        const wiredDependencies = wireDuplicatedComputedInputs({
+          newProperties,
+          dependencies: newDependencies,
+          workspaceId: targetWorkspaceId,
+        });
+        if (Result.isError(wiredDependencies)) {
+          return Result.err(wiredDependencies.error);
+        }
+        if (wiredDependencies.value.length > 0) {
+          await tx.insert(propertyDependencies).values(wiredDependencies.value);
         }
 
         if (snapshot.views.length > 0) {
@@ -993,10 +1081,10 @@ export const createDuplicateWorkspace = (
           },
         });
 
-        await dependencies.enqueueEntitySearchRepairs(
-          tx,
-          duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
-        );
+        await dependencies.enqueueEntitySearchRepairs(tx, [
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ]);
         const nativeExtractionRunIds =
           await dependencies.requestNativeExtractionRuns({
             requests: nativeExtractionRequests,
@@ -1029,9 +1117,10 @@ export const createDuplicateWorkspace = (
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
         .catch(captureError);
       dependencies
-        .flushEntitySearchRepairs(
-          txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
-        )
+        .flushEntitySearchRepairs([
+          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ])
         .catch(captureError);
 
       handoffCommittedDocumentProcessingRuns({

@@ -160,43 +160,83 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization"],
-      <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>,
+      ["/admin"],
+      <BreadcrumbLink to="/admin">{t("common.organization")}</BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization/members"],
-      <BreadcrumbLink to="/settings/organization/members">
+      ["/admin/general"],
+      <BreadcrumbLink to="/admin/general">{t("admin.general")}</BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/members"],
+      <BreadcrumbLink to="/admin/members">
         {t("common.members")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization/number-series"],
-      <BreadcrumbLink to="/settings/organization/number-series">
-        {t("billing.numberSeries.title")}
+      ["/admin/usage"],
+      <BreadcrumbLink to="/admin/usage">
+        {t("admin.planAndUsage")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization/vat-rates"],
-      <BreadcrumbLink to="/settings/organization/vat-rates">
-        {t("billing.vatRates.title")}
+      ["/admin/audit-logs"],
+      <BreadcrumbLink to="/admin/audit-logs">
+        {t("settings.organization.auditLogs")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization/billing"],
-      <BreadcrumbLink to="/settings/organization/billing">
-        {t("billing.settingsTitle")}
+      ["/admin/ai"],
+      <BreadcrumbLink to="/admin/ai">
+        {t("admin.modelsAndProviders")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization/matter-numbering"],
-      <BreadcrumbLink to="/settings/organization/matter-numbering">
+      ["/admin/anonymization"],
+      <BreadcrumbLink to="/admin/anonymization">
+        {t("settings.organization.anonymization.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/tools"],
+      <BreadcrumbLink to="/admin/tools">
+        {t("knowledge.sections.tools.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/matter-numbering"],
+      <BreadcrumbLink to="/admin/matter-numbering">
         {t("settings.organization.matterNumbering")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
-      ["/settings/organization/ai"],
-      <BreadcrumbLink to="/settings/organization/ai">
-        {t("settings.organization.ai")}
+      ["/admin/document-types"],
+      <BreadcrumbLink to="/admin/document-types">
+        {t("settings.organization.documentTypes.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/time-policy"],
+      <BreadcrumbLink to="/admin/time-policy">
+        {t("settings.organization.timePolicy.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/number-series"],
+      <BreadcrumbLink to="/admin/number-series">
+        {t("billing.numberSeries.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/vat-rates"],
+      <BreadcrumbLink to="/admin/vat-rates">
+        {t("billing.vatRates.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/billing"],
+      <BreadcrumbLink to="/admin/billing">
+        {t("admin.billingProfiles")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(

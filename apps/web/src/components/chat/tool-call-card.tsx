@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,10 +9,11 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { StatusMark } from "@stll/ui/status-mark";
+import type { StatusMarkStatus } from "@stll/ui/status-mark";
 import { cn } from "@stll/ui/utils";
 
-import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
-import { getChatToolActivityState } from "@/components/chat/chat-activity.logic";
+import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
 import {
   type ChatToolCallPart,
   getChatToolTitleKey,
@@ -369,6 +370,39 @@ const skillResourceTabSource = ({
     : { ...source, skillDisplayName };
 };
 
+// The mark a call shows when it is neither running nor failed. Approval and
+// user-input states wait on a person, so they read as pending, never done.
+const TOOL_CALL_SETTLED_STATUS = {
+  "approval-requested": "pending",
+  "approval-responded": "pending",
+  "awaiting-input": "pending",
+  complete: "done",
+  error: "failed",
+  "input-complete": "pending",
+  "input-streaming": "pending",
+} as const satisfies Record<ToolPart["state"], StatusMarkStatus>;
+
+const toolCallStatus = ({
+  hasError,
+  isRunning,
+  state,
+}: {
+  hasError: boolean;
+  isRunning: boolean;
+  state: ToolPart["state"];
+}): StatusMarkStatus => {
+  if (hasError) {
+    return "failed";
+  }
+  return isRunning ? "running" : TOOL_CALL_SETTLED_STATUS[state];
+};
+
+const TOOL_CALL_STATUS_LABEL_KEYS = {
+  done: "common.done",
+  pending: "chat.toolCall.statusWaiting",
+  running: "common.running",
+} as const satisfies Record<Exclude<StatusMarkStatus, "failed">, string>;
+
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
@@ -383,7 +417,7 @@ export const toolFailureLabelKey = (
   return state === "error" ? "chat.toolCall.interrupted" : undefined;
 };
 
-export const ToolCallCard = ({
+const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
   durationMs,
@@ -435,7 +469,6 @@ export const ToolCallCard = ({
   });
 
   const isLoading = isRunningToolPart(part);
-  const activityState = isLoading ? getChatToolActivityState(name) : null;
   const [timing, setTiming] = useState(() =>
     createToolCallTiming({
       durationMs,
@@ -473,6 +506,13 @@ export const ToolCallCard = ({
   const errorMessage =
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
+  const status = toolCallStatus({
+    hasError,
+    isRunning: isLoading,
+    state: part.state,
+  });
+  const statusLabel =
+    status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = isCodeToolName(name) && hasOutput;
@@ -542,12 +582,11 @@ export const ToolCallCard = ({
           }}
           type="button"
         >
-          {activityState && <ChatActivityOrb state={activityState} />}
+          <StatusMark label={statusLabel} status={status} />
           <span
             className={cn(
               "min-w-0 truncate",
-              isLoading &&
-                "animate-skeleton motion-reduce:text-muted-foreground bg-[linear-gradient(90deg,var(--color-foreground-ghost)_35%,var(--color-muted-foreground)_50%,var(--color-foreground-ghost)_65%)] bg-[length:250%_100%] bg-clip-text text-transparent motion-reduce:animate-none rtl:[animation-name:skeleton-rtl]",
+              isLoading && CHAT_PENDING_TEXT_CLASS,
             )}
           >
             <span>{label}</span>
@@ -684,6 +723,10 @@ export const ToolCallCard = ({
     </div>
   );
 };
+
+// A response can stream many tool calls, and each new chunk re-renders the
+// message's part list: a card whose call did not change skips that render.
+export const ToolCallCard = memo(ToolCallCardComponent);
 
 /** The short human failure line, with the raw tool error (written for the
  *  model, not for people) behind a collapsed disclosure for debugging. */

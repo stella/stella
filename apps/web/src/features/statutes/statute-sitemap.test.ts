@@ -13,6 +13,8 @@ const {
 } = await import("@/features/statutes/statute-sitemap");
 const { createPublicLawSitemapIndexXml } =
   await import("@/lib/public-law-sitemap");
+const { createSitemapReadFailureResponse } =
+  await import("@/lib/public-sitemap");
 
 const requestUrlForTest = (input: Request | URL | string): string => {
   if (input instanceof URL) {
@@ -54,7 +56,10 @@ describe("public statute sitemap", () => {
       signal: AbortSignal.timeout(1000),
     });
 
-    expect(shards.unwrapOr([]).map(({ country }) => country)).toEqual(["cze"]);
+    expect(shards.unwrapOr([]).map(({ country }) => country)).toEqual([
+      "cze",
+      "svk",
+    ]);
     expect(requestedUrls).toEqual([
       "http://localhost:3001/v1/law/sitemap/shards",
     ]);
@@ -115,6 +120,36 @@ describe("public statute sitemap", () => {
     });
 
     expect(works.isErr()).toBe(true);
+  });
+
+  test("a budget refusal answers 429 with the upstream Retry-After", async () => {
+    const fetchImpl = async () =>
+      new Response("busy", { headers: { "Retry-After": "7" }, status: 429 });
+
+    const works = await fetchPublicStatuteSitemapWorks({
+      fetchImpl,
+      shard: { bucket: "all", country: "cze" },
+    });
+    const response = createSitemapReadFailureResponse(
+      works.isErr() ? works.error : null,
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("7");
+  });
+
+  test("any other unreadable shard answers 503", async () => {
+    const fetchImpl = async () => new Response("nope", { status: 502 });
+
+    const works = await fetchPublicStatuteSitemapWorks({
+      fetchImpl,
+      shard: { bucket: "all", country: "cze" },
+    });
+    const response = createSitemapReadFailureResponse(
+      works.isErr() ? works.error : null,
+    );
+
+    expect(response.status).toBe(503);
   });
 
   test("a shard payload of the wrong shape is an error value", async () => {
@@ -199,7 +234,7 @@ describe("public statute sitemap", () => {
     expect(xml).toContain(
       "<loc>http://localhost:3000/sitemaps/law-statutes/cze.xml</loc>",
     );
-    expect(xml).not.toContain(
+    expect(xml).toContain(
       "<loc>http://localhost:3000/sitemaps/law-statutes/svk/07.xml</loc>",
     );
     expect(xml).not.toContain("/xaa");

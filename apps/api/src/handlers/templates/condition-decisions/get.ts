@@ -4,9 +4,9 @@ import { t } from "elysia";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
+  memberAIAccessError,
   ownAIKeyRequiredError,
   storedAIConfigUnreadableError,
-  memberAIAccessError,
 } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -100,7 +100,7 @@ export const createConditionPreviewHandler = ({
               return Result.err(accessError);
             }
             const authorization = await authorizeUsage({
-              metering: { actionType: "chat", modelRole: "fast" },
+              metering: { actionType: "chat", modelTask: "classify" },
               organizationId: session.activeOrganizationId,
               orgAIConfig,
               workspaceId: null,
@@ -131,16 +131,17 @@ export const createConditionPreviewHandler = ({
                     abortSignal: AbortSignal.any([abortSignal, signal]),
                     generation: {
                       dataClass: "customer",
+                      userId: user.id,
                       orgAIConfig,
                       managedAIResidency,
                       organizationId: session.activeOrganizationId,
                       admission,
                       tenantWorkspaceIds: [],
-                      role: "fast",
+                      task: "classify",
                       serviceTier: "standard",
                       caching: resolveCaching({
                         promptCachingEnabled: false,
-                        role: "fast",
+                        task: "classify",
                         scopeKey: params.templateId,
                       }),
                       prompt:
@@ -148,7 +149,7 @@ export const createConditionPreviewHandler = ({
                       analytics: createTanStackAIAnalyticsCallbacks({
                         dataClass: "customer",
                         feature: "templates.preview-conditions",
-                        modelRole: "fast",
+                        modelTask: "classify",
                         orgAIConfig,
                         modelTier: admission.modelTier,
                         organizationId: session.activeOrganizationId,

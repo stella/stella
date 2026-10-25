@@ -3,6 +3,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { filenameForContext, jsxName } from "./utils.ts";
 
 const OWNER_PATH = "/packages/chat/src/link.tsx";
+// In-app legal navigation keeps its own label: each entry is the one file and
+// the one href expression that opens the legal reader in place.
+const LEGAL_NAVIGATION = [
+  { file: "/legal-citation-link.tsx", href: "{sanitizeHref(citation.url)}" },
+  { file: "/answer-quote.tsx", href: "{sanitizeHref(readerHref)}" },
+] as const;
 const isFaviconUrl = (text: string) => {
   const normalized = text.toLowerCase();
   return (
@@ -58,18 +64,20 @@ export default eslintCompatPlugin({
               return;
             }
             const source = value ? context.sourceCode.getText(value) : "";
-            // File attachment downloads retain their attachment content/controls.
+            // An attachment chip's title opens its file and keeps the chip shell.
             if (
-              filename.endsWith("/chat-thread-messages.tsx") &&
-              source === "{sanitizeHref(contentUrl)}"
+              filename.endsWith("/chat/attachment-chip.tsx") &&
+              source === "{sanitizeHref(open.href)}"
             ) {
               return;
             }
             // Legal navigation may use the specialized label. External citation
             // and source branches must delegate to ChatLink instead.
             if (
-              filename.endsWith("/legal-citation-link.tsx") &&
-              source === "{sanitizeHref(citation.url)}" &&
+              LEGAL_NAVIGATION.some(
+                (entry) =>
+                  filename.endsWith(entry.file) && source === entry.href,
+              ) &&
               !node.attributes.some(
                 (attribute) =>
                   attribute.type === "JSXSpreadAttribute" ||

@@ -64,6 +64,7 @@ const responseWithText = (text: string): SearchResponse => {
     citationCount: Number.MAX_VALUE,
     citationAuthority: -Number.MAX_VALUE,
     matchingPassages: Number.MAX_SAFE_INTEGER,
+    match: "all_terms",
     createdAt: text,
   } as const satisfies SearchResponse["hits"][number];
   return {
@@ -86,6 +87,7 @@ const responseWithText = (text: string): SearchResponse => {
       language: [bucket],
     },
     total: SEARCH_TOTAL_NOT_COUNTED,
+    relaxedHitCount: 0,
     nextCursor: text,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,

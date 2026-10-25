@@ -1,5 +1,117 @@
 # @stll/cli
 
+## 5.3.1
+
+### Patch Changes
+
+- [#5827](https://github.com/stella/stella/pull/5827) [`6f18636`](https://github.com/stella/stella/commit/6f186366c1749c64e0fdcf6f54d29dc746017155) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Comment on the claims of a list verification: `lists.verifications.claim-comments.list`, `.create`, `.update` and `.delete` read, add, change and remove comments on one claim, private unless shared with the matter.
+
+## 5.3.0
+
+### Minor Changes
+
+- [#6118](https://github.com/stella/stella/pull/6118) [`1f90c6b`](https://github.com/stella/stella/commit/1f90c6bdff83b54bd905a9087a0b132bf553fe25) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella capability` commands for document redline suggestions (`docx-suggestions list`, `resolve`, `revert`), assistant memory (`memories list`, `create`, `update`) and notifications (`notifications list`, `read-state-update`).
+
+  Memory writes use their own consent scope; memory and redline writes require confirmation for each call.
+
+- [#6472](https://github.com/stella/stella/pull/6472) [`83e4634`](https://github.com/stella/stella/commit/83e4634ae41525365ddcca368db1d128e6448729) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Paginate filesystem tree reads and expose bounded text previews in entity lists.
+
+- [#6196](https://github.com/stella/stella/pull/6196) [`534b9bf`](https://github.com/stella/stella/commit/534b9bf0ff8701234b84817d0b7ddb007b13b856) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add tax ID, VAT-payer status and invoice language to contacts, a language to invoices, and a command that adds a country's VAT rates from a preset.
+
+- [#6331](https://github.com/stella/stella/pull/6331) [`61ce03b`](https://github.com/stella/stella/commit/61ce03b8784374a9e9012e7f2273babd5a16db24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the Polish KSeF FA(3) e-invoice format to invoice export.
+
+### Patch Changes
+
+- [#6076](https://github.com/stella/stella/pull/6076) [`90be2f9`](https://github.com/stella/stella/commit/90be2f9b37607e3cad8bb027ba2299d6ae4392e4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Recognize the `action_feature_disabled` admission refusal, returned while an operator has turned the requested feature off, and exit with the feature-disabled code.
+
+- [#6487](https://github.com/stella/stella/pull/6487) [`8ccab27`](https://github.com/stella/stella/commit/8ccab27d6f3a721dd782b84c73b3c3db4fb8fc6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document uploads read their PUT timeout from the shared upload contract, so the CLI and the API agree on how long an upload may run and still be finalized.
+
+## 5.2.1
+
+### Patch Changes
+
+- [#6696](https://github.com/stella/stella/pull/6696) [`87beaf6`](https://github.com/stella/stella/commit/87beaf6bb6cc7d709af9961acd3f78d841746e6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe why AI is unavailable and whether the caller may configure the organization's provider in the AI availability capability.
+
+- [#6348](https://github.com/stella/stella/pull/6348) [`0008522`](https://github.com/stella/stella/commit/0008522c9ba216c440fc08b81e6c5e7fa553ec0f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage reports each source's held decision-year range and its completeness per calendar year.
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update connector tool metadata for app-only web link refresh.
+
+## 5.2.0
+
+### Minor Changes
+
+- [#5805](https://github.com/stella/stella/pull/5805) [`6ff1ef3`](https://github.com/stella/stella/commit/6ff1ef348f1fcd639ccfe85df8f6d31859a71474) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law search automatically tries partial matching when a question has no full matches, ranks partial hits by term coverage, and exposes match classifications and warnings in API, MCP, CLI and web results.
+
+### Patch Changes
+
+- [#6343](https://github.com/stella/stella/pull/6343) [`fd168ab`](https://github.com/stella/stella/commit/fd168abcc2dcb8de45b0764687149049163c42fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep published clients independent from private workspace packages while preserving supported-version requests.
+
+- [#6393](https://github.com/stella/stella/pull/6393) [`7ac81e4`](https://github.com/stella/stella/commit/7ac81e466061fa75b412e51f1a9faf7b7616c19c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `package.json` so consumers can read the installed package version.
+
+- [#6343](https://github.com/stella/stella/pull/6343) [`fd168ab`](https://github.com/stella/stella/commit/fd168abcc2dcb8de45b0764687149049163c42fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require supported local client versions, identify CLI and MCP kit requests, cache CLI update metadata, and turn incompatibilities into actionable update errors. Keep CLI version tests on the server metadata contract and scope the local-client CORS header to MCP transport requests.
+
+## 5.1.1
+
+### Patch Changes
+
+- [#6304](https://github.com/stella/stella/pull/6304) [`8554dd6`](https://github.com/stella/stella/commit/8554dd6fbe7ffbb9eb24f46859e4ba294e62df6b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add Poland to case-law search.
+
+## 5.1.0
+
+### Minor Changes
+
+- [#6144](https://github.com/stella/stella/pull/6144) [`fb28b69`](https://github.com/stella/stella/commit/fb28b69d95d8094029029517032bfe1b519cc83d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_case_law_citations` filters by doctrine and polarity; a doctrine filter on a surface without doctrine is refused instead of returning an empty page.
+
+- [#5986](https://github.com/stella/stella/pull/5986) [`20eaeb8`](https://github.com/stella/stella/commit/20eaeb874a0f097a78b56b520a3fe80226c4d187) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an as-of date to legislation search and return the matched consolidation validity window.
+
+- [#6012](https://github.com/stella/stella/pull/6012) [`0ff6a2c`](https://github.com/stella/stella/commit/0ff6a2cc9329ff77c5a9f3c5f47d221995935579) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_statute` returns publisher-stated pending changes and, per version, the amendments that produced it.
+
+### Patch Changes
+
+- [#5984](https://github.com/stella/stella/pull/5984) [`a4dc90d`](https://github.com/stella/stella/commit/a4dc90d7e0174d34f3435408998c973db7c538d7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve EU decisions by ECLI and include available decision languages.
+
+- [#5982](https://github.com/stella/stella/pull/5982) [`fcd5c17`](https://github.com/stella/stella/commit/fcd5c17d4bf9f955501d6f09aac6bd2bb277ff61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document EU-law provision filters for case-law search.
+
+## 5.0.0
+
+### Major Changes
+
+- [#5865](https://github.com/stella/stella/pull/5865) [`0b164f3`](https://github.com/stella/stella/commit/0b164f3f3bcf91d53d10f9f46f725ad2e581c18b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Replace clause list depth fields with named numbering variants in the generated contracts.
+
+### Patch Changes
+
+- [#5554](https://github.com/stella/stella/pull/5554) [`20316a1`](https://github.com/stella/stella/commit/20316a1133c7d433112551c4b843362d4dff1aac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List retained answer versions with the text before and after each change and the name of the member who made it.
+
+- [#6046](https://github.com/stella/stella/pull/6046) [`b83289b`](https://github.com/stella/stella/commit/b83289b9a22c5e21999eb033498dac37b6efb1ea) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use `url` for legal reader links and retain distinct publisher links in `source_url`.
+
+- [#5985](https://github.com/stella/stella/pull/5985) [`b65b24a`](https://github.com/stella/stella/commit/b65b24a5445be69c1f26b54f72d86640f3ad9258) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document that statute reads include outline and versions on the first text page only.
+
+## 4.3.0
+
+### Minor Changes
+
+- [#5824](https://github.com/stella/stella/pull/5824) [`24c4b4d`](https://github.com/stella/stella/commit/24c4b4d2dbf3c0d4c3926e0cae07c983571b9e9a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the lists.sample-case.create capability to load the AVT sample case in one server operation.
+
+- [#5785](https://github.com/stella/stella/pull/5785) [`031c581`](https://github.com/stella/stella/commit/031c5819cf2b5b98ae9a45a7afde80efc292addd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law search takes a `provision`, written as a lawyer cites it, and returns only decisions that cite that provision.
+
+- [#5811](https://github.com/stella/stella/pull/5811) [`4c822db`](https://github.com/stella/stella/commit/4c822db55284607ca26e96b009922c13cf067b62) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Citation reads report how a citing decision treats the cited one when a reviewed reading exists: it distinguishes or limits it, with a quoted passage, kept apart from the citing stance.
+
+- [#5710](https://github.com/stella/stella/pull/5710) [`05e8bd5`](https://github.com/stella/stella/commit/05e8bd574134ca4ed8d25880b1988e5713a0e432) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Prepare a matter's next invoice with `invoices prefill`, and create prefilled drafts that bill expenses and billed-time changes in one `invoices create` call. Seller profiles record whether the issuer is a VAT payer (`vatPayer`).
+
+- [#5774](https://github.com/stella/stella/pull/5774) [`6d2dbef`](https://github.com/stella/stella/commit/6d2dbefe1a099de62891cabfeaa1dc3618f216d1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Set a matter's client with `clientId` on `matters update`, and choose whether matter titles show their number with `matterNumberingEnabled` in organization settings.
+
+- [#5860](https://github.com/stella/stella/pull/5860) [`1fe32b6`](https://github.com/stella/stella/commit/1fe32b6f5d201bcaaaa5363f36da4ae95f4041ca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills update` accept `invocation` (`auto` or `manual`), and `skills get` and `skills list` report it: a `manual` skill runs only when the user invokes it.
+
+### Patch Changes
+
+- [#5680](https://github.com/stella/stella/pull/5680) [`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AiLabel`, an inline mark for generated content that opens a short disclosure in a popover. Case-law analysis reads now return `aiDisclosure` with the analysis, the sentence to show beside it.
+
+- [#5941](https://github.com/stella/stella/pull/5941) [`c988ea0`](https://github.com/stella/stella/commit/c988ea0e59548dd11efbacfee20d6bb6138170f3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A case-law analysis that failed because the AI provider asked to wait reports when it can be tried again, and is not run again before then.
+
+- [#5908](https://github.com/stella/stella/pull/5908) [`657524a`](https://github.com/stella/stella/commit/657524ad8bd7885797ef00aad0054000b0b1a91c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report a sanctions list that was only partly screened as incomplete in counterparty check results.
+
+- [#5707](https://github.com/stella/stella/pull/5707) [`c9888bd`](https://github.com/stella/stella/commit/c9888bd758b61d81ac01e775256267d9270ba54e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Split matter membership and organization settings commands into separate tools. Successful tool outputs no longer carry request IDs; errors retain them.
+
 ## 4.2.0
 
 ### Minor Changes

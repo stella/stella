@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
@@ -140,8 +140,7 @@ const getFileTabEditorState = ({
   desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
   editingDocxTabId: string | null;
   entityData:
-    | { fields: { id: string; propertyId?: string | undefined }[] }
-    | undefined;
+    { fields: { id: string; propertyId?: string | undefined }[] } | undefined;
   filePropertyId: string | undefined;
   isNativeDocxDisplay: boolean;
   isPdfDisplay: boolean;
@@ -250,12 +249,10 @@ export const FileTabPanel = ({
   const t = useTranslations();
   const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
-  const display = getFileTabDisplayState({
-    activeId,
-    minimized,
-    scaleOffsets,
-    tab,
-  });
+  const display = useMemo(
+    () => getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab }),
+    [activeId, minimized, scaleOffsets, tab],
+  );
   const {
     desktopEditFileType,
     isActive,
@@ -296,6 +293,7 @@ export const FileTabPanel = ({
     isEmailViewerActive: display.isEmailViewerActive,
     isPdfDisplay,
     minimized,
+    needsConversionStatus: display.needsConversionStatus,
     needsPropertyResolution: display.needsPropertyResolution,
     tab,
   });
@@ -313,9 +311,12 @@ export const FileTabPanel = ({
     tab,
   });
 
-  const handleViewerError = (error: unknown) => {
-    notifyUserError(error, t("errors.actionFailed"));
-  };
+  const handleViewerError = useCallback(
+    (error: unknown) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+    [t],
+  );
 
   const docxEditor = useDocxEditorBindings({
     docxActionsRef,

@@ -1,7 +1,7 @@
 import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 
 import {
   getChatAttachmentFilename,
@@ -12,7 +12,7 @@ import {
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -21,9 +21,9 @@ import {
   COMPACTION_SYSTEM_PROMPT,
 } from "@/api/lib/chat/compaction-summary";
 import {
+  compactionGenerationRequest,
   DEFAULT_PRESERVE_TOKENS,
   DEFAULT_TRIGGER_TOKENS,
-  compactionGenerationRequest,
   estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_STRUCTURED_PART_CHARS,
@@ -38,13 +38,17 @@ import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+
+// Compaction serves an interactive turn; a stalled summary falls back to the
+// bounded recent history and its visible context notice.
+const COMPACTION_GENERATION_DEADLINE_MS = 30_000;
 
 export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
 
 type TanStackCompactionAIAnalytics = Pick<
   TanStackAIAnalyticsCallbacks,
-  "captureError" | "middleware"
+  "captureError" | "forModel" | "middleware"
 >;
 
 export type ChatCompactionPlan =
@@ -489,6 +493,7 @@ export const compactModelMessages = async ({
 };
 
 type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
+  summaryDeadlineMs?: number | undefined;
   abortSignal: AbortSignal;
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   boundary: ChatThirdPartyBoundary;
@@ -497,12 +502,16 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
+  resolveTextModel?:
+    | Parameters<typeof generateTanStackTextForTask>[0]["resolveTextModel"]
+    | undefined;
   managedAIResidency: ManagedAIResidency;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 type CompactModelMessagesForModelOptions = {
+  summaryDeadlineMs?: number | undefined;
   abortSignal: AbortSignal;
   aiAnalytics?: TanStackCompactionAIAnalytics | undefined;
   modelId?: string | undefined;
@@ -511,9 +520,12 @@ type CompactModelMessagesForModelOptions = {
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
+  resolveTextModel?:
+    | Parameters<typeof generateTanStackTextForTask>[0]["resolveTextModel"]
+    | undefined;
   managedAIResidency: ManagedAIResidency;
   preserveTokens?: number | undefined;
-  role: ModelRole;
+  task: ModelTask;
   summarizeWithModel?: ((transcript: string) => Promise<string>) | undefined;
   /** Tenant set for the model-ingress guard on the summarizer request. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -521,6 +533,7 @@ type CompactModelMessagesForModelOptions = {
 };
 
 export const compactChatMessagesForModel = async ({
+  summaryDeadlineMs = COMPACTION_GENERATION_DEADLINE_MS,
   abortSignal,
   aiAnalytics,
   boundary,
@@ -530,6 +543,7 @@ export const compactChatMessagesForModel = async ({
   organizationId,
   admission,
   orgAIConfig,
+  resolveTextModel,
   managedAIResidency,
   preserveTokens,
   tenantWorkspaceIds,
@@ -547,13 +561,15 @@ export const compactChatMessagesForModel = async ({
     summarizeTranscript: async (transcript) => {
       const result = await Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
+            deadlineMs: summaryDeadlineMs,
+            userId: admission.userId,
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "chat",
+              task: "chat",
               scopeKey: null,
             }),
             ...compactionGenerationRequest(
@@ -568,8 +584,9 @@ export const compactChatMessagesForModel = async ({
             organizationId,
             admission,
             orgAIConfig,
+            resolveTextModel,
             managedAIResidency,
-            role: "chat",
+            task: "chat",
             serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
@@ -590,6 +607,7 @@ export const compactChatMessagesForModel = async ({
   });
 
 export const compactModelMessagesForModel = async ({
+  summaryDeadlineMs = COMPACTION_GENERATION_DEADLINE_MS,
   abortSignal,
   aiAnalytics,
   modelId,
@@ -598,9 +616,10 @@ export const compactModelMessagesForModel = async ({
   organizationId,
   admission,
   orgAIConfig,
+  resolveTextModel,
   managedAIResidency,
   preserveTokens,
-  role,
+  task,
   summarizeWithModel,
   tenantWorkspaceIds,
   triggerTokens,
@@ -618,13 +637,15 @@ export const compactModelMessagesForModel = async ({
 
       const result = await Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
+            deadlineMs: summaryDeadlineMs,
+            userId: admission.userId,
             dataClass: "customer",
             abortSignal,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role,
+              task,
               scopeKey: null,
             }),
             ...compactionGenerationRequest(
@@ -639,10 +660,11 @@ export const compactModelMessagesForModel = async ({
             organizationId,
             admission,
             orgAIConfig,
+            resolveTextModel,
             managedAIResidency,
             system: COMPACTION_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
-            role,
+            task,
             serviceTier: "standard",
             temperature: 0,
             tenantWorkspaceIds,

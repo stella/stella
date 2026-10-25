@@ -1,4 +1,7 @@
-import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import {
+  BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
+  INVOICE_LANGUAGES,
+} from "@stll/api-contract";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -17,17 +20,17 @@ import {
 import {
   bytea,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
@@ -185,6 +188,8 @@ export const organizationSettings = p.pgTable(
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
       .default("enabled"),
+    /** Default document language for invoices; null derives it from the seller. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
     sanctionsMonitoringMode: p
       .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
       .notNull()
@@ -348,6 +353,13 @@ export const organizationSettings = p.pgTable(
       "organization_settings_managed_ai_residency_check",
       sql`${table.managedAIResidency} IN (${sql.join(
         MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_settings_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
         sql`, `,
       )})`,
     ),

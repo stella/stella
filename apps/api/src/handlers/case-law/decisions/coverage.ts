@@ -7,7 +7,11 @@ import {
 } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
+import {
+  caseLawSources,
+  publishedCaseLawDecisions,
+  SOURCE_TOTAL_ORIGIN,
+} from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -17,14 +21,18 @@ import {
 import {
   CASE_LAW_TOTAL_REPORTER,
   type CaseLawCountryCompleteness,
-  type CaseLawCoverageHealth,
-  type CaseLawSourceCompleteness,
-  type CaseLawTotalReporter,
   caseLawCountryCompleteness,
   caseLawCountryHealth,
+  type CaseLawCoverageHealth,
+  type CaseLawSourceCompleteness,
   caseLawSourceCompleteness,
   caseLawSourceHealth,
+  type CaseLawTotalReporter,
 } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  type CaseLawKnownGaps,
+  readCaseLawCoverageYearsQuery,
+} from "@/api/handlers/case-law/decisions/coverage-years";
 import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
@@ -43,17 +51,13 @@ import {
   unavailableProvisionPendingCounts,
 } from "@/api/lib/case-law/provision-pending";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import { servedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
-import { storedObservationIsListingOnlySqlFor } from "@/api/lib/legal-search/partial-observation-sql";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
-import type {
-  LegalBrowseFacets,
-  LegalSearchEngine,
-} from "@/api/lib/legal-search/types";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -106,24 +110,18 @@ type CaseLawCoverageSource = {
   health: CaseLawCoverageHealth;
   /** ISO 8601; null before the first run. */
   lastSyncAt: string | null;
-  /** Exact searchable decision-year bounds for this source. */
+  /** Exact decision-year bounds for decisions held from this source. */
   decisionYearFrom: number | null;
   decisionYearTo: number | null;
   /** Publisher-listed decisions whose text has not arrived. */
   pendingTextCount: number;
-  /** Registry-reviewed gaps; unknown is never presented as no gaps. */
-  knownGaps:
-    | { type: "unknown" }
-    | { type: "none-recorded" }
-    | {
-        type: "known";
-        gaps: readonly {
-          from: string;
-          to: string;
-          reason: string;
-          evidenceRef: string;
-        }[];
-      };
+  /**
+   * Everything the corpus holds for this source, as the ingestion side last
+   * counted it; null before the first count, never a zero standing in for one.
+   */
+  storedDecisions: number | null;
+  /** Reconciled slice-ledger completeness by calendar year. */
+  knownGaps: CaseLawKnownGaps;
   completeness: CaseLawSourceCompleteness;
   /**
    * Decisions published for this source in the last seven days; null when
@@ -184,6 +182,11 @@ type CaseLawCoverage = {
 
 const provisionStatusReadFailure = failureSink({
   event: "case_law.coverage.provision_status_unavailable",
+  expected: [],
+});
+
+const sliceCompletenessReadFailure = failureSink({
+  event: "case_law.coverage.slice_completeness_unavailable",
   expected: [],
 });
 
@@ -250,20 +253,12 @@ type CaseLawCoverageSourceRow = {
  * nothing a reader of the corpus needs. The redistribution gate is applied
  * here rather than per number, so a withheld source contributes to nothing.
  */
-const LISTING_ONLY_COVERAGE_DECISION_SQL = sql.raw(
-  storedObservationIsListingOnlySqlFor("coverage_decisions.metadata"),
-);
-
 export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
     tx: CaseLawPublicReadTransaction,
-    engine: LegalSearchEngine = envBase.LEGAL_SEARCH_PROVIDER,
   ): Promise<CaseLawCoverageSourceRow[]> => {
-    const eligibility = servedCaseLawDecisionFor("coverage_decisions", engine);
-    // The external serving index cannot prove SQL membership: no endpoints means unknown.
-    const served = eligibility ?? sql`FALSE`;
-    return await tx
+    const sources = await tx
       .select({
         id: caseLawSources.id,
         adapterKey: caseLawSources.adapterKey,
@@ -276,37 +271,53 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
         decisionYearFrom: sql<number | null>`(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
-          FROM case_law_decisions AS coverage_decisions
+          FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
-          ORDER BY coverage_decisions.decision_date ASC
+          ORDER BY coverage_decisions.decision_date ASC, coverage_decisions.id ASC
           LIMIT 1
         )`,
         decisionYearTo: sql<number | null>`(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
-          FROM case_law_decisions AS coverage_decisions
+          FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
             AND coverage_decisions.decision_date IS NOT NULL
-          ORDER BY coverage_decisions.decision_date DESC
+          ORDER BY coverage_decisions.decision_date DESC, coverage_decisions.id DESC
           LIMIT 1
-        )`,
-        pendingTextCount: sql<number>`(
-          SELECT count(*)::integer
-          FROM case_law_decisions AS coverage_decisions
-          WHERE coverage_decisions.source_id = case_law_sources.id
-            AND coverage_decisions.fulltext IS NULL
-            AND coverage_decisions.redacted_at IS NULL
-            AND ${LISTING_ONLY_COVERAGE_DECISION_SQL}
         )`,
       })
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
       .orderBy(caseLawSources.adapterKey)
       .limit(CASE_LAW_SOURCE_ROWS_BOUND);
+    const counts = await readPendingTextCountsBySource(
+      tx,
+      sources.map(({ id }) => id),
+    );
+    const countsBySource = new Map(
+      counts.map(({ sourceId, pendingTextCount }) => [
+        sourceId,
+        pendingTextCount,
+      ]),
+    );
+    return sources.map((source) => ({
+      ...source,
+      pendingTextCount: countsBySource.get(source.id) ?? 0,
+    }));
   },
 );
+
+/** The slice ledger read failed: unknown for every source, never "no gaps". */
+const UNREAD_YEAR_COMPLETENESS = {
+  type: "not_reconciled",
+  reason: "Slice completeness could not be read.",
+} as const satisfies CaseLawKnownGaps;
+
+/** The ledger answered but holds no reconciled slices for the source. */
+const NO_YEAR_COMPLETENESS = {
+  type: "not_reconciled",
+  reason: "The source has no slice completeness result.",
+} as const satisfies CaseLawKnownGaps;
 
 /** A source the week's read did not answer for: unknown, never zero. */
 const UNKNOWN_ARRIVALS = {
@@ -337,6 +348,9 @@ type CoverageLoad = {
   readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
   ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals> | null>;
+  readYearCompleteness: (
+    sources: readonly Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">[],
+  ) => Promise<ReadonlyMap<string, CaseLawKnownGaps>>;
   readFacets: (
     country: string,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
@@ -370,6 +384,7 @@ export const loadCaseLawCoverage = async ({
   readCourts,
   readFacets,
   readSources,
+  readYearCompleteness,
 }: CoverageLoad): Promise<Result<CaseLawCoverage, CoverageError>> => {
   const sources = await Result.tryPromise({
     try: readSources,
@@ -382,6 +397,17 @@ export const loadCaseLawCoverage = async ({
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
   const arrivals = await readArrivals(admitted.map(({ id }) => id));
+  // Per-year completeness is a per-source detail: a failed ledger read marks
+  // every source not reconciled and the rest of the page still answers.
+  const yearCompleteness = await Result.tryPromise({
+    try: async () => await readYearCompleteness(admitted),
+    catch: coverageError("reading case-law slice completeness failed"),
+  });
+  if (Result.isError(yearCompleteness)) {
+    observeFailure(yearCompleteness.error, {
+      sink: sliceCompletenessReadFailure,
+    });
+  }
 
   const reportUnrecognizedSource =
     createUnrecognizedSourceReporter("case_law.coverage");
@@ -426,7 +452,12 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
-      knownGaps: manifest.knownGaps,
+      storedDecisions:
+        source.storedTotalAsOf === null ? null : source.storedTotal,
+      knownGaps: Result.isError(yearCompleteness)
+        ? UNREAD_YEAR_COMPLETENESS
+        : (yearCompleteness.value.get(String(source.id)) ??
+          NO_YEAR_COMPLETENESS),
       completeness: caseLawSourceCompleteness({
         reportedTotal: source.reportedTotal,
         reportedTotalAsOf: source.reportedTotalAsOf,
@@ -594,6 +625,10 @@ export const readCaseLawCoverageHandler = async (
     excludedSourceIds: excludedSourceIds.value,
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
+    readYearCompleteness: async (sources) =>
+      await caseLawDb(
+        async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
+      ),
     readArrivals: async (sourceIds) => {
       // One stored count per source, recounted by the scheduler: the week's
       // window is never walked on the request path. A failure leaves the

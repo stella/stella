@@ -224,6 +224,40 @@ describe("buildArgsFromFlags (S3)", () => {
     });
   });
 
+  test.each(["", "12junk", "1e3", "0x10", " 1"])(
+    "leaves unresolved numeric spelling %j for server validation",
+    async (raw) => {
+      const spec = specWith([
+        {
+          flag: "--amount",
+          prop: "amount",
+          kind: "number",
+          required: false,
+          repeatable: false,
+        },
+      ]);
+      expect(await buildArgsFromFlags(spec, { amount: raw })).toEqual({
+        ok: true,
+        args: { amount: raw },
+      });
+    },
+  );
+
+  test("refuses an unsafe integer flag before server normalization can round it", async () => {
+    const spec = specWith([
+      {
+        flag: "--count",
+        prop: "count",
+        kind: "int",
+        required: false,
+        repeatable: false,
+      },
+    ]);
+    expect(
+      await buildArgsFromFlags(spec, { count: "9007199254740992" }),
+    ).toEqual({ ok: false, message: "--count expects a safe integer" });
+  });
+
   test("repeatable arrays accumulate without comma-splitting", async () => {
     const spec = specWith([
       {
@@ -355,6 +389,19 @@ describe("reservedFlagUsageError (spec 049 review)", () => {
     expect(reservedFlagUsageError({ limit: "-3" })).toContain("--limit");
     expect(reservedFlagUsageError({ limit: "0" })).toContain("--limit");
     expect(reservedFlagUsageError({ limit: "25" })).toBeNull();
+  });
+
+  test.each([
+    "12junk",
+    "",
+    " 1",
+    "1 ",
+    "1e3",
+    "0x10",
+    "-0",
+    "9007199254740992",
+  ])("refuses the noncanonical pagination token %j", (limit) => {
+    expect(reservedFlagUsageError({ limit })).toContain("--limit");
   });
 
   test("an unknown --output value is a usage error naming the flag", () => {
@@ -987,6 +1034,19 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 
 describe("toolErrorLines", () => {
   const FLAGS = new Set(["matter_id", "entity_id"]);
+
+  test("an unknown tool is an actionable outdated-CLI error", () => {
+    expect(
+      toolErrorLines({
+        code: "unknown_tool",
+        message: "Unknown tool: invoke_capability",
+        hint: undefined,
+        issues: [],
+      }),
+    ).toEqual([
+      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
+    ]);
+  });
 
   test("a lone issue repeating the summary folds into one line naming the flag", () => {
     expect(

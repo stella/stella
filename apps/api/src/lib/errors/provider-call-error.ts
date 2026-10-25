@@ -1,4 +1,4 @@
-import type { AIErrorKind } from "@stll/api-contract";
+import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
@@ -49,7 +49,7 @@ export const providerCallErrorCode = (
 type ProviderCallErrorOptions = {
   model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
   status: HandlerErrorStatusCode;
-  code?: ProviderCallErrorCode | undefined;
+  code?: ProviderCallErrorCode | AIFailureCode | undefined;
   kind: AIErrorKind;
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
@@ -64,13 +64,13 @@ const diagnostics = new WeakMap<
 >();
 
 export class ProviderCallError extends HandlerError {
-  declare code?: ProviderCallErrorCode | undefined;
+  declare code?: ProviderCallErrorCode | AIFailureCode | undefined;
   readonly provider: ResolvedTanStackTextModel["provider"];
   readonly keySource: ResolvedTanStackTextModel["keySource"];
   readonly providerStatus: number | undefined;
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
-  readonly retryAfterMs: number | undefined;
+  override readonly retryAfterMs: number | undefined;
 
   get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
     return diagnostics.get(this);
@@ -90,6 +90,7 @@ export class ProviderCallError extends HandlerError {
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status,
       code,
+      ...(retryAfterMs === undefined ? {} : { retryable: true, retryAfterMs }),
       ...(facts === undefined
         ? {}
         : {
@@ -122,12 +123,7 @@ export class ProviderCallError extends HandlerError {
  */
 export type ModelRunFinish = {
   finish:
-    | "content_filter"
-    | "length"
-    | "none"
-    | "stop"
-    | "tool_calls"
-    | "unfinished";
+    "content_filter" | "length" | "none" | "stop" | "tool_calls" | "unfinished";
   providerStopReason?: string | undefined;
 };
 

@@ -37,7 +37,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -59,6 +59,17 @@ const REASONED = v.record(v.string(), v.pipe(v.string(), v.nonEmpty()));
 const BASELINE_SCHEMA = v.object({
   comment: v.string(),
   drivers: REASONED,
+  fingerprints: v.optional(
+    v.record(
+      v.string(),
+      v.object({
+        fingerprint: v.string(),
+        storedInputIdentity: v.optional(v.string(), ""),
+        version: v.number(),
+      }),
+    ),
+    {},
+  ),
   files: REASONED,
   writers: REASONED,
 });
@@ -69,6 +80,17 @@ type Section = (typeof SECTIONS)[number];
 const DRIVER_ROWS = v.array(
   v.object({ key: v.string(), reason: v.pipe(v.string(), v.nonEmpty()) }),
 );
+const DRIVER_CENSUS = v.object({
+  fingerprints: v.array(
+    v.object({
+      key: v.string(),
+      fingerprint: v.string(),
+      storedInputIdentity: v.string(),
+      version: v.number(),
+    }),
+  ),
+  misses: DRIVER_ROWS,
+});
 
 const LINT_OUTPUT = v.object({
   diagnostics: v.array(v.object({ code: v.string(), filename: v.string() })),
@@ -105,7 +127,9 @@ export const parseBaseline = (text: string, label: string): Baseline => {
   const parsed = v.safeParse(BASELINE_SCHEMA, JSON.parse(text));
   return parsed.success
     ? parsed.output
-    : panic(`${label} must hold reasoned drivers, files and writers`);
+    : panic(
+        `${label} must hold fingerprints and reasoned drivers, files and writers`,
+      );
 };
 
 /** Membership keys across sections, prefixed so sections cannot trade rows. */
@@ -405,7 +429,9 @@ const fileCensus = (): string[] => {
 
 // ── drivers: the API guard test's census ──────────────────────────────────
 
-const driverCensus = (): { key: string; reason: string }[] => {
+type DriverCensus = v.InferOutput<typeof DRIVER_CENSUS>;
+
+const driverCensus = (): DriverCensus => {
   const directory = mkdtempSync(path.join(tmpdir(), "source-fingerprint-"));
   const out = path.join(directory, "drivers.json");
   const result = Bun.spawnSync(
@@ -419,7 +445,7 @@ const driverCensus = (): { key: string; reason: string }[] => {
   );
   const rows =
     result.exitCode === 0 && Bun.file(out).size > 0
-      ? v.parse(DRIVER_ROWS, JSON.parse(readFileSync(out, "utf-8")))
+      ? v.parse(DRIVER_CENSUS, JSON.parse(readFileSync(out, "utf-8")))
       : panic("The source fingerprint guard test failed or wrote no census");
   rmSync(directory, { recursive: true, force: true });
   return rows;
@@ -456,9 +482,18 @@ const reasoned = (
 
 const write = (): number => {
   const previous = readBaseline();
+  const census = driverCensus();
   const next: Baseline = {
     comment: previous.comment,
-    drivers: reasoned(driverCensus(), previous.drivers),
+    drivers: reasoned(census.misses, previous.drivers),
+    fingerprints: Object.fromEntries(
+      census.fingerprints.map(
+        ({ key, fingerprint, storedInputIdentity, version }) => [
+          key,
+          { fingerprint, storedInputIdentity, version },
+        ],
+      ),
+    ),
     files: reasoned(
       fileCensus().map((key) => ({ key, reason: FILE_REASON })),
       previous.files,
@@ -481,9 +516,90 @@ const write = (): number => {
   return 0;
 };
 
+type RecordedFingerprint = Baseline["fingerprints"][string];
+
+export const fingerprintEvolutionFailures = (
+  current: Readonly<Record<string, RecordedFingerprint>>,
+  base: Readonly<Record<string, RecordedFingerprint>>,
+): string[] => {
+  const failures: string[] = [];
+  for (const [key, recorded] of Object.entries(current)) {
+    const previous = base[key];
+    if (previous === undefined) {
+      continue;
+    }
+    if (recorded.version < previous.version) {
+      failures.push(`${key}: fingerprint version decreased`);
+      continue;
+    }
+    if (
+      recorded.storedInputIdentity === previous.storedInputIdentity &&
+      recorded.fingerprint !== previous.fingerprint &&
+      recorded.version <= previous.version
+    ) {
+      failures.push(
+        `${key}: fixture fingerprint changed without a version bump`,
+      );
+    }
+  }
+  return failures;
+};
+
+const baselineAt = (args: readonly string[]): Baseline | null => {
+  const baseIndex = args.indexOf("--base");
+  const baseRef = baseIndex === -1 ? "origin/main" : args[baseIndex + 1];
+  if (baseRef === undefined || baseRef === "") {
+    panic("--base requires a nonempty Git reference");
+  }
+  const result = Bun.spawnSync(["git", "show", `${baseRef}:${BASELINE}`], {
+    cwd: ROOT,
+    stderr: "pipe",
+  });
+  if (result.exitCode === 0) {
+    return parseBaseline(result.stdout.toString(), `${baseRef}:${BASELINE}`);
+  }
+  if (baseIndex !== -1) {
+    panic(`Cannot read source fingerprint baseline at ${baseRef}`);
+  }
+  console.warn(
+    `Source fingerprint evolution was not checked: ${baseRef}:${BASELINE} is unavailable`,
+  );
+  return null;
+};
+
 const check = (args: readonly string[]): number => {
   const baseline = readBaseline();
   const failures: string[] = [];
+  const census = driverCensus();
+  const fingerprints = Object.fromEntries(
+    census.fingerprints.map(
+      ({ key, fingerprint, storedInputIdentity, version }) => [
+        key,
+        { fingerprint, storedInputIdentity, version },
+      ],
+    ),
+  );
+  if (
+    Object.keys(fingerprints).length !==
+      Object.keys(baseline.fingerprints).length ||
+    Object.entries(fingerprints).some(([key, current]) => {
+      const recorded = baseline.fingerprints[key];
+      return (
+        recorded === undefined ||
+        current.fingerprint !== recorded.fingerprint ||
+        current.storedInputIdentity !== recorded.storedInputIdentity ||
+        current.version !== recorded.version
+      );
+    })
+  ) {
+    failures.push("Fixture fingerprints are stale (run --write)");
+  }
+  const base = baselineAt(args);
+  if (base !== null) {
+    failures.push(
+      ...fingerprintEvolutionFailures(baseline.fingerprints, base.fingerprints),
+    );
+  }
   const observed: Record<Exclude<Section, "drivers">, string[]> = {
     files: fileCensus(),
     writers: writerCensus().map(({ key }) => key),
@@ -517,7 +633,7 @@ const check = (args: readonly string[]): number => {
     return 1;
   }
   console.log(
-    `Source fingerprint baseline: ${String(observed.files.length)} files, ${String(observed.writers.length)} writers, exact sets verified.`,
+    `Source fingerprint baseline: ${String(Object.keys(baseline.fingerprints).length)} fixture fingerprints, ${String(observed.files.length)} files, ${String(observed.writers.length)} writers verified.`,
   );
   return 0;
 };
@@ -572,12 +688,14 @@ const selfTest = (): number => {
     ledgerKeys({
       comment: "",
       drivers: {},
+      fingerprints: {},
       files: { "a.ts": "r" },
       writers: {},
     }),
     ledgerKeys({
       comment: "",
       drivers: { "a.ts": "r" },
+      fingerprints: {},
       files: {},
       writers: {},
     }),

@@ -1,4 +1,5 @@
-import type { ModelMessage } from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -15,15 +16,19 @@ import {
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
+import { ModelDeadlineExceededError } from "@/api/lib/errors/provider-call-error";
 import { LIMITS } from "@/api/lib/limits";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   chatThreadNeedsCompaction,
   compactChatMessages,
-  compactModelMessagesForModel,
+  compactChatMessagesForModel,
   compactModelMessages,
+  compactModelMessagesForModel,
   computeThreadContextUsage,
   planChatCompaction,
   planModelCompaction,
@@ -384,8 +389,8 @@ describe("chat history compaction", () => {
           summarizeTranscript,
         });
 
-        expect(Result.isOk(compacted)).toBe(true);
-        if (Result.isError(compacted)) {
+        expect(compacted.status).toBe("ok");
+        if (compacted.status === "error") {
           return;
         }
         const preservedTail = planChatCompaction({
@@ -550,7 +555,7 @@ Continue drafting the termination analysis.
       orgAIConfig: null,
       managedAIResidency: "eu",
       preserveTokens: 20,
-      role: "chat",
+      task: "chat",
       tenantWorkspaceIds: [],
       summarizeWithModel: async (transcript) => {
         transcriptSeenBySummarizer = transcript;
@@ -569,6 +574,169 @@ Continue drafting the termination analysis.
       content:
         "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
     });
+  });
+
+  for (const history of ["chat", "model"] as const) {
+    for (const stalledAt of ["resolution", "stream"] as const) {
+      test(`${history} compaction reports a stalled ${stalledAt} and returns bounded history`, async () => {
+        const pendingModel = Promise.withResolvers<ResolvedTanStackTextModel>();
+        const pendingStream = Promise.withResolvers<undefined>();
+        const summaryErrors: unknown[] = [];
+        const capturedErrors: unknown[] = [];
+        let reachedStall = false;
+        const adapter = asTestRaw<AnyTextAdapter>({
+          async *chatStream(): AsyncIterable<StreamChunk> {
+            reachedStall = true;
+            yield {
+              type: EventType.RUN_STARTED,
+              runId: "stalled-compaction",
+              threadId: "compaction-thread",
+            };
+            // This boundary ignores cancellation, as a broken provider can.
+            await pendingStream.promise;
+          },
+        });
+        const model = asTestRaw<ResolvedTanStackTextModel>({
+          adapter,
+          keySource: "instance",
+          modelId: "compaction-model",
+          modelOptions: {},
+          provider: "openai",
+        });
+        const forModel = () => ({ captureError, forModel, middleware });
+        const captureError = (error: unknown) => capturedErrors.push(error);
+        const middleware = { name: "compaction-deadline-test" };
+        const options = {
+          abortSignal: new AbortController().signal,
+          aiAnalytics: { captureError, forModel, middleware },
+          summaryDeadlineMs: 40,
+          organizationId: toSafeId<"organization">("org_compaction"),
+          admission: testModelAdmission(
+            toSafeId<"organization">("org_compaction"),
+          ),
+          orgAIConfig: null,
+          managedAIResidency: "eu",
+          preserveTokens: 20,
+          resolveTextModel: async () => {
+            if (stalledAt === "resolution") {
+              reachedStall = true;
+              return await pendingModel.promise;
+            }
+            return model;
+          },
+          tenantWorkspaceIds: [],
+          triggerTokens: 50,
+          onSummaryError: (error: unknown) => summaryErrors.push(error),
+        } as const;
+        const oldText = "old request ".repeat(80);
+        const compacted =
+          history === "chat"
+            ? await compactChatMessagesForModel({
+                ...options,
+                boundary: { type: "raw" },
+                messages: [
+                  textMessage({ id: "old", role: "user", text: oldText }),
+                  textMessage({
+                    id: "latest",
+                    role: "user",
+                    text: "latest request",
+                  }),
+                ],
+              })
+            : await compactModelMessagesForModel({
+                ...options,
+                task: "chat",
+                messages: [
+                  { role: "user", content: oldText },
+                  { role: "user", content: "latest request" },
+                ],
+              });
+        expect(reachedStall).toBe(true);
+        expect(capturedErrors).toHaveLength(1);
+        expect(capturedErrors.at(0)).toBeInstanceOf(ModelDeadlineExceededError);
+        expect(capturedErrors.at(0)).toMatchObject({
+          deadlineMs: 40,
+        });
+        expect(summaryErrors).toHaveLength(1);
+        expect(summaryErrors.at(0)).toMatchObject({
+          cause: capturedErrors.at(0),
+        });
+        expect(compacted.status).toBe("ok");
+        if (compacted.status === "error") {
+          return;
+        }
+        expect(compacted.value.messages).toHaveLength(1);
+        expect(JSON.stringify(compacted.value.messages)).toContain(
+          "latest request",
+        );
+        expect(JSON.stringify(compacted.value.messages)).not.toContain(oldText);
+        expect(compacted.value.notice).toMatchObject({
+          type: "history-trimmed",
+        });
+      });
+    }
+  }
+
+  test("meters model compaction against the fallback model that answers", async () => {
+    const requestedModelId = "requested-model";
+    const answeringModelId = "answering-fallback-model";
+    const meteredModelIds: string[] = [];
+    const adapter = asTestRaw<AnyTextAdapter>({
+      async *chatStream(): AsyncIterable<StreamChunk> {
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: "compaction-run",
+          threadId: "compaction-thread",
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "compaction-message",
+          delta: "fallback summary",
+        };
+        yield {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "compaction-run",
+          threadId: "compaction-thread",
+        };
+      },
+    });
+    const answeringModel = asTestRaw<ResolvedTanStackTextModel>({
+      adapter,
+      keySource: "instance",
+      modelId: answeringModelId,
+      modelOptions: {},
+      provider: "openai",
+    });
+    const middleware = { name: "record-compaction-model" };
+    const forModel = (model: { modelId: string }) => {
+      meteredModelIds.push(model.modelId);
+      return { captureError: () => undefined, forModel, middleware };
+    };
+
+    const compacted = await compactModelMessagesForModel({
+      abortSignal: AbortSignal.timeout(1000),
+      aiAnalytics: { captureError: () => undefined, forModel, middleware },
+      messages: [
+        { role: "user", content: "old request ".repeat(80) },
+        { role: "assistant", content: "old response ".repeat(80) },
+        { role: "user", content: "latest request" },
+      ],
+      modelId: requestedModelId,
+      organizationId: toSafeId<"organization">("org_compaction"),
+      admission: testModelAdmission(toSafeId<"organization">("org_compaction")),
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      preserveTokens: 20,
+      resolveTextModel: () => answeringModel,
+      task: "chat",
+      tenantWorkspaceIds: [],
+      triggerTokens: 50,
+    });
+
+    expect(Result.isOk(compacted)).toBe(true);
+    expect(answeringModelId).not.toBe(requestedModelId);
+    expect(meteredModelIds).toEqual([answeringModelId]);
   });
 
   test("preserves model history from the latest user turn boundary", () => {

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -7,6 +9,8 @@ import {
   PlusIcon,
   UnfoldHorizontalIcon,
 } from "@stll/ui/icons";
+
+import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 
 export type ZoomDirection = "in" | "out";
 
@@ -79,3 +83,26 @@ export const ZoomControls = ({
     </>
   );
 };
+
+type FloatingZoomControlsProps = ZoomControlsProps & {
+  /** Controls that share the bar, placed before the zoom triad. */
+  children?: ReactNode;
+  className?: string | undefined;
+};
+
+/**
+ * The zoom triad floated in the viewer's corner bar: the one place a reader
+ * zooms, in the side panel and on the full page alike. A reader never puts
+ * the triad in a header row; it mounts this inside the `relative` box that
+ * holds its scroll container.
+ */
+export const FloatingZoomControls = ({
+  children,
+  className,
+  ...zoom
+}: FloatingZoomControlsProps) => (
+  <ViewerOverlayBar className={className}>
+    {children}
+    <ZoomControls {...zoom} />
+  </ViewerOverlayBar>
+);

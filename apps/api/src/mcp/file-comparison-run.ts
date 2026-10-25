@@ -14,6 +14,7 @@ import { sha256Base64ToHex } from "@stll/sha256";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { fileComparisonUploads } from "@/api/db/schema";
 import {
   compareDocxBuffers,
@@ -42,7 +43,7 @@ import {
   ENCRYPTED_CONTENT_MESSAGE,
 } from "@/api/lib/files/detect-file-encryption";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { headObject } from "@/api/lib/s3-presign";
+import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import {
   DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
   deliverTemporaryRedline,
@@ -269,10 +270,17 @@ const loadInput = async ({
   if (Result.isError(head)) {
     return {
       status: "error",
-      response: notFoundResult(
-        "One of the files to compare was never uploaded",
-        `PUT the bytes to the url prepare_file_comparison returned before comparing. ${PREPARE_HINT}`,
-      ),
+      response: S3ObjectMissingError.is(head.error)
+        ? notFoundResult(
+            "One of the files to compare was never uploaded",
+            `PUT the bytes to the url prepare_file_comparison returned before comparing. ${PREPARE_HINT}`,
+          )
+        : structuredErrorResult({
+            code: "internal_error",
+            message: "One of the files to compare could not be read",
+            hint: "Retry the comparison; if it repeats, stage the files again.",
+            retryable: true,
+          }),
     };
   }
   if (head.value.contentLength !== row.declaredSize) {
@@ -425,8 +433,10 @@ const deliver = async ({
       bytes: new Uint8Array(compared.buffer),
       fileName,
       organizationId: context.organizationId,
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
       scopedDb: context.scopedDb,
       signal,
+      source: { kind: "background", reason: "MCP credential request" },
       userId: context.userId,
     },
     dependencies,

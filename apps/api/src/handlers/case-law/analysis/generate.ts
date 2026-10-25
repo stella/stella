@@ -14,6 +14,8 @@ import type {
   CaseLawAnalysisFailureCode as AnalysisFailureCode,
   CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
+import type { AiDisclosure } from "@stll/api-contract/ai-disclosure";
 import type { CaseLawIncompleteReason } from "@stll/api-contract/case-law-answer-completeness";
 import type {
   AnalysisGenerating,
@@ -22,15 +24,15 @@ import type {
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  resolveCaching,
-  resolveOrgAIModelForRole,
   type OrgAIConfig,
+  resolveCaching,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import {
+  type AIErrorKind,
   classifyAIError,
   isUnanticipatedAIFailure,
-  type AIErrorKind,
 } from "@/api/lib/ai-error";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -39,19 +41,19 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   analysisFailureKeyTag,
-  failureClaimGuard,
-  analysisFailureRecord,
-  failureRetryPending,
-  failureStillHolds,
   type AnalysisFailureRecord,
+  analysisFailureRecord,
   type AnalysisReaderKey,
   type AnalysisRequestKind,
+  failureClaimGuard,
+  failureRetryPending,
+  failureStillHolds,
 } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
-  analysisStore,
-  storesAnalyses,
   type AnalysisStore,
+  analysisStore,
+  writesDerivedAnalyses,
 } from "@/api/lib/case-law/analysis-store";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
@@ -59,8 +61,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
-  redactedProviderDiagnostic,
   type RedactedProviderDiagnostic,
+  redactedProviderDiagnostic,
 } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -70,10 +72,10 @@ import {
   type ModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
   type ResolvedTanStackTextModel,
 } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
@@ -157,11 +159,18 @@ type AnalysisUnavailableCode = CaseLawAnalysisUnavailableCode;
 
 /** Whose key a failed run used, as a reader may be told. */
 type AnalysisFailureKeyView =
-  | { source: "organization"; provider: string }
-  | { source: "platform" };
+  { source: "organization"; provider: string } | { source: "platform" };
 
 export type GenerateAnalysisResponse =
-  | { status: "done"; analysis: DecisionAnalysis }
+  | {
+      status: "done";
+      analysis: DecisionAnalysis;
+      /**
+       * What the reader is told about the analysis, carried beside it: the
+       * same disclosure the reader's AI mark opens on the web.
+       */
+      aiDisclosure: AiDisclosure;
+    }
   | { status: "generating" }
   | { status: "error"; code: AnalysisUnavailableCode; error: string }
   | {
@@ -233,7 +242,7 @@ const unavailable = (
 /**
  * The key a reader's run would call the provider with: the organization's
  * own fast-role provider when it configured one, the platform's otherwise.
- * The same rule `getTanStackTextModelInfoForRole` dispatches by.
+ * The same rule `getTanStackTextModelInfoForTask` dispatches by.
  */
 const readerKeyOf = ({
   orgAIConfig,
@@ -245,7 +254,7 @@ const readerKeyOf = ({
   if (orgAIConfig === null) {
     return { source: "platform" };
   }
-  const selection = resolveOrgAIModelForRole(orgAIConfig, "fast");
+  const selection = resolveOrgAIModelForTask(orgAIConfig, "short-text");
   return selection === null
     ? null
     : {
@@ -287,8 +296,7 @@ type RunGenerationOptions = {
 
 /** External model-resolution boundary; supplied by focused tests only. */
 type AnalysisModelResolver = () =>
-  | ResolvedTanStackTextModel
-  | Promise<ResolvedTanStackTextModel>;
+  ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
 
 const runGeneration = async ({
   admission,
@@ -310,7 +318,7 @@ const runGeneration = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "public_corpus",
     feature: "case-law.analysis",
-    modelRole: "fast",
+    modelTask: "short-text",
     organizationId,
     orgAIConfig,
     modelTier: admission.modelTier,
@@ -326,14 +334,19 @@ const runGeneration = async ({
 
   let analysis: DecisionAnalysis;
   try {
-    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForTask(
+      "short-text",
+      orgAIConfig,
+      {
+        dataClass: "public_corpus",
+        organizationId,
+        modelTier: admission.modelTier,
+      },
+    );
+    const result = await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "public_corpus",
-      organizationId,
-      modelTier: admission.modelTier,
-    });
-    const result = await generateTanStackObjectForRole({
-      dataClass: "public_corpus",
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
@@ -343,7 +356,7 @@ const runGeneration = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: decisionId,
       }),
       system: input.systemPrompt,
@@ -508,6 +521,12 @@ type GenerateAnalysisOptions = {
   retry: boolean;
   /** Where the analysis lives; the application's store unless a test says. */
   store?: AnalysisStore | undefined;
+  /**
+   * Whether a model may be asked for this decision's derived layers;
+   * `CASE_LAW_DERIVED_AI` unless a test says. Off, a stored analysis is
+   * served as it is and a missing one is reported unavailable.
+   */
+  derivedAi?: boolean | undefined;
   /** External model-resolution boundary; supplied by focused tests only. */
   resolveTextModel?: AnalysisModelResolver | undefined;
   /** The run's deadline; `ANALYSIS_GENERATION_DEADLINE_MS` unless a test says. */
@@ -530,6 +549,7 @@ export const generateAnalysis = async ({
   promptCachingEnabled,
   retry,
   store = analysisStore(),
+  derivedAi = writesDerivedAnalyses(),
   resolveTextModel,
   deadlineMs = ANALYSIS_GENERATION_DEADLINE_MS,
   beforeClaim,
@@ -574,12 +594,13 @@ export const generateAnalysis = async ({
       // on the citation graph and written in the background, so a reader
       // never waits for it and a decision whose neighbourhood has not
       // moved costs one indexed query.
-      if (storesAnalyses()) {
+      if (derivedAi) {
         detached(
           refreshSignificance({
             admitModelAction,
             analysis: stored.analysis,
             contentHash: decision.contentHash,
+            derivedAi,
             decisionId,
             orgAIConfig,
             orgAIConfigStatus,
@@ -589,7 +610,11 @@ export const generateAnalysis = async ({
           "analysis-generate.refresh-significance",
         );
       }
-      return Result.ok({ status: "done", analysis: stored.analysis });
+      return Result.ok({
+        status: "done",
+        analysis: stored.analysis,
+        aiDisclosure: aiDisclosure("caseLaw"),
+      });
     case "generating":
       return Result.ok({ status: "generating" });
     case "none":
@@ -598,6 +623,19 @@ export const generateAnalysis = async ({
       stored satisfies never;
       return panic(`Unhandled stored: ${String(stored)}`);
     }
+  }
+
+  // A deployment that may not ask a model for derived layers serves what is
+  // stored and generates nothing: a seeded or local stack never reaches a
+  // model by opening a decision. Decided before any recorded failure, so a
+  // reader is never offered a retry that this deployment cannot run.
+  if (!derivedAi) {
+    return Result.ok(
+      unavailable(
+        "analysis_unavailable",
+        "Analysis is unavailable for this decision",
+      ),
+    );
   }
 
   // Before a run starts: when the run this reader's key made last failed,
@@ -631,15 +669,6 @@ export const generateAnalysis = async ({
     return Result.ok(heldFailure);
   }
 
-  if (!storesAnalyses()) {
-    return Result.ok(
-      unavailable(
-        "analysis_unavailable",
-        "Analysis is unavailable for this decision",
-      ),
-    );
-  }
-
   // Sources carry different reuse terms. One whose terms withhold derived AI
   // use is still read and served; its text is never sent to a model. Decided
   // before AI availability because it is a property of the decision, not of
@@ -657,11 +686,11 @@ export const generateAnalysis = async ({
   // model: the stored and in-flight reads above must stay accessible when
   // the fast role is unavailable (a pre-existing bug ran this check before
   // them, locking finished analyses behind AI configuration).
-  const available = requireTanStackAIAvailableForRole({
+  const available = requireTanStackAIAvailableForTask({
     dataClass: "public_corpus",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (Result.isError(available)) {
     return Result.err(available.error);
@@ -750,7 +779,9 @@ const config = {
   contract: "patch",
   description:
     "Read the structural analysis of one court decision, starting generation " +
-    "when there is none yet. Returns status done with the stored analysis, " +
+    "when there is none yet. The analysis is generated by stella, not by the " +
+    "court: show its aiDisclosure text to the user beside anything taken " +
+    "from it. Returns status done with the stored analysis and aiDisclosure, " +
     "generating while a run is in flight (poll until it is done), or error " +
     "with a code: decision_not_found, document_unparseable, " +
     "language_unsupported or analysis_unavailable when no analysis can be " +

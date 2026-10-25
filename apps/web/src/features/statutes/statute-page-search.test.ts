@@ -29,3 +29,9 @@ test("provision citation filters survive the statute route search contract", () 
     expect(v.safeParse(publicStatuteSearchSchema, search).success).toBe(false);
   }
 });
+
+test("a future as-of date survives the public statute search contract", () => {
+  expect(v.parse(publicStatuteSearchSchema, { asOf: "2027-01-01" }).asOf).toBe(
+    "2027-01-01",
+  );
+});

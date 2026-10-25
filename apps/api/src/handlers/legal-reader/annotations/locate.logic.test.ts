@@ -210,3 +210,168 @@ describe("locatePassages", () => {
     );
   });
 });
+
+describe("annotation literal matching policy", () => {
+  test("locates Czech and Slovak statutory subdivisions literally", () => {
+    const blocks = [
+      paragraph(
+        "par_1729-odst_2-pism_a",
+        "§ 1729 odst. 2 písm. a) Občianskeho zákonníka",
+      ),
+      paragraph(
+        "cl_4-ods_1-pism_b",
+        "Čl. 4 ods. 1 písm. b) zákona o ochrane osobných údajov",
+      ),
+    ];
+
+    expect(
+      locatePassages(blocks, [
+        {
+          anchor: "par_1729-odst_2-pism_a",
+          quote: "§ 1729 odst. 2 písm. a)",
+        },
+        { anchor: "cl_4-ods_1-pism_b", quote: "Čl. 4 ods. 1 písm. b)" },
+      ]),
+    ).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "par_1729-odst_2-pism_a",
+          startOffset: 0,
+          endOffset: 23,
+          quote: "§ 1729 odst. 2 písm. a)",
+        },
+        {
+          blockAnchorId: "cl_4-ods_1-pism_b",
+          startOffset: 0,
+          endOffset: 21,
+          quote: "Čl. 4 ods. 1 písm. b)",
+        },
+      ],
+    });
+  });
+
+  test("relocates a saved quote after preceding text changes and reports its removal", () => {
+    const passage = { anchor: "par_7", quote: "právo na náhradu škody" };
+    const newerText = "Nová veta. Podľa § 7 vzniká právo na náhradu škody.";
+
+    expect(locatePassages([paragraph("par_7", newerText)], [passage])).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "par_7",
+          startOffset: 28,
+          endOffset: 50,
+          quote: "právo na náhradu škody",
+        },
+      ],
+    });
+    expect(
+      locatePassages(
+        [paragraph("par_7", "Nová veta. Podľa § 7 nárok zanikol.")],
+        [passage],
+      ),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [
+        { passageIndex: 0, code: ANNOTATION_LOCATE_ISSUE.quoteNotFound },
+      ],
+    });
+  });
+
+  test("keeps overlapping passages as separate ordered spans", () => {
+    expect(
+      locatePassages(
+        [paragraph("p", "abcdef")],
+        [
+          { anchor: "p", quote: "abcd" },
+          { anchor: "p", quote: "cdef" },
+        ],
+      ),
+    ).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "p",
+          startOffset: 0,
+          endOffset: 4,
+          quote: "abcd",
+        },
+        {
+          blockAnchorId: "p",
+          startOffset: 2,
+          endOffset: 6,
+          quote: "cdef",
+        },
+      ],
+    });
+  });
+
+  test("finds a passage in the final block of a very long document", () => {
+    const blocks = Array.from({ length: 10_000 }, (_, index) =>
+      paragraph(
+        `p-${String(index)}`,
+        index === 9999
+          ? "Koniec: rozhodnutie je právoplatné."
+          : `Odsek ${String(index)}`,
+      ),
+    );
+
+    expect(
+      locatePassages(blocks, [{ quote: "rozhodnutie je právoplatné" }]),
+    ).toMatchObject({
+      status: "located",
+      spans: [{ blockAnchorId: "p-9999", startOffset: 8, endOffset: 34 }],
+    });
+  });
+
+  test("retains overlapping ambiguity and literal punctuation", () => {
+    expect(
+      locatePassages([paragraph("p", "aaa")], [{ quote: "aa" }]),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [{ code: ANNOTATION_LOCATE_ISSUE.quoteAmbiguous }],
+    });
+    expect(
+      locatePassages([paragraph("p", "x a.b y axb")], [{ quote: "a.b" }]),
+    ).toMatchObject({
+      status: "located",
+      spans: [{ startOffset: 2, endOffset: 5, quote: "a.b" }],
+    });
+  });
+  test("keeps Czech inflections, case and diacritics exact", () => {
+    const blocks = [paragraph("p", "😀 JUDr. Nováková, návrh Novákové.")];
+    expect(locatePassages(blocks, [{ quote: "Novákové" }])).toMatchObject({
+      status: "located",
+      spans: [{ startOffset: 25, endOffset: 33 }],
+    });
+    for (const quote of ["Novakove", "novákové", "Novákoví", " "]) {
+      expect(locatePassages(blocks, [{ quote }])).toMatchObject({
+        status: "rejected",
+        issues: [{ code: ANNOTATION_LOCATE_ISSUE.quoteNotFound }],
+      });
+    }
+    expect(locatePassages([], [{ quote: "Nováková" }])).toMatchObject({
+      status: "rejected",
+    });
+    expect(locatePassages(blocks, [])).toEqual({
+      status: "located",
+      spans: [],
+    });
+  });
+});
+
+test("annotation quotes use scalar matching after isolated-surrogate replacement", () => {
+  expect(
+    locatePassages([paragraph("p", "😀")], [{ quote: "\ud83d" }]),
+  ).toMatchObject({
+    status: "rejected",
+    issues: [{ code: ANNOTATION_LOCATE_ISSUE.quoteNotFound }],
+  });
+  expect(
+    locatePassages([paragraph("p", "x\ud801y")], [{ quote: "\ud800" }]),
+  ).toEqual({
+    status: "located",
+    spans: [{ blockAnchorId: "p", startOffset: 1, endOffset: 2, quote: "�" }],
+  });
+});

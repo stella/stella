@@ -570,6 +570,7 @@ const GRAMMAR_SCENARIO_COURTS = {
   AUT: { court: "Bundesverwaltungsgericht", courtId: null, language: "de" },
   CZE: { court: "Nejvyšší správní soud", courtId: null, language: "cs" },
   EU: { court: "Court of Justice", courtId: null, language: "en" },
+  GBR: { court: "UKSC", courtId: null, language: "en" },
   HUN: { court: "Kúria", courtId: null, language: "hu" },
   POL: { court: "Sąd Najwyższy", courtId: null, language: "pl" },
   SVK: {

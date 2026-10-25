@@ -20,6 +20,14 @@ export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
 
 /**
+ * Zero-based list nesting levels a clause paragraph's numbering may carry.
+ * OOXML numbering defines nine levels (`w:ilvl` 0..8). The API rejects a level
+ * outside this range, so the clause editor keeps deeper nesting at the deepest
+ * supported level.
+ */
+export const CLAUSE_NUMBERING_LEVEL_LIMITS = { min: 0, max: 8 } as const;
+
+/**
  * Enabled skills an agent surface exposes: chat `load-skill`, template field
  * generators, and the MCP skill tools. The composer's slash menu must not
  * offer a skill the model cannot load.
@@ -150,3 +158,11 @@ export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH = 10_000;
 export const READER_PAGE_MAX_CHARS = 60_000;
 export const READER_PROVISION_ANCHOR_MIN_CHARS = 1;
 export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
+
+/**
+ * Smallest file a presigned upload may declare, single or in a dropped folder.
+ * An empty document is never a legitimate upload, so the API refuses it before
+ * minting a URL, and a folder drop sends empty files down the single-file path
+ * where the user sees that refusal for the file alone.
+ */
+export const UPLOAD_FILE_MIN_BYTES = 1;

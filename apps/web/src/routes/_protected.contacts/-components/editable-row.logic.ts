@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { tryToMinorUnits } from "@stll/money";
 
 import {
@@ -23,8 +25,12 @@ export const EDITABLE_FIELD_POLICY = {
   organizationName: { valueKind: "text", maxLength: 512 },
   displayName: { valueKind: "text", maxLength: 512 },
   notes: { valueKind: "text", maxLength: null },
-  registrationNumber: { valueKind: "text", maxLength: 64 },
-  taxId: { valueKind: "text", maxLength: 64 },
+  registrationNumber: {
+    valueKind: "text",
+    maxLength: PARTY_IDENTIFIER_MAX_LENGTH,
+  },
+  taxId: { valueKind: "text", maxLength: PARTY_IDENTIFIER_MAX_LENGTH },
+  vatId: { valueKind: "text", maxLength: PARTY_IDENTIFIER_MAX_LENGTH },
   defaultHourlyRate: { valueKind: "money" },
   currency: { valueKind: "text", maxLength: 3 },
   paymentTermDays: { valueKind: "nonNegativeInteger", maximum: 365 },
@@ -69,10 +75,7 @@ export const getEditableFieldInputAttributes = (field: EditableField) => {
 type NumericContactPayload = { paymentTermDays: number | null };
 
 type NumericContactPayloadResult =
-  | { status: "valid"; payload: NumericContactPayload }
-  | { status: "invalid" };
-
-const NON_NEGATIVE_INTEGER_TOKEN = /^[0-9]+$/u;
+  { status: "valid"; payload: NumericContactPayload } | { status: "invalid" };
 
 const NUMERIC_PAYLOAD_BUILDERS = {
   paymentTermDays: (value) => ({ paymentTermDays: value }),
@@ -97,13 +100,12 @@ export const buildNumericContactPayload = (
     };
   }
 
-  if (!NON_NEGATIVE_INTEGER_TOKEN.test(trimmedInput)) {
-    return { status: "invalid" };
-  }
-
-  const value = Number(trimmedInput);
   const policy = EDITABLE_FIELD_POLICY[field];
-  if (!Number.isSafeInteger(value) || value < 0 || value > policy.maximum) {
+  const value = parseIntegerToken(trimmedInput, {
+    sign: "unsigned",
+    max: policy.maximum,
+  }).unwrapOr(null);
+  if (value === null) {
     return { status: "invalid" };
   }
 
@@ -178,6 +180,8 @@ export const buildTextContactPayload = (
       return { suffix: value || null };
     case "taxId":
       return { taxId: value || null };
+    case "vatId":
+      return { vatId: value || null };
     default:
       field satisfies never;
       return panic(`Unhandled field: ${String(field)}`);

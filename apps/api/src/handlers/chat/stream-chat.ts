@@ -24,7 +24,7 @@ import {
 } from "@stll/agent-engine";
 import {
   getModelImageInputCapability,
-  type ModelRole,
+  type ModelTask,
   type ReasoningEffort,
 } from "@stll/ai-catalog";
 import {
@@ -50,10 +50,11 @@ import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
-  getChatAttachmentMimeType,
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
+  getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
+  isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
   isChatPart,
@@ -70,6 +71,7 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import {
   OWNER_LOST_OUTCOME,
+  readChatTurnTiming,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
@@ -83,6 +85,10 @@ import {
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
+import {
+  createChatTurnTimingDurability,
+  withChatTurnTiming,
+} from "@/api/handlers/chat/chat-turn-timing-stream";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   knownDecisionPassageStamper,
@@ -94,8 +100,8 @@ import {
   detectModelLoop,
   getLoopRecoveryKey,
   shouldInjectLoopRecovery,
-  shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
+  shouldSurfaceFinalContentLoop,
 } from "@/api/handlers/chat/loop-detector";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
@@ -145,6 +151,7 @@ import type {
   ChatMessageUsage,
   ChatPart,
   ChatTurnOutcome,
+  ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
@@ -160,7 +167,7 @@ import {
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -171,9 +178,9 @@ import {
   chatSystemPrompts,
 } from "@/api/lib/chat/chat-request";
 import {
-  chatToolMapToArray,
   type ChatTool,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
@@ -201,8 +208,8 @@ import {
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import {
-  createStreamMessageCapture,
   type ChatStreamProcessor,
+  createStreamMessageCapture,
 } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
@@ -213,28 +220,35 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
   createProviderDiagnostic,
   redactedProviderDiagnostic,
 } from "@/api/lib/errors/redacted-provider-diagnostic";
 import {
+  AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   providerErrorFields,
   providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
+import { emitRequestStage } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import {
   modelAcceptsStreamingToolUse,
@@ -248,6 +262,12 @@ import {
 } from "@/api/lib/tanstack-ai-usage";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import { projectVisualPreviewStream } from "@/api/lib/visual-preview-stream";
+import { withTimeout } from "@/api/lib/with-timeout";
+
+const TIMING_READ_FAILURE = failureSink({
+  event: "chat.turn.timing_read_failed",
+  expected: [],
+});
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -366,6 +386,9 @@ type StreamChatProps = {
   tools: ChatToolMap;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
+  /** What authorized the request this turn answers; its response ends with
+   *  it, while the turn runs on for the thread's other viewers. */
+  viewer: SseStreamBinding;
   workspaceId: SafeId<"workspace"> | null;
 };
 
@@ -467,6 +490,82 @@ export type StreamChatOutcome =
   | { type: "streaming"; response: Response }
   | { type: "refused"; response: ChatTurnFailureResponse };
 
+type ObserveChatOutputStagesOptions = {
+  source: AsyncIterable<StreamChunk>;
+  startedAt: number;
+  getSettlementOutcome: () =>
+    StreamChatFinishEvent["outcome"]["type"] | undefined;
+  now?: () => number;
+  emitStage?: typeof emitRequestStage;
+};
+
+type SettlementOutcomeKind = StreamChatFinishEvent["outcome"]["type"];
+type RequestStageOutcome = Parameters<typeof emitRequestStage>[0]["outcome"];
+
+const SETTLEMENT_STAGE_OUTCOME = {
+  "awaiting-user": "completed",
+  completed: "completed",
+  cancelled: "cancelled",
+  failed: "failed",
+  interrupted: "cancelled",
+} as const satisfies Record<SettlementOutcomeKind, RequestStageOutcome>;
+
+type OutputGeneratorPosition =
+  { type: "running" } | { type: "suspended" } | { type: "completed" };
+
+const UNFINISHED_GENERATOR_STAGE_OUTCOME = {
+  running: "failed",
+  suspended: "cancelled",
+} as const satisfies Record<
+  Exclude<OutputGeneratorPosition["type"], "completed">,
+  RequestStageOutcome
+>;
+
+export const observeChatOutputStages = async function* ({
+  source,
+  startedAt,
+  getSettlementOutcome,
+  now = () => performance.now(),
+  emitStage = emitRequestStage,
+}: ObserveChatOutputStagesOptions) {
+  let firstTokenAt: number | undefined;
+  let position: OutputGeneratorPosition = { type: "running" };
+  try {
+    for await (const chunk of source) {
+      if (firstTokenAt === undefined && chunkCarriesAnswer(chunk)) {
+        firstTokenAt = now();
+        emitStage({
+          route: "/v1/chat/:threadId/messages",
+          stage: "provider_first_token",
+          durationMs: firstTokenAt - startedAt,
+          outcome: "completed",
+        });
+      }
+      position = { type: "suspended" };
+      yield chunk;
+      position = { type: "running" };
+    }
+    position = { type: "completed" };
+  } finally {
+    const settlementOutcome = getSettlementOutcome();
+    let outcome: RequestStageOutcome;
+    if (position.type === "completed") {
+      outcome =
+        settlementOutcome === undefined
+          ? "failed"
+          : SETTLEMENT_STAGE_OUTCOME[settlementOutcome];
+    } else {
+      outcome = UNFINISHED_GENERATOR_STAGE_OUTCOME[position.type];
+    }
+    emitStage({
+      route: "/v1/chat/:threadId/messages",
+      stage: "stream_finish",
+      durationMs: now() - startedAt,
+      outcome,
+    });
+  }
+};
+
 export const streamChat = async ({
   visualOrigin,
   devModelId,
@@ -507,8 +606,10 @@ export const streamChat = async ({
   tools,
   externalMcpToolSource,
   userId,
+  viewer,
   workspaceId,
 }: StreamChatProps): Promise<StreamChatOutcome> => {
+  const admittedAt = performance.now();
   const messages = pruneOrphanedToolParts(rawMessages);
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
@@ -587,6 +688,7 @@ export const streamChat = async ({
       Result.isOk(validateTanStackDevModelOverride(modelId, orgAIConfig)),
   });
   const primaryModel = await resolveTanStackTextModel({
+    userId: modelAdmission.userId,
     dataClass: "customer",
     modelId: turnModelSelection.modelId,
     organizationId,
@@ -594,7 +696,7 @@ export const streamChat = async ({
     orgAIConfig,
     managedAIResidency,
     reasoningEffort: turnModelSelection.reasoningEffort,
-    role: "chat",
+    task: "chat",
   });
   run.attributeProvider(primaryModel.provider);
 
@@ -815,6 +917,7 @@ export const streamChat = async ({
     source: projectVisualPreviewStream(stream),
     stamper: decisionPassageStamper,
   });
+  const timingPhase: { status: "running" | "settled" } = { status: "running" };
   const processedStream = processTurnForPersistence({
     visualOrigin,
     // Delivery detach does not reach the producer; Stop, ownership and budgets do.
@@ -898,11 +1001,39 @@ export const streamChat = async ({
         yield chunk;
       }
     }
+    const terminalEvent = settlement.event;
+    if (
+      terminalEvent !== undefined &&
+      CUT_SHORT_OUTCOME[terminalEvent.outcome.type]
+    ) {
+      // Interruption is stored as turn data, not a provider error. Close the
+      // durable protocol too: EOF alone makes attached readers reconnect.
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: terminalEvent.responseMessage.id,
+        metadata: { turnOutcome: terminalEvent.outcome },
+      } as const satisfies PublicStreamChunk;
+      finalChunks.splice(0, finalChunks.length, {
+        type: EventType.RUN_FINISHED,
+        runId,
+        threadId,
+        outcome: { type: "cancelled" },
+        timestamp: Temporal.Now.instant().epochMilliseconds,
+      });
+    }
     // The visual transform can flush buffered refs after the source terminal.
     // Deliver that content before terminalizing, and identify the last terminal
     // so every earlier iteration remains appendable under the execution fence.
     settlement.terminalChunk = finalChunks.at(-1);
-    yield* finalChunks;
+    for (const chunk of finalChunks) {
+      if (chunk === settlement.terminalChunk) {
+        timingPhase.status = "settled";
+      }
+      yield chunk;
+    }
+    if (settlement.event !== undefined) {
+      timingPhase.status = "settled";
+    }
   })();
   const finishSettlement = async () => {
     const { event } = settlement;
@@ -931,29 +1062,57 @@ export const streamChat = async ({
     await settlement.finished;
   };
 
+  const readTiming = async (): Promise<ReadOutcome<ChatTurnTiming | null>> => {
+    const timing = await readChatTurnTiming({
+      execution: run.execution,
+      safeDb,
+    });
+    if (Result.isError(timing)) {
+      observeFailure(timing.error, {
+        sink: TIMING_READ_FAILURE,
+        ctx: { threadId },
+      });
+      return readUnavailable({ kind: "thrown", error: timing.error });
+    }
+    return readPresent(timing.value);
+  };
+
+  emitRequestStage({
+    route: "/v1/chat/:threadId/messages",
+    stage: "request_setup",
+    durationMs: performance.now() - admittedAt,
+    outcome: "completed",
+  });
+  const providerWaitStartedAt = performance.now();
+  const observedOutput = observeChatOutputStages({
+    source: output,
+    startedAt: providerWaitStartedAt,
+    getSettlementOutcome: () => settlement.event?.outcome.type,
+  });
   return {
     type: "streaming",
-    response: run.produce(output, {
-      ...log,
-      append: async (chunks) => {
-        const offsets = await log.append(chunks);
-        if (
-          settlement.terminalChunk !== undefined &&
-          chunks.includes(settlement.terminalChunk)
-        ) {
-          // Append while fenced; persist the transcript before returning the
-          // offsets that allow the SDK to deliver the final terminal event.
-          await finishSettlement();
-        }
-        return offsets;
-      },
-      close: async () => {
-        // A producer cutoff can return its generator without emitting a
-        // terminal. The SDK flushes its cleanup batch before this callback.
-        await finishSettlement();
-        await log.close();
-      },
-    }),
+    response: run.produce(
+      withChatTurnTiming({
+        source: observedOutput,
+        getPhase: () => timingPhase.status,
+        readTiming,
+      }),
+      createChatTurnTimingDurability({
+        log,
+        getTerminal: () =>
+          settlement.event === undefined ||
+          settlement.terminalChunk === undefined
+            ? undefined
+            : {
+                chunk: settlement.terminalChunk,
+                messageId: settlement.event.responseMessage.id,
+              },
+        getPhase: () => timingPhase.status,
+        finishSettlement,
+        readTiming,
+      }),
+      viewer,
+    ),
   };
 };
 
@@ -1192,12 +1351,13 @@ const resolveFallbackTextModel = async ({
 }: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
+      userId: modelAdmission.userId,
       dataClass: "customer",
       organizationId,
       admission: modelAdmission,
       orgAIConfig,
       managedAIResidency,
-      role: "reasoning",
+      task: "reasoning",
     });
     if (
       fallbackModel.provider === primaryModel.provider &&
@@ -1217,7 +1377,7 @@ const resolveFallbackTextModel = async ({
 
 type CreateChatAttemptAnalyticsProps = {
   feature: string;
-  modelRole: ModelRole;
+  modelTask: ModelTask;
   modelTier: ManagedModelTier;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -1234,7 +1394,7 @@ type CreateChatAttemptAnalyticsProps = {
 
 const createChatAttemptAnalytics = ({
   feature,
-  modelRole,
+  modelTask,
   modelTier,
   organizationId,
   orgAIConfig,
@@ -1259,7 +1419,7 @@ const createChatAttemptAnalytics = ({
       workspaceId,
     },
     feature,
-    modelRole,
+    modelTask,
     orgAIConfig,
     modelTier,
     properties: {
@@ -1271,7 +1431,7 @@ const createChatAttemptAnalytics = ({
     traceId: Bun.randomUUIDv7(),
   });
 
-type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
+type ChatAttemptTask = Extract<ModelTask, "chat" | "reasoning">;
 
 /**
  * Every surface this request hands to the provider, each one minted by the
@@ -1384,7 +1544,7 @@ const runChatAttempts = async function* ({
     runId,
     parentRunId,
     resume,
-    role: "chat",
+    task: "chat",
     safeDb,
     sandboxRun,
     usageLane,
@@ -1437,7 +1597,7 @@ const runChatAttempts = async function* ({
     managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
-    role: "reasoning",
+    task: "reasoning",
     safeDb,
     // The provider-fallback attempt serves the same user turn, so it
     // settles against the same budget lane.
@@ -1478,7 +1638,7 @@ type RunChatAttemptProps = {
   runId?: string | undefined;
   parentRunId?: string | undefined;
   resume?: RunAgentResumeItem[] | undefined;
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   safeDb: SafeDb;
   /**
    * When set, this attempt runs inside an agent sandbox: the
@@ -1515,7 +1675,7 @@ const runChatAttempt = async function* ({
   runId,
   parentRunId,
   resume,
-  role,
+  task,
   safeDb,
   sandboxRun,
   usageLane,
@@ -1538,11 +1698,11 @@ const runChatAttempt = async function* ({
   } = surfaces;
   const caching = resolveCaching({
     promptCachingEnabled,
-    role,
+    task,
     scopeKey: promptCacheKey,
   });
   // Sandbox turns dispatch on the harness's own model, not the thread's
-  // selection, so their consumption must rate against the role default
+  // selection, so their consumption must rate against the task default
   // rather than a model that never served them.
   const servedModelId = sandboxRun ? undefined : modelId;
   // Sandbox turns are machine work: they settle against the pool
@@ -1550,7 +1710,7 @@ const runChatAttempt = async function* ({
   const servedLane = sandboxRun ? "pool" : usageLane;
   const analytics = createChatAttemptAnalytics({
     feature,
-    modelRole: role,
+    modelTask: task,
     modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
@@ -1565,7 +1725,7 @@ const runChatAttempt = async function* ({
   });
   const compactionAnalytics = createChatAttemptAnalytics({
     feature: compactionFeature,
-    modelRole: role,
+    modelTask: task,
     modelTier: modelAdmission.modelTier,
     organizationId,
     orgAIConfig,
@@ -1622,7 +1782,7 @@ const runChatAttempt = async function* ({
           modelAdmission,
           orgAIConfig,
           managedAIResidency,
-          role,
+          task,
           state,
           systemLayers,
           tenantWorkspaceIds,
@@ -1639,7 +1799,7 @@ const runChatAttempt = async function* ({
       caching,
       model,
       modelTools,
-      role,
+      task,
       system: baseSystem,
       systemLayers,
       toolCallIds,
@@ -1680,7 +1840,7 @@ const runChatAttempt = async function* ({
         modelAdmission,
         orgAIConfig,
         managedAIResidency,
-        role,
+        task,
         state,
         systemLayers,
         tenantWorkspaceIds,
@@ -1766,7 +1926,7 @@ type ChatRuntimeMiddlewareProps = {
   modelAdmission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  role: ChatAttemptRole;
+  task: ChatAttemptTask;
   state: ChatAttemptState;
   systemLayers: ChatSafePromptLayers;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -1786,7 +1946,7 @@ const createChatRuntimeMiddleware = ({
   modelAdmission,
   orgAIConfig,
   managedAIResidency,
-  role,
+  task,
   state,
   systemLayers,
   tenantWorkspaceIds,
@@ -1860,7 +2020,7 @@ const createChatRuntimeMiddleware = ({
         admission: modelAdmission,
         orgAIConfig,
         managedAIResidency,
-        role,
+        task,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
           captureError(error, {
@@ -1900,16 +2060,14 @@ const createChatRuntimeMiddleware = ({
 
 type ProcessServerChatStreamProps = {
   reportSnapshotFailure?:
-    | ((error: SnapshotReconciliationError) => void)
-    | undefined;
+    ((error: SnapshotReconciliationError) => void) | undefined;
   /** The run's own signal: aborted by the provider deadline below *and* by the
    *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
   /** Original run control keeps user-stop and ownership-loss precedence. */
   runSignal?: AbortSignal;
   getRestorableCheckpoint?:
-    | (() => PersistableChatMessage | undefined)
-    | undefined;
+    (() => PersistableChatMessage | undefined) | undefined;
   /** The metered provider deadline the caller set for this turn. It is the
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
@@ -2460,9 +2618,55 @@ type SnapshotProcessorOptions = Pick<
   "responseMessageId" | "processor" | "partProvenance"
 >;
 
+type MessagesSnapshotChunk = Extract<
+  PublicStreamChunk,
+  { type: EventType.MESSAGES_SNAPSHOT }
+>;
+
 type ProcessSnapshotChunkOptions = SnapshotProcessorOptions & {
-  chunk: Extract<PublicStreamChunk, { type: EventType.MESSAGES_SNAPSHOT }>;
+  chunk: MessagesSnapshotChunk;
 };
+
+/**
+ * TanStack AI (0.65.1) answers an approved call it has not executed yet with
+ * a placeholder tool row (`uiMessagesToWire` / `uiMessageToModelMessages` in
+ * `@tanstack/ai`), and the interrupt MESSAGES_SNAPSHOT that hands an
+ * approved client tool to the browser carries it. Folded into UI parts, the
+ * placeholder becomes the call's complete output: the browser would treat the
+ * call as already run, and the tool's output schema rejects it at persistence.
+ * The SDK exports no type for the row, so it is matched by its exact shape.
+ */
+const approvedPendingExecutionSchema = v.strictObject({
+  approved: v.literal(true),
+  message: v.string(),
+  pendingExecution: v.literal(true),
+});
+
+const isApprovedPendingExecutionRow = (
+  message: MessagesSnapshotChunk["messages"][number],
+): boolean => {
+  if (message.role !== "tool" || typeof message.content !== "string") {
+    return false;
+  }
+  const parsed = parseToolResultContent(message.content);
+  return (
+    parsed.type === "json" && v.is(approvedPendingExecutionSchema, parsed.value)
+  );
+};
+
+/** Keep an approved, not yet executed call approval-responded with input only,
+ *  still owed its real result, on every processor that reads the snapshot. */
+const withoutApprovedPendingExecutionRows = (
+  chunk: MessagesSnapshotChunk,
+): MessagesSnapshotChunk =>
+  chunk.messages.some(isApprovedPendingExecutionRow)
+    ? {
+        ...chunk,
+        messages: chunk.messages.filter(
+          (message) => !isApprovedPendingExecutionRow(message),
+        ),
+      }
+    : chunk;
 
 const processPersistenceSnapshot = ({
   chunk: sourceChunk,
@@ -2470,7 +2674,7 @@ const processPersistenceSnapshot = ({
   responseMessageId,
   partProvenance,
 }: ProcessSnapshotChunkOptions) => {
-  let chunk = sourceChunk;
+  let chunk = withoutApprovedPendingExecutionRows(sourceChunk);
   const preservesPartLayout = chunk.messages.some(
     (message) => message.id === responseMessageId && "parts" in message,
   );
@@ -2856,6 +3060,103 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
   };
 };
 
+const SOURCE_CLEANUP_AFTER_CUT_FAILURE = failureSink({
+  event: "chat.source_cleanup_after_cut_failed",
+  expected: [],
+});
+
+type ReadSourceUntilCutArgs = Pick<
+  ProcessServerChatStreamProps,
+  "initialMessages" | "mapMessageId" | "source"
+> & { signal: AbortSignal };
+
+/** A provider that ignores cancellation cannot hold the turn's settlement.
+ * @yields Source chunks until the run is cut short.
+ */
+const readSourceUntilCut = async function* ({
+  initialMessages,
+  mapMessageId,
+  source,
+  signal,
+}: ReadSourceUntilCutArgs): AsyncIterable<Result<PublicStreamChunk, unknown>> {
+  const cancellation = new AIGenerationCancelledError({
+    message: "Chat source iteration was cancelled",
+  });
+  const isRunCut = () => signal.aborted;
+  const iterator = ensureAssistantMessageStart({
+    getOrCreateMessageId: () =>
+      mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+    source: keepDeniedApprovalsOnScreen({
+      deniedApprovals: findDeniedApprovals(initialMessages),
+      source: remapOutgoingMessageIds({
+        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
+        mapMessageId,
+        source,
+      }),
+    }),
+  })[Symbol.asyncIterator]();
+  let ended = false;
+  try {
+    while (true) {
+      if (isRunCut()) {
+        yield Result.err(cancellation);
+        return;
+      }
+      const next = Result.tryPromise({
+        try: async () => await iterator.next(),
+        catch: (error: unknown) => error,
+      });
+      const raced = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await next, {
+            label: "chat source iteration",
+            signal,
+            timeoutMs: 0,
+          }),
+        catch: (error: unknown) => error,
+      });
+      if (Result.isError(raced)) {
+        yield Result.err(isRunCut() ? cancellation : raced.error);
+        return;
+      }
+      const read = raced.value;
+      if (Result.isError(read)) {
+        yield Result.err(read.error);
+        return;
+      }
+      const step = read.value;
+      if (step.done) {
+        ended = true;
+        return;
+      }
+      yield Result.ok(step.value);
+    }
+  } finally {
+    if (!ended && iterator.return !== undefined) {
+      if (isRunCut()) {
+        // Async generator return waits for its outstanding next. Request
+        // cleanup, but let settlement finish while an uncooperative next is
+        // still blocked; the race already observes that next's rejection.
+        detached(
+          Result.tryPromise(async () => await iterator.return?.()).then(
+            (result) => {
+              if (Result.isError(result)) {
+                observeFailure(result.error, {
+                  sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
+                });
+              }
+              return undefined;
+            },
+          ),
+          "chat.source-cleanup-after-cut",
+        );
+      } else {
+        await iterator.return();
+      }
+    }
+  }
+};
+
 const createClientAssistantOwner = (responseMessageId: string) => {
   let state: "active" | "inactive" = "inactive";
   return {
@@ -2877,6 +3178,18 @@ const createClientAssistantOwner = (responseMessageId: string) => {
     },
   };
 };
+
+/** The approved client calls a resumed message holds. Their input completed
+ *  in the run that asked for approval; the resumed run hands them to the
+ *  client without streaming that input again. */
+const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
+  new Set(
+    arrayOrEmpty(message?.parts).flatMap((part) =>
+      part.type === "tool-call" && isApprovedClientCallAwaitingResult(part)
+        ? [part.id]
+        : [],
+    ),
+  );
 
 export const processServerChatStream = async function* ({
   abortSignal,
@@ -2910,7 +3223,7 @@ export const processServerChatStream = async function* ({
   // answer. Continuation history alone cannot make an empty run successful.
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
-  const toolCallsWithCompleteInput = new Set<string>();
+  const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
   let usage: TokenUsage | undefined;
   const recordUsage = (recorded: TokenUsage | undefined) => {
     usage = recorded;
@@ -2945,20 +3258,17 @@ export const processServerChatStream = async function* ({
     terminal,
   });
   try {
-    const normalizedSource = ensureAssistantMessageStart({
-      getOrCreateMessageId: () =>
-        mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-      source: keepDeniedApprovalsOnScreen({
-        deniedApprovals: findDeniedApprovals(initialMessages),
-        source: remapOutgoingMessageIds({
-          existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-          mapMessageId,
-          source,
-        }),
-      }),
-    });
-
-    for await (const sourceChunk of normalizedSource) {
+    for await (const sourceRead of readSourceUntilCut({
+      initialMessages,
+      mapMessageId,
+      source,
+      signal: runSignal,
+    })) {
+      if (Result.isError(sourceRead)) {
+        const { error } = sourceRead;
+        throw error;
+      }
+      const sourceChunk = sourceRead.value;
       trackIncompleteToolCallInput(
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
@@ -3066,21 +3376,22 @@ export const processServerChatStream = async function* ({
     }
     const kind = classifyAIError(error);
     if (abortSignal.aborted) {
-      // An aborted stream is an expected exit (metered cutoff, ownership
-      // loss); its rejection shape is not a stream defect even
-      // when the classifier cannot name it.
-      captureError(error, { kind });
+      // Run control cancellation is an expected exit. Keep telemetry for
+      // other upstream failures that arrive during cancellation.
+      if (!AIGenerationCancelledError.is(error)) {
+        captureError(error, { kind });
+      }
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),
       });
-    } else {
-      reportStreamFailure(error, kind);
-      await terminalize({
-        flushProcessor: true,
-        outcome: { type: "failed", error: kind },
-      });
+      return;
     }
+    reportStreamFailure(error, kind);
+    await terminalize({
+      flushProcessor: true,
+      outcome: { type: "failed", error: kind },
+    });
     yield* clientAssistantOwner.announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,
@@ -4455,8 +4766,7 @@ const restoreInterrupts = <T extends object>(
 };
 
 type ParsedToolResultContent =
-  | { type: "json"; value: unknown }
-  | { type: "text"; value: string };
+  { type: "json"; value: unknown } | { type: "text"; value: string };
 
 type TransformToolResultContentOptions = {
   boundary: ChatThirdPartyBoundary;

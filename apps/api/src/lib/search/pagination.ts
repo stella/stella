@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 
@@ -55,11 +56,13 @@ const decodeGlobalSearchKeysetPayload = (
   }
 
   const separatorIndex = decoded.id.indexOf(":");
-  const seen = Number(decoded.id.slice(0, separatorIndex));
+  const seen = parseIntegerToken(decoded.id.slice(0, separatorIndex), {
+    sign: "unsigned",
+  }).unwrapOr(null);
   const id = decoded.id.slice(separatorIndex + 1);
   if (
     separatorIndex === -1 ||
-    !Number.isInteger(seen) ||
+    seen === null ||
     seen <= 0 ||
     seen >= GLOBAL_SEARCH_RESULT_LIMIT ||
     !GLOBAL_SEARCH_HIT_ID_PREFIXES.some(

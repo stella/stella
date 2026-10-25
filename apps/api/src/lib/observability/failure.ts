@@ -19,6 +19,7 @@ import type { FailureGrade, FailureReason } from "@stll/errors";
 import { failureGradeOf } from "@stll/errors";
 
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { GRADED_HANDLER_CODE_REASON } from "@/api/lib/errors/graded-handler-codes";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
   TRANSPORT_WRAPPERS,
@@ -110,6 +111,9 @@ export const PG_SQL_STATE_REASON = {
   "57014": "pg_query_canceled",
   "28P01": "pg_auth_failed",
   "28000": "pg_auth_failed",
+  "22007": "pg_invalid_input",
+  "22008": "pg_invalid_input",
+  "22P02": "pg_invalid_input",
 } as const satisfies Record<PgLifecycleSqlState, FailureReason> &
   Record<string, FailureReason>;
 
@@ -160,18 +164,6 @@ export const NETWORK_ERROR_CODE_REASON = {
 } as const satisfies Record<string, FailureReason>;
 
 const TIMEOUT_CLASS_NAME = "TimeoutError";
-
-/**
- * `HandlerError` codes that carry a grade. Closed, so a misspelt code fails to
- * compile at the constructor rather than silently grading as a defect.
- */
-const GRADED_HANDLER_CODES = ["upstream_unavailable"] as const;
-
-type GradedHandlerCode = (typeof GRADED_HANDLER_CODES)[number];
-
-const GRADED_HANDLER_CODE_REASON = {
-  upstream_unavailable: "upstream_unavailable",
-} as const satisfies Record<GradedHandlerCode, FailureReason>;
 
 type HandlerClientStatus = Exclude<HandlerErrorStatusCode, 500 | 502 | 503>;
 
@@ -719,7 +711,10 @@ export const identityFields = (
   }
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
-    "error.code": root.code ?? root.awsName ?? root.tag,
+    "error.code":
+      root.extraction?.["workerErrorClass"] === undefined
+        ? (root.code ?? root.awsName ?? root.tag)
+        : `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`,
   };
   const frame = frameValue(root.frame);
   if (frame !== undefined) {
@@ -841,10 +836,7 @@ export const providerStatusFieldsOf = ({
 };
 
 export type FingerprintDegradation =
-  | "class_generic"
-  | "frame_absent"
-  | "read_failed"
-  | "truncated";
+  "class_generic" | "frame_absent" | "read_failed" | "truncated";
 
 /**
  * Why a grouping identity is weaker than it should be, if it is. A plain

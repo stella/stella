@@ -12,6 +12,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
+import { renderResultInputs } from "./ci-result-inputs";
 import {
   contextFromNested,
   contextWithPlanOutputs,
@@ -161,17 +163,6 @@ const events = [
   { event: "schedule", message: "ordinary" },
   { event: "workflow_dispatch", message: "ordinary" },
 ];
-// Main-only jobs gate on `github.ref`, so every modelled event needs the ref
-// GitHub gives it; an unknown ref would leave those conditions unresolved.
-const REF_BY_EVENT: Record<string, string> = {
-  merge_group: "refs/heads/gh-readonly-queue/main/pr-1-0000000",
-  pull_request: "refs/pull/1/merge",
-  push: "refs/heads/main",
-  schedule: "refs/heads/main",
-  workflow_dispatch: "refs/heads/main",
-};
-const refFor = (event: string) =>
-  REF_BY_EVENT[event] ?? panic(`No modelled ref for event ${event}`);
 type ContextOptions = {
   event: (typeof events)[number];
   variable: string;
@@ -186,45 +177,66 @@ const context = ({
   queueDepth,
   proveFix = false,
   queueBrowserSuites = "",
-}: ContextOptions) => ({
-  github: {
-    event_name: event,
-    ref: refFor(event),
-    event: {
-      head_commit: { message },
-      pull_request: {
-        draft: false,
-        labels: proveFix ? [{ name: "prove-fix" }] : [],
+}: ContextOptions) => {
+  const value = ciExpressionContext({
+    event: modelledEvent(event),
+    plan: {
+      ...plan,
+      queue_depth: queueDepth,
+      ...(event === "pull_request"
+        ? { fix_tests_on_base_required: "true" }
+        : {}),
+    },
+    vars: {
+      MERGE_QUEUE_DEPTH: variable,
+      QUEUE_BROWSER_SUITES: queueBrowserSuites,
+    },
+    needsResults: Object.fromEntries(needs.map((job) => [job, "success"])),
+  });
+  value.github.event.head_commit.message = message;
+  value.github.event.pull_request.labels = proveFix
+    ? [{ name: "prove-fix" }]
+    : [];
+  value.steps = {
+    "completed-depth": {
+      outputs: {
+        normal_completion: "required",
+        pr_heavy_suites: "run",
+        run_required: value.needs["ci-plan"]?.outputs["run_required"] ?? "true",
       },
     },
-  },
-  vars: {
-    MERGE_QUEUE_DEPTH: variable,
-    QUEUE_BROWSER_SUITES: queueBrowserSuites,
-    CI_POSTGRES_PR_SELECTION: "",
-  },
-  inputs: { heavy_only: false, pr_depth_only: false },
-  steps: {
-    "completed-depth": { outputs: { normal_completion: "required" } },
     "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
-  },
-  needs: Object.fromEntries(
-    needs.map((job) => {
-      const outputs: Record<string, string> =
-        job === "ci-plan" ? { ...plan, queue_depth: queueDepth } : {};
-      if (job === "ci-plan" && event === "pull_request") {
-        outputs["fix_tests_on_base_required"] = "true";
-      }
-      return [job, { result: "success", outputs }];
-    }),
-  ),
-  always: () => true,
-  cancelled: () => false,
-  failure: () => false,
-  startsWith: (value: string, prefix: string) => value.startsWith(prefix),
-});
+  };
+  return value;
+};
+// Some cases pass partial contexts; read nested fields without assuming shape.
+const field = (source: unknown, key: string): unknown =>
+  typeof source === "object" && source !== null
+    ? Reflect.get(source, key)
+    : undefined;
+// ci-plan's run_required comes from the completed-depth lookup; cases set it
+// on the plan outputs, so the lookup reports the same value.
+const syncLookup = (value: object) => {
+  const outputs = field(
+    field(field(value, "steps"), "completed-depth"),
+    "outputs",
+  );
+  if (typeof outputs !== "object" || outputs === null) {
+    return;
+  }
+  const runRequired = field(
+    field(field(field(value, "needs"), "ci-plan"), "outputs"),
+    "run_required",
+  );
+  Reflect.set(
+    outputs,
+    "run_required",
+    typeof runRequired === "string" ? runRequired : "true",
+  );
+};
 const selected = (condition: string | undefined, value: object) => {
   const expression = condition ?? "true";
+  syncLookup(value);
   const result = evaluateExpression(
     expression,
     contextWithPlanOutputs({
@@ -303,9 +315,9 @@ test("fast merge-group browser admission follows the planned jobs until normal c
         panic("Missing browser planner context");
       }
       planner.outputs["suite_depth"] = "fast";
-      value.steps["completed-depth"].outputs.normal_completion =
+      value.steps["completed-depth"]!.outputs["normal_completion"] =
         normalCompletion;
-      value.steps["pilot-queue-plan"].outputs.queue_jobs = JSON.stringify(
+      value.steps["pilot-queue-plan"]!.outputs["queue_jobs"] = JSON.stringify(
         queuedBrowser ? ["ci-browser"] : [],
       );
       expect(
@@ -338,6 +350,7 @@ type ExpectedPrSelectionOptions = {
 };
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
+  "e2e-landing",
   "e2e-production-shard",
   "scan-engine-wasm-drift",
   "web-build",
@@ -372,6 +385,17 @@ const expectedPrSelection = ({
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["browser_spec_selection_required"] ===
         "true"
+    );
+  }
+  // A landing change is checked in its own pull request, behind the gate.
+  if (job === "e2e-landing") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["run_required"] !== "false" &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["e2e_landing_required"] === "true" &&
+      value.needs["ci-plan"].outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["pr-heavy-gate"]?.result === "success"
     );
   }
   if (job === "e2e-production-shard") {
@@ -776,10 +800,16 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
       for (const failed of [false, true]) {
         const value = context({ event, variable: "full", queueDepth: "full" });
         value.failure = () => failed;
+        const pullRequestHelper =
+          id.endsWith("-cancel") && id.startsWith("code-quality-");
         expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
-          failed && event.event === "merge_group",
+          failed &&
+            event.event ===
+              (pullRequestHelper ? "pull_request" : "merge_group"),
         );
-        if (event.event === "merge_group") {
+        if (
+          event.event === (pullRequestHelper ? "pull_request" : "merge_group")
+        ) {
           const unresolved = Object.fromEntries(
             Object.entries(value).filter(([key]) => key !== "failure"),
           );
@@ -847,7 +877,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  // Retired jobs: ci-plan now produces the generated sources itself.
+  // Retired jobs: generated sources now come from the generated-sources job.
   const retiredJobs = new Set([
     "merge-group-fail-fast",
     "ci-generated-sources",
@@ -893,8 +923,12 @@ test("unset and full preserve historical predicates except declared PR, Postgres
             !foldedParts.has(id),
         ),
         "api-test-durations",
+        "generated-sources",
         "postgres-service-suites",
+        "pr-heavy-gate",
         "marketing-screenshots-cancel",
+        "code-quality-api-cancel",
+        "code-quality-web-rest-cancel",
         "ci-quick-checks",
         "code-quality-web-rest",
         "desktop-rust-tests",
@@ -906,6 +940,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
+    "e2e-landing",
     "e2e-production-shard",
     "scan-engine-wasm-drift",
     "web-build",
@@ -1078,7 +1113,16 @@ const evaluate = ({
       ];
     }),
   );
-  return Bun.spawnSync(["bash", "-e", "-c", script], {
+  const rendered = renderResultInputs(script, {
+    needs: JSON.stringify(dependencies),
+    plan: JSON.stringify({
+      ...plan,
+      queue_depth: queueDepth,
+      heavy_web_build_required: "false",
+      release_typecheck_required: releaseTypecheck ? "true" : "false",
+    }),
+  });
+  return Bun.spawnSync(["bash", "-e", "-c", rendered], {
     cwd: root,
     env: {
       ...process.env,
@@ -1100,13 +1144,6 @@ const evaluate = ({
       PR_DEPTH_REUSED: "false",
       PR_DEPTH_ONLY: "false",
       PR_DEPTH_SOURCE_RUN_ID: "",
-      PLAN: JSON.stringify({
-        ...plan,
-        queue_depth: queueDepth,
-        heavy_web_build_required: "false",
-        release_typecheck_required: releaseTypecheck ? "true" : "false",
-      }),
-      NEEDS: JSON.stringify(dependencies),
     },
   }).exitCode;
 };
@@ -1273,6 +1310,8 @@ test("the planner emits the canonical thin set only when derived planning is sel
             steps: {
               depth: { outputs: { queue_depth: queueDepth } },
               "completed-depth": { outputs: { run_required: "true" } },
+              // The derivation also waits for the planner install.
+              "planner-deps": { outcome: "success" },
             },
           }),
         ).toBe(heavyOnly || (event === "merge_group" && queueDepth === "thin"));
