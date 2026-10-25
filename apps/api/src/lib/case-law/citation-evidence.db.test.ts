@@ -53,6 +53,7 @@ test("citation evidence window validity agrees with database constraints", async
         );
       },
     ),
+    { numRuns: 100 },
   );
 });
 
