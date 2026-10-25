@@ -219,7 +219,9 @@ describe("inferred application type", () => {
 
 describe("native redirect URI exceptions", () => {
   test.each(
-    NATIVE_REDIRECT_URI_EXCEPTIONS.map((entry) => [entry.client, entry]),
+    NATIVE_REDIRECT_URI_EXCEPTIONS.map(
+      (entry) => [entry.client, entry] as const,
+    ),
   )("%s is pinned by its client's registration fixture", (_client, entry) => {
     const pinned = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).some(
       (fixture) =>
