@@ -2,8 +2,10 @@ import { panic } from "better-result";
 import {
   type Comment,
   type EcmaScriptModule,
+  type Node,
   parseSync,
   type Program,
+  visitorKeys,
 } from "oxc-parser";
 
 // Syntax-only reads of TypeScript and JavaScript sources. Guards and
@@ -28,6 +30,48 @@ export type ParsedSource = {
   readonly sourceText: string;
   /** Location of a node's `start` or `end` (UTF-16 offsets). */
   readonly locate: (offset: number) => SourceLocation;
+};
+
+const isNode = (value: unknown): value is Node =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  typeof value.type === "string";
+
+/**
+ * Visits `root` and every descendant in source order, passing the node's
+ * ancestors (nearest last). oxc nodes carry no parent links, so walkers that
+ * need context read it from `ancestors`. Returning "skip-children" leaves the
+ * node's subtree unvisited.
+ */
+export const walk = (
+  root: Node,
+  visit: (
+    node: Node,
+    ancestors: readonly Node[],
+  ) => "skip-children" | undefined,
+): void => {
+  const ancestors: Node[] = [];
+  const enter = (node: Node): void => {
+    if (visit(node, ancestors) === "skip-children") {
+      return;
+    }
+    ancestors.push(node);
+    for (const key of visitorKeys[node.type] ?? []) {
+      const child: unknown = Reflect.get(node, key);
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          if (isNode(item)) {
+            enter(item);
+          }
+        }
+      } else if (isNode(child)) {
+        enter(child);
+      }
+    }
+    ancestors.pop();
+  };
+  enter(root);
 };
 
 const lineStarts = (text: string): number[] => {

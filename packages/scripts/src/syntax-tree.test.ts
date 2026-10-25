@@ -1,6 +1,30 @@
 import { expect, test } from "bun:test";
 
-import { parseSource, Visitor } from "./syntax-tree";
+import { parseSource, Visitor, walk } from "./syntax-tree";
+
+test("walks in source order with ancestors and can skip a subtree", () => {
+  const parsed = parseSource(
+    "fixture.ts",
+    "outer(inner(1), () => hidden(2));\nlast();\n",
+  );
+  const calls: string[] = [];
+  walk(parsed.program, (node, ancestors) => {
+    if (node.type === "ArrowFunctionExpression") {
+      return "skip-children";
+    }
+    if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+      calls.push(
+        `${node.callee.name}<${ancestors.map(({ type }) => type).join(">")}`,
+      );
+    }
+    return undefined;
+  });
+  expect(calls).toEqual([
+    "outer<Program>ExpressionStatement",
+    "inner<Program>ExpressionStatement>CallExpression",
+    "last<Program>ExpressionStatement",
+  ]);
+});
 
 test("locates nodes by UTF-16 offset across non-ASCII lines", () => {
   const source = 'const ž = "čšř😀";\n\n  export const b = 1;\n';
