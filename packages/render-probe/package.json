@@ -21,7 +21,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/render-probe"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.3",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",

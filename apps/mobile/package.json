@@ -20,13 +20,13 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~57.0.27",
-    "expo-constants": "~57.0.21",
-    "expo-linking": "~57.0.12",
-    "expo-router": "~57.0.25",
+    "expo": "~57.0.30",
+    "expo-constants": "~57.0.22",
+    "expo-linking": "~57.0.13",
+    "expo-router": "~57.0.28",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
-    "expo-updates": "~57.0.25",
+    "expo-updates": "~57.0.26",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.3",
@@ -40,7 +40,7 @@
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
-    "expo-doctor": "1.20.4"
+    "expo-doctor": "1.21.5"
   },
   "crawlPosture": "unserved",
   "expo": {
