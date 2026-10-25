@@ -1,13 +1,9 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
-import { SymbolFlags, type Type } from "typescript/unstable/async";
+import { SymbolFlags, type Type } from "tsrs/unstable/async";
 
-import {
-  packageOfFile,
-  printContract,
-  verifyDeterminism,
-} from "./generate-web-api-types";
+import { printContract, verifyDeterminism } from "./generate-web-api-types";
 import { nameAliases } from "./lib/web-api-alias-names";
 import {
   type ContractProgram,
@@ -93,10 +89,7 @@ afterEach(async () => {
   }
 });
 
-const programOf = async (
-  source: string,
-  webDependencies: ReadonlySet<string> = new Set(),
-): Promise<ContractProgram> => {
+const programOf = async (source: string): Promise<ContractProgram> => {
   const program = await openContractProgram({
     contractPath: CONTRACT_FILE,
     compilerOptions: {
@@ -107,8 +100,6 @@ const programOf = async (
       moduleResolution: "bundler",
     },
     virtualFiles: new Map([[CONTRACT_FILE, source]]),
-    packageOf: packageOfFile,
-    webDependencies,
   });
   opened.push(program);
   return program;
@@ -136,7 +127,6 @@ import type { StandardTypedV1 } from "@standard-schema/spec";
 type Local<Input> = StandardTypedV1<Input, string>;
 export type WebApiContract = { Tool: Local<number> };
 `,
-    webDependencies,
   );
   const { checker } = program;
   const tool = (
@@ -150,8 +140,7 @@ export type WebApiContract = { Tool: Local<number> };
   }
   // A local alias must reach the imported interface, rather than bypassing
   // the fault by referring to the package export directly.
-  const toolType =
-    (await checker.getTypeOfSymbol(tool)) ?? panic("tool has no type");
+  const toolType = await checker.getTypeOfSymbol(tool);
   expect((await toolType.getAliasSymbol())?.name).toBe("Local");
   const result = await printContract({
     program,
@@ -173,7 +162,6 @@ type LocalSchema<Input> = StandardSchemaV1<Input, string> & StandardJSONSchemaV1
 type LocalTool = ClientTool<LocalSchema<number>, undefined, "save">;
 export type WebApiContract = { Tool: LocalTool };
 `,
-    webDependencies,
   );
   const result = await printContract({
     program,
@@ -279,7 +267,7 @@ export type WebApiContract = {
   });
 });
 
-// The compiler orders union members by type id, so by whichever member the
+// A compiler may order union members by type id, so by whichever member the
 // checker created first. `Primer` is resolved before printing and creates the
 // same member types in the opposite order; the contract itself is identical.
 const REVIEW = `
@@ -306,31 +294,19 @@ type Primer =
 describe("generate-web-api-types union member order", () => {
   const printed = async (primed: boolean) => {
     const compiled = await programOf(`${primed ? PRIMER : ""}${REVIEW}`);
-    const { checker } = compiled;
     if (primed) {
       await declaredType(compiled, "Primer");
     }
-    const review = await declaredType(compiled, "Review");
-    const compilerOrder: string[][] = [];
-    for (const property of await checker.getPropertiesOfType(review)) {
-      const type =
-        (await checker.getTypeOfSymbol(property)) ??
-        panic("property has no type");
-      const members = type.isUnionType() ? await type.getTypes() : [type];
-      const names: string[] = [];
-      for (const member of members) {
-        names.push(await checker.typeToString(member));
-      }
-      compilerOrder.push(names);
-    }
-    return { compilerOrder, result: await printSource(compiled) };
+    await declaredType(compiled, "Review");
+    return { result: await printSource(compiled) };
   };
 
+  // tsrs orders a union's members the same whichever it created first, so
+  // the primed fixture no longer changes the compiler's own order; the
+  // printout must still not depend on it.
   test("prints the same text whichever member the checker created first", async () => {
     const natural = await printed(false);
     const primed = await printed(true);
-    // The fixture reaches the fault: the compiler's own member order differs.
-    expect(primed.compilerOrder).not.toEqual(natural.compilerOrder);
     expect(primed.result.declarations).toEqual(natural.result.declarations);
     expect(primed.result.aliases).toEqual(natural.result.aliases);
   });

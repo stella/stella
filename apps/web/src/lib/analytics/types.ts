@@ -178,7 +178,7 @@ type ProvisionPlacementGapsProperties = {
   count: number;
 };
 
-type AnalyticsResetOptions = {
+export type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;
 };
 
