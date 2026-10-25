@@ -12,12 +12,14 @@ import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
   OAUTH_ENDPOINT_POLICY,
-  OAUTH_REGISTRATION_SCOPE_POLICY,
   OAUTH_SCOPE_POLICY_PATHS,
-  OPEN_REGISTRATION_SCOPES,
 } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/oauth-scope-policy";
 import { getMcpResourceUrl, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {

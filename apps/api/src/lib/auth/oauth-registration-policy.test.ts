@@ -7,11 +7,13 @@ import {
   grantableScopes,
   inferredApplicationType,
   NATIVE_REDIRECT_URI_EXCEPTIONS,
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-  OPEN_REGISTRATION_SCOPES,
   registrableScope,
   requiresNativeClientConsent,
 } from "@/api/lib/auth/oauth-registration-policy";
+import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/oauth-scope-policy";
 import { OAUTH_CLIENT_REGISTRATION_FIXTURES } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 
 const AUTHENTICATION_CONSENT_CASES = {

@@ -11,8 +11,6 @@ import type { HookEndpointContext } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 
-import type { McpOAuthScope } from "@stll/api-contract";
-
 import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
@@ -20,42 +18,15 @@ import {
   OAUTH_CLIENT_REGISTRATION_PATH,
 } from "@/api/lib/oauth-loopback-registration";
 import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/oauth-scope-policy";
+import {
   type AuthRequestBudgetFrameworkApi,
   isAuthRequestBudgetPath,
 } from "@/api/lib/rate-limit/auth-request-budget";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
-
-export const OAUTH_REGISTRATION_SCOPE_POLICY = {
-  openid: "open",
-  profile: "open",
-  email: "open",
-  offline_access: "open",
-  "stella:search": "open",
-  "stella:read": "open",
-  "stella:law_read": "open",
-  "stella:templates": "open",
-  "stella:documents_write": "open",
-  "stella:matters_write": "open",
-  "stella:contacts_write": "open",
-  "stella:chat": "open",
-  "stella:memory_write": "elevated",
-  "stella:knowledge_write": "open",
-  "stella:billing_write": "open",
-  "stella:admin_read": "elevated",
-  "stella:admin_write": "elevated",
-  "stella:onboarding": "open",
-  "stella:skills": "open",
-  "stella:external_mcps": "elevated",
-  "stella:feedback": "open",
-  "stella:search_anonymized": "open",
-  "stella:read_anonymized": "open",
-  "stella:templates_anonymized": "open",
-} as const satisfies Record<McpOAuthScope, "open" | "elevated">;
-
-export const OPEN_REGISTRATION_SCOPES = Object.entries(
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-).flatMap(([scope, policy]) => (policy === "open" ? [scope] : []));
 
 const OPEN_REGISTRATION_SCOPE_SET: ReadonlySet<string> = new Set(
   OPEN_REGISTRATION_SCOPES,

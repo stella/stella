@@ -10,9 +10,7 @@
 import { mintPartnerClientSecret } from "@/api/lib/db/partner-client-contract";
 
 // An ECS task records its session output; the secret must never be in it.
-const isEcsTask =
-  process.env["ECS_CONTAINER_METADATA_URI_V4"] !== undefined ||
-  process.env["ECS_CONTAINER_METADATA_URI"] !== undefined;
+const isEcsTask = process.env["ECS_CONTAINER_METADATA_URI_V4"] !== undefined;
 
 if (isEcsTask || !process.stdout.isTTY) {
   process.stderr.write(

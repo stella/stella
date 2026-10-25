@@ -3,10 +3,10 @@ import { and, eq } from "drizzle-orm";
 
 import { oauthClient, oauthClientResource } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/auth/oauth-registration-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/oauth-scope-policy";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export class PartnerClientOperatorError extends TaggedError(

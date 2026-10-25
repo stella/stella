@@ -16,13 +16,13 @@ import {
 import { systemAuditRuns } from "@/api/db/schema";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
-import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
   mintPartnerClientSecret,
   PARTNER_CLIENT_SECRET_SHA256_PATTERN,
   PARTNER_CLIENT_TYPE,
 } from "@/api/lib/db/partner-client-contract";
+import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/oauth-scope-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
