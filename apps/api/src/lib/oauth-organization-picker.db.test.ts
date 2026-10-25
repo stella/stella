@@ -20,6 +20,7 @@ import {
   authorizeOAuthClient,
   consentAndExchange,
   OAUTH_CONSENT_PAGE_PATH,
+  OAUTH_LOGIN_PAGE_PATH,
   OAUTH_ORGANIZATION_PAGE_PATH,
   readOAuthRedirect,
   readSignedQuery,
@@ -164,6 +165,64 @@ describe("OAuth organization picker", () => {
       consentPage,
     });
     expect(decodeJwt(grant.accessToken)["org_id"]).toBe(only.id);
+  });
+
+  test("a fresh sign-in request issues no code to the session it asked to replace", async () => {
+    const browser = await signInHuman(
+      `picker-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const only = await createOrganization(browser, "Only");
+    await browser.setActiveOrganization(only.id);
+    const client = await registerOAuthClient();
+
+    const { redirect: signIn } = await authorizeOAuthClient(
+      browser,
+      client,
+      undefined,
+      "login",
+    );
+    expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+    expect(new URLSearchParams(readSignedQuery(signIn)).get("prompt")).toBe(
+      "login",
+    );
+
+    // The user leaves the sign-in form without signing in. Every step the web
+    // pages can post with that request, under the session that was already
+    // there, sends the browser back to sign-in instead of to the client.
+    const continuations = [
+      await continueAfterPicking({
+        browser,
+        picker: signIn,
+        status: "selected",
+      }),
+      await continueAfterPicking({
+        browser,
+        picker: signIn,
+        status: "created",
+      }),
+      await readOAuthRedirect(
+        await getAuth().handler(
+          new Request(getAuthEndpointUrl("oauth2/consent"), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              cookie: browser.cookieHeader(),
+            },
+            body: JSON.stringify({
+              accept: true,
+              oauth_query: readSignedQuery(signIn),
+            }),
+          }),
+        ),
+      ),
+    ];
+    for (const redirect of continuations) {
+      expect(redirect.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+      expect(redirect.searchParams.has("code")).toBe(false);
+      expect(new URLSearchParams(readSignedQuery(redirect)).get("prompt")).toBe(
+        "login",
+      );
+    }
   });
 
   test("authorizing again without the continue step still asks for the organization", async () => {

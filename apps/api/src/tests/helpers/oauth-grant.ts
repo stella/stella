@@ -129,6 +129,9 @@ const readCode = (redirectUrl: string): string =>
   new URL(redirectUrl).searchParams.get("code") ??
   panic(`consent redirect carried no code: ${redirectUrl}`);
 
+/** The web sign-in page the provider sends a browser to when it must sign in. */
+export const OAUTH_LOGIN_PAGE_PATH = "/auth";
+
 /** The web page the provider sends a browser to when consent is needed. */
 export const OAUTH_CONSENT_PAGE_PATH = "/consent";
 
