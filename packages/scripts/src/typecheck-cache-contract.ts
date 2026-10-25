@@ -11,6 +11,7 @@ import {
   nativeTypecheckProgramFiles,
 } from "./api-typecheck-inputs";
 import { apiTypecheckProjects } from "./api-typecheck-partition";
+import { declarationOutputName } from "./declaration-output-name";
 
 const typecheckCacheTaskSchema = v.looseObject({
   cache: v.optional(v.boolean()),
@@ -164,25 +165,6 @@ const readCompilerProject = async (project: string) => {
   }
 };
 
-type DeclarationOutputNameOptions = { source: string; outFile?: string };
-const declarationOutputName = ({
-  source,
-  outFile,
-}: DeclarationOutputNameOptions) => {
-  if (outFile) {
-    return `${outFile.replace(/\.[^./\\]+$/u, "")}.d.ts`;
-  }
-  return source.replace(/\.(?:[jt]sx?|[mc][jt]s)$/u, (extension) => {
-    if (extension === ".mts" || extension === ".mjs") {
-      return ".d.mts";
-    }
-    if (extension === ".cts" || extension === ".cjs") {
-      return ".d.cts";
-    }
-    return ".d.ts";
-  });
-};
-
 const assertReferenceDeclarations = async (project: string) => {
   const parsed = await readCompilerProject(project);
   if (!parsed.options.disableSourceOfProjectReferenceRedirect) {
@@ -215,12 +197,11 @@ const assertReferenceDeclarations = async (project: string) => {
       if (/\.d\.[cm]?ts$/u.test(source) || !/\.[cm]?[jt]sx?$/u.test(source)) {
         continue;
       }
-      const output = declarationOutputName({
-        source: outputRoot
+      const output = declarationOutputName(
+        outputRoot
           ? path.join(outputRoot, repoRelativePath(sourceRoot, source))
           : source,
-        outFile: producer.options.outFile,
-      });
+      );
       if (!existsSync(output)) {
         panic(
           `Prepare declaration output before native cache audit: ${output}`,

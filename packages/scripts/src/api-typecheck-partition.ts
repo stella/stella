@@ -21,6 +21,7 @@ import {
   requireApiTypecheckGeneratedSources,
   uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
+import { declarationOutputName } from "./declaration-output-name";
 import {
   readTurboTypecheckInputs,
   writeTurboTypecheckInputs,
@@ -314,25 +315,6 @@ export const apiTypecheckInputIssues = async (
   return issues;
 };
 
-type DeclarationOutputNameOptions = { source: string; outFile?: string };
-const declarationOutputName = ({
-  source,
-  outFile,
-}: DeclarationOutputNameOptions) => {
-  if (outFile) {
-    return `${outFile.replace(/\.[^./\\]+$/u, "")}.d.ts`;
-  }
-  return source.replace(/\.(?:[jt]sx?|[mc][jt]s)$/u, (extension) => {
-    if (extension === ".mts" || extension === ".mjs") {
-      return ".d.mts";
-    }
-    if (extension === ".cts" || extension === ".cjs") {
-      return ".d.cts";
-    }
-    return ".d.ts";
-  });
-};
-
 const checkResolvedApiTestPartition = async (root: string) => {
   const api = path.join(root, "apps/api");
   const programs = new Map(
@@ -368,12 +350,11 @@ const checkResolvedApiTestPartition = async (root: string) => {
   for (const file of surface.fileNames.filter(
     (source) => !/\.d\.[cm]?ts$/u.test(source),
   )) {
-    const declaration = declarationOutputName({
-      source: outputRoot
+    const declaration = declarationOutputName(
+      outputRoot
         ? path.join(outputRoot, repoRelativePath(sourceRoot, file))
         : file,
-      outFile: surface.options.outFile,
-    });
+    );
     if (!existsSync(declaration)) {
       panic(`Missing API declaration for ${file}`);
     }

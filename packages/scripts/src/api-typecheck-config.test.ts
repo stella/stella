@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -23,8 +24,9 @@ const FIX_COMMAND = "bun --filter @stll/api generate:typecheck-declarations";
 const generatedApiProjects = () =>
   [...new Bun.Glob("tsconfig*.json").scanSync({ cwd: API_ROOT })]
     .map((name) => {
-      const config = Bun.JSONC.parse(
-        readFileSync(path.join(API_ROOT, name), "utf-8"),
+      const config = v.parse(
+        v.object({ extends: v.optional(v.unknown()) }),
+        Bun.JSONC.parse(readFileSync(path.join(API_ROOT, name), "utf-8")),
       );
       const extended: readonly string[] = Array.isArray(config.extends)
         ? config.extends.filter(
@@ -43,8 +45,11 @@ const generatedApiProjects = () =>
           `${name} extends ${generated} without a guard before it`,
         );
       }
-      const guard = Bun.JSONC.parse(
-        readFileSync(path.resolve(API_ROOT, required), "utf-8"),
+      const guard = v.parse(
+        v.object({ files: v.array(v.string()) }),
+        Bun.JSONC.parse(
+          readFileSync(path.resolve(API_ROOT, required), "utf-8"),
+        ),
       );
       return { name, generated, required, files: guard.files };
     })
