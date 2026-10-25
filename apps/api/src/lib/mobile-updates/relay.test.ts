@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -5,9 +6,9 @@ import {
   mobileUpdatePointerKey,
   mobileUpdateSignatureKey,
 } from "@stll/api-contract/mobile-updates";
-import type { Fetcher } from "@stll/fetch";
 
 import {
+  type CdnFetch,
   MOBILE_UPDATES_CDN_ORIGIN,
   mobileUpdateResponse,
   readSignedMobileUpdate,
@@ -29,17 +30,21 @@ const SIGNATURE = "c2lnbmF0dXJl";
 /** A CDN holding `objects` by key, recording what was asked of it. */
 const cdn = (objects: Record<string, string>, missingStatus = 404) => {
   const asked: string[] = [];
-  const fetcher: Fetcher = async (input) => {
-    const url = String(input);
+  const fetchObject: CdnFetch = async (url) => {
     asked.push(url);
     const key = url.replace(`${MOBILE_UPDATES_CDN_ORIGIN}/`, "");
+    const object = objects[key];
+    const status = object === undefined ? missingStatus : 200;
     return await Promise.resolve(
-      key in objects
-        ? new Response(objects[key])
-        : new Response("missing", { status: missingStatus }),
+      Result.ok({
+        body: new TextEncoder().encode(object ?? "missing").buffer,
+        headers: new Headers(),
+        ok: status === 200,
+        status,
+      }),
     );
   };
-  return { fetcher, asked };
+  return { fetchObject, asked };
 };
 
 const published = {
@@ -50,7 +55,7 @@ const published = {
 
 const read = async (objects: Record<string, string>, missingStatus = 404) => {
   const outcome = await readSignedMobileUpdate({
-    fetcher: cdn(objects, missingStatus).fetcher,
+    fetchObject: cdn(objects, missingStatus).fetchObject,
     target: TARGET,
   });
   return outcome.type === "present" ? outcome.value : outcome.type;
@@ -58,8 +63,11 @@ const read = async (objects: Record<string, string>, missingStatus = 404) => {
 
 describe("relaying a build's current update", () => {
   test("reads the pointer, then the exact signed manifest it names", async () => {
-    const { fetcher, asked } = cdn(published);
-    const outcome = await readSignedMobileUpdate({ fetcher, target: TARGET });
+    const { fetchObject, asked } = cdn(published);
+    const outcome = await readSignedMobileUpdate({
+      fetchObject,
+      target: TARGET,
+    });
     expect(outcome.type === "present" && outcome.value).toEqual({
       manifest: MANIFEST,
       signature: SIGNATURE,

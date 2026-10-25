@@ -32,6 +32,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
+  "apps/api/src/handlers/mobile-updates/**/*.ts",
+  "apps/api/src/lib/mobile-updates/**/*.ts",
   "apps/mobile/src/app/matter/**/*.{ts,tsx}",
   "apps/mobile/src/connection/**/*.{ts,tsx}",
   "apps/mobile/src/i18n/**/*.{ts,tsx}",

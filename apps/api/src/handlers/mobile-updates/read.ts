@@ -12,8 +12,10 @@ import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  cdnFetch,
   mobileUpdateResponse,
   readSignedMobileUpdate,
 } from "@/api/lib/mobile-updates/relay";
@@ -58,7 +60,7 @@ const readMobileUpdate = createSafeBoundedPublicHandler(
     }
     const update = yield* Result.ok(
       await readSignedMobileUpdate({
-        fetcher: fetch,
+        fetchObject: cdnFetch(grantThirdPartyOutboundPermit()),
         target: { variant, platform, runtimeVersion },
       }),
     );

@@ -19,19 +19,24 @@ import * as v from "valibot";
 import {
   MOBILE_UPDATE_ID_PATTERN,
   MOBILE_UPDATE_SIGNING_KEY_ID,
-  type MobileUpdateTarget,
   mobileUpdateManifestKey,
   mobileUpdatePointerKey,
   mobileUpdateSignatureKey,
+  type MobileUpdateTarget,
 } from "@stll/api-contract/mobile-updates";
-import { createFetchWithTimeout, type Fetcher } from "@stll/fetch";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
+  type ReadOutcome,
   readOutcomeOfStatus,
   readPresent,
   readUnavailable,
-  type ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
+import {
+  safeOutboundFetchBytes,
+  type SafeOutboundFetchError,
+  type SafeOutboundFetchResponse,
+} from "@/api/lib/safe-outbound-fetch";
 
 /** stella's public downloads CDN, which the publish job writes to. */
 export const MOBILE_UPDATES_CDN_ORIGIN = "https://downloads.stll.app";
@@ -52,16 +57,27 @@ export type SignedMobileUpdate = {
   readonly signature: string;
 };
 
+/** Reads one CDN object by URL. */
+export type CdnFetch = (
+  url: string,
+) => Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>>;
+
+/** The CDN reached through the outbound fetch owner, under the route's permit. */
+export const cdnFetch =
+  (permit: ThirdPartyOutboundPermit): CdnFetch =>
+  async (url) =>
+    await safeOutboundFetchBytes({
+      maxBytes: MANIFEST_MAX_BYTES,
+      permit,
+      timeout: { type: "headers", ms: CDN_TIMEOUT_MS },
+      url,
+    });
+
 const readCdnText = async (
-  fetcher: Fetcher,
+  fetchObject: CdnFetch,
   url: string,
 ): Promise<ReadOutcome<string>> => {
-  const fetched = await Result.tryPromise(
-    async () =>
-      await createFetchWithTimeout(fetcher)(url, {
-        timeout: { type: "headers", ms: CDN_TIMEOUT_MS },
-      }),
-  );
+  const fetched = await fetchObject(url);
   if (Result.isError(fetched)) {
     return readUnavailable({ kind: "thrown", error: fetched.error });
   }
@@ -72,13 +88,7 @@ const readCdnText = async (
       ? readUnavailable({ kind: "status", status: response.status })
       : outcome;
   }
-  const text = await Result.tryPromise(async () => await response.text());
-  if (Result.isError(text)) {
-    return readUnavailable({ kind: "thrown", error: text.error });
-  }
-  return text.value.length > MANIFEST_MAX_BYTES
-    ? readUnavailable({ kind: "too-large", maxBytes: MANIFEST_MAX_BYTES })
-    : readPresent(text.value);
+  return readPresent(new TextDecoder().decode(response.body));
 };
 
 /**
@@ -88,16 +98,16 @@ const readCdnText = async (
  * exists is unavailable, never an absence.
  */
 export const readSignedMobileUpdate = async ({
-  fetcher,
+  fetchObject,
   origin = MOBILE_UPDATES_CDN_ORIGIN,
   target,
 }: {
-  readonly fetcher: Fetcher;
+  readonly fetchObject: CdnFetch;
   readonly origin?: string;
   readonly target: MobileUpdateTarget;
 }): Promise<ReadOutcome<SignedMobileUpdate>> => {
   const pointer = await readCdnText(
-    fetcher,
+    fetchObject,
     `${origin}/${mobileUpdatePointerKey(target)}`,
   );
   if (pointer.type !== "present") {
@@ -113,11 +123,11 @@ export const readSignedMobileUpdate = async ({
   const { updateId } = parsedPointer.output;
   const [manifest, signature] = await Promise.all([
     readCdnText(
-      fetcher,
+      fetchObject,
       `${origin}/${mobileUpdateManifestKey(target, updateId)}`,
     ),
     readCdnText(
-      fetcher,
+      fetchObject,
       `${origin}/${mobileUpdateSignatureKey(target, updateId)}`,
     ),
   ]);
