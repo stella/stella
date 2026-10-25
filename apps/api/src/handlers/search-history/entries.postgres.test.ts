@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -221,7 +222,7 @@ const recordEntry = async (
 const recordQuery = async (
   fixture: HistoryFixture,
   query: string,
-  country = "CZE",
+  country: CaseLawJurisdiction = "CZE",
 ) => await recordEntry(fixture, { kind: "search", query, country });
 
 if (!databaseUrl || !enabled) {
