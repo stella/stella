@@ -8,8 +8,7 @@ import {
   type CallExpression,
   type ExportAllDeclaration,
   type ExportNamedDeclaration,
-  type FunctionDeclaration,
-  type FunctionExpression,
+  type Function as OxcFunction,
   type ImportDeclaration,
   type JSXAttribute,
   type JSXMemberExpression,
@@ -57,9 +56,9 @@ const TYPE_NODES = {
   TSTypeReference: true,
   TSUnionType: true,
   TSParenthesizedType: true,
-  JSDocNullableType: true,
-  JSDocNonNullableType: true,
-  JSDocUnknownType: true,
+  TSJSDocNullableType: true,
+  TSJSDocNonNullableType: true,
+  TSJSDocUnknownType: true,
 } as const satisfies Record<TSType["type"], true>;
 
 const visitChildren = (node: Node, visit: (child: Node) => void) => {
@@ -71,11 +70,10 @@ const visitChildren = (node: Node, visit: (child: Node) => void) => {
     return "skip-children";
   });
 };
-const nameOf = (node: {
-  type: string;
-  name?: string;
-  value?: unknown;
-}): string => (typeof node.name === "string" ? node.name : String(node.value));
+const nameOf = (node: Node): string => {
+  const name: unknown = Reflect.get(node, "name");
+  return typeof name === "string" ? name : String(Reflect.get(node, "value"));
+};
 
 // These boundaries install the first frame; their descendants already have one.
 export const FIRST_FRAME_OWNERS = [
@@ -437,7 +435,8 @@ class FallbackSymbols {
   }
   inspectFunction(
     file: string,
-    node: FunctionDeclaration | ArrowFunctionExpression | FunctionExpression,
+    // Every function form oxc parses: declarations, expressions and arrows.
+    node: OxcFunction | ArrowFunctionExpression,
     visited: Set<string>,
     locals: Map<string, Node>,
   ): string[] {

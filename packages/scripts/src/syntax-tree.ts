@@ -21,7 +21,6 @@ export type * from "oxc-parser";
  */
 export type Identifier = Extract<Node, { type: "Identifier" }>;
 export type Property = Extract<Node, { type: "Property" }>;
-
 export type SourceLocation = {
   /** 1-based line. */
   readonly line: number;
