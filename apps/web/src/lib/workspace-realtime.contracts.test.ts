@@ -5,6 +5,7 @@ import {
   QueryObserver,
   queryOptions,
 } from "@tanstack/react-query";
+import { organization } from "better-auth/plugins";
 import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -517,6 +518,424 @@ const propertyValue = (node: ts.Node, name: string) => {
   return syntaxValue(property.initializer);
 };
 
+const declarations = (source: ts.SourceFile) => {
+  const values = new Map<string, ts.Expression>();
+  const functions = new Map<string, ts.FunctionDeclaration>();
+  for (const statement of source.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name) {
+      functions.set(statement.name.text, statement);
+      continue;
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+        values.set(declaration.name.text, declaration.initializer);
+      }
+    }
+  }
+  return { functions, values };
+};
+
+const imports = (source: ts.SourceFile) => {
+  const bindings = new Map<string, { module: string; name: string }>();
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    if (statement.importClause?.name) {
+      bindings.set(statement.importClause.name.text, {
+        module: statement.moduleSpecifier.text,
+        name: "default",
+      });
+    }
+    const named = statement.importClause?.namedBindings;
+    if (named && ts.isNamedImports(named)) {
+      for (const binding of named.elements) {
+        bindings.set(binding.name.text, {
+          module: statement.moduleSpecifier.text,
+          name: (binding.propertyName ?? binding.name).text,
+        });
+      }
+    }
+  }
+  return bindings;
+};
+
+const exportedSafeHandlerConstructors = (source: ts.SourceFile) => {
+  const names = new Set<string>();
+  for (const statement of source.statements) {
+    const modifiers = ts.canHaveModifiers(statement)
+      ? ts.getModifiers(statement)
+      : undefined;
+    if (
+      !modifiers?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword) ||
+      (!ts.isFunctionDeclaration(statement) &&
+        !ts.isVariableStatement(statement))
+    ) {
+      continue;
+    }
+    let exportedNames: ts.Identifier[];
+    if (ts.isFunctionDeclaration(statement)) {
+      exportedNames = statement.name ? [statement.name] : [];
+    } else {
+      exportedNames = statement.declarationList.declarations.flatMap(
+        ({ name }) => (ts.isIdentifier(name) ? [name] : []),
+      );
+    }
+    for (const declaration of exportedNames) {
+      if (declaration.text.startsWith("createSafe")) {
+        names.add(declaration.text);
+      }
+    }
+  }
+  return names;
+};
+
+const MAX_HANDLER_FACTORY_DEPTH = 12;
+
+type HandlerResolverState = {
+  seen: ReadonlySet<string>;
+  depth: number;
+  shadowed: ReadonlySet<string>;
+};
+
+type HandlerConfigurationCandidate = {
+  configuration: ts.Expression | undefined;
+};
+
+const singleReturnExpression = (
+  functionNode: ts.FunctionLikeDeclaration,
+): ts.Expression | undefined => {
+  const body = functionNode.body;
+  if (!body) {
+    return undefined;
+  }
+  if (!ts.isBlock(body)) {
+    return body;
+  }
+  const [statement] = body.statements;
+  return body.statements.length === 1 &&
+    statement &&
+    ts.isReturnStatement(statement)
+    ? statement.expression
+    : undefined;
+};
+
+const bindingNamesOf = (name: ts.BindingName): string[] => {
+  if (ts.isIdentifier(name)) {
+    return [name.text];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) ? [] : bindingNamesOf(element.name),
+  );
+};
+
+const nextHandlerResolverState = (
+  state: HandlerResolverState,
+  localNames: readonly string[],
+): HandlerResolverState => ({
+  seen: state.seen,
+  depth: state.depth + 1,
+  shadowed: new Set([...state.shadowed, ...localNames]),
+});
+
+const realtimeConfigurationOfHandler = (
+  source: ts.SourceFile,
+  safeHandlerConstructors: ReadonlySet<string>,
+): ts.Expression | undefined => {
+  const { functions, values } = declarations(source);
+  const imported = imports(source);
+  const exported = source.statements.find(ts.isExportAssignment);
+  if (!exported) {
+    return undefined;
+  }
+
+  const configurationFrom = (
+    expression: ts.Expression | undefined,
+  ): ts.Expression | undefined => {
+    if (!expression) {
+      return undefined;
+    }
+    const value = syntaxValue(expression);
+    return ts.isIdentifier(value) && values.has(value.text)
+      ? values.get(value.text)
+      : value;
+  };
+
+  const resolveFunction = (
+    functionNode: ts.FunctionLikeDeclaration,
+    state: HandlerResolverState,
+  ): HandlerConfigurationCandidate[] => {
+    const returned = singleReturnExpression(functionNode);
+    if (!returned) {
+      return [];
+    }
+    const localNames = functionNode.parameters.flatMap(({ name }) =>
+      bindingNamesOf(name),
+    );
+    const branch = resolve(
+      returned,
+      nextHandlerResolverState(state, localNames),
+    );
+    return branch.length === 1 ? branch : [];
+  };
+
+  const resolveLocal = (
+    name: string,
+    state: HandlerResolverState,
+  ): HandlerConfigurationCandidate[] => {
+    if (state.seen.has(name)) {
+      return [];
+    }
+    const nextState = {
+      ...state,
+      seen: new Set(state.seen).add(name),
+      depth: state.depth + 1,
+    };
+    const functionNode = functions.get(name);
+    if (functionNode) {
+      return resolveFunction(functionNode, nextState);
+    }
+    const initializer = values.get(name);
+    return initializer ? resolve(initializer, nextState) : [];
+  };
+
+  const resolve = (
+    expression: ts.Expression,
+    state: HandlerResolverState,
+  ): HandlerConfigurationCandidate[] => {
+    if (state.depth > MAX_HANDLER_FACTORY_DEPTH) {
+      return [];
+    }
+    const value = syntaxValue(expression);
+    if (ts.isIdentifier(value)) {
+      if (state.shadowed.has(value.text)) {
+        return [];
+      }
+      return resolveLocal(value.text, state);
+    }
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
+      return resolveFunction(value, state);
+    }
+    if (!ts.isCallExpression(value)) {
+      return [];
+    }
+    const callee = syntaxValue(value.expression);
+    if (!ts.isIdentifier(callee)) {
+      return [];
+    }
+    if (state.shadowed.has(callee.text)) {
+      return [];
+    }
+    const importBinding = imported.get(callee.text);
+    if (
+      importBinding?.module === "@/api/lib/api-handlers" &&
+      safeHandlerConstructors.has(importBinding.name)
+    ) {
+      const argument = value.arguments.at(0);
+      const argumentValue = argument ? syntaxValue(argument) : undefined;
+      const resolvedArgument =
+        argumentValue &&
+        ts.isIdentifier(argumentValue) &&
+        state.shadowed.has(argumentValue.text)
+          ? undefined
+          : configurationFrom(argument);
+      return [{ configuration: resolvedArgument }];
+    }
+    return resolveLocal(callee.text, state);
+  };
+
+  const exportExpression = ts.isIdentifier(exported.expression)
+    ? (values.get(exported.expression.text) ?? exported.expression)
+    : exported.expression;
+  const candidates = resolve(exportExpression, {
+    seen: new Set(),
+    depth: 0,
+    shadowed: new Set(),
+  });
+  if (candidates.length !== 1) {
+    return undefined;
+  }
+  const configuration = candidates.at(0)?.configuration;
+  if (!configuration) {
+    return undefined;
+  }
+  const value = syntaxValue(configuration);
+  if (
+    !ts.isObjectLiteralExpression(value) ||
+    !value.properties.some(
+      (property) => property.name?.getText() === "realtime",
+    )
+  ) {
+    return undefined;
+  }
+  return value;
+};
+
+const handlerConfigurationFixture = (configuration: string) =>
+  ts.createSourceFile(
+    "handler.fixture.ts",
+    `import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entityRealtimeUpdates, organizationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+const unrelatedConfiguration = { realtime: organizationRealtimeUpdates };
+function registeredHandlerFactory() {
+  return createSafeHandler(${configuration}, async () => undefined);
+}
+const routeHandler = () => registeredHandlerFactory();
+export default routeHandler();`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+const organizationPluginIsRegistered = (source: ts.SourceFile) => {
+  const imported = imports(source);
+  if (
+    imported.get("organization")?.module !== "better-auth/plugins" ||
+    imported.get("organization")?.name !== "organization" ||
+    imported.get("betterAuth")?.module !== "better-auth" ||
+    imported.get("betterAuth")?.name !== "betterAuth"
+  ) {
+    return false;
+  }
+  let pluginCreated = false;
+  let pluginRegistered = false;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "organizationPlugin" &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === "organization"
+    ) {
+      pluginCreated = true;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "betterAuth"
+    ) {
+      const options = node.arguments.at(0);
+      if (options && ts.isObjectLiteralExpression(options)) {
+        const plugins = options.properties.find(
+          (property) =>
+            ts.isPropertyAssignment(property) &&
+            property.name.getText() === "plugins",
+        );
+        if (
+          plugins &&
+          ts.isPropertyAssignment(plugins) &&
+          ts.isArrayLiteralExpression(plugins.initializer)
+        ) {
+          pluginRegistered = plugins.initializer.elements.some(
+            (plugin) =>
+              ts.isIdentifier(plugin) && plugin.text === "organizationPlugin",
+          );
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return pluginCreated && pluginRegistered;
+};
+
+test("registered handler configuration follows local factory wrappers and keeps its realtime owner", () => {
+  const apiRoot = path.resolve(import.meta.dir, "../../../../apps/api/src");
+  const apiHandlers = ts.createSourceFile(
+    "api-handlers.ts",
+    readFileSync(path.join(apiRoot, "lib/api-handlers.ts"), "utf-8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const safeHandlerConstructors = exportedSafeHandlerConstructors(apiHandlers);
+
+  const valid = handlerConfigurationFixture(
+    "{ realtime: entityRealtimeUpdates }",
+  );
+  const validConfiguration = realtimeConfigurationOfHandler(
+    valid,
+    safeHandlerConstructors,
+  );
+  if (!validConfiguration) {
+    throw new TypeError("Factory fixture did not resolve its handler config");
+  }
+  const realtime = propertyValue(validConfiguration, "realtime");
+  if (!ts.isIdentifier(realtime)) {
+    throw new TypeError("Factory fixture lost its realtime identifier");
+  }
+  expect(realtime.text).toBe("entityRealtimeUpdates");
+  expect(imports(valid).get("entityRealtimeUpdates")).toEqual({
+    module: "@/api/handlers/realtime-resource-sets",
+    name: "entityRealtimeUpdates",
+  });
+
+  const missing = handlerConfigurationFixture("{ permissions: {} }");
+  expect(
+    realtimeConfigurationOfHandler(missing, safeHandlerConstructors),
+  ).toBeUndefined();
+
+  const shadowed = ts.createSourceFile(
+    "handler-shadow.fixture.ts",
+    `import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+const config = { realtime: entityRealtimeUpdates };
+function registeredHandlerFactory(config: unknown) {
+  return createSafeHandler(config, async () => undefined);
+}
+const routeHandler = () => registeredHandlerFactory({ permissions: {} });
+export default routeHandler();`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  expect(
+    realtimeConfigurationOfHandler(shadowed, safeHandlerConstructors),
+  ).toBeUndefined();
+
+  const shadowedImporter = ts.createSourceFile(
+    "handler-import-shadow.fixture.ts",
+    `import { createSafeHandler } from "@/api/lib/api-handlers";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+const routeHandler = (createSafeHandler: unknown) => createSafeHandler({ realtime: entityRealtimeUpdates }, async () => undefined);
+export default routeHandler(undefined);`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  expect(
+    realtimeConfigurationOfHandler(shadowedImporter, safeHandlerConstructors),
+  ).toBeUndefined();
+
+  const misdirected = handlerConfigurationFixture(
+    "{ realtime: organizationRealtimeUpdates }",
+  );
+  const misdirectedConfiguration = realtimeConfigurationOfHandler(
+    misdirected,
+    safeHandlerConstructors,
+  );
+  if (!misdirectedConfiguration) {
+    throw new TypeError("Misdirected fixture did not resolve its config");
+  }
+  const misdirectedRealtime = propertyValue(
+    misdirectedConfiguration,
+    "realtime",
+  );
+  if (!ts.isIdentifier(misdirectedRealtime)) {
+    throw new TypeError("Misdirected fixture lost its realtime identifier");
+  }
+  expect(imports(misdirected).get(misdirectedRealtime.text)?.name).not.toBe(
+    "entityRealtimeUpdates",
+  );
+});
+
 test("every mutation resource declaration agrees with its registered backend route and realtime metadata", () => {
   const apiSourceRoot = path.resolve(
     import.meta.dir,
@@ -529,47 +948,6 @@ test("every mutation resource declaration agrees with its registered backend rou
       ts.ScriptTarget.Latest,
       true,
     );
-  const declarations = (source: ts.SourceFile) => {
-    const values = new Map<string, ts.Expression>();
-    for (const statement of source.statements) {
-      if (!ts.isVariableStatement(statement)) {
-        continue;
-      }
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-          values.set(declaration.name.text, declaration.initializer);
-        }
-      }
-    }
-    return values;
-  };
-  const imports = (source: ts.SourceFile) => {
-    const bindings = new Map<string, { module: string; name: string }>();
-    for (const statement of source.statements) {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        continue;
-      }
-      if (statement.importClause?.name) {
-        bindings.set(statement.importClause.name.text, {
-          module: statement.moduleSpecifier.text,
-          name: "default",
-        });
-      }
-      const named = statement.importClause?.namedBindings;
-      if (named && ts.isNamedImports(named)) {
-        for (const binding of named.elements) {
-          bindings.set(binding.name.text, {
-            module: statement.moduleSpecifier.text,
-            name: (binding.propertyName ?? binding.name).text,
-          });
-        }
-      }
-    }
-    return bindings;
-  };
   const localImportFile = (specifier: string, sourceFile: string) => {
     if (specifier.startsWith("@/api/")) {
       return `${specifier.slice("@/api/".length)}.ts`;
@@ -584,7 +962,11 @@ test("every mutation resource declaration agrees with its registered backend rou
   const registeredRoutes = new Map<string, string[]>();
   const expectedRoutes = new Set(
     Object.values(RESOURCE_MUTATION_CONTRACTS).flatMap(({ writes }) =>
-      writes.map(({ method, route }) => `${method} ${route}`),
+      writes.flatMap((write) =>
+        write.type === "handler-route"
+          ? [`${write.method} ${write.route}`]
+          : [],
+      ),
     ),
   );
   const routeFiles = [
@@ -659,11 +1041,30 @@ test("every mutation resource declaration agrees with its registered backend rou
     };
     visit(source);
   }
+  const safeHandlerConstructors = exportedSafeHandlerConstructors(
+    readSource("lib/api-handlers.ts"),
+  );
+  const organizationDeleteEndpoint =
+    organization().endpoints.deleteOrganization;
+  expect(organizationPluginIsRegistered(readSource("lib/auth.ts"))).toBe(true);
   for (const contract of Object.values(RESOURCE_MUTATION_CONTRACTS)) {
     expect(contract.writes.length).toBeGreaterThan(0);
     const observedResources = new Set<ResourceType>();
     let registeredWriteCount = 0;
     for (const write of contract.writes) {
+      if (write.type === "auth-plugin-endpoint") {
+        expect(contract.resources).toEqual([RESOURCE_TYPE.ORGANIZATION]);
+        expect(write).toEqual({
+          type: "auth-plugin-endpoint",
+          plugin: "organization",
+          endpoint: "deleteOrganization",
+          method: organizationDeleteEndpoint.options.method,
+          route: organizationDeleteEndpoint.path,
+        });
+        observedResources.add(RESOURCE_TYPE.ORGANIZATION);
+        registeredWriteCount += 1;
+        continue;
+      }
       const handlers = registeredRoutes.get(`${write.method} ${write.route}`);
       if (!handlers) {
         continue;
@@ -677,38 +1078,14 @@ test("every mutation resource declaration agrees with its registered backend rou
         );
       }
       const handler = readSource(handlerPath);
-      const values = declarations(handler);
-      const defaultExport = handler.statements.find(ts.isExportAssignment);
-      if (!defaultExport) {
-        throw new TypeError("Handler must have a default export");
-      }
-      const declaration = ts.isIdentifier(defaultExport.expression)
-        ? values.get(defaultExport.expression.text)
-        : defaultExport.expression;
-      if (!declaration || !ts.isCallExpression(declaration)) {
-        throw new TypeError("Handler must declare its safe-handler call");
-      }
-      const firstArgument = declaration.arguments.at(0);
-      const directConfig =
-        firstArgument &&
-        (ts.isIdentifier(firstArgument)
-          ? values.get(firstArgument.text)
-          : firstArgument);
-      const declaresRealtime = (value: ts.Node) => {
-        const literal = syntaxValue(value);
-        return (
-          ts.isObjectLiteralExpression(literal) &&
-          literal.properties.some(
-            (property) => property.name?.getText() === "realtime",
-          )
-        );
-      };
-      const config =
-        directConfig && declaresRealtime(directConfig)
-          ? directConfig
-          : [...values.values()].find(declaresRealtime);
+      const config = realtimeConfigurationOfHandler(
+        handler,
+        safeHandlerConstructors,
+      );
       if (!config) {
-        throw new TypeError("Handler has no explicit configuration");
+        throw new TypeError(
+          `Handler has no explicit realtime configuration for ${write.method} ${write.route}`,
+        );
       }
       const realtime = propertyValue(config, "realtime");
       if (!ts.isIdentifier(realtime)) {

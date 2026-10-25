@@ -4,6 +4,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
+import type { OrganizationCreator } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 
 import {
@@ -67,6 +68,21 @@ type ResourceQueryMeta = Record<string, unknown> & {
   resourceReads?: ResourceReads;
 };
 
+type OrganizationDeleteEndpoint =
+  ReturnType<OrganizationCreator>["endpoints"]["deleteOrganization"];
+type AuthPluginEndpointWrite = OrganizationDeleteEndpoint extends {
+  path: infer Route extends string;
+  options: { method: infer Method extends string };
+}
+  ? {
+      type: "auth-plugin-endpoint";
+      plugin: "organization";
+      endpoint: "deleteOrganization";
+      method: Method;
+      route: Route;
+    }
+  : never;
+
 declare module "@tanstack/react-query" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires an interface for declaration merging
   interface Register {
@@ -89,8 +105,13 @@ export const resourceQueryOptions = <
 export const RESOURCE_MUTATION_CONTRACTS = {
   createInvoice: {
     writes: [
-      { method: "PUT", route: "/invoices/:workspaceId" },
       {
+        type: "handler-route",
+        method: "PUT",
+        route: "/invoices/:workspaceId",
+      },
+      {
+        type: "handler-route",
         method: "POST",
         route: "/invoices/:workspaceId/:invoiceId/transition",
       },
@@ -100,6 +121,7 @@ export const RESOURCE_MUTATION_CONTRACTS = {
   transitionInvoice: {
     writes: [
       {
+        type: "handler-route",
         method: "POST",
         route: "/invoices/:workspaceId/:invoiceId/transition",
       },
@@ -107,22 +129,44 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     resources: [RESOURCE_TYPE.INVOICE],
   },
   renameEntity: {
-    writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }],
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/entities/:workspaceId/rename",
+      },
+    ],
     resources: [RESOURCE_TYPE.ENTITY],
   },
   installCatalogueEntry: {
     writes: [
-      { method: "POST", route: "/catalogue/install-skill" },
-      { method: "POST", route: "/mcp/connectors" },
-      { method: "PATCH", route: "/mcp/native-tools/:slug" },
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/catalogue/install-skill",
+      },
+      { type: "handler-route", method: "POST", route: "/mcp/connectors" },
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/mcp/native-tools/:slug",
+      },
     ],
     resources: [RESOURCE_TYPE.AGENT_SKILL, RESOURCE_TYPE.MCP_CONNECTOR],
   },
   uninstallCatalogueEntry: {
     writes: [
-      { method: "DELETE", route: "/mcp/connectors/:slug" },
-      { method: "PATCH", route: "/mcp/native-tools/:slug" },
-      { method: "DELETE", route: "/skills/:skillId" },
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/mcp/connectors/:slug",
+      },
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/mcp/native-tools/:slug",
+      },
+      { type: "handler-route", method: "DELETE", route: "/skills/:skillId" },
     ],
     resources: [
       RESOURCE_TYPE.AGENT_SKILL,
@@ -134,23 +178,47 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
   },
   updateNativeTool: {
-    writes: [{ method: "PATCH", route: "/mcp/native-tools/:slug" }],
+    writes: [
+      {
+        type: "handler-route",
+        method: "PATCH",
+        route: "/mcp/native-tools/:slug",
+      },
+    ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
   addMcpServer: {
-    writes: [{ method: "POST", route: "/mcp/connectors" }],
+    writes: [
+      { type: "handler-route", method: "POST", route: "/mcp/connectors" },
+    ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
   connectMcpServer: {
-    writes: [{ method: "POST", route: "/mcp/connectors/:slug/connect" }],
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/mcp/connectors/:slug/connect",
+      },
+    ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
   saveMcpToken: {
-    writes: [{ method: "POST", route: "/mcp/connections" }],
+    writes: [
+      { type: "handler-route", method: "POST", route: "/mcp/connections" },
+    ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
   deleteOrganization: {
-    writes: [{ method: "DELETE", route: "/organization" }],
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "organization",
+        endpoint: "deleteOrganization",
+        method: "POST",
+        route: "/organization/delete",
+      } satisfies AuthPluginEndpointWrite,
+    ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
 } as const;
