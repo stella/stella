@@ -74,7 +74,7 @@ export const mobileUpdateScalingScenario = {
         statements: counter.count,
         transactionRoundTrips: counter.transactions,
         responseBytes:
-          response instanceof Response ? (await response.text()).length : 0,
+          typeof response === "string" ? Buffer.byteLength(response) : 0,
         rows: 1,
         cdnReads,
       };

@@ -11,13 +11,15 @@ import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   type CdnFetch,
   cdnFetch,
-  mobileUpdateResponse,
+  MOBILE_UPDATE_ANSWER_MAX_LENGTH,
+  mobileUpdateAnswer,
   readSignedMobileUpdate,
 } from "@/api/lib/mobile-updates/relay";
 
@@ -32,6 +34,10 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   params: t.Object({ variant: t.UnionEnum(MOBILE_UPDATE_VARIANTS) }),
+  // The multipart answer, bounded by what the relay reads from the CDN.
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    t.String({ maxLength: MOBILE_UPDATE_ANSWER_MAX_LENGTH }),
+  ),
 } satisfies PublicHandlerConfig;
 
 /**
@@ -46,7 +52,7 @@ export const createReadMobileUpdateHandler = (
 ) =>
   createSafeBoundedPublicHandler(
     config,
-    async function* ({ params: { variant }, request }) {
+    async function* ({ params: { variant }, request, set }) {
       const platform = MOBILE_UPDATE_PLATFORMS.find(
         (candidate) => candidate === request.headers.get("expo-platform"),
       );
@@ -69,10 +75,13 @@ export const createReadMobileUpdateHandler = (
         }),
       );
       switch (update.type) {
-        case "present":
-          return Result.ok(
-            mobileUpdateResponse(update.value, Bun.randomUUIDv7()),
-          );
+        case "present": {
+          const answer = mobileUpdateAnswer(update.value, Bun.randomUUIDv7());
+          for (const [name, value] of Object.entries(answer.headers)) {
+            set.headers[name] = value;
+          }
+          return Result.ok(answer.body);
+        }
         case "absent":
         case "refused":
           return Result.err(

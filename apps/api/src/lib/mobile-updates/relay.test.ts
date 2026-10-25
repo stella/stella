@@ -10,7 +10,7 @@ import {
 import {
   type CdnFetch,
   MOBILE_UPDATES_CDN_ORIGIN,
-  mobileUpdateResponse,
+  mobileUpdateAnswer,
   readSignedMobileUpdate,
 } from "@/api/lib/mobile-updates/relay";
 
@@ -107,16 +107,15 @@ describe("relaying a build's current update", () => {
 });
 
 describe("the protocol answer", () => {
-  test("carries the manifest byte for byte with its signature beside it", async () => {
-    const response = mobileUpdateResponse(
+  test("carries the manifest byte for byte with its signature beside it", () => {
+    const { body, headers } = mobileUpdateAnswer(
       { manifest: MANIFEST, signature: SIGNATURE },
       "boundary-1",
     );
-    expect(response.headers.get("content-type")).toBe(
+    expect(headers["content-type"]).toBe(
       "multipart/mixed; boundary=boundary-1",
     );
-    expect(response.headers.get("expo-protocol-version")).toBe("1");
-    const body = await response.text();
+    expect(headers["expo-protocol-version"]).toBe("1");
     expect(body).toContain(
       `expo-signature: sig="${SIGNATURE}", keyid="main"\r\n\r\n${MANIFEST}\r\n--boundary-1\r\n`,
     );
