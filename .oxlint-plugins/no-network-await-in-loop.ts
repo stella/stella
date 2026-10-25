@@ -91,6 +91,7 @@ const FUNCTION_TYPES = new Set([
 const FETCH_MODULES = new Set([
   "@stll/fetch",
   "@/api/lib/safe-outbound-fetch",
+  "@/api/lib/operator-endpoint-fetch",
   "@/api/lib/redirect-fetch",
 ]);
 

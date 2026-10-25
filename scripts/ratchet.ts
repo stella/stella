@@ -93,6 +93,7 @@ const INTERNAL_MODULE_MOCK_LEDGER_REL =
 // through them, so their own acquisition is the capability, not a legacy site.
 const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
   "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/lib/operator-endpoint-fetch.ts",
   "apps/api/src/db/sql-client.ts",
 ]);
 

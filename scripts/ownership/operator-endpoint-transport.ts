@@ -3,12 +3,12 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "operator-endpoint-transport",
   capability: "Posting to endpoints the operator configured for the API",
-  owner: ["apps/api/src/lib/safe-outbound-fetch.ts"],
+  owner: ["apps/api/src/lib/operator-endpoint-fetch.ts"],
   summary:
     "postToOperatorEndpoint skips the address checks that guard request-selected URLs, because an operator's collector may sit on a private network. Only clients whose URL comes from the API environment may call it; each reads status and headers and releases the body unread.",
   enforcement: {
     kind: "import",
-    specifiers: ["@/api/lib/safe-outbound-fetch"],
+    specifiers: ["@/api/lib/operator-endpoint-fetch"],
     names: ["postToOperatorEndpoint"],
     allowed: [
       {
@@ -18,11 +18,6 @@ export default {
       {
         path: "apps/api/src/lib/observability/otlp-log-exporter.ts",
         reason: "Exports log records to LOGS_OTLP_URL from the environment.",
-      },
-      {
-        path: "apps/api/src/lib/safe-outbound-fetch.type-test.ts",
-        reason:
-          "Reads the owner's exports as types to prove every request export takes a permit; it never calls postToOperatorEndpoint.",
       },
     ],
   },

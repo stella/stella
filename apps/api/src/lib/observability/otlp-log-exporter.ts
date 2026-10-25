@@ -18,7 +18,7 @@ import { Result } from "better-result";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
-import { postToOperatorEndpoint } from "@/api/lib/safe-outbound-fetch";
+import { postToOperatorEndpoint } from "@/api/lib/operator-endpoint-fetch";
 
 /** OTLP severity numbers for the levels the API logger emits. */
 export const LOG_SEVERITY_NUMBER = {
@@ -32,7 +32,12 @@ export type LogSeverityNumber =
   (typeof LOG_SEVERITY_NUMBER)[keyof typeof LOG_SEVERITY_NUMBER];
 
 export type LogAttributeValue =
-  boolean | boolean[] | number | number[] | string | string[];
+  | boolean
+  | boolean[]
+  | number
+  | number[]
+  | string
+  | string[];
 
 type LogAttributes = Record<string, LogAttributeValue>;
 
