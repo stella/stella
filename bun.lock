@@ -1076,6 +1076,7 @@
       "name": "@stll/legal-atlas",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
