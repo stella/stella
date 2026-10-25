@@ -356,6 +356,12 @@ export const parseAuthProviderId = <T extends AuthProviderIdType>(
 ): SafeId<T> | null =>
   AUTH_PROVIDER_ID_PATTERN.test(value) ? toSafeId<T>(value) : null;
 
+/** Validate and brand an operator-supplied usage policy UUID. */
+export const parseUsagePolicyId = (
+  value: string,
+): SafeId<"usagePolicy"> | null =>
+  isUuid(value) ? toSafeId<"usagePolicy">(value) : null;
+
 export const brandValidatedWorkflowActorKey = ({
   organizationId,
   workspaceId,

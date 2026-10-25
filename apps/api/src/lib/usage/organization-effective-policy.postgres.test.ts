@@ -1,6 +1,6 @@
 /**
  * The effective-policy owner on the real engine: every access state, every
- * entitlement status of `ENTITLEMENT_LIMIT_DISPOSITION_BY_STATUS`, both
+ * entitlement source and status of `entitlementLimitDisposition`, both
  * scheduled-cancellation flags (which never change the outcome), both period positions and the free floor
  * present or absent, against an oracle derived from that map. The member and
  * storage capacity functions are read for the same matrix, the member insert
@@ -19,8 +19,10 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  USAGE_ENTITLEMENT_SOURCES,
   USAGE_ENTITLEMENT_STATUSES,
   usageEntitlements,
+  type UsageEntitlementSource,
   type UsageEntitlementStatus,
   usagePolicies,
   usageSeatAssignments,
@@ -30,7 +32,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ENTITLEMENT_LIMIT_DISPOSITION,
-  ENTITLEMENT_LIMIT_DISPOSITION_BY_STATUS,
+  entitlementLimitDisposition,
 } from "@/api/lib/usage/effective-policy";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -60,21 +62,25 @@ type EntitlementCase =
   | { type: "none" }
   | {
       type: "entitlement";
+      source: UsageEntitlementSource;
       status: UsageEntitlementStatus;
       cancelAtPeriodEnd: "scheduled" | "not_scheduled";
       period: "running" | "ended";
     };
 
 const ENTITLEMENT_CASES: EntitlementCase[] = [{ type: "none" }];
-for (const status of USAGE_ENTITLEMENT_STATUSES) {
-  for (const cancelAtPeriodEnd of ["scheduled", "not_scheduled"] as const) {
-    for (const period of ["running", "ended"] as const) {
-      ENTITLEMENT_CASES.push({
-        type: "entitlement",
-        status,
-        cancelAtPeriodEnd,
-        period,
-      });
+for (const source of USAGE_ENTITLEMENT_SOURCES) {
+  for (const status of USAGE_ENTITLEMENT_STATUSES) {
+    for (const cancelAtPeriodEnd of ["scheduled", "not_scheduled"] as const) {
+      for (const period of ["running", "ended"] as const) {
+        ENTITLEMENT_CASES.push({
+          type: "entitlement",
+          source,
+          status,
+          cancelAtPeriodEnd,
+          period,
+        });
+      }
     }
   }
 }
@@ -84,8 +90,7 @@ const entitlementBinds = (entitlement: EntitlementCase): boolean => {
   if (entitlement.type === "none") {
     return false;
   }
-  const disposition =
-    ENTITLEMENT_LIMIT_DISPOSITION_BY_STATUS[entitlement.status];
+  const disposition = entitlementLimitDisposition(entitlement);
   switch (disposition) {
     case ENTITLEMENT_LIMIT_DISPOSITION.paid:
       return true;
@@ -279,7 +284,7 @@ if (!databaseUrl || !runPostgresTests) {
                         : now,
                     cancelAtPeriodEnd:
                       entitlement.cancelAtPeriodEnd === "scheduled",
-                    source: "manual",
+                    source: entitlement.source,
                   });
                 }
                 await tx.insert(usageSeatAssignments).values(
