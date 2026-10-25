@@ -10,6 +10,7 @@ import type { OrganizationAIAvailability } from "@stll/api-contract/organization
 import { decisionTitle } from "@stll/decision-reader/decision-title";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { INSPECTOR_PANE_MIN_WIDTH } from "@stll/ui/inspector";
 
 import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
@@ -532,7 +533,26 @@ for (const view of views) {
       });
       if (surface === "inspector") {
         const handle = page.locator('[data-slot="inspector-resize-handle"]');
+        await handle.hover();
         await handle.press("Home");
+        await expect(handle).toHaveAttribute(
+          "aria-valuenow",
+          String(INSPECTOR_PANE_MIN_WIDTH),
+        );
+        // Narrower paragraphs reflow past the active-heading cutoff. Select
+        // the intended section again before measuring its number.
+        await breadcrumb
+          .getByRole("button", { name: `${messages.statutes.outline}:` })
+          .click();
+        const activeDestination = page.locator(
+          `[data-contents-anchor="${view.anchors.active}"]`,
+        );
+        await expect(activeDestination).toBeVisible();
+        await activeDestination.click();
+        await expect(
+          root.locator(`[data-anchor="${view.anchors.active}"]`),
+        ).toBeInViewport();
+        await expect(current).toBeVisible();
         await expect
           .poll(async () =>
             current.evaluate((button) => {
