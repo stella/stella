@@ -232,7 +232,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
   - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
-  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
   - optional: --detail (standard|full)
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
@@ -412,7 +412,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 434
+Beyond the curated commands above, the CLI generates 435
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

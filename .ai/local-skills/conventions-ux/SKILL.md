@@ -46,6 +46,8 @@ rather than raw colour values.
 
 ## Core Beliefs
 
+- Number content only when order is meaningful, and only through the Steps component.
+
 - Users notice the little things
 - Every interaction should feel smooth
 - Good UX is invisible; it just works
