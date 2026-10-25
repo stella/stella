@@ -7,6 +7,8 @@
 
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type { Context } from "./context.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
@@ -155,7 +157,9 @@ export const runCapabilityCommand = async ({
       setPath(
         input,
         `${paginationPart}.limit`,
-        Number.parseInt(limitFlag.trim(), 10),
+        parseIntegerToken(limitFlag, { sign: "unsigned", min: 1 }).unwrap(
+          "Reserved pagination limit was validated before building the request",
+        ),
       );
     }
   }

@@ -4813,6 +4813,8 @@
     "recentDocuments": "Recent documents",
     "recentSearches": "Recent searches",
     "recentlyOpenedFiles": "Recently opened files",
+    "registryCandidateNameMismatch": "Official name is “{officialName}” and does not match",
+    "registryCandidateNoOfficialRecord": "Official register has no record for this number",
     "registryChoose": "Choose a company registry",
     "registryCredentialAskAdmin": "Ask an organization administrator to configure access to this registry.",
     "registryCredentialSaved": "Registry access saved",
@@ -4823,6 +4825,7 @@
       "enrichmentUnavailable": "Commercial-register details are temporarily unavailable"
     },
     "registryKrsHint": "KRS searches by registration number, not company name. Enter a 10-digit KRS number, including leading zeros (e.g. 0000006865).",
+    "registryNameSearchNotFound": "No verified company matched that name. The following candidates were rejected:",
     "registryVatHint": "VIES checks VAT numbers, not company names. Enter a VAT number with its country prefix (e.g. CZ27082440); the format depends on the country.",
     "renameSearchTitle": "Rename saved search",
     "requestCountry": "Request a new country",

@@ -61,6 +61,26 @@ describe.serial(RULE_NAME, () => {
     ).toEqual([1]);
   });
 
+  test("admits an attachment chip's file link only in the chip shell", async () => {
+    const source =
+      "export const Open = () => <a href={sanitizeHref(open.href)}>File</a>;";
+    expect(
+      await lint(source, "apps/web/src/components/chat/attachment-chip.tsx"),
+    ).toEqual([]);
+    expect(
+      await lint(
+        source,
+        "apps/web/src/components/chat/chat-thread-messages.tsx",
+      ),
+    ).toEqual([1]);
+    expect(
+      await lint(
+        "export const Open = () => <a href={open.href}>File</a>;",
+        "apps/web/src/components/chat/attachment-chip.tsx",
+      ),
+    ).toEqual([1]);
+  });
+
   test("limits specialized legal navigation to the internal branch", async () => {
     const source = [
       "export const One = () => <a href={sanitizeHref(citation.url)}>Citation</a>;",
