@@ -14,6 +14,7 @@ afterEach(resetMetricLineSinkForTesting);
 
 const report = {
   backlogItems: 3,
+  backlogCapped: false,
   oldestUnpublishedAgeSeconds: 42,
   oldestUnpublishedAgeSource: "desired_at",
   sourceAges: [{ source: "cz-ns", ageSeconds: 19 }],

@@ -55,6 +55,7 @@ import {
   sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
+import { corpusProjectionStateQueueProbe } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
 import { legislationFacetRefreshQuery } from "@/api/lib/legal-search/legislation-facet-refresh";
@@ -64,6 +65,7 @@ import {
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { DOCUMENT_SCAN_ROW_BUDGET } from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { LIMITS } from "@/api/lib/limits";
+import { caseLawFreshnessPendingStatesQuery } from "@/api/lib/observability/case-law-freshness-metrics";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
 import {
@@ -622,6 +624,34 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["corpus-index.projection-erasure-claim"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the serving generation's queue
+    // index, never a count over the table.
+    id: "case-law.freshness-pending-states",
+    class: "page",
+    role: "root",
+    build: () =>
+      caseLawFreshnessPendingStatesQuery({
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        cluster: "q09",
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.freshness-pending-states"],
+  },
+  {
+    // The freshness report's convergence status: three LIMIT 1 probes.
+    id: "corpus-index.convergence-state-probe",
+    class: "point",
+    role: "root",
+    build: () =>
+      corpusProjectionStateQueueProbe({
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.convergence-state-probe"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 
