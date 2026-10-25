@@ -15,8 +15,6 @@
     "apps/api/src/handlers/chat/tools/template-ai-boundary.ts::adaptAiValue::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/template-ai-boundary.ts::decideAiCondition::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/dev/public-law-connection.ts::startPublicLawConnection::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/files/get.ts::fetchStoredFileResponse::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/files/get.ts::fetchStoredFileResponse::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/legislation/ingestion.ts::storeSourceRaw::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/mcp-connectors/icons.ts::discoverMcpIconUrl::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/mcp-connectors/icons.ts::discoverMcpIconUrl::result-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
