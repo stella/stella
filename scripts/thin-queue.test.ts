@@ -418,6 +418,8 @@ const expectedPrSelection = ({
           (label) => label.name === "prove-fix",
         ) && baseline
       );
+    // A schema PR job gates on its own planner output, like a fast PR job.
+    case "schema-pr":
     case "pr-fast":
       return baseline;
     default:
@@ -1463,5 +1465,20 @@ test("scoped queue eligibility is invariant under depth and the retired browser 
         ]);
       }
     }
+  }
+});
+
+test("every current CI job disposition is modelled for pull requests", () => {
+  // The historical baseline moves with main-heavy.yml edits, so a job only
+  // enters that comparison later; model its disposition when it is declared.
+  const value = context({
+    event: { event: "pull_request", message: "ordinary" },
+    variable: "",
+    queueDepth: "full",
+  });
+  for (const job of Object.keys(ci.jobs)) {
+    expect(typeof expectedPrSelection({ job, baseline: true, value })).toBe(
+      "boolean",
+    );
   }
 });
