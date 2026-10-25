@@ -164,6 +164,9 @@ const report = (result: PrecommitI18nResult): number => {
         ].join("\n"),
       );
       return 1;
+    default:
+      result satisfies never;
+      return panic("Unhandled pre-commit i18n result");
   }
 };
 
