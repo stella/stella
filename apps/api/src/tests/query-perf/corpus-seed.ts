@@ -84,7 +84,6 @@ const withoutTriggers = async (
   write: (tx: SeedHandle) => Promise<void>,
 ) => {
   await database.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL statement_timeout = '120s'`);
     for (const table of GUARDED_TABLES) {
       // db-await-in-loop: four fixed tables; ALTER TABLE takes one table per statement.
       await tx.execute(sql.raw(`ALTER TABLE ${table} DISABLE TRIGGER USER`));
@@ -129,7 +128,6 @@ const deferSecondaryIndexes = async (database: GatedTestDb) => {
   });
   return async () => {
     await database.transaction(async (tx) => {
-      await tx.execute(sql`SET LOCAL statement_timeout = '120s'`);
       for (const { definition } of definitions) {
         // db-await-in-loop: one CREATE INDEX per dropped index, from its own definition.
         await tx.execute(sql.raw(definition));
