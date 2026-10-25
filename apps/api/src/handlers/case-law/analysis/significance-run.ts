@@ -146,7 +146,7 @@ export const refreshSignificance = async ({
           },
           contentHash,
           decisionId,
-          expected: analysis,
+          ownership: { type: "revision", expected: analysis },
         }),
     );
     if (Result.isError(saved)) {
@@ -264,7 +264,7 @@ export const refreshSignificance = async ({
       },
       contentHash,
       decisionId,
-      expected: analysis,
+      ownership: { type: "revision", expected: analysis },
     });
   });
 
