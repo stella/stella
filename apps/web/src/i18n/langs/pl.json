@@ -4770,7 +4770,6 @@
     "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
     "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
     "regenerate": "Wygeneruj odpowiedź ponownie",
-    "selectionError": "Zaznacz tekst w obrębie jednego akapitu (do 2000 znaków).",
     "send": "Wyślij dodatkowe pytanie",
     "share": "Udostępnij zespołowi",
     "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
