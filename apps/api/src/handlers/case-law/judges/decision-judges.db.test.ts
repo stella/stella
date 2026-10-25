@@ -305,83 +305,79 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
-test(
-  "a declined bench is stored under the roster's names, and a name it cannot place is left out",
-  async () => {
-    const svatonId = await insertJudge("Jan Svatoň");
-    const hulmakId = await insertJudge("Milan Hulmák");
-    const zemanovaId = await insertJudge("Daniela Zemanová");
-    // Two rows a declined "Jana Zemana" could be: neither is chosen.
-    await insertJudge("Jan Zeman");
-    await insertJudge("Jana Zemanová");
+test("a declined bench is stored under the roster's names, and a name it cannot place is left out", async () => {
+  const svatonId = await insertJudge("Jan Svatoň");
+  const hulmakId = await insertJudge("Milan Hulmák");
+  const zemanovaId = await insertJudge("Daniela Zemanová");
+  // Two rows a declined "Jana Zemana" could be: neither is chosen.
+  await insertJudge("Jan Zeman");
+  await insertJudge("Jana Zemanová");
 
-    await replaceDecisionJudges(asTx(), {
-      decisionId: benchDecisionId,
-      judges: [
-        // The opening sentence: "z předsedy Jana Svatoně (soudce
-        // zpravodaje), soudce Milana Hulmáka a soudkyně Daniely Zemanové".
-        {
-          role: DECISION_JUDGE_ROLE.PRESIDING,
-          czechDeclinedName: "Jana Svatoně",
-        },
-        {
-          role: DECISION_JUDGE_ROLE.RAPPORTEUR,
-          czechDeclinedName: "Jana Svatoně",
-        },
-        {
-          role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
-          czechDeclinedName: "Milana Hulmáka",
-        },
-        {
-          role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
-          czechDeclinedName: "Daniely Zemanové",
-        },
-        {
-          role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
-          czechDeclinedName: "Petra Nováka",
-        },
-        {
-          role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
-          czechDeclinedName: "Jana Zemana",
-        },
-        // The record card, surname first, after the sentence as the adapter
-        // orders them.
-        { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Svatoň Jan" },
-      ],
-    });
-
-    expect(await storedJudges(benchDecisionId)).toEqual([
-      {
-        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
-        name: "Milan Hulmák",
-        nameKey: judgeNameKey("Milan Hulmák"),
-        judgeId: hulmakId,
-        position: 0,
-      },
-      {
-        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
-        name: "Daniela Zemanová",
-        nameKey: judgeNameKey("Daniela Zemanová"),
-        judgeId: zemanovaId,
-        position: 1,
-      },
+  await replaceDecisionJudges(asTx(), {
+    decisionId: benchDecisionId,
+    judges: [
+      // The opening sentence: "z předsedy Jana Svatoně (soudce
+      // zpravodaje), soudce Milana Hulmáka a soudkyně Daniely Zemanové".
       {
         role: DECISION_JUDGE_ROLE.PRESIDING,
-        name: "Jan Svatoň",
-        nameKey: judgeNameKey("Jan Svatoň"),
-        judgeId: svatonId,
-        position: 0,
+        czechDeclinedName: "Jana Svatoně",
       },
-      // The card and the sentence name one rapporteur, so one row, under
-      // the name the sentence resolved to.
       {
         role: DECISION_JUDGE_ROLE.RAPPORTEUR,
-        name: "Jan Svatoň",
-        nameKey: judgeNameKey("Jan Svatoň"),
-        judgeId: svatonId,
-        position: 0,
+        czechDeclinedName: "Jana Svatoně",
       },
-    ]);
-  },
-  DB_TEST_TIMEOUT_MS,
-);
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Milana Hulmáka",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Daniely Zemanové",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Petra Nováka",
+      },
+      {
+        role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+        czechDeclinedName: "Jana Zemana",
+      },
+      // The record card, surname first, after the sentence as the adapter
+      // orders them.
+      { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Svatoň Jan" },
+    ],
+  });
+
+  expect(await storedJudges(benchDecisionId)).toEqual([
+    {
+      role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+      name: "Milan Hulmák",
+      nameKey: judgeNameKey("Milan Hulmák"),
+      judgeId: hulmakId,
+      position: 0,
+    },
+    {
+      role: DECISION_JUDGE_ROLE.PANEL_MEMBER,
+      name: "Daniela Zemanová",
+      nameKey: judgeNameKey("Daniela Zemanová"),
+      judgeId: zemanovaId,
+      position: 1,
+    },
+    {
+      role: DECISION_JUDGE_ROLE.PRESIDING,
+      name: "Jan Svatoň",
+      nameKey: judgeNameKey("Jan Svatoň"),
+      judgeId: svatonId,
+      position: 0,
+    },
+    // The card and the sentence name one rapporteur, so one row, under
+    // the name the sentence resolved to.
+    {
+      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+      name: "Jan Svatoň",
+      nameKey: judgeNameKey("Jan Svatoň"),
+      judgeId: svatonId,
+      position: 0,
+    },
+  ]);
+});
