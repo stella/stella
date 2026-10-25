@@ -10,7 +10,11 @@ import {
   session,
   user,
 } from "@/api/db/auth-schema";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -196,26 +200,26 @@ if (!databaseUrl || !runPostgres) {
       sessionId: string;
       database: Parameters<typeof createPersonalApiKey>[0]["database"];
     };
+    const racingAuditRecorder = ({ organizationId, userId }: RacingMint) =>
+      createBackgroundAuditRecorder({
+        organizationId,
+        userId,
+        workspaceId: null,
+        execution: {
+          performer: { type: "user", id: userId },
+          trigger: {
+            type: "system",
+            source: "personal_key_concurrency_test",
+          },
+        },
+      });
     // Every session-authorized issuer takes the same fence.
     const ISSUERS = {
-      "personal key": async ({ organizationId, userId, ...rest }: RacingMint) =>
+      "personal key": async (options: RacingMint) =>
         await createPersonalApiKey({
-          ...rest,
+          ...options,
           name: "Racing key",
-          organizationId,
-          userId,
-          recordAuditEvent: createBackgroundAuditRecorder({
-            organizationId,
-            userId,
-            workspaceId: null,
-            execution: {
-              performer: { type: "user", id: userId },
-              trigger: {
-                type: "system",
-                source: "personal_key_concurrency_test",
-              },
-            },
-          }),
+          recordAuditEvent: racingAuditRecorder(options),
         }),
       "machine key": async (options: RacingMint) =>
         await issueMachineApiKey({
@@ -225,6 +229,13 @@ if (!databaseUrl || !runPostgres) {
           permissions: { workspace: ["read"] },
           expiresInDays: undefined,
           audience: undefined,
+          recordAuditEvent: racingAuditRecorder(options),
+          auditEvent: (key) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+            resourceId: key.id,
+            metadata: { name: key.name, scopes: key.scopes },
+          }),
         }),
     } satisfies Record<
       string,
