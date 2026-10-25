@@ -34,7 +34,18 @@ export type ListedSlice = {
   listed: number;
   unidentifiable: number;
   duplicate: number;
+  /** Page requests the listing made, the first included. */
+  pages: number;
 };
+
+/**
+ * How many passes over a slice each proof makes, for a caller that has to
+ * bound a listing's worst case.
+ */
+export const SLICE_LISTING_PASSES = {
+  count: 1,
+  identities: 2,
+} as const;
 
 /**
  * What a caller needs a listing to prove. `identities` certifies the exact
@@ -81,6 +92,7 @@ const listSlicePass = async ({
     listed: 0,
     unidentifiable: 0,
     duplicate: 0,
+    pages: 0,
   };
   for (let page = 0; ; page += 1) {
     signal?.throwIfAborted();
@@ -97,6 +109,7 @@ const listSlicePass = async ({
           ? timeoutSignal
           : AbortSignal.any([signal, timeoutSignal]),
     });
+    listing.pages += 1;
     listing.listed += listed.items.length;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);
@@ -147,9 +160,11 @@ const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
  * had already read: the reported count and the distinct identities still
  * agree, and the slice would read as fully collected while that record was
  * never listed. A changed slice is refused like any failed listing, so its
- * previous ledger row stands and a later walk lists it again. An empty slice
- * costs its one request: there is nothing a second pass could find that the
- * first replaced.
+ * previous ledger row stands and a later walk lists it again. A slice that
+ * answered empty in one request costs that request: there is nothing a second
+ * pass could find that the first replaced. One read empty across several
+ * requests is verified like any other, since a record can land on a page the
+ * walk has already passed.
  */
 export const listReconciliationSlice = async (
   options: ListReconciliationSliceOptions,
@@ -157,7 +172,7 @@ export const listReconciliationSlice = async (
   const first = await listSlicePass(options);
   if (
     Result.isError(first) ||
-    first.value.listed === 0 ||
+    (first.value.listed === 0 && first.value.pages === 1) ||
     options.proof === SLICE_LISTING_PROOF.COUNT
   ) {
     return first;

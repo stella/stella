@@ -91,8 +91,10 @@ test("completed page delays remove their aborted-signal listeners", async () => 
     }),
   );
 
-  expect(addListener).toHaveBeenCalledTimes(3);
-  expect(removeListener).toHaveBeenCalledTimes(3);
+  // Four pages read twice (an empty slice read across several requests is
+  // verified): three pauses per pass and one between the passes.
+  expect(addListener).toHaveBeenCalledTimes(7);
+  expect(removeListener).toHaveBeenCalledTimes(7);
 });
 
 test("an empty slice lists nothing after one request", async () => {
@@ -250,4 +252,26 @@ test("a count needs no second walk, even of a changed slice", async () => {
   );
   expect(listing.keyed.size).toBe(3);
   expect(requests).toEqual([0, 1]);
+});
+
+test("a slice read empty across several requests is verified", async () => {
+  // A source that pages a slice by month answers January empty, a January
+  // record lands while later months are read, and every later month is
+  // empty too: one pass reads nothing, a second pass reads the record.
+  const { listSlicePage, requests } = changingListing(
+    [[], []],
+    [[documentItem("x")], []],
+  );
+  const listed = await listWith(listSlicePage);
+  expect(Result.isError(listed) ? listed.error.message : null).toBe(
+    "Slice 2026-01-01 changed while it was listed: 0 identities, then 1",
+  );
+  expect(requests).toEqual([0, 1, 0, 1]);
+});
+
+test("a slice read empty in one request is not walked twice", async () => {
+  const { listSlicePage, requests } = changingListing([[]], [[]]);
+  const listing = unwrapListing(await listWith(listSlicePage));
+  expect(listing.keyed.size).toBe(0);
+  expect(requests).toEqual([0]);
 });
