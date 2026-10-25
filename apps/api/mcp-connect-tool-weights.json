@@ -200,10 +200,10 @@
     {
       "name": "list_invoices",
       "nameChars": 13,
-      "descriptionChars": 641,
+      "descriptionChars": 468,
       "inputSchemaChars": 655,
-      "totalChars": 1309,
-      "estimatedTokens": 491
+      "totalChars": 1136,
+      "estimatedTokens": 434
     },
     {
       "name": "list_matters",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127645,
-    "estimatedTokens": 50572
+    "characters": 127472,
+    "estimatedTokens": 50515
   }
 }

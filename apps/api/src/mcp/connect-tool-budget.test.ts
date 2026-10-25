@@ -10,7 +10,7 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 import committedWeights from "../../mcp-connect-tool-weights.json" with { type: "json" };
 
 // Starts at today's total so it only blocks growth; lower it as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 127_645;
+const TOTAL_CONNECT_CHAR_BUDGET = 127_472;
 const PER_TOOL_CONNECT_CHAR_CAP = 7000;
 
 describe("MCP connect-time tool budget", () => {
