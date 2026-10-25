@@ -1064,13 +1064,9 @@ test("every mutation resource declaration agrees with its registered backend rou
       if (write.type === "auth-plugin-endpoint") {
         const endpoint = organizationEndpoints[write.endpoint];
         expect(contract.resources).toEqual([RESOURCE_TYPE.ORGANIZATION]);
-        expect(write).toEqual({
-          type: "auth-plugin-endpoint",
-          plugin: "organization",
-          endpoint: write.endpoint,
-          method: endpoint.options.method,
-          route: endpoint.path,
-        });
+        expect(write.plugin).toBe("organization");
+        expect(write.method).toBe(endpoint.options.method);
+        expect(write.route).toBe(endpoint.path);
         observedResources.add(RESOURCE_TYPE.ORGANIZATION);
         registeredWriteCount += 1;
         continue;

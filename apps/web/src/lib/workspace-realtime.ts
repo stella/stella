@@ -70,18 +70,13 @@ type ResourceQueryMeta = Record<string, unknown> & {
 
 type AuthPluginEndpointWrite<
   TEndpoint extends keyof ReturnType<OrganizationCreator>["endpoints"],
-> = ReturnType<OrganizationCreator>["endpoints"][TEndpoint] extends {
-  path: infer Route extends string;
-  options: { method: infer Method extends string };
-}
-  ? {
-      type: "auth-plugin-endpoint";
-      plugin: "organization";
-      endpoint: TEndpoint;
-      method: Method;
-      route: Route;
-    }
-  : never;
+> = {
+  type: "auth-plugin-endpoint";
+  plugin: "organization";
+  endpoint: TEndpoint;
+  method: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["options"]["method"];
+  route: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["path"];
+};
 
 declare module "@tanstack/react-query" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires an interface for declaration merging
