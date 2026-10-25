@@ -80,6 +80,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   DecisionJudgeInput,
+  IngestionCycle,
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
@@ -455,9 +456,47 @@ type DocumentRead =
       reason: BrStfDocumentMissing;
       url: string | undefined;
       outcome?: StoredReadOutcome | undefined;
+      /** Set when no request was sent because the breaker had tripped. */
+      skippedBy?: typeof CHALLENGE_BREAKER | undefined;
     }
   /** The publisher neither served the document nor said it is gone. */
   | { type: "unread"; url: string; outcome: UnreadOutcome };
+
+/**
+ * What one scope (a crawl cycle, a reconciliation slice walk) has learned
+ * about the paginator: once it answers with the bot challenge, every later
+ * acórdão PDF in the scope would cost the same two requests for the same
+ * answer, so none is sent and the row carries the challenge as its reason.
+ * A new scope asks again, so a lifted challenge is seen within one cycle.
+ */
+export type BrStfDocumentBreaker = {
+  tripped: boolean;
+  /** PDF reads this scope did not send because the breaker had tripped. */
+  skipped: number;
+};
+
+const CHALLENGE_BREAKER = "challenge-breaker";
+
+export const createBrStfDocumentBreaker = (): BrStfDocumentBreaker => ({
+  tripped: false,
+  skipped: 0,
+});
+
+const breakersByCycle = new WeakMap<IngestionCycle, BrStfDocumentBreaker>();
+
+/** The cycle's breaker; a page fetched outside a cycle is a scope of its own. */
+const breakerOf = (cycle: IngestionCycle | undefined): BrStfDocumentBreaker => {
+  if (cycle === undefined) {
+    return createBrStfDocumentBreaker();
+  }
+  const existing = breakersByCycle.get(cycle);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = createBrStfDocumentBreaker();
+  breakersByCycle.set(cycle, created);
+  return created;
+};
 
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46];
 const WAF_ACTION_HEADER = "x-amzn-waf-action";
@@ -581,10 +620,17 @@ const readRedirectedDocument = async (
     : await readDocumentAt(paginator, signal);
 };
 
-const readRecordDocument = async (
-  statedUrl: string | undefined,
-  signal: AbortSignal | undefined,
-): Promise<DocumentRead> => {
+type ReadRecordDocumentOptions = {
+  statedUrl: string | undefined;
+  breaker: BrStfDocumentBreaker;
+  signal: AbortSignal | undefined;
+};
+
+const readRecordDocument = async ({
+  statedUrl,
+  breaker,
+  signal,
+}: ReadRecordDocumentOptions): Promise<DocumentRead> => {
   if (statedUrl === undefined) {
     return {
       type: "missing",
@@ -603,8 +649,30 @@ const readRecordDocument = async (
   switch (request.type) {
     case "direct":
       return await readDocumentAt(request.url, signal);
-    case "redirected":
-      return await readRedirectedDocument(request.url, signal);
+    // Only the paginator challenges; the portal's own PDFs are still read.
+    case "redirected": {
+      if (breaker.tripped) {
+        breaker.skipped += 1;
+        return {
+          type: "missing",
+          reason: BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE,
+          url: request.url,
+          skippedBy: CHALLENGE_BREAKER,
+        };
+      }
+      const read = await readRedirectedDocument(request.url, signal);
+      if (
+        read.type === "missing" &&
+        read.reason === BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE
+      ) {
+        breaker.tripped = true;
+        logger.warn("case_law.ingestion.br_stf_document_breaker_tripped", {
+          adapterKey: KEY,
+          reason: read.reason,
+        });
+      }
+      return read;
+    }
     default:
       request satisfies never;
       return panic(`Unhandled document request: ${JSON.stringify(request)}`);
@@ -755,6 +823,7 @@ export type BrStfDocument =
       reason: BrStfDocumentMissing;
       url: string | undefined;
       outcome?: StoredReadOutcome | undefined;
+      skippedBy?: typeof CHALLENGE_BREAKER | undefined;
     }
   /** Neither served nor stated gone: the pipeline decides what it costs. */
   | { type: "unread"; url: string; outcome: UnreadOutcome };
@@ -812,12 +881,22 @@ const parsedDocumentOf = async (
 
 type ParsedDocumentOutcome = Awaited<ReturnType<typeof parsedDocumentOf>>;
 
+/**
+ * How a row came to be without its text: `missing` the publisher answered
+ * with no readable document, `not-requested` the scope's breaker held the
+ * read back, `unread` the publisher did not answer.
+ */
+export const BR_STF_DOCUMENT_READ_STATUS = {
+  MISSING: "missing",
+  NOT_REQUESTED: "not-requested",
+  UNREAD: "unread",
+} as const;
+
 type DocumentReadRecord = {
-  documentRead: {
-    status: "missing" | "unread";
-    reason: string;
-    url: string | null;
-  };
+  status: (typeof BR_STF_DOCUMENT_READ_STATUS)[keyof typeof BR_STF_DOCUMENT_READ_STATUS];
+  /** A {@link BrStfDocumentMissing} value, or the unread outcome's type. */
+  reason: string;
+  url: string | null;
   outcome: StoredReadOutcome | undefined;
 };
 
@@ -835,31 +914,28 @@ const documentReadOf = (
     case "pdf":
       return read.type === "missing"
         ? {
-            documentRead: {
-              status: "missing",
-              reason: read.reason,
-              url: document.url,
-            },
+            status: BR_STF_DOCUMENT_READ_STATUS.MISSING,
+            reason: read.reason,
+            url: document.url,
             outcome: undefined,
           }
         : undefined;
     case "missing":
       return {
-        documentRead: {
-          status: "missing",
-          reason: document.reason,
-          url: document.url ?? null,
-        },
+        status:
+          document.skippedBy === undefined
+            ? BR_STF_DOCUMENT_READ_STATUS.MISSING
+            : BR_STF_DOCUMENT_READ_STATUS.NOT_REQUESTED,
+        reason: document.reason,
+        url: document.url ?? null,
         outcome: document.outcome,
       };
     // The stored outcome of an unread document is the pipeline's to write.
     case "unread":
       return {
-        documentRead: {
-          status: "unread",
-          reason: document.outcome.type,
-          url: document.url,
-        },
+        status: BR_STF_DOCUMENT_READ_STATUS.UNREAD,
+        reason: document.outcome.type,
+        url: document.url,
         outcome: undefined,
       };
     default:
@@ -1020,8 +1096,19 @@ const textFieldsOf = (source: Record<string, unknown>) => {
   };
 };
 
+/**
+ * The metadata key a row states its missing text's reason under. Top-level
+ * and a plain string, because reconciliation's held-row rule reads it.
+ */
+const DOCUMENT_READ_REASON_KEY = "documentReadReason";
+
 const documentReadMetadataOf = (record: DocumentReadRecord | undefined) => ({
-  ...(record === undefined ? {} : { documentRead: record.documentRead }),
+  ...(record === undefined
+    ? {}
+    : {
+        documentRead: { status: record.status, url: record.url },
+        [DOCUMENT_READ_REASON_KEY]: record.reason,
+      }),
   ...(record?.outcome === undefined
     ? {}
     : { [READ_OUTCOME_METADATA_KEY]: record.outcome }),
@@ -1037,6 +1124,7 @@ type BuildOutcome =
 export const buildBrStfDecision = async (
   hit: Record<string, unknown>,
   signal?: AbortSignal,
+  breaker: BrStfDocumentBreaker = createBrStfDocumentBreaker(),
 ): Promise<BuildOutcome> => {
   const source = hit["_source"];
   const base = isRecord(source) ? source["base"] : undefined;
@@ -1050,10 +1138,11 @@ export const buildBrStfDecision = async (
   if (inline !== undefined) {
     return await assembleBrStfDecision({ hit, document: inline });
   }
-  const read = await readRecordDocument(
-    stringOf(source["inteiro_teor_url"]),
+  const read = await readRecordDocument({
+    statedUrl: stringOf(source["inteiro_teor_url"]),
+    breaker,
     signal,
-  );
+  });
   switch (read.type) {
     case "read":
       return await assembleBrStfDecision({
@@ -1256,10 +1345,12 @@ type Collected = Pick<
 const collectHits = async (
   hits: readonly BrStfListedHit[],
   signal: AbortSignal | undefined,
+  breaker: BrStfDocumentBreaker,
 ): Promise<Collected> => {
   const decisions: IngestionResult[] = [];
   const unreadItems: UnreadListedItem[] = [];
   let itemBuildFailures = 0;
+  const skippedBefore = breaker.skipped;
   for (const { hit } of hits) {
     const captured = await buildPlainTextItem({
       adapterKey: KEY,
@@ -1277,7 +1368,7 @@ const collectHits = async (
             return panic("Unhandled STF build outcome");
         }
       },
-      build: async () => await buildBrStfDecision(hit, signal),
+      build: async () => await buildBrStfDecision(hit, signal, breaker),
     });
     if (captured.type === "item_build_failed") {
       itemBuildFailures += 1;
@@ -1304,6 +1395,16 @@ const collectHits = async (
         built satisfies never;
         panic("Unhandled STF build outcome");
     }
+  }
+  // The rows say why they hold no text; this says how many reads the
+  // breaker held back, so the gap is visible without reading the rows.
+  if (breaker.skipped > skippedBefore) {
+    logger.warn("case_law.ingestion.br_stf_document_reads_skipped", {
+      adapterKey: KEY,
+      reason: BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE,
+      skipped: breaker.skipped - skippedBefore,
+      skippedInScope: breaker.skipped,
+    });
   }
   return {
     decisions,
@@ -1364,6 +1465,7 @@ const stepWindow = async ({
 const sweepPage = async (
   start: Extract<BrStfCursor, { phase: "sweep" }>,
   signal: AbortSignal | undefined,
+  breaker: BrStfDocumentBreaker,
 ): Promise<Result<SyncPage, AdapterFetchError>> => {
   let position = start;
   for (let step = 0; step < MAX_EMPTY_WINDOWS_PER_PAGE; step += 1) {
@@ -1381,7 +1483,7 @@ const sweepPage = async (
     const outcome = stepped.value;
     if (outcome.type === "page") {
       return Result.ok({
-        ...(await collectHits(outcome.hits, signal)),
+        ...(await collectHits(outcome.hits, signal, breaker)),
         nextCursor: encodeBrStfCursor({
           ...position,
           after: outcome.after,
@@ -1414,7 +1516,7 @@ const sweepPage = async (
     }
     if (outcome.hits.length > 0 || next.phase !== "sweep" || signal?.aborted) {
       return Result.ok({
-        ...(await collectHits(outcome.hits, signal)),
+        ...(await collectHits(outcome.hits, signal, breaker)),
         nextCursor: encodeBrStfCursor(next),
         sourceUrl: SEARCH_URL,
       });
@@ -1452,6 +1554,7 @@ const frontierPage = async (
   start: Extract<BrStfCursor, { phase: "frontier" }>,
   now: Temporal.Instant,
   signal: AbortSignal | undefined,
+  breaker: BrStfDocumentBreaker,
 ): Promise<Result<SyncPage, AdapterFetchError>> => {
   let position = start;
   for (let step = 0; step < MAX_EMPTY_WINDOWS_PER_PAGE; step += 1) {
@@ -1476,7 +1579,7 @@ const frontierPage = async (
     const outcome = stepped.value;
     if (outcome.type === "page") {
       return Result.ok({
-        ...(await collectHits(outcome.hits, signal)),
+        ...(await collectHits(outcome.hits, signal, breaker)),
         nextCursor: encodeBrStfCursor({
           ...position,
           after: outcome.after,
@@ -1506,7 +1609,7 @@ const frontierPage = async (
     };
     if (outcome.hits.length > 0 || signal?.aborted) {
       return Result.ok({
-        ...(await collectHits(outcome.hits, signal)),
+        ...(await collectHits(outcome.hits, signal, breaker)),
         nextCursor: encodeBrStfCursor(next),
         sourceUrl: SEARCH_URL,
       });
@@ -1524,16 +1627,18 @@ export const fetchBrStfPage = async (
   cursor: string | null,
   now: Temporal.Instant,
   signal?: AbortSignal,
+  cycle?: IngestionCycle,
 ): Promise<Result<SyncPage, AdapterFetchError>> => {
   const position = parseBrStfCursor(cursor, now);
   if (Result.isError(position)) {
     return position;
   }
+  const breaker = breakerOf(cycle);
   switch (position.value.phase) {
     case "sweep":
-      return await sweepPage(position.value, signal);
+      return await sweepPage(position.value, signal, breaker);
     case "frontier":
-      return await frontierPage(position.value, now, signal);
+      return await frontierPage(position.value, now, signal, breaker);
     default:
       position.value satisfies never;
       return panic(`Unhandled STF cursor: ${String(cursor)}`);
@@ -1718,17 +1823,70 @@ const listBrStfSlicePage = async ({
   };
 };
 
-const buildBrStfFromPayload = async (
-  payload: unknown,
-  signal?: AbortSignal,
-): Promise<ReconciliationBuildOutcome> => {
+/**
+ * Whether a missing-text reason settles a row as it stands. Total over the
+ * reasons, so a new one needs a decision. A challenge does not: the file
+ * exists behind it, and the row is held for the read that gets past it.
+ */
+const MISSING_REASON_SETTLES = {
+  "no-document-url": true,
+  "url-not-allowed": true,
+  "redirect-not-allowed": true,
+  "publisher-challenge": false,
+  absent: true,
+  "not-a-pdf": true,
+  "unreadable-pdf": true,
+} as const satisfies Record<BrStfDocumentMissing, boolean>;
+
+const settlesWithoutText = (reason: unknown): boolean =>
+  Object.entries(MISSING_REASON_SETTLES).some(
+    ([settled, settles]) => settles && settled === reason,
+  );
+
+const [FIRST_SETTLED_REASON, ...OTHER_SETTLED_REASONS] = Object.entries(
+  MISSING_REASON_SETTLES,
+).flatMap(([reason, settles]) => (settles ? [reason] : []));
+
+/**
+ * The listing-only rows reconciliation counts as held: those whose reason
+ * settles them. A challenged row, or one whose read went unanswered, is
+ * listed again on every walk of its slice until its text is read (rule 20).
+ */
+const HELD_WITHOUT_DOCUMENT = {
+  metadataKey: DOCUMENT_READ_REASON_KEY,
+  reasons: [
+    FIRST_SETTLED_REASON ?? panic("some missing-text reason settles a row"),
+    ...OTHER_SETTLED_REASONS,
+  ],
+} as const;
+
+type BuildFromPayloadOptions = {
+  payload: unknown;
+  breaker: BrStfDocumentBreaker;
+  signal: AbortSignal | undefined;
+};
+
+const buildBrStfFromPayload = async ({
+  payload,
+  breaker,
+  signal,
+}: BuildFromPayloadOptions): Promise<ReconciliationBuildOutcome> => {
   if (!isRecord(payload)) {
     return { type: "unkeyable" };
   }
-  const built = await buildBrStfDecision(payload, signal);
+  const built = await buildBrStfDecision(payload, signal, breaker);
   switch (built.type) {
-    case "built":
-      return { type: "built", decision: built.decision };
+    case "built": {
+      // Writing a challenged row would make the identity held with its text
+      // still unread; the walk parks it and asks again on its schedule.
+      const { decision } = built;
+      const reason = decision.metadata[DOCUMENT_READ_REASON_KEY];
+      return decision.isListingOnly === true &&
+        reason !== undefined &&
+        !settlesWithoutText(reason)
+        ? { type: "detail-unavailable" }
+        : { type: "built", decision };
+    }
     case "unkeyable":
       return { type: "unkeyable" };
     // A detail-less row would make the identity held while its document
@@ -1994,8 +2152,13 @@ export const brStfAdapter = defineSourceAdapter({
     fields: BR_STF_SOURCE_FIELDS,
     listSourceFields: listBrStfSourceFields,
   },
-  fetchPage: async (cursor, _config, signal) =>
-    await fetchBrStfPage(cursor, Temporal.Now.instant(), signal),
+  fetchPage: async (cursor, _config, signal, pageContext) =>
+    await fetchBrStfPage(
+      cursor,
+      Temporal.Now.instant(),
+      signal,
+      pageContext?.cycle,
+    ),
   getTotalCount: brStfTotalCount,
   reconciliation: {
     firstSlice: FIRST_SLICE,
@@ -2010,6 +2173,20 @@ export const brStfAdapter = defineSourceAdapter({
         ? { id: payload["_id"], source: payload["_source"] }
         : payload,
     listSlicePage: listBrStfSlicePage,
-    buildDecision: buildBrStfFromPayload,
+    heldRequiresDetail: true,
+    heldWithoutDocument: HELD_WITHOUT_DOCUMENT,
+    // A reader outside a slice walk is a scope of its own.
+    buildDecision: async (payload, signal) =>
+      await buildBrStfFromPayload({
+        payload,
+        breaker: createBrStfDocumentBreaker(),
+        signal,
+      }),
+    // One breaker per slice walk, as one per crawl cycle.
+    createSliceBuildDecision: () => {
+      const breaker = createBrStfDocumentBreaker();
+      return async (payload, signal) =>
+        await buildBrStfFromPayload({ payload, breaker, signal });
+    },
   },
 });

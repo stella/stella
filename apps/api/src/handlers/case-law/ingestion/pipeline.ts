@@ -15,7 +15,10 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  startIngestionCycle,
+  type SyncPage,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
@@ -259,6 +262,8 @@ export const runIngestionPipeline = async ({
   // Started here rather than passed in, so the budget the loop measures a page
   // against is the same one the abort it would get is derived from.
   const deadline = cycle === undefined ? undefined : startCycleDeadline(cycle);
+  /** Every page this run fetches shares it; the next run starts a new one. */
+  const ingestionCycle = startIngestionCycle();
 
   let cursor = source.syncCursor;
   /** The held page's consecutive unavailable cycles, as last stored. */
@@ -311,7 +316,7 @@ export const runIngestionPipeline = async ({
                 fetchCursor,
                 source.config ?? {},
                 pageSignal,
-                onDocumentObservation,
+                { onDocumentObservation, cycle: ingestionCycle },
               ),
             catch: (cause) =>
               new AdapterFetchError({

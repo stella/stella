@@ -5,7 +5,10 @@ import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  startIngestionCycle,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { BR_STF_SYNTHETIC_HIT } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/br-stf.synthetic";
 import {
   assembleBrStfDecision,
@@ -318,9 +321,11 @@ describe("decision documents behind the record", () => {
     expect(JSON.stringify(decision.metadata["documentRead"])).toBe(
       JSON.stringify({
         status: "missing",
-        reason: BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE,
         url: "https://redir.stf.jus.br/paginadorpub/paginador.jsp?docTP=AC&docID=324934",
       }),
+    );
+    expect(String(decision.metadata["documentReadReason"])).toBe(
+      BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE,
     );
   });
 
@@ -337,9 +342,9 @@ describe("decision documents behind the record", () => {
     );
     const decision = await decisionOf(hit!);
     expect(requests).toHaveLength(1);
-    expect(decision.metadata["documentRead"]).toMatchObject({
-      reason: BR_STF_DOCUMENT_MISSING.REDIRECT_NOT_ALLOWED,
-    });
+    expect(String(decision.metadata["documentReadReason"])).toBe(
+      BR_STF_DOCUMENT_MISSING.REDIRECT_NOT_ALLOWED,
+    );
   });
 
   test("a document link outside the allowlist costs no request", async () => {
@@ -351,9 +356,9 @@ describe("decision documents behind the record", () => {
     const decision = await decisionOf(hit);
     expect(requests).toEqual([]);
     expect(decision.isListingOnly).toBe(true);
-    expect(decision.metadata["documentRead"]).toMatchObject({
-      reason: BR_STF_DOCUMENT_MISSING.URL_NOT_ALLOWED,
-    });
+    expect(String(decision.metadata["documentReadReason"])).toBe(
+      BR_STF_DOCUMENT_MISSING.URL_NOT_ALLOWED,
+    );
   });
 
   test("a decisão without inline text is read from its PDF and keeps the file", async () => {
@@ -629,6 +634,153 @@ describe("the frontier collects closed days of publisher writes", () => {
     expect(parseCursor(next.value.nextCursor)).toMatchObject({
       frontier: "2026-10-24",
     });
+  });
+});
+
+describe("the paginator's bot challenge trips a breaker for the rest of its scope", () => {
+  const PORTAL = "https://portal.stf.jus.br/";
+  const PAGINATOR = "https://redir.stf.jus.br/";
+
+  /** Three acórdãos with no inline text, each needing its PDF. */
+  const challengedSource = async () => {
+    const hits = await recordedHits("br-stf-search-acordaos-2000-03.json.gz");
+    expect(hits).toHaveLength(3);
+    return stubFetch(({ url, body }) => {
+      if (isSearchBody(body)) {
+        return searchAnswer(
+          hits.length,
+          hits.map((hit, index) => ({
+            hit,
+            sort: [index, index, String(hit["_id"])],
+          })),
+        );
+      }
+      return url.startsWith(PORTAL)
+        ? new Response(null, {
+            status: 302,
+            headers: {
+              location: `${PAGINATOR}paginadorpub/paginador.jsp?docTP=AC&docID=324934`,
+            },
+          })
+        : new Response(null, {
+            status: 202,
+            headers: { "x-amzn-waf-action": "challenge" },
+          });
+    });
+  };
+
+  const pdfRequests = (requests: readonly StubRequest[]) =>
+    requests.filter(
+      ({ url }) => url.startsWith(PORTAL) || url.startsWith(PAGINATOR),
+    );
+
+  test("one challenged read stores the cycle's PDF-needing rows listing-only, and the next cycle asks again", async () => {
+    const requests = await challengedSource();
+    const cycle = startIngestionCycle();
+
+    const first = await fetchBrStfPage(
+      sweepAt("2000-03"),
+      NOW,
+      undefined,
+      cycle,
+    );
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    // One request chain: the portal's redirect, then the challenged paginator.
+    expect(pdfRequests(requests).map(({ url }) => url.slice(0, 24))).toEqual([
+      PORTAL.slice(0, 24),
+      PAGINATOR.slice(0, 24),
+    ]);
+    expect(first.value.decisions).toHaveLength(3);
+    for (const decision of first.value.decisions) {
+      expect(decision.isListingOnly).toBe(true);
+      expect(String(decision.metadata["documentReadReason"])).toBe(
+        BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE,
+      );
+    }
+    expect(
+      first.value.decisions.map((decision) =>
+        JSON.stringify(decision.metadata["documentRead"]).includes(
+          "not-requested",
+        ),
+      ),
+    ).toEqual([false, true, true]);
+
+    // A later page of the same cycle sends no PDF request at all.
+    const again = await fetchBrStfPage(
+      sweepAt("2000-03"),
+      NOW,
+      undefined,
+      cycle,
+    );
+    if (Result.isError(again)) {
+      throw again.error;
+    }
+    expect(again.value.decisions).toHaveLength(3);
+    expect(pdfRequests(requests)).toHaveLength(2);
+
+    // The next cycle tries the paginator again.
+    const next = await fetchBrStfPage(
+      sweepAt("2000-03"),
+      NOW,
+      undefined,
+      startIngestionCycle(),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    expect(pdfRequests(requests)).toHaveLength(4);
+  });
+
+  test("a slice walk shares one breaker and keeps challenged identities to be asked for again", async () => {
+    const requests = await challengedSource();
+    const hits = await recordedHits("br-stf-search-acordaos-2000-03.json.gz");
+    const { reconciliation } = brStfAdapter;
+    const build =
+      reconciliation.createSliceBuildDecision?.() ??
+      reconciliation.buildDecision;
+    const outcomes: string[] = [];
+    for (const hit of hits) {
+      outcomes.push((await build(hit)).type);
+    }
+    expect(outcomes).toEqual([
+      "detail-unavailable",
+      "detail-unavailable",
+      "detail-unavailable",
+    ]);
+    expect(pdfRequests(requests)).toHaveLength(2);
+    // A challenged row is not held, so the next walk lists it again; a row
+    // whose publisher stated the file gone is.
+    const held = reconciliation.heldWithoutDocument?.reasons ?? [];
+    expect(held).not.toContain(BR_STF_DOCUMENT_MISSING.PUBLISHER_CHALLENGE);
+    expect(held).toContain(BR_STF_DOCUMENT_MISSING.ABSENT);
+    expect(reconciliation.heldWithoutDocument?.metadataKey).toBe(
+      "documentReadReason",
+    );
+    expect(reconciliation.heldRequiresDetail).toBe(true);
+  });
+
+  test("the portal's own PDFs are still read once the paginator has challenged", async () => {
+    const pdf = await Bun.file(
+      new URL("br-stf-decisao-despacho1077076.pdf", FIXTURES),
+    ).bytes();
+    const requests = stubFetch(() => new Response(pdf));
+    const [listed] = await recordedHits(
+      "br-stf-search-decisoes-2020-03-03.json.gz",
+    );
+    const hit = {
+      ...listed!,
+      _source: { ...sourceOf(listed!), decisao_texto: null },
+    };
+    const built = await buildBrStfDecision(hit, undefined, {
+      tripped: true,
+      skipped: 0,
+    });
+    expect(requests).toHaveLength(1);
+    expect(built.type === "built" && built.decision.isListingOnly).toBe(
+      undefined,
+    );
   });
 });
 

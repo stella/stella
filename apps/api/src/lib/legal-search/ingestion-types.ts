@@ -1,3 +1,4 @@
+// parser-output-unchanged: pages receive an opaque per-cycle token for cycle-scoped adapter state; parsed output is unchanged.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
@@ -261,7 +262,8 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
+    | Readonly<Record<string, SourceRawObjectPayload>>
+    | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -300,7 +302,8 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
+  | { type: "accepted" }
+  | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -568,6 +571,27 @@ export type SliceCoverage = {
   reported: number;
   /** How many of them are held. */
   collected: number;
+};
+
+/**
+ * One run of a source's page loop, handed to every page it fetches.
+ *
+ * Only its identity means anything: an adapter keys state that must hold for
+ * the rest of a cycle and no longer (a breaker a publisher's refusal trips)
+ * on it, so the state ends with the cycle and the next cycle asks again.
+ * Callers outside a cycle pass none, and each page is then its own scope.
+ */
+export type IngestionCycle = { readonly kind: "ingestion-cycle" };
+
+export const startIngestionCycle = (): IngestionCycle => ({
+  kind: "ingestion-cycle",
+});
+
+/** What the page loop tells a page beside its cursor. */
+export type FetchPageContext = {
+  /** Consumed by the adapter wrapper, which reports the page's documents. */
+  readonly onDocumentObservation?: DocumentStageObserver | undefined;
+  readonly cycle?: IngestionCycle | undefined;
 };
 
 /** A page of ingestion results with an optional cursor. */
@@ -1230,7 +1254,8 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    (() => SourceReconciliation["buildDecision"]) | undefined;
+    | (() => SourceReconciliation["buildDecision"])
+    | undefined;
 };
 
 /**
@@ -1422,7 +1447,9 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
+  | StoredSourceSurface
+  | ExcludedSourceSurface
+  | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({
@@ -1530,7 +1557,7 @@ export type SourceAdapter = {
     cursor: string | null,
     config: Record<string, unknown>,
     signal?: AbortSignal,
-    onDocumentObservation?: DocumentStageObserver,
+    page?: FetchPageContext,
   ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** Minimum ms between requests to respect rate limits. */
   minRequestIntervalMs: number;
@@ -1635,11 +1662,15 @@ export const defineSourceAdapter = <
     observeDocumentStage,
     country: ADAPTER_MANIFESTS[adapter.key].country,
     name: ADAPTER_MANIFESTS[adapter.key].name,
-    fetchPage: async (cursor, config, signal, onDocumentObservation) =>
+    fetchPage: async (cursor, config, signal, pageContext) =>
       await observeDocumentStage({
         fetchPage: async () => {
           const fetched = await Result.tryPromise({
-            try: async () => await adapter.fetchPage(cursor, config, signal),
+            // The observer is this wrapper's; the adapter sees only the cycle.
+            try: async () =>
+              await adapter.fetchPage(cursor, config, signal, {
+                cycle: pageContext?.cycle,
+              }),
             catch: (cause) =>
               new AdapterFetchError({
                 message: "Adapter page fetch failed",
@@ -1650,7 +1681,7 @@ export const defineSourceAdapter = <
           });
           return fetched.andThen((page) => page);
         },
-        observe: onDocumentObservation,
+        observe: pageContext?.onDocumentObservation,
       }),
   };
 };

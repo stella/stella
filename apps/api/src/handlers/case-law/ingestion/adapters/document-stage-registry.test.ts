@@ -96,8 +96,10 @@ describe("registered document stages", () => {
         },
       });
       expect(
-        await adapter.fetchPage(null, {}, undefined, (event) => {
-          observations.push(event);
+        await adapter.fetchPage(null, {}, undefined, {
+          onDocumentObservation: (event) => {
+            observations.push(event);
+          },
         }),
       ).toBe(page);
       expect(observations).toHaveLength(2);
