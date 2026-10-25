@@ -71,22 +71,29 @@ write_back() {
   fi
 }
 
+# The newest deploy-staging proof run for a head, or {}.
+newest_run() {
+  api "repos/$repo/actions/workflows/deploy-staging.yml/runs?event=workflow_dispatch&branch=main&per_page=100" |
+    jq -c --arg repo "$repo" --arg title "Staging release proof $1" '
+      [.workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
+        .path == ".github/workflows/deploy-staging.yml" and .display_title == $title)][0] // {}'
+}
+
 # Reconcile a release head. It never derives a result from a run: a run's
 # success or failure is written only by that run's own finished-run job. This
 # path writes pending for an unfinished run, the failure that names the
 # dispatch when the head has no proof run at all, and write-backs.
 release_head() {
-  local head="$1" runs run run_id url
-  runs=$(api "repos/$repo/actions/workflows/deploy-staging.yml/runs?event=workflow_dispatch&branch=main&per_page=100")
-  run=$(jq -c --arg repo "$repo" --arg title "Staging release proof $head" '
-    [.workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
-      .path == ".github/workflows/deploy-staging.yml" and .display_title == $title)][0] // {}
-  ' <<< "$runs")
+  local head="$1" run run_id url
+  run=$(newest_run "$head")
   run_id=$(jq -r '.id // ""' <<< "$run")
   url=$(jq -r '.html_url // ""' <<< "$run")
   if [[ -z "$run_id" && "${PROOF_DISPATCHED:-}" == true ]]; then
-    # The run listing can trail a dispatch that just succeeded.
+    # The run listing can trail a dispatch that just succeeded; once listed,
+    # the run's recorded result goes back on top of this pending write.
     post "$head" pending "Staging proof dispatched; waiting for its run to start"
+    url=$(newest_run "$head" | jq -r '.html_url // ""')
+    if [[ -n "$url" ]]; then write_back "$head" "$url"; fi
   elif [[ -z "$run_id" ]]; then
     post "$head" failure "${NO_PROOF_REASON:-No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=$head}"
   elif [[ "$(jq -r '.status' <<< "$run")" != completed ]]; then

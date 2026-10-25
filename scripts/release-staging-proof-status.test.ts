@@ -52,6 +52,8 @@ fi
 key="\${endpoint//[\\/?&=]/_}"
 [[ -f "$RESPONSES/$key" ]] || { echo "unexpected endpoint: $endpoint" >&2; exit 1; }
 cat "$RESPONSES/$key"
+# A later response for the same endpoint, served from the next read on.
+if [[ -f "$RESPONSES/$key.then" ]]; then mv "$RESPONSES/$key.then" "$RESPONSES/$key"; fi
 `,
   );
   writeFileSync(path.join(directory, "statuses.log"), "");
@@ -342,6 +344,37 @@ describe("pull request heads", () => {
         description: "Staging proof dispatched; waiting for its run to start",
       },
     ]);
+  });
+
+  test("a dispatched run that records success before the pending write ends on success", () => {
+    // The listing is empty at first; the run then shows up and its last job
+    // records success before the pending write lands.
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, [recordedResult]);
+    runs([]);
+    writeFileSync(
+      path.join(
+        responses,
+        `repos/${repository}/actions/workflows/deploy-staging.yml/runs?event=workflow_dispatch&branch=main&per_page=100.then`.replaceAll(
+          /[/?&=]/gu,
+          "_",
+        ),
+      ),
+      JSON.stringify({ workflow_runs: [stagingRun("completed", "success")] }),
+    );
+    const result = run(["pull-request", "7"], { PROOF_DISPATCHED: "true" });
+    expect(result.exitCode).toBe(0);
+    expect(result.posted.map(({ state }) => state)).toEqual([
+      "pending",
+      "success",
+    ]);
+    expect(result.posted.at(-1)).toEqual({
+      sha: head,
+      state: "success",
+      context: "release/staging-proof",
+      description: `Staging proof passed; main=${mainBase}`,
+      target_url: runUrl,
+    });
   });
 
   test("open pull requests are all recorded", () => {
