@@ -3846,6 +3846,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Jeden klient",
+      "availabilityClientBadgeHelp": "Dostupná iba v spisoch jedného klienta.",
+      "availabilityClientHelp": "Použiteľná iba v spisoch tohto klienta. Neskôr to nemožno zmeniť.",
+      "availabilityFixedHelp": "Nastavené pri vytvorení zručnosti. Nemožno to zmeniť.",
+      "availabilityLabel": "Dostupné v",
+      "availabilityMatter": "Jeden spis",
+      "availabilityMatterBadgeHelp": "Dostupná iba v jednom spise.",
+      "availabilityMatterHelp": "Použiteľná iba v tomto spise. Neskôr to nemožno zmeniť.",
+      "availabilityOrganization": "Celá organizácia",
+      "availabilityTeamNeedsMatter": "Ak chcete zručnosť zdieľať s tímom, vyberte spis, pre ktorý je určená. Neskôr to nemožno zmeniť.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",

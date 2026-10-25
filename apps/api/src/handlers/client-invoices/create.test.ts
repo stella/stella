@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,7 +31,7 @@ const bodyWith = ({
 describe("client invoice request body", () => {
   test("accepts the per-kind source limit for one matter", () => {
     expect(
-      Value.Check(
+      v.is(
         clientInvoiceBody,
         bodyWith({
           timeEntryCount: LIMITS.invoiceSourceItemsPerKind,
@@ -43,7 +43,7 @@ describe("client invoice request body", () => {
 
   test("rejects one time entry over the per-kind source limit", () => {
     expect(
-      Value.Check(
+      v.is(
         clientInvoiceBody,
         bodyWith({
           timeEntryCount: LIMITS.invoiceSourceItemsPerKind + 1,
@@ -55,7 +55,7 @@ describe("client invoice request body", () => {
 
   test("rejects one expense over the per-kind source limit", () => {
     expect(
-      Value.Check(
+      v.is(
         clientInvoiceBody,
         bodyWith({
           timeEntryCount: 0,

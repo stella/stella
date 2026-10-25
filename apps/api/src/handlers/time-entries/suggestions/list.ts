@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 
@@ -9,7 +9,7 @@ import {
   timeSuggestionTimezoneSchema,
 } from "./schemas";
 
-const listTimeSuggestionsQuerySchema = t.Object({
+const listTimeSuggestionsQuerySchema = v.object({
   date: timeSuggestionDateSchema,
   timezoneId: timeSuggestionTimezoneSchema,
 });

@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import {
   DESKTOP_HANDOFF_PROTOCOL_HEADER,
@@ -8,7 +7,10 @@ import {
 
 import { createDesktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { createPdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
+import { createHttpApp } from "@/api/http/app";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const HANDOFF_TOKEN = "ab".repeat(32);
 
@@ -17,9 +19,15 @@ test("document handoffs require an authenticated desktop account", async () => {
     authorizeAccount: authorizeDesktopAccount,
     recordFailure: async () => false,
   };
-  const app = new Elysia()
-    .use(createDesktopEditSessionsRoute(dependencies))
-    .use(createPdfSigningSessionsRoute(dependencies));
+  await using server = serveForTest(
+    createHttpApp({
+      routes: [
+        ...createDesktopEditSessionsRoute(dependencies),
+        ...createPdfSigningSessionsRoute(dependencies),
+      ],
+      middleware: [errorBoundary],
+    }),
+  );
 
   for (const [path, body] of [
     ["/desktop-edit-handoffs/redeem", { handoffToken: HANDOFF_TOKEN }],
@@ -33,7 +41,7 @@ test("document handoffs require an authenticated desktop account", async () => {
     ],
   ] as const) {
     for (const authorization of [undefined, "Bearer unrelated-credential"]) {
-      const response = await app.handle(
+      const response = await server.fetch(
         new Request(`http://localhost${path}`, {
           method: "POST",
           headers: {

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { getLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
 import {
@@ -28,7 +28,9 @@ const config = {
         "Decorative icons use a bundled fallback when bytes are unavailable.",
     },
   },
-  query: t.Object({ url: t.String({ maxLength: ICON_URL_MAX_LENGTH }) }),
+  query: v.object({
+    url: v.pipe(v.string(), v.maxLength(ICON_URL_MAX_LENGTH)),
+  }),
 } satisfies HandlerConfig;
 
 const readOrigin = createExactIconOrigin();

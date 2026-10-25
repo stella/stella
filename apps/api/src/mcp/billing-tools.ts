@@ -3,7 +3,7 @@ import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -583,7 +583,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_from: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "List only entries worked on or after this ISO date (YYYY-MM-DD)",
@@ -592,7 +592,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_to: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "List only entries worked on or before this ISO date (YYYY-MM-DD)",
@@ -894,7 +894,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
       ),
       date_worked: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "Date the work was done (ISO YYYY-MM-DD); required when creating",
@@ -1271,7 +1271,7 @@ const resolveRateArgsSchema = nullAsAbsent(
       v.description("User ID to resolve the rate for"),
     ),
     date: v.pipe(
-      vApiDate,
+      apiDateSchema,
       v.maxLength(10),
       v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
     ),

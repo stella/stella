@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import {
+  API_CALENDAR_DATE_CHECK,
+  apiDateSchema,
+} from "@stll/api-contract/api-date";
 
 import type { SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
@@ -17,7 +21,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   AGENDA_ITEM_KIND,
@@ -47,51 +51,61 @@ import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
-export const createTaskBodySchema = t.Object({
-  name: t.String({
-    minLength: 1,
-    maxLength: 255,
-    description: "Task name; required when creating",
-  }),
-  parentId: t.Optional(tSafeId("entity")),
-  agendaKind: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  status: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 32,
-      description: "Task status (e.g. open, in_progress, done)",
-    }),
+export const createTaskBodySchema = v.object({
+  name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(255),
+    v.description("Task name; required when creating"),
   ),
-  priority: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 16,
-      description: "Task priority (e.g. none, low, medium, high)",
-    }),
-  ),
-  dueDate: t.Optional(
-    t.Nullable(
-      t.String({
-        format: "date",
-        description: "Due date (ISO YYYY-MM-DD); pass null to clear",
-      }),
+  parentId: v.optional(resourceIdSchema("entity")),
+  agendaKind: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  status: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description("Task status (e.g. open, in_progress, done)"),
     ),
   ),
-  listItemType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  listId: t.Optional(tSafeId("legalList")),
-  listSectionId: t.Optional(tSafeId("legalListSection")),
-  listPosition: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  listDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  ...agendaFieldsBodySchema.properties,
-  assigneeIds: t.Optional(
-    t.Array(tSafeId("user"), {
-      maxItems: LIMITS.workspaceMembersCount,
-    }),
+  priority: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(16),
+      v.description("Task priority (e.g. none, low, medium, high)"),
+    ),
   ),
-  ownerUserId: t.Optional(tSafeId("user")),
-  workingTargetDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  hardDeadlineDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  sourceDescription: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
+  dueDate: v.optional(
+    v.nullable(
+      v.pipe(
+        v.string(),
+        v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
+        v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
+      ),
+    ),
+  ),
+  listItemType: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  listId: v.optional(resourceIdSchema("legalList")),
+  listSectionId: v.optional(resourceIdSchema("legalListSection")),
+  listPosition: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+  listDescription: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  ...agendaFieldsBodySchema.entries,
+  assigneeIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("user")),
+      v.maxLength(LIMITS.workspaceMembersCount),
+    ),
+  ),
+  ownerUserId: v.optional(resourceIdSchema("user")),
+  workingTargetDate: v.optional(v.nullable(apiDateSchema)),
+  hardDeadlineDate: v.optional(v.nullable(apiDateSchema)),
+  sourceDescription: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(1000))),
+  ),
 });
 
 const toDateOrNull = (value: string | null | undefined): Date | null =>
@@ -107,7 +121,7 @@ export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof createTaskBodySchema>;
+  body: v.InferOutput<typeof createTaskBodySchema>;
   entityId?: SafeId<"entity">;
   features?: TaskDeploymentFeatures;
   workObligationSource?: CreateTaskWorkObligationSource;

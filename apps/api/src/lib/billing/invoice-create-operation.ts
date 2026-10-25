@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -53,7 +53,7 @@ import type { CentsAmount } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
-type InvoiceDocumentType = Static<typeof tInvoiceDocumentType>;
+type InvoiceDocumentType = v.InferOutput<typeof tInvoiceDocumentType>;
 
 type CreateInvoiceResult = {
   id: SafeId<"invoice">;
@@ -62,7 +62,7 @@ type CreateInvoiceResult = {
   entryCount: number;
   expenseCount: number;
 };
-type CreateInvoiceBody = Static<typeof createInvoiceBodySchema>;
+type CreateInvoiceBody = v.InferOutput<typeof createInvoiceBodySchema>;
 // The request with its optional lists resolved once, so no step re-defaults them.
 type CreateInvoiceInput = Omit<
   CreateInvoiceBody,

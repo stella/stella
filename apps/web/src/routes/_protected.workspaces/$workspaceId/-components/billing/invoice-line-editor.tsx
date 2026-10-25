@@ -25,7 +25,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   allExpensesQueryRoot,
@@ -72,7 +72,7 @@ export const InvoiceLineEditor = ({
     .lines({ lineId: line.id });
   const reset = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await invokeCapability("invoices.lines.update", async (request) =>
           endpoint.patch({ resetToRecorded: true }, request),
         ),
@@ -82,7 +82,7 @@ export const InvoiceLineEditor = ({
   });
   const remove = useMutation({
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await invokeCapability("invoices.lines.delete", async (request) =>
           endpoint.delete({}, request),
         ),

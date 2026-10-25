@@ -1274,7 +1274,7 @@ const RegistryAutofillControl = ({
     const seq = lookupSeq.current;
     setLoading(true);
     // A timeout, dropped connection, or DNS failure throws instead of
-    // resolving to an Eden `.error` response, which would otherwise leave
+    // resolving to an API client `.error` response, which would otherwise leave
     // `loading` stuck forever (see runDownload's own catch below for the
     // same class of bug on the fill/download path).
     let response: Awaited<
@@ -1999,7 +1999,7 @@ export const TemplateForm = ({
   );
 
   // Run a download and surface a thrown fill/convert failure as a toast.
-  // handleDownload's own error-toast only covers Eden `.error` responses; a
+  // handleDownload's own error-toast only covers API client `.error` responses; a
   // timeout, dropped connection, or blob-read failure throws instead, which
   // would otherwise be swallowed into a silent no-op that also leaves the
   // button stuck on its "generating" label.

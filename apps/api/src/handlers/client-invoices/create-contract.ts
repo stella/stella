@@ -1,30 +1,33 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { createInvoiceBodySchema } from "@/api/lib/billing/invoice-create-contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-export const clientInvoiceBody = t.Composite([
-  t.Omit(createInvoiceBodySchema, [
+export const clientInvoiceBody = v.object({
+  ...v.omit(createInvoiceBodySchema, [
     "timeEntryIds",
     "expenseIds",
     "entryAdjustments",
     "documentType",
     "originalInvoiceId",
     "invoiceNumber",
-  ]),
-  t.Object({
-    matters: t.Array(
-      t.Object({
-        workspaceId: tSafeId("workspace"),
-        timeEntryIds: t.Array(tSafeId("timeEntry"), {
-          maxItems: LIMITS.invoiceSourceItemsPerKind,
-        }),
-        expenseIds: t.Array(tSafeId("expense"), {
-          maxItems: LIMITS.invoiceSourceItemsPerKind,
-        }),
+  ]).entries,
+  matters: v.pipe(
+    v.array(
+      v.object({
+        workspaceId: resourceIdSchema("workspace"),
+        timeEntryIds: v.pipe(
+          v.array(resourceIdSchema("timeEntry")),
+          v.maxLength(LIMITS.invoiceSourceItemsPerKind),
+        ),
+        expenseIds: v.pipe(
+          v.array(resourceIdSchema("expense")),
+          v.maxLength(LIMITS.invoiceSourceItemsPerKind),
+        ),
       }),
-      { minItems: 1, maxItems: LIMITS.clientInvoiceMatters },
     ),
-  }),
-]);
+    v.minLength(1),
+    v.maxLength(LIMITS.clientInvoiceMatters),
+  ),
+});

@@ -3846,6 +3846,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Egy ügyfél",
+      "availabilityClientBadgeHelp": "Csak egy ügyfél ügyeiben érhető el.",
+      "availabilityClientHelp": "Csak ennek az ügyfélnek az ügyeiben használható. Ez később nem módosítható.",
+      "availabilityFixedHelp": "A készség létrehozásakor lett beállítva. Nem módosítható.",
+      "availabilityLabel": "Elérhető itt",
+      "availabilityMatter": "Egy ügy",
+      "availabilityMatterBadgeHelp": "Csak egy ügyben érhető el.",
+      "availabilityMatterHelp": "Csak ebben az ügyben használható. Ez később nem módosítható.",
+      "availabilityOrganization": "Teljes szervezet",
+      "availabilityTeamNeedsMatter": "Ha meg szeretné osztani a készséget a csapattal, válassza ki az ügyet, amelyhez készült. Ez később nem módosítható.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",

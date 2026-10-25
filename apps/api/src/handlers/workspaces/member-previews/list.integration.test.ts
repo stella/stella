@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   afterEach,
@@ -9,6 +8,7 @@ import {
   test,
 } from "bun:test";
 import { inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceMembers } from "@/api/db/schema";
@@ -172,12 +172,12 @@ describe("workspace member previews", () => {
       createSafeId<"workspace">(),
     );
 
+    expect(v.is(querySchema, { workspaceIds: workspaceIds.slice(0, 10) })).toBe(
+      true,
+    );
+    expect(v.is(querySchema, { workspaceIds })).toBe(false);
     expect(
-      Value.Check(querySchema, { workspaceIds: workspaceIds.slice(0, 10) }),
-    ).toBe(true);
-    expect(Value.Check(querySchema, { workspaceIds })).toBe(false);
-    expect(
-      Value.Check(querySchema, { workspaceIds: ["not-a-safe-workspace-id"] }),
+      v.is(querySchema, { workspaceIds: ["not-a-safe-workspace-id"] }),
     ).toBe(false);
   });
 });

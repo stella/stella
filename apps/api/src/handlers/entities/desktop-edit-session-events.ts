@@ -1,14 +1,15 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
 } from "@stll/api-contract";
 
+import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
@@ -24,12 +25,12 @@ const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
 const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
-export const desktopEditSessionEventsParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const desktopEditSessionEventsParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-export const desktopEditSessionEventsHeadersSchema = t.Object({
-  authorization: t.Optional(t.String()),
+export const desktopEditSessionEventsHeadersSchema = v.object({
+  authorization: v.optional(v.string()),
 });
 
 type SessionEventConnection = {
@@ -100,7 +101,7 @@ const deliverSessionEventLocal = (
 registerSessionDelivery(deliverSessionEventLocal);
 
 type DesktopEditSessionEventsHandlerProps = {
-  headers: { authorization?: string };
+  headers: { authorization?: string | undefined };
   sessionId: SafeId<"desktopEditSession">;
 };
 

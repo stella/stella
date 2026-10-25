@@ -3846,6 +3846,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Viens klients",
+      "availabilityClientBadgeHelp": "Pieejama tikai viena klienta lietās.",
+      "availabilityClientHelp": "Izmantojama tikai šī klienta lietās. Vēlāk to nevarēs mainīt.",
+      "availabilityFixedHelp": "Iestatīts, veidojot prasmi. To nevar mainīt.",
+      "availabilityLabel": "Pieejama",
+      "availabilityMatter": "Viena lieta",
+      "availabilityMatterBadgeHelp": "Pieejama tikai vienā lietā.",
+      "availabilityMatterHelp": "Izmantojama tikai šajā lietā. Vēlāk to nevarēs mainīt.",
+      "availabilityOrganization": "Visa organizācija",
+      "availabilityTeamNeedsMatter": "Lai kopīgotu prasmi ar komandu, izvēlieties lietu, kurai tā paredzēta. Vēlāk to nevarēs mainīt.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Izveidojiet līgumu pārbaudes ceļvedi pozīciju pa pozīcijai, balstoties uz iepriekš parakstītajiem līgumiem, īsu interviju un tirgū ierastajiem standartiem.",

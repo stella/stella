@@ -7,7 +7,7 @@ import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -31,7 +31,9 @@ export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
     queryFn: async ({ signal }) => {
       const result = await Result.tryPromise({
         try: async () =>
-          unwrapEden(await api.desktop.presence.get({ fetch: { signal } })),
+          unwrapApiResponse(
+            await api.desktop.presence.get({ fetch: { signal } }),
+          ),
         catch: (cause) =>
           cause instanceof Error ? cause : new UnhandledException({ cause }),
       });

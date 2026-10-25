@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
@@ -29,21 +29,31 @@ import {
 } from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { claimInvoiceExpenses } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CentsAmount } from "@/api/lib/money";
 
-const addEntriesBodySchema = t.Object({
-  timeEntryIds: t.Optional(
-    t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 500 }),
+const addEntriesBodySchema = v.object({
+  timeEntryIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("timeEntry")),
+      v.minLength(1),
+      v.maxLength(500),
+    ),
   ),
-  expenseIds: t.Optional(
-    t.Array(tSafeId("expense"), { minItems: 1, maxItems: 500 }),
+  expenseIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("expense")),
+      v.minLength(1),
+      v.maxLength(500),
+    ),
   ),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const buildAttachEvents = (params: {
   invoiceId: SafeId<"invoice">;
@@ -102,7 +112,7 @@ const buildAttachEvents = (params: {
 type AttachmentPreflightOptions = {
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof addEntriesBodySchema>;
+  body: v.InferOutput<typeof addEntriesBodySchema>;
 };
 const validateAttachmentInputs = async (
   safeDb: SafeDb,

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { findCatalogueEntry, isGithubSkillEntry } from "@stll/catalogue";
 
@@ -20,15 +20,12 @@ const installSkillScopeValues = [
   "private",
 ] as const satisfies typeof AGENT_SKILL_SCOPES;
 
-const installSkillBody = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 64 }),
-  // Literals are inlined rather than `AGENT_SKILL_SCOPES.map(...)`: mapping the
-  // const yields a non-tuple union that Elysia infers as `never`, collapsing
-  // `scope` to `undefined`; the tuple above keeps schema drift type-checked.
-  scope: t.Optional(
-    t.Union([
-      t.Literal(installSkillScopeValues[0]),
-      t.Literal(installSkillScopeValues[1]),
+const installSkillBody = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  scope: v.optional(
+    v.union([
+      v.literal(installSkillScopeValues[0]),
+      v.literal(installSkillScopeValues[1]),
     ]),
   ),
 });

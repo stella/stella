@@ -16,11 +16,13 @@ import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { invoiceContentMutationRefusal } from "@/api/lib/billing/invoice-document-type";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const deleteInvoice = createSafeHandler(
   {

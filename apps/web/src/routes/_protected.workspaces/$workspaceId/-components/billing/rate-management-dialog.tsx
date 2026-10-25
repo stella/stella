@@ -36,7 +36,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { apiFieldIssueMessage, unwrapEden } from "@/lib/errors/api";
+import { apiFieldIssueMessage, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -127,7 +127,7 @@ const RateTablesView = ({
           ...body,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -147,7 +147,7 @@ const RateTablesView = ({
           id: toSafeId<"rateTable">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -171,7 +171,7 @@ const RateTablesView = ({
           id: toSafeId<"rateTable">(body.id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -480,7 +480,7 @@ const RateEntriesView = ({
           }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -504,7 +504,7 @@ const RateEntriesView = ({
           id: toSafeId<"rateEntry">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -21,19 +21,29 @@ import {
 } from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const removeEntriesBodySchema = t.Object({
-  timeEntryIds: t.Optional(
-    t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 500 }),
+const removeEntriesBodySchema = v.object({
+  timeEntryIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("timeEntry")),
+      v.minLength(1),
+      v.maxLength(500),
+    ),
   ),
-  expenseIds: t.Optional(
-    t.Array(tSafeId("expense"), { minItems: 1, maxItems: 500 }),
+  expenseIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("expense")),
+      v.minLength(1),
+      v.maxLength(500),
+    ),
   ),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const buildDetachEvents = (params: {
   invoiceId: SafeId<"invoice">;

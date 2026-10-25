@@ -31,6 +31,19 @@ const NS = {
 
 const CUSTOMIZATION_ID = "urn:cen.eu:en16931:2017";
 
+export type UblSerializationOptions = {
+  customizationId: string;
+  profileId?: string;
+  endpointScheme?: string;
+  buyerReferenceFallback?: boolean;
+  requireIban?: boolean;
+  paymentMeansCode?: "30" | "58";
+  omitVatIds?: boolean;
+  exemptionReasonCodes?: boolean;
+  /** Peppol BIS carries the due date at document level only (BT-9). */
+  omitPaymentDueDate?: boolean;
+};
+
 /** UNCL 5305 VAT category of a line. */
 const vatCategoryOf = (
   vatTreatment: VatTreatment,
@@ -65,24 +78,58 @@ const EXEMPTION_REASON: Partial<Record<string, string>> = {
 const unitCodeOf = (unit: string | null): string =>
   unit !== null && /^(h|hod|hours?)$/iu.test(unit.trim()) ? "HUR" : "C62";
 
-const taxCategory = (
-  name: "cac:TaxCategory" | "cac:ClassifiedTaxCategory",
-  category: string,
-  vatRateBps: number,
-  withReason: boolean,
-): string =>
-  el(name, [
+type TaxCategoryOptions = {
+  name: "cac:TaxCategory" | "cac:ClassifiedTaxCategory";
+  category: string;
+  vatRateBps: number;
+  withReason: boolean;
+  exemptionReason?: string | null;
+  exemptionReasonCodes?: boolean;
+};
+
+const taxCategory = ({
+  name,
+  category,
+  vatRateBps,
+  withReason,
+  exemptionReason = null,
+  exemptionReasonCodes = false,
+}: TaxCategoryOptions): string => {
+  let reasonCode = "";
+  if (withReason && exemptionReasonCodes && category === "AE") {
+    reasonCode = text("cbc:TaxExemptionReasonCode", "VATEX-EU-AE");
+  } else if (withReason && exemptionReasonCodes && category === "O") {
+    reasonCode = text("cbc:TaxExemptionReasonCode", "VATEX-EU-O");
+  }
+  let reason = "";
+  if (withReason && category === "E") {
+    reason = text(
+      "cbc:TaxExemptionReason",
+      exemptionReason?.trim() || EXEMPTION_REASON["E"],
+    );
+  } else if (withReason) {
+    reason = text("cbc:TaxExemptionReason", EXEMPTION_REASON[category]);
+  }
+  return el(name, [
     text("cbc:ID", category),
     category === "O" ? "" : text("cbc:Percent", vatPercentText(vatRateBps)),
-    withReason
-      ? text("cbc:TaxExemptionReason", EXEMPTION_REASON[category])
-      : "",
+    reasonCode,
+    reason,
     el("cac:TaxScheme", text("cbc:ID", "VAT")),
   ]);
+};
 
-const party = (subject: InvoiceParty): string => {
+const party = (
+  subject: InvoiceParty,
+  options: UblSerializationOptions,
+): string => {
   const country = countryCodeOf(subject.country);
   return el("cac:Party", [
+    options.endpointScheme
+      ? text("cbc:EndpointID", subject.taxId, {
+          schemeID: options.endpointScheme,
+        })
+      : "",
     el("cac:PartyName", text("cbc:Name", subject.name)),
     el("cac:PostalAddress", [
       text("cbc:StreetName", subject.addressLine1),
@@ -91,7 +138,7 @@ const party = (subject: InvoiceParty): string => {
       text("cbc:PostalZone", subject.postalCode),
       el("cac:Country", text("cbc:IdentificationCode", country)),
     ]),
-    subject.vatId
+    subject.vatId && !options.omitVatIds
       ? el("cac:PartyTaxScheme", [
           text("cbc:CompanyID", subject.vatId),
           el("cac:TaxScheme", text("cbc:ID", "VAT")),
@@ -106,12 +153,21 @@ const party = (subject: InvoiceParty): string => {
 
 type Mode = "invoice" | "creditNote";
 
-const line = (
-  item: InvoiceExportLine,
-  index: number,
-  currency: string,
-  mode: Mode,
-): string => {
+type LineOptions = {
+  item: InvoiceExportLine;
+  index: number;
+  currency: string;
+  mode: Mode;
+  serialization: UblSerializationOptions;
+};
+
+const line = ({
+  item,
+  index,
+  currency,
+  mode,
+  serialization,
+}: LineOptions): string => {
   const amount = (value: number) =>
     text(
       "cbc:LineExtensionAmount",
@@ -142,12 +198,14 @@ const line = (
       : "",
     el("cac:Item", [
       text("cbc:Name", Array.from(item.description).slice(0, 100).join("")),
-      taxCategory(
-        "cac:ClassifiedTaxCategory",
+      taxCategory({
+        name: "cac:ClassifiedTaxCategory",
         category,
-        effectiveVatRateBps(item),
-        false,
-      ),
+        vatRateBps: effectiveVatRateBps(item),
+        withReason: false,
+        exemptionReason: item.exemptionReason,
+        exemptionReasonCodes: serialization.exemptionReasonCodes ?? false,
+      }),
     ]),
     el(
       "cac:Price",
@@ -158,7 +216,10 @@ const line = (
   ]);
 };
 
-const document = (record: InvoiceExportRecord): string => {
+const document = (
+  record: InvoiceExportRecord,
+  options: UblSerializationOptions,
+): string => {
   const mode: Mode =
     record.documentType === "credit_note" ? "creditNote" : "invoice";
   const { currency } = record;
@@ -189,10 +250,14 @@ const document = (record: InvoiceExportRecord): string => {
   const variableSymbol = variableSymbolOf(record);
   const payment =
     mode === "creditNote" ||
-    (!record.seller.iban && !record.seller.accountNumber)
+    (!record.seller.iban &&
+      (options.requireIban || !record.seller.accountNumber))
       ? ""
       : el("cac:PaymentMeans", [
-          text("cbc:PaymentMeansCode", "30"),
+          text("cbc:PaymentMeansCode", options.paymentMeansCode ?? "30"),
+          options.omitPaymentDueDate
+            ? ""
+            : text("cbc:PaymentDueDate", record.dueDate),
           text("cbc:PaymentID", variableSymbol),
           el("cac:PayeeFinancialAccount", [
             text("cbc:ID", record.seller.iban ?? record.seller.accountNumber),
@@ -205,7 +270,8 @@ const document = (record: InvoiceExportRecord): string => {
           ]),
         ]);
   const body = [
-    text("cbc:CustomizationID", CUSTOMIZATION_ID),
+    text("cbc:CustomizationID", options.customizationId),
+    text("cbc:ProfileID", options.profileId),
     text("cbc:ID", record.number),
     text("cbc:IssueDate", record.issueDate),
     // The two schemas place the tax point date differently.
@@ -230,21 +296,22 @@ const document = (record: InvoiceExportRecord): string => {
     text(
       "cbc:BuyerReference",
       record.reference ??
-        exportMattersOf(record)
+        (exportMattersOf(record)
           .flatMap((matter) => matter.reference ?? [])
-          .join(", "),
+          .join(", ") ||
+          (options.buyerReferenceFallback ? record.number : null)),
     ),
     record.originalNumber
       ? el(
           "cac:BillingReference",
-          el(
-            "cac:InvoiceDocumentReference",
+          el("cac:InvoiceDocumentReference", [
             text("cbc:ID", record.originalNumber),
-          ),
+            text("cbc:IssueDate", record.originalIssueDate),
+          ]),
         )
       : "",
-    el("cac:AccountingSupplierParty", party(record.seller)),
-    el("cac:AccountingCustomerParty", party(record.buyer)),
+    el("cac:AccountingSupplierParty", party(record.seller, options)),
+    el("cac:AccountingCustomerParty", party(record.buyer, options)),
     payment,
     el("cac:TaxTotal", [
       money("cbc:TaxAmount", totals.vatAmountMinor),
@@ -252,12 +319,22 @@ const document = (record: InvoiceExportRecord): string => {
         el("cac:TaxSubtotal", [
           money("cbc:TaxableAmount", subtotal.base),
           money("cbc:TaxAmount", subtotal.vat),
-          taxCategory(
-            "cac:TaxCategory",
-            subtotal.category,
-            subtotal.vatRateBps,
-            true,
-          ),
+          taxCategory({
+            name: "cac:TaxCategory",
+            category: subtotal.category,
+            vatRateBps: subtotal.vatRateBps,
+            withReason: true,
+            exemptionReason:
+              record.lines.find(
+                (itemLine) =>
+                  vatCategoryOf(
+                    itemLine.vatTreatment,
+                    effectiveVatRateBps(itemLine),
+                  ) === subtotal.category &&
+                  effectiveVatRateBps(itemLine) === subtotal.vatRateBps,
+              )?.exemptionReason ?? null,
+            exemptionReasonCodes: options.exemptionReasonCodes ?? false,
+          }),
         ]),
       ),
     ]),
@@ -267,7 +344,9 @@ const document = (record: InvoiceExportRecord): string => {
       money("cbc:TaxInclusiveAmount", totals.grossAmountMinor),
       money("cbc:PayableAmount", totals.grossAmountMinor),
     ]),
-    ...record.lines.map((item, index) => line(item, index, currency, mode)),
+    ...record.lines.map((item, index) =>
+      line({ item, index, currency, mode, serialization: options }),
+    ),
   ];
   const root = mode === "creditNote" ? "CreditNote" : "Invoice";
   return `${XML_DECLARATION}${el(root, body, {
@@ -301,7 +380,26 @@ export const buildUblFiles = (
   return Result.ok(
     records.map((record) => ({
       fileName: fileName(record.number),
-      content: document(record),
+      content: document(record, { customizationId: CUSTOMIZATION_ID }),
     })),
   );
+};
+
+/** Serialize already-validated records with a stricter UBL business profile. */
+export const serializeUblFiles = (
+  records: readonly InvoiceExportRecord[],
+  options: UblSerializationOptions,
+): { fileName: string; content: string }[] => {
+  const fileName = exportFileNamer("xml");
+  return records.map((record) => ({
+    fileName: fileName(record.number),
+    content: document(record, {
+      ...options,
+      omitVatIds:
+        options.omitVatIds ||
+        record.lines.some(
+          (itemLine) => itemLine.vatTreatment === "outside_scope",
+        ),
+    }),
+  }));
 };

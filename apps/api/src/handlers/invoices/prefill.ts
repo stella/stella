@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { readMatterInvoicePrefill } from "@/api/lib/billing/invoice-prefill-operation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 const prefillInvoice = createSafeHandler(
   {
@@ -28,8 +28,8 @@ const prefillInvoice = createSafeHandler(
       consumesServices: false,
     },
     access: "read",
-    query: t.Object({
-      sellerProfileId: t.Optional(tSafeId("sellerProfile")),
+    query: v.object({
+      sellerProfileId: v.optional(resourceIdSchema("sellerProfile")),
     }),
   },
   async function* ({ safeDb, session, workspaceId, query }) {

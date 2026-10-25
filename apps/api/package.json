@@ -99,7 +99,6 @@
     "@better-auth/cimd": "catalog:",
     "@better-auth/core": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
-    "@elysia/cors": "^1.4.2",
     "@embedpdf/pdfium": "2.15.1",
     "@firecrawl/anydoc": "0.2.4",
     "@gdp-ts/core": "0.1.0",
@@ -116,7 +115,6 @@
     "@opentelemetry/sdk-logs": "0.223.0",
     "@react-email/render": "^2.1.0",
     "@silurus/ooxml": "catalog:",
-    "@sinclair/typebox": "^0.34.52",
     "@smithy/fetch-http-handler": "^5.8.0",
     "@stll/agent-engine": "workspace:*",
     "@stll/agent-input": "workspace:*",
@@ -197,7 +195,6 @@
     "disposable-email-domains-js": "catalog:",
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",
-    "elysia": "catalog:",
     "entities": "^8.1.0",
     "franc": "catalog:",
     "hyparquet": "^1.31.2",
@@ -259,7 +256,9 @@
     "fast-check": "catalog:",
     "openai": "6.49.0",
     "pdfjs-dist": "^6.4.299",
-    "saxes": "catalog:"
+    "saxes": "catalog:",
+    "tsrs": "catalog:",
+    "typescript6": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {

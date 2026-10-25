@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -16,28 +16,33 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 const EXPORT_URL_TTL_SECONDS = 300;
 
-const exportInvoicesBody = t.Object({
-  format: t.UnionEnum(INVOICE_EXPORT_FORMATS, {
-    description:
-      "xlsx: one row per invoice; xlsx_lines: one row per invoice line; pohoda, money_s3, flexibee: accounting import XML; isdoc: ISDOC 6.0.2; ubl: UBL 2.1 e-invoices per EN 16931; ksef_fa3: Polish KSeF FA(3) e-invoices (isdoc, ubl and ksef_fa3 are a zip for several invoices); eso9: ESO9 import sheet; ledes_1998b: LEDES 1998B e-billing file",
-  }),
-  invoiceIds: t.Optional(
-    t.Array(tSafeId("invoice"), {
-      minItems: 1,
-      maxItems: MAX_EXPORT_INVOICES,
-      description:
+const exportInvoicesBody = v.object({
+  format: v.pipe(
+    v.picklist(INVOICE_EXPORT_FORMATS),
+    v.description(
+      "xlsx: one row per invoice; xlsx_lines: one row per invoice line; pohoda, money_s3, flexibee: accounting import XML; isdoc: ISDOC 6.0.2; ubl: UBL 2.1 e-invoices per EN 16931; peppol_sk: Peppol BIS Billing 3.0 for Slovak sellers; ksef_fa3: Polish KSeF FA(3) e-invoices (isdoc, ubl, peppol_sk and ksef_fa3 are a zip for several invoices); eso9: ESO9 import sheet; ledes_1998b: LEDES 1998B e-billing file",
+    ),
+  ),
+  invoiceIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("invoice")),
+      v.minLength(1),
+      v.maxLength(MAX_EXPORT_INVOICES),
+      v.description(
         "Issued invoices to export; omit to export every issued invoice in the matter",
-    }),
+      ),
+    ),
   ),
 });
 
@@ -49,7 +54,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       contract: "patch",
       contentDelivery: { type: "audited" },
       description:
-        "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC, UBL (EN 16931) or Polish KSeF FA(3) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection; one export holds at most 500 invoices. Refused when a format cannot hold the data, e.g. Money S3 or ISDOC for an invoice outside the seller's home currency, or KSeF FA(3) for a credit note. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
+        "Export a matter's issued invoices, advance invoices and credit notes (drafts and void invoices excluded) as a spreadsheet, an accounting import file (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC, UBL (EN 16931), Peppol BIS Billing 3.0 for Slovak sellers or Polish KSeF FA(3) e-invoices, or a LEDES 1998B e-billing file. Pass invoiceIds to export a selection; one export holds at most 500 invoices. Refused when a format cannot hold the data. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
       permissions: { workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       featureAccess: { featureId: "time-billing", type: "required" },
@@ -143,7 +148,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
                 : AUDIT_RESOURCE_TYPE.WORKSPACE,
               resourceId: single ? single.id : workspaceId,
               userId: user.id,
-              source: { kind: "request", sessionId: session.id },
+              source: callerDownloadSource(session),
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,
@@ -166,7 +171,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
 
 const exportInvoices = createInvoicesExport();
 
-declareAggregateMutation(exportInvoices.handler, {
+declareAggregateMutation(exportInvoices, {
   type: "independent",
   reason:
     "Reads issued invoices and writes only a temporary export object and its download audit event; no matter or invoice row changes.",

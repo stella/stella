@@ -9,7 +9,7 @@ import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
@@ -50,7 +50,7 @@ export const InvoicePdfDownloadButton = ({
             },
           ),
     );
-    return unwrapEden(response);
+    return unwrapApiResponse(response);
   };
   const download = useMutation({
     mutationFn: async () => {
@@ -59,7 +59,7 @@ export const InvoicePdfDownloadButton = ({
         timeout: { type: "idle", ms: PDF_DOWNLOAD_TIMEOUT_MS },
       });
       if (!file.ok) {
-        unwrapEden({
+        unwrapApiResponse({
           data: null,
           error: { status: file.status, value: "Invoice PDF download failed" },
         });

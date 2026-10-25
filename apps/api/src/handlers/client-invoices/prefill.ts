@@ -1,11 +1,13 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { readMatterInvoicePrefills } from "@/api/lib/billing/invoice-prefill-operation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -24,10 +26,10 @@ const prefillClientInvoice = createSafeRootHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    params: t.Object({ clientId: tSafeId("contact") }),
-    query: t.Object({
-      periodStart: t.Optional(t.String({ format: "date" })),
-      periodEnd: t.Optional(t.String({ format: "date" })),
+    params: v.object({ clientId: resourceIdSchema("contact") }),
+    query: v.object({
+      periodStart: v.optional(apiDateSchema),
+      periodEnd: v.optional(apiDateSchema),
     }),
   },
   async function* ({ safeDb, session, params, query }) {

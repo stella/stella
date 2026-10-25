@@ -4,7 +4,7 @@ import type { ConvertibleViewLayoutType } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
@@ -36,7 +36,7 @@ export const useCreateView = (workspaceId: string) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({ ...body, id: toSafeId<"workspaceView">(body.id) });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([
@@ -89,7 +89,7 @@ export const useUpdateView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .post(body);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async ({ viewId, ...body }) => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
@@ -155,7 +155,7 @@ export const useConvertView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .convert.post({ targetType });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_result, { viewId }) => {
       // A find belongs to the table layout: no other layout sends it or shows
@@ -191,7 +191,7 @@ export const useReorderViews = (workspaceId: string) => {
         .reorder.post({
           viewIds: viewIds.map((viewId) => toSafeId<"workspaceView">(viewId)),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async ({ viewIds }) =>
       readQueryResult(await cache.apply(viewIds)),
@@ -224,7 +224,7 @@ export const useDeleteView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       await invalidateViewDerivedQueries({ queryClient, workspaceId });

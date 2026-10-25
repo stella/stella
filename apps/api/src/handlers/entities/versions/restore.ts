@@ -9,7 +9,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
@@ -20,8 +20,8 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 const paramsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
-  versionId: tSafeId("entityVersion"),
+  entityId: resourceIdSchema("entity"),
+  versionId: resourceIdSchema("entityVersion"),
 });
 
 const config = {

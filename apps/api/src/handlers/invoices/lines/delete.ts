@@ -22,12 +22,12 @@ import {
 } from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const lineParamsSchema = workspaceParams({
-  invoiceId: tSafeId("invoice"),
-  lineId: tSafeId("invoiceLine"),
+  invoiceId: resourceIdSchema("invoice"),
+  lineId: resourceIdSchema("invoiceLine"),
 });
 
 type DeletedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };

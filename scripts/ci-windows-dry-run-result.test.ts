@@ -16,6 +16,7 @@ import {
   findWindowsResult,
   windowsResultKey,
 } from "./ci-windows-dry-run-result";
+import { evaluate } from "./github-expression";
 
 const tools = {
   bun: "1",
@@ -348,7 +349,7 @@ test("reuse requires successful merge-group provenance and a matching downloaded
   ).toBeUndefined();
 });
 
-test("merge-group proof always builds and never looks up receipts", () => {
+test("merge-group and armed PR proofs always build; merge groups never look up receipts", () => {
   expect(
     findWindowsResult({
       key,
@@ -385,11 +386,35 @@ test("merge-group proof always builds and never looks up receipts", () => {
   const steps = jobs["desktop-windows-dry-run"]?.steps ?? [];
   for (const name of [
     "Stamp dry-run metadata",
+    "Fetch Rust dependencies",
     "Exercise Windows desktop release build",
   ]) {
-    expect(steps.find((step) => step.name === name)?.if).toBe(
-      "github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'",
-    );
+    const condition = steps.find((step) => step.name === name)?.if;
+    if (condition === undefined) {
+      throw new TypeError(`Missing Windows build condition: ${name}`);
+    }
+    for (const event of [
+      "merge_group",
+      "pull_request",
+      "push",
+      "workflow_dispatch",
+    ]) {
+      for (const reused of ["true", "false", ""]) {
+        expect(
+          evaluate(condition, {
+            values: {
+              "github.event_name": event,
+              "steps.receipt.outputs.reused": reused,
+            },
+          }),
+          `${name}: ${event}, reused=${reused}`,
+        ).toBe(
+          event === "merge_group" ||
+            event === "pull_request" ||
+            reused !== "true",
+        );
+      }
+    }
   }
   expect(
     steps.find((step) => step.name === "Exercise Windows desktop release build")

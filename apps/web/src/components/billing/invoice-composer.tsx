@@ -60,7 +60,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -414,13 +414,13 @@ const useComposerSubmit = ({
         issue,
         create: async () => {
           if (client === undefined) {
-            return unwrapEden(
+            return unwrapApiResponse(
               await invokeCapability("invoices.create", async (request) =>
                 invoices.put(body, request),
               ),
             );
           }
-          return unwrapEden(
+          return unwrapApiResponse(
             await invokeCapability("client-invoices.create", async (request) =>
               api["client-invoices"]({
                 clientId: toSafeId<"contact">(client.clientId),

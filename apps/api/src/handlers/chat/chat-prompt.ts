@@ -92,6 +92,8 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { skillBindingAllows } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
@@ -708,6 +710,8 @@ type BuildChatSystemPromptProps = {
    * or as the thread's active skill.
    */
   requestedSkillNames: ReadonlySet<string>;
+  /** Where this turn may use a bound skill (`resolveSkillBindingScope`). */
+  skillBindingScope: SkillBindingScope;
   threadId: SafeId<"chatThread">;
   /**
    * The conditionally-registered tools handed to the model this turn.
@@ -893,6 +897,28 @@ const buildOwnedActiveTemplateSection = async ({
   );
 };
 
+/**
+ * The thread's active skill was resolved before the turn's matters were
+ * known; a skill bound to another matter or client does not run here.
+ */
+const requireActiveSkillInBindingScope = ({
+  activeSkillContext,
+  skillBindingScope,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null;
+  skillBindingScope: SkillBindingScope;
+}): Result<void, HandlerError<403>> =>
+  activeSkillContext === null ||
+  skillBindingAllows(skillBindingScope, activeSkillContext.binding)
+    ? Result.ok(undefined)
+    : Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "The active skill is bound to another matter or client and cannot be used in this conversation.",
+        }),
+      );
+
 export const buildChatSystemPromptParts = async ({
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
@@ -912,6 +938,7 @@ export const buildChatSystemPromptParts = async ({
   safeDb,
   messages,
   requestedSkillNames,
+  skillBindingScope,
   threadId,
   toolAvailability,
   userContext,
@@ -921,10 +948,15 @@ export const buildChatSystemPromptParts = async ({
   Result<ChatSystemPromptParts, HandlerError<403 | 404 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    yield* requireActiveSkillInBindingScope({
+      activeSkillContext,
+      skillBindingScope,
+    });
     const listedSkills =
       organizationId && userId
         ? yield* Result.await(
             listAvailableChatSkillMetadata({
+              bindingScope: skillBindingScope,
               organizationId,
               safeDb,
               userId,

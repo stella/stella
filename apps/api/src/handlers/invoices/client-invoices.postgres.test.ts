@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { cents } from "@stll/money";
 
@@ -34,6 +33,7 @@ import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
 import transitionInvoice from "@/api/handlers/invoices/transition";
+import { HttpStatusResponse } from "@/api/http/status";
 import {
   insertInvoiceLines,
   lockDraftInvoiceForLines,
@@ -361,7 +361,9 @@ if (!databaseUrl || !runPostgres) {
       userId: SafeId<"user"> = scenario.actors.owner,
     ) =>
       createTestHandlerContext<
-        Parameters<typeof clientInvoicePrefillScalingScenario.handler>[0]
+        Parameters<
+          typeof clientInvoicePrefillScalingScenario.definition.handler
+        >[0]
       >({
         safeDb: createMembershipSafeDb(markRlsDatabase(db), {
           organizationId: scenario.orgId,
@@ -592,8 +594,8 @@ if (!databaseUrl || !runPostgres) {
       expect(atLimit.statements).toBe(atOne.statements);
       expect(atLimit.transactionRoundTrips).toBe(atOne.transactionRoundTrips);
       const selected =
-        await clientInvoicePrefillScalingScenario.handler(context);
-      if (selected instanceof ElysiaCustomStatusResponse) {
+        await clientInvoicePrefillScalingScenario.definition.handler(context);
+      if (selected instanceof HttpStatusResponse) {
         panic("Selected client invoice prefill must succeed");
       }
       for (const entry of entryValues) {
@@ -630,7 +632,7 @@ if (!databaseUrl || !runPostgres) {
         })),
       );
       expect(
-        await clientInvoicePrefillScalingScenario.handler(context),
+        await clientInvoicePrefillScalingScenario.definition.handler(context),
       ).toMatchObject({
         code: 409,
         response: { code: "too_many_unbilled_items" },

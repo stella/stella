@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { getLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
 import {
@@ -27,7 +27,7 @@ const config = {
         "Decorative icons are optional; use the bundled globe when image bytes are unavailable.",
     },
   },
-  params: t.Object({ hostname: t.String({ maxLength: 253 }) }),
+  params: v.object({ hostname: v.pipe(v.string(), v.maxLength(253)) }),
 } satisfies HandlerConfig;
 
 const readOrigin = createLinkIconOrigin();

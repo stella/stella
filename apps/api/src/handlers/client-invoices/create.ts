@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, max, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
@@ -17,7 +17,7 @@ import {
 import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   lockBillingArrangement,
   withInvoiceMatterLocks,
@@ -43,7 +43,7 @@ const createClientInvoice = createSafeRootHandler(
       consumesServices: false,
     },
     realtime: invoiceRealtimeUpdates,
-    params: t.Object({ clientId: tSafeId("contact") }),
+    params: v.object({ clientId: resourceIdSchema("contact") }),
     body: clientInvoiceBody,
   },
   async function* ({
@@ -251,7 +251,7 @@ const createClientInvoice = createSafeRootHandler(
     return result.mapError(invoiceCreationError);
   },
 );
-declareAggregateMutation(createClientInvoice.handler, {
+declareAggregateMutation(createClientInvoice, {
   type: "aggregate",
   aggregates: ["workspace"],
 });

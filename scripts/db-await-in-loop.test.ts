@@ -647,6 +647,8 @@ let report: DbAwaitInLoopReport = {
   filesScanned: 0,
 };
 
+// timeout: checking the fixture program against the Drizzle types can exceed
+// Bun's five-second default on a loaded runner; no wait is involved.
 beforeAll(() => {
   mkdirSync(FIXTURE_PARENT, { recursive: true });
   fixtureRoot = mkdtempSync(path.join(FIXTURE_PARENT, "db-await-in-loop-"));
@@ -696,7 +698,7 @@ beforeAll(() => {
     isInScope: (relative) => !relative.startsWith("db/"),
     handleDeclarationFiles: HANDLE_MODULES,
   });
-});
+}, 60_000);
 
 afterAll(() => {
   if (fixtureRoot !== "") {

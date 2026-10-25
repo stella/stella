@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   parsePlainDate,
   parseTimeZoneId,
@@ -43,16 +43,18 @@ import { pickDefined } from "@/api/lib/pick-defined";
 
 import { resolveMemoryExtractionEnabledAt } from "./memory-extraction-consent";
 
-const documentProcessingModeSchema = t.Union([
-  t.Literal(DOCUMENT_PROCESSING_MODE.OFF),
-  t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
+const documentProcessingModeSchema = v.union([
+  v.literal(DOCUMENT_PROCESSING_MODE.OFF),
+  v.literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
 ]);
 
 // The literal list mirrors MANAGED_AI_RESIDENCIES: a member on one side only
 // fails to compile here.
-const managedAIResidencySchema = t.Union([t.Literal("eu"), t.Literal("us")]);
+const managedAIResidencySchema = v.picklist(["eu", "us"]);
 type ManagedAIResidencyValue = (typeof MANAGED_AI_RESIDENCIES)[number];
-type ManagedAIResidencySchemaValue = Static<typeof managedAIResidencySchema>;
+type ManagedAIResidencySchemaValue = v.InferOutput<
+  typeof managedAIResidencySchema
+>;
 type MissingManagedAIResidencySchemaValue = Exclude<
   ManagedAIResidencyValue,
   ManagedAIResidencySchemaValue
@@ -69,45 +71,52 @@ true satisfies UnexpectedManagedAIResidencySchemaValue extends never
   ? true
   : never;
 
-const updateOrganizationSettingsBodySchema = t.Object({
-  documentProcessingMode: t.Optional(documentProcessingModeSchema),
-  matterNumberPattern: t.Optional(
-    t.String({
-      minLength: LIMITS.matterNumberPatternMinLength,
-      maxLength: LIMITS.matterNumberPatternMaxLength,
-    }),
+const updateOrganizationSettingsBodySchema = v.object({
+  documentProcessingMode: v.optional(documentProcessingModeSchema),
+  matterNumberPattern: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(LIMITS.matterNumberPatternMinLength),
+      v.maxLength(LIMITS.matterNumberPatternMaxLength),
+    ),
   ),
-  matterNumberPadding: t.Optional(
-    t.Integer({
-      minimum: LIMITS.matterNumberPaddingMin,
-      maximum: LIMITS.matterNumberPaddingMax,
-    }),
+  matterNumberPadding: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(LIMITS.matterNumberPaddingMin),
+      v.maxValue(LIMITS.matterNumberPaddingMax),
+    ),
   ),
-  matterNumberingEnabled: t.Optional(t.Boolean()),
-  promptCachingEnabled: t.Optional(t.Boolean()),
-  managedAIResidency: t.Optional(managedAIResidencySchema),
-  memoryExtractionEnabled: t.Optional(t.Boolean()),
-  timeMinimumUnitMinutes: t.Optional(
-    t.Integer({
-      minimum: LIMITS.timeMinimumUnitMinutesMin,
-      maximum: LIMITS.timeMinimumUnitMinutesMax,
-    }),
+  matterNumberingEnabled: v.optional(v.boolean()),
+  promptCachingEnabled: v.optional(v.boolean()),
+  managedAIResidency: v.optional(managedAIResidencySchema),
+  memoryExtractionEnabled: v.optional(v.boolean()),
+  timeMinimumUnitMinutes: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(LIMITS.timeMinimumUnitMinutesMin),
+      v.maxValue(LIMITS.timeMinimumUnitMinutesMax),
+    ),
   ),
-  timeEditWindowDays: t.Optional(
-    t.Integer({ minimum: LIMITS.timeEditWindowDaysMin }),
+  timeEditWindowDays: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(LIMITS.timeEditWindowDaysMin)),
   ),
-  timeLockedThroughMonth: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  timeNarrativeRequired: t.Optional(t.Boolean()),
-  timeZone: t.Optional(
-    t.Nullable(
-      t.String({
-        minLength: 1,
-        maxLength: TIME_ZONE_ID_MAX_LENGTH,
-        description:
+  timeLockedThroughMonth: v.optional(v.nullable(apiDateSchema)),
+  timeNarrativeRequired: v.optional(v.boolean()),
+  timeZone: v.optional(
+    v.nullable(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(TIME_ZONE_ID_MAX_LENGTH),
+        v.description(
           "IANA time zone whose calendar decides the organization's day " +
-          "(e.g. Europe/Prague), or null to derive it from the primary " +
-          "practice jurisdiction again",
-      }),
+            "(e.g. Europe/Prague), or null to derive it from the primary " +
+            "practice jurisdiction again",
+        ),
+      ),
     ),
   ),
 });
@@ -132,7 +141,7 @@ export type UpdateOrganizationSettingsProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateOrganizationSettingsBodySchema>;
+  body: v.InferOutput<typeof updateOrganizationSettingsBodySchema>;
   /** The instant the lock-month check reads the organization's day at. */
   now?: Temporal.Instant;
 };

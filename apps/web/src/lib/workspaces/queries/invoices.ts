@@ -3,7 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { InvoiceStatus } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { invoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 
@@ -34,7 +34,7 @@ export const invoicesInfiniteOptions = (workspaceId: string, limit: number) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: getInitialInvoicesPageParam(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -49,7 +49,7 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -67,7 +67,7 @@ export const invoicePrefillOptions = (workspaceId: string) =>
         .invoices({ workspaceId })
         .prefill.get({ query: {}, fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -86,7 +86,7 @@ export const clientInvoicePrefillOptions = (
     staleTime: 0,
     refetchOnWindowFocus: false,
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["client-invoices"]({ clientId }).prefill.get({
           query: {
             ...(period.periodStart === null

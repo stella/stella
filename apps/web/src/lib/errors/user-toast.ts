@@ -128,8 +128,8 @@ export const notifyUserError = (
   if (notifyStepUp(error)) {
     return false;
   }
-  // The stable refusal id coalesces Eden's observer and local error handlers;
-  // raw fetch and SDK errors also need to emit the same notice here.
+  // The stable refusal id coalesces the API client's observer and local error
+  // handlers; raw fetch and SDK errors also need to emit the same notice here.
   const refusal = actionAdmissionOutcome(error);
   const title = userErrorFromThrown(error, fallback);
   reportUserVisibleError(error, feature, routeTemplate, {

@@ -57,9 +57,9 @@ import type {
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { FeedbackReportSource } from "@/lib/analytics/types";
-import { api, publicFeedbackApi } from "@/lib/api";
+import { api, apiClient } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
@@ -74,15 +74,15 @@ const submitFeedbackReport = async (
 ): Promise<FeedbackReceiptView> => {
   switch (channel) {
     case FEEDBACK_CHANNELS.account:
-      return unwrapEden(await api.feedback.post(body));
+      return unwrapApiResponse(await api.feedback.post(body));
     case FEEDBACK_CHANNELS.public: {
       // The intake parses the raw text itself so it can reject unknown keys.
-      const data = unwrapEden(
-        await publicFeedbackApi.post(JSON.stringify(body)),
+      const data = unwrapApiResponse(
+        await apiClient.public.feedback.post(JSON.stringify(body)),
       );
       const receipt = v.safeParse(feedbackReceiptSchema, data);
       if (!receipt.success) {
-        // `unwrapEden` has already turned every refusal into an `APIError`;
+        // `unwrapApiResponse` has already turned every refusal into an `APIError`;
         // a success without a receipt breaks the intake's own contract.
         return panic(
           "Feedback intake answered without a receipt",

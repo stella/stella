@@ -45,6 +45,7 @@ const line = (seed: LineSeed, position: number): InvoiceExportLine => {
     unitPriceMinor: seed.netAmountMinor,
     vatRateBps,
     vatTreatment: "domestic_vat",
+    exemptionReason: null,
     source: "manual",
     date: null,
     timekeeper: null,
@@ -81,6 +82,7 @@ export const exportRecord = (seed: RecordSeed): InvoiceExportRecord => {
     id: "0192d6a4-7c1e-7b55-9a3e-2f1b6c8d4e01",
     documentType,
     originalNumber: null,
+    originalIssueDate: null,
     status: "finalized",
     issueDate: "2026-09-30",
     taxableSupplyDate: "2026-09-30",
@@ -139,6 +141,7 @@ export const CREDIT_NOTE = exportRecord({
   number: "20260017",
   documentType: "credit_note",
   originalNumber: "20260016",
+  originalIssueDate: "2026-09-30",
   dueDate: null,
   lines: [
     {

@@ -39,6 +39,8 @@ export type InvoiceExportLine = {
   grossAmountMinor: CentsAmount;
   vatRateBps: number;
   vatTreatment: VatTreatment;
+  /** The statutory basis stored for an exempt supply. */
+  exemptionReason: string | null;
   source: InvoiceExportLineSource;
   /** The day the work was done or the expense incurred, `YYYY-MM-DD`. */
   date: string | null;
@@ -62,6 +64,7 @@ export type InvoiceExportRecord = {
   number: string;
   documentType: InvoiceDocumentType;
   originalNumber: string | null;
+  originalIssueDate: string | null;
   status: "finalized" | "sent" | "paid" | "void";
   issueDate: string;
   taxableSupplyDate: string | null;

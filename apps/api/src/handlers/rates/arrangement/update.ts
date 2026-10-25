@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { billingArrangements } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -10,7 +12,7 @@ import {
   readBillingUsage,
   recordBillingCapCrossings,
 } from "@/api/lib/billing/arrangements";
-import { tCurrencyCode, tMinorUnitAmount } from "@/api/lib/custom-schema";
+import { minorUnitAmountSchema } from "@/api/lib/custom-schema";
 import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -33,34 +35,30 @@ const updateBillingArrangement = createSafeHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    body: t.Union([
-      t.Object(
-        {
-          mode: t.Literal("hourly"),
-          currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
-        },
-        { additionalProperties: false },
-      ),
-      t.Object(
-        {
-          mode: t.Literal("hourly"),
-          currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
-          capAmount: tMinorUnitAmount(1),
-          alertThresholdBps: t.Integer({ minimum: 1, maximum: 10_000 }),
-        },
-        { additionalProperties: false },
-      ),
-      t.Object(
-        {
-          mode: t.Literal("flat_fee"),
-          currency: tCurrencyCode,
-          revision: t.Optional(t.Integer({ minimum: 1 })),
-          flatFeeAmount: tMinorUnitAmount(0),
-        },
-        { additionalProperties: false },
-      ),
+    body: v.union([
+      v.strictObject({
+        mode: v.literal("hourly"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      }),
+      v.strictObject({
+        mode: v.literal("hourly"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+        capAmount: minorUnitAmountSchema(1),
+        alertThresholdBps: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(10_000),
+        ),
+      }),
+      v.strictObject({
+        mode: v.literal("flat_fee"),
+        currency: currencyCodeSchema,
+        revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+        flatFeeAmount: minorUnitAmountSchema(0),
+      }),
     ]),
   },
   async function* ({ body, safeDb, workspaceId, session, recordAuditEvent }) {

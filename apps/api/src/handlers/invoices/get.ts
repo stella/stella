@@ -4,10 +4,12 @@ import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const readInvoiceById = createSafeHandler(
   {

@@ -23,9 +23,9 @@
 //
 // Enumeration is by module glob + dynamic import of every `{ config, handler }`
 // export a handler module exposes (the default export and any named exports),
-// NOT Elysia route introspection: the `mcp` field lives on the endpoint config
-// and is never threaded into the route wiring, so the composed app cannot see
-// it. Route wiring itself stays typecheck-enforced separately. An endpoint's
+// not the mounted route table: the identifiers and the hidden-endpoint count
+// are per module, which the table does not record. Route wiring itself stays
+// typecheck-enforced separately. An endpoint's
 // identifier is its repo-relative module path for the default export, or
 // `path#exportName` for a named export. Endpoints defined inline in a route file
 // (not exported as `{ config, handler }`) are typecheck-enforced for `mcp` but
@@ -73,7 +73,7 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
 
 /**
  * Files that legitimately define endpoints inline (via a `createSafe*Handler`
- * call whose result is mounted directly into an Elysia instance, never exported
+ * call whose result is mounted directly into a route table, never exported
  * as a `{ config, handler }` module) rather than as an enumerable export. Each
  * entry pins the exact number of inline factory call sites so the
  * hidden-endpoint invariant still fails if one more inline endpoint is added.
@@ -88,7 +88,11 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // endpoint. Endpoints made with it count under `createSafePublicSubjectHandler`
   // in their own files.
   "apps/api/src/handlers/case-law/decisions/public-subject.ts": 1,
-  "apps/api/src/handlers/case-law/public-routes.ts": 11,
+  "apps/api/src/handlers/case-law/public-routes.ts": 12,
+  // Factories: each route table builds its decision and law resolvers with
+  // its own authorization and resolved-response sink.
+  "apps/api/src/handlers/legal-resolve/decision-endpoint.ts": 1,
+  "apps/api/src/handlers/legal-resolve/law-endpoint.ts": 1,
   "apps/api/src/handlers/legislation/public-routes.ts": 11,
   // Built by a factory so tests can inject the bundled catalogue; all six are
   // internal-only public reads with no MCP tool.

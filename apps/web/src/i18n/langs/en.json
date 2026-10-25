@@ -3846,6 +3846,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "One client",
+      "availabilityClientBadgeHelp": "Available only in one client's matters.",
+      "availabilityClientHelp": "Usable only in this client's matters. This can't be changed later.",
+      "availabilityFixedHelp": "Set when the skill was created. It can't be changed.",
+      "availabilityLabel": "Available in",
+      "availabilityMatter": "One matter",
+      "availabilityMatterBadgeHelp": "Available only in one matter.",
+      "availabilityMatterHelp": "Usable only in this matter. This can't be changed later.",
+      "availabilityOrganization": "Whole organization",
+      "availabilityTeamNeedsMatter": "To share a skill with the team, choose the matter it is for. This can't be changed later.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",

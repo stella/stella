@@ -18,6 +18,10 @@ import {
   REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
+import {
+  AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
+  AGENT_SKILL_BINDING_CONSTRAINTS,
+} from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import {
@@ -198,6 +202,24 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   CASE_LAW_PARSE_PENDING_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skills_bound_workspace_idx" ON public."agent_skills" (bound_workspace_id) WHERE bound_workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.agent_skills USING btree (bound_workspace_id) WHERE (bound_workspace_id IS NOT NULL)",
+    isUnique: false,
+    name: "agent_skills_bound_workspace_idx",
+    tableName: "agent_skills",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skills_bound_client_idx" ON public."agent_skills" (bound_client_id) WHERE bound_client_id IS NOT NULL',
+    definitionBody:
+      "ON public.agent_skills USING btree (bound_client_id) WHERE (bound_client_id IS NOT NULL)",
+    isUnique: false,
+    name: "agent_skills_bound_client_idx",
+    tableName: "agent_skills",
+  },
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "legislation_documents_work_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE version_valid_from IS NOT NULL',
@@ -846,6 +868,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CLIENT_INVOICE_BACKFILL,
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
+  ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
@@ -873,6 +896,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
   [
     ...CLIENT_INVOICE_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+    ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
     ...DECISION_DATE_CEILING_CONSTRAINTS,
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,

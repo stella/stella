@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
@@ -34,37 +34,37 @@ import {
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
-const createLineBodySchema = t.Object({
-  source: t.Union([
-    t.Object({
-      type: t.Literal("manual"),
+const createLineBodySchema = v.object({
+  source: v.union([
+    v.object({
+      type: v.literal("manual"),
       description: tLineDescription,
       quantity: tInvoiceLineQuantity,
-      unit: t.Optional(t.Nullable(tLineUnit)),
-      unitPriceMinor: tMinorUnitAmount(0),
+      unit: v.optional(v.nullable(tLineUnit)),
+      unitPriceMinor: minorUnitAmountSchema(0),
     }),
-    t.Object({
-      type: t.Literal("time_entry"),
-      timeEntryId: tSafeId("timeEntry"),
-      description: t.Optional(tLineDescription),
+    v.object({
+      type: v.literal("time_entry"),
+      timeEntryId: resourceIdSchema("timeEntry"),
+      description: v.optional(tLineDescription),
     }),
-    t.Object({
-      type: t.Literal("expense"),
-      expenseId: tSafeId("expense"),
-      description: t.Optional(tLineDescription),
+    v.object({
+      type: v.literal("expense"),
+      expenseId: resourceIdSchema("expense"),
+      description: v.optional(tLineDescription),
     }),
   ]),
   vatRateBps: tVatRateBps,
   vatTreatment: tVatTreatment,
-  exemptionReason: t.Optional(tExemptionReason),
+  exemptionReason: v.optional(tExemptionReason),
 });
 
 const prepareLineInput = ({
@@ -72,7 +72,7 @@ const prepareLineInput = ({
   vatRateBps,
   vatTreatment,
   exemptionReason,
-}: Static<typeof createLineBodySchema>) => {
+}: v.InferOutput<typeof createLineBodySchema>) => {
   const vat = {
     vatRateBps,
     vatTreatment,
@@ -90,7 +90,9 @@ const prepareLineInput = ({
   }).map((manualDraft) => ({ manualDraft, vat }));
 };
 
-const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const lineParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
@@ -103,7 +105,7 @@ const lineCreationError = (error: HandlerError | SafeDbError) =>
     : error;
 
 type ReadInvoiceLineDraftOptions = {
-  source: Static<typeof createLineBodySchema>["source"];
+  source: v.InferOutput<typeof createLineBodySchema>["source"];
   vat: Pick<
     InvoiceLineDraft,
     "vatRateBps" | "vatTreatment" | "exemptionReason"

@@ -31,12 +31,6 @@
   },
   {
     "file": "apps/api/scripts/ingestion-status.ts",
-    "fingerprint": "e7c408f336ca0b7926a5a34941ffb6c46408ba9e80fc06ad2f054412ac1c5d35",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/ingestion-status.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/ingestion-status.ts",
     "fingerprint": "2aeaa30e638fda933707d7b555d0f8a6d5735b3340f28efbc06e73819e52f94d",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/ingestion-status.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -64,6 +58,12 @@
     "fingerprint": "ceb16a2858d910ae0e653c63e8451064c30ee0fe3e9c2ca095dcc92fe3ebc3b3",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/ingestion-status.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/scripts/ingestion-status.ts",
+    "fingerprint": "e7c408f336ca0b7926a5a34941ffb6c46408ba9e80fc06ad2f054412ac1c5d35",
+    "count": 1,
+    "reason": "Existing transaction boundary; the hourly and daily sums inside it now cast to int, which changed the site's fingerprint."
   },
   {
     "file": "apps/api/scripts/ingestion-status.ts",
@@ -663,7 +663,7 @@
     "file": "apps/api/src/db/online-migrations.ts",
     "fingerprint": "71f257696dfea511892314a551b1062a430e69327915e45ca2df2310250b2ba1",
     "count": 1,
-    "reason": "pg_try_advisory_lock( in apps/api/src/db/online-migrations.ts: Existing session coordination remains with its connection owner."
+    "reason": "The online migration lock is tried instead of awaited in the database, so neither startup nor a waiting migrate run holds a statement on it past the statement timeout. Same lock, same single acquisition."
   },
   {
     "file": "apps/api/src/db/online-migrations.ts",
@@ -1059,7 +1059,7 @@
     "file": "apps/api/src/handlers/contacts/update.ts",
     "fingerprint": "51ee3a03e6ec7b85d24b3924a72bc29aa0ad9f860b786a248fcaf5bb31af0280",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/contacts/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The contact update lock also reads the stored tax and VAT IDs to resolve the pair it writes; the lock scope and order are unchanged."
   },
   {
     "file": "apps/api/src/handlers/desktop-presence/service.ts",
@@ -1203,13 +1203,13 @@
     "file": "apps/api/src/handlers/entities/move.ts",
     "fingerprint": "2840d044d2c47f5aca5f6491b869b3c0ca5870020f8a268bbf45046681116720",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/move.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The move's entity row lock takes a list of entity ids in id order so one transaction can move several entities; same table, same transaction, still after the matter tree lock."
   },
   {
     "file": "apps/api/src/handlers/entities/move.ts",
     "fingerprint": "c998924749f3b9f8d0e0d3807192086a3adeb6d71ad61d1b245fa6e7072d6e07",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/move.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The move's target folder row lock reads the parent id from an argument instead of the request body; same row, same transaction, same lock order."
   },
   {
     "file": "apps/api/src/handlers/entities/open-desktop-edit-session.ts",
@@ -1729,9 +1729,9 @@
   },
   {
     "file": "apps/api/src/handlers/skills/update.ts",
-    "fingerprint": "362b7954c5875a3730ec3e485c127c17f540ff820cc646e548ed27b9fefd1476",
+    "fingerprint": "270bd1490b6feb89cea19cc72d7088996750ec56eee035496196bbeb9ee45912",
     "count": 1,
-    "reason": "The existing skill row lock also selects invocation for the update diff and audit; lock acquisition, tenant predicate, and transaction boundary are unchanged."
+    "reason": "The existing skill row lock also selects the binding fields for management authorization; lock acquisition, tenant predicate, and transaction boundary are unchanged."
   },
   {
     "file": "apps/api/src/handlers/style-sets/delete.ts",
@@ -3627,7 +3627,7 @@
     "file": "apps/api/src/lib/review-organization/reset.ts",
     "fingerprint": "7224a12a5c3044925eb22fbcc8c94d43c4d20ce2be95805097667ca9ad9c8199",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "Existing review reset transaction; the account lookup now compares the address through the email owner, which changes its source fingerprint while preserving the transaction boundary and count."
   },
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",
@@ -4200,10 +4200,10 @@
     "reason": "transaction-boundary in apps/api/src/scripts/better-auth-microsoft-identity-map.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/better-auth-migration-audit.ts",
+    "file": "apps/api/src/scripts/better-auth-migration-audit-command.ts",
     "fingerprint": "fc0f0097cd1ab3f2ca6229c95a53ce6b468bb40137d87ce8a48882666d9c9f4a",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/better-auth-migration-audit.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "transaction-boundary in apps/api/src/scripts/better-auth-migration-audit-command.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/case-law-source-total.ts",
@@ -4362,16 +4362,16 @@
     "reason": "transaction-boundary in apps/api/src/scripts/repair-publisher-absent-text.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/replay-tick.ts",
+    "file": "apps/api/src/scripts/replay-tick-command.ts",
     "fingerprint": "5d2ff5e173412a2f6563f61cbe7648607a2b8113a3077eee52c0fcea09278c0f",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
+    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick-command.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/replay-tick.ts",
+    "file": "apps/api/src/scripts/replay-tick-command.ts",
     "fingerprint": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
+    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick-command.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/seed-polarity-rules.ts",

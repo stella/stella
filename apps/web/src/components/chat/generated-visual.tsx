@@ -34,7 +34,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { browserApiRootUrl } from "@/lib/api-url";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
@@ -76,7 +76,7 @@ const GeneratedVisualFrame = ({
       const response = await api["user-files"]({ fileId }).visual.get({
         fetch: { signal },
       });
-      return v.parse(generatedVisualPageSchema, unwrapEden(response));
+      return v.parse(generatedVisualPageSchema, unwrapApiResponse(response));
     },
     gcTime: 0,
     staleTime: Infinity,

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
@@ -12,12 +12,11 @@ import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { boundedString } from "@/api/lib/search/response-text-bounds";
-import { preventPublicCaching } from "@/api/lib/security-headers";
 
 // The coverage page reads "cannot state the figures" as an answer, not a failure.
-const coverageAnswerSchema = t.Union([
+const coverageAnswerSchema = v.union([
   coverageResponseSchema,
-  t.Object({ message: boundedString(2048) }, { additionalProperties: false }),
+  v.object({ message: boundedString(2048) }),
 ]);
 
 const config = {
@@ -42,7 +41,8 @@ const readCaseLawCoverage = createSafeBoundedPublicHandler(
       ),
     );
     if ("message" in response) {
-      preventPublicCaching(set);
+      // A degraded answer is never cached publicly.
+      set.privateOnly = true;
     }
 
     return Result.ok(projectResponseText(response, coverageAnswerSchema));
