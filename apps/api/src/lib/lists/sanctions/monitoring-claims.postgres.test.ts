@@ -17,7 +17,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const now = new Date("2026-09-29T12:00:00Z");
-const BLOCK_OBSERVATION_TIMEOUT_MS = 2000;
 const CLAIM_INSPECTED = "Monitoring contact claim inspected";
 const errorSummary = (error: unknown): string => {
   if (!(error instanceof Error)) {
@@ -101,7 +100,6 @@ if (!databaseUrl || !runPostgresTests) {
           await waitForExternalState({
             description:
               "the competing claim finishes without waiting on this row",
-            timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
             read: async () => {
               if (claimFinished) {
                 return true;

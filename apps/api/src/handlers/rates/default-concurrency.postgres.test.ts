@@ -43,7 +43,6 @@ const observeBlocking = async (
   await waitForExternalState({
     description:
       "the concurrent rate default mutation waits on the workspace lock",
-    timeoutMs: 2000,
     read: async () =>
       (
         await tx

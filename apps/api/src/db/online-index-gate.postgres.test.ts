@@ -51,7 +51,6 @@ const waitForPhase = async (
   await waitForExternalState({
     description: `CIC reaches ${phase}`,
     intervalMs: 5,
-    timeoutMs: 2000,
     read: async () =>
       (
         await observer<
@@ -70,7 +69,6 @@ const waitForBackendExit = async (
   await waitForExternalState({
     description,
     intervalMs: 5,
-    timeoutMs: 2000,
     read: async () =>
       (
         await observer<
@@ -89,7 +87,6 @@ const waitForLockWait = async (
   await waitForExternalState({
     description,
     intervalMs: 5,
-    timeoutMs: 2000,
     read: async () =>
       (
         await observer<
@@ -917,7 +914,6 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
               await waitForExternalState({
                 description: "the index scan reaches the advisory barrier",
                 intervalMs: 5,
-                timeoutMs: 2000,
                 read: async () =>
                   (
                     await fixture.observer<
@@ -1095,7 +1091,6 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await waitForExternalState({
         description: "the writer is idle in its transaction",
         intervalMs: 5,
-        timeoutMs: 2000,
         read: async () =>
           (
             await fixture.observer<
@@ -1148,7 +1143,6 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await waitForExternalState({
         description: "a lock request queues on the table",
         intervalMs: 5,
-        timeoutMs: 2000,
         read: async () => (await queuedRequests()).length > 0,
       });
       expect(await queuedRequests()).toHaveLength(1);

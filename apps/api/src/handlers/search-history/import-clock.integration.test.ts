@@ -133,7 +133,6 @@ const acquireClockAfter = async (fixture: HistoryFixture, cutoff: Date) =>
   await waitForExternalState({
     description: "an import clock strictly after the database cutoff",
     intervalMs: 1,
-    timeoutMs: 1000,
     read: async () => {
       const clock = await acquireClock(fixture);
       return Date.parse(clock.issuedAt) > cutoff.getTime() && clock;

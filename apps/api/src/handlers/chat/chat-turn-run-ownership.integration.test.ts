@@ -589,7 +589,6 @@ describe("a producing run", () => {
     await waitForExternalState({
       description: "the heartbeat renews the lease past now",
       intervalMs: 5,
-      timeoutMs: 2000,
       read: async () => {
         const { leaseExpiresAt } = await readTurn(execution.id);
         return leaseExpiresAt !== null && leaseExpiresAt > new Date();
@@ -725,7 +724,6 @@ describe("a producing run", () => {
     await waitForExternalState({
       description: "the relinquished claim shortens the lease",
       intervalMs: 5,
-      timeoutMs: 2000,
       read: async () => {
         const { leaseExpiresAt } = await readTurn(execution.id);
         return (

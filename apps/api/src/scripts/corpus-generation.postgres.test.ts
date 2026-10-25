@@ -41,7 +41,6 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const TARGET = { family: "case_law", generation: "case_law_v7" } as const;
 const LOCK_WAIT_POLL_MS = 20;
-const LOCK_WAIT_TIMEOUT_MS = 2000;
 
 type RelationLock = { relation: string; mode: string; granted: boolean };
 
@@ -77,7 +76,6 @@ const waitingOn = async (
   await waitForExternalState({
     description: `backend ${String(pid)} waits on ${relation}`,
     intervalMs: LOCK_WAIT_POLL_MS,
-    timeoutMs: LOCK_WAIT_TIMEOUT_MS,
     read: async () => {
       const locks = await relationLocksOf(db, pid);
       return (

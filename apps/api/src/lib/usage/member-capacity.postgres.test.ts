@@ -27,7 +27,6 @@ import {
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const BLOCK_OBSERVATION_TIMEOUT_MS = 2000;
 
 const errorChainText = (error: unknown): string => {
   const parts: string[] = [];
@@ -147,7 +146,6 @@ if (!databaseUrl || !runPostgresTests) {
 
           await waitForExternalState({
             description: "the second addition waits on the first",
-            timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
             read: async () =>
               (
                 await setup.sql<{ blocked: boolean }[]>`

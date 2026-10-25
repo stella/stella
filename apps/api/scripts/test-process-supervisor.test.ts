@@ -623,7 +623,6 @@ posixTest(
       };
       await waitForExternalState({
         description: `worker ${String(pid)} exits`,
-        timeoutMs: 1000,
         read: () => !alive(),
       });
     } finally {
@@ -691,7 +690,6 @@ posixTest(
       };
       await waitForExternalState({
         description: `worker ${String(pid)} exits`,
-        timeoutMs: 1000,
         read: () => !alive(),
       });
     } finally {
@@ -815,7 +813,6 @@ posixTest(
       await waitForExternalState({
         description: "the descendant writes a heartbeat after the leader exits",
         intervalMs: 20,
-        timeoutMs: 1000,
         read: () => readFileSync(heartbeatPath, "utf-8") !== afterLeaderExit,
       });
       fixture.supervisor.dispose();

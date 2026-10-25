@@ -185,7 +185,6 @@ if (!databaseUrl || !runPostgresTests) {
                   );
             await waitForExternalState({
               description: "the mutation waits on the attaching transaction",
-              timeoutMs: 2000,
               read: async () =>
                 (
                   await setup.sql<

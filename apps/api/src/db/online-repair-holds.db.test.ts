@@ -333,7 +333,6 @@ describe.skipIf(!enabled)(
                       description:
                         "the staged index reaches its writer barrier",
                       intervalMs: 5,
-                      timeoutMs: 2000,
                       read: async () =>
                         (
                           await observer.unsafe<{ phase: string }[]>(

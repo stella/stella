@@ -37,7 +37,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const WRITER_GATE_SETTING = "test.correspondence_writer_gate";
-const BLOCK_OBSERVATION_TIMEOUT_MS = 2000;
 
 const waitForWriterGate = async (
   tx: Transaction,
@@ -45,7 +44,6 @@ const waitForWriterGate = async (
 ): Promise<void> => {
   await waitForExternalState({
     description: "the production writer reaches the insert gate",
-    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
     read: async () =>
       (
         await tx.execute<{ blocked: boolean }>(sql`

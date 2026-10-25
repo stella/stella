@@ -300,7 +300,6 @@ if (!databaseUrl || !runPostgresTests) {
             description:
               "the second delivery waits on a lock or reaches its candidate",
             intervalMs: 20,
-            timeoutMs: 2000,
             read: async () =>
               secondReachedCandidate ||
               (

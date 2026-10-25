@@ -47,7 +47,6 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const now = new Date("2026-09-29T12:00:00Z");
 const GATE_SETTING = "test.monitoring_write_gate";
-const BLOCK_OBSERVATION_TIMEOUT_MS = 2000;
 
 const backendPid = async (db: GatedTestDb) =>
   (await db.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)).at(0)
@@ -58,7 +57,6 @@ const backendPid = async (db: GatedTestDb) =>
 const blockersFor = async (db: GatedTestDb, pid: number) =>
   await waitForExternalState({
     description: "the monitoring operation reaches its database barrier",
-    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
     read: async () => {
       const row =
         (
