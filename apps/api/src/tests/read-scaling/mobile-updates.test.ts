@@ -10,5 +10,6 @@ test("the update relay reads three CDN objects and no rows at any CDN size", asy
     expect(measured.transactionRoundTrips).toBe(0);
     expect(measured.cdnReads).toBe(3);
   }
+  expect(small.responseBytes).toBeGreaterThan(0);
   expect(large.responseBytes).toBe(small.responseBytes);
 });

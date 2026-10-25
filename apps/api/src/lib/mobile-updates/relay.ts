@@ -46,6 +46,16 @@ const CDN_TIMEOUT_MS = 5000;
 /** A manifest is a few kilobytes; anything far larger is not one. */
 const MANIFEST_MAX_BYTES = 256 * 1024;
 
+/** The protocol's framing around the manifest and its signature. */
+const ANSWER_FRAMING_MAX_LENGTH = 1024;
+
+/**
+ * The longest answer the route can give: a manifest and a signature, each
+ * read under the CDN cap, inside the protocol's framing.
+ */
+export const MOBILE_UPDATE_ANSWER_MAX_LENGTH =
+  2 * MANIFEST_MAX_BYTES + ANSWER_FRAMING_MAX_LENGTH;
+
 const pointerSchema = v.object({
   updateId: v.pipe(v.string(), v.regex(MOBILE_UPDATE_ID_PATTERN)),
 });
@@ -141,15 +151,20 @@ export const readSignedMobileUpdate = async ({
   return readPresent({ manifest: manifest.value, signature: trimmed });
 };
 
+export type MobileUpdateAnswer = {
+  readonly body: string;
+  readonly headers: Readonly<Record<string, string>>;
+};
+
 /**
  * The protocol's multipart answer: the signed manifest, its signature in the
  * part's `expo-signature` header (a structured-field dictionary), and empty
  * extensions. Caching is the route's `CachePolicy`.
  */
-export const mobileUpdateResponse = (
+export const mobileUpdateAnswer = (
   update: SignedMobileUpdate,
   boundary: string,
-): Response => {
+): MobileUpdateAnswer => {
   const crlf = "\r\n";
   const body = [
     `--${boundary}`,
@@ -166,11 +181,12 @@ export const mobileUpdateResponse = (
     `--${boundary}--`,
     "",
   ].join(crlf);
-  return new Response(body, {
+  return {
+    body,
     headers: {
       "content-type": `multipart/mixed; boundary=${boundary}`,
       "expo-protocol-version": "1",
       "expo-sfv-version": "0",
     },
-  });
+  };
 };

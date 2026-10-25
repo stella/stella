@@ -8,4 +8,5 @@ export const mobileUpdatesRoute = new Elysia({
   prefix: "/mobile/updates",
 }).get("/:variant", readMobileUpdate.handler, {
   params: readMobileUpdate.config.params,
+  response: readMobileUpdate.config.response,
 });

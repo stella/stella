@@ -106,6 +106,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   ["/favicon.ico", "The API host's icon is served by every deployment"],
   [
+    "/v1/mobile/updates",
+    "Mobile builds ask every deployment for updates; one with nothing published answers 404",
+  ],
+  [
     "/operator",
     "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
   ],
