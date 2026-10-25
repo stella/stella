@@ -26,6 +26,8 @@ import {
   recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   MANAGED_MODEL_TIER,
@@ -155,25 +157,20 @@ const addDays = (from: Date, days: number): Date =>
  * nothing.
  */
 export const endOrganizationEvaluation = async (
-  db: Pick<Transaction, "update">,
+  db: Transaction,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<boolean> => {
-  const ended = await db
-    .update(organizationAccessStates)
-    .set({
-      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
-      evaluationEndedAt: now,
-    })
-    .where(
-      and(
-        eq(organizationAccessStates.organizationId, organizationId),
-        eq(
-          organizationAccessStates.state,
-          ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        ),
-      ),
-    )
-    .returning({ organizationId: organizationAccessStates.organizationId });
+  const ended = await transitionScopedBatch({
+    tx: db,
+    spec: TRANSITIONS.organizationAccessStates,
+    identities: [{ organizationId }],
+    options: {
+      from: [ORGANIZATION_ACCESS_STATE.evaluationPeriod],
+      to: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      set: { evaluationEndedAt: now },
+    },
+    recordTransitionAuditEvent: async () => await Promise.resolve(),
+  });
   return ended.length > 0;
 };
 
@@ -213,12 +210,9 @@ export const moveKeylessOrganizationsToFree = async (
   db: Transaction,
   { now, actor }: MoveKeylessOrganizationsOptions,
 ): Promise<SafeId<"organization">[]> => {
-  const moved = await db
-    .update(organizationAccessStates)
-    .set({
-      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
-      evaluationEndedAt: now,
-    })
+  const candidates = await db
+    .select({ id: organizationAccessStates.organizationId })
+    .from(organizationAccessStates)
     .where(
       and(
         eq(
@@ -240,38 +234,55 @@ export const moveKeylessOrganizationsToFree = async (
             ),
         ),
       ),
-    )
-    .returning({ organizationId: organizationAccessStates.organizationId });
+    );
 
-  // One audit group per organization, written in one batched insert.
-  await recordAuditGroups({
+  const moved = await transitionScopedBatch({
     tx: db,
-    groups: moved.map((row) => ({
-      bindings: {
-        organizationId: row.organizationId,
-        workspaceId: null,
-        userId: actor,
-        execution: {
-          performer: { type: "service", id: actor, name: actor },
-          trigger: { type: "system", source: KEYLESS_MOVE_AUDIT_SOURCE },
-        },
-      },
-      events: [
-        {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
-          resourceId: row.organizationId,
-          changes: {
-            state: {
-              old: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-              new: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    spec: TRANSITIONS.organizationAccessStates,
+    identities: candidates.map(({ id }) => ({ organizationId: id })),
+    options: {
+      from: [ORGANIZATION_ACCESS_STATE.selfManagedKeys],
+      to: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      set: { evaluationEndedAt: now },
+    },
+    recordTransitionAuditEvent: async (auditTx, rows) => {
+      const movedIds = candidates.filter(({ id }) =>
+        rows.some(({ identity }) => identity["organizationId"] === id),
+      );
+      await recordAuditGroups({
+        tx: auditTx,
+        groups: movedIds.map(({ id }) => ({
+          bindings: {
+            organizationId: id,
+            workspaceId: null,
+            userId: actor,
+            execution: {
+              performer: { type: "service", id: actor, name: actor },
+              trigger: { type: "system", source: KEYLESS_MOVE_AUDIT_SOURCE },
             },
           },
-        },
-      ],
-    })),
+          events: [
+            {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+              resourceId: id,
+              changes: {
+                state: {
+                  old: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+                  new: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+                },
+              },
+            },
+          ],
+        })),
+      });
+    },
   });
-  return moved.map((row) => row.organizationId);
+  return candidates
+    .filter(({ id }) =>
+      moved.some(({ identity }) => identity["organizationId"] === id),
+    )
+    .map(({ id }) => id);
 };
 
 /**

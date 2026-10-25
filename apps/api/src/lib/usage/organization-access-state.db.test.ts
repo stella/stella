@@ -40,6 +40,8 @@ import {
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -313,6 +315,71 @@ describe("moving keyless organizations to the free floor", () => {
         .delete(organization)
         .where(inArray(organization.id, organizationIds));
       await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
+    }
+  });
+
+  test("the declared graph refuses ended and evaluation-period stale moves", async () => {
+    const endedId = mintAuthProviderId<"organization">();
+    const evaluationId = mintAuthProviderId<"organization">();
+    let auditEvents = 0;
+    try {
+      await testDb.insert(organization).values([
+        {
+          id: endedId,
+          name: "Ended transition fixture",
+          slug: `ended-transition-${endedId}`,
+          createdAt: new Date(),
+        },
+        {
+          id: evaluationId,
+          name: "Evaluation transition fixture",
+          slug: `evaluation-transition-${evaluationId}`,
+          createdAt: new Date(),
+        },
+      ]);
+      await testDb.insert(organizationAccessStates).values([
+        {
+          organizationId: endedId,
+          state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+          evaluationEndedAt: new Date(),
+        },
+        {
+          organizationId: evaluationId,
+          state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+          evaluationStartedAt: new Date(Date.now() - DAY_IN_MS),
+          evaluationEndsAt: new Date(Date.now() + DAY_IN_MS),
+        },
+      ]);
+
+      expect(
+        await endOrganizationEvaluation(ownerDb(), {
+          organizationId: endedId,
+          now: new Date(),
+        }),
+      ).toBe(false);
+      const moved = await transitionScopedBatch({
+        tx: ownerDb(),
+        spec: TRANSITIONS.organizationAccessStates,
+        identities: [{ organizationId: evaluationId }],
+        options: {
+          from: [ORGANIZATION_ACCESS_STATE.selfManagedKeys],
+          to: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+          set: { evaluationEndedAt: new Date() },
+        },
+        recordTransitionAuditEvent: (_tx, rows) => {
+          auditEvents += rows.length;
+        },
+      });
+
+      expect(moved).toEqual([]);
+      expect(auditEvents).toBe(0);
+      expect((await readState(evaluationId))?.state).toBe(
+        ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      );
+    } finally {
+      await testDb
+        .delete(organization)
+        .where(inArray(organization.id, [endedId, evaluationId]));
     }
   });
 });

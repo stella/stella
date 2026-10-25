@@ -23,14 +23,14 @@ import {
 
 const USAGE =
   "Usage: move-keyless-organizations-to-free.ts [--apply --actor <operator>]";
-const { values, positionals } = parseArgs({
+const { values } = parseArgs({
   args: process.argv.slice(2),
   options: { apply: { type: "boolean" }, actor: { type: "string" } },
   strict: true,
 });
 const apply = values.apply === true;
 const actor = values.actor?.trim();
-if (positionals.length > 0 || apply !== (actor !== undefined && actor !== "")) {
+if (apply !== (actor !== undefined && actor !== "")) {
   panic(USAGE);
 }
 
