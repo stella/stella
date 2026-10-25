@@ -1662,6 +1662,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "RELEASE_PROOF_REPOSITORY",
   // Why release/staging-proof found no staging proof for a release head.
   "NO_PROOF_REASON",
+  "PROOF_DISPATCHED",
   "RELEASE_TREE_PROOF_VERIFIER",
   "REUSE_RUN",
   "RELEASE_REF",

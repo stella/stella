@@ -296,6 +296,21 @@ describe("pull request heads", () => {
     });
   });
 
+  test("a proof this run just dispatched stays pending until its run is listed", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, []);
+    runs([]);
+    const result = run(["pull-request", "7"], { PROOF_DISPATCHED: "true" });
+    expect(result.posted).toEqual([
+      {
+        sha: head,
+        state: "pending",
+        context: "release/staging-proof",
+        description: "Staging proof dispatched; waiting for its run to start",
+      },
+    ]);
+  });
+
   test("open pull requests are all recorded", () => {
     respond(`repos/${repository}/pulls?state=open&base=main&per_page=100`, [
       [
@@ -323,8 +338,23 @@ describe("merge groups", () => {
   };
   const tree = "1".repeat(40);
 
-  test("a non-release merge group passes at once", () => {
+  const version = (sha: string, value: string) => {
+    writeFileSync(
+      path.join(
+        responses,
+        `repos/${repository}/contents/VERSION?ref=${sha}`.replaceAll(
+          /[/?&=]/gu,
+          "_",
+        ),
+      ),
+      `${value}\n`,
+    );
+  };
+
+  test("a non-release merge group that lands no release passes", () => {
     respond(`repos/${repository}/pulls/7`, pull({ title: "feat: thing" }));
+    version(groupHead, "1.2.2");
+    version(mainBase, "1.2.2");
     const result = run(["merge-group", "7", groupHead, mainBase]);
     expect(result.exitCode).toBe(0);
     expect(result.posted).toEqual([
@@ -335,6 +365,33 @@ describe("merge groups", () => {
         description: "Not a release pull request",
       },
     ]);
+  });
+
+  test("an unproven release queued ahead of an ordinary pull request fails the group", () => {
+    // The queue ref names the ordinary entry; the release ahead of it changed
+    // VERSION between the resolved base and the group head.
+    respond(`repos/${repository}/pulls/8`, pull({ title: "feat: thing" }));
+    version(groupHead, "1.2.3");
+    version(mainBase, "1.2.2");
+    const result = run(["merge-group", "8", groupHead, mainBase]);
+    expect(result.exitCode).toBe(0);
+    expect(result.posted).toEqual([
+      {
+        sha: groupHead,
+        state: "failure",
+        context: "release/staging-proof",
+        description:
+          "This merge group also lands a release; a release merges alone, so requeue after it lands",
+      },
+    ]);
+  });
+
+  test("an unreadable VERSION fails closed without a status", () => {
+    respond(`repos/${repository}/pulls/8`, pull({ title: "feat: thing" }));
+    version(groupHead, "1.2.2");
+    const result = run(["merge-group", "8", groupHead, mainBase]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.posted).toEqual([]);
   });
 
   test("a release lands only the proven tree on the proven main", () => {
@@ -492,6 +549,7 @@ test("malformed arguments are refused before any request", () => {
 describe("release-proof.yml records the status on every head that needs it", () => {
   const workflow = v.parse(
     v.object({
+      concurrency: v.object({ group: v.string() }),
       jobs: v.object({ dispatch: v.object({ if: v.string() }) }),
     }),
     Bun.YAML.parse(
@@ -501,17 +559,43 @@ describe("release-proof.yml records the status on every head that needs it", () 
       ),
     ),
   );
+  const contextFor = (event: object) =>
+    contextFromNested({
+      github: {
+        event_name: "pull_request_target",
+        ref: "refs/heads/main",
+        workflow: "Prove release PR tree",
+        run_id: 99,
+        event: { pull_request: { number: 7 }, ...event },
+      },
+    });
   const runsFor = (event: object) =>
-    evaluate(
-      workflow.jobs.dispatch.if,
-      contextFromNested({
-        github: {
-          event_name: "pull_request_target",
-          ref: "refs/heads/main",
-          event,
-        },
-      }),
+    evaluate(workflow.jobs.dispatch.if, contextFor(event));
+  // Concurrency is decided before the job condition, for every event.
+  const groupFor = (event: object) =>
+    workflow.concurrency.group.replaceAll(
+      /\$\{\{(.*?)\}\}/gu,
+      (_, expression: string) =>
+        v.parse(v.string(), evaluate(expression, contextFor(event))),
     );
+
+  test("an ignored edit takes its own concurrency group and cancels nothing", () => {
+    const bodyOnly = {
+      action: "edited",
+      changes: { body: { from: "old" }, title: null, base: null },
+    };
+    expect(runsFor(bodyOnly)).toBe(false);
+    expect(groupFor(bodyOnly)).toBe("Prove release PR tree-run-99");
+    expect(groupFor({ action: "synchronize" })).toBe(
+      "Prove release PR tree-pr-7",
+    );
+    expect(
+      groupFor({
+        action: "edited",
+        changes: { title: { from: "feat: x" }, base: null },
+      }),
+    ).toBe("Prove release PR tree-pr-7");
+  });
 
   test("a pull request retargeted to main is recorded", () => {
     expect(

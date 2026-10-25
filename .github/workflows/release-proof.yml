@@ -26,7 +26,9 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
+  # Concurrency applies before the job condition: an edit the job ignores
+  # (body only) takes its own group, so it never cancels a run that records.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && (github.event.action != 'edited' || github.event.changes.title != null || github.event.changes.base != null) && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 defaults:
@@ -98,7 +100,28 @@ jobs:
               continue
             fi
             gh workflow run "$workflow.yml" --repo "$GITHUB_REPOSITORY" --ref main -f sha="$PROOF_SHA" -f release_candidate=true
+            if [[ "$workflow" == deploy-staging ]]; then
+              echo "dispatched=true" >> "$GITHUB_OUTPUT"
+            fi
           done
+
+      # The shared resolver picks the group's comparison base: the merge base
+      # of main and the group head, so every queue entry that lands with this
+      # one is judged, not only the entry its ref names. It runs from main's
+      # checkout against the group head, which is never checked out.
+      - name: Resolve the merge group's comparison base
+        id: group-base
+        if: github.event_name == 'merge_group'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_REF: ${{ github.event.merge_group.base_ref }}
+          GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet --no-tags --filter=blob:none origin "$GROUP_HEAD_SHA"
+          git worktree add --quiet --detach --no-checkout "$RUNNER_TEMP/merge-group" "$GROUP_HEAD_SHA"
+          cd "$RUNNER_TEMP/merge-group"
+          bash "$GITHUB_WORKSPACE/scripts/merge-target-base.sh"
 
       # Runs after a refused dispatch too, so the refusal shows on the head.
       - name: Record release/staging-proof
@@ -107,10 +130,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DISPATCH_OUTCOME: ${{ steps.dispatch.outcome }}
           NO_PROOF_REASON: ${{ steps.dispatch.outputs.no_proof_reason }}
+          PROOF_DISPATCHED: ${{ steps.dispatch.outputs.dispatched }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
           GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
           GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
-          GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          GROUP_BASE: ${{ steps.group-base.outputs.base_sha }}
         run: |
           set -euo pipefail
           status=scripts/release-staging-proof-status.sh
@@ -124,7 +148,7 @@ jobs:
             merge_group)
               [[ "$GROUP_HEAD_REF" =~ ^refs/heads/gh-readonly-queue/main/pr-([1-9][0-9]*)-[0-9a-f]{40}$ ]] ||
                 { echo "::error::Merge group ref does not name a pull request: $GROUP_HEAD_REF" >&2; exit 1; }
-              bash "$status" merge-group "${BASH_REMATCH[1]}" "$GROUP_HEAD_SHA" "$GROUP_BASE_SHA"
+              bash "$status" merge-group "${BASH_REMATCH[1]}" "$GROUP_HEAD_SHA" "$GROUP_BASE"
               ;;
             push | workflow_dispatch)
               bash "$status" open-pull-requests

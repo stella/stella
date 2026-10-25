@@ -13,9 +13,10 @@
 # Usage:
 #   release-staging-proof-status.sh pull-request <number>
 #   release-staging-proof-status.sh open-pull-requests
-#   release-staging-proof-status.sh merge-group <number> <group head> <group base>
+#   release-staging-proof-status.sh merge-group <number> <group head> <resolved base>
 #   release-staging-proof-status.sh finished-run <release head> <run id>
-# NO_PROOF_REASON names why no proof was started for a release head.
+# NO_PROOF_REASON names why no proof was started for a release head;
+# PROOF_DISPATCHED=true says this run just dispatched its staging proof.
 set -euo pipefail
 
 context=release/staging-proof
@@ -78,7 +79,11 @@ release_head() {
     [.workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
       .path == ".github/workflows/deploy-staging.yml" and .display_title == $title)][0] // {}
   ' <<< "$runs")
-  if [[ "$(jq -r '.id // ""' <<< "$run")" == "" ]]; then
+  if [[ "$(jq -r '.id // ""' <<< "$run")" == "" && "${PROOF_DISPATCHED:-}" == true ]]; then
+    # The run listing can trail a dispatch that just succeeded; the run's own
+    # last job settles the status.
+    post "$head" pending "Staging proof dispatched; waiting for its run to start"
+  elif [[ "$(jq -r '.id // ""' <<< "$run")" == "" ]]; then
     post "$head" failure "${NO_PROOF_REASON:-No staging proof was started for this head; push to the release branch to start one}"
   elif [[ "$(jq -r '.status' <<< "$run")" != completed ]]; then
     post "$head" pending "Staging proof running: run $(jq -r '.id' <<< "$run")" "$(jq -r '.html_url' <<< "$run")"
@@ -113,13 +118,32 @@ open_pull_requests() {
   done <<< "$pulls"
 }
 
+version_at() {
+  local version
+  version=$(api "repos/$repo/contents/VERSION?ref=$1" -H "Accept: application/vnd.github.raw") || return
+  printf '%s\n' "${version//[[:space:]]/}"
+}
+
+# The group base is the shared resolver's (merge-target-base.sh): the merge
+# base of main and the group head, so the group head carries every queue entry
+# that lands with this one, not only the entry the queue ref names. A release
+# merges alone: its group must hold exactly the proven tree on exactly the
+# proven main, and any other group whose entries change VERSION fails.
 merge_group() {
   local number="$1" group_head="$2" group_base="$3"
   [[ "$number" =~ ^[1-9][0-9]*$ && "$group_head" =~ $sha_pattern && "$group_base" =~ $sha_pattern ]] || usage
-  local pull head proof group_tree head_tree
+  local pull head proof group_tree head_tree group_version base_version
   pull=$(api "repos/$repo/pulls/$number")
   if ! is_release "$pull"; then
-    post "$group_head" success "Not a release pull request"
+    # Assigned on their own so an unreadable VERSION stops the script.
+    group_version=$(version_at "$group_head")
+    base_version=$(version_at "$group_base")
+    [[ -n "$group_version" && -n "$base_version" ]] || { echo "::error::VERSION is unreadable in the merge group" >&2; exit 1; }
+    if [[ "$group_version" != "$base_version" ]]; then
+      post "$group_head" failure "This merge group also lands a release; a release merges alone, so requeue after it lands"
+    else
+      post "$group_head" success "Not a release pull request"
+    fi
     return
   fi
   head=$(jq -r '.head.sha' <<< "$pull")
@@ -136,7 +160,7 @@ merge_group() {
   group_tree=$(api "repos/$repo/commits/$group_head" | jq -r '.commit.tree.sha')
   head_tree=$(api "repos/$repo/commits/$head" | jq -r '.commit.tree.sha')
   if [[ ! "$group_tree" =~ $sha_pattern || "$group_tree" != "$head_tree" ]]; then
-    post "$group_head" failure "Merge group tree differs from the proven release head ${head:0:12}"
+    post "$group_head" failure "Merge group tree differs from the proven release head ${head:0:12}; a release merges alone"
     return
   fi
   post "$group_head" success "Lands the proven tree of ${head:0:12}; main=$group_base" "$(jq -r '.target_url // ""' <<< "$proof")"
