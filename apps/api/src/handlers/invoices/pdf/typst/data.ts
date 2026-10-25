@@ -298,7 +298,9 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         unitPrice:
           billed && line.unitPrice !== null ? money(line.unitPrice) : null,
         net: money(line.netAmount),
-        vatLabel: `${treatments[line.vatTreatment]} ${vatRate(line.vatRateBps)}`,
+        // Only the rate: the treatment is named in the VAT breakdown and the
+        // legal notes, and a long treatment label would squeeze the description.
+        vatLabel: vatRate(line.vatRateBps),
         vat: money(line.vatAmount),
         total: money(line.grossAmount),
       };

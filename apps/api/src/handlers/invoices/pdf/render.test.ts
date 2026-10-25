@@ -194,8 +194,10 @@ describe("invoice PDF", () => {
       },
     });
     expect(pdf.getPages().length).toBeGreaterThan(1);
-    expect(text).toContain("KONEC POPISU");
-    expect(text).toContain("KONEC POZNÁMEK");
+    // A wrapped cell breaks lines anywhere; the ending must survive, not its line breaks.
+    const flowing = text.replace(/\s+/gu, " ");
+    expect(flowing).toContain("KONEC POPISU");
+    expect(flowing).toContain("KONEC POZNÁMEK");
     expect(text).toContain(options.seller.footerNotes);
   });
 
