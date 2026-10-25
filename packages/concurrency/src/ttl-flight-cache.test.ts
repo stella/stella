@@ -159,7 +159,7 @@ describe("createTtlFlightCache", () => {
     expect(loads.count()).toBe(2);
   });
 
-  test("a load that throws before its first await is dropped like any failure", async () => {
+  test("a load that fails at once is dropped like any failure", async () => {
     const cache = cacheOf<string>(clock());
     let calls = 0;
     const failure = new TypeError("thrown at once");
