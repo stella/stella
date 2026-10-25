@@ -57,7 +57,8 @@ export type PlSnLine =
       readonly runs: readonly PlSnRun[];
       readonly indented: boolean;
       readonly footnote?:
-        { readonly label: string; readonly noteId: string } | undefined;
+        | { readonly label: string; readonly noteId: string }
+        | undefined;
     }
   | { readonly type: "blank" };
 
@@ -916,7 +917,10 @@ export const extractPlSnLines = async (
   const { supremeCourt } = options;
   if (supremeCourt === undefined) {
     return textPages.flatMap((lines) =>
-      readPage(lines.map(extractedLineOf), paragraphStart),
+      readPage(
+        lines.map((line) => extractedLineOf(line)),
+        paragraphStart,
+      ),
     );
   }
 
