@@ -15,14 +15,23 @@ import { searchQuestionsParam } from "@/features/case-law/research/search-questi
 import { optionalUuidSearchSchema } from "@/lib/schema";
 import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 
+/**
+ * A text facet. The router reads each URL value as JSON, so `year=2026` or
+ * `court=123` arrives as a number; it is the same text the URL spells. Any
+ * other unreadable value is dropped like a bad date: a public URL may be typed
+ * or crawled, and it is a page without that facet, not an error screen.
+ */
 const optionalBrowseStringSchema = (maxLength: number) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.maxLength(maxLength),
-      v.transform((value) => (value.length > 0 ? value : undefined)),
+  v.fallback(
+    v.optional(
+      v.pipe(
+        v.union([v.string(), v.pipe(v.number(), v.transform(String))]),
+        v.trim(),
+        v.maxLength(maxLength),
+        v.transform((value) => (value.length > 0 ? value : undefined)),
+      ),
     ),
+    undefined,
   );
 
 /**
