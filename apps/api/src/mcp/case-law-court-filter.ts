@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/case-law/search-warnings";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { createTtlFlightCache } from "@/api/lib/ttl-flight-cache";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 
@@ -358,29 +359,21 @@ const COURT_FILTER_VOCABULARY_SINK = failureSink({
   expected: [],
 });
 
-const courtNamesCache = new Map<
-  string,
-  { expiresAt: number; courts: Promise<readonly string[]> }
->();
+/** One entry per country; a failed read is dropped, never served. */
+const courtNamesCache = createTtlFlightCache<readonly string[]>({
+  ttlMs: COURT_NAMES_CACHE_TTL_MS,
+  maxEntries: 64,
+  now: () => Temporal.Now.instant().epochMilliseconds,
+});
 
 const readCachedCourtNames = async (
   country: string,
-): Promise<readonly string[]> => {
-  const now = Temporal.Now.instant().epochMilliseconds;
-  const cached = courtNamesCache.get(country);
-  if (cached !== undefined && cached.expiresAt > now) {
-    return await cached.courts;
-  }
-  const courts = readCourtNames({ caseLawDb: caseLawPublicReadDb, country });
-  courtNamesCache.set(country, {
-    expiresAt: now + COURT_NAMES_CACHE_TTL_MS,
-    courts,
-  });
-  // A failed read must not be served from the cache for ten minutes. The
-  // caller awaiting `courts` observes the failure itself.
-  courts.catch((_failure: unknown) => courtNamesCache.delete(country));
-  return await courts;
-};
+): Promise<readonly string[]> =>
+  await courtNamesCache.read(
+    country,
+    async () =>
+      await readCourtNames({ caseLawDb: caseLawPublicReadDb, country }),
+  );
 
 /**
  * The country's stored courts, or null when they cannot be read in time. A

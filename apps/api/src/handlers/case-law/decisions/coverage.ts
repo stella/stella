@@ -6,6 +6,8 @@ import {
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { compareCodeUnit } from "@stll/collation";
+import { Temporal } from "@stll/time";
 
 import {
   caseLawSources,
@@ -66,6 +68,10 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import {
+  createTtlFlightCache,
+  type TtlFlightCache,
+} from "@/api/lib/ttl-flight-cache";
 
 /**
  * How much case law the corpus holds, per country and per source, and whether
@@ -595,16 +601,55 @@ export const loadCaseLawCoverage = async ({
   });
 };
 
-export const readCaseLawCoverageHandler = async (
-  caseLawDb: CaseLawPublicReadDb,
-): Promise<
+type CaseLawCoverageAnswer =
   | (CaseLawCoverage & {
       provisionProcessing: Awaited<
         ReturnType<typeof readProvisionPendingCounts>
       >;
     })
-  | { message: string }
-> => {
+  | { message: string };
+
+/**
+ * How long one computed answer is served. The answer walks every country's
+ * facets and court activity, seconds of reads, and it describes a corpus that
+ * moves by ingestion batches; `generatedAt` states the instant it describes,
+ * so a cached answer never claims to be newer than it is. Shorter than the
+ * HTTP response's shared cache, which already serves an answer this old.
+ */
+const COVERAGE_ANSWER_TTL_MS = 5 * 60_000;
+
+/**
+ * Computed answers, per read database and per source policy. Every surface
+ * (the public page's origin, the MCP tool) asks for the same whole answer, so
+ * they share one computation instead of each call walking the corpus again,
+ * and concurrent calls share one flight. An unavailable answer is never kept.
+ */
+const coverageAnswers = new WeakMap<
+  CaseLawPublicReadDb,
+  TtlFlightCache<CaseLawCoverageAnswer>
+>();
+
+const coverageAnswersFor = (
+  caseLawDb: CaseLawPublicReadDb,
+): TtlFlightCache<CaseLawCoverageAnswer> => {
+  const existing = coverageAnswers.get(caseLawDb);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = createTtlFlightCache<CaseLawCoverageAnswer>({
+    ttlMs: COVERAGE_ANSWER_TTL_MS,
+    // One key per source policy; a policy changes rarely.
+    maxEntries: 4,
+    now: () => Temporal.Now.instant().epochMilliseconds,
+    keep: (answer) => !("message" in answer),
+  });
+  coverageAnswers.set(caseLawDb, created);
+  return created;
+};
+
+export const readCaseLawCoverageHandler = async (
+  caseLawDb: CaseLawPublicReadDb,
+): Promise<CaseLawCoverageAnswer> => {
   // Read ahead of the cache: the source policy is an input to the answer, so a
   // revocation changes the key instead of keeping a withheld source's numbers
   // public for a whole window.
@@ -615,14 +660,25 @@ export const readCaseLawCoverageHandler = async (
     });
     return { message: "Coverage is unavailable" };
   }
+  const policy = excludedSourceIds.value;
+  return await coverageAnswersFor(caseLawDb).read(
+    // A set: the order it was read in must not split one policy in two.
+    JSON.stringify(policy.toSorted(compareCodeUnit)),
+    async () => await computeCaseLawCoverageAnswer(caseLawDb, policy),
+  );
+};
 
+const computeCaseLawCoverageAnswer = async (
+  caseLawDb: CaseLawPublicReadDb,
+  excludedSourceIds: readonly SafeId<"caseLawSource">[],
+): Promise<CaseLawCoverageAnswer> => {
   // One instant for the whole page: the freshness windows, the arrivals window
   // and `generatedAt` all describe the same moment, so a reader comparing a
   // source's last sync against the stated time is comparing like with like.
   const now = new Date();
 
   const result = await loadCaseLawCoverage({
-    excludedSourceIds: excludedSourceIds.value,
+    excludedSourceIds,
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
     readYearCompleteness: async (sources) =>
@@ -653,7 +709,7 @@ export const readCaseLawCoverageHandler = async (
     readFacets: async (country) =>
       await readBrowseFacetsUnderPolicy({
         country,
-        excludedSourceIds: excludedSourceIds.value,
+        excludedSourceIds,
       }),
     readCourts: async ({ buckets, country, total }) => {
       const [courtWeights, activity, courtCount] = await Promise.all([
@@ -663,7 +719,7 @@ export const readCaseLawCoverageHandler = async (
             await readCaseLawCourtActivityQuery(tx, {
               country,
               courts: buckets.map(({ value }) => value),
-              excludedSourceIds: excludedSourceIds.value,
+              excludedSourceIds,
               now,
             }),
         ),
@@ -671,7 +727,7 @@ export const readCaseLawCoverageHandler = async (
           async (tx) =>
             await readCaseLawCourtCountQuery(tx, {
               country,
-              excludedSourceIds: excludedSourceIds.value,
+              excludedSourceIds,
               engine: envBase.LEGAL_SEARCH_PROVIDER,
             }),
         ),
