@@ -273,6 +273,9 @@ export const withInterleaving = async <State>({
                 pending.delete(actor);
               }
             }
+            if (remaining.length === 0 && pending.size === 0) {
+              break;
+            }
             const next = remaining.findIndex(
               (token) => !pending.has(token.startsWith("a.") ? "a" : "b"),
             );

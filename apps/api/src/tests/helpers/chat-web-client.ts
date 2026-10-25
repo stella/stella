@@ -430,7 +430,6 @@ export const createWebChatClient = async ({
     await withTimeout(
       async (signal) => {
         let quiet = 0;
-        // oxlint-disable-next-line test-timing/no-polling-loop -- busy states await change events; the only timer is the deliberate quiet-period barrier after the last notification
         while (!signal.aborted) {
           if (reloading !== undefined) {
             await reloading;
