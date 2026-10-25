@@ -34,7 +34,6 @@ import {
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   OAUTH_PROVIDER_SESSION_PATHS,
-  readRequestAuthSession,
   resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveMemberAuthorization,
   resolveUserRealtimeAuthorization,
@@ -1105,98 +1104,6 @@ describe("session freshness", () => {
     expect(getAuth().options.session.cookieCache.version).toBeFunction();
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
-
-  test.each([
-    ["http://localhost/api-keys", "POST"],
-    ["http://localhost/api-keys/personal/rotate", "POST"],
-    ["http://localhost/v1/api-keys", "DELETE"],
-    ["http://localhost/v1/api-keys/personal", "PATCH"],
-  ])(
-    "API-key mutation confirms the cached session in storage (%s %s)",
-    async (url, method) => {
-      const reads: unknown[] = [];
-      const checked: string[] = [];
-      const cached = {
-        headers: new Headers(),
-        response: asTestRaw<
-          Awaited<
-            ReturnType<
-              Parameters<typeof readRequestAuthSession>[0]["getSession"]
-            >
-          >["response"]
-        >({ session: { token: "cached-token" }, user: { id: "user-1" } }),
-      };
-      const read = async (live: boolean) =>
-        await readRequestAuthSession(
-          {
-            request: new Request(url, { method }),
-            getSession: async (options) => {
-              reads.push(options);
-              return cached;
-            },
-          },
-          async (token) => {
-            checked.push(token);
-            return live;
-          },
-        );
-
-      const current = await read(true);
-      const revoked = await read(false);
-
-      expect(current.response).toBe(cached.response);
-      expect(revoked.response).toBeNull();
-      expect(checked).toEqual(["cached-token", "cached-token"]);
-      // The owner row is not reloaded: only the session row is checked.
-      expect(reads).toEqual([
-        { headers: new Headers(), returnHeaders: true },
-        { headers: new Headers(), returnHeaders: true },
-      ]);
-    },
-  );
-
-  test.each([
-    ["http://localhost/v1/api-keys/personal", "GET"],
-    ["http://localhost/v1/workspaces", "POST"],
-  ])(
-    "ordinary request retains the cookie-cache path (%s %s)",
-    async (url, method) => {
-      const reads: unknown[] = [];
-      const checked: string[] = [];
-
-      await readRequestAuthSession(
-        {
-          request: new Request(url, { method }),
-          getSession: async (options) => {
-            reads.push(options);
-            return {
-              headers: new Headers(),
-              response: asTestRaw<
-                Awaited<
-                  ReturnType<
-                    Parameters<typeof readRequestAuthSession>[0]["getSession"]
-                  >
-                >["response"]
-              >({ session: { token: "cached-token" }, user: { id: "user-1" } }),
-            };
-          },
-        },
-        async (token) => {
-          checked.push(token);
-          return true;
-        },
-      );
-
-      expect(checked).toEqual([]);
-
-      expect(reads).toEqual([
-        {
-          headers: new Headers(),
-          returnHeaders: true,
-        },
-      ]);
-    },
-  );
 });
 
 describe("OAuth resource provisioning", () => {

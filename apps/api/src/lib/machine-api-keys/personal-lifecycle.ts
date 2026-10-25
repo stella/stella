@@ -1,6 +1,4 @@
-import { defaultKeyHasher } from "@better-auth/api-key";
-import { generateRandomString } from "better-auth/crypto";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, gt } from "drizzle-orm";
 
 import { apikey, member, organization, user } from "@/api/db/auth-schema";
@@ -12,20 +10,20 @@ import {
   mintMachineApiKey,
   toMachineApiKeySummary,
 } from "@/api/handlers/api-keys/mint";
+import type {
+  MintedMachineApiKey,
+  MintMachineApiKeyOptions,
+} from "@/api/handlers/api-keys/mint";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { holdLiveSessionCredentialFence } from "@/api/lib/auth-artifacts";
+import { CredentialIssuanceFence } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
   API_KEY_POLICY,
-  MACHINE_API_KEY_LENGTH,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
-  MACHINE_API_KEY_PREFIX,
-  MACHINE_API_KEY_RATE_LIMIT,
-  MACHINE_API_KEY_START_LENGTH,
   PERSONAL_API_KEY_ACTIVE_LIMIT,
   PERSONAL_API_KEY_AUDIENCES,
   PERSONAL_API_KEY_DEFAULT_SCOPES,
@@ -43,6 +41,7 @@ import {
   apiKeyKindScope,
   machineApiKeyOrganizationScope,
 } from "@/api/lib/machine-api-key-scope";
+import { createApiKeyUnderFence } from "@/api/lib/machine-api-keys/fenced-issuance";
 import { personalApiKeyPermissions } from "@/api/lib/machine-api-keys/personal-policy";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -73,6 +72,14 @@ type Principal = {
 type KeyMutationAuthority =
   { type: "issue"; sessionId: string | null } | { type: "manage" };
 const MANAGE = { type: "manage" } as const satisfies KeyMutationAuthority;
+const signInAgainToIssue = () =>
+  new HandlerError({
+    status: 401,
+    message: "Sign in again to create an API key",
+  });
+/** An issuing mutation aborts before `run` unless it holds the fence. */
+const issuingFence = (fence: CredentialIssuanceFence | null) =>
+  fence ?? panic("An issuing key mutation runs only under its fence");
 type MutationOptions = Principal & {
   recordAuditEvent: AuditRecorder;
   database?: Pick<typeof rootDb, "transaction" | "select">;
@@ -85,26 +92,23 @@ const mutatePersonalKeys = async <T>(
   run: (context: {
     tx: Transaction;
     memberRole: AuthorizedMemberRole;
+    /** Held for issuing authority only; issuers write keys through it. */
+    fence: CredentialIssuanceFence | null;
   }) => Promise<T>,
 ) =>
   Result.tryPromise({
     try: async () =>
       (options.database ?? rootDb).transaction(async (tx) => {
         // The account fence ranks before the organization row.
-        if (
-          options.authority.type === "issue" &&
-          (options.authority.sessionId === null ||
-            !(await holdLiveSessionCredentialFence(tx, {
-              userId: options.userId,
-              sessionId: options.authority.sessionId,
-            })))
-        ) {
-          return abortTransaction(
-            new HandlerError({
-              status: 401,
-              message: "Sign in again to create an API key",
-            }),
-          );
+        const fence =
+          options.authority.type === "issue"
+            ? await CredentialIssuanceFence.hold(tx, {
+                userId: options.userId,
+                sessionId: options.authority.sessionId,
+              })
+            : null;
+        if (options.authority.type === "issue" && fence === null) {
+          return abortTransaction(signInAgainToIssue());
         }
         // All mint/rotate/policy changes take this lock next. The active limit and
         // policy decision therefore serialize across processes, including first use.
@@ -129,7 +133,11 @@ const mutatePersonalKeys = async <T>(
         if (!membership || !isMemberRole(membership.role)) {
           return abortTransaction(keyNotFound());
         }
-        return run({ tx, memberRole: sessionMemberRole(membership.role) });
+        return run({
+          tx,
+          memberRole: sessionMemberRole(membership.role),
+          fence,
+        });
       }),
     catch: (error: unknown) =>
       HandlerError.is(error)
@@ -167,9 +175,10 @@ type MintPersonalKeyInTransactionOptions = {
   memberRole: AuthorizedMemberRole;
 };
 const mintPersonalKey = async (
-  tx: Transaction,
+  fence: CredentialIssuanceFence,
   { options, memberRole }: MintPersonalKeyInTransactionOptions,
 ) => {
+  const { tx } = fence;
   if (
     (await readPersonalApiKeyPolicy(options.organizationId, tx)) !== "enabled"
   ) {
@@ -232,48 +241,24 @@ const mintPersonalKey = async (
       userId: options.userId,
       organizationId: options.organizationId,
     },
-    async ({ body }) => {
-      // Use the plugin's generator/hasher contract, while keeping insertion and
-      // its audit receipt in the same transaction as the active-key reservation.
-      const key = `${MACHINE_API_KEY_PREFIX}${generateRandomString(MACHINE_API_KEY_LENGTH, "a-z", "A-Z")}`;
-      const id = Bun.randomUUIDv7();
-      const start = key.slice(0, MACHINE_API_KEY_START_LENGTH);
-      const expiresAt = new Date(now.getTime() + body.expiresIn * 1000);
-      await tx.insert(apikey).values({
-        id,
-        configId: body.configId,
-        referenceId: body.userId,
-        name: body.name,
-        prefix: MACHINE_API_KEY_PREFIX,
-        start,
-        key: await defaultKeyHasher(key),
-        metadata: JSON.stringify(body.metadata),
-        permissions: JSON.stringify(body.permissions),
-        expiresAt,
-        createdAt: now,
-        updatedAt: now,
-        enabled: true,
-        rateLimitEnabled: MACHINE_API_KEY_RATE_LIMIT.enabled,
-        rateLimitMax: MACHINE_API_KEY_RATE_LIMIT.maxRequests,
-        rateLimitTimeWindow: MACHINE_API_KEY_RATE_LIMIT.timeWindow,
-      });
-      await options.recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
-        resourceId: id,
-        metadata: {
-          name: body.name,
-          scopes: body.metadata.scopes,
-          audience: body.metadata.audience,
-        },
-      });
-      return { id, start, key, expiresAt };
-    },
+    // Insertion and its audit receipt share the active-key reservation's
+    // transaction, which holds the account's credential fence.
+    createApiKeyUnderFence(fence, now),
   );
   if (minted.isErr()) {
     return abortTransaction(minted.error);
   }
   const summary = minted.value;
+  await options.recordAuditEvent(tx, {
+    action: AUDIT_ACTION.CREATE,
+    resourceType: AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY,
+    resourceId: summary.id,
+    metadata: {
+      name: summary.name,
+      scopes: summary.scopes,
+      audience: summary.audience,
+    },
+  });
   return {
     id: summary.id,
     name: summary.name,
@@ -288,7 +273,52 @@ const mintPersonalKey = async (
 export const createPersonalApiKey = async (options: MintPersonalKeyOptions) =>
   mutatePersonalKeys(
     { ...options, authority: { type: "issue", sessionId: options.sessionId } },
-    async ({ tx, memberRole }) => mintPersonalKey(tx, { options, memberRole }),
+    async ({ memberRole, fence }) =>
+      mintPersonalKey(issuingFence(fence), { options, memberRole }),
+  );
+
+type IssueMachineApiKeyOptions = MintMachineApiKeyOptions & {
+  /** The issuing browser session; a credential without one cannot issue. */
+  sessionId: string | null;
+  recordAuditEvent: AuditRecorder;
+  /** The receipt recorded with the key, in the issuing transaction. */
+  auditEvent: (minted: MintedMachineApiKey) => Parameters<AuditRecorder>[1];
+  database?: MutationOptions["database"];
+};
+
+/**
+ * Mints a machine key through the same mutation as a personal key: under the
+ * account's credential fence and the organization's key lock, with membership
+ * rechecked and the receipt recorded in that transaction. Neither kind of key
+ * can therefore outlive a concurrent access reset.
+ */
+export const issueMachineApiKey = async ({
+  sessionId,
+  recordAuditEvent,
+  auditEvent,
+  database,
+  ...options
+}: IssueMachineApiKeyOptions) =>
+  mutatePersonalKeys(
+    {
+      organizationId: options.organizationId,
+      userId: options.userId,
+      recordAuditEvent,
+      database,
+      authority: { type: "issue", sessionId },
+    },
+    async ({ fence }) => {
+      const issuing = issuingFence(fence);
+      const minted = await mintMachineApiKey(
+        options,
+        createApiKeyUnderFence(issuing, new Date()),
+      );
+      if (minted.isErr()) {
+        return abortTransaction(minted.error);
+      }
+      await recordAuditEvent(issuing.tx, auditEvent(minted.value));
+      return minted.value;
+    },
   );
 
 type KeyOptions = MutationOptions & { keyId: string };
@@ -375,7 +405,7 @@ export const rotatePersonalApiKey = async (
 ) =>
   mutatePersonalKeys(
     { ...options, authority: { type: "issue", sessionId: options.sessionId } },
-    async ({ tx, memberRole }) => {
+    async ({ tx, memberRole, fence }) => {
       const key = await loadPersonalKey(tx, { ...options, access: "own" });
       if (
         !key.enabled ||
@@ -397,7 +427,7 @@ export const rotatePersonalApiKey = async (
         .where(
           and(personalScope(options.organizationId), eq(apikey.id, key.id)),
         );
-      const replacement = await mintPersonalKey(tx, {
+      const replacement = await mintPersonalKey(issuingFence(fence), {
         options: {
           ...options,
           name: key.name,

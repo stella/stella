@@ -197,7 +197,7 @@ export const validateGrantablePermissions = ({
   return { type: "ok" };
 };
 
-type MintMachineApiKeyOptions = {
+export type MintMachineApiKeyOptions = {
   kind?: ApiKeyKind;
   name: string;
   scopes: MachineApiKeyScope[];
@@ -228,15 +228,13 @@ export type MintedMachineApiKey = {
 };
 
 /**
- * Mint a machine key.
- *
- * Called without `headers` on purpose: `permissions`, `userId`, and the rate
- * limit fields are server-only on the plugin's create endpoint and it rejects
- * them outright whenever a request or header bag is present. The ownership ids
- * are parameters rather than body fields precisely so this path cannot be
+ * Writes a minted key. The only implementation is `createApiKeyUnderFence`,
+ * which inserts inside a transaction holding the account's credential fence,
+ * so a key cannot outlive an access reset that ran concurrently. The ownership
+ * ids are parameters rather than body fields precisely so this path cannot be
  * pointed at another user or organization.
  */
-type CreateApiKey = (options: {
+export type CreateApiKey = (options: {
   body: {
     configId: string;
     name: string;
@@ -263,7 +261,7 @@ export const mintMachineApiKey = async (
     userId,
     organizationId,
   }: MintMachineApiKeyOptions,
-  createApiKey: CreateApiKey = getAuth().api.createApiKey,
+  createApiKey: CreateApiKey,
 ): Promise<Result<MintedMachineApiKey, HandlerError>> => {
   const policy = API_KEY_POLICY[kind];
   const days = expiresInDays ?? policy.defaultDays;

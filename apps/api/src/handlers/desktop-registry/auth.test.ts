@@ -72,7 +72,7 @@ type IssuanceContext = {
 };
 const assertIssuanceReference = (
   node: ts.Node,
-  { filename, ast, isMachineOwner }: IssuanceContext,
+  { filename, isMachineOwner }: IssuanceContext,
 ) => {
   // An operation-name constant such as `REVIEW_ACCOUNT_OPERATION.createApiKey`
   // holds a label, not the provider issuance function.
@@ -99,17 +99,15 @@ const assertIssuanceReference = (
   if (isMemberReference || isBareReference) {
     const directCall =
       ts.isCallExpression(node.parent) && node.parent.expression === node;
-    const parameter = ts.isParameter(node.parent) ? node.parent : null;
-    const defaultParameter =
-      isMemberReference && ts.isParameter(node.parent) ? node.parent : null;
-    const machineParameter = parameter ?? defaultParameter;
+    // The machine owner takes its writer as a required parameter: its callers
+    // pass the fenced in-transaction writer, never the provider function.
+    const machineParameter = ts.isParameter(node.parent) ? node.parent : null;
     const machineAlias =
       isMachineOwner &&
       machineParameter !== null &&
       ts.isIdentifier(machineParameter.name) &&
       machineParameter.name.text === "createApiKey" &&
-      machineParameter.initializer?.getText(ast) ===
-        "getAuth().api.createApiKey";
+      machineParameter.initializer === undefined;
     if (!directCall && !machineAlias) {
       throw new TypeError(`${filename}: issuance function cannot be aliased`);
     }
@@ -468,6 +466,22 @@ describe("desktop registry API-key configuration", () => {
         ),
       ),
     ).toThrow("machine issuance cannot mint desktop credentials");
+    // A provider default would let a caller mint outside the credential fence.
+    expect(() =>
+      assertDesktopIssuance(
+        sources.map((entry) =>
+          entry.filename.replace(/^\.\//u, "") === "handlers/api-keys/mint.ts"
+            ? {
+                ...entry,
+                source: entry.source.replace(
+                  "createApiKey: CreateApiKey,",
+                  "createApiKey: CreateApiKey = getAuth().api.createApiKey,",
+                ),
+              }
+            : entry,
+        ),
+      ),
+    ).toThrow("issuance function cannot be aliased");
     for (const reference of [
       "auth.api.createApiKey",
       'auth.api["createApiKey"]',

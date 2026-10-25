@@ -80,8 +80,8 @@ describe.skipIf(!runPostgresTests)("personal API keys (postgres)", () => {
       "revoked-browser",
     );
     expect(rejected.status).toBe(401);
-    // A machine key has no issuance fence of its own: the confirmed session
-    // is what refuses it.
+    // A machine key is issued under the same credential fence, so the revoked
+    // session refuses it too.
     const rejectedMachine = await server.fetch(
       new Request("http://localhost/api-keys", {
         method: "POST",

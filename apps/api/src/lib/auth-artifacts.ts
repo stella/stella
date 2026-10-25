@@ -577,31 +577,47 @@ export const revokeMonitoringSessions = async ({
 
 type HoldLiveSessionCredentialFenceOptions = {
   userId: SafeId<"user">;
-  sessionId: string;
+  /** The issuing browser session; a credential without one cannot issue. */
+  sessionId: string | null;
 };
 
 /**
- * Holds the account's credential fence for the issuing transaction and reports
- * whether the issuing session is still live under it.
+ * Proof that a transaction holds the account's credential fence for a live
+ * issuing session. Only `hold` creates one, so a credential can be written
+ * only by code that took the fence first.
  */
-export const holdLiveSessionCredentialFence = async (
-  tx: Transaction,
-  { userId, sessionId }: HoldLiveSessionCredentialFenceOptions,
-): Promise<boolean> => {
-  await shareAccountRow(tx, userId);
-  const [live] = await tx
-    .select({ id: sessionTable.id })
-    .from(sessionTable)
-    .where(
-      and(
-        eq(sessionTable.id, sessionId),
-        eq(sessionTable.userId, userId),
-        sql`${sessionTable.expiresAt} > now()`,
-      ),
-    )
-    .limit(1);
-  return live !== undefined;
-};
+export class CredentialIssuanceFence {
+  readonly tx: Transaction;
+  readonly userId: SafeId<"user">;
+
+  private constructor(tx: Transaction, userId: SafeId<"user">) {
+    this.tx = tx;
+    this.userId = userId;
+  }
+
+  /** The fence, or null when the issuing session is not live under it. */
+  static async hold(
+    tx: Transaction,
+    { userId, sessionId }: HoldLiveSessionCredentialFenceOptions,
+  ): Promise<CredentialIssuanceFence | null> {
+    if (sessionId === null) {
+      return null;
+    }
+    await shareAccountRow(tx, userId);
+    const [live] = await tx
+      .select({ id: sessionTable.id })
+      .from(sessionTable)
+      .where(
+        and(
+          eq(sessionTable.id, sessionId),
+          eq(sessionTable.userId, userId),
+          sql`${sessionTable.expiresAt} > now()`,
+        ),
+      )
+      .limit(1);
+    return live === undefined ? null : new CredentialIssuanceFence(tx, userId);
+  }
+}
 
 /**
  * Better Auth's pending second-factor sign-in: a `2fa-<random>` verification

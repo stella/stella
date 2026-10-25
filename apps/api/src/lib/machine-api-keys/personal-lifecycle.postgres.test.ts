@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, inArray, sql } from "drizzle-orm";
 
@@ -11,9 +12,12 @@ import {
 } from "@/api/db/auth-schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
   createPersonalApiKey,
+  issueMachineApiKey,
   listPersonalApiKeys,
 } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -186,101 +190,133 @@ if (!databaseUrl || !runPostgres) {
       });
     }, 15_000); // timeout: three pooled clients connect and seed before the lock barrier
 
-    test("a mint racing an access reset either is revoked by it or finds its session ended", async () => {
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const { db: mintDb } = openClient();
-        const { db: resetDb } = openClient();
-        const { sql: observer } = openClient();
-        const organizationId = mintAuthProviderId<"organization">();
-        const userId = mintAuthProviderId<"user">();
-        await mintDb.insert(user).values({
-          id: userId,
-          name: "Fixture member",
-          email: `${userId}@example.test`,
-          emailVerified: true,
-        });
-        await mintDb.insert(organization).values({
-          id: organizationId,
-          name: "Key reset fixture",
-          slug: organizationId,
-          createdAt: new Date(),
-        });
-        await mintDb.insert(member).values({
-          id: mintAuthProviderIdValue(),
+    type RacingMint = {
+      organizationId: SafeId<"organization">;
+      userId: SafeId<"user">;
+      sessionId: string;
+      database: Parameters<typeof createPersonalApiKey>[0]["database"];
+    };
+    // Every session-authorized issuer takes the same fence.
+    const ISSUERS = {
+      "personal key": async ({ organizationId, userId, ...rest }: RacingMint) =>
+        await createPersonalApiKey({
+          ...rest,
+          name: "Racing key",
           organizationId,
           userId,
-          role: "member",
-          createdAt: new Date(),
-        });
-        const liveSession = liveSessionRow(userId);
-        await mintDb.insert(session).values(liveSession);
-        const sessionId = liveSession.id;
-        const [mintWorker] = await mintDb
-          .select({ pid: sql<number>`pg_backend_pid()` })
-          .from(organization)
-          .where(eq(organization.id, organizationId));
-        if (!mintWorker) {
-          panic("The mint session must exist");
-        }
-        try {
-          let pending: ReturnType<typeof createPersonalApiKey> | undefined;
-          // The reset holds the credential fence while the mint arrives; the
-          // mint must wait for it and then see the session the reset ended.
-          await resetDb.transaction(async (tx) => {
-            const [resetWorker] = await tx
-              .select({ pid: sql<number>`pg_backend_pid()` })
-              .from(organization)
-              .where(eq(organization.id, organizationId));
-            if (!resetWorker) {
-              panic("The reset session must exist");
-            }
-            await revokeAllUserDurableCredentials(tx, userId);
-            pending = createPersonalApiKey({
-              name: "Racing key",
-              organizationId,
-              userId,
-              sessionId,
-              recordAuditEvent: createBackgroundAuditRecorder({
+          recordAuditEvent: createBackgroundAuditRecorder({
+            organizationId,
+            userId,
+            workspaceId: null,
+            execution: {
+              performer: { type: "user", id: userId },
+              trigger: {
+                type: "system",
+                source: "personal_key_concurrency_test",
+              },
+            },
+          }),
+        }),
+      "machine key": async (options: RacingMint) =>
+        await issueMachineApiKey({
+          ...options,
+          name: "Racing key",
+          scopes: ["stella:read"],
+          permissions: { workspace: ["read"] },
+          expiresInDays: undefined,
+          audience: undefined,
+        }),
+    } satisfies Record<
+      string,
+      (options: RacingMint) => Promise<Result<unknown, HandlerError>>
+    >;
+
+    test.each(Object.entries(ISSUERS))(
+      "a %s mint racing an access reset either is revoked by it or finds its session ended",
+      async (_name, issue) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: mintDb } = openClient();
+          const { db: resetDb } = openClient();
+          const { sql: observer } = openClient();
+          const organizationId = mintAuthProviderId<"organization">();
+          const userId = mintAuthProviderId<"user">();
+          await mintDb.insert(user).values({
+            id: userId,
+            name: "Fixture member",
+            email: `${userId}@example.test`,
+            emailVerified: true,
+          });
+          await mintDb.insert(organization).values({
+            id: organizationId,
+            name: "Key reset fixture",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          await mintDb.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId,
+            userId,
+            role: "member",
+            createdAt: new Date(),
+          });
+          const liveSession = liveSessionRow(userId);
+          await mintDb.insert(session).values(liveSession);
+          const sessionId = liveSession.id;
+          const [mintWorker] = await mintDb
+            .select({ pid: sql<number>`pg_backend_pid()` })
+            .from(organization)
+            .where(eq(organization.id, organizationId));
+          if (!mintWorker) {
+            panic("The mint session must exist");
+          }
+          try {
+            let pending: ReturnType<typeof issue> | undefined;
+            // The reset holds the credential fence while the mint arrives; the
+            // mint must wait for it and then see the session the reset ended.
+            await resetDb.transaction(async (tx) => {
+              const [resetWorker] = await tx
+                .select({ pid: sql<number>`pg_backend_pid()` })
+                .from(organization)
+                .where(eq(organization.id, organizationId));
+              if (!resetWorker) {
+                panic("The reset session must exist");
+              }
+              await revokeAllUserDurableCredentials(tx, userId);
+              pending = issue({
                 organizationId,
                 userId,
-                workspaceId: null,
-                execution: {
-                  performer: { type: "user", id: userId },
-                  trigger: {
-                    type: "system",
-                    source: "personal_key_concurrency_test",
-                  },
-                },
-              }),
-              database: mintDb,
+                sessionId,
+                database: mintDb,
+              });
+              await waitForBlockedPid(observer, {
+                waitingPid: mintWorker.pid,
+                holdingPid: resetWorker.pid,
+              });
             });
-            await waitForBlockedPid(observer, {
-              waitingPid: mintWorker.pid,
-              holdingPid: resetWorker.pid,
-            });
-          });
-          if (pending === undefined) {
-            panic("The racing mint must have started");
-          }
-          const minted = await pending;
-          expect(minted.isErr()).toBe(true);
-          if (minted.isErr()) {
-            expect(minted.error.status).toBe(401);
-          }
-          expect(
+            if (pending === undefined) {
+              panic("The racing mint must have started");
+            }
+            const minted = await pending;
+            expect(minted.isErr()).toBe(true);
+            if (minted.isErr()) {
+              expect(minted.error.status).toBe(401);
+            }
+            expect(
+              await mintDb
+                .select({ id: apikey.id })
+                .from(apikey)
+                .where(eq(apikey.referenceId, userId)),
+            ).toEqual([]);
+          } finally {
+            await mintDb.delete(apikey).where(eq(apikey.referenceId, userId));
             await mintDb
-              .select({ id: apikey.id })
-              .from(apikey)
-              .where(eq(apikey.referenceId, userId)),
-          ).toEqual([]);
-        } finally {
-          await mintDb.delete(apikey).where(eq(apikey.referenceId, userId));
-          await mintDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
-          await mintDb.delete(user).where(eq(user.id, userId));
-        }
-      });
-    }, 15_000);
+              .delete(organization)
+              .where(eq(organization.id, organizationId));
+            await mintDb.delete(user).where(eq(user.id, userId));
+          }
+        });
+      },
+      15_000,
+    );
   });
 }

@@ -2729,81 +2729,23 @@ const readAuthSession = async (options: AuthSessionReadOptions) => {
 };
 type AuthSessionReader = typeof readAuthSession;
 
-const API_KEYS_ROUTE_PATH = "/api-keys";
-const COOKIE_CACHE_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-export const requiresAuthoritativeApiSession = (request: Request): boolean => {
-  if (COOKIE_CACHE_SAFE_METHODS.has(request.method)) {
-    return false;
-  }
-  const pathname = new URL(request.url).pathname;
-  return (
-    pathname.endsWith(API_KEYS_ROUTE_PATH) ||
-    pathname.includes(`${API_KEYS_ROUTE_PATH}/`)
-  );
-};
-
-type ReadRequestAuthSessionOptions = {
-  getSession: AuthSessionReader;
-  request: Request;
-};
-
-/** Whether the stored session a cached cookie names still exists unexpired. */
-const isStoredSessionLive = async (token: string): Promise<boolean> =>
-  (
-    await rootDb
-      .select({ id: authSession.id })
-      .from(authSession)
-      .where(
-        and(
-          eq(authSession.token, token),
-          sql`${authSession.expiresAt} > now()`,
-        ),
-      )
-      .limit(1)
-  ).length > 0;
-
-type StoredSessionLiveness = (token: string) => Promise<boolean>;
-
-/**
- * The caller's session. An API-key mutation also confirms the cached session
- * against storage, so a session revoked within the cookie cache window cannot
- * mint a durable credential. Only the session row is read: the key endpoints
- * load the owner themselves.
- */
-export const readRequestAuthSession = async (
-  { getSession, request }: ReadRequestAuthSessionOptions,
-  isLive: StoredSessionLiveness = isStoredSessionLive,
-) => {
-  const resolved = await getSession({
-    headers: request.headers,
-    returnHeaders: true,
-  });
-  if (resolved.response === null || !requiresAuthoritativeApiSession(request)) {
-    return resolved;
-  }
-  return (await isLive(resolved.response.session.token))
-    ? resolved
-    : { ...resolved, response: null };
-};
-
 type GetSessionAndMemberAuthorizationOptions = {
   getSession?: AuthSessionReader | undefined;
-  request: Request;
+  headers: Headers | Record<string, string>;
   responseHeaders: ResponseHeaders;
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 const getSessionAndMemberAuthorization = async ({
   getSession = readAuthSession,
-  request,
+  headers,
   responseHeaders,
   workspaceId,
 }: GetSessionAndMemberAuthorizationOptions) => {
   const sessionResult = await Result.tryPromise(async () => {
-    const resolved = await readRequestAuthSession({
-      getSession,
-      request,
+    const resolved = await getSession({
+      headers,
+      returnHeaders: true,
     });
     appendSetCookieHeaders(responseHeaders, resolved.headers);
     return resolved.response;
@@ -3438,7 +3380,7 @@ const resolveValidateAuth = async ({
   const { sessionResult, memberAuthorizationResult } =
     await getSessionAndMemberAuthorization({
       getSession,
-      request,
+      headers: request.headers,
       responseHeaders,
       workspaceId: initialWorkspaceId ?? undefined,
     });
