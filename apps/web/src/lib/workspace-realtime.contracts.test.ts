@@ -809,8 +809,7 @@ const organizationPluginIsRegistered = (source: ts.SourceFile) => {
   ) {
     return false;
   }
-  let pluginCreated = false;
-  let pluginRegistered = false;
+  const evidence = new Set<"created" | "registered">();
   const visit = (node: ts.Node) => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -821,7 +820,7 @@ const organizationPluginIsRegistered = (source: ts.SourceFile) => {
       ts.isIdentifier(node.initializer.expression) &&
       node.initializer.expression.text === "organization"
     ) {
-      pluginCreated = true;
+      evidence.add("created");
     }
     if (
       ts.isCallExpression(node) &&
@@ -840,17 +839,22 @@ const organizationPluginIsRegistered = (source: ts.SourceFile) => {
           ts.isPropertyAssignment(plugins) &&
           ts.isArrayLiteralExpression(plugins.initializer)
         ) {
-          pluginRegistered = plugins.initializer.elements.some(
+          const registered = plugins.initializer.elements.some(
             (plugin) =>
               ts.isIdentifier(plugin) && plugin.text === "organizationPlugin",
           );
+          if (registered) {
+            evidence.add("registered");
+          } else {
+            evidence.delete("registered");
+          }
         }
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return pluginCreated && pluginRegistered;
+  return evidence.has("created") && evidence.has("registered");
 };
 
 test("registered handler configuration follows local factory wrappers and keeps its realtime owner", () => {
@@ -1050,8 +1054,7 @@ test("every mutation resource declaration agrees with its registered backend rou
   const safeHandlerConstructors = exportedSafeHandlerConstructors(
     readSource("lib/api-handlers.ts"),
   );
-  const organizationDeleteEndpoint =
-    organization().endpoints.deleteOrganization;
+  const organizationEndpoints = organization().endpoints;
   expect(organizationPluginIsRegistered(readSource("lib/auth.ts"))).toBe(true);
   for (const contract of Object.values(RESOURCE_MUTATION_CONTRACTS)) {
     expect(contract.writes.length).toBeGreaterThan(0);
@@ -1059,13 +1062,14 @@ test("every mutation resource declaration agrees with its registered backend rou
     let registeredWriteCount = 0;
     for (const write of contract.writes) {
       if (write.type === "auth-plugin-endpoint") {
+        const endpoint = organizationEndpoints[write.endpoint];
         expect(contract.resources).toEqual([RESOURCE_TYPE.ORGANIZATION]);
         expect(write).toEqual({
           type: "auth-plugin-endpoint",
           plugin: "organization",
-          endpoint: "deleteOrganization",
-          method: organizationDeleteEndpoint.options.method,
-          route: organizationDeleteEndpoint.path,
+          endpoint: write.endpoint,
+          method: endpoint.options.method,
+          route: endpoint.path,
         });
         observedResources.add(RESOURCE_TYPE.ORGANIZATION);
         registeredWriteCount += 1;

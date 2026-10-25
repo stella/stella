@@ -121,6 +121,154 @@ test("the canonical mutation and reader helpers satisfy the AST guard", () => {
   expect(violations(validSources)).toEqual([]);
 });
 
+const organizationWrites = [
+  {
+    type: "auth-plugin-endpoint",
+    plugin: "organization",
+    endpoint: "deleteOrganization",
+    method: "POST",
+    route: "/organization/delete",
+  },
+  {
+    type: "auth-plugin-endpoint",
+    plugin: "organization",
+    endpoint: "leaveOrganization",
+    method: "POST",
+    route: "/organization/leave",
+  },
+];
+
+const authPluginSources = ({
+  operation,
+  writes = organizationWrites,
+  imported = 'import { authClient } from "@/lib/auth-client";',
+  parameter = 'action: "delete" | "leave"',
+}: {
+  operation: string;
+  writes?: typeof organizationWrites;
+  imported?: string;
+  parameter?: string;
+}) => [
+  ...validSources.slice(0, 2).map((source) => ({
+    ...source,
+    text: source.file.endsWith("resource-ref.ts")
+      ? source.text.replace(
+          'WORKSPACE: "workspace",',
+          'ORGANIZATION: "organization", WORKSPACE: "workspace",',
+        )
+      : source.text.replace(
+          "export const RESOURCE_MUTATION_CONTRACTS = {",
+          () =>
+            `export const RESOURCE_MUTATION_CONTRACTS = { deleteOrganization: { writes: ${JSON.stringify(writes)}, resources: [RESOURCE_TYPE.ORGANIZATION] },`,
+        ),
+  })),
+  {
+    file: "apps/web/src/features.ts",
+    text: `
+import { useMutation } from "@tanstack/react-query";
+import { resourceMutation } from "@/lib/workspace-realtime";
+${imported}
+const queryClient = {};
+export const removeOrganization = () => useMutation({
+  mutationFn: resourceMutation({
+    mutation: "deleteOrganization", queryClient, scope: { type: "organization" },
+    mutationFn: async (${parameter}) => ${operation},
+  }),
+});`,
+  },
+];
+
+test("auth plugin mutations use both actual RPC paths and their typed endpoint methods", () => {
+  for (const client of ["authClient", "authAlias"]) {
+    const sources = authPluginSources({
+      imported: `import { authClient as ${client} } from "@/lib/auth-client";`,
+      operation: `action === "delete" ? await ${client}.organization.delete({ organizationId }) : await ${client}.organization.leave({ organizationId })`,
+    });
+    const census = inspectMutationQuerySources(sources);
+    expect(
+      census.mutations
+        .flatMap(({ writes }) =>
+          writes.map(({ method, route }) => `${method} ${route}`),
+        )
+        .toSorted(),
+    ).toEqual(["post /organization/delete", "post /organization/leave"]);
+    expect(violations(sources)).toEqual([]);
+  }
+  expect(
+    violations(
+      authPluginSources({
+        imported: 'import * as authNamespace from "@/lib/auth-client";',
+        operation:
+          'action === "delete" ? await authNamespace.authClient.organization.delete({ organizationId }) : await authNamespace.authClient.organization.leave({ organizationId })',
+      }),
+    ),
+  ).toEqual([]);
+});
+
+test("auth plugin contracts cannot hide a missing conditional write or unknown receiver", () => {
+  for (const sources of [
+    authPluginSources({
+      writes: organizationWrites.slice(0, 1),
+      operation:
+        'action === "delete" ? await authClient.organization.delete({ organizationId }) : await authClient.organization.leave({ organizationId })',
+    }),
+    authPluginSources({
+      operation: "authClient.organization.destroy({ organizationId })",
+    }),
+    authPluginSources({
+      parameter: "authClient: unknown",
+      operation: "authClient.organization.delete({ organizationId })",
+    }),
+    authPluginSources({
+      imported: 'import { authClient } from "@/lib/untrusted-client";',
+      operation: "authClient.organization.delete({ organizationId })",
+    }),
+    authPluginSources({
+      imported: 'import * as client from "@/lib/auth-client";',
+      operation: "client.unknownClient.organization.delete({ organizationId })",
+    }),
+    authPluginSources({
+      operation: "authClient.organization[endpointName]({ organizationId })",
+    }),
+  ]) {
+    const census = inspectMutationQuerySources(sources);
+    expect(
+      census.mutations
+        .flatMap(({ unresolved }) => unresolved)
+        .some(({ reason }) => reason === "unresolved-auth-plugin-endpoint"),
+    ).toBe(true);
+    assertInvalidCannotBeBaselined(violations(sources));
+  }
+});
+
+test("auth plugin route normalization covers declared camel-case RPC methods as a class", () => {
+  for (const [member, route] of [
+    ["updateMemberRole", "/organization/update-member-role"],
+    ["inviteMember", "/organization/invite-member"],
+    ["removeMember", "/organization/remove-member"],
+    ["setActive", "/organization/set-active"],
+  ] as const) {
+    const sources = authPluginSources({
+      writes: [
+        {
+          type: "auth-plugin-endpoint",
+          plugin: "organization",
+          endpoint: member,
+          method: "POST",
+          route,
+        },
+      ],
+      operation: `authClient.organization.${member}({ organizationId })`,
+    });
+    expect(
+      inspectMutationQuerySources(sources)
+        .mutations.flatMap(({ writes }) => writes)
+        .map(({ method, route: writeRoute }) => `${method} ${writeRoute}`),
+    ).toEqual([`post ${route}`]);
+    expect(violations(sources)).toEqual([]);
+  }
+});
+
 test("chained query receivers preserve the executing reader call", () => {
   for (const receiver of [
     "useQueryClient()",

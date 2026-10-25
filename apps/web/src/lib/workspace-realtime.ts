@@ -68,16 +68,16 @@ type ResourceQueryMeta = Record<string, unknown> & {
   resourceReads?: ResourceReads;
 };
 
-type OrganizationDeleteEndpoint =
-  ReturnType<OrganizationCreator>["endpoints"]["deleteOrganization"];
-type AuthPluginEndpointWrite = OrganizationDeleteEndpoint extends {
+type AuthPluginEndpointWrite<
+  TEndpoint extends keyof ReturnType<OrganizationCreator>["endpoints"],
+> = ReturnType<OrganizationCreator>["endpoints"][TEndpoint] extends {
   path: infer Route extends string;
   options: { method: infer Method extends string };
 }
   ? {
       type: "auth-plugin-endpoint";
       plugin: "organization";
-      endpoint: "deleteOrganization";
+      endpoint: TEndpoint;
       method: Method;
       route: Route;
     }
@@ -217,7 +217,14 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         endpoint: "deleteOrganization",
         method: "POST",
         route: "/organization/delete",
-      } satisfies AuthPluginEndpointWrite,
+      } satisfies AuthPluginEndpointWrite<"deleteOrganization">,
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "organization",
+        endpoint: "leaveOrganization",
+        method: "POST",
+        route: "/organization/leave",
+      } satisfies AuthPluginEndpointWrite<"leaveOrganization">,
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },

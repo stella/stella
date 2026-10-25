@@ -1,3 +1,4 @@
+import { toKebabCase } from "@better-auth/core/utils/string";
 import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -444,6 +445,9 @@ class CallScanner {
       return;
     }
     const route = this.analyzer.routeOf(node);
+    if (!route && this.analyzer.authClientOperation(node)) {
+      this.unknown("unresolved-auth-plugin-endpoint", node);
+    }
     if (this.analyzer.isExecutingReader(node)) {
       this.readerOf.add(this.analyzer.location(node).id);
       const argument = node.arguments.at(
@@ -680,6 +684,7 @@ class CensusAnalyzer {
   readonly mutationFunctions = new Set<ts.Node>();
   readonly readerFunctions = new Set<ts.Node>();
   readonly effectFunctions = new Set<ts.Node>();
+  readonly authPluginRoutes;
   readonly mutations: MutationCensusEntry[] = [];
   readonly readers: QueryReaderCensusEntry[] = [];
   targets = new Map<ts.CallExpression, ts.Node>();
@@ -692,7 +697,113 @@ class CensusAnalyzer {
     this.modules = new Map(
       inputs.map((input) => [input.file, indexModule(input)]),
     );
+    const contracts = this.modules
+      .get("apps/web/src/lib/workspace-realtime.ts")
+      ?.exports.get("RESOURCE_MUTATION_CONTRACTS");
+    const routes = new Map<string, string | undefined>();
+    const value = contracts ? unwrap(contracts) : undefined;
+    const properties =
+      value && ts.isObjectLiteralExpression(value) ? value.properties : [];
+    for (const contract of properties) {
+      if (!ts.isPropertyAssignment(contract)) {
+        continue;
+      }
+      const writes = this.property(
+        { node: contract.initializer, env: new Map() },
+        "writes",
+      );
+      const entries = writes ? unwrap(writes.node) : undefined;
+      if (!entries || !ts.isArrayLiteralExpression(entries)) {
+        continue;
+      }
+      for (const entry of entries.elements) {
+        const node = unwrap(entry);
+        if (!ts.isObjectLiteralExpression(node)) {
+          continue;
+        }
+        const fields = new Map(
+          node.properties
+            .filter(ts.isPropertyAssignment)
+            .map((property) => [
+              propertyName(property.name),
+              unwrap(property.initializer),
+            ]),
+        );
+        const type = fields.get("type");
+        const method = fields.get("method");
+        const route = fields.get("route");
+        if (
+          type &&
+          ts.isStringLiteral(type) &&
+          type.text === "auth-plugin-endpoint" &&
+          method &&
+          ts.isStringLiteral(method) &&
+          route &&
+          ts.isStringLiteral(route)
+        ) {
+          const normalized = method.text.toLowerCase();
+          routes.set(
+            route.text,
+            routes.has(route.text) && routes.get(route.text) !== normalized
+              ? undefined
+              : normalized,
+          );
+        }
+      }
+    }
+    this.authPluginRoutes = routes;
   }
+  authClientOperation = (call: ts.CallExpression) => {
+    const parts: string[] = [];
+    let node = unwrap(call.expression);
+    let shape: "static" | "dynamic" = "static";
+    while (
+      ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node) ||
+      ts.isCallExpression(node)
+    ) {
+      if (ts.isPropertyAccessExpression(node)) {
+        parts.unshift(node.name.text);
+      } else if (ts.isElementAccessExpression(node)) {
+        if (ts.isStringLiteral(node.argumentExpression)) {
+          parts.unshift(node.argumentExpression.text);
+        } else {
+          shape = "dynamic";
+        }
+      } else {
+        shape = "dynamic";
+      }
+      node = unwrap(node.expression);
+    }
+    if (!ts.isIdentifier(node)) {
+      return undefined;
+    }
+    const module = this.moduleFor(node);
+    const imported = module?.imports.get(node.text);
+    const from =
+      module && imported
+        ? this.moduleBase(module.file, imported.module)
+        : undefined;
+    const canonical = from === "apps/web/src/lib/auth-client";
+    const named = imported?.imported === "authClient";
+    const namespace =
+      imported?.imported === "*" && canonical && parts.shift() === "authClient";
+    if (!named && !namespace && !canonical && node.text !== "authClient") {
+      return undefined;
+    }
+    if (
+      !canonical ||
+      (!named && !namespace) ||
+      this.bindingFor(node) ||
+      shape === "dynamic"
+    ) {
+      return { type: "unproven" } as const;
+    }
+    return {
+      type: "proven",
+      route: `/${parts.map(toKebabCase).join("/")}`,
+    } as const;
+  };
   moduleFor = (node: ts.Node) =>
     this.modules.get(node.getSourceFile().fileName);
   isResourceMutationFactory = (call: ts.CallExpression) => {
@@ -1107,6 +1218,21 @@ class CensusAnalyzer {
     return undefined;
   };
   routeOf = (call: ts.CallExpression): CensusRoute | undefined => {
+    const auth = this.authClientOperation(call);
+    if (auth) {
+      const method =
+        auth.type === "proven"
+          ? this.authPluginRoutes.get(auth.route)
+          : undefined;
+      return auth.type === "proven" && method
+        ? {
+            file: call.getSourceFile().fileName,
+            route: auth.route,
+            method,
+            expression: normalize(call),
+          }
+        : undefined;
+    }
     const method = callName(call.expression);
     if (
       !method ||
@@ -1151,7 +1277,7 @@ class CensusAnalyzer {
       }
       const imported = this.moduleFor(node)?.imports.get(node.text);
       if (
-        !/(?:^api$|apiClient|authClient|^client$)/u.test(node.text) &&
+        !/(?:^api$|apiClient|^client$)/u.test(node.text) &&
         imported?.imported !== "api"
       ) {
         return undefined;
@@ -1229,6 +1355,7 @@ class CensusAnalyzer {
     for (const call of this.calls) {
       if (
         !this.routeOf(call) &&
+        !this.authClientOperation(call) &&
         !CACHE_EFFECTS.has(this.primitiveNames.get(call) ?? "") &&
         !MUTATIONS.has(this.primitiveNames.get(call) ?? "") &&
         !this.isExecutingReader(call)
