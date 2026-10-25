@@ -26,12 +26,19 @@ import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type OxcError, transformSync } from "oxc-transform-react";
-import ts from "typescript6";
 
 import {
   REACT_COMPILER_EXCLUDE,
   REACT_COMPILER_OPTIONS,
 } from "../packages/scripts/src/react-compiler-options";
+import {
+  type ArrowFunctionExpression,
+  type Function as SyntaxFunction,
+  type MethodDefinition,
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const BASELINE_PATH = BASELINE_PATHS.reactCompilerBailouts;
@@ -133,81 +140,72 @@ type FunctionLocation = {
   start: number;
 };
 
-const isFunctionLikeDeclaration = (
-  node: ts.Node,
-): node is ts.FunctionLikeDeclaration =>
-  ts.isArrowFunction(node) ||
-  ts.isConstructorDeclaration(node) ||
-  ts.isFunctionDeclaration(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isGetAccessorDeclaration(node) ||
-  ts.isMethodDeclaration(node) ||
-  ts.isSetAccessorDeclaration(node);
+type FunctionNode = SyntaxFunction | ArrowFunctionExpression | MethodDefinition;
 
-const scriptKind = (file: string): ts.ScriptKind =>
-  file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+const isFunctionLikeDeclaration = (node: Node): node is FunctionNode =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "MethodDefinition";
 
-const sourceFileFor = (file: string, code: string): ts.SourceFile =>
-  ts.createSourceFile(
-    file,
-    code,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind(file),
-  );
+const sourceFileFor = (file: string, code: string) => {
+  const parsed = parseSource(file, code);
+  const parents = new Map<Node, readonly Node[]>();
+  walk(parsed.program, (node, ancestors) => {
+    parents.set(node, [...ancestors]);
+  });
+  return { ...parsed, parents };
+};
+type SourceTree = ReturnType<typeof sourceFileFor>;
 
-const functionName = (
-  sourceFile: ts.SourceFile,
-  node: ts.FunctionLikeDeclaration,
-): string => {
-  if (node.name !== undefined && ts.isIdentifier(node.name)) {
-    return node.name.text;
+const functionName = (sourceFile: SourceTree, node: FunctionNode): string => {
+  if (
+    (node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression") &&
+    node.id
+  ) {
+    return node.id.name;
   }
-
-  let current: ts.Node = node;
-  while (!ts.isSourceFile(current.parent)) {
-    const { parent } = current;
-    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-      return parent.name.text;
+  if (node.type === "MethodDefinition" && node.key.type === "Identifier") {
+    return node.key.name;
+  }
+  for (const parent of (sourceFile.parents.get(node) ?? []).toReversed()) {
+    if (
+      parent.type === "VariableDeclarator" &&
+      parent.id.type === "Identifier"
+    ) {
+      return parent.id.name;
     }
-    current = parent;
   }
-
-  const { line, character } = sourceFile.getLineAndCharacterOfPosition(
-    node.getStart(sourceFile),
-  );
-  return `<anonymous@${String(line + 1)}:${String(character)}>`;
+  const { line, column } = sourceFile.locate(node.start);
+  return `<anonymous@${String(line)}:${String(column - 1)}>`;
 };
 
 const functionLocation = (
-  sourceFile: ts.SourceFile,
-  node: ts.FunctionLikeDeclaration,
+  sourceFile: SourceTree,
+  node: FunctionNode,
 ): FunctionLocation => ({
-  end: node.getEnd(),
+  end: node.end,
   name: functionName(sourceFile, node),
-  start: node.getStart(sourceFile),
+  start: node.start,
 });
 
 const enclosingFunction = (
-  sourceFile: ts.SourceFile,
+  sourceFile: SourceTree,
   position: number,
-): ts.FunctionLikeDeclaration | undefined => {
-  const find = (node: ts.Node): ts.FunctionLikeDeclaration | undefined => {
-    if (position < node.getFullStart() || position >= node.getEnd()) {
-      return undefined;
+): FunctionNode | undefined => {
+  let match: FunctionNode | undefined;
+  walk(sourceFile.program, (node) => {
+    if (match || position < node.start || position >= node.end) {
+      return "skip-children";
     }
     if (isFunctionLikeDeclaration(node)) {
-      return node;
+      match = node;
+      return "skip-children";
     }
-
-    let match: ts.FunctionLikeDeclaration | undefined;
-    node.forEachChild((child) => {
-      match ??= find(child);
-    });
-    return match;
-  };
-
-  return find(sourceFile);
+    return undefined;
+  });
+  return match;
 };
 
 // Oxc reports UTF-8 byte offsets while TypeScript's AST uses UTF-16 code-unit
@@ -239,7 +237,7 @@ const addBailout = (
 };
 
 const diagnosticLocation = (
-  sourceFile: ts.SourceFile,
+  sourceFile: SourceTree,
   code: string,
   error: OxcError,
 ): FunctionLocation | undefined => {
@@ -252,56 +250,63 @@ const diagnosticLocation = (
 };
 
 const addExplicitOptOuts = (
-  sourceFile: ts.SourceFile,
+  sourceFile: SourceTree,
   file: string,
   code: string,
   bailouts: Map<string, BailoutRecord>,
 ): void => {
-  for (const statement of sourceFile.statements) {
+  for (const directive of sourceFile.program.body) {
     if (
-      !ts.isExpressionStatement(statement) ||
-      !ts.isStringLiteral(statement.expression)
+      directive.type !== "ExpressionStatement" ||
+      directive.expression.type !== "Literal" ||
+      typeof directive.expression.value !== "string"
     ) {
       break;
     }
-    if (OPT_OUT_DIRECTIVES.has(statement.expression.text)) {
+    if (OPT_OUT_DIRECTIVES.has(directive.expression.value)) {
       addBailout(
         bailouts,
         file,
         code,
         undefined,
-        `explicit module opt-out: ${statement.expression.text}`,
+        `explicit module opt-out: ${directive.expression.value}`,
       );
     }
   }
-
-  const visit = (node: ts.Node): void => {
+  walk(sourceFile.program, (node, ancestors) => {
+    if (!isFunctionLikeDeclaration(node)) {
+      return;
+    }
+    // MethodDefinition owns the function value's source range and name.
     if (
-      isFunctionLikeDeclaration(node) &&
-      node.body !== undefined &&
-      ts.isBlock(node.body)
+      node.type === "FunctionExpression" &&
+      ancestors.at(-1)?.type === "MethodDefinition"
     ) {
-      for (const statement of node.body.statements) {
-        if (
-          !ts.isExpressionStatement(statement) ||
-          !ts.isStringLiteral(statement.expression)
-        ) {
-          break;
-        }
-        if (OPT_OUT_DIRECTIVES.has(statement.expression.text)) {
-          addBailout(
-            bailouts,
-            file,
-            code,
-            functionLocation(sourceFile, node),
-            `explicit opt-out: ${statement.expression.text}`,
-          );
-        }
+      return;
+    }
+    const body = node.type === "MethodDefinition" ? node.value.body : node.body;
+    if (body?.type !== "BlockStatement") {
+      return;
+    }
+    for (const directive of body.body) {
+      if (
+        directive.type !== "ExpressionStatement" ||
+        directive.expression.type !== "Literal" ||
+        typeof directive.expression.value !== "string"
+      ) {
+        break;
+      }
+      if (OPT_OUT_DIRECTIVES.has(directive.expression.value)) {
+        addBailout(
+          bailouts,
+          file,
+          code,
+          functionLocation(sourceFile, node),
+          `explicit opt-out: ${String(directive.expression.value)}`,
+        );
       }
     }
-    node.forEachChild(visit);
-  };
-  sourceFile.forEachChild(visit);
+  });
 };
 
 const scanFile = (
