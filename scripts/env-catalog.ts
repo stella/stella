@@ -504,7 +504,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   OPENROUTER_FAST_TIER_WIF_POLICY_ID:
     "Workload-identity federation policy for fast-tier managed work. Shares the audience and regional STS endpoint; a fast-tier static key takes precedence.",
   OPENROUTER_FAST_TIER_API_KEY:
-    "Managed OpenRouter key for fast-tier work. Never falls back to the standard key; required with FEATURE_FREE_TIER and AI_PROVIDER=openrouter unless the fast-tier federation policy is set.",
+    "Managed OpenRouter key for fast-tier work. Never falls back to the standard key; required when the free tier runs on managed OpenRouter, unless the fast-tier federation policy is set.",
   OPENROUTER_WIF_AUDIENCE:
     "Audience for the workload-identity token. Required with the federation policy and STS region.",
   OPENROUTER_WIF_STS_REGION:
