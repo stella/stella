@@ -73,7 +73,8 @@ const lockOrganization = async (
     case "missing":
       return refused("The organization does not exist");
     case "busy":
-      return Result.err(lock.error);
+      // Only a `nowait` acquisition reports busy; this one blocks.
+      return panic("A blocking organization lock reported busy");
     default:
       lock satisfies never;
       return panic("Unhandled aggregate lock status");
