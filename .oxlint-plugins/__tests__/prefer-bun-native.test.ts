@@ -221,7 +221,7 @@ test.each([
 });
 
 const sourceNodes = (source: ReturnType<typeof parseSource>) => {
-  const nodes = source.getChildren(source);
+  const nodes = [...source.getChildren(source)];
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes.at(index);
     if (node !== undefined) {
@@ -239,7 +239,7 @@ const hasDockerApiRuntimeCall = (source: ReturnType<typeof parseSource>) => {
         !ts.isStringLiteral(statement.moduleSpecifier) ||
         statement.moduleSpecifier.text !== "./api" ||
         statement.importClause === undefined ||
-        statement.importClause.isTypeOnly
+        statement.importClause.phaseModifier === ts.SyntaxKind.TypeKeyword
       ) {
         return [];
       }
