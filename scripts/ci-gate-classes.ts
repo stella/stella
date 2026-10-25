@@ -237,6 +237,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "scan-engine-wasm-drift": { class: "correctness" },
   "desktop-rust-tests": { class: "correctness" },
   "desktop-rust-lint": { class: "correctness" },
+  "dependency-audit": { class: "correctness" },
+  "dependency-review": { class: "correctness" },
   "dependency-malware": { class: "correctness" },
   "ci-quick-checks": {
     class: "correctness",

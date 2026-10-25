@@ -6,6 +6,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  flushFailureObservations,
+  resetFailureObservationsForTesting,
+} from "@/api/lib/observability/failure-shadow";
+import {
   credentialPermissionsForContext,
   readAuthorizedMemberRole,
   roleForDisplay,
@@ -15,8 +19,14 @@ import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -163,13 +173,18 @@ const REPRESENTATIVE_DB_FAILURES: {
 ];
 
 let analytics: RecordingAnalytics;
+let logs: RecordingLogger;
 
 beforeEach(() => {
+  resetFailureObservationsForTesting();
   analytics = installRecordingAnalytics();
+  logs = installRecordingLogger();
 });
 
 afterEach(() => {
+  resetFailureObservationsForTesting();
   analytics.restore();
+  logs.restore();
 });
 
 // Read the recorder through module-scope helpers: the table-driven tests below
@@ -362,9 +377,24 @@ describe("internalFailureResult preserves expected handler errors", () => {
       },
     });
     expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
-    expect(capturedExceptionProperties()).toMatchObject([
-      { "error.code": "upstream_unavailable", source: "mcp" },
+    expect(capturedExceptions()).toEqual([]);
+    flushFailureObservations();
+    expect(
+      logs.records.filter(({ message }) => message === "failure.observed"),
+    ).toMatchObject([
+      {
+        severityText: "INFO",
+        message: "failure.observed",
+        attributes: {
+          "failure.sink": "exception.captured",
+          "failure.grade": "transient",
+          "failure.reason": "upstream_unavailable",
+          "failure.legacy_channel": "capture",
+          occurrences: 1,
+        },
+      },
     ]);
+    expect(JSON.stringify(logs.records)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
   });
 });
 
