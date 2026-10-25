@@ -51,11 +51,13 @@ describe("read budget declarations", () => {
               `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
             ];
       }
-      const budget = READ_BUDGETS[job.reads.budget];
-      return budget.pages <= UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING
+      // Widened: the check holds for every budget a job may declare later.
+      const pages: number = READ_BUDGETS[job.reads.budget].pages;
+      const ceiling: number = UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING;
+      return pages <= ceiling
         ? []
         : [
-            `${job.id}: ${budget.pages} pages per run is over the ${UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING}-page ceiling for a job outside the load governor`,
+            `${job.id}: ${String(pages)} pages per run is over the ${String(ceiling)}-page ceiling for a job outside the load governor`,
           ];
     });
     expect(violations).toEqual([]);
