@@ -76,6 +76,7 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { countQuarantineCollisions } from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -687,6 +688,33 @@ export const runIngestionPipeline = async ({
   };
 
   /**
+   * The crawl's half of the walker's quarantine collision count
+   * (`countQuarantineCollisions`): two records on one page under one
+   * quarantine id with different stored bytes are two records one row cannot
+   * hold, and the pipeline would let the second replace the first. Reported
+   * per id, not stopped: the id is the adapter's to make more specific.
+   */
+  const reportPageQuarantineCollisions = (
+    decisions: SyncPage["decisions"],
+  ): void => {
+    const collisions = countQuarantineCollisions(
+      decisions.flatMap(({ sourceDocumentId, rawHash }) =>
+        sourceDocumentId === undefined
+          ? []
+          : [{ sourceDocumentId, revision: rawHash }],
+      ),
+    );
+    for (const [sourceDocumentId, extra] of collisions) {
+      logger.warn("case_law.ingestion.quarantine_collision", {
+        adapterKey: adapter.key,
+        cursor,
+        sourceDocumentId,
+        collidingRecords: extra,
+      });
+    }
+  };
+
+  /**
    * Apply a page's decisions, place its supplements, then settle its unread
    * items. A page with failed corpus writes stops before the unread items:
    * the cycle is held for those writes and does not count against an item.
@@ -699,6 +727,7 @@ export const runIngestionPipeline = async ({
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     const s3FailuresBefore = s3UploadFailures;
+    reportPageQuarantineCollisions(page.decisions);
     const halted = await applyPageDecisions({
       decisions: page.decisions,
       observation,

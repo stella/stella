@@ -36,6 +36,7 @@ const counts = (
 ): ReconciliationCounts => ({
   listed: 0,
   keyable: 0,
+  unstored: 0,
   heldBefore: 0,
   scheduled: 0,
   written: 0,

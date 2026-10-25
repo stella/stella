@@ -15,6 +15,12 @@ import type {
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import {
+  countQuarantineCollisions,
+  isQuarantineListingIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Pages requested for one slice before the listing gives up on it.
@@ -32,10 +38,35 @@ export type ListedSlice = {
   keyed: Map<string, ReconciliationListingItem>;
   /** Items the publisher listed, including repeats. */
   listed: number;
+  /** Repeats of an identity with the same revision: one record listed twice. */
   duplicate: number;
   /** Page requests the listing made, the first included. */
   pages: number;
+  /**
+   * Per quarantine identity, the records beyond the first that it was listed
+   * for: repeats whose payload revision differs from every earlier one. A
+   * publisher id names one document however often it is listed, but a
+   * content-addressed id is only as distinct as the fields it hashes, so two
+   * records whose stable fields agree share it and only one row can be
+   * stored (case-law AGENTS.md rule 17's failure mode). Counted, never
+   * folded into `duplicate`.
+   */
+  quarantineCollisions: Map<string, number>;
+  /**
+   * Records the publisher listed that state no stable field to key on, so
+   * nothing can be stored for them (`ReconciliationSlicePage.withoutStableFields`).
+   */
+  withoutStableFields: number;
 };
+
+const unstoredCollisionCount = ({
+  quarantineCollisions,
+}: ListedSlice): number =>
+  [...quarantineCollisions.values()].reduce((sum, extra) => sum + extra, 0);
+
+/** Records a slice lists that cannot each have a row of their own. */
+export const unstoredRecordCount = (listing: ListedSlice): number =>
+  listing.withoutStableFields + unstoredCollisionCount(listing);
 
 /**
  * How many passes over a slice each proof makes, for a caller that has to
@@ -65,6 +96,7 @@ type ListReconciliationSliceOptions = {
   adapterKey: string;
   proof: SliceListingProof;
   listSlicePage: SourceReconciliation["listSlicePage"];
+  revisionOf: SourceReconciliation["revisionOf"];
   slice: string;
   /** Pause before every page after the first. */
   pageDelayMs: number;
@@ -80,6 +112,7 @@ const listSlicePass = async ({
   listSlicePage,
   pageDelayMs,
   pageTimeoutMs,
+  revisionOf,
   slice,
   sleep,
   signal,
@@ -91,6 +124,23 @@ const listSlicePass = async ({
     listed: 0,
     duplicate: 0,
     pages: 0,
+    quarantineCollisions: new Map(),
+    withoutStableFields: 0,
+  };
+  // Only quarantine items are fingerprinted: a publisher id is one record
+  // however often it is listed, and hashing every payload would cost every
+  // walk for nothing.
+  const quarantineObservations: {
+    sourceDocumentId: string;
+    revision: string;
+  }[] = [];
+  let repeats = 0;
+  const finish = (): ListedSlice => {
+    listing.quarantineCollisions = countQuarantineCollisions(
+      quarantineObservations,
+    );
+    listing.duplicate = repeats - unstoredCollisionCount(listing);
+    return listing;
   };
   for (let page = 0; ; page += 1) {
     signal?.throwIfAborted();
@@ -108,19 +158,30 @@ const listSlicePass = async ({
           : AbortSignal.any([signal, timeoutSignal]),
     });
     listing.pages += 1;
-    listing.listed += listed.items.length;
+    listing.listed += listed.items.length + (listed.withoutStableFields ?? 0);
+    listing.withoutStableFields += listed.withoutStableFields ?? 0;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);
+      if (
+        item.identity.type === "document" &&
+        isQuarantineListingIdentity(item.identity)
+      ) {
+        quarantineObservations.push({
+          sourceDocumentId: item.identity.sourceDocumentId,
+          revision: fingerprintReconciliationPayload(revisionOf(item.payload)),
+        });
+      }
       if (listing.keyed.has(identityKey)) {
         // A publisher lists a document once per docket it settles; the same
-        // identity twice is one document.
-        listing.duplicate += 1;
+        // publisher identity twice is one document. A quarantine identity
+        // repeated with another revision is not, and `finish` separates it.
+        repeats += 1;
         continue;
       }
       listing.keyed.set(identityKey, item);
     }
     if (page + 1 >= listed.totalPages) {
-      return Result.ok(listing);
+      return Result.ok(finish());
     }
     if (page + 1 >= MAX_SLICE_PAGES) {
       return Result.err(
@@ -134,6 +195,32 @@ const listSlicePass = async ({
     // No clock here on purpose: a listing has nowhere to resume from, so
     // cutting one off on time would make a slowly-listing slice unlistable
     // rather than merely slow.
+  }
+};
+
+/**
+ * One record per listed record the slice cannot store, from the first pass
+ * only, so a verified slice reports each once. Every caller of the walker
+ * gets it, so no adapter has to remember to.
+ */
+const reportUnstoredRecords = (
+  { adapterKey, slice }: ListReconciliationSliceOptions,
+  listing: ListedSlice,
+): void => {
+  for (const [sourceDocumentId, extra] of listing.quarantineCollisions) {
+    logger.warn("case_law.reconciliation.quarantine_collision", {
+      adapterKey,
+      slice,
+      sourceDocumentId,
+      collidingRecords: extra,
+    });
+  }
+  if (listing.withoutStableFields > 0) {
+    logger.warn("case_law.reconciliation.records_without_stable_fields", {
+      adapterKey,
+      slice,
+      records: listing.withoutStableFields,
+    });
   }
 };
 
@@ -164,6 +251,9 @@ export const listReconciliationSlice = async (
   options: ListReconciliationSliceOptions,
 ): Promise<Result<ListedSlice, AdapterFetchError>> => {
   const first = await listSlicePass(options);
+  if (Result.isOk(first)) {
+    reportUnstoredRecords(options, first.value);
+  }
   if (
     Result.isError(first) ||
     (first.value.listed === 0 && first.value.pages === 1) ||

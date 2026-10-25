@@ -46,6 +46,7 @@ import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation
 import {
   listReconciliationSlice,
   SLICE_LISTING_PROOF,
+  unstoredRecordCount,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -438,6 +439,7 @@ const countSlice = async ({
         adapterKey: adapter.key,
         proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
+        revisionOf: adapter.reconciliation.revisionOf,
         pageDelayMs: adapter.minRequestIntervalMs,
         pageTimeoutMs: adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE,
         slice: target,
@@ -453,7 +455,12 @@ const countSlice = async ({
             cause,
           }),
   });
-  return listing.andThen((listed) => listed).map(({ keyed }) => keyed.size);
+  // What the publisher lists, the records no row can hold included: the
+  // census is the source's own count, and those records are exactly the gap
+  // between it and what is stored.
+  return listing
+    .andThen((listed) => listed)
+    .map((listed) => listed.keyed.size + unstoredRecordCount(listed));
 };
 
 /** The checkpoint a call starts counting from, and the value it replaces. */

@@ -88,6 +88,7 @@ import {
   MAX_SLICE_PAGES,
   SLICE_LISTING_PASSES,
   SLICE_LISTING_PROOF,
+  unstoredRecordCount,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
@@ -234,6 +235,12 @@ type ReconciliationUnitSummary = {
   /** Distinct identities; this is what the ledger's `reported` is. */
   keyable: number;
   duplicate: number;
+  /**
+   * Listed records no row can hold: ones stating no stable field, and the
+   * extra records behind a colliding quarantine identity. Outside `keyable`,
+   * so the ledger's settledness is unchanged; see `unstoredRecordCount`.
+   */
+  unstored: number;
   heldBefore: number;
   /**
    * Listed identities that are missing but already tracked, so this walk left
@@ -260,6 +267,7 @@ const emptySummary = (
   listed: 0,
   keyable: 0,
   duplicate: 0,
+  unstored: 0,
   heldBefore: 0,
   scheduled: 0,
   written: 0,
@@ -1523,6 +1531,7 @@ const walkSlice = async ({
     adapterKey,
     proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
+    revisionOf: reconciliation.revisionOf,
     pageDelayMs: LIST_DELAY_MS,
     pageTimeoutMs: LIST_TIMEOUT_MS,
     slice,
@@ -1537,6 +1546,7 @@ const walkSlice = async ({
   const { keyed } = listing.value;
   summary.listed = listing.value.listed;
   summary.duplicate = listing.value.duplicate;
+  summary.unstored = unstoredRecordCount(listing.value);
 
   const items = Array.from(keyed, ([identityKey, { identity, payload }]) => ({
     identity,

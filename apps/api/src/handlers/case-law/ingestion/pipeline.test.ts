@@ -90,6 +90,10 @@ import type {
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -1184,6 +1188,50 @@ describe("runIngestionPipeline — failure records", () => {
         ({ message }) => message === "case_law.ingestion.pipeline_page_done",
       )?.attributes?.["itemBuildFailures"],
     ).toBe(2);
+  });
+
+  test("reports two records a page lists under one quarantine id", async () => {
+    // A quarantine id is only as distinct as the fields it hashes; a second
+    // record under it would replace the first. Each one is reported, a repeat
+    // of the same record and records under publisher ids are not.
+    const source = caseLawSourceRow({ name: "Quarantine collision source" });
+    const { sourceDocumentId } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_NS,
+      stableFields: { docket: "21 Cdo 288/2026" },
+    });
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [
+          { ...baseResult({}), sourceDocumentId, rawHash: "first" },
+          { ...baseResult({}), sourceDocumentId, rawHash: "first" },
+          { ...baseResult({}), sourceDocumentId, rawHash: "second" },
+          { ...baseResult({}), sourceDocumentId: "unid-a", rawHash: "a" },
+          { ...baseResult({}), sourceDocumentId: "unid-a", rawHash: "b" },
+        ],
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb } = failingDecisionDb(null);
+    logs = installRecordingLogger();
+
+    await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(
+      logs.records
+        .filter(
+          ({ message }) =>
+            message === "case_law.ingestion.quarantine_collision",
+        )
+        .map(({ attributes }) => ({
+          sourceDocumentId: attributes?.["sourceDocumentId"],
+          collidingRecords: attributes?.["collidingRecords"],
+        })),
+    ).toEqual([{ sourceDocumentId, collidingRecords: 1 }]);
   });
 
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {

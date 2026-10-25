@@ -5,6 +5,7 @@ import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
   SLICE_LISTING_PROOF,
+  unstoredRecordCount,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -12,8 +13,15 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  QUARANTINE_NAMESPACE,
+  quarantineIdentity,
+} from "@/api/lib/legal-search/quarantine-identity";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 type ReconciliationListSlicePage = SourceReconciliation["listSlicePage"];
+
+const payloadRevision = (payload: unknown): unknown => payload;
 
 const documentItem = (id: string): ReconciliationListingItem => ({
   identity: { type: "document", sourceDocumentId: id },
@@ -39,6 +47,7 @@ test("keys each identity once and counts its repeats", async () => {
     await listReconciliationSlice({
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
+      revisionOf: payloadRevision,
       listSlicePage: pagedListing([
         [documentItem("a"), documentItem("b")],
         [documentItem("a"), documentItem("c")],
@@ -74,6 +83,7 @@ test("completed page delays remove their aborted-signal listeners", async () => 
     await listReconciliationSlice({
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
+      revisionOf: payloadRevision,
       listSlicePage: pagedListing([[], [], [], []]),
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -97,6 +107,7 @@ test("an empty slice lists nothing after one request", async () => {
     await listReconciliationSlice({
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.IDENTITIES,
+      revisionOf: payloadRevision,
       listSlicePage: async () => {
         requests += 1;
         return await Promise.resolve({ items: [], totalPages: 0 });
@@ -118,6 +129,7 @@ test("a listing past the page ceiling is refused, not truncated", async () => {
   const listed = await listReconciliationSlice({
     adapterKey: "fake",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
+    revisionOf: payloadRevision,
     listSlicePage: async ({ page }) => {
       requests += 1;
       return await Promise.resolve({
@@ -166,6 +178,7 @@ const listWith = async (listSlicePage: ReconciliationListSlicePage) =>
   await listReconciliationSlice({
     adapterKey: "fake",
     proof: SLICE_LISTING_PROOF.IDENTITIES,
+    revisionOf: payloadRevision,
     listSlicePage,
     pageDelayMs: 0,
     pageTimeoutMs: 5000,
@@ -235,6 +248,7 @@ test("a count needs no second walk, even of a changed slice", async () => {
     await listReconciliationSlice({
       adapterKey: "fake",
       proof: SLICE_LISTING_PROOF.COUNT,
+      revisionOf: payloadRevision,
       listSlicePage,
       pageDelayMs: 0,
       pageTimeoutMs: 5000,
@@ -268,4 +282,78 @@ test("a slice read empty in one request is not walked twice", async () => {
   const listing = unwrapListing(await listWith(listSlicePage));
   expect(listing.keyed.size).toBe(0);
   expect(requests).toEqual([0]);
+
+test("a quarantine id listed for two different records is a counted collision, not a duplicate", async () => {
+  // A content-addressed id is only as distinct as the fields it hashes: two
+  // records whose stable fields agree share it, and only one row can hold
+  // them. Folding the second into `duplicate` would lose it without a trace.
+  const { sourceDocumentId } = quarantineIdentity({
+    namespace: QUARANTINE_NAMESPACE.CZ_NS,
+    stableFields: { docket: "21 Cdo 288/2026" },
+  });
+  const quarantined = (payload: unknown): ReconciliationListingItem => ({
+    identity: { type: "document", sourceDocumentId },
+    payload,
+  });
+  const logs = installRecordingLogger();
+  try {
+    const listing = unwrapListing(
+      await listReconciliationSlice({
+        adapterKey: "fake",
+        proof: SLICE_LISTING_PROOF.IDENTITIES,
+        revisionOf: payloadRevision,
+        listSlicePage: async () =>
+          await Promise.resolve({
+            items: [
+              quarantined({ row: "first" }),
+              // The same record listed again: a duplicate.
+              quarantined({ row: "first" }),
+              quarantined({ row: "second" }),
+              // A publisher id repeated with another payload is still one
+              // document.
+              documentItem("a"),
+              { ...documentItem("a"), payload: { id: "a", corrected: true } },
+            ],
+            withoutStableFields: 2,
+            totalPages: 1,
+          }),
+        pageDelayMs: 0,
+        pageTimeoutMs: 5000,
+        slice: "2026-01-01",
+        sleep: async () => {
+          await Promise.resolve();
+        },
+      }),
+    );
+
+    expect([...listing.keyed.keys()]).toEqual([
+      `document:${sourceDocumentId}`,
+      "document:a",
+    ]);
+    expect(listing.duplicate).toBe(2);
+    expect([...listing.quarantineCollisions]).toEqual([[sourceDocumentId, 1]]);
+    expect(listing.withoutStableFields).toBe(2);
+    expect(listing.listed).toBe(7);
+    expect(unstoredRecordCount(listing)).toBe(3);
+    // Reported once per verified slice, from the first pass alone.
+    const warnings = logs.at("WARN").map(({ message, attributes }) => ({
+      message,
+      sourceDocumentId: attributes?.["sourceDocumentId"],
+      records: attributes?.["collidingRecords"] ?? attributes?.["records"],
+    }));
+    expect(warnings).toEqual([
+      {
+        message: "case_law.reconciliation.quarantine_collision",
+        sourceDocumentId,
+        records: 1,
+      },
+      {
+        message: "case_law.reconciliation.records_without_stable_fields",
+        sourceDocumentId: undefined,
+        records: 2,
+      },
+    ]);
+  } finally {
+    logs.restore();
+  }
 });

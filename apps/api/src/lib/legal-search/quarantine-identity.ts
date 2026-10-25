@@ -122,6 +122,44 @@ export const isQuarantineSourceDocumentId = (
   sourceDocumentId: string,
 ): boolean => sourceDocumentId.startsWith(quarantinePrefix(namespace));
 
+type QuarantineObservation = {
+  readonly sourceDocumentId: string;
+  /** What distinguishes one record's content from another's. */
+  readonly revision: string;
+};
+
+/**
+ * Per quarantine id, how many records beyond the first were observed under
+ * it: the distinct revisions past the first.
+ *
+ * A publisher id names one document however often it is listed, so a repeat
+ * is a duplicate. A quarantine id is only as distinct as the fields it hashes:
+ * two records whose stable fields agree share it, only one row can be stored,
+ * and the second observation would silently replace the first (case-law
+ * AGENTS.md rule 17). The callers report these instead of folding them into
+ * duplicates. Observations under publisher ids are ignored.
+ */
+export const countQuarantineCollisions = (
+  observations: Iterable<QuarantineObservation>,
+): Map<string, number> => {
+  const revisions = new Map<string, Set<string>>();
+  for (const { sourceDocumentId, revision } of observations) {
+    if (!isQuarantineListingIdentity({ type: "document", sourceDocumentId })) {
+      continue;
+    }
+    const seen = revisions.get(sourceDocumentId) ?? new Set<string>();
+    seen.add(revision);
+    revisions.set(sourceDocumentId, seen);
+  }
+  const collisions = new Map<string, number>();
+  for (const [sourceDocumentId, seen] of revisions) {
+    if (seen.size > 1) {
+      collisions.set(sourceDocumentId, seen.size - 1);
+    }
+  }
+  return collisions;
+};
+
 /**
  * Whether a listing identity is a quarantine identity of any namespace.
  *

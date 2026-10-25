@@ -1116,6 +1116,15 @@ export type ReconciliationListingItem = {
 
 export type ReconciliationSlicePage = {
   items: ReconciliationListingItem[];
+  /**
+   * Records the page lists that state no stable field at all (no publisher
+   * id and nothing a quarantine identity could hash, such as a result the
+   * publisher counts but will not serve). There is nothing to key or store
+   * for them, so they are not items, but the publisher listed them: the walk
+   * counts them so coverage shows the gap instead of losing them. Absent
+   * means none.
+   */
+  withoutStableFields?: number | undefined;
   /** 0 where the publisher lists nothing for the slice at all. */
   totalPages: number;
 };
