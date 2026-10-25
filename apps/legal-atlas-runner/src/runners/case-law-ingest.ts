@@ -1606,6 +1606,7 @@ export const runCaseLawIngest = async (
             `listed=${summary.listed} ` +
             `keyable=${summary.keyable} ` +
             `unstored=${summary.unstored} ` +
+            `quarantinePeerCollisions=${summary.quarantinePeerCollisions} ` +
             `held=${summary.heldBefore} ` +
             `scheduled=${summary.scheduled} ` +
             `written=${summary.written} ` +

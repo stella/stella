@@ -76,7 +76,10 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
-import { countQuarantineCollisions } from "@/api/lib/legal-search/quarantine-identity";
+import {
+  countQuarantineCollisions,
+  quarantinePeerCollisions,
+} from "@/api/lib/legal-search/quarantine-identity";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -710,6 +713,21 @@ export const runIngestionPipeline = async ({
         cursor,
         sourceDocumentId,
         collidingRecords: extra,
+      });
+    }
+    // A keyed record whose repair alias is a quarantine id the same page
+    // also stores: two records the fingerprint cannot tell apart, and the
+    // alias would merge them.
+    for (const peer of quarantinePeerCollisions(
+      decisions.map((decision) => ({
+        sourceDocumentId: decision.sourceDocumentId ?? "",
+        quarantinePeers: decision.sourceDocumentIdRepairAliases ?? [],
+      })),
+    )) {
+      logger.warn("case_law.ingestion.quarantine_peer_collision", {
+        adapterKey: adapter.key,
+        cursor,
+        sourceDocumentId: peer,
       });
     }
   };

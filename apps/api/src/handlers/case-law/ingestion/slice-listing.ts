@@ -18,6 +18,7 @@ import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import {
   countQuarantineCollisions,
   isQuarantineListingIdentity,
+  quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import { logger } from "@/api/lib/observability/logger";
@@ -52,6 +53,12 @@ export type ListedSlice = {
    * folded into `duplicate`.
    */
   quarantineCollisions: Map<string, number>;
+  /**
+   * Quarantine ids listed both for a quarantined record and as the peer of a
+   * keyed one (`ReconciliationListingItem.quarantinePeers`): two records the
+   * fingerprint cannot tell apart, which a repair alias would merge.
+   */
+  quarantinePeerCollisions: string[];
   /**
    * Records the publisher listed that state no stable field to key on, so
    * nothing can be stored for them (`ReconciliationSlicePage.withoutStableFields`).
@@ -125,6 +132,7 @@ const listSlicePass = async ({
     duplicate: 0,
     pages: 0,
     quarantineCollisions: new Map(),
+    quarantinePeerCollisions: [],
     withoutStableFields: 0,
   };
   // Only quarantine items are fingerprinted: a publisher id is one record
@@ -140,6 +148,13 @@ const listSlicePass = async ({
       quarantineObservations,
     );
     listing.duplicate = repeats - unstoredCollisionCount(listing);
+    listing.quarantinePeerCollisions = quarantinePeerCollisions(
+      [...listing.keyed.values()].map(({ identity, quarantinePeers }) => ({
+        sourceDocumentId:
+          identity.type === "document" ? identity.sourceDocumentId : "",
+        quarantinePeers: quarantinePeers ?? [],
+      })),
+    );
     return listing;
   };
   for (let page = 0; ; page += 1) {
@@ -213,6 +228,13 @@ const reportUnstoredRecords = (
       slice,
       sourceDocumentId,
       collidingRecords: extra,
+    });
+  }
+  for (const sourceDocumentId of listing.quarantinePeerCollisions) {
+    logger.warn("case_law.reconciliation.quarantine_peer_collision", {
+      adapterKey,
+      slice,
+      sourceDocumentId,
     });
   }
   if (listing.withoutStableFields > 0) {

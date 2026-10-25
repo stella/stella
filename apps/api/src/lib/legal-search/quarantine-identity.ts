@@ -160,6 +160,44 @@ export const countQuarantineCollisions = (
   return collisions;
 };
 
+type QuarantinePeerObservation = {
+  readonly sourceDocumentId: string;
+  /**
+   * For a record keyed on a publisher id, the quarantine ids an id-less
+   * listing of it would get; empty for any other record.
+   */
+  readonly quarantinePeers: readonly string[];
+};
+
+/**
+ * The quarantine ids observed both as a quarantined record and as the peer
+ * of a keyed record in the same listing.
+ *
+ * Within one listing such a pair is two records, a keyed one and an id-less
+ * one, whose stable fields agree: the fingerprint cannot tell them apart, so
+ * adopting the quarantined row on the keyed record's recovery would merge two
+ * documents. Reported so the adapter's stable fields can be made more
+ * specific; nothing is merged or dropped here.
+ */
+export const quarantinePeerCollisions = (
+  observations: readonly QuarantinePeerObservation[],
+): string[] => {
+  const quarantined = new Set(
+    observations.flatMap(({ sourceDocumentId }) =>
+      isQuarantineListingIdentity({ type: "document", sourceDocumentId })
+        ? [sourceDocumentId]
+        : [],
+    ),
+  );
+  return [
+    ...new Set(
+      observations.flatMap(({ quarantinePeers }) =>
+        quarantinePeers.filter((peer) => quarantined.has(peer)),
+      ),
+    ),
+  ];
+};
+
 /**
  * Whether a listing identity is a quarantine identity of any namespace.
  *

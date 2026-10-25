@@ -357,3 +357,60 @@ test("a quarantine id listed for two different records is a counted collision, n
     logs.restore();
   }
 });
+
+test("a keyed record whose quarantine peer is also listed quarantined is a reported pair", async () => {
+  // Two records whose stable fields agree, one keyed and one id-less: a
+  // repair alias from the keyed one would merge them, so the walker names
+  // the pair. A peer nothing else lists is no collision.
+  const peerOf = (docket: string): string =>
+    quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_NS,
+      stableFields: { docket },
+    }).sourceDocumentId;
+  const shared = peerOf("21 Cdo 288/2026");
+  const logs = installRecordingLogger();
+  try {
+    const listing = unwrapListing(
+      await listReconciliationSlice({
+        adapterKey: "fake",
+        proof: SLICE_LISTING_PROOF.COUNT,
+        revisionOf: payloadRevision,
+        listSlicePage: async () =>
+          await Promise.resolve({
+            items: [
+              { ...documentItem("a"), quarantinePeers: [shared] },
+              {
+                ...documentItem("b"),
+                quarantinePeers: [peerOf("22 Cdo 1/2026")],
+              },
+              {
+                identity: { type: "document", sourceDocumentId: shared },
+                payload: { row: "id-less" },
+              },
+            ],
+            totalPages: 1,
+          }),
+        pageDelayMs: 0,
+        pageTimeoutMs: 5000,
+        slice: "2026-01-01",
+        sleep: async () => {
+          await Promise.resolve();
+        },
+      }),
+    );
+
+    expect(listing.quarantinePeerCollisions).toEqual([shared]);
+    expect(listing.keyed.size).toBe(3);
+    expect(
+      logs
+        .at("WARN")
+        .filter(
+          ({ message }) =>
+            message === "case_law.reconciliation.quarantine_peer_collision",
+        )
+        .map(({ attributes }) => attributes?.["sourceDocumentId"]),
+    ).toEqual([shared]);
+  } finally {
+    logs.restore();
+  }
+});

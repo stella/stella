@@ -1112,6 +1112,13 @@ export type ReconciliationListingItem = {
   identity: ListingIdentity;
   /** Verbatim listing payload, JSON-serializable; replayed into buildDecision. */
   payload: unknown;
+  /**
+   * For a record keyed on a publisher id: the quarantine ids an id-less
+   * listing of the same record would get, whether or not the adapter emits
+   * them as repair aliases. The walker reports a slice that also lists one
+   * of them as a quarantined record (`quarantinePeerCollisions`).
+   */
+  quarantinePeers?: readonly string[] | undefined;
 };
 
 export type ReconciliationSlicePage = {

@@ -1111,6 +1111,20 @@ test("a parked key no rule wrote is reported and counted failed, never guessed",
         message === "case_law.reconciliation.parked_identity_key_unparseable",
     );
   expect(reported?.attributes?.["identityKey"]).toBe(unparseableKey);
+  // Retired, not left due: due parked items are planned before every walk,
+  // so a row that stayed due would take a retry slot on every visit forever.
+  expect(
+    await db
+      .select({ identityKey: caseLawReconciliationItems.identityKey })
+      .from(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.identityKey, unparseableKey),
+        ),
+      )
+      .limit(1),
+  ).toEqual([]);
 });
 
 test.each(Object.values(RECONCILIATION_ITEM_STATUS))(

@@ -1234,6 +1234,47 @@ describe("runIngestionPipeline — failure records", () => {
     ).toEqual([{ sourceDocumentId, collidingRecords: 1 }]);
   });
 
+  test("reports a keyed record whose repair alias the same page stores as a quarantined row", async () => {
+    // The alias would let the keyed record adopt the other one's row, merging
+    // two documents the fingerprint cannot tell apart.
+    const source = caseLawSourceRow({ name: "Quarantine peer source" });
+    const { sourceDocumentId } = quarantineIdentity({
+      namespace: QUARANTINE_NAMESPACE.CZ_NS,
+      stableFields: { docket: "21 Cdo 288/2026" },
+    });
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [
+          {
+            ...baseResult({}),
+            sourceDocumentId: "unid-a",
+            sourceDocumentIdRepairAliases: [sourceDocumentId],
+          },
+          { ...baseResult({}), sourceDocumentId, rawHash: "id-less" },
+        ],
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb } = failingDecisionDb(null);
+    logs = installRecordingLogger();
+
+    await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+
+    expect(
+      logs.records
+        .filter(
+          ({ message }) =>
+            message === "case_law.ingestion.quarantine_peer_collision",
+        )
+        .map(({ attributes }) => attributes?.["sourceDocumentId"]),
+    ).toEqual([sourceDocumentId]);
+  });
+
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>

@@ -241,6 +241,8 @@ type ReconciliationUnitSummary = {
    * so the ledger's settledness is unchanged; see `unstoredRecordCount`.
    */
   unstored: number;
+  /** See `ListedSlice.quarantinePeerCollisions`. */
+  quarantinePeerCollisions: number;
   heldBefore: number;
   /**
    * Listed identities that are missing but already tracked, so this walk left
@@ -268,6 +270,7 @@ const emptySummary = (
   keyable: 0,
   duplicate: 0,
   unstored: 0,
+  quarantinePeerCollisions: 0,
   heldBefore: 0,
   scheduled: 0,
   written: 0,
@@ -1547,6 +1550,8 @@ const walkSlice = async ({
   summary.listed = listing.value.listed;
   summary.duplicate = listing.value.duplicate;
   summary.unstored = unstoredRecordCount(listing.value);
+  summary.quarantinePeerCollisions =
+    listing.value.quarantinePeerCollisions.length;
 
   const items = Array.from(keyed, ([identityKey, { identity, payload }]) => ({
     identity,
@@ -1861,25 +1866,43 @@ const retryParkedItems = async ({
   summary.keyable = due.length;
 
   const candidates: KeyedListingItem[] = [];
-  for (const { identityKey, payload, slice } of due) {
+  const unparseable: typeof due = [];
+  for (const row of due) {
+    const { identityKey, payload, slice } = row;
     const identity = parseListingIdentityKey(identityKey);
     if (identity === null) {
       // Every parked key was written by `listingIdentityKey`, which
       // round-trips through the parser, so this is a ledger row no current
-      // rule wrote: a bug, never an identity to guess. Reported and counted
-      // like any other failed item rather than thrown, because a throw would
-      // fail the whole unit and hold every other due retry of this source
-      // behind one bad row; the row stays due, so it reports again each
-      // visit until it is fixed.
+      // rule wrote: a bug, never an identity to guess. Not thrown, because a
+      // throw would fail the whole unit and hold every other due retry of
+      // this source behind one bad row; not left due either, because due
+      // parked items are planned before every walk and the row would take a
+      // retry slot on every visit forever. Reported once and retired: if the
+      // record is still missing, the next walk of its slice parks it again
+      // under a key the parser reads.
       summary.failed += 1;
       logger.error("case_law.reconciliation.parked_identity_key_unparseable", {
         adapterKey,
         identityKey,
         slice,
+        disposition: "retired",
       });
+      unparseable.push(row);
       continue;
     }
     candidates.push({ identity, identityKey, payload, slice });
+  }
+  if (unparseable.length > 0) {
+    await lease.beforeDatabaseMark();
+    const retired = await resolveReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      items: unparseable,
+    });
+    if (retired.outcome === "superseded") {
+      summary.deferred = due.length;
+      return summary;
+    }
   }
 
   const held = await selectHeldIdentityKeys(scopedDb, {
