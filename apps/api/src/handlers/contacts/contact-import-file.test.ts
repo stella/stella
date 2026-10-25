@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
+  CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_LABELED_FIELDS,
   CONTACT_IMPORT_MAX_ROWS,
   CONTACT_IMPORT_SCHEMA_VERSION,
@@ -303,6 +304,12 @@ describe("labeled contact import blocks", () => {
           ]);
         }
       }
+    }
+  });
+
+  test("every field name suggests its own field", () => {
+    for (const field of CONTACT_IMPORT_FIELDS) {
+      expect([field, suggestedTargetForHeader(field)]).toEqual([field, field]);
     }
   });
 });

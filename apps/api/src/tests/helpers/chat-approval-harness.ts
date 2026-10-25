@@ -266,6 +266,7 @@ export const createApprovalHarness = ({
   scopedDb,
   sources = {},
   testDb,
+  textAdapterFactory,
   user,
   withDirectRefTool = false,
 }: {
@@ -325,6 +326,10 @@ export const createApprovalHarness = ({
   promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
+  /** Uses a local adapter through the same resolution seam as scripted replies. */
+  textAdapterFactory?: NonNullable<
+    Parameters<typeof installScriptedProvider>[0]
+  >["textAdapterFactory"];
   /** Defaults to the scripted provider. */
   model?: HarnessModel | undefined;
   /** The organization's model selection; defaults to the harness's own. */
@@ -357,7 +362,7 @@ export const createApprovalHarness = ({
   // Every database access of a turn goes to the test database; one that
   // reaches the shared pools escaped it, and fails the test at `close`.
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
-  const provider = model ?? installScriptedProvider();
+  const provider = model ?? installScriptedProvider({ textAdapterFactory });
   const executions: string[] = [];
   // Built for each request, as a connector's tools are: a grant ungates the
   // request's own tool object.

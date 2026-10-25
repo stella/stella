@@ -334,6 +334,72 @@ test.each(["api", "web"] as const)(
   },
 );
 
+test("a failed Bun trial exposes its captured failure without changing its verdict", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "fixture.test.ts",
+      'import {expect,test} from "bun:test"; test("visible trial reason",()=>expect("actual").toBe("expected"));',
+    );
+    const diagnostics: string[] = [];
+    const outcome = await runOnce({
+      target: targetFor(root),
+      seed: 11,
+      timeoutMs: 10_000,
+      onFailureOutput: (output) => {
+        diagnostics.push(output);
+      },
+    });
+    expect(outcome).toMatchObject({ passed: false, status: 1, ranTests: true });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain("visible trial reason");
+    expect(diagnostics[0]).toContain('"expected"');
+  });
+});
+
+test("the gate reports bounded output only for the first failed trial of each file", async () => {
+  let elapsed = 0;
+  const diagnostics: string[] = [];
+  const report = await executeGate({
+    targets: [
+      targetFor(".", "first.test.ts"),
+      targetFor(".", "second.test.ts"),
+    ],
+    skipped: [],
+    now: () => elapsed,
+    reportFailureOutput: (output) => {
+      diagnostics.push(output);
+    },
+    run: async ({ seed, onFailureOutput }) => {
+      elapsed += 1;
+      if (seed > 1) {
+        onFailureOutput?.(`${"x".repeat(32_768)}failure seed ${seed}`);
+      }
+      return {
+        type: "executed",
+        passed: seed === 1,
+        status: seed === 1 ? 0 : 1,
+        ranTests: true,
+        failedTests: seed === 1 ? [] : ["fixture"],
+      };
+    },
+  });
+  expect(diagnostics).toHaveLength(2);
+  for (const [index, output] of diagnostics.entries()) {
+    expect(output).toContain(index === 0 ? "first.test.ts" : "second.test.ts");
+    expect(output).toContain("seed 2");
+    expect(output).toEndWith("failure seed 2\n");
+    expect(output.length).toBeLessThan(16_512);
+  }
+  expect(
+    report.results.map(({ runs, failures }) => ({ runs, failures })),
+  ).toEqual([
+    { runs: REPEATS, failures: REPEATS - 1 },
+    { runs: REPEATS, failures: REPEATS - 1 },
+  ]);
+  expect(reportExitCode(report, true)).toBe(1);
+});
+
 test("fixture strings and comments do not classify a Bun test as Playwright", async () => {
   await withFixture((root) => {
     write(
@@ -964,4 +1030,65 @@ test("a failed file annotation cannot inject workflow commands through its name"
   });
   expect(annotation.split("\n")).toHaveLength(1);
   expect(annotation).not.toContain("\n::warning::");
+});
+
+test("a failing gate names each failing test with its first assertion line", async () => {
+  let trial = 0;
+  const report = await executeGate({
+    targets: [
+      targetFor("/fixture", "a.test.ts"),
+      targetFor("/fixture", "b.test.ts"),
+    ],
+    skipped: [],
+    run: async ({ target }) => {
+      trial += 1;
+      if (target.file.endsWith("b.test.ts")) {
+        return {
+          type: "executed",
+          passed: false,
+          status: 134,
+          ranTests: false,
+          failedTests: [],
+          failureDetails: [],
+        };
+      }
+      return {
+        type: "executed",
+        passed: false,
+        status: 1,
+        ranTests: true,
+        failedTests: ["math > adds"],
+        failureDetails: [
+          {
+            name: "math > adds",
+            detail:
+              trial === 1 ? "Expected: 2 Received: 3" : "later trial line",
+          },
+        ],
+      };
+    },
+  });
+  const markdown = renderReport(report);
+  expect(markdown).toContain("math > adds: Expected: 2 Received: 3");
+  expect(markdown).not.toContain("later trial line");
+  expect(markdown).toContain(
+    "a trial failed with exit status 134 and named no test",
+  );
+});
+
+test("a failing trial that names tests without details still names them", async () => {
+  const report = await executeGate({
+    targets: [targetFor("/fixture", "a.test.ts")],
+    skipped: [],
+    run: async () => ({
+      type: "executed",
+      passed: false,
+      status: 1,
+      ranTests: true,
+      failedTests: ["math > adds"],
+    }),
+  });
+  const markdown = renderReport(report);
+  expect(markdown).toContain("math > adds");
+  expect(markdown).not.toContain("named no test");
 });
