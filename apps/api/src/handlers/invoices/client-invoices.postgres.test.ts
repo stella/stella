@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia";
 
@@ -79,7 +79,6 @@ const expectSqlState = async (
   }
 };
 
-setDefaultTimeout(120_000);
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 

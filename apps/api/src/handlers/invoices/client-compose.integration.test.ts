@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
@@ -36,7 +29,6 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-setDefaultTimeout(120_000);
 let db: TestDatabase;
 let ids: TestIds;
 const clientId = createSafeId<"contact">();

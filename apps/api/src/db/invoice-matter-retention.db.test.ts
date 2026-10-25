@@ -149,7 +149,6 @@ test.each(retainedInvoiceCases)(
       await rm(directory, { recursive: true, force: true });
     }
   },
-  30_000,
 );
 
 const retentionMigration = async (name: string) =>
@@ -219,7 +218,7 @@ test("the retention migration changes only foreign keys and keeps existing invoi
       .toSorted()
       .map((name) => ({ name, action: "a", validated: true })),
   );
-}, 30_000);
+});
 
 test("explicit organization deletion still removes its whole billing history", async () => {
   await using database = new PGlite();
@@ -227,4 +226,4 @@ test("explicit organization deletion still removes its whole billing history", a
   await database.exec("DELETE FROM organization WHERE id = 'org'");
   expect(await readInvoiceState(database)).toEqual({ invoices: [], lines: [] });
   expect((await database.query("SELECT id FROM workspaces")).rows).toEqual([]);
-}, 30_000);
+});
