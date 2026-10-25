@@ -282,6 +282,7 @@ test("a slice read empty in one request is not walked twice", async () => {
   const listing = unwrapListing(await listWith(listSlicePage));
   expect(listing.keyed.size).toBe(0);
   expect(requests).toEqual([0]);
+});
 
 test("a quarantine id listed for two different records is a counted collision, not a duplicate", async () => {
   // A content-addressed id is only as distinct as the fields it hashes: two
