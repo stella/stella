@@ -52,7 +52,7 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -381,7 +381,7 @@ const useComposerSubmit = ({
       });
       return await submitComposedInvoice({
         issue,
-        create: async () => unwrapEden(await invoices.put(body)),
+        create: async () => unwrapApiResponse(await invoices.put(body)),
         finalize: async (id) => {
           const finalized = await invoices({
             invoiceId: toSafeId<"invoice">(id),

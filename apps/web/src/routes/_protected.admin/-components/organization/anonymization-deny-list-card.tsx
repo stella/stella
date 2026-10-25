@@ -28,7 +28,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
@@ -293,7 +293,7 @@ export const AnonymizationDenyListCard = () => {
   // therefore submit the full target list, not a delta.
   const updateMutation = useSettingsMutation({
     mutationFn: async ({ entries }: UpdateBlacklistVars) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["anonymization-blacklist"].put({
           entries: entries.map((entry) => ({
             canonical: entry.canonical,

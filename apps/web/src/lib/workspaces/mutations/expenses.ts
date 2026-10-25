@@ -4,7 +4,7 @@ import type { ExpenseCategory } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -34,7 +34,7 @@ export const useCreateExpense = () => {
           matterId: toSafeId<"entity">(body.matterId),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -74,7 +74,7 @@ export const useUpdateExpense = () => {
           }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -98,7 +98,7 @@ export const useDeleteExpense = () => {
           id: toSafeId<"expense">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
       analytics.captureError(error);

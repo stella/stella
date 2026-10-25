@@ -351,8 +351,8 @@ const checkJobEventPolicy = ({
     }
     return problems;
   }
-  if (eventPolicy === "schema-pr" && file !== "db-migrations.yml") {
-    problems.push(`${key}: schema policy belongs to Database Migrations`);
+  if (eventPolicy === "schema-pr" && file !== "ci.yml") {
+    problems.push(`${key}: schema policy belongs to CI Checks`);
   }
   if (periodic) {
     const condition =
@@ -570,7 +570,9 @@ export const checkCiEventPolicies = ({
     );
     const needs = v.parse(v.array(v.string()), result?.needs);
     const expected = needs.filter(
-      (id) => id !== "ci-plan" && declared.jobs[`${file}/${id}`] === "pr-fast",
+      (id) =>
+        id !== "ci-plan" &&
+        ["pr-fast", "schema-pr"].includes(declared.jobs[`${file}/${id}`] ?? ""),
     );
     if (
       actual.length !== expected.length ||

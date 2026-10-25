@@ -69,7 +69,7 @@ const createOrgContext = (
 };
 
 // The exported `.handler` returns the *unwrapped* success payload on ok, or an
-// Elysia status response (`{ code, ... }`) on error — not a raw Result.
+// `HttpStatusResponse` (`{ code, ... }`) on error — not a raw Result.
 type TestEndpoint<TContext> = {
   handler: (context: TContext) => Promise<unknown>;
 };
@@ -103,7 +103,7 @@ const getStatusCode = (result: unknown): number | null => {
   return null;
 };
 
-// The error branch is an Elysia status response: the numeric HTTP status on
+// The error branch is an `HttpStatusResponse`: the numeric HTTP status on
 // `code`, the `SafeErrorBody` (whose own `code` is the machine-readable
 // identifier clients branch on) on `response`.
 const getErrorCode = (result: unknown): string | null => {

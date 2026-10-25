@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   machineApiKeyAudienceSchema,
@@ -14,7 +14,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
-const createApiKeyBody = t.Object({
+const createApiKeyBody = v.object({
   name: machineApiKeyNameSchema,
   scopes: machineApiKeyScopesSchema,
   permissions: machineApiKeyPermissionsBodySchema,

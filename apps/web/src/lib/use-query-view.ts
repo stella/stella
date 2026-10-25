@@ -4,7 +4,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
-import type { NotEdenErrorEnvelope } from "@/lib/analytics/types";
+import type { NotApiErrorEnvelope } from "@/lib/analytics/types";
 import { queryView, queryViewError } from "@/lib/query-view.logic";
 import type { QueryView, QueryViewOptions } from "@/lib/query-view.logic";
 
@@ -19,7 +19,7 @@ export const useQueryView = <TData, TError>(
 
 /** Optional reads keep their cached content and report failures without blocking it. */
 export const useQueryViewError = <TData, TError>(
-  view: QueryView<TData, TError & NotEdenErrorEnvelope<TError>>,
+  view: QueryView<TData, TError & NotApiErrorEnvelope<TError>>,
 ) => {
   const analytics = useAnalytics();
   const error = queryViewError(view);
@@ -32,7 +32,7 @@ export const useQueryViewError = <TData, TError>(
 
 /** Dynamic query batches report each active failure once across renders. */
 export const useQueryViewErrors = <TData, TError>(
-  views: readonly QueryView<TData, TError & NotEdenErrorEnvelope<TError>>[],
+  views: readonly QueryView<TData, TError & NotApiErrorEnvelope<TError>>[],
 ) => {
   const analytics = useAnalytics();
   const reportedErrors = useRef(new Set<TError>());

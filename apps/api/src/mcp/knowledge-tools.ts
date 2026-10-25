@@ -2349,16 +2349,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create a review playbook, or add, change, and remove positions in one. " +
-      "Omit playbook_id to create (name required); pass playbook_id and " +
-      "expected_updated_at to update. positions lists only what is added or " +
-      "changed, never the whole playbook: an entry with source_id replaces " +
-      "that stored position whole, an entry without one is added. Entries are " +
-      "checked one by one; a refused entry comes back in issues with the fix " +
-      "and the rest are saved. A saved playbook is a draft that a person " +
-      "approves in the editor before it can run. Returns the playbook id, the " +
-      "updatedAt to pass as the next expected_updated_at, and each written " +
-      "position's sourceId.",
+      "Create a review playbook or change its positions. Omit playbook_id to " +
+      "create (name required); to update, pass it with expected_updated_at. " +
+      "positions is a patch: source_id replaces one position, while no source_id " +
+      "adds one. Invalid entries return in issues; valid entries are saved. The " +
+      "result is a draft for human approval and returns the id, updatedAt for the " +
+      "next update, and written sourceIds.",
     inputSchema: savePlaybookArgsSchema,
     inputNormalization: {
       "scope.perspective": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

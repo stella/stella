@@ -979,6 +979,33 @@ export const installPgliteCaseLawObservationFence = async (
   }
 };
 
+/** Install parsed-input invalidation from the production migration after schema push. */
+export const installPgliteCaseLawParsedSourceInvalidation = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261022120000_case_law_batch_slots",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION invalidate_case_law_parsed_source") ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_decisions_parsed_source_invalidation",
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the parsed-source invalidation function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261003120100_organization_member_capacity",
@@ -1038,6 +1065,13 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261005090300_organization_effective_policy",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261025104500_per_seat_member_capacity",
         "migration.sql",
       ),
     ),

@@ -1,5 +1,7 @@
+// parser-output-unchanged: declares bounded work failure grades without changing admitted work or parser results.
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import { declareFailureClass, type FailureReason } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { LIMITS } from "@/api/lib/limits";
@@ -13,11 +15,21 @@ import { WORK_POOL_LIMITS, type WorkPool } from "./work-pools";
 const ADMITTED = Symbol("work-admission");
 type WorkHold = { status: "held" | "settled" };
 
+const WORK_REFUSAL_REASON = {
+  busy: "work_capacity_unavailable",
+  memory: "work_capacity_unavailable",
+  aborted: "work_cancelled",
+} as const satisfies Record<WorkRefusal["reason"], FailureReason>;
+
 export class WorkRefusal extends TaggedError("WorkRefusal")<{
   message: string;
   reason: "busy" | "memory" | "aborted";
   retryAfterMs: number;
-}> {}
+}> {
+  static {
+    declareFailureClass(this, ({ reason }) => WORK_REFUSAL_REASON[reason]);
+  }
+}
 
 export class WorkDeadlineError extends TaggedError("WorkDeadlineError")<{
   message: string;

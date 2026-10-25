@@ -1,16 +1,16 @@
 import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { workspaceContacts, workspaces } from "@/api/db/schema";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const readContactByIdParamsSchema = t.Object({
-  contactId: tSafeId("contact", { description: "Contact ID" }),
+const readContactByIdParamsSchema = v.object({
+  contactId: resourceIdSchema("contact", { description: "Contact ID" }),
 });
 
 const readContactById = createSafeRootHandler(

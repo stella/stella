@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -10,7 +10,7 @@ import {
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
@@ -48,12 +48,12 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({
-    fieldId: tSafeId("field"),
-    attachmentId: t.String({ minLength: 1, maxLength: 64 }),
+    fieldId: resourceIdSchema("field"),
+    attachmentId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   }),
-  body: t.Object({
-    destinationWorkspaceId: tSafeId("workspace"),
-    parentId: t.Nullable(tSafeId("entity")),
+  body: v.object({
+    destinationWorkspaceId: resourceIdSchema("workspace"),
+    parentId: v.nullable(resourceIdSchema("entity")),
   }),
 } satisfies WorkspaceHandlerConfig;
 

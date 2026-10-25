@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   INVOICE_COUNTRY_PROFILES,
@@ -49,7 +49,7 @@ import {
   type VatRateRequest,
 } from "@/api/lib/billing/vat-exchange-rates";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -83,8 +83,8 @@ const TRANSITIONS = {
   { from: InvoiceStatus[]; to: InvoiceStatus }
 >;
 
-const transitionInvoiceBodySchema = t.Object({
-  action: t.UnionEnum([
+const transitionInvoiceBodySchema = v.object({
+  action: v.picklist([
     "finalize",
     "send",
     "mark_paid",
@@ -93,7 +93,9 @@ const transitionInvoiceBodySchema = t.Object({
   ]),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const validateReverseChargeBuyer = async (
   tx: Transaction,

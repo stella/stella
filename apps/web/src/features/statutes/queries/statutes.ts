@@ -15,7 +15,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
+import { isPublicLawMiss, unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -126,7 +126,7 @@ const readStatutesPage = async ({
     fetch: { signal },
   });
 
-  const data = unwrapPublicLawEden(response, "listPublicStatutes");
+  const data = unwrapPublicLawResponse(response, "listPublicStatutes");
 
   return data;
 };
@@ -181,7 +181,7 @@ const readStatuteSearchPage = async ({
     },
     fetch: { signal },
   });
-  return unwrapPublicLawEden(response, "searchPublicStatutes");
+  return unwrapPublicLawResponse(response, "searchPublicStatutes");
 };
 
 export type StatuteSearchHit = Awaited<
@@ -211,7 +211,7 @@ export const statuteFacetsOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "readPublicStatuteFacets");
+      const data = unwrapPublicLawResponse(response, "readPublicStatuteFacets");
 
       return data;
     },
@@ -231,7 +231,10 @@ export const legislationShelfOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapPublicLawEden(response, "readPublicLegislationShelf");
+      const data = unwrapPublicLawResponse(
+        response,
+        "readPublicLegislationShelf",
+      );
 
       return data;
     },
@@ -243,7 +246,7 @@ const readStatute = async (documentId: string, signal: AbortSignal) => {
     .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
     .get({ fetch: { signal } });
 
-  const data = unwrapPublicLawEden(response, "readPublicStatute");
+  const data = unwrapPublicLawResponse(response, "readPublicStatute");
 
   return data;
 };
@@ -279,7 +282,7 @@ export const publicStatuteOptions = (documentId: string) =>
         return null;
       }
 
-      return unwrapPublicLawEden(response, "readPublicStatute");
+      return unwrapPublicLawResponse(response, "readPublicStatute");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -329,7 +332,7 @@ export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
         return windowGap;
       }
 
-      return unwrapPublicLawEden(response, "readPublicStatuteBySlug");
+      return unwrapPublicLawResponse(response, "readPublicStatuteBySlug");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -355,7 +358,7 @@ const readStatuteVersionsPage = async ({
       fetch: { signal },
     });
 
-  const data = unwrapPublicLawEden(response, "listPublicStatuteVersions");
+  const data = unwrapPublicLawResponse(response, "listPublicStatuteVersions");
 
   return data;
 };

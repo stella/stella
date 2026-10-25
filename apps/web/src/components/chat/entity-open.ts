@@ -11,7 +11,7 @@ import {
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { OfficeCitationSource } from "@/lib/files/office-citations";
@@ -156,7 +156,7 @@ export const openEntityInInspector = async (
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .get();
 
-    const data = unwrapEden(response);
+    const data = unwrapApiResponse(response);
 
     const responseLabel = data.name;
     const openedByKind = openEntityByKind({
@@ -216,7 +216,7 @@ export const openSourceBoundEntityFile = async ({
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .field({ fieldId: toSafeId<"field">(fieldId) })
       .file.get();
-    const data = unwrapEden(response);
+    const data = unwrapApiResponse(response);
     if (
       isCurrent() &&
       data.entityVersionId === entityVersionId &&

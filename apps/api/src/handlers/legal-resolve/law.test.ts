@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import { status } from "elysia";
 
 import {
   admitLawRead,
@@ -16,6 +15,7 @@ import {
   projectProvisionPreview,
   projectStatuteReader,
 } from "@/api/handlers/legislation/reader-response";
+import { status } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";

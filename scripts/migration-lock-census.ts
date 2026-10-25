@@ -700,6 +700,24 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "add-column",
+    reason:
+      "The three parsed-input fields and two captured raw-object keys are nullable and default-free catalog additions, without a corpus row scan or table rewrite; lock acquisition is bounded by 1s and the statement by 30s.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "add-constraint",
+    reason:
+      "The complete parsed-input CHECK is added NOT VALID without scanning existing corpus rows, under transaction-local 1s lock_timeout and 30s statement_timeout; the canonical online phase validates it after releasing the schema lock.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "create-trigger",
+    reason:
+      "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:

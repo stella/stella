@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import type { recordLegalResolveAudit } from "@/api/db/root";
 import { authorizeLegalResolveRequest } from "@/api/handlers/legal-resolve/authorization";
@@ -8,9 +7,23 @@ import {
   createLegalResolveRateLimitOptions,
   createLegalResolveRoute,
 } from "@/api/handlers/legal-resolve/routes";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { McpAuthenticationError } from "@/api/mcp/errors";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+/** The legal resolve routes behind the error boundary, on a real server. */
+const serveLegalResolve = (
+  dependencies: Parameters<typeof createLegalResolveRoute>[0],
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: createLegalResolveRoute(dependencies),
+      middleware: [errorBoundary],
+    }),
+  );
 
 const principal = {
   type: "service",
@@ -29,23 +42,21 @@ test("service resolve calls authenticate once and audit outcomes without query t
     failurePolicy: "fail_open_local",
     onRedisError: () => undefined,
   });
-  const app = new Elysia().use(
-    createLegalResolveRoute({
-      authenticate: async () => {
-        authentications += 1;
-        return Result.ok({ ...principal, scopes: [...principal.scopes] });
-      },
-      publicLawEnabled: () => true,
-      recordAudit: async (input) => {
-        audits.push(input);
-      },
-      rateLimitContext: context,
-      resolveDecision: async () => ({ status: "country_unavailable" }),
-      resolveLaw: async () => ({ status: "country_unavailable" }),
-    }),
-  );
+  await using app = serveLegalResolve({
+    authenticate: async () => {
+      authentications += 1;
+      return Result.ok({ ...principal, scopes: [...principal.scopes] });
+    },
+    publicLawEnabled: () => true,
+    recordAudit: async (input) => {
+      audits.push(input);
+    },
+    rateLimitContext: context,
+    resolveDecision: async () => ({ status: "country_unavailable" }),
+    resolveLaw: async () => ({ status: "country_unavailable" }),
+  });
   const call = async (path: string) =>
-    await app.handle(
+    await app.fetch(
       new Request(`http://localhost${path}`, {
         headers: { authorization: "Bearer synthetic" },
       }),
@@ -133,33 +144,31 @@ test.each(["service", "user"] as const)(
       generator: () => key,
       max: 10,
     });
-    const app = new Elysia().use(
-      createLegalResolveRoute({
-        authenticate: async () => {
-          authentications += 1;
-          return Result.ok(
-            type === "service"
-              ? { ...principal, scopes: [] }
-              : {
-                  userId: "synthetic-user",
-                  organizationId: principal.organizationId,
-                  scopes: [],
-                },
-          );
-        },
-        publicLawEnabled: () => true,
-        recordAudit: async (input) => {
-          audits.push(input);
-        },
-        decisionRateLimit: limit("decision"),
-        lawRateLimit: limit("law"),
-        resolveDecision: async () => {
-          resolveCalls += 1;
-          return { status: "country_unavailable" };
-        },
-      }),
-    );
-    const response = await app.handle(
+    await using app = serveLegalResolve({
+      authenticate: async () => {
+        authentications += 1;
+        return Result.ok(
+          type === "service"
+            ? { ...principal, scopes: [] }
+            : {
+                userId: "synthetic-user",
+                organizationId: principal.organizationId,
+                scopes: [],
+              },
+        );
+      },
+      publicLawEnabled: () => true,
+      recordAudit: async (input) => {
+        audits.push(input);
+      },
+      decisionRateLimit: limit("decision"),
+      lawRateLimit: limit("law"),
+      resolveDecision: async () => {
+        resolveCalls += 1;
+        return { status: "country_unavailable" };
+      },
+    });
+    const response = await app.fetch(
       new Request(
         "http://localhost/case/CZ/decisions/resolve?identifier=synthetic",
         { headers: { authorization: "Bearer synthetic" } },
@@ -187,26 +196,24 @@ test("post-auth validation failures retain the service audit principal", async (
     generator: () => key,
     max: 10,
   });
-  const app = new Elysia().use(
-    createLegalResolveRoute({
-      authenticate: async () => {
-        authentications += 1;
-        return Result.ok({ ...principal, scopes: [...principal.scopes] });
-      },
-      publicLawEnabled: () => true,
-      recordAudit: async (input) => {
-        audits.push(input);
-      },
-      decisionRateLimit: limit("decision"),
-      lawRateLimit: limit("law"),
-      resolveDecision: async () => {
-        resolveCalls += 1;
-        return { status: "country_unavailable" };
-      },
-    }),
-  );
+  await using app = serveLegalResolve({
+    authenticate: async () => {
+      authentications += 1;
+      return Result.ok({ ...principal, scopes: [...principal.scopes] });
+    },
+    publicLawEnabled: () => true,
+    recordAudit: async (input) => {
+      audits.push(input);
+    },
+    decisionRateLimit: limit("decision"),
+    lawRateLimit: limit("law"),
+    resolveDecision: async () => {
+      resolveCalls += 1;
+      return { status: "country_unavailable" };
+    },
+  });
   const identifier = "synthetic-query".repeat(40);
-  const response = await app.handle(
+  const response = await app.fetch(
     new Request(
       `http://localhost/case/CZ/decisions/resolve?identifier=${identifier}`,
       { headers: { authorization: "Bearer synthetic" } },
@@ -232,23 +239,21 @@ test("token rejection carries no principal into response auditing", async () => 
     generator: () => key,
     max: 10,
   });
-  const app = new Elysia().use(
-    createLegalResolveRoute({
-      authenticate: async () => {
-        authentications += 1;
-        return Result.err(
-          new McpAuthenticationError({ message: "Synthetic token rejection" }),
-        );
-      },
-      publicLawEnabled: () => true,
-      recordAudit: async (input) => {
-        audits.push(input);
-      },
-      decisionRateLimit: limit("decision"),
-      lawRateLimit: limit("law"),
-    }),
-  );
-  const response = await app.handle(
+  await using app = serveLegalResolve({
+    authenticate: async () => {
+      authentications += 1;
+      return Result.err(
+        new McpAuthenticationError({ message: "Synthetic token rejection" }),
+      );
+    },
+    publicLawEnabled: () => true,
+    recordAudit: async (input) => {
+      audits.push(input);
+    },
+    decisionRateLimit: limit("decision"),
+    lawRateLimit: limit("law"),
+  });
+  const response = await app.fetch(
     new Request(
       "http://localhost/case/CZ/decisions/resolve?identifier=synthetic",
       { headers: { authorization: "Bearer synthetic" } },

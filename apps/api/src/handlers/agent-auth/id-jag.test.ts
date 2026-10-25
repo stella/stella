@@ -38,18 +38,21 @@ import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
+import { createHttpApp } from "@/api/http/app";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
   type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -80,6 +83,14 @@ const BASE = "http://localhost";
 const ISSUER = "https://idp.test.stella.dev";
 const JWKS_URL = `${ISSUER}/.well-known/jwks.json`;
 const CLIENT_ID = "test-agent-client";
+
+// Both agent-auth tables over a real socket, as the API serves them.
+const server = serveForTest(
+  createHttpApp({
+    routes: [...agentAuthRoute, ...agentAuthConfirmRoute],
+    middleware: [errorBoundary],
+  }),
+);
 
 let issuerKid: string;
 let issuerPrivateKey: CryptoKey;
@@ -127,6 +138,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await server.stop();
   globalThis.fetch = realFetch;
   disableFeature();
   await releaseAgentAuthTestDb();
@@ -190,7 +202,7 @@ const mintIdJag = async (overrides: IdJagOverrides = {}): Promise<string> => {
 };
 
 const postIdentity = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_IDENTITY_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -199,7 +211,7 @@ const postIdentity = async (body: Json) =>
   );
 
 const postToken = async (body: Json) =>
-  await agentAuthRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_TOKEN_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -208,7 +220,7 @@ const postToken = async (body: Json) =>
   );
 
 const postConfirm = async (body: Json, cookieHeader: string) =>
-  await agentAuthConfirmRoute.handle(
+  await server.fetch(
     new Request(`${BASE}${AGENT_AUTH_CONFIRM_PATH}`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: cookieHeader },
