@@ -17,9 +17,9 @@ import type {
 } from "@/api/lib/file-scan/types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { S3ObjectMissingError, S3PresignError } from "@/api/lib/s3-presign";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { runFileComparison } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunDependencies } from "@/api/mcp/file-comparison-run";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -150,7 +150,7 @@ const createHarness = ({
     }),
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     organizationId: toSafeId<"organization">(ORGANIZATION_ID),
     recordAuditEvent: async (
       _tx: unknown,

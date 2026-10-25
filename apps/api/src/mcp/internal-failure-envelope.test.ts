@@ -10,10 +10,11 @@ import {
   readAuthorizedMemberRole,
   roleForDisplay,
 } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,18 +52,20 @@ const createRecordAuditEventMock = () =>
 // Owner role with one active, accessible workspace, so authorization and
 // workspace-access pre-checks pass and each handler advances to its first DB
 // call (the only thing that fails here).
-const createFailingDbContext = (failure?: HandlerError): McpRequestContext => {
-  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
+const createFailingDbContext = (
+  failure?: HandlerError,
+): AuthorizedMcpRequestContext => {
+  const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(() => {
     throw new Error(`database unavailable: ${DB_INTERNAL_LEAK_TOKEN}`);
   });
   const safeDb =
     failure === undefined
       ? toSafeDbMock(scopedDb)
-      : asTestRaw<McpRequestContext["safeDb"]>(
+      : asTestRaw<AuthorizedMcpRequestContext["safeDb"]>(
           async () => await Promise.resolve(Result.err(failure)),
         );
 
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
@@ -76,7 +79,7 @@ const createFailingDbContext = (failure?: HandlerError): McpRequestContext => {
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const asCallToolResult = (result: McpToolResponse) => {

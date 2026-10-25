@@ -446,6 +446,7 @@ describe("handleMcpHttpRequest", () => {
           name: "get_document",
           scope: "stella:read",
           access: "read",
+          permissions: { type: "open-read", reason: "reads only fixture data" },
           description: "Read a document",
           inputSchema: { type: "object", properties: {} },
         });
@@ -524,6 +525,7 @@ describe("handleMcpHttpRequest", () => {
         name: "get_document",
         scope: "stella:read",
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         description: "Read a document",
         inputSchema: { type: "object", properties: {} },
       });
