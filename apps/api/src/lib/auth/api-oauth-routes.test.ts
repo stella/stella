@@ -41,7 +41,8 @@ describe("the routes an API access token opens", () => {
       const endpoint = handlerConfigOf(
         await import(new URL(handler, REPO_ROOT).pathname),
       );
-      expect(route?.handler).toBe(endpoint.handler);
+      const routeHandler: unknown = route?.handler;
+      expect(routeHandler).toBe(endpoint.handler);
       expect(endpoint.accountAccess).not.toBe(ACCOUNT_ACCESS.accountControl);
 
       const capability = catalog.get(
