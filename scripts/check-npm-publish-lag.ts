@@ -57,13 +57,15 @@ export type RegistryResult =
   | { status: "passed"; reason: "ok" }
   | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
+  // npm's `latest`, so callers can tell a lagging registry from one ahead.
+  | { status: "failed"; reason: "version_mismatch"; latest: string }
   | {
       status: "failed";
       reason:
         | "http_status"
         | "timeout"
         | "contract_error"
-        | "version_mismatch"
+        | "publish_awaits_promote"
         | "unattested_publish";
     };
 
@@ -354,7 +356,13 @@ type CheckRegistryOptions = {
   registry: string;
   timeoutMs: number;
   npmRunner?: NpmRunner;
+  fetchImpl?: RegistryFetch;
 };
+
+export type RegistryFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
 
 // This is the network boundary: exceptions become fixed, credential-free reasons.
 export const checkRegistry = async ({
@@ -366,9 +374,10 @@ export const checkRegistry = async ({
   timeoutMs,
   movedRepository,
   npmRunner = runNpm,
+  fetchImpl = fetch,
 }: CheckRegistryOptions): Promise<RegistryResult> => {
   try {
-    const response = await fetch(
+    const response = await fetchImpl(
       `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
       { signal: AbortSignal.timeout(timeoutMs) },
     );
@@ -421,7 +430,11 @@ export const checkRegistry = async ({
       case "pending":
         return { status: "skipped", reason: "publish_pending" };
       case "mismatch":
-        return { status: "failed", reason: "version_mismatch" };
+        return {
+          status: "failed",
+          reason: "version_mismatch",
+          latest: payload["version"],
+        };
       default: {
         assessment satisfies never;
         throw new NpmPublishLagError("Unhandled version assessment");

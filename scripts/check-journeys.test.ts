@@ -483,7 +483,7 @@ rm -f "$response"
       expect(stderr).toBe("");
       for (const line of stdout.trim().split("\n")) {
         expect(line).toMatch(
-          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|version_mismatch|registry_rejected|no_credential|auth_rejected|ok)$/u,
+          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|version_mismatch|publish_awaits_promote|registry_rejected|no_credential|auth_rejected|ok)$/u,
         );
       }
     }
