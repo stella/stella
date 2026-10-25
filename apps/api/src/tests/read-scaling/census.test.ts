@@ -22,6 +22,7 @@ import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -49,6 +50,7 @@ const measuredApiScenarios = [
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   myOpenTasksScalingScenario,
+  mobileUpdateScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
