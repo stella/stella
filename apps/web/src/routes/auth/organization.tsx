@@ -219,14 +219,11 @@ const SignedInAccount = ({ disabled }: { disabled: boolean }) => {
   const email = Route.useRouteContext({ select: (ctx) => ctx.user?.email });
   const switchAccount = useOAuthAccountSwitch();
   const { isPending, mutate } = useMutation({
-    mutationFn: async () => {
-      const outcome = await switchAccount();
+    mutationFn: switchAccount,
+    onSuccess: (outcome) => {
       if (outcome.isErr()) {
-        throw outcome.error;
+        notifyUserError(outcome.error, t("errors.actionFailed"));
       }
-    },
-    onError: (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
