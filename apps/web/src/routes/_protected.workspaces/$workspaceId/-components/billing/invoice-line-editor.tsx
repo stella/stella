@@ -45,7 +45,6 @@ type InvoiceLineEditorProps = {
   invoiceId: string;
   currency: string;
   editable: boolean;
-  billingMode: string;
 };
 
 export const InvoiceLineEditor = ({
@@ -54,8 +53,10 @@ export const InvoiceLineEditor = ({
   invoiceId,
   currency,
   editable,
-  billingMode,
 }: InvoiceLineEditorProps) => {
+  // The flat fee keeps its snapshotted amount and cannot be removed; the
+  // server refuses both, and a flat-fee invoice holds no other line.
+  const isFlatFeeLine = line.billingPurpose === "flat_fee";
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
@@ -120,11 +121,11 @@ export const InvoiceLineEditor = ({
             endpoint.patch(
               {
                 description: value.description,
-                ...(billingMode !== "flat_fee" &&
+                ...(!isFlatFeeLine &&
                 quantityText(value.quantity) !== quantityText(line.quantity)
                   ? { quantity: value.quantity }
                   : {}),
-                ...(billingMode !== "flat_fee" &&
+                ...(!isFlatFeeLine &&
                 value.unitPrice !==
                   toMajorUnits({ amountCents: line.unitPrice, currency })
                   ? {
@@ -203,7 +204,7 @@ export const InvoiceLineEditor = ({
                   aria-label={t("billing.invoices.lineOverrides.quantity")}
                   dir="ltr"
                   inputMode="decimal"
-                  readOnly={billingMode === "flat_fee"}
+                  readOnly={isFlatFeeLine}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
@@ -221,7 +222,7 @@ export const InvoiceLineEditor = ({
                   min={0}
                   step={10 ** -currencyMinorUnitDigits(currency)}
                   type="number"
-                  readOnly={billingMode === "flat_fee"}
+                  readOnly={isFlatFeeLine}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) =>
@@ -255,7 +256,7 @@ export const InvoiceLineEditor = ({
               })}
             </p>
           )}
-          {billingMode !== "flat_fee" && (
+          {!isFlatFeeLine && (
             <Button
               disabled={remove.isPending}
               onClick={() => remove.mutate()}

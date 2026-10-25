@@ -456,7 +456,6 @@ const InvoiceDetail = ({
                       invoice.finalizedAt === null &&
                       canUpdateInvoice
                     }
-                    billingMode={invoice.billingMode}
                   />
                 ))}
                 <div className="flex flex-col gap-2 px-4 py-3">

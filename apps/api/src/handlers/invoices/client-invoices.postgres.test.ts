@@ -58,6 +58,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -1847,26 +1848,28 @@ if (!databaseUrl || !runPostgres) {
         accessibleWorkspaceIds: SafeId<"workspace">[],
       ) => {
         const userId = scenario.actors[actor];
-        return buildMcpContextFromChat({
-          organizationId: scenario.orgId,
-          userId,
-          userEmail: "invoice-reader@example.test",
-          memberRole: sessionMemberRole(actor),
-          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        return authorizedMcpContextForTest(
+          buildMcpContextFromChat({
             organizationId: scenario.orgId,
             userId,
+            userEmail: "invoice-reader@example.test",
+            memberRole: sessionMemberRole(actor),
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              organizationId: scenario.orgId,
+              userId,
+            }),
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId: scenario.orgId,
+              userId,
+              serverValidatedWorkspaceIds: [],
+            }),
+            scopedDb: scoped(scenario, userId),
+            toolWorkspaceIds: resolveToolWorkspaceIds({
+              accessibleWorkspaceIds,
+              pinnedIds: [],
+            }),
           }),
-          safeDb: createMembershipSafeDb(markRlsDatabase(db), {
-            organizationId: scenario.orgId,
-            userId,
-            serverValidatedWorkspaceIds: [],
-          }),
-          scopedDb: scoped(scenario, userId),
-          toolWorkspaceIds: resolveToolWorkspaceIds({
-            accessibleWorkspaceIds,
-            pinnedIds: [],
-          }),
-        });
+        );
       };
       for (const actor of ["owner", "admin"] as const) {
         const partial = contextFor(actor, [scenario.firstMatterId]);
@@ -2010,26 +2013,28 @@ if (!databaseUrl || !runPostgres) {
         if (actor === "owner" || actor === "admin") {
           accessibleWorkspaceIds.push(scenario.otherClientMatterId);
         }
-        const context = buildMcpContextFromChat({
-          organizationId: scenario.orgId,
-          userId,
-          userEmail: "invoice-reader@example.test",
-          memberRole,
-          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        const context = authorizedMcpContextForTest(
+          buildMcpContextFromChat({
             organizationId: scenario.orgId,
             userId,
+            userEmail: "invoice-reader@example.test",
+            memberRole,
+            featureAccessSnapshot: enrolledTimeBillingSnapshot({
+              organizationId: scenario.orgId,
+              userId,
+            }),
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId: scenario.orgId,
+              userId,
+              serverValidatedWorkspaceIds: [],
+            }),
+            scopedDb: scoped(scenario, userId),
+            toolWorkspaceIds: resolveToolWorkspaceIds({
+              accessibleWorkspaceIds,
+              pinnedIds: [],
+            }),
           }),
-          safeDb: createMembershipSafeDb(markRlsDatabase(db), {
-            organizationId: scenario.orgId,
-            userId,
-            serverValidatedWorkspaceIds: [],
-          }),
-          scopedDb: scoped(scenario, userId),
-          toolWorkspaceIds: resolveToolWorkspaceIds({
-            accessibleWorkspaceIds,
-            pinnedIds: [],
-          }),
-        });
+        );
         expect(
           await BILLING_TOOL_HANDLERS.list_invoices({
             args: { invoice_id: scenario.invoiceId },
