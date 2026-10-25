@@ -330,8 +330,7 @@ const CDATA_CLOSE = "]]>";
  * wrapper is opened by its exact delimiters; anything else is the plain form.
  */
 export type BrTstDespachoText =
-  | { type: "html"; html: string }
-  | { type: "text"; text: string };
+  { type: "html"; html: string } | { type: "text"; text: string };
 
 export const brTstDespachoTextOf = (value: string): BrTstDespachoText => {
   const trimmed = value.trim();
