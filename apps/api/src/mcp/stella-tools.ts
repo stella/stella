@@ -1245,7 +1245,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "unavailable. doctrine is null when doctrineAvailability=unavailable; " +
       "not_stated doesn't imply followed; unread means none read. " +
       "passage.evidenceQuote is verbatim when text is available. passage.text max " +
-      "1200 chars; cut if passage.truncated. passage.mention: sole, " +
+      `${LIMITS.caseLawCitationPassageChars} chars; cut if passage.truncated. passage.mention: sole, ` +
       "classified_section (polarity's mention), latest_of_several (may not be). Pass " +
       "nextCursor as cursor. url=reader; source_url=publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
