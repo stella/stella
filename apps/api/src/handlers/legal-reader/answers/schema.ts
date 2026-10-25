@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { HTTP_REQUEST_BODY_MAX_BYTES } from "@stll/api-contract/limits";
 import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 
 import {
@@ -29,19 +30,25 @@ const createFields = {
   ...modelOptions,
   decisionId: resourceIdSchema("caseLawDecision"),
   locale,
-  // A selection is bounded by the decision it must match, not by a length:
-  // every span is checked against its paragraph before anything is stored.
+  // Each quote code unit and span consumes at least one JSON wire byte, so
+  // these transport-derived bounds admit every selection the server can read.
+  // Every span must also match its paragraph before anything is stored.
   anchor: v.strictObject({
     spans: v.pipe(
       v.array(
         v.strictObject({
           paragraphId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-          quote: v.pipe(v.string(), v.minLength(1)),
+          quote: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(HTTP_REQUEST_BODY_MAX_BYTES),
+          ),
           startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
           endOffset: v.pipe(v.number(), v.integer(), v.minValue(1)),
         }),
       ),
       v.minLength(1),
+      v.maxLength(HTTP_REQUEST_BODY_MAX_BYTES),
     ),
   }),
 };

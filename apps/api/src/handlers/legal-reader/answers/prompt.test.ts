@@ -83,6 +83,54 @@ describe("reader answer evidence", () => {
     expect(prompt.context).not.toContain("a".repeat(100));
   });
 
+  test("every selected paragraph remains citable when surrounding context fills the budget", () => {
+    const spans = [
+      { paragraphId: "p-1", quote: "a", startOffset: 0, endOffset: 1 },
+      anchor,
+    ] as const;
+    const prompt = buildReaderAnswerPrompt({
+      decision: {
+        decisionId,
+        court: "Test court",
+        decisionDate: "2026-01-01",
+        paragraphs: [
+          { paragraphId: "p-1", text: "a".repeat(READER_ANSWER_CONTEXT_CHARS) },
+          { paragraphId: "p-2", text: anchor.quote },
+        ],
+      },
+      anchor: [spans[0], spans[1]],
+      locale: "cs-CZ",
+    });
+    const context = v.parse(
+      v.object({
+        selection: v.object({
+          spans: v.array(v.object({ quote: v.string() })),
+        }),
+        paragraphs: v.array(
+          v.object({ paragraphId: v.string(), text: v.string() }),
+        ),
+      }),
+      JSON.parse(prompt.context),
+    );
+    expect(context.paragraphs.map(({ paragraphId }) => paragraphId)).toEqual([
+      "p-1",
+    ]);
+    expect(context.paragraphs.at(0)?.text).toHaveLength(
+      READER_ANSWER_CONTEXT_CHARS,
+    );
+    expect(context.selection.spans.map(({ quote }) => quote)).toEqual(
+      spans.map(({ quote }) => quote),
+    );
+    const content = `[[${decisionId}#p-1]] [[${decisionId}#p-2]]`;
+    expect(
+      validateReaderAnswerCitations({ content, allowed: prompt.citations }),
+    ).toEqual({
+      content,
+      citations: spans.map(({ paragraphId }) => ({ decisionId, paragraphId })),
+      invalidCitationCount: 0,
+    });
+  });
+
   test("an oversized selected paragraph remains evidence around the actual selection", () => {
     const prefix = "Background ".repeat(4000);
     const selectedAnchor = {

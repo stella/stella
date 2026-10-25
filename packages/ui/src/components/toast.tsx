@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { Toast } from "@base-ui/react/toast";
-import type { ToastManagerAddOptions } from "@base-ui/react/toast";
+import type { ToastManagerAddOptions, ToastObject } from "@base-ui/react/toast";
 
 import {
   CircleAlertIcon,
@@ -20,6 +20,7 @@ import { ScrollArea } from "./scroll-area";
 
 type ToastData = {
   tooltipStyle?: boolean;
+  timeoutPolicy?: { type: "automatic" } | { type: "explicit"; timeout: number };
 };
 
 const toastManager = Toast.createToastManager<ToastData>();
@@ -158,7 +159,9 @@ const stellaToast: ToastApi = Object.assign(
     success: (title: React.ReactNode, options?: ToastOptions) =>
       addToast(title, "success", options),
     update: (id: string, options: ToastUpdateOptions) => {
-      toastManager.update(id, normalizeToastUpdateOptions(options));
+      toastManager.update(id, (previous) =>
+        normalizeToastUpdateOptions(options, previous),
+      );
     },
     warning: (title: React.ReactNode, options?: ToastOptions) =>
       addToast(title, "warning", options),
@@ -513,23 +516,23 @@ const readWindowFocus = () => document.hasFocus();
 const readServerWindowFocus = () => true;
 
 function normalizeToastAddOptions(options: ToastUpdateOptions) {
-  const { action, actionProps, timeout, type, ...addOptions } = options;
+  const { action, actionProps, data, timeout, type, ...addOptions } = options;
   return {
     ...addOptions,
     ...normalizeToastActionProps({ action, actionProps }),
+    data: { ...data, timeoutPolicy: toastTimeoutPolicy(timeout) },
     timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(options)),
     type,
   };
 }
 
-function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
-  const { action, actionProps, timeout, type, ...updateOptions } = options;
-  const normalizedTimeout =
-    timeout === undefined
-      ? normalizeDefaultToastUpdateTimeout(options)
-      : normalizeToastTimeout(timeout);
-
-  return {
+function normalizeToastUpdateOptions(
+  options: ToastUpdateOptions,
+  previous: ToastObject<ToastData>,
+) {
+  const { action, actionProps, data, timeout, type, ...updateOptions } =
+    options;
+  const update = {
     ...updateOptions,
     ...normalizeToastActionProps({
       action,
@@ -539,16 +542,30 @@ function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
         Object.hasOwn(options, "actionProps"),
     }),
     ...(type === undefined ? {} : { type }),
-    ...(normalizedTimeout === undefined ? {} : { timeout: normalizedTimeout }),
+  };
+  const timeoutPolicy =
+    timeout === undefined
+      ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
+      : toastTimeoutPolicy(timeout);
+  return {
+    ...update,
+    data: {
+      ...(Object.hasOwn(options, "data") ? data : previous.data),
+      timeoutPolicy,
+    },
+    timeout:
+      timeoutPolicy.type === "explicit"
+        ? timeoutPolicy.timeout
+        : getDefaultToastTimeout({ ...previous, ...update }),
   };
 }
 
-function normalizeDefaultToastUpdateTimeout(options: ToastUpdateOptions) {
-  if (options.type === undefined) {
-    return undefined;
-  }
-
-  return normalizeToastTimeout(getDefaultToastTimeout(options));
+function toastTimeoutPolicy(
+  timeout: number | undefined,
+): NonNullable<ToastData["timeoutPolicy"]> {
+  return timeout === undefined
+    ? { type: "automatic" }
+    : { type: "explicit", timeout: normalizeToastTimeout(timeout) };
 }
 
 function normalizeToastActionProps({
@@ -586,7 +603,10 @@ function getDefaultToastTimeout({
   description,
   title,
   type,
-}: ToastUpdateOptions) {
+}: Pick<
+  ToastManagerAddOptions<ToastData>,
+  "title" | "description" | "type" | "actionProps"
+> & { action?: ToastAction }) {
   if (type === "loading") {
     return 0;
   }
@@ -607,7 +627,7 @@ function getDefaultToastTimeout({
   return 4000;
 }
 
-function normalizeToastTimeout(timeout: number | undefined) {
+function normalizeToastTimeout(timeout: number) {
   if (timeout === Number.POSITIVE_INFINITY) {
     return 0;
   }

@@ -46,6 +46,60 @@ const createErrorToasts = {
   },
 };
 
+const timeoutUpdateCases = {
+  "plain to described": { initial: {}, update: { description: DETAIL } },
+  "plain to action": {
+    initial: {},
+    update: { action: { label: "Retry" } },
+  },
+  "described type patch": {
+    initial: { description: DETAIL },
+    update: { type: "error" },
+  },
+  "action type patch": {
+    initial: { action: { label: "Retry" } },
+    update: { type: "error" },
+  },
+  "clear description": {
+    initial: { description: DETAIL },
+    update: { description: null },
+  },
+  "clear action": {
+    initial: { action: { label: "Retry" } },
+    update: { action: undefined },
+  },
+  "clear action props": {
+    initial: { actionProps: { children: "Retry" } },
+    update: { actionProps: undefined },
+  },
+  "explicit eight second description": {
+    initial: { timeout: 8000 },
+    update: { description: DETAIL },
+  },
+  "explicit eight second title": {
+    initial: { timeout: 8000 },
+    update: { title: "Update failure" },
+  },
+  "explicit persistent type": {
+    initial: { timeout: 0 },
+    update: { type: "success" },
+  },
+  "explicit update wins": {
+    initial: { timeout: 0, description: DETAIL },
+    update: { timeout: 3000 },
+  },
+  "explicit infinity title": {
+    initial: { timeout: Number.POSITIVE_INFINITY },
+    update: { title: "Update failure" },
+  },
+} as const satisfies Record<
+  string,
+  {
+    initial: NonNullable<Parameters<typeof stellaToast.error>[1]>;
+    update: Parameters<typeof stellaToast.update>[1];
+  }
+>;
+
 const requestedPosition = new URLSearchParams(window.location.search).get(
   "position",
 );
@@ -70,6 +124,18 @@ const ToastFixture = () => (
           }}
         >
           {entry}
+        </button>
+      ))}
+      {Object.entries(timeoutUpdateCases).map(([name, { initial, update }]) => (
+        <button
+          type="button"
+          key={name}
+          onClick={() => {
+            const id = stellaToast.error("Update failure", initial);
+            stellaToast.update(id, update);
+          }}
+        >
+          {name}
         </button>
       ))}
       <button
