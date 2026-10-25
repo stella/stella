@@ -46,8 +46,8 @@ export const releaseLine = (version: string): string => {
   if (match === null) {
     return panic(`app version ${version} is not major.minor.patch`);
   }
-  const [, major, minor] = match;
-  return major === "0" ? `0.${minor}` : `${major}`;
+  const [, major = "", minor = ""] = match;
+  return major === "0" ? `0.${minor}` : major;
 };
 
 /**
