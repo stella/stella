@@ -183,6 +183,5 @@ export type ProcessDecisionOptions = Omit<
   judges?: CaseLawJudgeDependencies;
   /** Test seam for the external raw-object store. */
   sourceFingerprintFromStoredRaw?:
-    | ((key: string) => Promise<string>)
-    | undefined;
+    ((key: string) => Promise<string>) | undefined;
 };

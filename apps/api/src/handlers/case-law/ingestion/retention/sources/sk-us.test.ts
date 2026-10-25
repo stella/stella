@@ -68,7 +68,7 @@ const crawledDecision = async (
   fixture: (typeof RECORDED)[number],
 ): Promise<IngestionResult> => {
   const content = await recordedContent(fixture.url);
-  globalThis.fetch = asFetchMock((input: string | URL | Request) => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.pathname === "/o/v1/dms/content") {
       return Promise.resolve(

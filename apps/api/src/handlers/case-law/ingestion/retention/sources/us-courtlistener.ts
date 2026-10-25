@@ -378,6 +378,6 @@ const projectCourtListenerCluster = (
 
 export const usCourtlistenerRetention: RetentionPolicy = {
   type: "checked",
-  project: (sourceRaw) =>
+  project: async (sourceRaw) =>
     Promise.resolve(projectCourtListenerCluster(sourceRaw)),
 };

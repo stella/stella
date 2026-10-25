@@ -82,5 +82,5 @@ const projectPlNsa = (sourceRaw: string): RetentionProjection => {
 
 export const plNsaRetention: RetentionPolicy = {
   type: "checked",
-  project: (sourceRaw) => Promise.resolve(projectPlNsa(sourceRaw)),
+  project: async (sourceRaw) => Promise.resolve(projectPlNsa(sourceRaw)),
 };

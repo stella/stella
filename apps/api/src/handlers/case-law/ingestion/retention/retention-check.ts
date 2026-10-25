@@ -283,7 +283,7 @@ const inFlight = new Set<Promise<void>>();
  * parse) runs inside the write that started it, and no abort signal or
  * deadline of that write reaches it.
  */
-const startCheck = (
+const startCheck = async (
   subject: ValidationSubject,
   check: () => Promise<void>,
 ): Promise<void> => {
@@ -308,7 +308,7 @@ const startCheck = (
 };
 
 /** `checkDecisionRetention`, started off the write that stored the decision. */
-export const startDecisionRetentionCheck = (
+export const startDecisionRetentionCheck = async (
   options: CheckDecisionRetentionOptions,
 ): Promise<void> =>
   startCheck(decisionSubject(options.adapterKey, options.result), async () => {
@@ -316,7 +316,7 @@ export const startDecisionRetentionCheck = (
   });
 
 /** `checkProjectedRetention`, started off the store it follows. */
-export const startProjectedRetentionCheck = (
+export const startProjectedRetentionCheck = async (
   options: CheckProjectedRetentionOptions,
 ): Promise<void> =>
   startCheck({ parser: options.adapterKey, ...options.subject }, async () => {

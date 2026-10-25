@@ -72,5 +72,5 @@ const projectCzNss = (sourceRaw: string): RetentionProjection => {
 
 export const czNssRetention: RetentionPolicy = {
   type: "checked",
-  project: (sourceRaw) => Promise.resolve(projectCzNss(sourceRaw)),
+  project: async (sourceRaw) => Promise.resolve(projectCzNss(sourceRaw)),
 };

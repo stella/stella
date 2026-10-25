@@ -98,10 +98,10 @@ afterEach(() => {
 
 describe("checkDecisionRetention", () => {
   test("a projection that keeps the decision's text logs no error", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-regional",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({
             type: "source",
             source: buildValidationHtml([TEXT]),
@@ -118,10 +118,10 @@ describe("checkDecisionRetention", () => {
   });
 
   test("text the parser lost is reported by the oracle", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-regional",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({
             type: "source",
             source: buildValidationHtml([TEXT, LOST_PARAGRAPH]),
@@ -134,10 +134,10 @@ describe("checkDecisionRetention", () => {
   });
 
   test("text kept in a separate document is logged once, at info", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-uohs",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({
             type: "no-text",
             reason: RETENTION_TEXT_ABSENCE.SEPARATE_DOCUMENT,
@@ -160,10 +160,10 @@ describe("checkDecisionRetention", () => {
   });
 
   test("a document built without publisher text stays an error", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "pl-sn",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({
             type: "no-text",
             reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED,
@@ -185,10 +185,10 @@ describe("checkDecisionRetention", () => {
   });
 
   test("an unreadable raw is reported with the projection's reason", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "pl-sn",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({
             type: "unreadable",
             reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT,
@@ -207,12 +207,12 @@ describe("checkDecisionRetention", () => {
 
   test("a projection that rejects or throws is reported, never raised", async () => {
     for (const project of [
-      () => Promise.reject(new TypeError("the reader broke")),
-      (): Promise<RetentionProjection> => {
+      async () => Promise.reject(new TypeError("the reader broke")),
+      async (): Promise<RetentionProjection> => {
         throw new RangeError("the reader broke before its promise");
       },
     ]) {
-      const records = await logged(() =>
+      const records = await logged(async () =>
         checkDecisionRetention({
           adapterKey: "pl-sn",
           policy: checked(project),
@@ -234,10 +234,10 @@ describe("checkDecisionRetention", () => {
   });
 
   test("a decision without a stored raw is reported", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-regional",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({ type: "source", source: TEXT }),
         ),
         result: decision(undefined),
@@ -249,7 +249,7 @@ describe("checkDecisionRetention", () => {
   });
 
   test("an unparsed source that built a document is reported", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "sk-courts",
         policy: {
@@ -267,11 +267,11 @@ describe("checkDecisionRetention", () => {
 
 describe("checkProjectedRetention", () => {
   test("names the adapter as the parser in the oracle's signal", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkProjectedRetention({
         adapterKey: "sk-courts",
         subject: { caseNumber: "1Co/1/2026", language: "sk" },
-        project: () =>
+        project: async () =>
           Promise.resolve({
             type: "source",
             source: {
@@ -297,7 +297,7 @@ describe("a log sink that throws", () => {
 
   test("never rejects a decision check, on any branch", async () => {
     throwingSink();
-    const notPublished = checked(() =>
+    const notPublished = checked(async () =>
       Promise.resolve({
         type: "no-text",
         reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED,
@@ -306,8 +306,8 @@ describe("a log sink that throws", () => {
     const policies: RetentionPolicy[] = [
       { type: "unparsed", reason: RETENTION_UNPARSED_REASON.METADATA_ONLY },
       notPublished,
-      checked(() => Promise.reject(new TypeError("the reader broke"))),
-      checked(() =>
+      checked(async () => Promise.reject(new TypeError("the reader broke"))),
+      checked(async () =>
         Promise.resolve({
           type: "source",
           source: buildValidationHtml([TEXT, LOST_PARAGRAPH]),
@@ -338,7 +338,7 @@ describe("a log sink that throws", () => {
       await checkProjectedRetention({
         adapterKey: "sk-courts",
         subject: { caseNumber: "1Co/1/2026" },
-        project: () => Promise.reject(new TypeError("the reader broke")),
+        project: async () => Promise.reject(new TypeError("the reader broke")),
         blocks: [paragraph(TEXT)],
       }),
     ).toBeUndefined();
@@ -350,7 +350,7 @@ describe("startDecisionRetentionCheck", () => {
     let projected = 0;
     const started = startDecisionRetentionCheck({
       adapterKey: "cz-regional",
-      policy: checked(() => {
+      policy: checked(async () => {
         projected += 1;
         return Promise.resolve({
           type: "source",
@@ -369,16 +369,16 @@ describe("startDecisionRetentionCheck", () => {
     const records = await logged(async () => {
       const blocked = Array.from(
         { length: MAX_RETENTION_CHECKS_IN_FLIGHT },
-        () =>
+        async () =>
           startDecisionRetentionCheck({
             adapterKey: "pl-sn",
-            policy: checked(() => release.promise),
+            policy: checked(async () => release.promise),
             result: decision("{}"),
           }),
       );
       await startDecisionRetentionCheck({
         adapterKey: "pl-sn",
-        policy: checked(() => release.promise),
+        policy: checked(async () => release.promise),
         result: decision("{}"),
       });
       release.resolve({
@@ -402,10 +402,10 @@ describe("startDecisionRetentionCheck", () => {
   });
 
   test("a document over the projection's budget is logged unchecked", async () => {
-    const records = await logged(() =>
+    const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "pl-sn",
-        policy: checked(() =>
+        policy: checked(async () =>
           Promise.resolve({
             type: "no-text",
             reason: RETENTION_TEXT_ABSENCE.OVER_CHECK_BUDGET,

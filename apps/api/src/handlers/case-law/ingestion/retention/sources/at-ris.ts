@@ -165,5 +165,5 @@ const projectRisDecision = (sourceRaw: string): RetentionProjection => {
 /** One projection for every RIS application: they store one raw shape. */
 export const atRisRetention: RetentionPolicy = {
   type: "checked",
-  project: (sourceRaw) => Promise.resolve(projectRisDecision(sourceRaw)),
+  project: async (sourceRaw) => Promise.resolve(projectRisDecision(sourceRaw)),
 };

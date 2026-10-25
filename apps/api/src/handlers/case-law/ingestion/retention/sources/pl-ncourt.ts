@@ -138,5 +138,6 @@ export const projectPlNcourtSourceRaw = (
 
 export const plNcourtRetention: RetentionPolicy = {
   type: "checked",
-  project: (sourceRaw) => Promise.resolve(projectPlNcourtSourceRaw(sourceRaw)),
+  project: async (sourceRaw) =>
+    Promise.resolve(projectPlNcourtSourceRaw(sourceRaw)),
 };

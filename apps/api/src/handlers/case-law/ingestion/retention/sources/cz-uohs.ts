@@ -60,5 +60,5 @@ const projectCzUohs = (sourceRaw: string): RetentionProjection => {
 
 export const czUohsRetention: RetentionPolicy = {
   type: "checked",
-  project: (sourceRaw) => Promise.resolve(projectCzUohs(sourceRaw)),
+  project: async (sourceRaw) => Promise.resolve(projectCzUohs(sourceRaw)),
 };
