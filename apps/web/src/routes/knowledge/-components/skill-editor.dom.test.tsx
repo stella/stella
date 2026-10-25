@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
