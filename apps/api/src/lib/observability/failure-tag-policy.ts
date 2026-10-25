@@ -270,6 +270,7 @@ export const TAGGED_FAILURE_REASON = {
   MailAuthenticationError: "tagged_failure",
   ManagedProviderCheckError: "tagged_failure",
   ManualCallbackParseError: "tagged_failure",
+  ManualEntitlementRefusedError: "tagged_failure",
   McpAuthenticationError: "tagged_failure",
   McpClientError: "tagged_failure",
   McpDiscoveryError: "tagged_failure",
