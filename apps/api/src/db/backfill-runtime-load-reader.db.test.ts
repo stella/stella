@@ -7,6 +7,7 @@ import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
 } from "@stll/db-load-gate/indicators";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
@@ -18,7 +19,6 @@ import {
 } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { waitForExternalState } from "@stll/property-testing/external-state";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -640,7 +640,7 @@ describe.skipIf(!enabled)(
             description: "autovacuum and autoanalyze run on public.target_a",
             timeoutMs: 110_000,
             read: async () => {
-            const progress = await client`
+              const progress = await client`
           SELECT 'vacuum' AS phase, progress.pid FROM pg_stat_progress_vacuum AS progress
           JOIN pg_stat_activity AS worker USING (pid)
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
@@ -651,42 +651,42 @@ describe.skipIf(!enabled)(
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
             AND progress.datid = (SELECT oid FROM pg_database WHERE datname = current_database())
         `;
-            for (const row of progress) {
-              const phase = row["phase"];
-              if (typeof phase !== "string" || seen.has(phase)) {
-                continue;
-              }
-              const direct = (
-                await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
-              ).at(0);
-              const verdict = await readA();
-              const stillActive = (
-                await client`
+              for (const row of progress) {
+                const phase = row["phase"];
+                if (typeof phase !== "string" || seen.has(phase)) {
+                  continue;
+                }
+                const direct = (
+                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
+                ).at(0);
+                const verdict = await readA();
+                const stillActive = (
+                  await client`
             SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${row["pid"]} AND ${phase} = 'vacuum'
               UNION ALL SELECT 1 FROM pg_stat_progress_analyze WHERE pid = ${row["pid"]} AND ${phase} = 'analyze') AS active
           `
-              ).at(0);
-              if (stillActive?.["active"] !== true) {
-                continue;
+                ).at(0);
+                if (stillActive?.["active"] !== true) {
+                  continue;
+                }
+                expect(direct?.["vacuum_active"]).toBe(true);
+                expect(verdict.kind).toBe("degraded");
+                expect(
+                  verdict.signals.find(
+                    ({ indicator }) => indicator === "autovacuum_on_target",
+                  ),
+                ).toMatchObject({ kind: "degraded", value: 1 });
+                const other = (
+                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
+                ).at(0);
+                expect(other?.["vacuum_active"]).toBe(false);
+                expect((await readB()).kind).toBe("normal");
+                seen.add(phase);
               }
-              expect(direct?.["vacuum_active"]).toBe(true);
-              expect(verdict.kind).toBe("degraded");
-              expect(
-                verdict.signals.find(
-                  ({ indicator }) => indicator === "autovacuum_on_target",
-                ),
-              ).toMatchObject({ kind: "degraded", value: 1 });
-              const other = (
-                await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
-              ).at(0);
-              expect(other?.["vacuum_active"]).toBe(false);
-              expect((await readB()).kind).toBe("normal");
-              seen.add(phase);
-            }
-            return seen.size === 2;
-          },
-          // The diagnostics below name what was observed.
-          onTimeout: () => undefined,
+              return seen.size === 2;
+            },
+            // The diagnostics below name what was observed.
+            onTimeout: () => undefined,
           });
           if (seen.size !== 2) {
             const settings =
