@@ -22,6 +22,36 @@
     "loadFailed": "No se pudieron cargar tus asuntos.",
     "retry": "Reintentar"
   },
+  "matter": {
+    "documents": "Documentos",
+    "tasks": "Tareas",
+    "emptyTitle": "Aún no hay nada",
+    "emptyDescription": "Los documentos y tareas de este asunto aparecerán aquí.",
+    "loadFailed": "No se pudo cargar este asunto.",
+    "loadMoreFailed": "No se pudieron cargar más elementos.",
+    "loadMore": "Cargar más",
+    "retry": "Reintentar",
+    "untitled": "Sin título",
+    "updated": "Actualizado {time}",
+    "kind": {
+      "folder": "Carpeta",
+      "document": "Documento",
+      "task": "Tarea"
+    },
+    "status": {
+      "open": "Abierta",
+      "in_progress": "En curso",
+      "in_review": "En revisión",
+      "done": "Hecha",
+      "cancelled": "Cancelada"
+    }
+  },
+  "entity": {
+    "type": "Tipo",
+    "reference": "Referencia",
+    "currentVersion": "Versión actual",
+    "loadFailed": "No se pudo cargar este elemento."
+  },
   "signIn": {
     "title": "Inicia sesión en stella",
     "description": "Introduce la dirección de tu servidor stella. Aprobarás el inicio de sesión en el navegador.",
