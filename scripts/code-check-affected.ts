@@ -8,7 +8,8 @@
 // changed workspaces plus reverse dependants. Known global inputs widen only
 // the check family they can affect, preserving independent lint and typecheck
 // cache hits. Root scripts sit outside workspace tasks, so changed root
-// sources are linted directly and root TypeScript projects run through a
+// sources are linted directly (every root source when a lint-wide input
+// changes, as in the full check) and root TypeScript projects run through a
 // cacheable Turbo root task. Inconsistent affected-workspace output still
 // fails safe to the full check.
 
@@ -170,6 +171,17 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   "$TURBO_ROOT$/scripts/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.scripts.json",
 ] as const;
+// Inputs that change what the root lint reports for a root source the pull
+// request does not touch. When one changes, the affected check lints every
+// root lint path, as the full check does, so a rule or config change cannot
+// pass its pull request and then fail the full check on main. Root scripts and
+// rule sources stay with the root-script-lint and plugin-fixtures checks,
+// whose own inputs cover them.
+const ROOT_LINT_INPUTS = [
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
+  ...LINT_ONLY_CACHE_INPUTS,
+] as const;
 const TURBO_CONFIG_PATH = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
 
@@ -210,6 +222,11 @@ type CheckPlan = { type: "fallback"; changedPath: string } | ScopedCheckPlan;
 type PlanCheckOptions = {
   changedPaths: readonly string[];
   presentChangedPaths: readonly string[];
+  /**
+   * The tracked or unignored files present in the checkout. Only root paths
+   * are read, so a caller may leave out the workspace files.
+   */
+  repositoryPaths: readonly string[];
   affectedWorkspacePaths: readonly string[];
   workspacePaths: ReadonlySet<string>;
 };
@@ -291,6 +308,7 @@ const rootChecksForPath = (file: string): readonly RootCheck[] => {
 export const planCheck = ({
   changedPaths,
   presentChangedPaths,
+  repositoryPaths,
   affectedWorkspacePaths,
   workspacePaths,
 }: PlanCheckOptions): CheckPlan => {
@@ -351,6 +369,18 @@ export const planCheck = ({
   );
   const rootScriptLintRuns = rootCheckSet.has(ROOT_CHECKS.rootScriptLint);
   const pluginFixturesRun = rootCheckSet.has(ROOT_CHECKS.pluginFixtures);
+  const rootLintCandidates = changedPaths.some((changedPath) =>
+    ROOT_LINT_INPUTS.some((input) => matchesTurboInput(changedPath, input)),
+  )
+    ? [
+        ...presentChangedPaths,
+        ...repositoryPaths.filter(
+          (file) =>
+            !file.startsWith("scripts/") &&
+            !file.startsWith(".oxlint-plugins/"),
+        ),
+      ]
+    : presentChangedPaths;
 
   return {
     type: "scoped",
@@ -360,7 +390,7 @@ export const planCheck = ({
       : { type: "targets", targets },
     rootLintPaths: [
       ...new Set(
-        presentChangedPaths.filter(
+        rootLintCandidates.filter(
           (changedPath) =>
             workspaceForPath(changedPath) === null &&
             (changedPath.startsWith("scripts/")
@@ -1314,6 +1344,7 @@ export const planFullCheck = ({
   const plan = planCheck({
     changedPaths: files,
     presentChangedPaths: files,
+    repositoryPaths: files,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
   });
@@ -1365,6 +1396,10 @@ const planScope = async (
       if (changed.isErr()) {
         return changed;
       }
+      const repository = repositoryPaths();
+      if (repository.isErr()) {
+        return repository;
+      }
       const affected = await discoverAffectedWorkspaces({
         mergeBase: changed.value.mergeBase,
       });
@@ -1377,6 +1412,11 @@ const planScope = async (
               : planCheck({
                   changedPaths: changed.value.paths,
                   presentChangedPaths,
+                  repositoryPaths: presentPaths(
+                    repository.value.filter(
+                      (file) => workspaceForPath(file) === null,
+                    ),
+                  ),
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
                 }),

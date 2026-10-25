@@ -93,6 +93,9 @@ minimumReleaseAgeExcludes = [
 ]
 
 [fmt]
+# These options apply on top of Prettier's defaults because the root
+# .prettierrc.yml ends the formatter's config lookup at this repository root
+# (scripts/formatter-config-root.test.ts).
 printWidth = 80
 ignorePatterns = [
   # Shared generated files (stll-toolchain formatter policy).

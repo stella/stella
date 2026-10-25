@@ -1,11 +1,14 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
+  copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -73,6 +76,7 @@ const plan = (
   planCheck({
     changedPaths,
     presentChangedPaths,
+    repositoryPaths: presentChangedPaths,
     affectedWorkspacePaths,
     workspacePaths: WORKSPACES,
   });
@@ -967,10 +971,7 @@ process.exit(childExitStatus(result));
   });
 
   test("the full check schedules every root check from the tracked tree", () => {
-    const tracked = Bun.spawnSync(["git", "ls-files", "-z"])
-      .stdout.toString()
-      .split("\0")
-      .filter(Boolean);
+    const tracked = trackedFiles();
     const workspaces = new Set(
       workspaceManifests().map(({ workspace }) => workspace),
     );
@@ -994,6 +995,54 @@ process.exit(childExitStatus(result));
       "--log-order=stream",
       "--log-prefix=task",
     ]);
+  });
+
+  // A lint-wide input changes what the root lint reports for root sources the
+  // pull request leaves untouched, so the affected check must lint the same
+  // root paths as the full check, or the change passes and main goes red.
+  test.each([
+    "oxlint.config.ts",
+    ".oxlint-plugins/test-timing.ts",
+    "scripts/ownership.ts",
+    "tsconfig.tooling.json",
+    "bun.lock",
+    "types/svg.d.ts",
+  ])("a change to %s lints every root path the full check lints", (input) => {
+    const tracked = trackedFiles();
+    const workspaces = new Set(
+      workspaceManifests().map(({ workspace }) => workspace),
+    );
+    const full = planFullCheck({ files: tracked, workspacePaths: workspaces });
+    const affected = planCheck({
+      changedPaths: [input],
+      presentChangedPaths: [input],
+      repositoryPaths: tracked,
+      affectedWorkspacePaths: [],
+      workspacePaths: workspaces,
+    });
+    if (affected.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+
+    expect(full.rootLintPaths).toContain(
+      ".claude/mcp/stella-docs-http.test.ts",
+    );
+    expect(affected.rootLintPaths).toEqual(full.rootLintPaths);
+  });
+
+  test("a root source change outside the lint-wide inputs lints only itself", () => {
+    const planned = planCheck({
+      changedPaths: [".claude/mcp/server.ts"],
+      presentChangedPaths: [".claude/mcp/server.ts"],
+      repositoryPaths: trackedFiles(),
+      affectedWorkspacePaths: [],
+      workspacePaths: WORKSPACES,
+    });
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+
+    expect(planned.rootLintPaths).toEqual([".claude/mcp/server.ts"]);
   });
 
   test("the full check fails loudly when a root check is unreachable", () => {
@@ -1176,6 +1225,12 @@ const taskInputs = (tasks: Record<string, TurboTask>, name: string) =>
   taskField(tasks, name, "inputs").toSorted();
 
 const isRootInput = (input: string) => input.startsWith("$TURBO_ROOT$/");
+
+const trackedFiles = (): string[] =>
+  Bun.spawnSync(["git", "ls-files", "-z"])
+    .stdout.toString()
+    .split("\0")
+    .filter(Boolean);
 
 type WorkspaceManifest = {
   workspace: string;
@@ -1939,21 +1994,80 @@ describe("check failure reporting", () => {
 
 test("the CLI stops after failure, reports it, and propagates its exit code", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "code-check-runner-"));
+  const fixtureRoot = path.join(directory, "repo");
+  const fixtureScripts = path.join(fixtureRoot, "scripts");
+  const fixturePackagesScripts = path.join(fixtureRoot, "packages/scripts/src");
   const log = path.join(directory, "commands.log");
-  const realGit = Bun.which("git");
-  if (realGit === null) {
+  const realNodeModules = path.resolve(import.meta.dir, "../node_modules");
+  const pathValue = process.env["PATH"];
+  if (pathValue === undefined || !existsSync(realNodeModules)) {
+    throw new Error(
+      "CLI execution fixture requires PATH and installed modules",
+    );
+  }
+  mkdirSync(path.join(fixtureRoot, "apps"), { recursive: true });
+  mkdirSync(fixtureScripts, { recursive: true });
+  mkdirSync(fixturePackagesScripts, { recursive: true });
+  copyFileSync(
+    path.join(import.meta.dir, "code-check-affected.ts"),
+    path.join(fixtureScripts, "code-check-affected.ts"),
+  );
+  for (const helper of [
+    "baseline-paths.ts",
+    "check-rust-test-determinism.ts",
+    "check-test-state-baseline.ts",
+    "code-quality-task-budget.ts",
+    "code-quality-task-budgets.json",
+    "generated-files.ts",
+    "ledger-membership.ts",
+    "lint-paths.ts",
+    "oxlint-config-scopes.ts",
+    "ratchet.ts",
+    "result-boundary-globs.ts",
+    "root-script-lint.ts",
+    "rust-test-determinism-scan.ts",
+  ]) {
+    symlinkSync(
+      path.join(import.meta.dir, helper),
+      path.join(fixtureScripts, helper),
+    );
+  }
+  for (const helper of ["child-exit-status.ts", "code-quality-partition.ts"]) {
+    symlinkSync(
+      path.resolve(import.meta.dir, `../packages/scripts/src/${helper}`),
+      path.join(fixturePackagesScripts, helper),
+    );
+  }
+  symlinkSync(realNodeModules, path.join(fixtureRoot, "node_modules"));
+  writeFileSync(
+    path.join(fixtureRoot, ".gitignore"),
+    [
+      "*",
+      "!.gitignore",
+      "!turbo.json",
+      "!scripts/",
+      "scripts/*",
+      "!oxlint.config.ts",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(path.join(fixtureRoot, "turbo.json"), '{"tasks":{}}\n');
+  writeFileSync(path.join(fixtureRoot, "oxlint.config.ts"), "");
+  const git = Bun.which("git");
+  if (git === null) {
     throw new Error("CLI execution fixture requires Git");
   }
-  writeFileSync(
-    path.join(directory, "git"),
-    `#!/bin/sh
-if [ "$*" = 'rev-parse --verify --quiet origin/main^{commit}' ]; then
-  exit 1
-fi
-exec "$CHECK_REAL_GIT" "$@"
-`,
-    { mode: 0o755 },
-  );
+  for (const args of [
+    ["init", "--quiet"],
+    ["add", "turbo.json", "oxlint.config.ts"],
+  ]) {
+    const result = Bun.spawnSync([git, ...args], {
+      cwd: fixtureRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+  }
   const fakeRunner = `#!/bin/sh
 printf '%s\n' "$*" >> "$CHECK_COMMAND_LOG"
 case "$CHECK_FAIL:$*" in
@@ -1978,19 +2092,18 @@ esac
         [
           process.execPath,
           "--no-env-file",
-          path.join(import.meta.dir, "code-check-affected.ts"),
+          path.join(fixtureScripts, "code-check-affected.ts"),
           "--all",
           "--leg",
           "rest",
         ],
         {
-          cwd: path.resolve(import.meta.dir, ".."),
+          cwd: fixtureRoot,
           env: {
             ...process.env,
             ...LARGE_MACHINE,
-            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            PATH: `${directory}:${pathValue}`,
             CHECK_COMMAND_LOG: log,
-            CHECK_REAL_GIT: realGit,
             CHECK_REAL_BUN: process.execPath,
             CHECK_FAIL: failure,
           },
@@ -1999,16 +2112,19 @@ esac
         },
       );
       const output = result.stdout.toString();
+      expect(result.exitCode, result.stderr.toString()).toBe(
+        failure === "yes" ? 1 : 0,
+      );
       const commands = readFileSync(log, "utf-8");
-      expect(commands).toContain("turbo run lint typecheck");
+      expect(
+        commands,
+        `CLI stdout:\n${output}\nCLI stderr:\n${result.stderr.toString()}`,
+      ).toContain("turbo run lint typecheck");
       if (failure === "yes") {
         expect(commands).not.toContain("turbo run typecheck:repo");
       } else {
         expect(commands).toContain("turbo run typecheck:repo");
       }
-      expect(result.exitCode, result.stderr.toString()).toBe(
-        failure === "yes" ? 1 : 0,
-      );
       if (failure === "yes") {
         expect(output).toContain("code-check: 1 failed command(s)");
         expect(output).toContain(

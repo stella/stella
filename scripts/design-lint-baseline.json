@@ -874,7 +874,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
     "scripts/check-api-deployment.ts": 1,
-    "scripts/check-npm-publish-lag.ts": 1,
     "scripts/check-public-law-pages.ts": 1,
     "scripts/check-railway-smoke.ts": 1,
     "scripts/check-railway-template-draft.ts": 1,

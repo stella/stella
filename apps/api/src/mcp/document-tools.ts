@@ -2591,13 +2591,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Set a document's value for a property (a cell in the matter's table). " +
-      "Pass the document entity_id, the property_id (from list_properties), and " +
-      "a content object whose 'type' matches the property's value type: text " +
-      "(value: string), single-select (value: string or null), multi-select " +
-      "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
-      "(value: integer, optional currency: 3-letter ISO code). An empty value " +
-      "clears the cell.",
+      "Set a document property cell. Pass entity_id, property_id from " +
+      "list_properties, and content matching the property's type: 'text' string; " +
+      "'single-select' string or null; 'multi-select' string array; 'date' ISO value " +
+      "or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     inputSchema: setFieldValueArgsSchema,
     // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on

@@ -1197,17 +1197,13 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
-      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
-      "textVersion as text_version; versionChanged flags changed text. " +
+      "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
+      "text_version; versionChanged flags changed text. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches and neighbours with position, publisher label, " +
-      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
-      "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(citedBy reference counts, polarity, top citers: exact " +
-      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
-      "cites with held decisionIds). " +
-      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
-      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`query` returns matches, neighbours and deep links. Page 1 adds " +
+      "reader/publisher URL, metadata, textFields and citation summaries (top " +
+      `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
+      "Use read_case_law_citations for all citations. One id adds an outline. " +
       "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {

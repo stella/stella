@@ -847,6 +847,14 @@ const listCapabilitiesArgsSchema = nullAsAbsent(
         ),
       ),
     ),
+    query: v.optional(
+      v.pipe(
+        v.string(),
+        v.description(
+          "Search capability ids, generated titles, and descriptions. Results are ranked by relevance.",
+        ),
+      ),
+    ),
     access: v.optional(
       v.pipe(
         v.picklist(CAPABILITY_ACCESS_FILTERS),
@@ -954,15 +962,22 @@ const listCapabilitiesHandler: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { domain, access, cursor, limit } = parsed.output;
+  const query = parsed.output.query?.trim() || undefined;
 
-  const afterId =
+  const decodedCursor =
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
-  if (afterId === null) {
+  // A cursor resumes only the listing that issued it: an id-order cursor
+  // carries no query, a relevance cursor carries its query.
+  if (
+    decodedCursor === null ||
+    (decodedCursor !== undefined && decodedCursor.query !== query)
+  ) {
     return invalidCursorResult({
       cursor: cursor ?? "",
       tool: "list_capabilities",
     });
   }
+  const afterId = decodedCursor?.afterId;
 
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
@@ -971,15 +986,40 @@ const listCapabilitiesHandler: McpToolHandler<
   // invoke refuses them for it as well.
   const confirmable =
     context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
-  const filtered = (await getCatalog()).filter(
+  const matching = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       capabilityFeatureEnabled(entry, context) &&
       (confirmable || !requiresCapabilityConfirmation(entry)) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
-      (access === "all" || entry.access === access) &&
-      (afterId === undefined || entry.id > afterId),
+      (access === "all" || entry.access === access),
   );
+  let filtered: CatalogEntry[];
+  if (query === undefined) {
+    // Id order: a cursor whose entry has since been hidden still resumes after it.
+    filtered = matching.filter(
+      (entry) => afterId === undefined || entry.id > afterId,
+    );
+  } else {
+    // Relevance order: the cursor must name an entry of this same ranking.
+    const ranked = matching
+      .map((entry) => ({ entry, rank: capabilityQueryRank(entry, query) }))
+      .filter(({ rank }) => rank > 0)
+      .toSorted(
+        (left, right) =>
+          right.rank - left.rank || byCapabilityId(left.entry, right.entry),
+      )
+      .map(({ entry }) => entry);
+    const cursorIndex =
+      afterId === undefined ? -1 : ranked.findIndex(({ id }) => id === afterId);
+    if (afterId !== undefined && cursorIndex < 0) {
+      return invalidCursorResult({
+        cursor: cursor ?? "",
+        tool: "list_capabilities",
+      });
+    }
+    filtered = ranked.slice(cursorIndex + 1);
+  }
   const { DEFAULT_MCP_TOOL_DEFINITIONS } =
     await import("@/api/mcp/static-tool-definitions");
   const hiddenIds = hiddenMcpDescriptorIds(
@@ -990,7 +1030,9 @@ const listCapabilitiesHandler: McpToolHandler<
   const last = page.at(-1);
   const nextCursor =
     last !== undefined && filtered.length > page.length
-      ? encodePaginationCursor([last.id])
+      ? encodePaginationCursor(
+          query === undefined ? [last.id] : [last.id, query],
+        )
       : null;
 
   return structuredEgressPlan({
@@ -1025,12 +1067,75 @@ const accessLabel = (entry: CatalogEntry): string =>
 const summarizeEntry = (entry: CatalogEntry): string =>
   `${capabilityDomain(entry.id)} / ${capabilityLeaf(entry.id)} (${accessLabel(entry)})`;
 
-const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
-  const decoded = decodePaginationCursor(cursor)?.at(0);
-  if (decoded === undefined) {
+const capabilityTitle = (id: string): string => id.replaceAll(/[.-]/gu, " ");
+
+const queryWords = (value: string): string[] =>
+  Array.from(
+    value.toLocaleLowerCase("en-US").matchAll(/[\p{L}\p{N}]+/gu),
+    ([word]) => word,
+  );
+
+const wordMatches = (candidate: string, query: string): boolean =>
+  candidate === query ||
+  candidate.startsWith(query) ||
+  query.startsWith(candidate);
+
+const capabilityQueryRank = (entry: CatalogEntry, query: string): number => {
+  const normalizedQuery = query.toLocaleLowerCase("en-US");
+  const id = entry.id.toLocaleLowerCase("en-US");
+  const title = capabilityTitle(entry.id).toLocaleLowerCase("en-US");
+  const description = entry.description?.toLocaleLowerCase("en-US") ?? "";
+  const words = queryWords(normalizedQuery);
+  const idWords = queryWords(id);
+  const titleWords = queryWords(title);
+
+  let rank = 0;
+  if (description.includes(normalizedQuery)) {
+    rank = 100;
+  }
+  if (title.includes(normalizedQuery)) {
+    rank = 800;
+  }
+  if (id.includes(normalizedQuery)) {
+    rank = 1000;
+  }
+  for (const word of words) {
+    if (idWords.some((candidate) => wordMatches(candidate, word))) {
+      rank += 100;
+    } else if (titleWords.some((candidate) => wordMatches(candidate, word))) {
+      rank += 80;
+    } else if (description.includes(word)) {
+      rank += 10;
+    } else {
+      return 0;
+    }
+  }
+  return rank;
+};
+
+const byCapabilityId = (left: CatalogEntry, right: CatalogEntry): number => {
+  if (left.id === right.id) {
+    return 0;
+  }
+  return left.id < right.id ? -1 : 1;
+};
+
+const decodeCapabilityCursor = (
+  cursor: string,
+): { afterId: string; query: string | undefined } | null => {
+  const decoded = decodePaginationCursor(cursor);
+  if (decoded === null) {
     return null;
   }
-  return typeof decoded === "string" ? decoded : null;
+  const [afterId, query, ...rest] = decoded;
+  if (
+    typeof afterId !== "string" ||
+    (query !== undefined && typeof query !== "string") ||
+    rest.length > 0
+  ) {
+    return null;
+  }
+  return { afterId, query };
 };
 
 // --- describe_capability -----------------------------------------------------
@@ -2296,7 +2401,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "List the automatable capabilities beyond the curated tools: every safe " +
       "backend operation (CRUD, exports, processing triggers) reachable through " +
       "read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. " +
-      '"time-entries") or access (read/write). Each item gives the capability ' +
+      '"time-entries") or access (read/write), or search ids, titles, and descriptions with query. ' +
+      "Each item gives the capability " +
       "id, description, access/destructive, its transport (whether this path " +
       "can run it, which field takes a file, and what to use instead), " +
       "handlerKind (workspace or root), and every OAuth scope it needs. Use " +
