@@ -1129,9 +1129,10 @@ export const assemblePlNcourtDecision = ({
   });
   // Where the listing once could not serve this row, or served it without a
   // usable id, its audit row is found through these, and enriched.
-  const repairAliases = [positionAlias, plNcourtRowFingerprintId(row)].filter(
-    (alias) => alias !== undefined,
-  );
+  const repairAliases = [
+    ...(positionAlias === undefined ? [] : [positionAlias]),
+    ...plNcourtRowRepairAliases(row, id),
+  ];
 
   const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
@@ -1284,40 +1285,88 @@ const ROW_FINGERPRINT_FIELDS = [
 ] as const satisfies readonly (keyof PlNcourtListingRow)[];
 
 /**
- * The content-addressed identity of a listed row that states no usable id,
- * or `undefined` for a row stating no stable field at all. Every listed row
- * emits its own as a repair alias, so a row whose id is later corrected
- * enriches its audit row instead of doubling it.
- *
- * `ncourt-listed:` predates the shared quarantine identity and stored rows
- * carry it, so a row stating any of {@link ROW_FINGERPRINT_FIELDS} keeps that
- * digest byte for byte. Only a row stating none of them, which used to have
- * no identity at all, is keyed through `quarantineIdentity`.
+ * The `ncourt-listed:` form: a digest of the {@link ROW_FINGERPRINT_FIELDS}
+ * the row states, or `undefined` where it states none. It predates the shared
+ * quarantine identity and stored rows carry it, so it is kept byte for byte.
  */
-export const plNcourtRowFingerprintId = (
-  row: PlNcourtListingRow,
-): string | undefined => {
+const listedFingerprintOf = (row: PlNcourtListingRow): string | undefined => {
   const stated = ROW_FINGERPRINT_FIELDS.flatMap((field) => {
     const value = row[field];
     return value === undefined ? [] : [[field, value] as const];
   });
-  if (stated.length > 0) {
-    return `${LISTED_ID_PREFIX}${hashContent(JSON.stringify(stated))}`;
-  }
-  // What such a row can still state about the judgment: the day the portal
-  // published it and its thesis, both read off the record and unchanged when
-  // its id comes back. `lastUpdate` moves with every edit of the record and
-  // the id is the malformed part, so neither is a stable field.
-  if (row.publicationDate === undefined && row.thesis === undefined) {
-    return undefined;
-  }
-  return quarantineIdentity({
-    namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
-    stableFields: {
-      publicationDate: row.publicationDate,
-      thesis: row.thesis,
-    },
-  }).sourceDocumentId;
+  return stated.length === 0
+    ? undefined
+    : `${LISTED_ID_PREFIX}${hashContent(JSON.stringify(stated))}`;
+};
+
+/**
+ * The `pl-ncourt-quarantine:` form, for a row stating none of the
+ * fingerprint fields: what it can still state about the judgment, the day
+ * the portal published it and its thesis, both read off the record and
+ * unchanged when its id comes back. `lastUpdate` moves with every edit of the
+ * record and the id is the malformed part, so neither is a stable field.
+ * `undefined` where the row states neither.
+ */
+const publishedFingerprintOf = (row: PlNcourtListingRow): string | undefined =>
+  row.publicationDate === undefined && row.thesis === undefined
+    ? undefined
+    : quarantineIdentity({
+        namespace: QUARANTINE_NAMESPACE.PL_NCOURT,
+        stableFields: {
+          publicationDate: row.publicationDate,
+          thesis: row.thesis,
+        },
+      }).sourceDocumentId;
+
+/**
+ * The content-addressed identity of a listed row that states no usable id,
+ * or `undefined` for a row stating no stable field at all: the
+ * `ncourt-listed:` form where the row states any of its fields, the
+ * `pl-ncourt-quarantine:` form only where it states none, which used to
+ * leave the row with no identity at all.
+ */
+export const plNcourtRowFingerprintId = (
+  row: PlNcourtListingRow,
+): string | undefined =>
+  listedFingerprintOf(row) ?? publishedFingerprintOf(row);
+
+/**
+ * Every fingerprint form an earlier, poorer observation of this row could
+ * have been stored under, other than the identity it is stored under now.
+ *
+ * Recovery can add fields as well as the id: a row first quarantined on its
+ * publication day and thesis can come back stating a signature, which moves
+ * it to the `ncourt-listed:` form, or an id, which keys it. Each form is
+ * computed from the fields it was built from wherever this observation still
+ * states them, so the row stored under either is found and enriched rather
+ * than doubled. Two forms at most, deduplicated.
+ *
+ * A form is emitted only where it states a field that tells one document
+ * from another: the signature or the excerpt for `ncourt-listed:`, the
+ * thesis for the published form. Without one, the form is a day, a court
+ * or a type, which many judgments share, and an alias built from it would
+ * let this row adopt another judgment's quarantine row. An id-less row
+ * still stores under such a form; only adoption by alias is withheld.
+ */
+const plNcourtRowRepairAliases = (
+  row: PlNcourtListingRow,
+  storedUnder: string,
+): string[] => {
+  const states = (value: string | undefined): boolean =>
+    value !== undefined && value.trim().length > 0;
+  const forms = [
+    states(row.signature) || states(row.excerpt)
+      ? listedFingerprintOf(row)
+      : undefined,
+    states(row.thesis) ? publishedFingerprintOf(row) : undefined,
+  ];
+  return [
+    ...new Set(
+      forms.flatMap((alias) =>
+        alias === undefined || alias === storedUnder ? [] : [alias],
+      ),
+    ),
+  ];
 };
 
 /**
@@ -1432,14 +1481,15 @@ const buildUnkeyedRow = ({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
-  // Kept under its id, the row still names the audit row it was stored as
-  // while its id was unusable, as a judgment built from it would.
-  const repairAlias = idUsable ? plNcourtRowFingerprintId(row) : undefined;
+  // Kept under its id or one fingerprint form, the row still names the audit
+  // rows a poorer observation of it was stored as, as a judgment built from
+  // it would.
+  const repairAliases = plNcourtRowRepairAliases(row, sourceDocumentId);
   return plainTextIngestionResult({
     sourceDocumentId,
-    ...(repairAlias === undefined
+    ...(repairAliases.length === 0
       ? {}
-      : { sourceDocumentIdRepairAliases: [repairAlias] }),
+      : { sourceDocumentIdRepairAliases: repairAliases }),
     ...(documentRole === undefined ? {} : { documentRole }),
     caseNumber: signature ?? sourceDocumentId,
     ...(signature === undefined ? { caseNumberIsPlaceholder: true } : {}),

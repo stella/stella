@@ -620,3 +620,163 @@ const CZ_COLLECTION_URLS = [
     "https://uohs.gov.cz/cs/pristup-k-dopravni-infrastrukture.html",
   ],
 ] as const;
+
+describe("ÚOHS decisions listed without a storable IRI", () => {
+  const QUARANTINE_ID = /^cz-uohs-quarantine:[0-9a-f]{64}$/u;
+  const PDF_URL =
+    "https://uohs.gov.cz/download/sbirky_rozhodnuti/dokumenty/quarantined.pdf";
+  const RECOVERED_IRI =
+    "https://uohs.gov.cz/cs/verejne-zakazky/sbirky-rozhodnuti/detail-90011.html";
+
+  const listed = async () => {
+    const [template] = await records();
+    const make = (iri: string, overrides: object = {}) => ({
+      ...template!,
+      iri,
+      dokument: [{ typ: "Digitální objekt", url: PDF_URL }],
+      ...overrides,
+    });
+    return {
+      keyed: make("https://uohs.gov.cz/cs/verejne-zakazky/detail-1.html", {
+        dokument: [],
+      }),
+      empty: make("", {
+        číslo_jednací: "90011/2026/163",
+        spisová_značka: "R0911/2026/VZ",
+      }),
+      overLong: make(`https://uohs.gov.cz/cs/${"x".repeat(300)}.html`, {
+        číslo_jednací: "90012/2026/163",
+        spisová_značka: "R0912/2026/VZ",
+      }),
+      // No IRI and neither number: nothing could name it again.
+      unnamed: make("", { číslo_jednací: " ", spisová_značka: "" }),
+    };
+  };
+
+  const serve = (rozhodnutí: readonly object[]): string[] => {
+    const requested: string[] = [];
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      requested.push(input instanceof Request ? input.url : String(input));
+      return Response.json({ rozhodnutí });
+    });
+    return requested;
+  };
+
+  const listSlice = async (rozhodnutí: readonly object[]) => {
+    serve(rozhodnutí);
+    return await czUohsAdapter.reconciliation.listSlicePage({
+      slice: "all",
+      page: 0,
+      signal: undefined,
+    });
+  };
+
+  const listedIdOf = async (record: object): Promise<string | null> => {
+    const [item] = (await listSlice([record])).items;
+    return item?.identity.type === "document"
+      ? item.identity.sourceDocumentId
+      : null;
+  };
+
+  test("keys an empty or over-long IRI on a quarantine id and counts a decision with no stable field", async () => {
+    const { keyed, empty, overLong, unnamed } = await listed();
+    const page = await listSlice([keyed, empty, overLong, unnamed]);
+    expect(page.withoutStableFields).toBe(1);
+    expect(page.totalPages).toBe(1);
+    const emptyId = await listedIdOf(empty);
+    const overLongId = await listedIdOf(overLong);
+    expect(emptyId).toMatch(QUARANTINE_ID);
+    expect(overLongId).toMatch(QUARANTINE_ID);
+    expect(emptyId).not.toBe(overLongId);
+    expect(
+      page.items.map(({ identity }) =>
+        identity.type === "document" ? identity.sourceDocumentId : null,
+      ),
+    ).toEqual([emptyId, keyed.iri, overLongId]);
+  });
+
+  test("the crawl stores a quarantined decision listing-only under its listed id, reading no document", async () => {
+    const { keyed, empty, overLong, unnamed } = await listed();
+    const emptyId = await listedIdOf(empty);
+    const overLongId = await listedIdOf(overLong);
+    const requested = serve([keyed, empty, overLong, unnamed]);
+    const page = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
+    expect(requested).not.toContain(PDF_URL);
+    expect(
+      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual([emptyId, keyed.iri, overLongId]);
+    for (const [record, reason] of [
+      [empty, "missing-record-iri"],
+      [overLong, "unpersistable-record-iri"],
+    ] as const) {
+      const id = await listedIdOf(record);
+      const stored = page.decisions.find(
+        ({ sourceDocumentId }) => sourceDocumentId === id,
+      );
+      expect(stored?.isListingOnly).toBe(true);
+      expect(stored?.fulltext).toBeUndefined();
+      expect(stored?.sourceDocumentIdRepairAliases).toBeUndefined();
+      expect(stored?.metadata).toMatchObject({
+        identityQuarantined: true,
+        listedOnly: true,
+        listedOnlyReason: reason,
+        fileNumber: record.spisová_značka,
+        referenceNumber: record.číslo_jednací,
+      });
+      const raw = decodeSourceRawEnvelope(stored?.sourceRaw ?? "");
+      expect(JSON.parse(raw?.["listing"] ?? "null")).toEqual(record);
+    }
+  });
+
+  test("the reconciliation builds a quarantined payload as the same listing-only row", async () => {
+    const { empty } = await listed();
+    const [item] = (await listSlice([empty])).items;
+    expect(item).toBeDefined();
+    if (item === undefined || item.identity.type !== "document") {
+      return;
+    }
+    const outcome = await czUohsAdapter.reconciliation.buildDecision(
+      item.payload,
+      undefined,
+    );
+    expect(outcome.type).toBe("built");
+    if (outcome.type !== "built") {
+      return;
+    }
+    expect(outcome.decision.sourceDocumentId).toBe(
+      item.identity.sourceDocumentId,
+    );
+    expect(outcome.decision.isListingOnly).toBe(true);
+  });
+
+  test("a keyed observation names the quarantine id its IRI-less listing was stored under", async () => {
+    const { empty } = await listed();
+    const quarantineId = await listedIdOf(empty);
+    const recovered = { ...empty, iri: RECOVERED_IRI, dokument: [] };
+    const decision = await buildCzUohsDecision(
+      parseCzUohsListing({ rozhodnutí: [recovered] })[0]!,
+    );
+    expect(decision.sourceDocumentId).toBe(RECOVERED_IRI);
+    expect(decision.sourceDocumentIdRepairAliases).toEqual([quarantineId]);
+    const quarantined = await buildCzUohsDecision(
+      parseCzUohsListing({ rozhodnutí: [empty] })[0]!,
+    );
+    expect(quarantined.caseNumber).toBe(decision.caseNumber);
+  });
+
+  test("the quarantine id survives a re-rendered listing", async () => {
+    const { keyed, empty } = await listed();
+    const quarantineId = await listedIdOf(empty);
+    const reflowed = {
+      ...empty,
+      věc: { cs: `  ${empty.věc.cs.replaceAll(" ", "\n  ")} ` },
+      spisová_značka: ` ${empty.spisová_značka}`,
+    };
+    const page = await listSlice([keyed, reflowed]);
+    expect(
+      page.items.map(({ identity }) =>
+        identity.type === "document" ? identity.sourceDocumentId : null,
+      ),
+    ).toEqual([quarantineId, keyed.iri]);
+  });
+});

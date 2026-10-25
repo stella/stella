@@ -2044,6 +2044,81 @@ describe("the walk", () => {
     expect(recovered.sourceDocumentIdRepairAliases).toContain(ids[0]);
   });
 
+  test("a row that recovers fields as well as its id names every form it was stored under", async () => {
+    const stated = {
+      publicationDate: "2019-02-28 18:26:16.0 CET",
+      thesis: "Teza o czymś.",
+    };
+    const listedFields = {
+      signature: "II Ca 236/18",
+      date: "2018-03-22 01:00:00.0 CET",
+      courtId: "15502000",
+      type: "SENTENCE",
+    };
+    const unkeyed = (fields: Record<string, string>): IngestionResult =>
+      built(
+        assemblePlNcourtDecision({
+          listingXml: rowXml(fields),
+          detailXml: undefined,
+          contentXml: undefined,
+        }),
+      );
+    // First observed with no id and none of the fingerprint fields.
+    const published = unkeyed(stated).sourceDocumentId ?? "";
+    expect(published).toMatch(/^pl-ncourt-quarantine:[0-9a-f]{64}$/u);
+
+    // Then with its signature but still no id: a new form, naming the first.
+    const listedRow = unkeyed({ ...listedFields, ...stated });
+    const listed = listedRow.sourceDocumentId ?? "";
+    expect(listed).toStartWith("ncourt-listed:");
+    expect(listedRow.sourceDocumentIdRepairAliases).toEqual([published]);
+
+    // Then keyed: both earlier forms, each once.
+    const recovered = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ id: PAIR, ...listedFields, ...stated }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml: undefined,
+      }),
+    );
+    expect(recovered.sourceDocumentId).toBe(PAIR);
+    expect(recovered.sourceDocumentIdRepairAliases?.toSorted()).toEqual(
+      [listed, published].toSorted(),
+    );
+  });
+
+  test("a form that tells no judgment apart is stored under, never emitted as an alias", async () => {
+    const publicationDate = "2019-02-28 18:26:16.0 CET";
+    // Id-less with only its publication day: still kept, under that form.
+    const dayOnly = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({ publicationDate }),
+        detailXml: undefined,
+        contentXml: undefined,
+      }),
+    );
+    expect(dayOnly.sourceDocumentId ?? "").toMatch(
+      /^pl-ncourt-quarantine:[0-9a-f]{64}$/u,
+    );
+
+    // Keyed, with no thesis, signature or excerpt in its listing row: every
+    // judgment published that day would compute the same day-only form.
+    const keyed = built(
+      assemblePlNcourtDecision({
+        listingXml: rowXml({
+          id: PAIR,
+          publicationDate,
+          date: "2018-03-22 01:00:00.0 CET",
+          courtId: "15502000",
+        }),
+        detailXml: await fixture(`pl-ncourt-detail-${PAIR}.xml`),
+        contentXml: undefined,
+      }),
+    );
+    expect(keyed.sourceDocumentId).toBe(PAIR);
+    expect(keyed.sourceDocumentIdRepairAliases).toBeUndefined();
+  });
+
   test("a listed row stating no stable field is logged and passed, not keyed", async () => {
     const rows = await servableRows();
     const empty = rowXml({ lastUpdate: "2019-02-28 14:38:12.0 CET" });

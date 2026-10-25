@@ -76,6 +76,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { ReconciliationListingItem } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   isQuarantineSourceDocumentId,
@@ -600,8 +601,12 @@ type CzNsRowIdentity =
   | {
       type: "document";
       unid: string;
-      /** The quarantine id this row would have had without its id. */
-      repairAlias: string | undefined;
+      /**
+       * The quarantine id this row would have had without its id. Reported to
+       * the walker as a peer, never emitted as a repair alias: it covers the
+       * dockets only, which do not prove which document of a docket it is.
+       */
+      quarantinePeer: string | undefined;
     }
   | {
       type: "quarantined";
@@ -621,6 +626,12 @@ type CzNsRowIdentity =
  * moves, and the ids are the identity that is missing. A docket names a
  * docket rather than a document, so two id-less documents of one docket share
  * a quarantine row: nothing either listing states tells them apart.
+ *
+ * For the same reason a keyed row never names this id as a repair alias:
+ * every document of the docket would, and the first to recover would adopt a
+ * listing row that may be another document's. A quarantined row therefore
+ * stays listing-only beside its document once the id recovers, and the walker
+ * reports a slice listing both (`quarantinePeers`).
  */
 const czNsDocketQuarantine = (dockets: readonly string[]) =>
   dockets.length === 0
@@ -649,7 +660,7 @@ const czNsRowIdentity = (row: CzNsListingRow): CzNsRowIdentity | null => {
     return {
       type: "document",
       unid: row.unid,
-      repairAlias: quarantine?.sourceDocumentId,
+      quarantinePeer: quarantine?.sourceDocumentId,
     };
   }
   const [firstDocket, ...otherDockets] = dockets;
@@ -719,7 +730,7 @@ const buildCzNsDecisionFromPages = ({
   if (identity?.type !== "document") {
     return null;
   }
-  const { unid, repairAlias } = identity;
+  const { unid } = identity;
   const [listedCaseNumber, ...additionalCaseNumbers] = caseNumbersOf(row);
   // A row listed with an id and no docket is still the publisher's document,
   // so it is kept under its id, which also stands in for the missing label.
@@ -771,12 +782,10 @@ const buildCzNsDecisionFromPages = ({
     caseNumber,
     ...(listingDocketMissing ? { caseNumberIsPlaceholder: true } : {}),
     ...docketIdentifiers(additionalCaseNumbers),
+    // No repair alias: the only quarantine id this row could name covers its
+    // dockets alone, which another document of the docket shares
+    // (`czNsDocketQuarantine`).
     sourceDocumentId: unid,
-    // So the listing row the crawl kept for this document while its id was
-    // unusable is taken over by it rather than left beside it.
-    ...(repairAlias === undefined
-      ? {}
-      : { sourceDocumentIdRepairAliases: [repairAlias] }),
     legacySourceUrls: [webUrl],
     ecli: meta["ecli"],
     court,
@@ -845,8 +854,9 @@ type CzNsQuarantinedDecisionOptions = {
  * Nothing is fetched for it: every detail and print address is the universal
  * id the row lacks. Its stored raw is the listing row in the same envelope
  * part a read row keeps it in, so the crawl and the reconciliation store the
- * same bytes for it, and it is held until the id recovers and the keyed
- * observation takes the row over by its repair alias.
+ * same bytes for it. It is held as it stands: a recovered id keys a row of
+ * its own, since the docket fingerprint cannot prove which document of the
+ * docket this listing was (`czNsDocketQuarantine`).
  */
 const czNsQuarantinedDecision = ({
   row,
@@ -1233,9 +1243,14 @@ const czNsSliceDate = (slice: string): string => {
 };
 
 /**
- * A result row. The docket and the universal id come out of the same anchor,
- * so a row that names one names the other, and a row that names neither is
- * not a row at all.
+ * A result row: the publisher prints one `odk` anchor per listed document,
+ * the docket as its text and the document's address as its link.
+ *
+ * Every such anchor is a row whatever its link states, because the publisher
+ * counts it: a pattern that required a well-formed universal id skipped a row
+ * whose link was missing or malformed, and the day's counts then refused the
+ * whole listing for it. The id is read from the link separately
+ * ({@link LISTING_DOCUMENT_HREF_PATTERN}) and a row without one is quarantined.
  *
  * The docket runs to the anchor's close rather than to the first tag inside
  * it: one decision can settle several dockets, and the publisher prints those
@@ -1244,7 +1259,18 @@ const czNsSliceDate = (slice: string): string => {
  * decision than it listed and could never settle.
  */
 const LISTING_ROW_PATTERN =
-  /<a\s+class="odk"\s+href="[^"]*\/WebSearch\/(?<unid>[0-9A-Fa-f]{32})\?openDocument"[^>]*>(?<caseNumber>[\s\S]*?)<\/a>/gu;
+  /<a\s+class="odk"(?<attributes>[^>]*)>(?<caseNumber>[\s\S]*?)<\/a>/gu;
+
+/** The link attribute of a row's anchor. */
+const LISTING_HREF_PATTERN = /\bhref="(?<href>[^"]*)"/u;
+
+/**
+ * A row link that names a document: its universal id, exactly as every
+ * detail URL of this publisher states it. Anything else names no document
+ * the adapter can address.
+ */
+const LISTING_DOCUMENT_HREF_PATTERN =
+  /\/WebSearch\/(?<unid>[0-9A-Fa-f]{32})\?openDocument$/u;
 
 /** What several dockets settled by one decision are joined with. */
 const CASE_NUMBER_SEPARATOR = ", ";
@@ -1294,8 +1320,13 @@ const parseListingRows = (html: string): CzNsListingRow[] =>
     );
     const caseNumber = caseNumbers.at(0) ?? "";
     const additionalCaseNumbers = caseNumbers.slice(1);
+    const href =
+      LISTING_HREF_PATTERN.exec(match.groups?.["attributes"] ?? "")?.groups?.[
+        "href"
+      ] ?? "";
     return {
-      unid: match.groups?.["unid"] ?? "",
+      // Empty for a link that names no document, which quarantines the row.
+      unid: LISTING_DOCUMENT_HREF_PATTERN.exec(href)?.groups?.["unid"] ?? "",
       caseNumber,
       additionalCaseNumbers:
         additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
@@ -1340,6 +1371,29 @@ export const czNsListingIdentity = (
       identity satisfies never;
       return panic(`Unhandled cz-ns row identity: ${JSON.stringify(identity)}`);
   }
+};
+
+/**
+ * A row as the listing walk reports it, or `null` for one with nothing to key
+ * on. A keyed row names the quarantine id an id-less listing of it would get,
+ * so the walker can report a slice that lists both on one docket: those are
+ * two documents the fingerprint cannot tell apart.
+ */
+const czNsListingItem = (
+  row: CzNsListingRow,
+): ReconciliationListingItem | null => {
+  const identity = czNsListingIdentity(row);
+  if (identity === null) {
+    return null;
+  }
+  const peer = czNsRowIdentity(row);
+  return {
+    identity,
+    payload: row,
+    ...(peer?.type === "document" && peer.quarantinePeer !== undefined
+      ? { quarantinePeers: [peer.quarantinePeer] }
+      : {}),
+  };
 };
 
 /**
@@ -1447,13 +1501,12 @@ const listCzNsSlicePage = async ({
     });
   }
 
-  // `LISTING_ROW_PATTERN` only matches an anchor addressed by a universal id,
-  // so every row here keys; one that does not is counted, not dropped. An
-  // anchor with no universal id is not parsed at all, and the stated counts
-  // above refuse the page for it instead.
+  // Every parsed anchor counted above is a listed record. One with neither a
+  // universal id nor a docket has nothing to key on, so it is counted rather
+  // than listed as an item.
   const items = rows.flatMap((row) => {
-    const identity = czNsListingIdentity(row);
-    return identity === null ? [] : [{ identity, payload: row }];
+    const item = czNsListingItem(row);
+    return item === null ? [] : [item];
   });
   const withoutStableFields = rows.length - items.length;
   return {

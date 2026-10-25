@@ -33,6 +33,7 @@ export const QUARANTINE_NAMESPACE = {
   CZ_NS: "cz-ns",
   CZ_NSS: "cz-nss",
   CZ_REGIONAL: "cz-regional",
+  CZ_UOHS: "cz-uohs",
   CZ_US: "nalus",
   EU_ECJ: "eu-ecj",
   HU_BHGY: "hu-bhgy",

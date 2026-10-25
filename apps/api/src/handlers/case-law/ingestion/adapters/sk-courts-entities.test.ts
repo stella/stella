@@ -7,6 +7,9 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   decodeSourceRawEnvelope,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -14,7 +17,13 @@ import {
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 const fixture = () =>
   ({
@@ -208,6 +217,101 @@ describe("Slovak court display text decodes publisher entities to stable text", 
     expect(
       replay({ ...input, sourceDocumentId: "plaintext-quarantine:earlier" }),
     ).toMatchObject({ type: "rejected", rejection: "identity-mismatch" });
+  });
+
+  describe("a guid-less row an earlier version stored under the shared plain-text quarantine", () => {
+    // Earlier versions assembled this item keyed, with no record (no guid)
+    // and no registry read (no registry guid), and the shared plain-text
+    // assembly stored the refused docket under its own quarantine id.
+    const item = {
+      guid: null,
+      spisovaZnacka: "\\rtf1 rejected",
+      sud: { nazov: "Okresný súd Žilina" },
+      identifikacneCislo: "5120201234",
+      datumVydania: "14.05.2020",
+    };
+
+    /** The row the earlier path stored, built by the shared function itself. */
+    const earlierRow = () => {
+      const sourceRaw = encodeSourceRawEnvelope({
+        listing: JSON.stringify(item),
+      });
+      const earlier = plainTextIngestionResult({
+        caseNumber: item.spisovaZnacka,
+        court: item.sud.nazov,
+        country: "SVK",
+        language: "sk",
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        metadata: {},
+        rawHash: sourceFingerprint({ sourceRaw }),
+        documentAst: EMPTY_AST,
+        sourceRaw,
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      });
+      expect(earlier.plainTextOutcome.type).toBe("item_build_failed");
+      return earlier;
+    };
+
+    test("its quarantined row names the earlier id as a repair alias", () => {
+      const earlierId =
+        earlierRow().sourceDocumentId ?? panic("the earlier row has no id");
+      expect(earlierId.startsWith("plaintext-quarantine:")).toBe(true);
+
+      const decision =
+        assembleSkCourtsDecision({ item, detail: null }) ??
+        panic("the item must reach quarantine");
+
+      expect(decision.sourceDocumentId).toMatch(
+        /^sk-courts-quarantine:[0-9a-f]{64}$/u,
+      );
+      expect(decision.sourceDocumentIdRepairAliases).toEqual([earlierId]);
+    });
+
+    test("replay rebuilds a row stored under the earlier id under the new one", () => {
+      const earlier = earlierRow();
+      const replay =
+        skCourtsAdapter.reparseStoredRaw ??
+        panic("adapter has no replay reader");
+
+      const outcome = replay({
+        raw: new TextEncoder().encode(
+          earlier.sourceRaw ?? panic("the earlier row stores no raw"),
+        ),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: earlier.caseNumber,
+        sourceDocumentId: earlier.sourceDocumentId ?? null,
+        language: "sk",
+        court: earlier.court,
+        ecli: null,
+        decisionDate: null,
+        decisionType: null,
+        sourceUrl: null,
+        documentUrl: null,
+        metadata: {},
+      });
+
+      expect(outcome).toMatchObject({
+        type: "parsed",
+        result: {
+          sourceDocumentId: expect.stringMatching(
+            /^sk-courts-quarantine:[0-9a-f]{64}$/u,
+          ),
+          sourceDocumentIdRepairAliases: [earlier.sourceDocumentId],
+          isListingOnly: true,
+        },
+      });
+    });
+
+    test("a listing naming a registry guid has no earlier id this can rebuild", () => {
+      // The earlier raw also held the registry record read at crawl time.
+      const decision =
+        assembleSkCourtsDecision({
+          item: { ...item, sud: { ...item.sud, registreGuid: "sud_102" } },
+          detail: null,
+        }) ?? panic("the item must reach quarantine");
+
+      expect(decision.sourceDocumentIdRepairAliases).toBeUndefined();
+    });
   });
 
   test("stored raw replay preserves the same decoded fields", () => {

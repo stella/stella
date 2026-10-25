@@ -1321,6 +1321,63 @@ describe("a listed decision with no usable publisher key", () => {
     expect(decision?.isListingOnly).toBe(true);
   });
 
+  describe("an observation that recovers a field names the row stored before it", () => {
+    // First listed without a docket or a key, so quarantined on its summary
+    // form. A later listing adding a docket, or the key too, fingerprints on
+    // the docket form instead; without the earlier form as a repair alias it
+    // would insert a second row beside the first.
+    const summarised = {
+      MeghozoBirosag: "Kúria",
+      HatarozatEve: 2025,
+      JogTerulet: "Társasági jog",
+      Rezume: "A felülvizsgálati kérelem alaptalan.",
+    };
+    const earlierId = storedIdOf(
+      huBhgyListingIdentity(normalizeHuBhgyRow(summarised)),
+    );
+    const withDocket = { ...summarised, Azonosito: "Gfv.30000/2025/4" };
+    const docketId = storedIdOf(
+      huBhgyListingIdentity(normalizeHuBhgyRow(withDocket)),
+    );
+
+    test("a docket arriving: the docket-form row adopts the summary-form row", async () => {
+      expect(docketId).not.toBe(earlierId);
+      const built = await assembleHuBhgyDecision({
+        row: normalizeHuBhgyRow(withDocket),
+        document: undefined,
+        rawParts: huBhgyRawPartsOf(withDocket, undefined),
+      });
+      const decision =
+        built.type === "quarantined" ? built.decision : undefined;
+      expect(decision?.sourceDocumentId).toBe(docketId);
+      expect(decision?.sourceDocumentIdRepairAliases).toEqual([earlierId]);
+    });
+
+    test("the key arriving: the keyed row names both earlier forms, once each", async () => {
+      const keyed = { ...withDocket, IndexId: "id-30000" };
+      const built = await assembleHuBhgyDecision({
+        row: normalizeHuBhgyRow(keyed),
+        document: undefined,
+        rawParts: huBhgyRawPartsOf(keyed, undefined),
+      });
+      const decision =
+        built.type === "detail-unavailable" ? built.decision : undefined;
+      expect(decision?.sourceDocumentId).toBe("id-30000");
+      expect(decision?.sourceDocumentIdRepairAliases).toEqual([
+        docketId,
+        earlierId,
+      ]);
+    });
+
+    test("a row stating one form names no alias for its own identity", () => {
+      expect(huBhgyIdentityOf(normalizeHuBhgyRow(summarised))).toMatchObject({
+        type: "quarantined",
+        sourceDocumentId: earlierId,
+        repairAliases: [],
+      });
+    });
+  });
+
   test("a stored quarantined row replays under the id it was stored by", async () => {
     const built = await assembleHuBhgyDecision({
       row: normalizeHuBhgyRow(keyless),

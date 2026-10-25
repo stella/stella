@@ -507,8 +507,6 @@ describe("a court's record with no usable identity is quarantined", () => {
     for (const overrides of [
       { jednaciCislo: null },
       { jednaciCislo: "" },
-      // Trims to no docket, and there is no link to key on instead.
-      { jednaciCislo: "   ", odkaz: null },
       { jednaciCislo: null, odkaz: null },
       { jednaciCislo: OVERLONG_DOCKET, odkaz: null },
       { jednaciCislo: OVERLONG_DOCKET, odkaz: OVERLONG_LINK },
@@ -771,6 +769,47 @@ describe("a row an earlier parser stored keeps its key", () => {
       caseNumber: "18 C 130/2024",
       language: "cs",
     });
+  });
+
+  test("a linkless row whose docket trims to nothing is stored as before, and counted unkeyed", async () => {
+    const item = {
+      ...(await itemByDocket(LISTING, DISTRICT_DOCKET)),
+      jednaciCislo: "  ",
+      odkaz: null,
+    };
+    // Earlier parsers stored this row under an empty case number and no
+    // publisher id; a quarantine id would make the next crawl a second row.
+    const built = await buildCzRegionalDecision(item);
+    expect(built.type).toBe("built");
+    const decision = built.type === "built" ? built.decision : undefined;
+    expect(decision?.sourceDocumentId).toBeUndefined();
+    expect(decision?.caseNumber).toBe("");
+    expect(decision?.court).toBe(item.soud ?? "");
+    expect(decision?.sourceDocumentIdRepairAliases).toBeUndefined();
+    expect(decision?.metadata["identityQuarantined"]).toBeUndefined();
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(JSON.stringify({ items: [item], totalPages: 1 })),
+    );
+    try {
+      const page = (
+        await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+      ).unwrap();
+      expect(page.decisions).toEqual([decision]);
+      // No listing identity can name an empty case number, and a key the
+      // stored row never matches would hunt it forever: the ledger counts
+      // it as a record it cannot key.
+      const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+        slice: "2025-06-11",
+        page: 0,
+      });
+      expect(slice.items).toEqual([]);
+      expect(slice.withoutStableFields).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   test("a stored docket-keyed row re-parses under its docket, with no id", async () => {

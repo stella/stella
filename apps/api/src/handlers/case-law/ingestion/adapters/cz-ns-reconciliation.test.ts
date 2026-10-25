@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
@@ -33,6 +33,10 @@ import {
   decisionIdentifiersFromMetadata,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -464,7 +468,7 @@ describe("cz-ns listSlicePage", () => {
       { type: "document", sourceDocumentId: UNID.FIRST },
       { type: "document", sourceDocumentId: UNID.SECOND },
     ]);
-    // Every anchor the listing parses names a universal id.
+    // Every row states a universal id.
     expect(listed.withoutStableFields).toBeUndefined();
 
     const url = requestedUrls.at(0) ?? "";
@@ -475,6 +479,56 @@ describe("cz-ns listSlicePage", () => {
     expect(new URL(url).searchParams.get("Start")).toBe("1");
     expect(new URL(url).searchParams.get("Count")).toBe("900");
     expect(requestedUrls).toHaveLength(1);
+  });
+
+  test("a row whose link names no document is quarantined, not left out of the day", async () => {
+    const NO_HREF = "NO-HREF";
+    const body = listingPageHtml({
+      rows: [
+        [UNID.FIRST, DOCKET.FIRST],
+        ["not-a-universal-id", DOCKET.SECOND],
+        [NO_HREF, DOCKET.SUFFIXED],
+        // Neither an id nor a docket: counted, nothing to key.
+        ["", ""],
+      ],
+      shown: 4,
+    }).replace(
+      `href="/Judikatura/judikatura_ns.nsf/WebSearch/${NO_HREF}?openDocument" `,
+      "",
+    );
+    expect(body).not.toContain(`WebSearch/${NO_HREF}`);
+    mockFetch({ listing: { body } });
+
+    // Before, the day's own count refused the whole listing for these rows.
+    const listed = await listSlice("2026-07-01");
+
+    expect(listed.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: UNID.FIRST },
+      {
+        type: "document",
+        sourceDocumentId: quarantinedIdOf({
+          unid: "",
+          caseNumber: DOCKET.SECOND,
+        }),
+      },
+      {
+        type: "document",
+        sourceDocumentId: quarantinedIdOf({
+          unid: "",
+          caseNumber: DOCKET.SUFFIXED,
+        }),
+      },
+    ]);
+    expect(listed.items.at(1)?.payload).toEqual({
+      unid: "",
+      caseNumber: DOCKET.SECOND,
+    });
+    // The keyed row names the quarantine id an id-less listing of it gets.
+    expect(listed.items.at(0)?.quarantinePeers).toEqual([
+      quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST }),
+    ]);
+    expect(listed.items.at(1)?.quarantinePeers).toBeUndefined();
+    expect(listed.withoutStableFields).toBe(1);
   });
 
   test("asking the same slice twice asks the publisher the same question", async () => {
@@ -799,8 +853,46 @@ describe("cz-ns buildDecision", () => {
     ).toBe(listingIdentityKey(identityOf(row)));
   });
 
-  test("a keyed observation names the quarantine row its id-less listing was kept under", async () => {
-    mockFetch({ printStatus: 404 });
+  test("a keyed row and an id-less row on one docket are reported, never merged", async () => {
+    // Two documents of one docket, one listed without its id: the docket
+    // fingerprint cannot tell them apart, so the keyed one must not adopt the
+    // other's quarantine row.
+    mockFetch({
+      listing: {
+        body: listingPageHtml({
+          rows: [
+            [UNID.FIRST, DOCKET.FIRST],
+            ["", DOCKET.FIRST],
+          ],
+          shown: 2,
+        }),
+      },
+      printStatus: 404,
+    });
+    const quarantined = quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST });
+
+    const listing = await listReconciliationSlice({
+      adapterKey: "cz-ns",
+      proof: SLICE_LISTING_PROOF.COUNT,
+      listSlicePage: reconciliation.listSlicePage,
+      revisionOf: reconciliation.revisionOf,
+      slice: "2026-07-01",
+      pageDelayMs: 0,
+      pageTimeoutMs: 5000,
+      sleep: async () => {
+        await Promise.resolve();
+      },
+    });
+    if (Result.isError(listing)) {
+      throw listing.error;
+    }
+    expect(
+      [...listing.value.keyed.values()].map((item) => item.identity),
+    ).toEqual([
+      { type: "document", sourceDocumentId: UNID.FIRST },
+      { type: "document", sourceDocumentId: quarantined },
+    ]);
+    expect(listing.value.quarantinePeerCollisions).toEqual([quarantined]);
 
     const built = await reconciliation.buildDecision({
       unid: UNID.FIRST,
@@ -810,11 +902,7 @@ describe("cz-ns buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    // A recovered id takes the listing-only row over instead of leaving a
-    // second row beside it.
-    expect(built.decision.sourceDocumentIdRepairAliases).toEqual([
-      quarantinedIdOf({ unid: "", caseNumber: DOCKET.FIRST }),
-    ]);
+    expect(built.decision.sourceDocumentIdRepairAliases).toBeUndefined();
   });
 
   test("a row listed with an id and no docket is read and stored under its id", async () => {

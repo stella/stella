@@ -181,10 +181,10 @@ describe("view entries with no usable universal id", () => {
         decodeSourceRawEnvelope(idLess?.sourceRaw ?? "")?.["listing"] ?? "null",
       ),
     ).toEqual({ unid: "", caseNumber: DOCKET });
-    // The keyed entry of the same docket names the quarantine row, so the
-    // listing kept while its id was missing is taken over, not duplicated.
+    // The keyed entry of the same docket does not claim the quarantine row:
+    // the docket alone cannot prove it is the same document.
     expect(keyed?.isListingOnly).toBeUndefined();
-    expect(keyed?.sourceDocumentIdRepairAliases).toEqual([quarantined]);
+    expect(keyed?.sourceDocumentIdRepairAliases).toBeUndefined();
     // Only the keyed entry is fetched: nothing addresses the others.
     expect(
       requested.filter((url) => !url.includes("ReadViewEntries")),

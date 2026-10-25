@@ -746,33 +746,51 @@ export const huKollegiumsOf = (value: string | undefined): string[] =>
  * neither a docket nor a summary has no stable field set: its court, year and
  * college name thousands of decisions, and a fingerprint over them would merge
  * unrelated ones into one row.
+ *
+ * Every form whose fields the row states is returned, most specific first.
+ * The first is the row's own quarantine identity; the rest are the forms an
+ * earlier observation stating fewer fields was quarantined under, which the
+ * row names as repair aliases so it takes that row over instead of inserting
+ * a second one when a docket or an `IndexId` arrives. Two forms with distinct
+ * field sets, so the list is bounded and its digests distinct.
  */
-const huBhgyQuarantineOf = (row: HuBhgyRow): QuarantineIdentity | undefined => {
+const huBhgyQuarantineForms = (row: HuBhgyRow): QuarantineIdentity[] => {
   const decisionYear =
     row.HatarozatEve === undefined ? undefined : String(row.HatarozatEve);
-  if (row.Azonosito !== undefined) {
-    return quarantineIdentity({
-      namespace: QUARANTINE_NAMESPACE.HU_BHGY,
-      stableFields: {
-        docket: row.Azonosito,
-        court: row.MeghozoBirosag,
-        decisionYear,
-      },
-    });
-  }
-  if (row.Rezume !== undefined) {
-    return quarantineIdentity({
-      namespace: QUARANTINE_NAMESPACE.HU_BHGY,
-      stableFields: {
-        court: row.MeghozoBirosag,
-        decisionYear,
-        legalArea: row.JogTerulet,
-        summary: row.Rezume,
-      },
-    });
-  }
-  return undefined;
+  const withDocket =
+    row.Azonosito === undefined
+      ? []
+      : [
+          quarantineIdentity({
+            namespace: QUARANTINE_NAMESPACE.HU_BHGY,
+            stableFields: {
+              docket: row.Azonosito,
+              court: row.MeghozoBirosag,
+              decisionYear,
+            },
+          }),
+        ];
+  const withSummary =
+    row.Rezume === undefined
+      ? []
+      : [
+          quarantineIdentity({
+            namespace: QUARANTINE_NAMESPACE.HU_BHGY,
+            stableFields: {
+              court: row.MeghozoBirosag,
+              decisionYear,
+              legalArea: row.JogTerulet,
+              summary: row.Rezume,
+            },
+          }),
+        ];
+  return [...withDocket, ...withSummary];
 };
+
+/** The stored ids of quarantine forms, once each. */
+const quarantineIdsOf = (forms: readonly QuarantineIdentity[]): string[] => [
+  ...new Set(forms.map(({ sourceDocumentId }) => sourceDocumentId)),
+];
 
 /** Why a listed row is stored under its quarantine identity. */
 const HU_BHGY_QUARANTINE_REASON = {
@@ -813,21 +831,23 @@ export type HuBhgyIdentity =
       sourceDocumentId: string;
       fingerprint: string;
       reason: HuBhgyQuarantineReason;
+      /** Less specific forms an earlier observation may be stored under. */
+      repairAliases: readonly string[];
     }
   /** No publisher key and no stable field set: nothing can name this row. */
   | { type: "no-stable-field" };
 
 export const huBhgyIdentityOf = (row: HuBhgyRow): HuBhgyIdentity => {
   const { IndexId } = row;
-  const quarantine = huBhgyQuarantineOf(row);
+  const forms = huBhgyQuarantineForms(row);
   if (IndexId !== undefined && isPersistableSourceDocumentId(IndexId)) {
     return {
       type: "keyed",
       sourceDocumentId: IndexId,
-      repairAliases:
-        quarantine === undefined ? [] : [quarantine.sourceDocumentId],
+      repairAliases: quarantineIdsOf(forms),
     };
   }
+  const [quarantine, ...earlier] = forms;
   return quarantine === undefined
     ? { type: "no-stable-field" }
     : {
@@ -835,6 +855,9 @@ export const huBhgyIdentityOf = (row: HuBhgyRow): HuBhgyIdentity => {
         sourceDocumentId: quarantine.sourceDocumentId,
         fingerprint: quarantine.fingerprint,
         reason: quarantineReasonOf(row),
+        repairAliases: quarantineIdsOf(earlier).filter(
+          (id) => id !== quarantine.sourceDocumentId,
+        ),
       };
 };
 
@@ -1019,6 +1042,9 @@ const quarantinedHuBhgyDecision = ({
     ...(aliasesOf(row).length === 0
       ? {}
       : { sourceDocumentIdAliases: aliasesOf(row) }),
+    ...(identity.repairAliases.length === 0
+      ? {}
+      : { sourceDocumentIdRepairAliases: identity.repairAliases }),
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
     language: HU_BHGY_LANGUAGE,

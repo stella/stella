@@ -1172,7 +1172,14 @@ type CzRegionalQuarantinedRow = {
 type CzRegionalKeyedRow = {
   type: "keyed";
   record: Readonly<Record<string, unknown>>;
-  identity: ListingIdentity;
+  /**
+   * Undefined for one legacy shape only: a court's linkless row whose docket
+   * is empty once trimmed. Earlier parsers stored it under that empty case
+   * number with no publisher id, so the build still does, or the next crawl
+   * would insert a second row beside the stored one. No listing identity can
+   * name an empty case number, so the ledger cannot track it.
+   */
+  identity: ListingIdentity | undefined;
   court: string;
   /** The docket exactly as listed, sheet number and all. */
   listedDocket: string;
@@ -1242,7 +1249,11 @@ const czRegionalRowIdentity = (raw: unknown): CzRegionalRowIdentity => {
     const identity =
       documentIdentity ??
       (usableDocket === undefined ? undefined : docketIdentity);
-    if (identity !== undefined) {
+    // An over-long docket is no such legacy: the write refused it, so no
+    // earlier row exists and it is quarantined like a missing one.
+    const legacyEmptyDocket =
+      documentIdentity === undefined && docketIdentity?.caseNumber === "";
+    if (identity !== undefined || legacyEmptyDocket) {
       return {
         type: "keyed",
         record: raw,
@@ -1308,8 +1319,15 @@ const czRegionalRepairAliases = (
 
 /**
  * How the listing walk and the operator repair see one listed row: the
- * identity the ingest stores it under, or why the source stores no row for
+ * identity the ingest stores it under, or why the ledger can hold no row for
  * it. Discriminated on `type` together with {@link ListingIdentity}.
+ *
+ * `no-stable-field` is a row stating nothing a listing identity can name:
+ * one with no field to fingerprint, and the legacy empty-docket row the
+ * crawl still stores under its empty case number (see
+ * {@link CzRegionalKeyedRow}). The walk counts both as records it cannot
+ * key, so coverage shows them instead of a ledger key that would never
+ * match the stored row.
  */
 export type CzRegionalListedIdentity =
   | ListingIdentity
@@ -1322,7 +1340,7 @@ export const czRegionalListingIdentity = (
   const row = czRegionalRowIdentity(raw);
   switch (row.type) {
     case "keyed":
-      return row.identity;
+      return row.identity ?? { type: "no-stable-field" };
     case "quarantined":
       return {
         type: "document",

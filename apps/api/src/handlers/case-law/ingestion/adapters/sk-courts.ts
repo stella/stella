@@ -827,6 +827,65 @@ const skCourtsKeyedItem = (raw: unknown): SkApiItem | null => {
 };
 
 /**
+ * The id an earlier version stored this record under, where it can be rebuilt
+ * byte for byte from the listing alone.
+ *
+ * Before records with no usable id were quarantined here, a guid-less item
+ * whose docket or court the plain-text form refuses went through the keyed
+ * assembly and fell back to the shared plain-text quarantine, whose id digests
+ * the row's raw. That raw was the listing, plus the court registry record
+ * when the listing named a registry guid, plus the detail record when it
+ * stated a guid of any length. Only an item stating neither had a raw that is
+ * its listing alone, so only for it is the earlier id known; the earlier row
+ * is adopted through it as a repair alias. The id is produced by the shared
+ * function itself, over the raw the earlier assembly built, so it cannot drift
+ * from what that function stored.
+ */
+const legacyPlainTextQuarantineId = ({
+  record,
+  reason,
+}: SkCourtsQuarantinedRecord): string | undefined => {
+  if (
+    reason !== SK_COURTS_QUARANTINE_REASON.NO_PUBLISHER_ID ||
+    !isSkApiItem(record) ||
+    (record.guid !== null && record.guid !== undefined && record.guid !== "") ||
+    (record.sud?.registreGuid !== null &&
+      record.sud?.registreGuid !== undefined)
+  ) {
+    return undefined;
+  }
+  // The earlier assembly kept only items stating both, under these labels.
+  const statedCaseNumber = toOptionalValue(record.spisovaZnacka);
+  const statedCourt = toOptionalValue(record.sud?.nazov);
+  if (!statedCaseNumber || !statedCourt) {
+    return undefined;
+  }
+  const { sourceRaw, sourceRawContentType } = skCourtsSourceRaw({
+    item: record,
+    detail: null,
+    courtRegistry: null,
+  });
+  const earlier = plainTextIngestionResult({
+    caseNumber: canonicalSkCourtText(statedCaseNumber) || statedCaseNumber,
+    court: canonicalSkCourtText(statedCourt) || statedCourt,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
+    language: SK_COURTS_LANGUAGE,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: {},
+    rawHash: sourceFingerprint({ sourceRaw }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    documentAst: EMPTY_AST,
+    sourceRaw,
+    sourceRawContentType,
+  });
+  // Labels the plain-text form accepts were stored by docket, not under the
+  // shared quarantine, so there is no earlier id to adopt.
+  return earlier.plainTextOutcome.type === "item_build_failed"
+    ? earlier.sourceDocumentId
+    : undefined;
+};
+
+/**
  * The listing-only row of a record stored under its quarantine identity
  * (case-law AGENTS.md rule 20): the verbatim listing as its raw, every label
  * the listing states in a form this adapter can read, and no detail request,
@@ -834,11 +893,11 @@ const skCourtsKeyedItem = (raw: unknown): SkApiItem | null => {
  * document walk either: with no record read there is no document URL for it
  * to fetch, and a deferred row would be published with nothing on it.
  */
-const quarantinedSkCourtsDecision = ({
-  record,
-  quarantine,
-  reason,
-}: SkCourtsQuarantinedRecord): IngestionResult => {
+const quarantinedSkCourtsDecision = (
+  quarantined: SkCourtsQuarantinedRecord,
+): IngestionResult => {
+  const { record, quarantine, reason } = quarantined;
+  const legacyId = legacyPlainTextQuarantineId(quarantined);
   const statedCourtRecord = record["sud"];
   const statedJudgeRecord = record["sudca"];
   const court: Readonly<Record<string, unknown>> = isRecord(statedCourtRecord)
@@ -866,6 +925,9 @@ const quarantinedSkCourtsDecision = ({
       : {}),
     isListingOnly: true,
     sourceDocumentId: quarantine.sourceDocumentId,
+    ...(legacyId === undefined
+      ? {}
+      : { sourceDocumentIdRepairAliases: [legacyId] }),
     court: statedCourt ?? "",
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
     language: SK_COURTS_LANGUAGE,
@@ -2391,11 +2453,18 @@ const reparseStoredRaw = (
   // A quarantined row is rebuilt from its listing alone, whatever the
   // listing's shape: that is all it was ever built from.
   if (listed.type === "quarantined") {
-    // Only a row already stored under that quarantine identity is rebuilt
-    // from it. A row an earlier version stored under another key keeps it:
-    // replay never moves a stored row's identity.
-    return stored.sourceDocumentId === listed.quarantine.sourceDocumentId
-      ? reparsedSkCourtsDecision(stored, quarantinedSkCourtsDecision(listed))
+    // Only a row stored under that quarantine identity, or under the earlier
+    // id its rebuilt row names as a repair alias (which the pipeline adopts),
+    // is rebuilt from it. A row an earlier version stored under any other key
+    // keeps it: replay never moves a stored row onto an identity it cannot
+    // prove is the same record's.
+    const rebuilt = quarantinedSkCourtsDecision(listed);
+    return stored.sourceDocumentId === listed.quarantine.sourceDocumentId ||
+      (stored.sourceDocumentId !== null &&
+        rebuilt.sourceDocumentIdRepairAliases?.includes(
+          stored.sourceDocumentId,
+        ) === true)
+      ? reparsedSkCourtsDecision(stored, rebuilt)
       : {
           type: "rejected",
           rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
