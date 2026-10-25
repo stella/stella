@@ -108,9 +108,7 @@ type AnswerOf<TDefinition> = TDefinition extends {
 type LiteralCode<TCode> = number extends TCode ? never : TCode;
 
 type AnswerCodes<TAnswer> =
-  TAnswer extends HttpStatusResponse<infer TCode, unknown>
-    ? LiteralCode<TCode>
-    : 200;
+  TAnswer extends HttpStatusResponse<infer TCode> ? LiteralCode<TCode> : 200;
 
 type AnswerAt<TAnswer, TCode> =
   TAnswer extends HttpStatusResponse<infer TAnswerCode, infer TBody>

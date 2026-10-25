@@ -175,8 +175,7 @@ type RowActionsProps = {
   /** A folder was created from this menu under `parentId` (null: the matter
    *  root); the caller reveals it and starts renaming it. */
   onSubfolderCreated?:
-    | ((entityId: string, parentId: string | null) => void)
-    | undefined;
+    ((entityId: string, parentId: string | null) => void) | undefined;
   triggerClassName?: string | undefined;
   triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
@@ -206,8 +205,7 @@ type GetRowFileTargetOptions = {
 };
 
 type TranslationDialogState =
-  | { type: "closed" }
-  | { target: TranslationTarget; type: "open" };
+  { type: "closed" } | { target: TranslationTarget; type: "open" };
 
 /** What a confirmed deletion removes, captured when it was requested. */
 type DeleteRequest = {

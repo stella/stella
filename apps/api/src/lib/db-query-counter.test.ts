@@ -203,7 +203,9 @@ afterAll(async () => {
 
 // Queries from work that belongs to no request: started before any request
 // exists and never awaited by one.
-const runBackgroundQueries = (signal: { done: boolean }): Promise<void> => {
+const runBackgroundQueries = async (signal: {
+  done: boolean;
+}): Promise<void> => {
   const loop = async () => {
     while (!signal.done) {
       await Bun.sleep(BACKGROUND_QUERY_WAIT_MS);

@@ -39,7 +39,7 @@ const authorizeFolioCollabService = (
 };
 
 /** A snapshot endpoint's caller: the deployment's collaboration service. */
-export const verifyFolioCollabServiceCaller: VerifyCaller<void> = ({
+export const verifyFolioCollabServiceCaller: VerifyCaller<void> = async ({
   request,
 }) =>
   Promise.resolve(

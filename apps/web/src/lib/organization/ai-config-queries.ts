@@ -113,8 +113,7 @@ export const updateCachedAIAvailability = ({
   instanceProvisioned,
   orgConfigured,
 }: UpdateCachedAIAvailabilityOptions):
-  | OrganizationAIAvailability
-  | undefined => {
+  OrganizationAIAvailability | undefined => {
   if (current === undefined) {
     return current;
   }

@@ -110,11 +110,11 @@ type JsonNode = JsonSchema | Record<string, unknown>;
 
 /** The string member of a field as clients see it, if it reads a string. */
 const stringMember = (rendered: JsonNode): JsonNode | undefined => {
-  const type = rendered["type"];
+  const type = rendered.type;
   if (type === "string" || (isUnknownArray(type) && type.includes("string"))) {
     return rendered;
   }
-  const anyOf = rendered["anyOf"];
+  const anyOf = rendered.anyOf;
   return isUnknownArray(anyOf)
     ? anyOf.filter(isRecord).find((member) => member["type"] === "string")
     : undefined;
@@ -133,13 +133,13 @@ const isFreeTextField = (schema: v.GenericSchema): boolean => {
   if (member === undefined) {
     return false;
   }
-  const minLength = member["minLength"];
-  const maxLength = member["maxLength"];
+  const minLength = member.minLength;
+  const maxLength = member.maxLength;
   return (
     // A closed set (`picklist`, `literal`) is filled with one of its values.
     closedValues(member).length === 0 &&
-    member["format"] === undefined &&
-    member["pattern"] === undefined &&
+    member.format === undefined &&
+    member.pattern === undefined &&
     (typeof minLength === "number" ? minLength : 0) <= PLAIN_VALUE.length &&
     (typeof maxLength === "number" ? maxLength : Number.POSITIVE_INFINITY) >=
       JSON_SHAPED_VALUE.length
@@ -170,13 +170,13 @@ const STRING_FILLERS = [
 const closedValues = (rendered: JsonNode): string[] => {
   const values: unknown[] = [];
   if ("const" in rendered) {
-    values.push(rendered["const"]);
+    values.push(rendered.const);
   }
-  const members = rendered["enum"];
+  const members = rendered.enum;
   if (isUnknownArray(members)) {
     values.push(...members);
   }
-  const anyOf = rendered["anyOf"];
+  const anyOf = rendered.anyOf;
   if (isUnknownArray(anyOf)) {
     values.push(...anyOf.filter(isRecord).flatMap(closedValues));
   }
