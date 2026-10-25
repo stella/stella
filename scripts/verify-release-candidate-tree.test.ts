@@ -119,7 +119,9 @@ const withCandidate = (
     const candidate = git(directory, "rev-parse", "HEAD");
 
     verify(
-      Bun.spawnSync(["node", verifier, main, candidate], { cwd: directory }),
+      Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
+        cwd: directory,
+      }),
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -222,7 +224,31 @@ type ReleaseCommit = {
   mutate: (directory: string) => void;
   /** Commits as a merge of a side branch, editing files during the merge. */
   asMerge?: boolean;
+  /** Whether GitHub signed it as committer; defaults to a GitHub committer. */
+  githubSigned?: boolean;
 };
+
+const GITHUB_SIGNATURE = {
+  isValid: true,
+  state: "VALID",
+  wasSignedByGitHub: true,
+  signer: { login: "web-flow" },
+};
+
+// Answers the verifier's signature query from the recorded fixture, as the
+// GitHub CLI would.
+const FAKE_GITHUB_CLI = `#!/usr/bin/env node
+const { readFileSync } = require("node:fs");
+const query = process.argv.find((arg) => arg.startsWith("query=")) ?? "";
+const signatures = JSON.parse(
+  readFileSync(process.env.FAKE_GITHUB_SIGNATURES, "utf8"),
+);
+const repository = {};
+for (const match of query.matchAll(/(c[0-9]+): object\\(oid: "([0-9a-f]{40})"\\)/g)) {
+  repository[match[1]] = { oid: match[2], signature: signatures[match[2]] ?? null };
+}
+process.stdout.write(JSON.stringify({ data: { repository } }));
+`;
 
 const commitAs = (
   directory: string,
@@ -309,18 +335,38 @@ const withReleaseRange = (
     );
     const main = git(directory, "rev-parse", "HEAD");
     git(directory, "checkout", "--quiet", "-b", "release");
+    // What GitHub reports for each commit: only commits GitHub signed as
+    // committer carry its web-flow signature.
+    const signatures: Record<string, unknown> = {};
     for (const [index, commit] of commits.entries()) {
       if (commit.asMerge === true) {
         commitSideMerge(directory, { main, index, commit });
-        continue;
+      } else {
+        commit.mutate(directory);
+        git(directory, "add", "-A");
+        commitAs(directory, commit, "commit", "--quiet", "--message", "step");
       }
-      commit.mutate(directory);
-      git(directory, "add", "-A");
-      commitAs(directory, commit, "commit", "--quiet", "--message", "step");
+      signatures[git(directory, "rev-parse", "HEAD")] =
+        (commit.githubSigned ?? commit.committer === GITHUB)
+          ? GITHUB_SIGNATURE
+          : null;
     }
     const candidate = git(directory, "rev-parse", "HEAD");
+    const signaturesPath = path.join(directory, ".git", "signatures.json");
+    writeFileSync(signaturesPath, JSON.stringify(signatures));
+    const fakeBin = path.join(directory, ".git", "fake-bin");
+    mkdirSync(fakeBin);
+    writeFileSync(path.join(fakeBin, "gh"), FAKE_GITHUB_CLI, { mode: 0o755 });
+    const { GH_RETRY_SCRIPT: _retry, ...environment } = process.env;
     verify(
-      Bun.spawnSync(["node", verifier, main, candidate], { cwd: directory }),
+      Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
+        cwd: directory,
+        env: {
+          ...environment,
+          PATH: `${fakeBin}:${process.env["PATH"] ?? ""}`,
+          FAKE_GITHUB_SIGNATURES: signaturesPath,
+        },
+      }),
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -389,6 +435,29 @@ test.each([
     expect(result.exitCode).not.toBe(0);
     expect(stderrText(result)).toContain(message);
   }),
+);
+
+test.each([
+  [
+    "Tailwind class cache",
+    { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+  ],
+  [
+    "landing product media",
+    { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
+  ],
+])(
+  "refuses %s from a commit with the bot's names that GitHub did not sign",
+  (name, commit) =>
+    withReleaseRange(
+      [releaseCut, { ...commit, githubSigned: false }],
+      (result) => {
+        expect(result.exitCode).not.toBe(0);
+        expect(stderrText(result)).toContain(
+          `${name} commit is not signed by GitHub for its bot`,
+        );
+      },
+    ),
 );
 
 test("refuses a merge that changes a bot's bytes after its commit", () =>

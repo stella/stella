@@ -49,8 +49,14 @@ const refuse = (message) => {
 
 const mainSha = process.argv[2] ?? "";
 const candidateSha = process.argv[3] ?? "";
+const repository = process.argv[4] ?? "";
 if (!SHA_PATTERN.test(mainSha) || !SHA_PATTERN.test(candidateSha)) {
   refuse("expected full lowercase main and candidate SHAs");
+}
+const REPOSITORY_PATTERN = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/u;
+const repositoryParts = REPOSITORY_PATTERN.exec(repository);
+if (repositoryParts === null) {
+  refuse("expected the owner/name repository as the third argument");
 }
 
 /**
@@ -195,6 +201,9 @@ const blobsUnder = (sha, prefix) =>
       }),
   );
 
+/** Commits whose GitHub signature each generated class depends on. */
+const generatedCommits = new Map(/** @type {[string, string][]} */ ([]));
+
 for (const [generatedClass, paths] of generatedPaths) {
   if (paths.length === 0) {
     continue;
@@ -229,6 +238,7 @@ for (const [generatedClass, paths] of generatedPaths) {
           `${name} changed by a commit not made by its bot: ${sha} (${author})`,
         );
       }
+      generatedCommits.set(sha, name);
       commit = sha;
     } else if (line.length > 0 && !latestCommitByPath.has(line)) {
       latestCommitByPath.set(line, commit);
@@ -247,6 +257,70 @@ for (const [generatedClass, paths] of generatedPaths) {
       commitBlobs.set(latest, blobsUnder(latest, prefix)).get(latest);
     if (written?.get(path) !== candidateBlobs.get(path)) {
       refuse(`${name} path differs from its bot's commit: ${path}`);
+    }
+  }
+}
+
+// Author and committer strings are free text in Git. GitHub's own record must
+// show that it signed each bot commit as committer, on the bot's behalf.
+const GITHUB_SIGNER = "web-flow";
+const SIGNATURE_BATCH = 50;
+const generatedShas = [...generatedCommits.keys()];
+for (let start = 0; start < generatedShas.length; start += SIGNATURE_BATCH) {
+  const batch = generatedShas.slice(start, start + SIGNATURE_BATCH);
+  const fields = batch
+    .map(
+      (sha, index) =>
+        `c${index}: object(oid: "${sha}") { ... on Commit { oid signature { isValid state wasSignedByGitHub signer { login } } } }`,
+    )
+    .join(" ");
+  const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`;
+  const command = process.env.GH_RETRY_SCRIPT ? "bash" : "gh";
+  const args = [
+    ...(process.env.GH_RETRY_SCRIPT ? [process.env.GH_RETRY_SCRIPT] : []),
+    "api",
+    "graphql",
+    "-f",
+    "query=".concat(query),
+    "-F",
+    "owner=".concat(repositoryParts[1] ?? ""),
+    "-F",
+    "name=".concat(repositoryParts[2] ?? ""),
+  ];
+  let response = "";
+  try {
+    response = execFileSync(command, args, {
+      encoding: "utf-8",
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    refuse("could not read GitHub's signature record for generated files");
+  }
+  const parsed = parseJson(response, "GitHub signature response");
+  const objects =
+    isRecord(parsed) &&
+    isRecord(parsed.data) &&
+    isRecord(parsed.data.repository)
+      ? parsed.data.repository
+      : refuse("GitHub signature response has no repository");
+  for (const [index, sha] of batch.entries()) {
+    const object = objects[`c${index}`];
+    const signature = isRecord(object) ? object.signature : undefined;
+    const signer = isRecord(signature) ? signature.signer : undefined;
+    if (
+      !isRecord(object) ||
+      object.oid !== sha ||
+      !isRecord(signature) ||
+      signature.isValid !== true ||
+      signature.state !== "VALID" ||
+      signature.wasSignedByGitHub !== true ||
+      !isRecord(signer) ||
+      signer.login !== GITHUB_SIGNER
+    ) {
+      refuse(
+        `${generatedCommits.get(sha) ?? "generated file"} commit is not signed by GitHub for its bot: ${sha}`,
+      );
     }
   }
 }
