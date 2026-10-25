@@ -112,7 +112,7 @@ const isThinEndpointCall = (node: unknown): boolean => {
     return false;
   }
   const name = getCalleeName(value.callee);
-  return name !== null && name.startsWith(`${THIN_ENDPOINT_BUILDER}.`);
+  return name?.startsWith(`${THIN_ENDPOINT_BUILDER}.`) === true;
 };
 
 // An object literal that spells a definition's `run` itself.
@@ -232,8 +232,7 @@ export default eslintCompatPlugin({
           }
           const variable = resolveVariable(context, value);
           return (
-            variable !== null &&
-            variable.defs.length === 1 &&
+            variable?.defs.length === 1 &&
             variable.defs[0]?.type === "ImportBinding"
           );
         };

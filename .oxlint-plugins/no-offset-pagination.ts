@@ -27,12 +27,10 @@ const WIRE_HELPERS: ReadonlySet<string> = new Set([
   "numberFromString",
 ]);
 
-const SCHEMA_NAME = /Schema$/u;
-
 const isSchemaCallee = (calleeName: string): boolean =>
   calleeName.startsWith("v.") ||
   WIRE_HELPERS.has(calleeName) ||
-  SCHEMA_NAME.test(calleeName);
+  calleeName.endsWith("Schema");
 
 const containsRequestSchema = (node: unknown): boolean => {
   const current = unwrapExpression(node);
@@ -40,7 +38,7 @@ const containsRequestSchema = (node: unknown): boolean => {
     return false;
   }
   if (current.type === "Identifier") {
-    return typeof current.name === "string" && SCHEMA_NAME.test(current.name);
+    return typeof current.name === "string" && current.name.endsWith("Schema");
   }
   if (current.type !== "CallExpression") {
     return false;
