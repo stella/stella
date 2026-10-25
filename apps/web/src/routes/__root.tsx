@@ -169,6 +169,7 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  const nonce = useRouter().options.ssr?.nonce;
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
@@ -214,8 +215,8 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <HeadContent />
 
-        <script src="/handoff-init.js" />
-        <script src="/prepaint-init.js" />
+        <script nonce={nonce} src="/handoff-init.js" />
+        <script nonce={nonce} src="/prepaint-init.js" />
       </head>
       <body>
         <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>

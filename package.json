@@ -323,6 +323,7 @@
     }
   },
   "patchedDependencies": {
+    "@emnapi/runtime@1.9.1": "patches/@emnapi%2Fruntime@1.9.1.patch",
     "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "mailauth@7.1.1": "patches/mailauth@7.1.1.patch",

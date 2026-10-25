@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { getStorageKey } from "../../src/consts";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { expect, test } from "../helpers/test";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
@@ -127,6 +128,7 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
   page,
 }) => {
   await setEnglishLocale(page);
+  const csp = await installContentSecurityPolicyCollector(page);
   for (const viewport of [
     { width: 1280, height: 720 },
     { width: 390, height: 844 },
@@ -145,6 +147,7 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
         ratio: 1,
       });
     }
+    await csp.assertClean();
     // A registered client is unverified: its own name, no product mark.
     await expect(page.getByText("Unverified app")).toBeVisible();
     await expect(

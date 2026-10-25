@@ -590,6 +590,7 @@
         "y-prosemirror": "catalog:",
         "y-protocols": "catalog:",
         "yjs": "catalog:",
+        "zod": "^4.6.6",
         "zustand": "^5.0.15",
       },
       "devDependencies": {
@@ -1605,6 +1606,7 @@
     "@tanstack/ai-gemini@0.36.0": "patches/@tanstack%2Fai-gemini@0.36.0.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@better-auth/drizzle-adapter@1.7.6": "patches/@better-auth%2Fdrizzle-adapter@1.7.6.patch",
+    "@emnapi/runtime@1.9.1": "patches/@emnapi%2Fruntime@1.9.1.patch",
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "@better-auth/cimd@1.7.6": "patches/@better-auth%2Fcimd@1.7.6.patch",
