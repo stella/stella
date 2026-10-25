@@ -415,7 +415,6 @@ export const FAILURE_TAGS = [
   "TokenExchangeError",
   "TokenRefreshError",
   "ToolOutputContractDegradedError",
-  "TypeScriptApiError",
   "UnknownSkillPromptError",
   "UnpersistableDecisionFieldError",
   "Unreachable",
