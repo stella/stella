@@ -618,18 +618,17 @@ describe("response conformance validation", () => {
   );
 
   test("validates every framework request-validation response against its shared envelope", async () => {
-    const valid = Response.json(
-      {
-        type: "validation",
-        on: "body",
-        property: "/name",
-        message: "Expected string",
-        summary: "Property 'name' must be a string",
-        found: {},
-        errors: [],
-      },
-      { status: 422 },
+    const app = new Elysia().post("/framework-validation", () => "ok", {
+      body: t.Object({ name: t.String() }),
+    });
+    const valid = await app.handle(
+      new Request("http://localhost/framework-validation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
     );
+    expect(valid.status).toBe(422);
     expect(
       await assertHttpResponseConformance({
         route,
@@ -654,6 +653,73 @@ describe("response conformance validation", () => {
       ),
     ).toMatchObject({ status: 422, issuePath: "(root)" });
   });
+
+  for (const [library, schema, issuePath] of [
+    ["TypeBox", t.Object({ code: t.Literal("business_refusal") }), "/code"],
+    [
+      "Standard Schema",
+      v.object({ code: v.literal("business_refusal") }),
+      "code",
+    ],
+  ] as const) {
+    test.each(["422", "default"])(
+      `validates the declared %s ${library} contract before framework validation`,
+      async (statusKey) => {
+        for (const code of ["business_refusal", "wrong"]) {
+          const response = Response.json({ code }, { status: 422 });
+          const checked = assertHttpResponseConformance({
+            route,
+            response,
+            method: "POST",
+            schema: { [statusKey]: schema },
+          });
+          if (code === "business_refusal") {
+            expect(await checked).toBe("valid");
+          } else {
+            expect(await rejectionOf(checked)).toMatchObject({
+              status: 422,
+              issuePath,
+              contentType: "application/json",
+            });
+          }
+          expect(response.bodyUsed).toBe(false);
+          expect(await response.json()).toEqual({ code });
+        }
+      },
+    );
+  }
+
+  for (const [library, schema] of [
+    ["TypeBox", t.Literal("business absence")],
+    ["Standard Schema", v.literal("business absence")],
+  ] as const) {
+    test.each(["404", "default"])(
+      `validates the declared %s ${library} contract before hidden-route fallback`,
+      async (statusKey) => {
+        for (const body of ["business absence", "NOT_FOUND"]) {
+          const response = new Response(body, { status: 404 });
+          response.headers.delete("content-type");
+          const checked = assertHttpResponseConformance({
+            route,
+            response,
+            method: "GET",
+            schema: { [statusKey]: schema },
+          });
+          if (body === "business absence") {
+            expect(await checked).toBe("valid");
+          } else {
+            expect(await rejectionOf(checked)).toMatchObject({
+              status: 404,
+              issuePath: "(root)",
+              contentType: "(missing)",
+            });
+          }
+          expect(response.bodyUsed).toBe(false);
+          expect(await response.text()).toBe(body);
+        }
+      },
+    );
+  }
 
   test("accepts only the framework's exact hidden-route response", async () => {
     const hidden = new Response("NOT_FOUND", { status: 404 });

@@ -43,7 +43,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
@@ -122,9 +122,9 @@ const config = {
   },
   response: safeHandlerResponseSchemas(
     t.Object({
-      listId: t.String(),
-      documentEntityId: t.String(),
-      fileFieldId: t.String(),
+      listId: tSafeId("legalList"),
+      documentEntityId: tSafeId("entity"),
+      fileFieldId: tSafeId("field"),
     }),
   ),
   body: t.Object({

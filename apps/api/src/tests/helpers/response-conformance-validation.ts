@@ -1,4 +1,4 @@
-import { Kind, TypeGuard, type TSchema } from "@sinclair/typebox";
+import { Kind, type TSchema, TypeGuard } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 
@@ -274,10 +274,16 @@ export const assertHttpResponseConformance = async ({
   } else if (status === 404 && contentType === undefined) {
     frameworkSchema = { 404: hiddenRouteResponseSchema };
   }
-  const selected = selectSchema(frameworkSchema ?? schema, identity, {
-    models,
-    references: resolvedReferences,
-  });
+  const hasDeclaredStatus =
+    isRecord(schema) &&
+    !TypeGuard.IsSchema(schema) &&
+    !("~standard" in schema) &&
+    (Object.hasOwn(schema, String(status)) || Object.hasOwn(schema, "default"));
+  const selected = selectSchema(
+    hasDeclaredStatus ? schema : (frameworkSchema ?? schema),
+    identity,
+    { models, references: resolvedReferences },
+  );
   if (selected.type === "missing") {
     return "missing";
   }
