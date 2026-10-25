@@ -86,8 +86,7 @@ type Marks = { bold: boolean; italic: boolean; href: string | undefined };
 const NO_MARKS: Marks = { bold: false, italic: false, href: undefined };
 
 type Run =
-  | { type: "text"; text: string; marks: Marks }
-  | { type: "line-break" };
+  { type: "text"; text: string; marks: Marks } | { type: "line-break" };
 
 type PendingParagraph = { runs: Run[]; quote: boolean };
 
