@@ -16,9 +16,9 @@ import {
   filterReadWarning,
   filterUnreadWarning,
 } from "@/api/lib/case-law/search-warnings";
+import { runBoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { runBoundedRequestStep } from "@/api/lib/request-latency-budget";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 /**

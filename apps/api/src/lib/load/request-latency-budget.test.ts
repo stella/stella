@@ -7,7 +7,7 @@ import {
   requestBoundedTimeoutMs,
   runBoundedRequestStep,
   runWithinRequestLatencyBudget,
-} from "@/api/lib/request-latency-budget";
+} from "@/api/lib/load/request-latency-budget";
 
 /** A step that never settles: only a budget ends the wait. */
 const never = async <T>(): Promise<T> =>

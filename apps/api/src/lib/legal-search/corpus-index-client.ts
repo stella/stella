@@ -13,7 +13,7 @@ import {
   CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
-import { requestBoundedTimeoutMs } from "@/api/lib/request-latency-budget";
+import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**

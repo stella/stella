@@ -105,8 +105,8 @@ import {
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { runWithinRequestLatencyBudget } from "@/api/lib/request-latency-budget";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";

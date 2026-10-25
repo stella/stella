@@ -29,6 +29,7 @@ import type { captureError as captureApiError } from "@/api/lib/analytics/captur
 import { detached } from "@/api/lib/analytics/capture";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
@@ -46,7 +47,6 @@ import {
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
 import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
-import { runWithinRequestLatencyBudget } from "@/api/lib/request-latency-budget";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";

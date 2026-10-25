@@ -11,7 +11,7 @@ import type { McpToolName } from "@/api/mcp/static-tool-names";
  * - the API's `mcp.request.phases` record carries `budget` and `overBudget`,
  *   which a log metric filter counts;
  * - a `tools/call` runs inside a request latency scope of this budget
- *   (`lib/request-latency-budget.ts`), so the corpus client and the public-law
+ *   (`lib/load/request-latency-budget.ts`), so the corpus client and the public-law
  *   statement timeout give up inside it rather than outwaiting the caller.
  *
  * Keys are the names the phases record reports (`classifyMcpMetricToolName`):
@@ -41,7 +41,30 @@ export const MCP_TOOL_LATENCY_DEFAULT_BUDGET_MS = 2000;
 /** A corpus or workspace search: an index scan plus row hydration. */
 const SEARCH_BUDGET_MS = 8000;
 
-// oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- sparse by design: absence means the tool's work is an ordinary read or write and gets MCP_TOOL_LATENCY_DEFAULT_BUDGET_MS; a total record would restate the default per tool and hide which tools are long by design.
+/**
+ * The tools whose work is long by design. Every other key gets the default,
+ * so the record below is total over exactly these: a name missing from
+ * either side, or one that is not a tool, fails to compile.
+ */
+type LongByDesignTool = Extract<
+  McpToolLatencyBudgetKey,
+  | "search"
+  | "search_case_law"
+  | "search_legislation"
+  | "search_boe_legislation"
+  | "search_across_matters"
+  | "lookup_business_registry"
+  | "read_case_law_decision"
+  | "preview_template_conditions"
+  | "read_content_across_matters"
+  | "external_mcp"
+  | "create_template"
+  | "prepare_file_comparison_from_links"
+  | "upload_document_version"
+  | "save_filled_template"
+  | "compare_documents"
+>;
+
 export const MCP_TOOL_LATENCY_BUDGET_OVERRIDES = {
   search: {
     budgetMs: SEARCH_BUDGET_MS,
@@ -115,9 +138,7 @@ export const MCP_TOOL_LATENCY_BUDGET_OVERRIDES = {
     reason:
       "Runs the document comparison synchronously; the HTTP route and CLI leaf grant it the same ten minutes.",
   },
-} as const satisfies Partial<
-  Record<McpToolLatencyBudgetKey, McpToolLatencyOverride>
->;
+} as const satisfies Record<LongByDesignTool, McpToolLatencyOverride>;
 
 const hasOverride = (
   toolName: string,

@@ -39,7 +39,7 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
-import { runWithinRequestLatencyBudget } from "@/api/lib/request-latency-budget";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,

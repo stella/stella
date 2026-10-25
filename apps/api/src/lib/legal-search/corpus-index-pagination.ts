@@ -48,7 +48,7 @@ import {
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
-import { requestBoundedTimeoutMs } from "@/api/lib/request-latency-budget";
+import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
