@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
+  CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_LABELED_FIELDS,
   CONTACT_IMPORT_MAX_ROWS,
   CONTACT_IMPORT_SCHEMA_VERSION,
@@ -16,6 +17,7 @@ import {
   contactMetadataSchema,
 } from "@/api/db/schema-validators";
 import {
+  importedTaxIdentifiers,
   inspectContactImportDocument,
   parseContactImportDocument,
   previewContactImport,
@@ -302,6 +304,12 @@ describe("labeled contact import blocks", () => {
           ]);
         }
       }
+    }
+  });
+
+  test("every field name suggests its own field", () => {
+    for (const field of CONTACT_IMPORT_FIELDS) {
+      expect([field, suggestedTargetForHeader(field)]).toEqual([field, field]);
     }
   });
 });
@@ -645,5 +653,41 @@ describe("candidate validation", () => {
       { code: "display_name_required", field: "display_name", rowNumber: 6 },
       { code: "invalid_email", field: "primary_email", rowNumber: 6 },
     ]);
+  });
+});
+
+describe("imported tax identifiers", () => {
+  test("an EU VAT number in the tax column is stored as the VAT number", () => {
+    // A German client imported after the tax/VAT split must keep its VAT
+    // number, or invoice prefill would charge domestic VAT instead of
+    // reversing the charge.
+    expect(importedTaxIdentifiers("DE298765432", "none")).toEqual({
+      taxId: null,
+      vatId: "DE298765432",
+    });
+    expect(importedTaxIdentifiers("SK2020123456", "none")).toEqual({
+      taxId: null,
+      vatId: "SK2020123456",
+    });
+  });
+
+  test("national tax numbers and Brazilian ids stay tax ids", () => {
+    // A Slovak DIČ has no prefix; a register number is not a VAT number.
+    expect(importedTaxIdentifiers("2020123456", "none")).toEqual({
+      taxId: "2020123456",
+      vatId: null,
+    });
+    expect(importedTaxIdentifiers("HRB123456", "none")).toEqual({
+      taxId: "HRB123456",
+      vatId: null,
+    });
+    expect(importedTaxIdentifiers("12345678909", "br_cpf_cnpj")).toEqual({
+      taxId: "12345678909",
+      vatId: null,
+    });
+    expect(importedTaxIdentifiers(undefined, "none")).toEqual({
+      taxId: null,
+      vatId: null,
+    });
   });
 });

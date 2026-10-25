@@ -675,6 +675,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 event: "migrate.phase_duration",
                 phase: "schema",
                 durationMs: 20,
+                retriesSpent: 0,
                 outcome: "applied",
                 laneWaitMs: 10,
                 appliedCount: 1,
@@ -683,6 +684,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 event: "migrate.phase_duration",
                 phase: "online",
                 durationMs: 10,
+                retriesSpent: 0,
                 outcome: "complete",
               },
             ]);
@@ -734,16 +736,33 @@ if (!runPostgresTests || databaseUrl === undefined) {
             retryAfterMs: 7,
           } as const satisfies OnlineMigrationOutcome;
           const connection = await openClient().reserve();
+          const timings: MigrationTimingRecord[] = [];
           try {
             const single = await runMigrations({
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
               databaseUrl: scratchUrl,
+              timing: {
+                clock: () => performance.now(),
+                emit: (record) => {
+                  timings.push(record);
+                },
+              },
               runOnline: async () => {
                 expect(await laneOpenToWriters()).toBe(true);
                 return deferred;
               },
+            });
+            const onlineTerminals = timings.filter(
+              (record) =>
+                record.event === "migrate.phase_duration" &&
+                record.phase === "online",
+            );
+            expect(onlineTerminals).toHaveLength(1);
+            expect(onlineTerminals.at(0)).toMatchObject({
+              outcome: "deferred",
+              retriesSpent: 0,
             });
             expect(single).toMatchObject({
               status: "online_deferred",
@@ -1011,16 +1030,22 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchedNames: [A],
                       });
                       // The no-op event, then the schema phase's duration.
-                      expect(stdout.mock.calls).toHaveLength(2);
+                      const phaseCalls = stdout.mock.calls.filter(
+                        (call) =>
+                          !String(call.at(0)).includes(
+                            '"event":"migrate.lock_attempt"',
+                          ),
+                      );
+                      expect(phaseCalls).toHaveLength(2);
                       expect(
-                        JSON.parse(String(stdout.mock.calls.at(1)?.at(0))),
+                        JSON.parse(String(phaseCalls.at(1)?.at(0))),
                       ).toMatchObject({
                         event: "migrate.phase_duration",
                         phase: "schema",
                         outcome: "stale_bundle_noop",
                         appliedCount: 0,
                       });
-                      const noopLine = String(stdout.mock.calls.at(0)?.at(0));
+                      const noopLine = String(phaseCalls.at(0)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({
                         event: "migrate.stale_bundle_noop",
@@ -1113,13 +1138,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
       );
     });
 
-    test("a pending set that loses a lock wait reruns under the lane and records each migration once", async () => {
+    test("a split migration retries after committing this run's earlier receipt", async () => {
       await withBundle(
         [
           { name: A, sql: CREATE_PROBE },
           {
             name: B,
-            sql: `${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
+            sql: `COMMIT;--> statement-breakpoint\n${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
           },
         ],
         async (folder) => {
@@ -1162,7 +1187,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 },
               });
               expect(sleeps).toEqual([10]);
-              expect(appliedResult(result).insertedNames).toEqual([A, B]);
+              expect(result).toMatchObject({
+                status: "applied",
+                predictedNames: [A, B],
+                insertedNames: [A, B],
+              });
               expect(onlineLockTimeout).toEqual([{ lock_timeout: "0" }]);
             } finally {
               stdout.mockRestore();
@@ -1196,6 +1225,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               const holder = holdLockProbe(openClient());
               const connection = await openClient().reserve();
               const sleeps: number[] = [];
+              const timings: MigrationTimingRecord[] = [];
               const stdout = spyOn(process.stdout, "write").mockImplementation(
                 () => true,
               );
@@ -1209,6 +1239,12 @@ if (!runPostgresTests || databaseUrl === undefined) {
                       ebs: DISABLED_EBS,
                       migrationsFolder: folder,
                       runOnline: async () => ONLINE_COMPLETE,
+                      timing: {
+                        clock: () => performance.now(),
+                        emit: (record) => {
+                          timings.push(record);
+                        },
+                      },
                       lockWaitRetry: {
                         lockTimeoutsMs: [10, 20, 30],
                         pauseBaseMs: 10,
@@ -1233,7 +1269,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   true,
                 );
                 expect(sleeps).toEqual([10, 10]);
+                expect(timings).toHaveLength(1);
+                expect(timings.at(0)).toMatchObject({
+                  event: "migrate.phase_duration",
+                  phase: "schema",
+                  outcome: "failed",
+                  retriesSpent: 2,
+                });
                 expect([...(await ledgerRows(observer))]).toEqual([]);
+
                 const [probe] = await observer.unsafe<{ exists: boolean }[]>(
                   "SELECT to_regclass('migration_probe') IS NOT NULL AS exists",
                 );

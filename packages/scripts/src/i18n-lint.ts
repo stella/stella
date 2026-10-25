@@ -497,7 +497,7 @@ export const hasInvalidCapitalizedStella = (value: string): boolean => {
 // sentence with a period, comma, colon or parentheses, in every locale. A
 // value that is only the glyph is the empty-cell marker, not punctuation.
 export const hasEmDash = (value: string): boolean =>
-  value.includes("\u2014") && value.trim() !== "\u2014";
+  value.includes("\u2014") && value !== "\u2014";
 
 export const EM_DASH_GUIDANCE =
   "no em dash: rewrite the break with a period, comma, colon or parentheses";

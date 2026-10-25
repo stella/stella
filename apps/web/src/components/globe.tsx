@@ -4,6 +4,7 @@ import createGlobe from "cobe";
 
 import { cn } from "@stll/ui/utils";
 
+import { createVisibleFrameLoop } from "@/components/visible-frame-loop";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 
 export type GlobeMarker = {
@@ -179,7 +180,6 @@ export const Globe = ({
       const initialTheme = themeRef.current;
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
       let phi = 0;
-      let rafId = 0;
 
       const globe = createGlobe(canvas, {
         devicePixelRatio: pixelRatio,
@@ -199,7 +199,9 @@ export const Globe = ({
         markers: markersRef.current,
       });
 
-      const tick = () => {
+      // Draw only while the canvas is on screen: a scrolled-away globe
+      // renders nothing, and scrolling back resumes the spin.
+      const loop = createVisibleFrameLoop(() => {
         const theme = themeRef.current;
         globe.update({
           phi,
@@ -219,9 +221,13 @@ export const Globe = ({
           const delta = shortestAngleDelta(target, phi);
           phi += delta * 0.05;
         }
-        rafId = requestAnimationFrame(tick);
-      };
-      rafId = requestAnimationFrame(tick);
+      });
+      const visibility = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          loop.setVisible(entry.isIntersecting);
+        }
+      });
+      visibility.observe(canvas);
 
       canvas.style.opacity = "0";
       requestAnimationFrame(() => {
@@ -229,7 +235,8 @@ export const Globe = ({
       });
 
       cleanup = () => {
-        cancelAnimationFrame(rafId);
+        visibility.disconnect();
+        loop.stop();
         globe.destroy();
       };
     }

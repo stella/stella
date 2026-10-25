@@ -74,8 +74,7 @@ describe("desktop locale catalogues", () => {
     test(`${locale} copy contains no em dash`, () => {
       const withEmDash = Object.entries(readCatalogue(locale))
         .filter(
-          ([, message]) =>
-            message.includes(EM_DASH) && message.trim() !== EM_DASH,
+          ([, message]) => message.includes(EM_DASH) && message !== EM_DASH,
         )
         .map(([key]) => key);
       expect(withEmDash).toEqual([]);

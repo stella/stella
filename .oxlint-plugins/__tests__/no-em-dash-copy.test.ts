@@ -30,6 +30,12 @@ test("allows the character spelled as data", async () => {
   ).toEqual([]);
 });
 
+test("rejects a spaced glyph that separates two pieces of copy", async () => {
+  expect(await lint('const p = <p>{label}{" — "}{name}</p>;')).toEqual([1]);
+  expect(await lint('const tip = [a, b].join(" — ");')).toEqual([1]);
+  expect(await lint(`const title = \`\${a} — \${b}\`;`)).toEqual([1]);
+});
+
 test("allows the lone empty-cell marker", async () => {
   expect(await lint('const cell = (v: string | null) => v ?? "—";')).toEqual(
     [],

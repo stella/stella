@@ -1,8 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import {
+  PL_KIO_HTML_BUDGET,
+  PlKioHtmlBudgetError,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
 const baseInput = (
@@ -44,6 +48,26 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each(["x\n\nx\n\nx\n\nx", "x\r\n\r\nx\r\n\r\nx\r\n\r\nx"])(
+    "rejects bounded plaintext %j before constructing paragraph strings",
+    (content) => {
+      const split = spyOn(String.prototype, "split");
+
+      expect(() =>
+        parsePlDecisionContent(
+          baseInput(content, {
+            htmlExpansionBudget: {
+              ...PL_KIO_HTML_BUDGET,
+              maxDomAllocations: 2,
+            },
+          }),
+        ),
+      ).toThrow(PlKioHtmlBudgetError);
+      expect(split).not.toHaveBeenCalled();
+      split.mockRestore();
+    },
+  );
+
   test("parses SAOS HTML into headings, holdings, and argumentation", () => {
     const html = `
       <p><strong>Sygn. akt I ACa 772/13</strong></p>

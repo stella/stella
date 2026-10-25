@@ -643,6 +643,8 @@ export const caseLawDecisions = p.pgTable(
       .notNull(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
+    /** Algorithm version under which `sourceHash` was computed. */
+    sourceHashVersion: p.smallint("source_hash_version").default(0).notNull(),
     sourceObservedAt: timestamptz("source_observed_at"),
     sourceObservationOrder: p.bigint("source_observation_order", {
       mode: "bigint",

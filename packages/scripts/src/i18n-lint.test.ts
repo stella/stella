@@ -80,6 +80,7 @@ describe("em dash in catalogue copy", () => {
     expect(hasEmDash("Pages 2–4")).toBe(false);
     expect(hasEmDash("Draft (not sent)")).toBe(false);
     expect(hasEmDash("\u2014")).toBe(false);
+    expect(hasEmDash(" \u2014 ")).toBe(true);
   });
 });
 

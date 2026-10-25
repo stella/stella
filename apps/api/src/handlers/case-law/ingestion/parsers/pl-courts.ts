@@ -1,3 +1,5 @@
+// parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
+// parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 /**
  * Polish Courts (SAOS) parser.
@@ -49,6 +51,11 @@ type ParsePlDecisionInput = {
   sourceUrl: string | undefined;
   documentUrl: string | undefined;
   content: string;
+  loadHtml?: (html: string) => cheerio.CheerioAPI;
+  htmlExpansionBudget?: {
+    maxDomAllocations: number;
+    reject: (message: string) => never;
+  };
   keywords: string[];
   statutes: string[];
   documentId: string;
@@ -496,9 +503,32 @@ const parsePlainText = (state: ParserState, content: string): void => {
   }
 };
 
+const enforcePlainTextExpansionBudget = (
+  content: string,
+  budget: NonNullable<ParsePlDecisionInput["htmlExpansionBudget"]> | undefined,
+): void => {
+  if (budget === undefined) {
+    return;
+  }
+
+  // Every line break, CRLF included, can become a line string in
+  // normalization and a paragraph after the split, so lines bound both.
+  let lines = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.codePointAt(index) !== 10) {
+      continue;
+    }
+    lines += 1;
+    if (lines > budget.maxDomAllocations) {
+      budget.reject("KIO plaintext exceeds DOM allocation budget");
+    }
+  }
+};
+
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
+  const loadHtml = input.loadHtml ?? cheerio.load;
   const state = createState();
   const title = normalizeDecisionTitle(input.decisionType);
 
@@ -512,7 +542,7 @@ export const parsePlDecisionContent = (
   }
 
   if (hasHtmlTags(input.content)) {
-    const $ = cheerio.load(input.content);
+    const $ = loadHtml(input.content);
     const root = $("body").length > 0 ? $("body") : $.root();
     parseChildren($, state, root);
     validateAndLog(
@@ -522,20 +552,25 @@ export const parsePlDecisionContent = (
       { document: $ },
     );
   } else {
+    enforcePlainTextExpansionBudget(input.content, input.htmlExpansionBudget);
     const normalizedContent = normalizeLegacyPlainText(
       stripHtml(input.content),
     );
-    parsePlainText(state, normalizedContent);
     const paragraphs = normalizedContent
       .split(/\n{2,}/u)
       .flatMap((paragraph) => {
         const normalized = normalizeWhitespace(paragraph);
         return normalized ? [normalized] : [];
       });
+    const validationHtml = buildValidationHtml(paragraphs);
+    // Check expansion before allocating paragraph ASTs for bounded sources.
+    const sourceDocument = input.loadHtml?.(validationHtml);
+    parsePlainText(state, normalizedContent);
     validateAndLog(
       { parser: "pl-courts", caseNumber: input.caseNumber },
-      buildValidationHtml(paragraphs),
+      validationHtml,
       state.blocks,
+      sourceDocument === undefined ? {} : { document: sourceDocument },
     );
   }
 

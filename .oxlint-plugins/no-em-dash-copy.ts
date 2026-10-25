@@ -21,13 +21,19 @@
 //   text.replace(/—/gu, "-")
 //   "2019–2024"                      (en dash range)
 //   invoice.dueDate ?? "—"           (empty-cell marker)
+// Flagged too, as a separator rather than a marker:
+//   {" — "}   parts.join(" — ")
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 const EM_DASH = "\u2014";
 const EM_DASH_ENTITY = /&(?:mdash|#8212|#x0*2014);/iu;
 
-const EMPTY_CELL_MARKER = /^\s*(?:\u2014|&mdash;|&#8212;|&#x0*2014;)\s*$/iu;
+// A string value must be exactly the glyph: `" — "` with spaces is a separator
+// between two pieces of copy, not a missing value. JSX text may carry the
+// surrounding layout whitespace.
+const EMPTY_CELL_MARKER = /^(?:\u2014|&mdash;|&#8212;|&#x0*2014;)$/iu;
+const EMPTY_CELL_TEXT = /^\s*(?:\u2014|&mdash;|&#8212;|&#x0*2014;)\s*$/iu;
 
 const containsEmDash = (raw: string | null | undefined): boolean =>
   raw !== null && raw !== undefined && raw.includes(EM_DASH);
@@ -79,7 +85,7 @@ export default eslintCompatPlugin({
           },
           JSXText(node) {
             const raw = node.raw ?? node.value;
-            if (EMPTY_CELL_MARKER.test(raw)) {
+            if (EMPTY_CELL_TEXT.test(raw)) {
               return;
             }
             if (containsEmDash(raw) || EM_DASH_ENTITY.test(raw)) {

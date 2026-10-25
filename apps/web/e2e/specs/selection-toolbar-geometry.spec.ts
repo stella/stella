@@ -1,8 +1,14 @@
-import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import {
+  expect,
+  stableBoundingBox,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const directory = mkdtempSync(path.join(tmpdir(), "selection-toolbar-"));
 const fixture = { bundle: "" };
@@ -120,11 +126,34 @@ for (const [name, selectionCase] of Object.entries(cases)) {
         })
         .join("\n"),
     );
+    const fixtureUrl = new URL(
+      "/e2e/selection-toolbar-fixture",
+      stylesheetPage.url(),
+    ).href;
     await stylesheetPage.close();
-    await page.setContent(`<head>${styles}</head><div id="fixture"></div>`);
+    await page.route(fixtureUrl, async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<!doctype html><head>${styles}</head><body><div id="fixture"></div></body>`,
+      });
+    });
+    await page.goto(fixtureUrl, { waitUntil: "domcontentloaded" });
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(() =>
+            Array.from(
+              document.querySelectorAll("link[rel='stylesheet']"),
+            ).every(
+              (link) => link instanceof HTMLLinkElement && link.sheet !== null,
+            ),
+          ),
+      )
+      .toBe(true);
     await page.addScriptTag({ content: fixture.bundle });
     const pane = page.getByTestId("pane");
     await expect(pane).toBeVisible();
+    await waitForStableGeometry(page, [pane, page.locator("header")]);
     await page.evaluate((selectionInput) => {
       const root = window.document.querySelector<HTMLElement>(
         '[data-testid="pane"]',
@@ -177,9 +206,10 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     }
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toHaveCSS("position", "fixed");
-    await expect
-      .poll(async () => (await toolbar.boundingBox())?.width ?? 0)
-      .toBeGreaterThan(name === "narrowRightEdge" ? 100 : 200);
+    await waitForStableGeometry(page, [pane, toolbar, page.locator("header")]);
+    expect((await stableBoundingBox(page, toolbar)).width).toBeGreaterThan(
+      name === "narrowRightEdge" ? 100 : 200,
+    );
     const rows = expect.poll(async () =>
       toolbar
         .locator("button")
@@ -194,6 +224,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
     } else {
       await rows.toBe(1);
     }
+    await waitForStableGeometry(page, [pane, toolbar, page.locator("header")]);
     const geometry = await page.evaluate((usePointer) => {
       const paneElement = window.document.querySelector<HTMLElement>(
         '[data-testid="pane"]',

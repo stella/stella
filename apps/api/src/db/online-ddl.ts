@@ -17,12 +17,17 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
+import { isRecord } from "../lib/type-guards";
 import {
   DEFAULT_LOCK_RETRY_CONFIG,
   DEFAULT_LOCK_RETRY_RUNTIME,
   runLockRetryLadder,
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
+import {
+  createMigrationLockTelemetry,
+  observeMigrationLockAttempt,
+} from "./migration-lock-observation";
 import { readConstraintValidated } from "./online-constraint-completion";
 import { readDdlFunctionDeclaration } from "./online-ddl-functions";
 import type { OnlineDdlFunctionName } from "./online-ddl-functions";
@@ -95,11 +100,13 @@ const lockTaking = ({
 /** An index declared for the online phase, with its own build statement. */
 export type OnlineIndexDeclaration = RequiredMigrationIndex & {
   /**
-   * The declared build, read only by `createIndexConcurrently`. Without it,
-   * the build renders from `definitionBody`, PostgreSQL's own definition.
+   * The declared build, read only by `createIndexConcurrently`. An index
+   * without one belongs to a schema migration rather than the online phase.
    */
   createSql?: string;
 };
+
+type OnlineBuildDeclaration = OnlineIndexDeclaration & { createSql: string };
 
 type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
 
@@ -107,27 +114,18 @@ type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
  * Whether the online phase may build the index. One without a declared build
  * belongs to a schema migration, so its absence is a broken deploy.
  */
-export const declaresOnlineBuild = ({
-  createSql,
-}: OnlineIndexDeclaration): boolean => createSql !== undefined;
+export const declaresOnlineBuild = (
+  index: OnlineIndexDeclaration,
+): index is OnlineBuildDeclaration => index.createSql !== undefined;
 
 const createSqlTarget =
   /^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\."?([A-Za-z_][A-Za-z0-9_]*)"? /u;
 
 export const createIndexConcurrently = ({
   createSql,
-  definitionBody,
-  isUnique,
   name,
   tableName,
-}: OnlineIndexDeclaration): LockTakingStatement => {
-  if (createSql === undefined) {
-    return lockTaking({
-      tableName,
-      text: `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
-      lockQueue: "beside_writers",
-    });
-  }
+}: OnlineBuildDeclaration): LockTakingStatement => {
   // The gate watches the declared table, so the build must be on it.
   const match = createSqlTarget.exec(createSql);
   const builtName = match?.at(1);
@@ -139,7 +137,7 @@ export const createIndexConcurrently = ({
   }
   return lockTaking({
     tableName,
-    text: createSql,
+    text: spliced(createSql),
     lockQueue: "beside_writers",
   });
 };
@@ -389,11 +387,19 @@ class OnlineLockRetryDeferred extends TaggedError("OnlineLockRetryDeferred")<{
   cause: unknown;
 }> {}
 
-const sessionOn = (
-  connection: Pick<OnlineMigrationConnection, "execute" | "query">,
-  { tableName }: GatedTableTarget,
-  lockRetry: GatedTableWorkOptions["lockRetry"],
-): GatedTableSession => ({
+type GatedTableSessionOptions = {
+  connection: Pick<OnlineMigrationConnection, "execute" | "query">;
+  target: GatedTableTarget;
+  lockRetry: GatedTableWorkOptions["lockRetry"];
+  onRetry: () => void;
+};
+
+const sessionOn = ({
+  connection,
+  target: { tableName },
+  lockRetry,
+  onRetry,
+}: GatedTableSessionOptions): GatedTableSession => ({
   query: async (query, params) => await connection.query(query, params),
   run: async (statement) => {
     // The gate read the health of this table only.
@@ -413,7 +419,10 @@ const sessionOn = (
           sleep: lockRetry?.runtime.sleep ?? DEFAULT_LOCK_RETRY_RUNTIME.sleep,
           random:
             lockRetry?.runtime.random ?? DEFAULT_LOCK_RETRY_RUNTIME.random,
-          attempt: async (lockTimeoutMs) => {
+          attempt: async (lockTimeoutMs, attempt) => {
+            if (attempt > 1) {
+              onRetry();
+            }
             await setDedicatedLockTimeout(connection, lockTimeoutMs);
             try {
               await connection.execute(statement[LOCK_TAKING]);
@@ -456,6 +465,10 @@ export const runGatedTableWork = async ({
   lockRetry,
 }: GatedTableWorkOptions): Promise<OnlineMigrationOutcome> => {
   const observer = await reserveObserver();
+  let statementRetries = 0;
+  const onRetry = () => {
+    statementRetries += 1;
+  };
   try {
     const runtime = createOnlineIndexGate({
       ...gate,
@@ -466,25 +479,49 @@ export const runGatedTableWork = async ({
       kind,
     });
     try {
-      const attempt = await Result.tryPromise({
-        try: async () =>
-          await runtime.attempt(
-            async (guardedConnection) =>
-              await work(sessionOn(guardedConnection, target, lockRetry)),
-          ),
-        catch: (cause) => cause,
-      });
-      if (attempt.isErr()) {
-        if (!(attempt.error instanceof OnlineLockRetryDeferred)) {
-          throw attempt.error;
-        }
-        return {
-          type: "deferred",
-          step: target.name,
-          retryAfterMs: runtime.retryAfterMs,
-        };
+      const backend = (
+        await connection.query("SELECT pg_backend_pid() AS pid")
+      ).at(0);
+      const pid = isRecord(backend) ? backend["pid"] : null;
+      if (typeof pid !== "number") {
+        panic("Invalid migration backend pid response");
       }
-      const outcome = attempt.value;
+      const outcome = await observeMigrationLockAttempt({
+        observer,
+        pid,
+        phase: "online",
+        step: target.name,
+        table: target.tableName,
+        telemetry: gate.lockTelemetry ?? createMigrationLockTelemetry(),
+        cancelWork: connection.terminate,
+        additionalRetries: () => statementRetries,
+        work: async () => {
+          const attempt = await Result.tryPromise({
+            try: async () =>
+              await runtime.attempt(
+                async (guardedConnection) =>
+                  await work(
+                    sessionOn({
+                      connection: guardedConnection,
+                      target,
+                      lockRetry,
+                      onRetry,
+                    }),
+                  ),
+              ),
+            catch: (cause) => cause,
+          });
+          if (attempt.isOk()) {
+            return attempt.value;
+          }
+          if (attempt.error instanceof OnlineLockRetryDeferred) {
+            return "retry";
+          }
+          throw attempt.error;
+        },
+        outcome: (result) => (result === "done" ? "done" : "deferred"),
+      });
+
       switch (outcome) {
         case "done":
           return { type: "complete" };
@@ -536,7 +573,9 @@ export const createUngatedTableGateForTests = (
   lockRetry?: GatedTableWorkOptions["lockRetry"],
 ): OnlineTableGate => ({
   run: async ({ target, work }) => {
-    await work(sessionOn(connection, target, lockRetry));
+    await work(
+      sessionOn({ connection, target, lockRetry, onRetry: () => undefined }),
+    );
     return { type: "complete" };
   },
 });
