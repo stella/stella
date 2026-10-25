@@ -80,6 +80,16 @@ const leafEntries = (
   return entries;
 };
 
+test("capability list exposes free-text search", () => {
+  const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const list = findLeaf(tree, ["capability", "list"]);
+
+  expect(flagFor(list ?? errorSpec(), "--query")).toMatchObject({
+    kind: "string",
+    required: false,
+  });
+});
+
 const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
   spec.flags.find((f) => f.flag === flag);
 
