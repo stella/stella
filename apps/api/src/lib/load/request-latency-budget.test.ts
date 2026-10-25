@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { readFailureBrand } from "@stll/errors";
 
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   remainingRequestBudgetMs,
   requestBoundedTimeoutMs,
+  requestBudgetExpiry,
   runBoundedRequestStep,
   runWithinRequestLatencyBudget,
 } from "@/api/lib/load/request-latency-budget";
@@ -63,6 +65,39 @@ describe("request latency budget", () => {
           requestBoundedTimeoutMs(30_000),
         );
         expect(nested).toBeLessThanOrEqual(8000);
+      },
+    );
+  });
+});
+
+describe("request budget expiry", () => {
+  test("names nothing outside a scope or while budget remains", () => {
+    const cause = new Error("statement cancelled");
+    expect(requestBudgetExpiry(cause)).toBeUndefined();
+    runWithinRequestLatencyBudget(
+      { label: "read_statute", budgetMs: 2000 },
+      () => {
+        expect(requestBudgetExpiry(cause)).toBeUndefined();
+      },
+    );
+  });
+
+  test("reports a failure after the deadline as the budget's, cause kept", () => {
+    const cause = new Error("connection ended by the server");
+    runWithinRequestLatencyBudget(
+      { label: "read_statute", budgetMs: 0 },
+      () => {
+        const expiry = requestBudgetExpiry(cause);
+        expect(expiry).toBeInstanceOf(TimeoutError);
+        expect(expiry).toMatchObject({
+          label: "read_statute",
+          timeoutMs: 0,
+          cause,
+        });
+        expect(readFailureBrand(expiry)).toEqual({
+          reason: "timeout_budgeted",
+          source: "instance",
+        });
       },
     );
   });

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL as SqlFragment } from "drizzle-orm";
 
@@ -17,7 +17,10 @@ import {
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
-import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
+import {
+  requestBoundedTimeoutMs,
+  requestBudgetExpiry,
+} from "@/api/lib/load/request-latency-budget";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -394,8 +397,13 @@ export const configureReadTransaction = async (
     panic("Public-law read guards require read-only and a statement timeout");
   }
   const requestTimeoutMs = getPublicReadStatementTimeoutMs();
+  // Inside a request latency scope the whole transaction ends at the
+  // request's deadline. `statement_timeout` alone restarts with every
+  // statement, so a run of statements could still outlast the request;
+  // `transaction_timeout` counts them together and ends the session even
+  // between statements. Zero outside a scope: no deadline of the request's.
+  const requestDeadlineMs = requestBoundedTimeoutMs(0);
   await setSharedReadTransactionGuards(tx, {
-    // A statement never outlives the request latency budget it serves.
     statementTimeoutMs: requestBoundedTimeoutMs(
       requestTimeoutMs === undefined
         ? statementTimeoutMs
@@ -405,6 +413,9 @@ export const configureReadTransaction = async (
     ...(idleInTransactionTimeoutMs === undefined
       ? {}
       : { idleInTransactionTimeoutMs }),
+    ...(requestDeadlineMs > 0
+      ? { transactionTimeoutMs: requestDeadlineMs }
+      : {}),
   });
 };
 
@@ -504,6 +515,11 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
  * Public handlers intentionally do not receive `scopedDb`, `session`, or
  * workspace context. Requiring this branded wrapper keeps public reads from
  * accidentally depending on authenticated route macros.
+ *
+ * Inside a request latency scope the guards end the transaction at the
+ * request's deadline, and a failure that surfaces once the budget is spent
+ * (the cancelled statement, or the session the server ended) is reported as
+ * the budget's `timeout_budgeted` TimeoutError, the database error its cause.
  */
 export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
@@ -511,9 +527,17 @@ export const publicLawReadDb = async <T>(
 ): Promise<T> => {
   const isolation = options?.isolation ?? "read-committed";
   const database = await getPublicLawDatabase();
-  return await database.transaction(async (tx) => {
+  const transaction = database.transaction(async (tx) => {
     await configureReadTransaction(tx, isolation, publicLawReadGuards());
 
     return await fn(tx);
   });
+  const outcome = await Result.tryPromise({
+    try: async () => await transaction,
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(outcome)) {
+    return outcome.value;
+  }
+  throw requestBudgetExpiry(outcome.error) ?? outcome.error;
 };

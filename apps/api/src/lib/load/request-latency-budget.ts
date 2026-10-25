@@ -68,6 +68,32 @@ export const requestBoundedTimeoutMs = (timeoutMs: number): number => {
 };
 
 /**
+ * A failure that surfaced once the request's budget was spent, as the
+ * budget's own `TimeoutError` (classified `timeout_budgeted`, the original
+ * failure as its cause); undefined while budget remains or outside a scope.
+ *
+ * A dependency the request clamped to its deadline fails in its own terms
+ * (a cancelled statement, a closed connection); this names what ended it.
+ */
+export const requestBudgetExpiry = (
+  cause: unknown,
+): TimeoutError | undefined => {
+  const scope = requestLatencyScope.getStore();
+  if (scope === undefined || remainingRequestBudgetMs() !== 0) {
+    return undefined;
+  }
+  return classifyFailure(
+    new TimeoutError({
+      message: `${scope.label} exceeded its ${String(scope.budgetMs)}ms latency budget`,
+      label: scope.label,
+      timeoutMs: scope.budgetMs,
+      cause,
+    }),
+    "timeout_budgeted",
+  );
+};
+
+/**
  * How an optional request step ended.
  *
  * `degraded` means the step's sub-budget, or the request's own, ran out: the

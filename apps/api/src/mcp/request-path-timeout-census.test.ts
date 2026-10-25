@@ -121,7 +121,7 @@ const readExpression = (text: string, start: number): string => {
  */
 // A property colon follows its name directly; a ternary's ` : ` does not.
 const SITE_PATTERNS = [
-  /\b(?:timeoutMs|deadlineMs|budgetMs|commandTimeoutMs|requestTimeoutMs|statementTimeoutMs):\s*/gu,
+  /\b(?:timeoutMs|deadlineMs|budgetMs|commandTimeoutMs|requestTimeoutMs|statementTimeoutMs|transactionTimeoutMs):\s*/gu,
   /\b(?:timeoutMs|commandTimeoutMs)\s*=(?![=>])\s*/gu,
   /\bAbortSignal\.timeout\(\s*/gu,
 ] as const;
@@ -587,7 +587,7 @@ const CENSUS: readonly CensusEntry[] = [
     http: ["browse", "search", "aggregate", "sitemap"],
     bound: "request",
     onExpiry: "fails-fast",
-    why: "The public-law statement guard; a transaction inside a tool call sets the shorter of it and what is left of the tool's budget.",
+    why: "The public-law statement guard; a transaction inside a tool call sets the shorter of it and what is left of the tool's budget, and ends at the deadline as a whole.",
   },
   {
     site: "apps/api/src/lib/public-law-read-db.ts#requestBoundedTimeoutMs( requestTimeoutMs === undefined ? statementTimeoutMs : Math.min(statementTimeoutMs, requestTimeoutMs), )",
@@ -596,6 +596,14 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "Where the statement guard is clamped to the route class and the request's remaining budget.",
+  },
+  {
+    site: "apps/api/src/lib/public-law-read-db.ts#requestDeadlineMs",
+    path: "request",
+    tools: PUBLIC_LAW_READ_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "The transaction-wide deadline: statement_timeout restarts per statement, so transaction_timeout ends the whole read at the request's deadline.",
   },
 ];
 

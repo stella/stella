@@ -466,6 +466,9 @@ describe("public case-law route boundary", () => {
     expect(sharedReadGuards).toContain(
       "set_config('idle_in_transaction_session_timeout',",
     );
+    // Inside a request latency scope the transaction ends at its deadline.
+    expect(sharedReadGuards).toContain("set_config('transaction_timeout',");
+    expect(readConfiguration).toContain("transactionTimeoutMs:");
     expect(validation).toContain("configureReadTransaction(");
     expect(validation).toContain("validateExternalPublicLawDatabase(tx)");
     expect(validation.indexOf("configureReadTransaction(")).toBeLessThan(
