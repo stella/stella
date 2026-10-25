@@ -67,7 +67,7 @@ describe("official VAT exchange rates", () => {
       }),
     );
     expect(rate.effectiveDate).toBe("2026-10-23");
-    expect(rate.rate).toBe("0.8");
+    expect(rate.rate).toBe("1.25");
     expect(seen.at(0)).toContain("endPeriod=2026-10-25");
   });
 

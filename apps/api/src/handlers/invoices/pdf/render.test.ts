@@ -131,6 +131,7 @@ describe("invoice PDF", () => {
       homeCurrency: "CZK",
       rate: "25",
       source: "CNB",
+      rateLine: "1 EUR = 25 CZK",
       homeVatMinor: 250_000,
       totalLabel: "DPH v domácí měně celkem",
     },
@@ -139,8 +140,10 @@ describe("invoice PDF", () => {
       language: "sk",
       currency: "USD",
       homeCurrency: "EUR",
-      rate: "0.8",
+      // ECB quotes the foreign currency per euro, as published.
+      rate: "1.25",
       source: "ECB",
+      rateLine: "1 EUR = 1,25 USD",
       homeVatMinor: 8000,
       totalLabel: "DPH v domácej mene spolu",
     },
@@ -151,6 +154,7 @@ describe("invoice PDF", () => {
       homeCurrency: "PLN",
       rate: "4.3",
       source: "NBP",
+      rateLine: "1 EUR = 4,3 PLN",
       homeVatMinor: 43_000,
       totalLabel: "Łączny VAT w walucie krajowej",
     },
@@ -163,6 +167,7 @@ describe("invoice PDF", () => {
       homeCurrency,
       rate,
       source,
+      rateLine,
       homeVatMinor,
       totalLabel,
     }) => {
@@ -205,7 +210,7 @@ describe("invoice PDF", () => {
       });
       expect(text).toContain(totalLabel);
       expect(text).toContain(source);
-      expect(text).toContain(`1 ${currency}`);
+      expect(text.replace(/[\u00a0\u202f]/gu, " ")).toContain(rateLine);
       expect(text).toContain(
         formatMoneyCents({
           amountCents: homeVatMinor,

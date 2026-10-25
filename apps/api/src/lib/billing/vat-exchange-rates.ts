@@ -1,7 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { normalizeVatExchangeRate, type VatRateCountry } from "@stll/invoicing";
+import {
+  normalizeVatExchangeRate,
+  type VatRateCountry,
+  type VatRateSource,
+} from "@stll/invoicing";
 import { Temporal } from "@stll/time";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -23,8 +27,9 @@ export class VatRateNotPublishedError extends TaggedError(
 )<{ message: string; availableFrom: string }> {}
 
 export type VatExchangeRate = {
+  /** As the source publishes it; VAT_RATE_QUOTE_BASIS says which way it reads. */
   rate: string;
-  source: "CNB" | "ECB" | "NBP";
+  source: VatRateSource;
   effectiveDate: string;
   sourceReference: string | null;
 };
@@ -195,7 +200,7 @@ const notPublished = (availableFrom: string) =>
     }),
   );
 
-type RateSource = VatExchangeRate["source"];
+type RateSource = VatRateSource;
 
 /** Gregorian Easter Sunday (anonymous Gregorian computus). */
 const easterSunday = (year: number) => {
@@ -354,8 +359,7 @@ const fetchCnbRate = async ({
   }
   const normalized = normalizeRate({
     quote: row[4].replace(",", "."),
-    foreignUnits: BigInt(row[2]),
-    direction: "home_per_foreign",
+    units: BigInt(row[2]),
   });
   if (Result.isError(normalized)) {
     return normalized;
@@ -421,8 +425,7 @@ const fetchEcbRate = async ({
   }
   const normalized = normalizeRate({
     quote: String(latest.quote),
-    foreignUnits: 1n,
-    direction: "foreign_per_home",
+    units: 1n,
   });
   if (Result.isError(normalized)) {
     return normalized;
@@ -477,8 +480,7 @@ const fetchNbpRate = async ({
   }
   const normalized = normalizeRate({
     quote: String(rate.mid),
-    foreignUnits: 1n,
-    direction: "home_per_foreign",
+    units: 1n,
   });
   if (Result.isError(normalized)) {
     return normalized;

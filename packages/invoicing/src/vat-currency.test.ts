@@ -69,27 +69,38 @@ describe("VAT currency", () => {
     ).toBe("2026-10-31");
   });
 
-  test("normalizes units and inverts ECB quotes without floating point", () => {
-    expect(
-      normalizeVatExchangeRate({
-        quote: "15.25",
-        foreignUnits: 100n,
-        direction: "home_per_foreign",
-      }),
-    ).toBe("0.1525");
-    expect(
-      normalizeVatExchangeRate({
-        quote: "1.25",
-        foreignUnits: 1n,
-        direction: "foreign_per_home",
-      }),
-    ).toBe("0.8");
+  test("normalizes a quote to one unit without floating point", () => {
+    expect(normalizeVatExchangeRate({ quote: "15.25", units: 100n })).toBe(
+      "0.1525",
+    );
+    expect(normalizeVatExchangeRate({ quote: "1.25", units: 1n })).toBe("1.25");
+  });
+
+  test("an ECB quote converts by one exact division, so a half cent still rounds up", () => {
+    // 3 US cents at 1.2 USD/EUR is exactly 2.5 euro cents; a pre-rounded
+    // inverse (0.833333333333) would give 2.
+    const result = homeCurrencyVat({
+      country: "SK",
+      rate: "1.2",
+      source: "ECB",
+      vatBreakdown: [
+        {
+          vatRateBps: 2300,
+          vatTreatment: "domestic_vat",
+          netAmountMinor: cents(13),
+          vatAmountMinor: cents(3),
+          grossAmountMinor: cents(16),
+        },
+      ],
+    });
+    expect(Number(result.totalVatAmountMinor)).toBe(3);
   });
 
   test("rounds every VAT bucket half-up to the minor unit", () => {
     const result = homeCurrencyVat({
       country: "PL",
       rate: "4.005",
+      source: "NBP",
       vatBreakdown: [
         {
           vatRateBps: 2300,
@@ -109,6 +120,7 @@ describe("VAT currency", () => {
         homeCurrencyVat({
           country: "PL",
           rate,
+          source: "NBP",
           vatBreakdown: [
             {
               vatRateBps: 2300,
@@ -133,10 +145,12 @@ describe("VAT currency", () => {
           maxLength: 20,
         }),
         fc.integer({ min: 1, max: 100_000 }),
-        (amounts, rateThousandths) => {
+        fc.constantFrom("CNB", "ECB"),
+        (amounts, rateThousandths, source) => {
           const result = homeCurrencyVat({
-            country: "CZ",
+            country: source === "ECB" ? "SK" : "CZ",
             rate: `${Math.floor(rateThousandths / 1000)}.${String(rateThousandths % 1000).padStart(3, "0")}`,
+            source,
             vatBreakdown: amounts.map((amount) => ({
               vatRateBps: 2100,
               vatTreatment: "domestic_vat",
@@ -146,14 +160,21 @@ describe("VAT currency", () => {
             })),
           });
           for (const [index, bucket] of result.byRate.entries()) {
-            const exactThousandths =
-              BigInt(amounts[index] ?? 0) * BigInt(rateThousandths);
-            const roundedThousandths = BigInt(bucket.vatAmountMinor) * 1000n;
-            const error = roundedThousandths - exactThousandths;
+            const amount = BigInt(amounts[index] ?? 0);
+            const rate = BigInt(rateThousandths);
+            // The exact conversion is numerator / denominator.
+            const [numerator, denominator] =
+              source === "ECB"
+                ? [amount * 1000n, rate]
+                : [amount * rate, 1000n];
+            const error =
+              BigInt(bucket.vatAmountMinor) * denominator - numerator;
             // Within half a minor unit, and a tie rounds away from zero.
-            expect(error * 2n <= 1000n && error * 2n >= -1000n).toBe(true);
-            if (error * 2n === 1000n || error * 2n === -1000n) {
-              expect(error > 0n === exactThousandths > 0n).toBe(true);
+            expect(
+              error * 2n <= denominator && error * 2n >= -denominator,
+            ).toBe(true);
+            if (error * 2n === denominator || error * 2n === -denominator) {
+              expect(error > 0n === numerator > 0n).toBe(true);
             }
           }
           expect(Number(result.totalVatAmountMinor)).toBe(

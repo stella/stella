@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
 import {
@@ -10,7 +10,9 @@ import {
   type InvoiceDocumentType,
   type InvoicePartyId,
   invoiceSellerCountryOf,
+  isVatRateSource,
   legalNotesFor,
+  VAT_RATE_QUOTE_BASIS,
   type VatTreatment,
 } from "@stll/invoicing";
 import { formatMoneyCents } from "@stll/money";
@@ -186,6 +188,68 @@ const party = ({
   ]),
 });
 
+type HomeCurrencyVatBlockOptions = {
+  options: RenderInvoicePdfOptions;
+  country: ReturnType<typeof invoiceCountryOf>;
+  lang: RenderInvoicePdfOptions["invoice"]["language"];
+  labelFor: (row: { vatTreatment: VatTreatment; vatRateBps: number }) => string;
+  date: (value: string) => string;
+};
+
+/** The home-currency VAT block of an invoice that stores an official rate. */
+const homeCurrencyVatBlock = ({
+  options: { invoice, totals },
+  country,
+  lang,
+  labelFor,
+  date,
+}: HomeCurrencyVatBlockOptions) => {
+  const profile = INVOICE_COUNTRY_PROFILES[country];
+  if (
+    invoice.vatExchangeRate === null ||
+    invoice.vatExchangeRate === undefined ||
+    invoice.vatExchangeRateSource === null ||
+    invoice.vatExchangeRateSource === undefined ||
+    invoice.vatExchangeRateDate === null ||
+    invoice.vatExchangeRateDate === undefined ||
+    profile.vatCurrency === null ||
+    (country !== "CZ" && country !== "SK" && country !== "PL")
+  ) {
+    return null;
+  }
+  const source = invoice.vatExchangeRateSource;
+  if (!isVatRateSource(source)) {
+    return panic(`Unknown VAT exchange-rate source: ${source}`);
+  }
+  const converted = homeCurrencyVat({
+    country,
+    rate: invoice.vatExchangeRate,
+    source,
+    vatBreakdown: totals.vatBreakdown,
+  });
+  const homeMoney = (amountCents: number) =>
+    formatMoneyCents({
+      amountCents,
+      currency: profile.vatCurrency,
+      locale: lang,
+    });
+  const displayRate = formatExchangeRate(invoice.vatExchangeRate, lang);
+  return {
+    total: homeMoney(converted.totalVatAmountMinor),
+    breakdown: converted.byRate.map((row) => ({
+      label: labelFor(row),
+      vat: homeMoney(row.vatAmountMinor),
+    })),
+    // The rate reads the way its source publishes it.
+    rate:
+      VAT_RATE_QUOTE_BASIS[source] === "home_per_foreign"
+        ? `1 ${invoice.currency} = ${displayRate} ${profile.vatCurrency}`
+        : `1 ${profile.vatCurrency} = ${displayRate} ${invoice.currency}`,
+    source: invoice.vatExchangeRateSource,
+    date: date(invoice.vatExchangeRateDate),
+  };
+};
+
 export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
   const { invoice, seller, totals, originalNumber } = options;
   const lang = invoice.language;
@@ -208,42 +272,14 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     outside_scope: l.outsideScope,
     not_vat_payer: l.nonPayer,
   } satisfies Record<VatTreatment, string>;
-  const homeVat = (() => {
-    if (
-      invoice.vatExchangeRate === null ||
-      invoice.vatExchangeRate === undefined ||
-      invoice.vatExchangeRateSource === null ||
-      invoice.vatExchangeRateSource === undefined ||
-      invoice.vatExchangeRateDate === null ||
-      invoice.vatExchangeRateDate === undefined ||
-      profile.vatCurrency === null ||
-      (country !== "CZ" && country !== "SK" && country !== "PL")
-    ) {
-      return null;
-    }
-    const converted = homeCurrencyVat({
-      country,
-      rate: invoice.vatExchangeRate,
-      vatBreakdown: totals.vatBreakdown,
-    });
-    const homeMoney = (amountCents: number) =>
-      formatMoneyCents({
-        amountCents,
-        currency: profile.vatCurrency,
-        locale: lang,
-      });
-    const displayRate = formatExchangeRate(invoice.vatExchangeRate, lang);
-    return {
-      total: homeMoney(converted.totalVatAmountMinor),
-      breakdown: converted.byRate.map((row) => ({
-        label: `${treatments[row.vatTreatment]} ${vatRate(row.vatRateBps)}`,
-        vat: homeMoney(row.vatAmountMinor),
-      })),
-      rate: `1 ${invoice.currency} = ${displayRate} ${profile.vatCurrency}`,
-      source: invoice.vatExchangeRateSource,
-      date: date(invoice.vatExchangeRateDate),
-    };
-  })();
+  const homeVat = homeCurrencyVatBlock({
+    options,
+    country,
+    lang,
+    labelFor: (row) =>
+      `${treatments[row.vatTreatment]} ${vatRate(row.vatRateBps)}`,
+    date,
+  });
 
   let qr: string | null = null;
   let qrWidthMm = 32;

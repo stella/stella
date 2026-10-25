@@ -95,37 +95,51 @@ export const formatExchangeRate = (rate: string, locale: string) => {
   return significant === "" ? grouped : `${grouped}${separator}${significant}`;
 };
 
-/** Converts a source quote to home-currency units per one invoice-currency unit. */
+/**
+ * How each official source quotes its rate. ČNB and NBP give home currency per
+ * foreign unit; ECB gives the foreign currency per euro. The quote is stored
+ * as published so a conversion divides once instead of rounding an inverse.
+ */
+export const VAT_RATE_QUOTE_BASIS = {
+  CNB: "home_per_foreign",
+  ECB: "foreign_per_home",
+  NBP: "home_per_foreign",
+} as const;
+
+export type VatRateSource = keyof typeof VAT_RATE_QUOTE_BASIS;
+
+export const isVatRateSource = (value: string): value is VatRateSource =>
+  Object.hasOwn(VAT_RATE_QUOTE_BASIS, value);
+
+/** A source quote per one unit of the quoted currency (ČNB quotes 100 JPY). */
 export const normalizeVatExchangeRate = (input: {
   quote: string;
-  /** Units of the invoice currency the quote is given for (ČNB quotes 100 JPY). */
-  foreignUnits: bigint;
-  direction: "home_per_foreign" | "foreign_per_home";
+  units: bigint;
   precision?: number;
 }): string => {
   const parsed = decimal(input.quote);
   const precision = input.precision ?? 12;
-  const scaled =
-    input.direction === "home_per_foreign"
-      ? divideHalfUp(
-          parsed.coefficient * powerOfTen(precision),
-          powerOfTen(parsed.scale) * input.foreignUnits,
-        )
-      : divideHalfUp(
-          powerOfTen(parsed.scale + precision) * input.foreignUnits,
-          parsed.coefficient,
-        );
+  const scaled = divideHalfUp(
+    parsed.coefficient * powerOfTen(precision),
+    powerOfTen(parsed.scale) * input.units,
+  );
   const digits = scaled.toString().padStart(precision + 1, "0");
   const fraction = withoutTrailingZeros(digits.slice(-precision));
   const whole = digits.slice(0, -precision);
   return fraction === "" ? whole : `${whole}.${fraction}`;
 };
 
-const convertMinor = (amount: number, rate: Decimal): CentsAmount => {
-  const exact = divideHalfUp(
-    BigInt(amount) * rate.coefficient,
-    powerOfTen(rate.scale),
-  );
+const convertMinor = (
+  amount: number,
+  rate: Decimal,
+  basis: (typeof VAT_RATE_QUOTE_BASIS)[VatRateSource],
+): CentsAmount => {
+  // One exact division, rounded once: amount x rate, or amount / rate when the
+  // source quotes the foreign currency per home unit.
+  const exact =
+    basis === "home_per_foreign"
+      ? divideHalfUp(BigInt(amount) * rate.coefficient, powerOfTen(rate.scale))
+      : divideHalfUp(BigInt(amount) * powerOfTen(rate.scale), rate.coefficient);
   // The shared integer parser owns the bigint-to-number step and its range.
   const minor = parseIntegerToken(exact.toString());
   if (minor.isErr()) {
@@ -137,14 +151,16 @@ const convertMinor = (amount: number, rate: Decimal): CentsAmount => {
 export const homeCurrencyVat = (input: {
   country: VatRateCountry;
   rate: string;
+  source: VatRateSource;
   vatBreakdown: readonly VatBreakdownLine[];
 }) => {
   const rate = decimal(input.rate);
+  const basis = VAT_RATE_QUOTE_BASIS[input.source];
   const byRate = input.vatBreakdown.map((bucket) => ({
     vatRateBps: bucket.vatRateBps,
     vatTreatment: bucket.vatTreatment,
     // PL ustawa o VAT art. 106e ust. 11: PLN tax is rounded half-up to one grosz.
-    vatAmountMinor: convertMinor(bucket.vatAmountMinor, rate),
+    vatAmountMinor: convertMinor(bucket.vatAmountMinor, rate, basis),
   }));
   return {
     byRate,
