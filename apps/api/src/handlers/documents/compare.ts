@@ -519,7 +519,7 @@ export const createDocumentCompareGenerator = (
     ]);
     const documentId = params.documentId;
     const mode = body.mode ?? "strict";
-    const granularity = body.granularity ?? "word";
+    const { granularity } = body;
     const selection = body.selection;
     const targetIds =
       selection.type === "versions"

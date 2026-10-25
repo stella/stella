@@ -53,6 +53,7 @@ import {
   defineMcpToolOutput,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
@@ -1031,38 +1032,44 @@ describe("MCP static tool-set coherence", () => {
 describe("MCP wire schemas under an independent validator", () => {
   const validator = createWireSchemaValidator();
 
-  // Two sources that compact to one published schema are distinct inputs to
-  // the equivalence check, so a contract is keyed by both projections.
-  const contractKey = (
-    contract: Pick<
-      RuntimeMcpToolOutputContract,
-      "outputSchema" | "outputSchemaSource"
-    >,
-  ): string =>
-    JSON.stringify([
-      contract.outputSchema,
-      deriveUncompactedMcpOutputSchema(contract.outputSchemaSource),
-    ]);
+  type ComparedContract = {
+    outputSchema: RuntimeMcpToolOutputContract["outputSchema"];
+    /**
+     * The uncompacted projection of the same contract, advertised the way the
+     * published one is (a write tool's accepts its omitted result too), so
+     * the comparison isolates compaction.
+     */
+    uncompacted: RuntimeMcpToolOutputContract["outputSchema"];
+    tool: string;
+  };
 
   const outputContracts = () => {
-    const contracts = new Map<
-      string,
-      Pick<
-        RuntimeMcpToolOutputContract,
-        "outputSchema" | "outputSchemaSource"
-      > & {
-        tool: string;
-      }
-    >();
+    // Two sources that compact to one published schema are distinct inputs to
+    // the equivalence check, so a contract is keyed by both projections.
+    const contracts = new Map<string, ComparedContract>();
+    const add = (compared: ComparedContract) => {
+      contracts.set(
+        JSON.stringify([compared.outputSchema, compared.uncompacted]),
+        compared,
+      );
+    };
     for (const mode of MCP_MODES) {
-      for (const tool of toMcpTools(listStaticMcpToolDefinitions(mode), {
-        mode,
-      })) {
-        const contract = getStaticMcpToolOutputContract(tool.name, mode);
+      for (const definition of listStaticMcpToolDefinitions(mode)) {
+        const contract = getStaticMcpToolOutputContract(definition.name, mode);
         if (contract !== undefined) {
-          contracts.set(contractKey(contract), {
-            tool: `${mode}/${tool.name}`,
-            ...contract,
+          add({
+            tool: `${mode}/${definition.name}`,
+            outputSchema: contract.outputSchema,
+            uncompacted: advertisedMcpOutputSchema({
+              contract: {
+                ...contract,
+                outputSchema: deriveUncompactedMcpOutputSchema(
+                  contract.outputSchemaSource,
+                ),
+              },
+              access: definition.access,
+              compaction: "none",
+            }),
           });
         }
       }
@@ -1071,9 +1078,12 @@ describe("MCP wire schemas under an independent validator", () => {
       DYNAMIC_TOOL_FAMILY_POLICIES,
     )) {
       if (policy.owner === "stella") {
-        contracts.set(contractKey(policy.output), {
+        add({
           tool: `family/${family}`,
-          ...policy.output,
+          outputSchema: policy.output.outputSchema,
+          uncompacted: deriveUncompactedMcpOutputSchema(
+            policy.output.outputSchemaSource,
+          ),
         });
       }
     }
@@ -1103,12 +1113,7 @@ describe("MCP wire schemas under an independent validator", () => {
 
   test("every output schema accepts exactly what its uncompacted projection accepts", () => {
     let compacted = 0;
-    for (const {
-      tool,
-      outputSchema,
-      outputSchemaSource,
-    } of outputContracts()) {
-      const uncompacted = deriveUncompactedMcpOutputSchema(outputSchemaSource);
+    for (const { tool, outputSchema, uncompacted } of outputContracts()) {
       if (JSON.stringify(uncompacted) === JSON.stringify(outputSchema)) {
         continue;
       }

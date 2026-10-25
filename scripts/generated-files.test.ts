@@ -953,6 +953,15 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
   }
 });
 
+test.each([
+  "apps/api/src/mcp/web-handoff-link-contract.ts",
+  "apps/api/src/mcp/write-result-omission.ts",
+])("app contracts follow their advertised output owner %s", (file) => {
+  expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
+    "mcp-app-contracts",
+  );
+});
+
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ciGeneratedStepRun(
     "CLI sharded registry and derived runtime guard",

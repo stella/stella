@@ -1219,6 +1219,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for the external preview routes.",
   },
   {
+    path: "apps/api/src/handlers/invoices/transition.ts",
+    reason:
+      "Issues request authority for the official VAT exchange rate an invoice finalize needs.",
+  },
+  {
     path: "apps/api/src/handlers/legislation/boe/law-structure/get.ts",
     reason: "Direct route boundary for BOE law structure reads.",
   },
