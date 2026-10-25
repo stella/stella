@@ -1852,8 +1852,7 @@ const storedPublishedCaseNumber = ({
  * plain text the portal serves where that endpoint answered instead.
  */
 type StoredDocument =
-  | { type: "html"; html: string }
-  | { type: "text"; text: string };
+  { type: "html"; html: string } | { type: "text"; text: string };
 
 const storedDocumentOf = (
   raw: string,

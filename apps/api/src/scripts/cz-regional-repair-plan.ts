@@ -216,8 +216,7 @@ export type CzRegionalRepairReport = {
 };
 
 export type CzRegionalRangeCheck =
-  | { type: "valid" }
-  | { type: "invalid"; message: string };
+  { type: "valid" } | { type: "invalid"; message: string };
 
 type RangeCheckInput = {
   from: string;

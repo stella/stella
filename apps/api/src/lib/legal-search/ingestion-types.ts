@@ -98,8 +98,7 @@ export type CzechDeclinedDecisionJudge = {
 
 /** A judge as one decision names them, before the roster is consulted. */
 export type DecisionJudgeInput =
-  | PrintedDecisionJudge
-  | CzechDeclinedDecisionJudge;
+  PrintedDecisionJudge | CzechDeclinedDecisionJudge;
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -286,8 +285,7 @@ export type RawIngestionResult = {
    * address it wrote them at; the adapter states only the bytes.
    */
   sourceRawObjects?:
-    | Readonly<Record<string, SourceRawObjectPayload>>
-    | undefined;
+    Readonly<Record<string, SourceRawObjectPayload>> | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
 };
@@ -335,8 +333,7 @@ type PlainTextResultFields = {
 };
 
 type PlainTextOutcome =
-  | { type: "accepted" }
-  | { type: "item_build_failed"; error: PlainTextError };
+  { type: "accepted" } | { type: "item_build_failed"; error: PlainTextError };
 
 export type IngestionResult = Omit<
   RawIngestionResult,
@@ -1305,8 +1302,7 @@ export type SourceReconciliation = SourceSliceWalk & {
   ) => Promise<ReconciliationBuildOutcome>;
   /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
   createSliceBuildDecision?:
-    | (() => SourceReconciliation["buildDecision"])
-    | undefined;
+    (() => SourceReconciliation["buildDecision"]) | undefined;
 };
 
 /**
@@ -1498,9 +1494,7 @@ export type BacklogSourceSurface = {
  * because the inventory only ever sees the pages already fetched.
  */
 export type SourceSurfaceDisposition =
-  | StoredSourceSurface
-  | ExcludedSourceSurface
-  | BacklogSourceSurface;
+  StoredSourceSurface | ExcludedSourceSurface | BacklogSourceSurface;
 
 /** A response the crawl fetches with the decision and keeps as `part`. */
 export const storedSourceSurface = (part: string): StoredSourceSurface => ({

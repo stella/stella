@@ -198,9 +198,7 @@ type CzUohsQuarantineReason =
  * name again.
  */
 type CzUohsRecordIdentity =
-  | CzUohsKeyedIdentity
-  | CzUohsQuarantinedIdentity
-  | { type: "no-stable-field" };
+  CzUohsKeyedIdentity | CzUohsQuarantinedIdentity | { type: "no-stable-field" };
 
 type CzUohsKeyedIdentity = {
   type: "keyed";
