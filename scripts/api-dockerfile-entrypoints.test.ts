@@ -463,6 +463,7 @@ test("no bundled entrypoint reaches a package that loads its native binding by a
 // `if (import.meta.main)` block, now in a chunk that is never the main
 // module, would never run: the script would exit 0 having done nothing. Code
 // another module needs lives in a module of its own, as replay-tick-command.ts.
+// timeout: bundles every API entrypoint, which takes tens of seconds on CI
 test("no bundled module imports another entrypoint", async () => {
   const result = await buildEntrypointGraph();
   expect(result.success).toBe(true);
