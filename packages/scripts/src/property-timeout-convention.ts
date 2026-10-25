@@ -1,4 +1,11 @@
-import ts from "typescript6";
+import {
+  type Identifier,
+  type Node,
+  type ObjectExpression,
+  parseSource,
+  type Program,
+  walk,
+} from "./syntax-tree";
 
 const BUN_TIMEOUT_APIS = new Set([
   "afterAll",
@@ -11,32 +18,30 @@ const BUN_TIMEOUT_APIS = new Set([
 ]);
 const BUN_JEST_BINDING = "jest";
 
-const rootIdentifier = (
-  expression: ts.Expression,
-): ts.Identifier | undefined => {
-  if (ts.isIdentifier(expression)) {
+const rootIdentifier = (expression: Node): Identifier | undefined => {
+  if (expression.type === "Identifier") {
     return expression;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return rootIdentifier(expression.expression);
+  if (expression.type === "MemberExpression") {
+    return rootIdentifier(expression.object);
   }
-  if (ts.isElementAccessExpression(expression)) {
-    return rootIdentifier(expression.expression);
-  }
-  if (ts.isCallExpression(expression)) {
-    return rootIdentifier(expression.expression);
+  if (expression.type === "CallExpression") {
+    return rootIdentifier(expression.callee);
   }
   return undefined;
 };
 
-const isPropertyTestTimeoutCall = (expression: ts.Expression): boolean =>
-  ts.isCallExpression(expression) &&
-  ts.isIdentifier(expression.expression) &&
-  expression.expression.text === "propertyTestTimeout";
+const isPropertyTestTimeoutCall = (expression: Node): boolean =>
+  expression.type === "CallExpression" &&
+  expression.callee.type === "Identifier" &&
+  expression.callee.name === "propertyTestTimeout";
 
-const propertyName = (name: ts.PropertyName): string | undefined => {
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) {
-    return name.text;
+const propertyName = (name: Node): string | undefined => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  if (name.type === "Literal" && typeof name.value === "string") {
+    return name.value;
   }
   return undefined;
 };
@@ -46,58 +51,59 @@ type BunTestBindings = {
   namespaces: Set<string>;
 };
 
-const bunTestBindings = (sourceFile: ts.SourceFile): BunTestBindings => {
+const bunTestBindings = (sourceFile: Program): BunTestBindings => {
   const named = new Map<string, string>();
   const namespaces = new Set<string>();
-  for (const statement of sourceFile.statements) {
+  for (const statement of sourceFile.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "bun:test" ||
-      statement.importClause?.namedBindings === undefined
+      statement.type !== "ImportDeclaration" ||
+      statement.source.value !== "bun:test"
     ) {
       continue;
     }
-    const { namedBindings } = statement.importClause;
-    if (ts.isNamespaceImport(namedBindings)) {
-      namespaces.add(namedBindings.name.text);
-      continue;
-    }
-    for (const element of namedBindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
+    for (const element of statement.specifiers) {
+      if (element.type === "ImportNamespaceSpecifier") {
+        namespaces.add(element.local.name);
+        continue;
+      }
+      if (element.type !== "ImportSpecifier") {
+        continue;
+      }
+      const importedName = propertyName(element.imported);
       if (
-        BUN_TIMEOUT_APIS.has(importedName) ||
-        importedName === BUN_JEST_BINDING
+        importedName !== undefined &&
+        (BUN_TIMEOUT_APIS.has(importedName) ||
+          importedName === BUN_JEST_BINDING)
       ) {
-        named.set(element.name.text, importedName);
+        named.set(element.local.name, importedName);
       }
     }
   }
   return { named, namespaces };
 };
 
-const memberPath = (
-  expression: ts.Expression,
-  root: string,
-): string[] | undefined => {
-  if (ts.isIdentifier(expression)) {
-    return expression.text === root ? [] : undefined;
+const memberPath = (expression: Node, root: string): string[] | undefined => {
+  if (expression.type === "Identifier") {
+    return expression.name === root ? [] : undefined;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    const path = memberPath(expression.expression, root);
-    path?.push(expression.name.text);
-    return path;
-  }
-  if (ts.isElementAccessExpression(expression)) {
-    if (!ts.isStringLiteral(expression.argumentExpression)) {
+  if (expression.type === "MemberExpression") {
+    if (
+      expression.computed &&
+      (expression.property.type !== "Literal" ||
+        typeof expression.property.value !== "string")
+    ) {
       return undefined;
     }
-    const path = memberPath(expression.expression, root);
-    path?.push(expression.argumentExpression.text);
+    const name = propertyName(expression.property);
+    if (name === undefined) {
+      return undefined;
+    }
+    const path = memberPath(expression.object, root);
+    path?.push(name);
     return path;
   }
-  if (ts.isCallExpression(expression)) {
-    return memberPath(expression.expression, root);
+  if (expression.type === "CallExpression") {
+    return memberPath(expression.callee, root);
   }
   return undefined;
 };
@@ -112,74 +118,72 @@ export const collectPropertyTimeoutViolations = ({
   relativePath,
   source,
 }: CollectTimeoutViolationsOptions): string[] => {
-  const sourceFile = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const bindings = bunTestBindings(sourceFile);
+  const parsed = parseSource(relativePath, source);
+  const bindings = bunTestBindings(parsed.program);
   const violations: string[] = [];
-  const report = (node: ts.Node, api: string) => {
-    const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+  const report = (node: Node, api: string) => {
+    const { line } = parsed.locate(node.start);
     violations.push(
-      `${relativePath}:${line + 1}: ${api} timeout is not factor-scaled`,
+      `${relativePath}:${line}: ${api} timeout is not factor-scaled`,
     );
   };
 
-  const inspectOptions = (options: ts.ObjectLiteralExpression, api: string) => {
+  const inspectOptions = (options: ObjectExpression, api: string) => {
     for (const member of options.properties) {
       if (
-        ts.isPropertyAssignment(member) &&
-        propertyName(member.name) === "timeout"
+        member.type === "Property" &&
+        !member.shorthand &&
+        !member.method &&
+        !member.computed &&
+        member.kind === "init" &&
+        propertyName(member.key) === "timeout"
       ) {
-        if (!isPropertyTestTimeoutCall(member.initializer)) {
-          report(member.initializer, api);
+        if (!isPropertyTestTimeoutCall(member.value)) {
+          report(member.value, api);
         }
         continue;
       }
       if (
-        ts.isShorthandPropertyAssignment(member) &&
-        member.name.text === "timeout"
+        member.type === "Property" &&
+        member.shorthand &&
+        propertyName(member.key) === "timeout"
       ) {
         report(member, api);
         continue;
       }
-      if (!ts.isSpreadAssignment(member)) {
+      if (member.type !== "SpreadElement") {
         continue;
       }
-      if (ts.isObjectLiteralExpression(member.expression)) {
-        inspectOptions(member.expression, api);
+      if (member.argument.type === "ObjectExpression") {
+        inspectOptions(member.argument, api);
         continue;
       }
-      report(member.expression, api);
+      report(member.argument, api);
     }
   };
 
-  const visit = (node: ts.Node) => {
-    if (!ts.isCallExpression(node)) {
-      ts.forEachChild(node, visit);
+  walk(parsed.program, (node, ancestors) => {
+    if (node.type !== "CallExpression") {
       return;
     }
 
     // In `test.each(cases)(...)`, only the outer call has the test signature.
-    if (ts.isCallExpression(node.parent) && node.parent.expression === node) {
-      ts.forEachChild(node, visit);
+    const parent = ancestors.at(-1);
+    if (parent?.type === "CallExpression" && parent.callee === node) {
       return;
     }
 
-    const identifier = rootIdentifier(node.expression);
+    const identifier = rootIdentifier(node.callee);
     const namedApi =
       identifier === undefined
         ? undefined
-        : bindings.named.get(identifier.text);
+        : bindings.named.get(identifier.name);
     const members =
       identifier === undefined
         ? undefined
-        : memberPath(node.expression, identifier.text);
+        : memberPath(node.callee, identifier.name);
     const namespaceMember =
-      identifier !== undefined && bindings.namespaces.has(identifier.text)
+      identifier !== undefined && bindings.namespaces.has(identifier.name)
         ? members?.at(0)
         : undefined;
     const namedJestSetTimeout =
@@ -201,7 +205,6 @@ export const collectPropertyTimeoutViolations = ({
           : undefined);
     }
     if (api === undefined) {
-      ts.forEachChild(node, visit);
       return;
     }
 
@@ -210,12 +213,11 @@ export const collectPropertyTimeoutViolations = ({
       if (timeout !== undefined && !isPropertyTestTimeoutCall(timeout)) {
         report(timeout, api);
       }
-      ts.forEachChild(node, visit);
       return;
     }
 
     for (const argument of node.arguments) {
-      if (ts.isObjectLiteralExpression(argument)) {
+      if (argument.type === "ObjectExpression") {
         inspectOptions(argument, api);
       }
     }
@@ -224,21 +226,17 @@ export const collectPropertyTimeoutViolations = ({
     const positionalTimeout = node.arguments.at(positionalIndex);
     if (
       positionalTimeout !== undefined &&
-      !ts.isObjectLiteralExpression(positionalTimeout) &&
-      !ts.isArrowFunction(positionalTimeout) &&
-      !ts.isFunctionExpression(positionalTimeout) &&
+      positionalTimeout.type !== "ObjectExpression" &&
+      positionalTimeout.type !== "ArrowFunctionExpression" &&
+      positionalTimeout.type !== "FunctionExpression" &&
       !isPropertyTestTimeoutCall(positionalTimeout) &&
       !(
-        ts.isIdentifier(positionalTimeout) &&
-        positionalTimeout.text === "undefined"
+        positionalTimeout.type === "Identifier" &&
+        positionalTimeout.name === "undefined"
       )
     ) {
       report(positionalTimeout, api);
     }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
+  });
   return violations;
 };

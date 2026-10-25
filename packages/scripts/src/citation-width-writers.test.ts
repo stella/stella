@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "./syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../../apps/api");
 const fields = new Set([
@@ -144,185 +145,174 @@ const declarations: Record<string, Declaration> = {
     },
 };
 
-const propertyName = (node: ts.PropertyName) => {
-  if (ts.isIdentifier(node) || ts.isStringLiteral(node)) {
-    return node.text;
+const propertyName = (node: Node) => {
+  if (node.type === "Identifier") {
+    return node.name;
   }
-  if (ts.isComputedPropertyName(node) && ts.isStringLiteral(node.expression)) {
-    return node.expression.text;
-  }
-  return null;
+  return node.type === "Literal" && typeof node.value === "string"
+    ? node.value
+    : null;
 };
 
-const ownerOf = (node: ts.Node): string => {
-  let parent = node;
-  while (!ts.isSourceFile(parent)) {
-    if (ts.isFunctionDeclaration(parent) && parent.name) {
-      return parent.name.text;
+const ownerOf = (ancestors: readonly Node[]): string => {
+  for (const parent of ancestors.toReversed()) {
+    if (parent.type === "FunctionDeclaration" && parent.id) {
+      return parent.id.name;
     }
     if (
-      ts.isVariableDeclaration(parent) &&
-      parent.initializer &&
-      (ts.isArrowFunction(parent.initializer) ||
-        ts.isFunctionExpression(parent.initializer)) &&
-      ts.isIdentifier(parent.name)
+      parent.type === "VariableDeclarator" &&
+      parent.id.type === "Identifier" &&
+      (parent.init?.type === "ArrowFunctionExpression" ||
+        parent.init?.type === "FunctionExpression")
     ) {
-      return parent.name.text;
+      return parent.id.name;
     }
     if (
-      ts.isPropertyAssignment(parent) &&
-      (ts.isArrowFunction(parent.initializer) ||
-        ts.isFunctionExpression(parent.initializer))
+      parent.type === "Property" &&
+      (parent.value.type === "ArrowFunctionExpression" ||
+        parent.value.type === "FunctionExpression")
     ) {
-      return propertyName(parent.name) ?? "computed-producer";
+      return propertyName(parent.key) ?? "computed-producer";
     }
-    parent = parent.parent;
   }
   return "module";
 };
 
-const writtenFields = (node: ts.Expression): string[] | null => {
-  if (!ts.isObjectLiteralExpression(node)) {
+const writtenFields = (node: Node): string[] | null => {
+  if (node.type !== "ObjectExpression") {
     return null;
   }
   if (
     node.properties.some(
       (property) =>
-        ts.isSpreadAssignment(property) ||
-        (ts.isPropertyAssignment(property) &&
-          ts.isComputedPropertyName(property.name) &&
-          propertyName(property.name) === null),
+        property.type === "SpreadElement" ||
+        (property.computed && propertyName(property.key) === null),
     )
   ) {
     return null;
   }
   return node.properties.flatMap((property) => {
-    if (ts.isShorthandPropertyAssignment(property)) {
-      return fields.has(property.name.text) ? [property.name.text] : [];
-    }
-    if (!ts.isPropertyAssignment(property)) {
+    if (property.type !== "Property" || property.method) {
       return [];
     }
-    const name = propertyName(property.name);
+    const name = propertyName(property.key);
     return name && fields.has(name) ? [name] : [];
   });
 };
 
 const discoverWriters = (file: string, text: string): Writer[] => {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const source = parseSource(file, text);
   const aliases = new Map([...tables].map((name) => [name, name]));
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement)) {
+  for (const statement of source.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const binding of bindings.elements) {
-      const imported = binding.propertyName?.text ?? binding.name.text;
-      if (tables.has(imported)) {
-        aliases.set(binding.name.text, imported);
+    for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const imported = propertyName(binding.imported);
+      if (imported && tables.has(imported)) {
+        aliases.set(binding.local.name, imported);
       }
     }
   }
-  const tableOf = (expression: ts.Expression): string | null => {
+  const tableOf = (expression: Node): string | null => {
     if (
-      !ts.isCallExpression(expression) ||
-      !ts.isPropertyAccessExpression(expression.expression)
+      expression.type !== "CallExpression" ||
+      expression.callee.type !== "MemberExpression" ||
+      expression.callee.computed ||
+      expression.callee.property.type !== "Identifier"
     ) {
       return null;
     }
-    const member = expression.expression;
-    if (member.name.text === "insert" || member.name.text === "update") {
-      const target = expression.arguments[0];
-      if (!target) {
-        return null;
-      }
-      if (ts.isIdentifier(target)) {
-        return aliases.get(target.text) ?? null;
+    const member = expression.callee;
+    if (
+      member.property.name === "insert" ||
+      member.property.name === "update"
+    ) {
+      const target = expression.arguments.at(0);
+      if (target?.type === "Identifier") {
+        return aliases.get(target.name) ?? null;
       }
       if (
-        ts.isPropertyAccessExpression(target) &&
-        tables.has(target.name.text)
+        target?.type === "MemberExpression" &&
+        !target.computed &&
+        target.property.type === "Identifier" &&
+        tables.has(target.property.name)
       ) {
-        return target.name.text;
+        return target.property.name;
       }
       return null;
     }
-    return tableOf(member.expression);
+    return tableOf(member.object);
   };
   const found: Writer[] = [];
   const counts = new Map<string, number>();
-  const add = (node: ts.Node, kind: string, payload: string) => {
-    const base = `${file}:${ownerOf(node)}:${kind}`;
-    const count = (counts.get(base) ?? 0) + 1;
-    counts.set(base, count);
-    found.push({
-      id: `${base}:${count}`,
-      file,
-      payload,
-      expression: node.getText(source),
-    });
-  };
-  const visit = (node: ts.Node) => {
+  walk(source.program, (node, ancestors) => {
+    const add = (kind: string, payload: string) => {
+      const base = `${file}:${ownerOf([...ancestors, node])}:${kind}`;
+      const count = (counts.get(base) ?? 0) + 1;
+      counts.set(base, count);
+      found.push({
+        id: `${base}:${count}`,
+        file,
+        payload,
+        expression: text.slice(node.start, node.end),
+      });
+    };
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier"
     ) {
-      const member = node.expression;
-      const table = tableOf(member.expression);
-      let payload = node.arguments[0];
+      const member = node.callee;
+      const name = member.property.name;
+      const table = tableOf(member.object);
+      let payload = node.arguments.at(0);
       if (
         table &&
-        ["values", "set", "onConflictDoUpdate"].includes(member.name.text) &&
+        ["values", "set", "onConflictDoUpdate"].includes(name) &&
         payload
       ) {
         if (
-          member.name.text === "onConflictDoUpdate" &&
-          ts.isObjectLiteralExpression(payload)
+          name === "onConflictDoUpdate" &&
+          payload.type === "ObjectExpression"
         ) {
           payload = payload.properties
             .flatMap((property) =>
-              ts.isPropertyAssignment(property) &&
-              propertyName(property.name) === "set"
-                ? [property.initializer]
+              property.type === "Property" &&
+              !property.method &&
+              !property.shorthand &&
+              propertyName(property.key) === "set"
+                ? [property.value]
                 : [],
             )
             .at(0);
         }
         if (payload) {
           const written = writtenFields(payload);
-          if (
-            member.name.text === "values" ||
-            written === null ||
-            written.length > 0
-          ) {
-            add(
-              node,
-              `orm-${member.name.text}-${table}`,
-              payload.getText(source),
-            );
+          if (name === "values" || written === null || written.length > 0) {
+            add(`orm-${name}-${table}`, text.slice(payload.start, payload.end));
           }
         }
       }
     }
     let sqlText: string | undefined;
-    if (ts.isNoSubstitutionTemplateLiteral(node) || ts.isStringLiteral(node)) {
-      sqlText = node.text;
+    if (node.type === "Literal" && typeof node.value === "string") {
+      sqlText = node.value;
     }
-    if (ts.isTemplateExpression(node)) {
-      sqlText =
-        node.head.text +
-        node.templateSpans.map((span) => ` EXPR ${span.literal.text}`).join("");
+    if (node.type === "TemplateLiteral") {
+      sqlText = node.quasis
+        .map((quasi) => quasi.value.cooked ?? quasi.value.raw)
+        .join(" EXPR ");
     }
     if (sqlText !== undefined && sqlWrite.test(sqlText)) {
-      add(node, "sql", sqlText);
+      add("sql", sqlText);
     }
     sqlWrite.lastIndex = 0;
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return found;
 };
 
@@ -420,25 +410,18 @@ test("column readers and unrelated updates are not citation writers", () => {
 });
 
 const producerText = (source: string, name: string): string => {
-  const file = ts.createSourceFile(
-    "producer.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const file = parseSource("producer.ts", source);
   let result = "";
-  const visit = (node: ts.Node) => {
+  walk(file.program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === name &&
-      node.initializer
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.id.name === name &&
+      node.init
     ) {
-      result = node.initializer.getText(file);
+      result = source.slice(node.init.start, node.init.end);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return result;
 };
 
