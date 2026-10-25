@@ -929,8 +929,8 @@ jobs:
         with:
           name: staging-user-journeys-report
           path: |
-            apps/web/test-results/user-journeys-deployed*/
-            apps/web/test-results/user-journeys-local-stack*/
+            ${{ steps.deployed-journeys.outputs.report-paths }}
+            ${{ steps.mock-journeys.outputs.report-paths }}
             /tmp/api.log
             ${{ runner.temp }}/web-user-journeys.log
           retention-days: 7

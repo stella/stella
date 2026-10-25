@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -477,6 +484,130 @@ test("a launched check runs as a bash step with its env, output and timeout", as
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+// timeout: The signal fixture has a 10 s child watchdog; allow its forced
+// cleanup to finish before the outer test can terminate.
+test("cancellation retains bounded running and buffered failure diagnostics and stops children", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-cancel-"));
+  const scripts = path.join(directory, "scripts");
+  const registry = path.join(directory, ".github/ci-checks");
+  mkdirSync(scripts);
+  mkdirSync(registry, { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  const fifo = path.join(directory, "ready.fifo");
+  const pidFile = path.join(directory, "child.pid");
+  expect(Bun.spawnSync(["mkfifo", fifo]).exitCode).toBe(0);
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  writeFileSync(
+    path.join(registry, "ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        {
+          name: "Blocked first",
+          run: [
+            `printf '%s\\n' discarded-prefix '${"x".repeat(20 * 1024)}' 'Checking fixture-generator'`,
+            "sleep 600 &",
+            'echo $! > "$FIXTURE_CHILD_PID"',
+            'printf "ready\\n" > "$FIXTURE_READY_FIFO"',
+            "wait",
+          ].join("\n"),
+          env: { FIXTURE_CHILD_PID: pidFile, FIXTURE_READY_FIFO: fifo },
+        },
+        {
+          name: "Buffered failure",
+          run: 'read -r ready < "$FIXTURE_READY_FIFO"\necho "::error::buffered fixture failure"\nexit 1',
+          env: { FIXTURE_READY_FIFO: fifo },
+        },
+        ...Array.from({ length: 9 }, (_, index) => ({
+          name: `Buffered log ${index}`,
+          run: `printf '%s\\n' '${(index % 2 === 0 ? "\n" : "é🙂\n\n").repeat(20 * 1024)}'`,
+        })),
+        { name: "Later check", run: "sleep 600" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      path.join(scripts, "ci-check-pool.ts"),
+      "run",
+      "ci-checks-rest",
+    ],
+    {
+      cwd: directory,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        RUNNER_TEMP: directory,
+        CI_CHECK_POOL_CONCURRENCY: "2",
+        CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+        CI_CHECK_POOL_STEPS: "{}",
+        CI_CHECK_POOL_INPUTS: "{}",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 10_000,
+      killSignal: "SIGKILL",
+    },
+  );
+  const stderr = new Response(child.stderr).text();
+  let output = "";
+  let status: "waiting" | "signalled" = "waiting";
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  try {
+    for await (const chunk of child.stdout) {
+      output += decoder.decode(chunk, { stream: true });
+      if (
+        status === "waiting" &&
+        output.includes("Starting check: Later check")
+      ) {
+        // The FIFO proves the first log was written; worker reuse proves the
+        // second check settled, while registry ordering still holds its log.
+        expect(output).not.toContain("::group::Buffered failure");
+        child.kill("SIGTERM");
+        status = "signalled";
+      }
+    }
+    output += decoder.decode();
+    expect(await stderr).toBe("");
+    expect(status).toBe("signalled");
+    expect(await child.exited).toBe(130);
+    expect(output).toContain("Interrupted check: Blocked first (running)");
+    expect(output).toContain("| Checking fixture-generator");
+    expect(output).toContain("Interrupted check: Buffered failure (completed)");
+    expect(output).toContain("| ::error::buffered fixture failure");
+    expect(output).not.toContain("discarded-prefix");
+    expect(output).not.toMatch(/^::error::buffered fixture failure$/mu);
+    expect(output).toContain(
+      "Log tail omitted: cancellation output limit reached.",
+    );
+    const diagnostics = output.slice(
+      output.indexOf("::group::Interrupted check:"),
+    );
+    expect(diagnostics).toContain("é🙂");
+    expect(diagnostics).toContain("�");
+    expect(Buffer.byteLength(diagnostics)).toBeLessThanOrEqual(64 * 1024);
+    expect([...diagnostics.matchAll(/^::group::/gmu)]).toHaveLength(
+      [...diagnostics.matchAll(/^::endgroup::$/gmu)].length,
+    );
+    const pid = readFileSync(pidFile, "utf-8").trim();
+    expect(pid).toMatch(/^[1-9]\d*$/u);
+    const state = Bun.spawnSync(["ps", "-o", "stat=", "-p", pid]);
+    // Linux may retain an already-killed orphan briefly as a zombie.
+    expect(new TextDecoder().decode(state.stdout).trim()).toMatch(/^Z.*$|^$/u);
+  } finally {
+    if (child.exitCode === null) {
+      child.kill("SIGTERM");
+    }
+    await child.exited;
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 20_000);
 
 test("flattening steps that already carry their pooled checks adds none", () => {
   for (const job of CHECK_POOL_JOBS) {

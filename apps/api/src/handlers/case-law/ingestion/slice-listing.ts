@@ -34,10 +34,37 @@ export type ListedSlice = {
   listed: number;
   unidentifiable: number;
   duplicate: number;
+  /** Page requests the listing made, the first included. */
+  pages: number;
 };
+
+/**
+ * How many passes over a slice each proof makes, for a caller that has to
+ * bound a listing's worst case.
+ */
+export const SLICE_LISTING_PASSES = {
+  count: 1,
+  identities: 2,
+} as const;
+
+/**
+ * What a caller needs a listing to prove. `identities` certifies the exact
+ * set a slice holds, which is what recording its coverage complete rests on
+ * (case-law AGENTS.md rule 19). `count` only sums it: a record replaced
+ * between pages leaves the count unchanged, so a second pass would cost the
+ * publisher a full listing and change nothing a count can say.
+ */
+export const SLICE_LISTING_PROOF = {
+  COUNT: "count",
+  IDENTITIES: "identities",
+} as const;
+
+type SliceListingProof =
+  (typeof SLICE_LISTING_PROOF)[keyof typeof SLICE_LISTING_PROOF];
 
 type ListReconciliationSliceOptions = {
   adapterKey: string;
+  proof: SliceListingProof;
   listSlicePage: SourceReconciliation["listSlicePage"];
   slice: string;
   /** Pause before every page after the first. */
@@ -48,14 +75,8 @@ type ListReconciliationSliceOptions = {
   signal?: AbortSignal | undefined;
 };
 
-/**
- * Every page of one slice, or an error. Never a partial listing: an
- * undercount would be recorded as if it were the whole slice, and an
- * undercounted slice can read as fully collected. A page request that rejects
- * rejects this call with the adapter's own error, so a caller that classifies
- * adapter failures still sees them unchanged.
- */
-export const listReconciliationSlice = async ({
+/** One pass over every page of a slice, keyed as the ingest keys it. */
+const listSlicePass = async ({
   adapterKey,
   listSlicePage,
   pageDelayMs,
@@ -71,6 +92,7 @@ export const listReconciliationSlice = async ({
     listed: 0,
     unidentifiable: 0,
     duplicate: 0,
+    pages: 0,
   };
   for (let page = 0; ; page += 1) {
     signal?.throwIfAborted();
@@ -87,6 +109,7 @@ export const listReconciliationSlice = async ({
           ? timeoutSignal
           : AbortSignal.any([signal, timeoutSignal]),
     });
+    listing.pages += 1;
     listing.listed += listed.items.length;
     for (const item of listed.items) {
       const identityKey = listingIdentityKey(item.identity);
@@ -118,4 +141,55 @@ export const listReconciliationSlice = async ({
     // cutting one off on time would make a slowly-listing slice unlistable
     // rather than merely slow.
   }
+};
+
+const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
+  first.keyed.size === second.keyed.size &&
+  [...first.keyed.keys()].every((identityKey) => second.keyed.has(identityKey));
+
+/**
+ * Every page of one slice, or an error. Never a partial listing: an
+ * undercount would be recorded as if it were the whole slice, and an
+ * undercounted slice can read as fully collected. A page request that rejects
+ * rejects this call with the adapter's own error, so a caller that classifies
+ * adapter failures still sees them unchanged.
+ *
+ * Under the `identities` proof a non-empty slice is listed twice and accepted
+ * only when both passes name the same identities (case-law AGENTS.md rule
+ * 19). One pass cannot see a record the publisher inserted at an offset it
+ * had already read: the reported count and the distinct identities still
+ * agree, and the slice would read as fully collected while that record was
+ * never listed. A changed slice is refused like any failed listing, so its
+ * previous ledger row stands and a later walk lists it again. A slice that
+ * answered empty in one request costs that request: there is nothing a second
+ * pass could find that the first replaced. One read empty across several
+ * requests is verified like any other, since a record can land on a page the
+ * walk has already passed.
+ */
+export const listReconciliationSlice = async (
+  options: ListReconciliationSliceOptions,
+): Promise<Result<ListedSlice, AdapterFetchError>> => {
+  const first = await listSlicePass(options);
+  if (
+    Result.isError(first) ||
+    (first.value.listed === 0 && first.value.pages === 1) ||
+    options.proof === SLICE_LISTING_PROOF.COUNT
+  ) {
+    return first;
+  }
+  const { adapterKey, pageDelayMs, slice, sleep, signal } = options;
+  await abortableSleep(sleep, pageDelayMs, signal);
+  const verification = await listSlicePass(options);
+  if (Result.isError(verification)) {
+    return verification;
+  }
+  return sameIdentities(first.value, verification.value)
+    ? first
+    : Result.err(
+        new AdapterFetchError({
+          message: `Slice ${slice} changed while it was listed: ${String(first.value.keyed.size)} identities, then ${String(verification.value.keyed.size)}`,
+          adapterKey,
+          cursor: slice,
+        }),
+      );
 };

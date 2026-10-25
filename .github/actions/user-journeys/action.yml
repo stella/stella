@@ -19,6 +19,10 @@ inputs:
     description: Docker Hub token for mock stack image pulls
     required: false
     default: ""
+outputs:
+  report-paths:
+    description: Newline-separated directories holding the run's screenshots, error context and HTML report, for upload-artifact
+    value: ${{ steps.source.outputs.report-paths }}
 runs:
   using: composite
   steps:
@@ -37,6 +41,16 @@ runs:
           local-stack) ;;
           *) echo "::error::Unknown journey project"; exit 1 ;;
         esac
+        # The one place the run's output directory is named: Playwright writes
+        # there and every caller uploads it through this action's output.
+        output_dir="$GITHUB_WORKSPACE/apps/web/e2e/test-results/user-journeys-$PROJECT"
+        {
+          echo "output-dir=$output_dir"
+          echo "report-paths<<REPORT_PATHS"
+          echo "$output_dir/"
+          echo "$output_dir-report/"
+          echo "REPORT_PATHS"
+        } >> "$GITHUB_OUTPUT"
         if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [[ "$(git rev-parse HEAD)" != "$EXPECTED_COMMIT" ]]; then
           echo "::error::Journey source does not match the pinned commit."
           exit 1
@@ -95,7 +109,7 @@ runs:
         PROJECT: ${{ inputs.project }}
         EXPECTED_COMMIT: ${{ inputs.expected-commit }}
         HEALTH_URL: ${{ inputs.health-url }}
-        E2E_OUTPUT_DIR: test-results/user-journeys-${{ inputs.project }}
+        E2E_OUTPUT_DIR: ${{ steps.source.outputs.output-dir }}
       run: |
         set -euo pipefail
         verify_deployed_commit() {

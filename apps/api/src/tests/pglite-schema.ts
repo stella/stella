@@ -1071,6 +1071,13 @@ export const installPgliteOrganizationMemberCapacity = async (
     ...readMigrationStatements(
       nodePath.join(
         DRIZZLE_DIR,
+        "20261025104500_per_seat_member_capacity",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
         "20261025120000_manual_entitlement_period_bound",
         "migration.sql",
       ),

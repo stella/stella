@@ -450,6 +450,11 @@ restart from page zero, not retry the invalid offset forever. The follow-up
 window must begin at the snapshot boundary plus one, not at a fresh rolling
 lookback, or a long crawl/outage creates a permanent gap.
 
+Reconciliation slices get this pass from the shared walker
+(`listReconciliationSlice` in `ingestion/slice-listing.ts`): it lists every
+non-empty slice twice and refuses one whose two passes name different
+identities, so an adapter verifies only the windows its own cursor walks.
+
 **The steady-state follow-up is a frontier, not a window.** Once the sweep has
 seen the collection, the cursor carries the last publisher window it verified
 and advances only over windows that have closed since. It verifies a closed
