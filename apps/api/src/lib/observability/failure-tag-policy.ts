@@ -24,6 +24,7 @@ export const TAGGED_FAILURE_REASON = {
   AggregateLockBusy: "tagged_failure",
   AggregateLockUpgradeRefused: "tagged_failure",
   AnonymizedFieldBoundaryError: "tagged_failure",
+  ApiAccessTokenError: "tagged_failure",
   AuthorizedWorkspaceReadError: "tagged_failure",
   BackfillFailedError: "tagged_failure",
   BackfillHeldError: "tagged_failure",
