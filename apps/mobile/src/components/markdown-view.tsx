@@ -99,20 +99,21 @@ const BlockView = ({ block }: { block: Block }) => {
       );
     }
     case "code": {
-      return (
-        <View
-          style={[
-            styles.codeBlock,
-            { backgroundColor: colors.background, borderColor: colors.border },
-          ]}
-        >
-          <Text selectable style={[styles.code, { color: colors.text }]}>
-            {block.text}
-          </Text>
-        </View>
-      );
+      break;
     }
   }
+  return (
+    <View
+      style={[
+        styles.codeBlock,
+        { backgroundColor: colors.background, borderColor: colors.border },
+      ]}
+    >
+      <Text selectable style={[styles.code, { color: colors.text }]}>
+        {block.text}
+      </Text>
+    </View>
+  );
 };
 
 /** An assistant answer drawn from its markdown with plain Text views. */
