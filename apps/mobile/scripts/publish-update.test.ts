@@ -3,6 +3,7 @@ import { generateKeyPairSync, verify } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   mobileUpdatePointerKey,
@@ -11,6 +12,20 @@ import {
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import { buildSignedUpdate } from "./publish-update";
+
+const assetSchema = v.object({
+  hash: v.string(),
+  url: v.string(),
+  contentType: v.string(),
+});
+
+/** The parts of a served manifest these tests read. */
+const manifestSchema = v.looseObject({
+  id: v.string(),
+  runtimeVersion: v.string(),
+  launchAsset: assetSchema,
+  assets: v.array(assetSchema),
+});
 
 const TARGET = {
   variant: "preview",
@@ -89,12 +104,7 @@ describe("a published update", () => {
 
   test("lists every asset with the hash a phone checks against its bytes", () => {
     const update = publish("bundle-1");
-    const manifest = JSON.parse(update.manifest) as {
-      id: string;
-      runtimeVersion: string;
-      launchAsset: { hash: string; url: string; contentType: string };
-      assets: { hash: string; url: string; contentType: string }[];
-    };
+    const manifest = v.parse(manifestSchema, JSON.parse(update.manifest));
     expect(manifest.runtimeVersion).toBe(TARGET.runtimeVersion);
     expect(manifest.launchAsset.hash).toBe(sha256Base64Url("bundle-1"));
     expect(manifest.launchAsset.contentType).toBe("application/javascript");
