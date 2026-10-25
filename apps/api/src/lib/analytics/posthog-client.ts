@@ -4,12 +4,13 @@
  * Events are queued in memory and sent in gzip-compressed batches when the
  * queue reaches `flushAt`, on a timer, and on `flush()` (the API flushes after
  * every logged request). Capturing never waits on the network and never
- * throws. The delivery rules are the ones the PostHog Node SDK applied for us:
+ * throws, and a failed delivery is logged here rather than rejecting the
+ * flush. The delivery rules are the ones the PostHog Node SDK applied for us:
  * per-attempt timeout, fixed-delay retries on 408/429/5xx and network
  * failures, a 413 halving the batch, events kept for the next flush after a
  * network failure, and a bounded queue that drops its oldest event.
  */
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -32,7 +33,7 @@ const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
   Object.values(SERVER_ANALYTICS_EVENTS),
 );
 
-/** A batch the PostHog API did not accept; the flush caller logs it. */
+/** A batch the PostHog API did not accept; the flush logs it. */
 export class PostHogDeliveryError extends TaggedError("PostHogDeliveryError")<{
   message: string;
   status?: number;
@@ -120,22 +121,27 @@ export const createPostHogAnalytics = (
   let flushTail: Promise<PostHogDeliveryError | null> = Promise.resolve(null);
 
   const sendOnce = async (body: Uint8Array): Promise<SendOutcome> => {
-    try {
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- POSTHOG_HOST from the API's validated environment; the operator chooses it, no request selects it
-      const response = await fetchWithTimeout(batchUrl, {
-        body,
-        headers,
-        method: "POST",
-        timeoutMs: requestTimeoutMs,
-      });
-      // Only the status matters; release the body unread.
-      await response.body?.cancel();
-      return response.ok
-        ? { kind: "ok" }
-        : { kind: "http_status", status: response.status };
-    } catch (error) {
-      return { kind: "network", cause: error };
+    const sent = await Result.tryPromise({
+      try: async () => {
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- POSTHOG_HOST from the API's validated environment; the operator chooses it, no request selects it
+        const response = await fetchWithTimeout(batchUrl, {
+          body,
+          headers,
+          method: "POST",
+          timeoutMs: requestTimeoutMs,
+        });
+        // Only the status matters; release the body unread.
+        await response.body?.cancel();
+        return response;
+      },
+      catch: (error: unknown) => error,
+    });
+    if (sent.isErr()) {
+      return { kind: "network", cause: sent.error };
     }
+    return sent.value.ok
+      ? { kind: "ok" }
+      : { kind: "http_status", status: sent.value.status };
   };
 
   const send = async (batch: readonly PostHogMessage[]) => {
@@ -172,7 +178,7 @@ export const createPostHogAnalytics = (
   /**
    * Send what is queued when this flush starts. A rejected batch is dropped;
    * a batch that never reached PostHog goes back to the front of the queue
-   * for the next flush. Either way the flush rejects so its caller can log.
+   * for the next flush. Either way the flush logs the failure.
    */
   const drain = async (): Promise<PostHogDeliveryError | null> => {
     clearTimer();
@@ -214,7 +220,12 @@ export const createPostHogAnalytics = (
     flushTail = next;
     const failure = await next;
     if (failure !== null) {
-      throw failure;
+      logger.warn("analytics.delivery.failed", {
+        "error.type": failure._tag,
+        ...(failure.status === undefined
+          ? {}
+          : { "http.status_code": failure.status }),
+      });
     }
   };
 

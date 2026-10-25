@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
+import { logger } from "@/api/lib/observability/logger";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 import {
@@ -37,6 +36,19 @@ type ReceivedRequest = {
 };
 
 const servers: { stop: (force?: boolean) => Promise<void> }[] = [];
+
+/** The delivery failures a flush logged while `run` ran. */
+const deliveryFailuresDuring = async (
+  run: () => Promise<void>,
+): Promise<unknown[]> => {
+  const warn = spyOn(logger, "warn");
+  await run();
+  const failures = warn.mock.calls
+    .filter(([event]) => event === "analytics.delivery.failed")
+    .map(([, attributes]) => attributes);
+  warn.mockRestore();
+  return failures;
+};
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(async (server) => server.stop(true)));
@@ -301,7 +313,7 @@ describe("PostHog server analytics", () => {
     );
   });
 
-  test("drops a batch PostHog rejects and rejects the flush with the status", async () => {
+  test("drops a batch PostHog rejects and logs the status", async () => {
     const receiver = startReceiver((_request, index) =>
       index === 0
         ? new Response("invalid", { status: 400 })
@@ -310,12 +322,9 @@ describe("PostHog server analytics", () => {
     const analytics = analyticsFor(receiver.host);
 
     analytics.capture(feedbackEvent("rejected_user"));
-    expect(await rejectionOf(analytics.flush())).toMatchObject({
-      _tag: "PostHogDeliveryError",
-      message:
-        "PostHog rejected a batch of 1 events with HTTP 400; the batch is dropped",
-      status: 400,
-    });
+    expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
+      { "error.type": "PostHogDeliveryError", "http.status_code": 400 },
+    ]);
     analytics.capture(feedbackEvent("next_user"));
     await analytics.flush();
 
@@ -342,10 +351,9 @@ describe("PostHog server analytics", () => {
 
     analytics.capture(feedbackEvent("user_1"));
     const startedAt = performance.now();
-    expect(await rejectionOf(analytics.flush())).toMatchObject({
-      _tag: "PostHogDeliveryError",
-      message: expect.stringContaining("did not reach"),
-    });
+    expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
+      { "error.type": "PostHogDeliveryError" },
+    ]);
     // One attempt and one retry, each cut off by the request timeout.
     expect(performance.now() - startedAt).toBeLessThan(2000);
     expect(receiver.requests).toHaveLength(2);
@@ -361,7 +369,7 @@ describe("PostHog server analytics", () => {
     ).toEqual(["user_1", "user_2"]);
   });
 
-  test("rejects the flush, without throwing from capture, when PostHog is unreachable", async () => {
+  test("logs, without throwing from capture or flush, when PostHog is unreachable", async () => {
     const closed = Bun.serve({ port: 0, fetch: () => new Response("ok") });
     const closedHost = closed.url.origin;
     await closed.stop(true);
@@ -369,9 +377,8 @@ describe("PostHog server analytics", () => {
 
     analytics.capture(feedbackEvent("user_1"));
 
-    expect(await rejectionOf(analytics.flush())).toMatchObject({
-      _tag: "PostHogDeliveryError",
-      message: `PostHog batch of 1 events did not reach ${closedHost}/batch/; the events stay queued for the next flush`,
-    });
+    expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
+      { "error.type": "PostHogDeliveryError" },
+    ]);
   });
 });
