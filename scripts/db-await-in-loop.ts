@@ -448,7 +448,15 @@ const isPerIterationPosition = (loop: ts.Node, child: ts.Node): boolean => {
   return false;
 };
 
-const isIterationStatement = (node: ts.Node): node is ts.IterationStatement =>
+// tsrs names the loop kinds but not their union.
+type IterationStatement =
+  | ts.DoStatement
+  | ts.ForInStatement
+  | ts.ForOfStatement
+  | ts.ForStatement
+  | ts.WhileStatement;
+
+const isIterationStatement = (node: ts.Node): node is IterationStatement =>
   ts.isForStatement(node) ||
   ts.isForOfStatement(node) ||
   ts.isForInStatement(node) ||
@@ -597,7 +605,7 @@ const findLoopContext = (
   exitSites: "include" | "exclude" = "exclude",
 ): {
   context: LoopContext;
-  loop: ts.IterationStatement | null;
+  loop: IterationStatement | null;
   fanOut: ts.CallExpression | null;
 } | null => {
   let child: ts.Node = site;
@@ -1180,7 +1188,7 @@ export const scanDbAwaitInLoop = async ({
   };
 
   const boundedRoundShape = async (
-    loop: ts.IterationStatement,
+    loop: IterationStatement,
   ): Promise<boolean> => {
     if (ts.isForStatement(loop)) {
       return await boundedCounter(loop);
@@ -1210,7 +1218,7 @@ export const scanDbAwaitInLoop = async ({
     return length !== null && length <= 16;
   };
 
-  const hasEnclosingIteration = (loop: ts.IterationStatement): boolean => {
+  const hasEnclosingIteration = (loop: IterationStatement): boolean => {
     for (
       let node: ts.Node = loop.parent;
       !ts.isSourceFile(node);
@@ -1550,6 +1558,7 @@ export const scanDbAwaitInLoop = async ({
           }
         } else if (
           ts.isShorthandPropertyAssignment(property) &&
+          ts.isIdentifier(property.name) &&
           (await isHandleValue(property.name))
         ) {
           return property.name.text;
@@ -1773,7 +1782,7 @@ export const scanDbAwaitInLoop = async ({
     filesScanned += 1;
     const fileHits: {
       hit: DbAwaitInLoopHit;
-      loop: ts.IterationStatement | null;
+      loop: IterationStatement | null;
       fanOut: boolean;
     }[] = [];
 

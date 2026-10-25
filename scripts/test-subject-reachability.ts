@@ -747,9 +747,10 @@ const dynamicImport = async (
   if (!specifier || !ts.isStringLiteral(specifier)) {
     return undefined;
   }
-  const symbols = await checker.getSymbolAtLocation(
-    declaration.name.elements.map(({ name }) => name),
+  const names = declaration.name.elements.flatMap(({ name }) =>
+    name === undefined ? [] : [name],
   );
+  const symbols = await checker.getSymbolAtLocation(names);
   return {
     specifier: specifier.text,
     bindings: symbols.filter((symbol) => symbol !== undefined),

@@ -437,7 +437,14 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
   );
   const lockfile = tree.get("/app/bun.lock");
   if (typeof lockfile === "string") {
-    const parsed = Result.try(() => Bun.JSONC.parse(text(root, lockfile)));
+    const parsed = Result.try(() =>
+      v.parse(
+        v.object({
+          packages: v.optional(v.record(v.string(), v.unknown())),
+        }),
+        Bun.JSONC.parse(text(root, lockfile)),
+      ),
+    );
     if (parsed.isErr()) {
       panic("Invalid Bun lockfile");
     }
