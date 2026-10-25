@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] the BRA grammar gains STF process classes and incident marks; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] BRA adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] BP extends only GBR and the division-list export leaves the POL grammar used by this adapter unchanged.
 // parser-output-unchanged: [pl-uokik] GBR adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
@@ -835,7 +836,9 @@ const canonicalBritishDocketKey = (folded: string): string =>
  */
 export const BR_SUPERIOR_COURT_CLASSES = [
   "AC",
+  "ACi",
   "ACO",
+  "ACr",
   "ADC",
   "ADI",
   "ADO",
@@ -852,11 +855,16 @@ export const BR_SUPERIOR_COURT_CLASSES = [
   "AR",
   "ARE",
   "AREsp",
+  "ARv",
   "AS",
+  "CA",
   "CC",
+  "CJ",
   "Cm",
   "CR",
+  "CT",
   "Cta",
+  "Den",
   "EAg",
   "EAREsp",
   "EI",
@@ -871,30 +879,36 @@ export const BR_SUPERIOR_COURT_CLASSES = [
   "IDC",
   "IF",
   "Inq",
+  "IP",
   "IUJ",
   "MC",
   "MI",
   "MS",
   "OACO",
   "PA",
+  "PAv",
   "Pet",
   "PPE",
   "PSV",
   "PUIL",
+  "QC",
   "RC",
   "RCED",
   "Rcl",
   "RE",
+  "REL",
   "REsp",
   "REspe",
   "REspEl",
   "RHC",
   "RHD",
+  "RLS",
   "RMI",
   "RMS",
   "RO",
   "Rp",
   "RvC",
+  "SE",
   "SEC",
   "SIRDR",
   "SL",
@@ -929,8 +943,9 @@ const BR_LEADING_INCIDENTS = [
 
 /**
  * Incident marks the STF writes after the number, joined by hyphens: "ARE
- * 1.234.567 AgR-ED", "ADI 6.341 MC-Ref", "RE 123 ED-segundos". Ordinals
- * count repeated incidents of one kind.
+ * 1.234.567 AgR-ED", "ADI 6.341 MC-Ref", "RE 123 ED-segundos", "Ext 762
+ * Extn-segunda". Ordinals count repeated incidents of one kind and agree in
+ * gender with it: an extensão is counted "segunda".
  */
 const BR_TRAILING_INCIDENTS = [
   "AgR",
@@ -939,19 +954,29 @@ const BR_TRAILING_INCIDENTS = [
   "EDcl",
   "EDv",
   "EI",
+  "Extn",
   "MC",
   "QO",
   "Ref",
   "RG",
   "TP",
+  "TPI",
   "segundo",
   "segundos",
+  "segunda",
+  "segundas",
   "terceiro",
   "terceiros",
+  "terceira",
+  "terceiras",
   "quarto",
   "quartos",
+  "quarta",
+  "quartas",
   "quinto",
   "quintos",
+  "quinta",
+  "quintas",
 ] as const;
 
 const BR_STATES = [

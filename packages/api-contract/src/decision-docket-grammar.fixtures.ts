@@ -32,6 +32,12 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
     { canonical: "ADI 99341", variants: ["ADI 99.341 MC-Ref", "ADI 99341/DF"] },
     { canonical: "HC 99456", variants: ["HC 99.456", "HC 99456 AgR-segundo"] },
     {
+      canonical: "Ext 99762",
+      variants: ["Ext 99762 Extn", "Ext 99.762 Extn-segunda", "ext 99762 TPI"],
+    },
+    { canonical: "CJ 99123", variants: ["CJ 99.123 AgR", "cj 99123"] },
+    { canonical: "ACi 99001", variants: ["ACi 99.001 ED"] },
+    {
       canonical: "0000751-20.2099.5.08.0017",
       variants: [
         "751-20.2099.5.08.0017",
