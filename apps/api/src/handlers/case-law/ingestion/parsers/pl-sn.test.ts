@@ -353,6 +353,8 @@ describe("reading recorded Supreme Court PDFs", () => {
   });
 
   test("a hanging-indent list point stays whole and opens its own paragraph", async () => {
+    // `2-9` is set with character spacing: each of its glyphs stands a
+    // space's width from the next, and none of those gaps is a word space.
     const paragraphs = await supremeCourtParagraphs(
       "pl-sn-iii-kk-499-19",
       "III KK 499/19",
@@ -366,6 +368,44 @@ describe("reading recorded Supreme Court PDFs", () => {
     expect(
       paragraphs.some((paragraph) => /;\s*2\. czynów/u.test(paragraph)),
     ).toBe(false);
+  });
+
+  test("a word space set by position alone, with no space glyph, still separates the words", async () => {
+    // These PDFs print some word spaces only as a gap of 0.16-0.29 em, under
+    // the extractor's own 0.3 em, so the text layer ran the words together.
+    const ruling = (
+      await supremeCourtParagraphs("pl-sn-i-nkrs-75-23", "I NKRS 75/23")
+    ).join("\n");
+    const appeal = (
+      await supremeCourtParagraphs("pl-sn-ii-nsnc-192-24", "II NSNc 192/24")
+    ).join("\n");
+
+    expect(ruling).toContain("wniosku o powołanie A. K. (dalej również:");
+    expect(ruling).toContain("W ocenie Sądu Najwyższego Krajowa Rada");
+    expect(ruling).toContain("przy 8 głosach „wstrzymujących się”");
+    expect(ruling).toContain("przez dokonanie oceny kwalifikacji");
+    expect(appeal).toContain("zasadę zaufania obywatela do państwa");
+    expect(appeal).toContain("(art. 7 w związku z art. 2 Konstytucji RP)");
+    expect(appeal).toContain("I NSNc 592/21");
+    expect(`${ruling}\n${appeal}`).not.toMatch(/SąduNajwyższego|\p{Ll}\p{Lu}/u);
+  });
+
+  test("the running header is dropped where a sentence runs over the page break", async () => {
+    const paragraphs = await supremeCourtParagraphs(
+      "pl-sn-i-csk-3410-25",
+      "I CSK 3410/25",
+    );
+
+    expect(
+      paragraphs.filter((paragraph) => /I CSK 3410\/25\s+\d/u.test(paragraph)),
+    ).toEqual([]);
+    expect(
+      paragraphs.some((paragraph) =>
+        paragraph.includes(
+          "w miejscu pobytu. Jednak rozstrzygnięcie, czy w danej sprawie",
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("a sentence ending near the margin still ends its paragraph", async () => {
