@@ -23,6 +23,16 @@ const createClient = (rows: unknown) => {
 };
 
 describe("request read work", () => {
+  test("reusing an instrumented client retains one meter and one result count", async () => {
+    const client = meterSqlClient(createClient([{ content: "text" }]));
+    const reused = meterSqlClient(client);
+    expect(reused).toBe(client);
+    await runWithQueryCounter(async () => {
+      expect(await reused.unsafe()).toEqual([{ content: "text" }]);
+      expect(currentReadWork()?.dbResultBytes).toBe(20);
+    });
+  });
+
   test.each(["catch", "finally"] as const)(
     "native %s continuations meter successful rows",
     async (continuation) => {
@@ -109,11 +119,11 @@ describe("request read work", () => {
         "insert into items values ('payload') returning content",
       );
       const before = await client.unsafe("select count(*) as count from items");
-      expect(before).toEqual([{ count: 0 }]);
+      expect(before).toEqual([{ count: 0n }]);
       await query;
       await query;
       const after = await client.unsafe("select count(*) as count from items");
-      expect(after).toEqual([{ count: 1 }]);
+      expect(after).toEqual([{ count: 1n }]);
       await runWithQueryCounter(async () => {
         const pending = client.unsafe("select 'payload' as content");
         await pending;
@@ -138,7 +148,9 @@ describe("request read work", () => {
         recordReadWork("cacheHits");
         expect(captured?.dbResultBytes).toBe(0);
         expect(captured?.cacheHits).toBe(0);
-        return currentReadWork();
+        return (
+          currentReadWork() ?? panic("Measurement requires its request meter")
+        );
       });
     const [small, large] = await Promise.all([measure(10), measure(100)]);
     expect(small).toEqual({

@@ -178,6 +178,17 @@ describe("answering a stored or in-flight analysis", () => {
         ),
       })
       .where(eq(caseLawDecisions.id, row.id));
+
+    // Saving the analysis changes updatedAt, hence the row-cache identity.
+    // These repeated-read budgets start with that persisted version warm.
+    const warmed = await resolveAnalysisInput({
+      decisionId: row.id,
+      scopedDb: scopedDbOf(db),
+    });
+    if (warmed.kind !== "resolved") {
+      return panic(`expected a warm decision, got ${warmed.kind}`);
+    }
+    expect(warmed.input.fingerprint).toBe(resolution.input.fingerprint);
     return { decisionId: row.id, fingerprint: resolution.input.fingerprint };
   };
 

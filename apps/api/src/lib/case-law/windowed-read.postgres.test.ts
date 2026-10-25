@@ -300,43 +300,51 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       for (const [profile, read] of Object.entries(productionReads)) {
         const measurements = [];
         for (const scale of SCALES) {
-          await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-            const { db } = openClient({ max: 1 });
-            const fixture = await prepareFixture(db, scale);
-            resetPublicCaseLawConfigForTesting(fixture.caseLawDb);
-            try {
-              const cold = await measuredRead(async () => await read(fixture));
-              const warm = await measuredRead(async () => await read(fixture));
-              expect(cold.statements).toBeGreaterThan(0);
-              expect(cold.transactionRoundTrips).toBeGreaterThan(0);
-              expect(cold.dbResultBytes).toBeGreaterThan(fixture.payloadBytes);
-              expect(cold.astParses).toBeGreaterThan(0);
-              expect(warm.statements).toBeGreaterThan(0);
-              expect(warm.statements).toBeLessThan(cold.statements);
-              expect(warm.transactionRoundTrips).toBeGreaterThan(0);
-              expect(warm.dbResultBytes).toBeLessThan(fixture.payloadBytes / 2);
-              expect(warm.astParses).toBe(0);
-              expect(warm.storageReadBytes).toBe(0);
-              expect(warm.cacheHits).toBeGreaterThan(0);
-              console.info(
-                "production-window-budget",
-                JSON.stringify({ profile, scale, cold, warm }),
-              );
-              measurements.push({
-                cold,
-                warm,
-                payloadBytes: fixture.payloadBytes,
-              });
-              // Redaction must be checked again before any warmed payload is served.
-              await db
-                .update(caseLawDecisions)
-                .set({ redactedAt: new Date("2026-01-01T00:00:00Z") })
-                .where(eq(caseLawDecisions.sourceId, fixture.sourceId));
-              await expectRedacted(profile, fixture);
-            } finally {
-              resetPublicCaseLawConfigForTesting();
-            }
-          });
+          const measurement = await withGatedTestClients(
+            databaseUrl,
+            async ({ openClient }) => {
+              const { db } = openClient({ max: 1 });
+              const fixture = await prepareFixture(db, scale);
+              resetPublicCaseLawConfigForTesting(fixture.caseLawDb);
+              try {
+                const cold = await measuredRead(
+                  async () => await read(fixture),
+                );
+                const warm = await measuredRead(
+                  async () => await read(fixture),
+                );
+                expect(cold.statements).toBeGreaterThan(0);
+                expect(cold.transactionRoundTrips).toBeGreaterThan(0);
+                expect(cold.dbResultBytes).toBeGreaterThan(
+                  fixture.payloadBytes,
+                );
+                expect(cold.astParses).toBeGreaterThan(0);
+                expect(warm.statements).toBeGreaterThan(0);
+                expect(warm.statements).toBeLessThan(cold.statements);
+                expect(warm.transactionRoundTrips).toBeGreaterThan(0);
+                expect(warm.dbResultBytes).toBeLessThan(
+                  fixture.payloadBytes / 2,
+                );
+                expect(warm.astParses).toBe(0);
+                expect(warm.storageReadBytes).toBe(0);
+                expect(warm.cacheHits).toBeGreaterThan(0);
+                console.info(
+                  "production-window-budget",
+                  JSON.stringify({ profile, scale, cold, warm }),
+                );
+                // Redaction must be checked again before any warmed payload is served.
+                await db
+                  .update(caseLawDecisions)
+                  .set({ redactedAt: new Date("2026-01-01T00:00:00Z") })
+                  .where(eq(caseLawDecisions.sourceId, fixture.sourceId));
+                await expectRedacted(profile, fixture);
+                return { cold, warm, payloadBytes: fixture.payloadBytes };
+              } finally {
+                resetPublicCaseLawConfigForTesting();
+              }
+            },
+          );
+          measurements.push(measurement);
         }
         const small = measurements.at(0) ?? panic("Missing 1x measurement");
         const large = measurements.at(1) ?? panic("Missing 10x measurement");

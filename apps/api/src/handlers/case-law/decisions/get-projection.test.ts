@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import { drizzle } from "drizzle-orm/bun-sql";
+import { getColumns } from "drizzle-orm";
 
+import { createMockDatabase } from "@/api/db/sql-client";
 import { decisionRecordQuery } from "@/api/handlers/case-law/decisions/get";
 import { createSafeId } from "@/api/lib/branded-types";
 
-const queryDb = drizzle.mock();
+const queryDb = createMockDatabase();
 
 test("decision metadata selects payload presence without transferring AST or sections", () => {
   const statement = decisionRecordQuery(
@@ -12,7 +13,9 @@ test("decision metadata selects payload presence without transferring AST or sec
     createSafeId<"caseLawDecision">(),
   );
   const query = statement.toSQL();
-  expect("documentAst" in statement.getSelectedFields()).toBe(false);
-  expect("sections" in statement.getSelectedFields()).toBe(false);
+  const fields = getColumns(statement.as("decision_metadata"));
+  expect("id" in fields).toBe(true);
+  expect("documentAst" in fields).toBe(false);
+  expect("sections" in fields).toBe(false);
   expect(query.sql).toContain('"document_ast" IS NOT NULL');
 });

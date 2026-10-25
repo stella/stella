@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect } from "bun:test";
 
 import { classifiedCitationBlockIds } from "@stll/legal-ast/citation-passage";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { citationPassageIn } from "@/api/handlers/case-law/decisions/citation-passages";
@@ -98,7 +99,7 @@ export const caseLawWindowFixture = async (
         }),
     });
     const ast = served.payload;
-    if (ast === null || !("blocks" in ast)) {
+    if (!isDocumentAst(ast)) {
       return panic("Fixture requires a readable AST");
     }
     switch (profile) {
@@ -140,7 +141,7 @@ export const caseLawWindowFixture = async (
               caseNumberType: "case-number",
               caseNumber: "1 Test",
               courtAbbreviation: null,
-              courtTier: null,
+              courtTier: "other",
               court: "Court",
               country: "CZE",
               decisionDate: null,

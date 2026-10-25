@@ -66,11 +66,16 @@ const meterPendingQuery = (value: unknown): unknown => {
   return query;
 };
 
+const meteredClients = new WeakSet<(...args: never[]) => unknown>();
+
 /** Driver-local instrumentation; no prototype changes or retained document data. */
 export const meterSqlClient = <T extends (...args: never[]) => unknown>(
   client: T,
-): T =>
-  new Proxy(client, {
+): T => {
+  if (meteredClients.has(client)) {
+    return client;
+  }
+  const metered = new Proxy(client, {
     apply: (target, receiver, args) =>
       meterPendingQuery(Reflect.apply(target, receiver, args)),
     get: (target, property) => {
@@ -102,3 +107,6 @@ export const meterSqlClient = <T extends (...args: never[]) => unknown>(
       return member.bind(target);
     },
   });
+  meteredClients.add(metered);
+  return metered;
+};
