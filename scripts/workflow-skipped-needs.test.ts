@@ -7,9 +7,8 @@ import path from "node:path";
 // with a parent is usually the intent. The hazard is a parent that states a
 // status function (`!cancelled()`, `always()`, ...) so it still runs after a
 // skipped ancestor, while its child does not: the parent does the work, the
-// child silently skips, and the run can conclude success. Staging promotion
-// was skipped this way whenever a release candidate found staging running.
-// Such a child states its own status function and the results it depends on.
+// child silently skips, and the run can conclude success. Such a child states
+// its own status function and the results it depends on.
 
 const WORKFLOWS = path.resolve(import.meta.dirname, "../.github/workflows");
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure|success)\(\)/u;
@@ -21,6 +20,43 @@ const TOLERATES_SKIP =
   /\b(?:always|cancelled)\(\)|!\s*(?:failure|success)\(\)/u;
 
 type Job = { needs?: unknown; if?: unknown };
+
+/**
+ * The `&&` operands of a condition outside parentheses and quotes, each with
+ * whitespace collapsed; none when a `||` also sits at that level.
+ */
+const topLevelConjuncts = (condition: string): string[] => {
+  const expression = condition
+    .trim()
+    .replace(/^\$\{\{(.*)\}\}$/su, "$1")
+    .trim();
+  const conjuncts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let start = 0;
+  for (let index = 0; index < expression.length; index += 1) {
+    const char = expression[index];
+    if (char === "'") {
+      quoted = !quoted;
+    } else if (!quoted && char === "(") {
+      depth += 1;
+    } else if (!quoted && char === ")") {
+      depth -= 1;
+    } else if (!quoted && depth === 0) {
+      const pair = expression.slice(index, index + 2);
+      if (pair === "||") {
+        return [];
+      }
+      if (pair === "&&") {
+        conjuncts.push(expression.slice(start, index));
+        start = index + 2;
+        index += 1;
+      }
+    }
+  }
+  conjuncts.push(expression.slice(start));
+  return conjuncts.map((part) => part.trim().replaceAll(/\s+/gu, " "));
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -60,16 +96,14 @@ export const skipsAfterTolerantParent = (
     [name, ...ancestors(name)].some(
       (ancestor) => jobs[ancestor]?.if !== undefined,
     );
-  // `needs.<need>.result == 'success'` skips the job whenever that need skips.
+  // A top-level `needs.<need>.result == 'success'` conjunct skips the job
+  // whenever that need skips. A guard under `||` or in parentheses may not be
+  // required, so it does not count.
   const requiresSuccess = (name: string, need: string) => {
-    const escaped = need.replaceAll(
-      /[$()*+.?[\\\]^{|}]/gu,
-      (char) => `\\${char}`,
-    );
-    return conditionMatches(
-      name,
-      new RegExp(String.raw`needs\.${escaped}\.result\s*==\s*'success'`, "u"),
-    );
+    const condition = jobs[name]?.if;
+    const conjuncts =
+      typeof condition === "string" ? topLevelConjuncts(condition) : [];
+    return conjuncts.includes(`needs.${need}.result == 'success'`);
   };
   // The parent runs after a skip along some need it does not require to succeed.
   const survivesSkip = (parent: string) =>
@@ -136,9 +170,16 @@ test("the check finds the child of a tolerant parent and nothing that skips with
       if: "!cancelled() && needs.wake.result == 'success'",
     },
     package: { needs: ["guarded"] },
+    // A success guard that is one alternative of several does not require it.
+    either: {
+      needs: ["wake"],
+      if: "!cancelled() && (needs.wake.result == 'success' || needs.wake.result == 'skipped')",
+    },
+    ship: { needs: ["either"] },
   };
   expect(skipsAfterTolerantParent("w.yml", jobs)).toEqual([
     "w.yml#promote",
     "w.yml#publish",
+    "w.yml#ship",
   ]);
 });
