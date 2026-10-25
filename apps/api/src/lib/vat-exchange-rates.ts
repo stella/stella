@@ -224,9 +224,9 @@ const fetchCnbRate = async ({
     return malformed("ČNB returned a malformed daily-rate file");
   }
   const effectiveDate = effective.split(".").toReversed().join("-");
-  // ČNB methodology: a rate announced on a working day (after 14:30) applies
-  // to that day and the non-working days after it; before then, today's rate
-  // does not exist yet and the file still carries the previous one.
+  // ČNB methodology: a rate announced in the afternoon of a working day applies
+  // to that day and the non-working days after it; until it is announced,
+  // today's rate does not exist and the file still carries the previous one.
   if (
     publicationPending({
       required: referenceDate,
