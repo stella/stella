@@ -260,6 +260,7 @@ export const FAILURE_TAGS = [
   "MailAuthenticationError",
   "ManagedProviderCheckError",
   "ManualCallbackParseError",
+  "ManualEntitlementRefusedError",
   "McpAuthenticationError",
   "McpClientError",
   "McpDiscoveryError",
