@@ -627,6 +627,10 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ],
   ],
   [
+    "tsrs",
+    ["https://raw.githubusercontent.com/oxc-project/tsrs/HEAD/llms.txt"],
+  ],
+  [
     "typescript",
     [
       "https://www.typescriptlang.org/llms.txt",

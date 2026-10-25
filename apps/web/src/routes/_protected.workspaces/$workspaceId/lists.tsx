@@ -69,10 +69,11 @@ import {
   legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { routeSearchSchema } from "@/route-search-params";
 import { ListSourceAction } from "@/routes/_protected.workspaces/$workspaceId/-components/list-source-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   list: v.optional(v.string()),
 });
 

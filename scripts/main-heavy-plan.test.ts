@@ -17,6 +17,7 @@ import {
   UNKNOWN,
 } from "./github-expression";
 import {
+  heavyProofJobScopes,
   mainHeavyJobs,
   MERGE_GROUP_EXCEPTIONS,
   prDepthJobs,
@@ -144,10 +145,20 @@ const context = (
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
+    suites: {
+      outputs: {
+        heavy_proof:
+          plan["heavy_proof"] ??
+          String(plan["run_required"] !== "false" && event !== "pull_request"),
+      },
+    },
+    // Unarmed pull requests and merge groups without armed proof.
     "completed-depth": {
       outputs: {
+        armed: plan["armed"] ?? "false",
+        armed_proof: plan["armed_proof"] ?? "",
         run_required: plan["run_required"] ?? "true",
-        pr_heavy_suites: "run",
+        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
       },
     },
   };
@@ -661,7 +672,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           const queueJob = Object.entries(eventPolicies.jobs).some(
             ([key, policy]) =>
               key === `ci.yml/${job}` &&
-              (policy === "queue" || policy === "main"),
+              (policy === "queue" || policy === "main" || policy === "armed"),
           );
           if (event === "pull_request" && queueJob) {
             expected = false;
@@ -1222,5 +1233,23 @@ test("heavy classification uses passing evidence from any matching-tree run", as
       ).toBe(hasQueuePass);
       expect(warnings).toEqual([]);
     }
+  }
+});
+
+test("armed proof cannot replace independent folded suite coverage", () => {
+  const folded = v.parse(
+    v.record(v.string(), v.unknown()),
+    JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+  );
+  for (const name of Object.keys(folded)) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs[name];
+    if (!job?.if) {
+      panic(`Missing folded job: ${name}`);
+    }
+    job.if = `needs.ci-plan.outputs.heavy_proof == 'true' && (${job.if})`;
+    expect(() => heavyProofJobScopes(mutated)).toThrow(
+      `Folded suites require queued coverage: ${name}`,
+    );
   }
 });

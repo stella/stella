@@ -11,10 +11,11 @@ import { panic, Result } from "better-result";
 // printout restores that printout from .cache/web-api-types instead of
 // building the API program (see lib/compiler-input-stamp.ts).
 //
-// The program is built and read by TypeScript 7 (tsgo) through its API, the
-// compiler apps/web type-checks with (see lib/web-api-program.ts). Every
-// question to the checker is a request to that process; the printer caches
-// each answer, so a type reached twice costs one request.
+// The program is built and read by tsrs, the Rust port of the TypeScript 7
+// compiler, through the TypeScript 7 API it serves (see
+// lib/web-api-program.ts). Every question to the checker is a request to that
+// process; the printer caches each answer, so a type reached twice costs one
+// request.
 //
 // Modes:
 //   bun --filter @stll/api gen:web-api-types           regenerate the file
@@ -48,15 +49,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import typescriptPackage from "typescript/package.json" with { type: "json" };
-import type { Node, SourceFile } from "typescript/unstable/ast";
+import compilerPackage from "tsrs/package.json" with { type: "json" };
+import type { Node, SourceFile } from "tsrs/unstable/ast";
 import {
   isComputedPropertyName,
   isParameterDeclaration,
   isPropertySignatureDeclaration,
-} from "typescript/unstable/ast/is";
+} from "tsrs/unstable/ast/is";
 import {
   type Checker,
+  CheckFlags,
   type Diagnostic,
   DiagnosticCategory,
   ElementFlags,
@@ -71,10 +73,11 @@ import {
   type TupleType,
   type Type,
   TypeFlags,
+  TypeFormatFlags,
   TypePredicateKind,
   type TypeReference,
   type UnionOrIntersectionType,
-} from "typescript/unstable/async";
+} from "tsrs/unstable/async";
 import * as v from "valibot";
 
 import { printError } from "@stll/errors";
@@ -174,6 +177,9 @@ const diagnosticMessage = (diagnostic: Diagnostic, depth: number): string =>
     ),
   ].join("\n");
 
+// tsrs reports a diagnostic's category as a plain number.
+const ERROR_CATEGORY: number = DiagnosticCategory.Error;
+
 const formatDiagnostics = (
   diagnostics: readonly Diagnostic[],
   sourceText: (fileName: string) => string | undefined,
@@ -189,7 +195,7 @@ const formatDiagnostics = (
               text === undefined ? "" : lineAndColumn(text, diagnostic.pos)
             }: `;
       const category =
-        diagnostic.category === DiagnosticCategory.Error ? "error" : "warning";
+        diagnostic.category === ERROR_CATEGORY ? "error" : "warning";
       return `${location}${category} TS${diagnostic.code}: ${diagnosticMessage(diagnostic, 0).trimStart()}`;
     })
     .join("\n");
@@ -224,10 +230,12 @@ const NODE_MODULES_PACKAGE = /\/node_modules\/((?:@[^/]+\/)?[^/]+)\//u;
 // Compiler libs and runtime globals print by global name, never as imports.
 const GLOBAL_TYPE_PACKAGES = new Set([
   "typescript",
-  "@typescript/native-preview",
+  "tsrs",
   "bun-types",
   "@types/bun",
 ]);
+// Scopes of the compilers' platform packages, which carry the lib files.
+const COMPILER_SCOPES = ["@typescript/", "@tsrs/"];
 
 export const packageOfFile = (fileName: string): string | undefined => {
   const workspaceDirectory = WORKSPACE_PACKAGE_SOURCE.exec(fileName)?.[1];
@@ -241,7 +249,7 @@ export const packageOfFile = (fileName: string): string | undefined => {
   const name = NODE_MODULES_PACKAGE.exec(fileName.slice(lastNodeModules))?.[1];
   return name === undefined ||
     GLOBAL_TYPE_PACKAGES.has(name) ||
-    name.startsWith("@typescript/")
+    COMPILER_SCOPES.some((scope) => name.startsWith(scope))
     ? undefined
     : name;
 };
@@ -269,11 +277,6 @@ const NUMERIC_KEY = /^(?:0|[1-9]\d*)$/u;
 const FUNCTION_TYPE = /[=]>/u;
 // The compiler names a property keyed by a unique symbol `__@name@id`.
 const LATE_BOUND_NAME = "__@";
-// `CheckFlags.Readonly`: a property a mapped type made readonly carries the
-// modifier only here, not on any declaration.
-const CHECK_FLAGS_READONLY = 8;
-// `TypeFormatFlags.NoTruncation`.
-const NO_TRUNCATION = 1;
 
 // Whether route responses print as JSON delivers them or as the API declares
 // them; the latter exists only for the identity check.
@@ -369,9 +372,7 @@ const createCachedCompiler = (checker: Checker, contractSource: SourceFile) => {
     if (known !== undefined) {
       return await known;
     }
-    const fetched = (async () =>
-      (await checker.getTypeOfSymbol(symbol)) ??
-      panic(`generate-web-api-types: ${symbol.name} has no type`))();
+    const fetched = checker.getTypeOfSymbol(symbol);
     symbolTypes.set(symbol.id, fetched);
     return await fetched;
   };
@@ -405,10 +406,9 @@ const createCachedCompiler = (checker: Checker, contractSource: SourceFile) => {
     async (type: TypeReference) => await type.getTarget(),
   );
   const symbolOf = cachedById(async (type: Type) => await type.getSymbol());
-  // Answered here rather than asked: only a reference is an array or a
-  // tuple, and its target says which.
-  const isTuple = async (type: Type): Promise<boolean> =>
-    type.isTypeReference() && (await targetOf(type)).isTupleType();
+  // Answered here rather than asked: a tuple reference says so itself, and
+  // only a reference whose target is the global `Array` is an array.
+  const isTuple = (type: Type): boolean => type.isTupleType();
   const isArray = async (type: Type): Promise<boolean> => {
     if (!type.isTypeReference()) {
       return false;
@@ -501,7 +501,11 @@ export const printContract = async ({
     map.set(key, (map.get(key) ?? 0) + 1);
   const fallback = async (reason: string, type: Type): Promise<string> => {
     count(fallbacks, reason);
-    return await checker.typeToString(type, undefined, NO_TRUNCATION);
+    return await checker.typeToString(
+      type,
+      undefined,
+      TypeFormatFlags.NoTruncation,
+    );
   };
 
   const declarationFile = (symbol: CompilerSymbol): string | undefined => {
@@ -782,7 +786,7 @@ export const printContract = async ({
     if (!type.isObjectType() || (await isDate(type))) {
       return [];
     }
-    if ((await compiler.isArray(type)) || (await compiler.isTuple(type))) {
+    if (compiler.isTuple(type) || (await compiler.isArray(type))) {
       return type.isTypeReference() ? await compiler.typeArguments(type) : [];
     }
     const globalSymbol = type.isTypeReference()
@@ -874,7 +878,7 @@ export const printContract = async ({
   const isReadonlyProperty = async (
     property: CompilerSymbol,
   ): Promise<boolean> => {
-    if (hasFlag(property.checkFlags, CHECK_FLAGS_READONLY)) {
+    if (hasFlag(property.checkFlags, CheckFlags.Readonly)) {
       return true;
     }
     const declaration = await compiler.declaration(property);
@@ -978,9 +982,7 @@ export const printContract = async ({
     const predicate = await checker.getTypePredicateOfSignature(sig);
     let returned: string;
     if (predicate === undefined) {
-      const returnType =
-        (await checker.getReturnTypeOfSignature(sig)) ??
-        panic("generate-web-api-types: signature without a return type");
+      const returnType = await checker.getReturnTypeOfSignature(sig);
       returned = await at("=>", async () => print(returnType));
     } else {
       const asserts =
@@ -1123,7 +1125,7 @@ export const printContract = async ({
         hasFlag(flags, TypeFlags.Intersection)) &&
       (await globalNameOf(await compiler.aliasSymbol(type))) === undefined &&
       !(await compiler.isArray(type)) &&
-      !(await compiler.isTuple(type))
+      !compiler.isTuple(type)
     ) {
       const reference = await packageReference(type);
       if (reference !== undefined) {
@@ -1234,10 +1236,11 @@ export const printContract = async ({
 
   const printObject = async (type: ObjectType): Promise<string> => {
     if (type.isTypeReference()) {
-      const target = await compiler.target(type);
-      if (target.isTupleType()) {
-        return await memo(type, async () => tuple(type, target));
+      if (type.isTupleType()) {
+        const tupleTarget = await type.getTarget();
+        return await memo(type, async () => tuple(type, tupleTarget));
       }
+      const target = await compiler.target(type);
       if (await compiler.isArray(type)) {
         const element = (await compiler.typeArguments(type)).at(0);
         const name =
@@ -1329,10 +1332,8 @@ export const printContract = async ({
         if (!type.isObjectType()) {
           return;
         }
-        const [isArray, isTuple] = await Promise.all([
-          compiler.isArray(type),
-          compiler.isTuple(type),
-        ]);
+        const isTuple = compiler.isTuple(type);
+        const isArray = await compiler.isArray(type);
         if (type.isTypeReference()) {
           const target = await compiler.target(type);
           const [typeArguments, targetSymbol] = await Promise.all([
@@ -1344,7 +1345,6 @@ export const printContract = async ({
           if (
             isArray ||
             isTuple ||
-            target.isTupleType() ||
             (await globalNameOf(targetSymbol)) !== undefined
           ) {
             return;
@@ -1659,8 +1659,6 @@ const printWithProgram = async ({
     compilerOptions: PROGRAM_OPTIONS,
     virtualFiles,
     ...(recorder === undefined ? {} : { recorder }),
-    packageOf: packageOfFile,
-    webDependencies,
   });
   const printed = await Result.tryPromise(async () => {
     const programCreated = performance.now();
@@ -1816,10 +1814,10 @@ const cacheStampSchema = v.strictObject({
 const cacheContext = () =>
   sha256Hex(
     JSON.stringify({
-      format: 3,
+      format: 4,
       output: repoRelativePath(REPO_ROOT, OUTPUT_PATH),
       bun: Bun.version,
-      typescript: typescriptPackage.version,
+      compiler: compilerPackage.version,
       generator: scriptSourceHash(import.meta.path),
       // The Turbo coverage check reads these declarations, so a restored
       // printout must not outlive a change to them.

@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { PILOT_ALWAYS, pilotFastJobs } from "./ci-pr-pilot-plan";
 import { renderResultInputs } from "./ci-result-inputs";
 import { evaluate } from "./github-expression";
+import { heavyProofJobs } from "./main-heavy-plan";
 
 const schema = v.object({
   jobs: v.record(
@@ -190,7 +191,12 @@ test("nonexistent calendar dates cannot certify fast coverage", async () => {
   }
 });
 
-const conditionContext = (profile: string, event: string, depth: string) => {
+const conditionContext = (
+  profile: string,
+  event: string,
+  depth: string,
+  { armed = false }: { armed?: boolean } = {},
+) => {
   const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
     "github.event.action": "synchronize",
@@ -207,6 +213,12 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     "needs.ci-plan.outputs.suite_depth": depth,
     "needs.ci-plan.outputs.queue_depth": "full",
     "needs.ci-plan.outputs.trusted": "true",
+    "needs.ci-plan.outputs.e2e_production_required": "true",
+    // A pull request runs the queue-only suites only once armed; a merge
+    // group here has no armed proof.
+    "needs.ci-plan.outputs.heavy_proof": String(
+      event !== "pull_request" || armed,
+    ),
   };
   for (const name of Object.keys(workflow.jobs)) {
     values[`needs.${name}.result`] = "success";
@@ -230,6 +242,9 @@ const conditionContext = (profile: string, event: string, depth: string) => {
     status: { always: true, success: true, failure: false, cancelled: false },
   };
 };
+
+// Suites a pull request runs only once armed (the heavy_proof gate).
+const queueOnly = new Set(heavyProofJobs(workflow));
 
 const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "e2e-production-shard",
@@ -309,7 +324,20 @@ test("off and unset preserve today's job plan across every event and depth", asy
         const { outputs } = await decide({ variable, event, action });
         expect(outputs.get("coverage_profile")).toBe("normal-v1");
         for (const depth of ["fast", "full"]) {
-          const context = conditionContext("normal-v1", event, depth);
+          // The normal PR plan is the armed run's plan; an unarmed push
+          // leaves out exactly the queue-only suites.
+          const context = conditionContext("normal-v1", event, depth, {
+            armed: true,
+          });
+          if (event === "pull_request") {
+            const unarmed = conditionContext("normal-v1", event, depth);
+            for (const name of queueOnly) {
+              expect(
+                evaluate(workflow.jobs[name]?.if ?? "true", unarmed),
+                name,
+              ).toBe(false);
+            }
+          }
           for (const [name, job] of Object.entries(original.jobs)) {
             if (DECLARED_EVERY_DEPTH_CHANGES.has(name)) {
               const actual = evaluate(
@@ -318,7 +346,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
               );
               const baseline = evaluate(
                 job.if ?? "true",
-                conditionContext("normal-v1", event, "full"),
+                conditionContext("normal-v1", event, "full", { armed: true }),
               );
               expect(actual, name).toBe(
                 event === "pull_request" ? true : baseline,
@@ -336,9 +364,15 @@ test("off and unset preserve today's job plan across every event and depth", asy
               );
               continue;
             }
-            expect(partSelected(name, context), name).toEqual(
-              evaluate(job.if ?? "true", context),
-            );
+            const planned = evaluate(job.if ?? "true", context);
+            // Arming adds the queue-only suites to the normal PR plan.
+            if (event === "pull_request" && queueOnly.has(name)) {
+              if (planned === true) {
+                expect(partSelected(name, context), name).toBe(true);
+              }
+              continue;
+            }
+            expect(partSelected(name, context), name).toEqual(planned);
           }
         }
       }
@@ -355,7 +389,9 @@ test("off and unset preserve today's job plan across every event and depth", asy
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
   for (const profile of ["normal-v1", "pilot-fast-v1"]) {
     for (const selection of ["", "off", "on"]) {
-      const context = conditionContext(profile, "pull_request", "fast");
+      const context = conditionContext(profile, "pull_request", "fast", {
+        armed: true,
+      });
       context.values["vars.CI_POSTGRES_PR_SELECTION"] = selection;
       context.values["needs.ci-plan.outputs.postgres_service_suites_required"] =
         String(selection === "on");
@@ -370,7 +406,9 @@ test("Postgres PR execution follows explicit opt-in in either pilot profile", ()
 });
 
 test("corpus-only PRs start only corpus service steps", () => {
-  const context = conditionContext("normal-v1", "pull_request", "fast");
+  const context = conditionContext("normal-v1", "pull_request", "fast", {
+    armed: true,
+  });
   for (const key of Object.keys(context.values)) {
     if (key.endsWith("_required")) {
       context.values[key] = "false";
@@ -499,6 +537,11 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
     if (!allowed.includes(name)) {
       expect(evaluate(job.if ?? "true", context), name).toBe(false);
     }
+    // A pilot push is unarmed: the queue-only suites wait for arming.
+    if (queueOnly.has(name)) {
+      expect(evaluate(job.if ?? "true", context), name).toBe(false);
+      continue;
+    }
     if (
       allowed.includes(name) &&
       !name.endsWith("-cancel") &&
@@ -525,8 +568,13 @@ test("ready and auto-merge arm select exactly the normal PR plan", async () => {
     const { outputs } = await decide({ action });
     expect(outputs.get("coverage_profile")).toBe("normal-v1");
   }
-  const full = conditionContext("normal-v1", "pull_request", "fast");
-  const reference = conditionContext("normal-v1", "pull_request", "fast");
+  // Arming runs the queue-only suites with the normal PR plan.
+  const full = conditionContext("normal-v1", "pull_request", "fast", {
+    armed: true,
+  });
+  const reference = conditionContext("normal-v1", "pull_request", "fast", {
+    armed: true,
+  });
   for (const [name, job] of Object.entries(original.jobs)) {
     if (evaluate(job.if ?? "true", reference) === true) {
       expect(evaluate(workflow.jobs[name]?.if ?? "true", full), name).toBe(

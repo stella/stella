@@ -1,22 +1,19 @@
-// The TypeScript 7 program the web API type printer reads: built by the
-// compiler's own process (tsgo) and queried through its API, so the printer
-// and the identity check run on the checker apps/web type-checks with.
+// The TypeScript program the web API type printer reads: built by tsrs, the
+// Rust port of the TypeScript 7 compiler, in its own process and queried
+// through the TypeScript 7 API it serves.
 //
-// The program's roots are the contract, the files served from memory and a
-// package probe beside the contract: one `import type` per apps/web dependency
-// the program already loads, so the printer can read what each package entry
-// exports, resolved from the contract as the API itself resolves it.
+// The program's roots are the contract and the files served from memory. A
+// package's entry is resolved from the contract, as the API itself resolves
+// it, so the printer reads what that entry exports.
 import { panic, Result } from "better-result";
 import path from "node:path";
-import type { SourceFile } from "typescript/unstable/ast";
-import { isImportDeclaration } from "typescript/unstable/ast/is";
+import type { SourceFile } from "tsrs/unstable/ast";
 import {
   API,
   type Checker,
   type Diagnostic,
-  type Project,
   type Symbol as CompilerSymbol,
-} from "typescript/unstable/async";
+} from "tsrs/unstable/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -26,7 +23,6 @@ import {
 } from "./compiler-input-stamp";
 
 const PROGRAM_CONFIG_NAME = "tsconfig.__web-api-program__.json";
-const PACKAGE_PROBE_NAME = "__web-api-packages__.ts";
 
 export type ContractProgram = {
   checker: Checker;
@@ -48,17 +44,7 @@ type OpenContractProgramOptions = {
   /** Files served from memory, added to the program's roots. */
   virtualFiles: ReadonlyMap<string, string>;
   recorder?: CompilerInputRecorder;
-  packageOf: (fileName: string) => string | undefined;
-  webDependencies: ReadonlySet<string>;
 };
-
-const probeSource = (packages: readonly string[]) =>
-  `${packages
-    .map(
-      (name, index) =>
-        `import type * as __package${index} from ${JSON.stringify(name)};\n`,
-    )
-    .join("")}export {};\n`;
 
 // On a case-insensitive file system the compiler keys files by a lower-cased
 // path; declaration handles carry that key, not the spelling on disk.
@@ -82,17 +68,12 @@ export const openContractProgram = async ({
   compilerOptions,
   virtualFiles,
   recorder,
-  packageOf,
-  webDependencies,
 }: OpenContractProgramOptions): Promise<ContractProgram> => {
   const directory = path.dirname(contractPath);
   const configPath = path.join(directory, PROGRAM_CONFIG_NAME);
-  const probePath = path.join(directory, PACKAGE_PROBE_NAME);
-  // Served live: the config and the probe are rewritten once the files they
-  // depend on are known.
+  // Served live: the config is written once the base config's files are known.
   const served = new Map(virtualFiles);
   served.set(configPath, "{}");
-  served.set(probePath, probeSource([]));
   const api = new API({
     cwd: directory,
     fs:
@@ -115,87 +96,70 @@ export const openContractProgram = async ({
           ? {}
           : { extends: `./${repoRelativePath(directory, baseConfigPath)}` }),
         compilerOptions,
-        files: [contractPath, probePath, ...virtualFiles.keys(), ...ambient],
+        files: [contractPath, ...virtualFiles.keys(), ...ambient],
         include: [],
       }),
     );
-    const loaded = await api.updateSnapshot({ openProjects: [configPath] });
-    const loadedProject =
-      loaded.getProject(configPath) ??
+    const snapshot = await api.createSnapshot({ openProjects: [configPath] });
+    const project =
+      snapshot.getConfiguredProject(configPath) ??
       panic("web-api-program: the program config did not open");
     const configDiagnostics =
-      await loadedProject.program.getConfigFileParsingDiagnostics();
+      await project.program.getConfigFileParsingDiagnostics();
     if (configDiagnostics.length > 0) {
       return panic(
         `web-api-program: ${configDiagnostics.map(({ text }) => text).join("; ")}`,
       );
     }
-    const packages = [
-      ...new Set(
-        (await loadedProject.program.getSourceFileNames()).flatMap(
-          (fileName) => {
-            const name = packageOf(fileName);
-            return name !== undefined && webDependencies.has(name)
-              ? [name]
-              : [];
-          },
-        ),
-      ),
-    ].toSorted();
-    served.set(probePath, probeSource(packages));
-    const snapshot = await api.updateSnapshot({
-      fileChanges: { changed: [probePath] },
-    });
-    await loaded.dispose();
-    const project: Project =
-      snapshot.getProject(configPath) ??
-      panic("web-api-program: the program config did not reopen");
-    return { packages, project };
+    const resolver = await api.createModuleResolver(
+      project.parsedCommandLine.options,
+    );
+    return { project, resolver, snapshot };
   });
   if (opened.isErr()) {
     await api.close();
     return panic("web-api-program: could not open the program", opened.error);
   }
-  const { packages, project } = opened.value;
+  const { project, resolver, snapshot } = opened.value;
   const { checker, program } = project;
   const contractSource =
     (await program.getSourceFile(contractPath)) ??
     panic(`web-api-program: ${contractPath} is not in the program`);
-  const probe =
-    (await program.getSourceFile(probePath)) ??
-    panic("web-api-program: the package probe is not in the program");
-  const specifiers = probe.statements.flatMap((statement) =>
-    isImportDeclaration(statement) ? [statement.moduleSpecifier] : [],
-  );
   const modules = new Map<string, Promise<CompilerSymbol | undefined>>();
+  // A package whose entry the program never loaded exports nothing to it.
+  const resolveModule = async (packageName: string) => {
+    const resolved = await resolver.resolveModuleName(
+      packageName,
+      directory,
+      undefined,
+      { snapshot },
+    );
+    const fileName = resolved.resolvedModule?.resolvedFileName;
+    const source =
+      fileName === undefined
+        ? undefined
+        : await program.getSourceFile(fileName);
+    return source === undefined
+      ? undefined
+      : await checker.getSymbolAtLocation(source);
+  };
   return {
     checker,
     contractSource,
     fileNameOf: fileNameResolver(await program.getSourceFileNames()),
     moduleOfPackage: async (packageName) => {
-      const index = packages.indexOf(packageName);
-      const specifier = specifiers.at(index);
-      if (index === -1 || specifier === undefined) {
-        return undefined;
-      }
       const known = modules.get(packageName);
       if (known !== undefined) {
         return await known;
       }
-      const resolved = checker.getSymbolAtLocation(specifier);
-      modules.set(packageName, resolved);
-      return await resolved;
+      const resolving = resolveModule(packageName);
+      modules.set(packageName, resolving);
+      return await resolving;
     },
-    diagnosticsOf: async (fileNames) => {
-      const diagnostics: Diagnostic[] = [];
-      for (const fileName of fileNames) {
-        diagnostics.push(
-          ...(await program.getSyntacticDiagnostics(fileName)),
-          ...(await program.getSemanticDiagnostics(fileName)),
-        );
-      }
-      return diagnostics;
-    },
+    diagnosticsOf: async (fileNames) => [
+      ...(await program.getSyntacticDiagnostics(fileNames)),
+      ...(await program.getSemanticDiagnostics(fileNames)),
+    ],
     close: async () => {
       await api.close();
     },
