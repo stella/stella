@@ -693,6 +693,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "search_history_entries_owner_country_recent_idx" ON public."search_history_entries" USING btree ("organization_id", "user_id", "country", "last_used_at", "id")',
+    definitionBody:
+      "ON public.search_history_entries USING btree (organization_id, user_id, country, last_used_at, id)",
+    isUnique: false,
+    name: "search_history_entries_owner_country_recent_idx",
+    tableName: "search_history_entries",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 

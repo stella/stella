@@ -202,11 +202,14 @@ const readHistory = async (
   return result;
 };
 
-const recordQuery = async (fixture: HistoryFixture, query: string) => {
+const recordEntry = async (
+  fixture: HistoryFixture,
+  body: Parameters<typeof record.handler>[0]["body"],
+) => {
   const result = await record.handler(
     createTestHandlerContext<Parameters<typeof record.handler>[0]>({
       ...identity(fixture),
-      body: { kind: "search", query },
+      body,
     }),
   );
   if (result instanceof HttpStatusResponse) {
@@ -214,6 +217,12 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
   }
   return result;
 };
+
+const recordQuery = async (
+  fixture: HistoryFixture,
+  query: string,
+  country = "CZE",
+) => await recordEntry(fixture, { kind: "search", query, country });
 
 if (!databaseUrl || !enabled) {
   describe.skip("search history (postgres)", () => {
@@ -854,6 +863,58 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test("entries keep their jurisdiction and a country filter lists only its own", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const czechQuery = await recordQuery(fixture, "Náhrada škody", "CZE");
+        const polishQuery = await recordQuery(fixture, "náhrada  škody", "POL");
+        expect(polishQuery.id).not.toBe(czechQuery.id);
+        const polishDecision = await recordEntry(fixture, {
+          kind: "decision",
+          documentId: "01a16610-b177-712f-bff9-4732ef2df307",
+          title: "II CSKP 61/24",
+          path: "/law/pol/cases/sad-najwyzszy/ii-cskp-61-24",
+        });
+        const legacyRows = await prepareSearchHistoryRows(fixture, [
+          {
+            entry: { kind: "search", query: "kept before countries" },
+            usedAt: new Date(NOW.getTime() - 60_000),
+          },
+        ]);
+        await fixture.db.transaction(
+          async (tx) =>
+            await upsertSearchHistoryRows({
+              tx,
+              rows: legacyRows,
+              mode: "import",
+              recordAuditEvent: historyAuditRecorder(fixture),
+            }),
+        );
+
+        const czech = await readHistory(fixture, { country: "CZE" });
+        expect(czech.items.map(({ id }) => id)).toEqual([czechQuery.id]);
+        expect(czech.items.at(0)).toMatchObject({
+          kind: "search",
+          country: "CZE",
+        });
+        const polish = await readHistory(fixture, { country: "POL" });
+        expect(new Set(polish.items.map(({ id }) => id))).toEqual(
+          new Set([polishQuery.id, polishDecision.id]),
+        );
+        expect(polish.items.every(({ country }) => country === "POL")).toBe(
+          true,
+        );
+        expect(
+          (await readHistory(fixture, { country: "POL", kind: "decision" }))
+            .items,
+        ).toMatchObject([{ id: polishDecision.id, country: "POL" }]);
+        const unscoped = await readHistory(fixture);
+        expect(unscoped.items).toHaveLength(4);
+        expect(
+          unscoped.items.find(({ country }) => country === null),
+        ).toMatchObject({ kind: "search", query: "kept before countries" });
+      });
+    });
+
     test("delete erases one entry and clear erases only the active owner's remaining entries", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const first = await recordQuery(fixture, "First");
@@ -962,7 +1023,7 @@ if (!databaseUrl || !enabled) {
         const staleRecord = await record.handler(
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
-            body: { kind: "search", query: "Stale record" },
+            body: { kind: "search", query: "Stale record", country: "CZE" },
           }),
         );
         const staleImport = await importEntries.handler(
@@ -1079,7 +1140,7 @@ if (!databaseUrl || !enabled) {
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
             audit: interruptedRecorder,
-            body: { kind: "search", query: "Atomic record" },
+            body: { kind: "search", query: "Atomic record", country: "CZE" },
           }),
         );
         expect(auditInserted).toBe(true);

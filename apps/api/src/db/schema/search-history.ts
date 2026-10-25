@@ -1,3 +1,5 @@
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
 import {
   bytea,
   organization,
@@ -39,6 +41,12 @@ export const searchHistoryEntries = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     kind: p.text("kind", { enum: SEARCH_HISTORY_KINDS }).notNull(),
+    /**
+     * The jurisdiction the entry belongs to: the one a query was typed under,
+     * or the one an opened page's path names. Null on queries a browser kept
+     * from before entries named one; no country-scoped list shows those.
+     */
+    country: p.text("country", { enum: CASE_LAW_JURISDICTIONS }),
     courtId: p.varchar("court_id", { length: 128 }),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),
@@ -54,6 +62,17 @@ export const searchHistoryEntries = p.pgTable(
     p
       .index("search_history_entries_owner_recent_idx")
       .on(table.organizationId, table.userId, table.lastUsedAt, table.id),
+    // Built online (`ONLINE_MIGRATION_INDEXES`): the law home lists one
+    // jurisdiction's entries.
+    p
+      .index("search_history_entries_owner_country_recent_idx")
+      .on(
+        table.organizationId,
+        table.userId,
+        table.country,
+        table.lastUsedAt,
+        table.id,
+      ),
     p
       .index("search_history_entries_owner_kind_recent_idx")
       .on(

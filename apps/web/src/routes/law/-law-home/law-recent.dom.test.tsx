@@ -32,6 +32,7 @@ const queryImportBatchSchema = v.object({
 });
 
 const usage = {
+  country: "CZE",
   firstUsedAt: "2026-01-01T12:00:00Z",
   lastUsedAt: "2026-01-02T12:00:00Z",
   useCount: 1,
@@ -270,7 +271,7 @@ test("recents stay a placeholder until the session says who is visiting", async 
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent country="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,
@@ -360,7 +361,7 @@ test("signed-in recents import local data once and always display server data", 
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent country="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,
@@ -491,17 +492,19 @@ const mountServerHistory = async (
       { preconnect: () => undefined },
     ),
   );
+  const page = (country: string) => (
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <LawRecent country={country} onSearch={() => undefined} />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>
+  );
+  let rendered: ReturnType<typeof render> | undefined;
   try {
     await act(async () => {
-      render(
-        <QueryClientProvider client={client}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
-            </FormattingProvider>
-          </IntlProvider>
-        </QueryClientProvider>,
-      );
+      rendered = render(page("CZE"));
     });
   } catch (error) {
     await act(async () => cleanup());
@@ -512,6 +515,12 @@ const mountServerHistory = async (
   return {
     requests,
     client,
+    /** The country picker moving to another jurisdiction. */
+    setCountry: async (country: string) => {
+      await act(async () => {
+        rendered?.rerender(page(country));
+      });
+    },
     setScope: async ({
       userId,
       organizationId,
@@ -616,6 +625,76 @@ test("recents tabs fetch each kind beyond the newest twenty mixed entries", asyn
       ),
     ).toBe(true);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("recents list only the selected jurisdiction's searches and opened decisions", async () => {
+  const stored = [
+    ...seed,
+    {
+      ...seed[0],
+      country: "POL",
+      id: toSafeId<"searchHistoryEntry">("history-polish-search"),
+      query: "zadośćuczynienie",
+    },
+    {
+      ...seed[1],
+      country: "POL",
+      id: toSafeId<"searchHistoryEntry">("history-polish-decision"),
+      documentId: "decision-pl",
+      title: "II CSKP 61/24 · Sąd Najwyższy",
+      path: "/law/pol/cases/sad-najwyzszy/ii-cskp-61-24",
+      documentIdentity: {
+        kind: "decision",
+        courtAbbreviation: "SN",
+        courtTier: "supreme",
+      },
+    },
+  ];
+  const fixture = await mountServerHistory(({ url, method }) => {
+    if (method !== "GET" || !url.pathname.includes("search-history")) {
+      throw new TypeError("Expected a history list request");
+    }
+    const country = url.searchParams.get("country");
+    return Response.json({
+      scope: {
+        userId: "scoped-history-reader",
+        organizationId: "scoped-history-org-a",
+      },
+      items: stored.filter((entry) => entry.country === country),
+      nextCursor: null,
+      limit: 20,
+    });
+  });
+  try {
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /23 Cdo 1001/u })).toBeTruthy(),
+    );
+    expect(screen.getByRole("button", { name: /náhrada škody/u })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /II CSKP 61\/24/u })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /zadośćuczynienie/u }),
+    ).toBeNull();
+
+    await fixture.setCountry("POL");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: /II CSKP 61\/24/u }),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen.getByRole("button", { name: /zadośćuczynienie/u }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /23 Cdo 1001/u })).toBeNull();
+    expect(screen.queryByRole("button", { name: /náhrada škody/u })).toBeNull();
+    expect(
+      fixture.requests.map(({ url }) => url.searchParams.get("country")),
+    ).toEqual(expect.arrayContaining(["CZE", "POL"]));
+    expect(
+      fixture.requests.every(({ url }) => url.searchParams.has("country")),
+    ).toBe(true);
   } finally {
     await fixture.dispose();
   }
@@ -1363,7 +1442,7 @@ test(
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
             <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent onSearch={() => undefined} />
+              <LawRecent country="CZE" onSearch={() => undefined} />
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,

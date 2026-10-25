@@ -4,6 +4,11 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -84,16 +89,25 @@ const statuteDocumentIdentitySchema = v.strictObject({
   ),
 });
 
-/** One use to record: a typed query, or a decision or statute opened. */
-export const searchHistoryEntryInputSchema = v.union([
-  v.strictObject({
-    kind: v.literal("search"),
-    query: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(LIMITS.searchQueryMaxLength),
+// Enum derives its choices without assigning a default to an omitted filter.
+export const searchHistoryCountrySchema = v.pipe(
+  v.enum(
+    Object.fromEntries(
+      CASE_LAW_JURISDICTIONS.map((country) => [country, country] as const),
     ),
-  }),
+  ),
+  v.description(
+    "The jurisdiction the law pages were scoped to, as its corpus code (CZE, POL, EU).",
+  ),
+);
+
+const searchQuerySchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchQueryMaxLength),
+);
+
+const openedEntrySchemas = [
   v.strictObject({
     kind: v.literal("decision"),
     courtId: v.optional(
@@ -115,10 +129,37 @@ export const searchHistoryEntryInputSchema = v.union([
     title: titleSchema,
     path: pathSchema,
   }),
+] as const;
+
+/**
+ * One use to record: a query typed under a jurisdiction, or a decision or
+ * statute opened. An opened document's jurisdiction is the one its path names.
+ */
+export const searchHistoryEntryInputSchema = v.union([
+  v.strictObject({
+    kind: v.literal("search"),
+    query: searchQuerySchema,
+    country: searchHistoryCountrySchema,
+  }),
+  ...openedEntrySchemas,
+]);
+
+/**
+ * What an import reads. A browser kept its searches before they named a
+ * jurisdiction, so an imported query may lack one; it is stored without it
+ * and no country-scoped list shows it.
+ */
+const searchHistoryImportEntrySchema = v.union([
+  v.strictObject({
+    kind: v.literal("search"),
+    query: searchQuerySchema,
+    country: v.optional(searchHistoryCountrySchema),
+  }),
+  ...openedEntrySchemas,
 ]);
 
 export type SearchHistoryEntryInput = v.InferOutput<
-  typeof searchHistoryEntryInputSchema
+  typeof searchHistoryImportEntrySchema
 >;
 
 // Enum derives its choices without assigning a default to an omitted filter.
@@ -163,38 +204,60 @@ const statutePayloadSchema = v.object({
 const collapseWhitespace = (value: string) =>
   normalizeUnicode(value, "NFC").trim().replaceAll(/\s+/gu, " ");
 
+/** The jurisdiction a law page path names, when it names a declared one. */
+const pathCountry = (segment: string): CaseLawJurisdiction | null => {
+  const code = segment.toUpperCase();
+  return isCaseLawJurisdiction(code) ? code : null;
+};
+
 /**
- * The entry as stored and the text its repeats are matched on. A query is
- * matched case- and spacing-insensitively, so "Náhrada  škody" and "náhrada
- * škody" are one entry; an opened document is matched on its identifier.
- * `null` when the entry is not one the law pages could have recorded.
+ * The entry as stored, the jurisdiction it was recorded under, and the text
+ * its repeats are matched on. A query is matched case- and
+ * spacing-insensitively within its jurisdiction, so "Náhrada  škody" and
+ * "náhrada škody" are one entry; an opened document is matched on its
+ * identifier. `null` when the entry is not one the law pages could have
+ * recorded.
  */
 export const canonicalSearchHistoryEntry = (
   entry: SearchHistoryEntryInput,
-): { entry: SearchHistoryEntryInput; match: string } | null => {
+): {
+  entry: SearchHistoryEntryInput;
+  country: CaseLawJurisdiction | null;
+  match: string;
+} | null => {
   switch (entry.kind) {
     case "search": {
       const query = collapseWhitespace(entry.query);
-      return query.length === 0
-        ? null
-        : {
-            entry: { kind: "search", query },
-            match: searchHistoryEntryMatch(entry),
-          };
+      if (query.length === 0) {
+        return null;
+      }
+      const match = searchHistoryEntryMatch(entry);
+      if (entry.country === undefined) {
+        // An imported query without a jurisdiction keeps the key it was
+        // first stored under, so a repeated import converges on its row.
+        return { entry: { kind: "search", query }, country: null, match };
+      }
+      return {
+        entry: { kind: "search", query, country: entry.country },
+        country: entry.country,
+        match: `${entry.country}\u0000${match}`,
+      };
     }
     case "decision":
     case "statute": {
       const title = collapseWhitespace(entry.title);
       const documentId = entry.documentId.trim();
-      const opensDocument =
+      const route =
         entry.kind === "decision"
-          ? parseCaseLawDecisionPath(entry.path) !== null
-          : parseStatutePath(entry.path) !== null;
-      if (title.length === 0 || documentId.length === 0 || !opensDocument) {
+          ? parseCaseLawDecisionPath(entry.path)
+          : parseStatutePath(entry.path);
+      const country = route === null ? null : pathCountry(route.country);
+      if (title.length === 0 || documentId.length === 0 || country === null) {
         return null;
       }
       return {
         entry: { ...entry, documentId, title },
+        country,
         match: searchHistoryEntryMatch(entry),
       };
     }
@@ -209,7 +272,7 @@ export const canonicalSearchHistoryEntry = (
 export const readSearchHistoryEntryInput = (
   value: unknown,
 ): SearchHistoryEntryInput | null =>
-  v.is(searchHistoryEntryInputSchema, value) ? value : null;
+  v.is(searchHistoryImportEntrySchema, value) ? value : null;
 
 const payloadOf = (entry: SearchHistoryEntryInput) => {
   switch (entry.kind) {
@@ -247,6 +310,7 @@ export type SearchHistoryUse = {
 
 type PreparedUse = {
   kind: SearchHistoryEntryInput["kind"];
+  country: CaseLawJurisdiction | null;
   lookupKey: string;
   entry: SearchHistoryEntryInput;
   firstUsedAt: Date;
@@ -280,6 +344,7 @@ const prepareUses = async (
     if (previous === undefined) {
       prepared.set(mapKey, {
         kind: use.entry.kind,
+        country: canonical.country,
         lookupKey,
         entry: canonical.entry,
         firstUsedAt: use.usedAt,
@@ -291,6 +356,7 @@ const prepareUses = async (
     const isLatest = use.usedAt >= previous.lastUsedAt;
     prepared.set(mapKey, {
       kind: previous.kind,
+      country: isLatest ? canonical.country : previous.country,
       lookupKey,
       entry: isLatest ? canonical.entry : previous.entry,
       firstUsedAt:
@@ -326,6 +392,7 @@ export const prepareSearchHistoryRows = async (
         organizationId: owner.organizationId,
         userId: owner.userId,
         kind: use.kind,
+        country: use.country,
         courtId:
           use.entry.kind === "decision" ? (use.entry.courtId ?? null) : null,
         lookupKey: use.lookupKey,
@@ -537,6 +604,7 @@ export const upsertSearchHistoryRows = async ({
               table.lookupKey,
             ],
             set: {
+              country: sql`CASE WHEN ${incomingIsLatest} THEN excluded.country ELSE ${table.country} END`,
               courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
               ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
               iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
@@ -567,6 +635,7 @@ type SearchHistoryRow = Pick<
   SearchHistoryEntryRow,
   | "id"
   | "kind"
+  | "country"
   | "courtId"
   | "ciphertext"
   | "iv"
@@ -591,6 +660,7 @@ export const toSearchHistoryEntryResponse = async (
   );
   const usage = {
     id: row.id,
+    country: row.country,
     firstUsedAt: row.firstUsedAt.toISOString(),
     lastUsedAt: row.lastUsedAt.toISOString(),
     useCount: row.useCount,

@@ -107,15 +107,18 @@ test("server history stays visible while a local import recovers", async () => {
   });
   client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   try {
-    const { result } = renderHook(() => useLawHistory(), {
-      wrapper: ({ children }) => (
-        <QueryClientProvider client={client}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            {children}
-          </IntlProvider>
-        </QueryClientProvider>
-      ),
-    });
+    const { result } = renderHook(
+      () => useLawHistory({ filter: "all", country: "CZE" }),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              {children}
+            </IntlProvider>
+          </QueryClientProvider>
+        ),
+      },
+    );
     await waitFor(() => {
       expect(result.current.list).toMatchObject({
         status: "ready",
@@ -214,17 +217,26 @@ test("leaving the page during a local import does not report its cancellation", 
   });
   client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
   try {
-    const { result } = renderHook(() => useLawHistory(), {
-      wrapper: ({ children }) => (
-        <QueryClientProvider client={client}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            {children}
-          </IntlProvider>
-        </QueryClientProvider>
-      ),
-    });
+    const { result } = renderHook(
+      () => useLawHistory({ filter: "all", country: "CZE" }),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              {children}
+            </IntlProvider>
+          </QueryClientProvider>
+        ),
+      },
+    );
     await waitFor(() => expect(clockRequested).toBe(true));
-    act(() => result.current.record.mutate({ kind: "search", query: "Next" }));
+    act(() =>
+      result.current.record.mutate({
+        kind: "search",
+        query: "Next",
+        country: "CZE",
+      }),
+    );
     await act(async () => client.cancelQueries());
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(toasts).not.toHaveBeenCalled();

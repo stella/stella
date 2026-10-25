@@ -153,7 +153,7 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
   const result = await record.handler(
     createTestHandlerContext<Parameters<typeof record.handler>[0]>({
       ...identity(fixture),
-      body: { kind: "search", query },
+      body: { kind: "search", query, country: "CZE" },
     }),
   );
   if (result instanceof HttpStatusResponse) {
