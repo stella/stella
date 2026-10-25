@@ -111,6 +111,7 @@ ignorePatterns = [
   "**/*.min.*",
   "sbom.cdx.json",
   "**/.cache/**",
+  ".tailwind-cache/**",
   "**/.oxlintrc.json",
   "**/dist/**",
   "**/.react-email/**",
