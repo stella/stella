@@ -59,7 +59,9 @@ bun apps/api/scripts/build-server-bundle.ts "$bundle"
 origin="http://127.0.0.1:$port"
 smoke_secret=$(openssl rand -hex 32)
 # Release runtime: NODE_ENV=production without local development access,
-# action admission and the size limits enabled as on the hosted deployment.
+# action admission (its concurrency and lease) and the size limits enabled as
+# on the hosted deployment, and public law on for the journeys' case-law tool
+# call.
 # Outbound integrations point at closed loopback ports; no journey uses them.
 (
   cd apps/api
@@ -72,7 +74,11 @@ smoke_secret=$(openssl rand -hex 32)
     FRONTEND_URL="$origin" \
     CONTENT_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
     SMOKE_SESSION_SECRET="$smoke_secret" \
-    FEATURE_ACTION_ADMISSION=true \
+    FEATURE_ACTION_ADMISSION=true FEATURE_PUBLIC_LAW=true \
+    ACTION_ADMISSION_ORG_CONCURRENCY=2 ACTION_ADMISSION_USER_CONCURRENCY=1 \
+    ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY=1 \
+    ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY=1 \
+    ACTION_ADMISSION_LEASE_MS=120000 \
     ACTION_REQUEST_MAX_BYTES=1048576 ACTION_RESPONSE_MAX_BYTES=1048576 \
     ACTION_PAGE_SIZE_MAX=100 \
     EMAIL_PROVIDER=smtp SMTP_HOST=127.0.0.1 SMTP_PORT=1025 \
