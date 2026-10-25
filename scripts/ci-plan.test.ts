@@ -2477,6 +2477,7 @@ test("every bounded-install implementation and fixture selects Windows", () => {
   }
 });
 
+// timeout: Executes the complete selected-job matrix in real Bash processes.
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];
@@ -2527,7 +2528,7 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     });
   }
   expectResultGates(gates);
-});
+}, 30_000);
 
 const MatrixJob = v.object({
   strategy: v.object({
