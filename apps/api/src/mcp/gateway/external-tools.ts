@@ -35,12 +35,14 @@ const mcpStructuredErrorResult = (
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
 export type ExternalGatewayDependencies = {
+  consumeMcpGatewayRateLimit: typeof consumeMcpGatewayRateLimit;
   loadActiveMcpConnectionsForUser: typeof loadActiveMcpConnectionsForUser;
   proxyMcpToolCall: typeof proxyMcpToolCall;
   refreshCachedMcpToolsForConnection: typeof refreshCachedMcpToolsForConnection;
 };
 
 const defaultDependencies: ExternalGatewayDependencies = {
+  consumeMcpGatewayRateLimit,
   loadActiveMcpConnectionsForUser,
   proxyMcpToolCall,
   refreshCachedMcpToolsForConnection,
@@ -190,7 +192,7 @@ export const callGatewayExternalMcpTool = async ({
     });
   }
 
-  const allowed = await consumeMcpGatewayRateLimit({
+  const allowed = await dependencies.consumeMcpGatewayRateLimit({
     connectorSlug: resolved.connectorSlug,
     userId: context.userId,
   });
