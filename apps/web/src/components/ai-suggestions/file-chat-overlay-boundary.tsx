@@ -7,6 +7,7 @@ import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { isStaleDeploymentLoadError } from "@/lib/preload-error-recovery";
 
 type FileChatOverlayErrorFallbackProps = {
@@ -31,39 +32,42 @@ export const FileChatOverlayErrorFallback = ({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
-      <div
+      <RecoverableErrorStatus
         className="bg-background/95 pointer-events-auto flex items-center gap-3 rounded-md border px-3 py-2 shadow-sm"
-        role="alert"
-      >
-        <span className="text-muted-foreground text-sm">
-          {staleDeployment
+        message={
+          staleDeployment
             ? t("chat.overlayUpdated")
-            : t("chat.overlayLoadFailed")}
-        </span>
-        {staleDeployment ? (
-          <Button
-            onClick={() => {
-              window.location.reload();
-            }}
-            size="sm"
-            variant="outline"
-          >
-            {t("common.reload")}
-          </Button>
-        ) : (
-          <Button onClick={onRetry} size="sm" variant="outline">
-            {t("common.tryAgain")}
-          </Button>
-        )}
-        <Button
-          aria-label={t("common.dismiss")}
-          onClick={onDismiss}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <XIcon aria-hidden="true" className="size-4" />
-        </Button>
-      </div>
+            : t("chat.overlayLoadFailed")
+        }
+        messageClassName="text-muted-foreground text-sm"
+        actions={
+          <>
+            {staleDeployment ? (
+              <Button
+                onClick={() => {
+                  window.location.reload();
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {t("common.reload")}
+              </Button>
+            ) : (
+              <Button onClick={onRetry} size="sm" variant="outline">
+                {t("common.tryAgain")}
+              </Button>
+            )}
+            <Button
+              aria-label={t("common.dismiss")}
+              onClick={onDismiss}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <XIcon aria-hidden="true" className="size-4" />
+            </Button>
+          </>
+        }
+      />
     </div>
   );
 };
