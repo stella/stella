@@ -1,9 +1,13 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  invoiceMatterShare,
+  invoiceTouchesMatter,
+} from "@/api/lib/billing/invoice-scope";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -52,7 +56,7 @@ const readInvoices = createSafeHandler(
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.invoicesPageSizeDefault,
     );
-    const conditions = [eq(invoices.workspaceId, workspaceId)];
+    const conditions = [invoiceTouchesMatter(invoices, workspaceId)];
 
     if (query.cursor) {
       const cursor = invoiceCursor.decode(query.cursor);
@@ -78,6 +82,8 @@ const readInvoices = createSafeHandler(
       safeDb((tx) =>
         tx
           .select({
+            clientId: invoices.clientId,
+            matterShare: invoiceMatterShare(invoices, workspaceId),
             id: invoices.id,
             invoiceNumber: invoices.invoiceNumber,
             documentType: invoices.documentType,
@@ -112,6 +118,8 @@ const readInvoices = createSafeHandler(
     return Result.ok({
       ...page,
       items: page.items.map((row) => ({
+        clientId: row.clientId,
+        matterShare: row.matterShare,
         id: row.id,
         invoiceNumber: row.invoiceNumber,
         documentType: row.documentType,

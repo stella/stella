@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/billing/invoice-lines.ts",
+  "delta": 1,
+  "reason": "The participating matter query is bounded by LIMITS.invoiceLinesPerInvoice (1000), plus the current matter. Recalculation checks each distinct sorted matter under the existing ordered matter and arrangement locks in the invoice transaction; each operation has a distinct matter-scoped billing-cap effect."
+}

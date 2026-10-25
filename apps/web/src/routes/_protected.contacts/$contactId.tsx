@@ -32,6 +32,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
@@ -120,6 +121,8 @@ function ContactDetailPage() {
     contactOptions(activeOrganizationId, contactId),
   );
   const deleteContact = useDeleteContact();
+  const [invoiceComposerOpen, setInvoiceComposerOpen] = useState(false);
+  const canCreateInvoice = usePermissions({ invoice: ["create"] });
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -193,6 +196,11 @@ function ContactDetailPage() {
           </span>
         </div>
         <div className="ms-auto flex items-center gap-2">
+          {canCreateInvoice && activeClientMatters.length > 0 && (
+            <Button size="sm" onClick={() => setInvoiceComposerOpen(true)}>
+              {t("billing.clientComposer.title")}
+            </Button>
+          )}
           {canCreateMatter && (
             <Button
               onClick={() =>
@@ -492,6 +500,14 @@ function ContactDetailPage() {
         </section>
       </div>
 
+      {canCreateInvoice && (
+        <ClientInvoiceComposer
+          clientId={contactId}
+          clientName={contact.displayName}
+          open={invoiceComposerOpen}
+          onOpenChange={setInvoiceComposerOpen}
+        />
+      )}
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmLabel={t("common.delete")}

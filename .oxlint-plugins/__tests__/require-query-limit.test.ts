@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
@@ -90,5 +91,44 @@ describe.serial("cursor reads through the bounded owner", () => {
     expect(
       await lint(`${pageOwner}\nreadCursorPage(other, ${QUERY});`),
     ).toEqual([2]);
+  });
+});
+
+describe.serial("grouped lateral reads through the bounded owner", () => {
+  const groupedOwner =
+    'import { readBoundedByGroup } from "@/api/lib/db/read-bounded";';
+  const options =
+    "{ cap: 500, readRows: limited => execute(limited), groupKeyOf: row => row.group }";
+  test("accepts the canonical grouped owner query argument", async () => {
+    expect(
+      await lint(`${groupedOwner}\nreadBoundedByGroup(${QUERY}, ${options});`),
+    ).toEqual([]);
+    expect(
+      await lint(
+        `${groupedOwner}\nconst query = ${QUERY};\nreadBoundedByGroup(query, ${options});\nawait query;`,
+      ),
+    ).toEqual([2]);
+    expect(
+      await lint(
+        `const readBoundedByGroup = q => q;\nreadBoundedByGroup(${QUERY}, ${options});`,
+      ),
+    ).toEqual([2]);
+  });
+  test("production lateral source queries cannot leave their bounded owner", async () => {
+    const source = readFileSync(
+      new URL(
+        "../../apps/api/src/lib/billing/invoice-prefill-operation.ts",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    expect(source.match(/readBoundedByGroup\(/gu)).toHaveLength(2);
+    expect(await lint(source)).toEqual([]);
+    const unbounded = source.replaceAll(
+      "readBoundedByGroup(",
+      "readWithoutBound(",
+    );
+    expect(unbounded).not.toBe(source);
+    expect(await lint(unbounded)).toHaveLength(2);
   });
 });

@@ -1089,6 +1089,10 @@ export const relations = defineRelations(
       }),
     },
     invoiceLines: {
+      workspace: r.one.workspaces({
+        from: r.invoiceLines.workspaceId,
+        to: r.workspaces.id,
+      }),
       invoice: r.one.invoices({
         from: r.invoiceLines.invoiceId,
         to: r.invoices.id,

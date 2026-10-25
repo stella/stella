@@ -700,6 +700,48 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261018220000_client_invoices",
+    form: "add-column",
+    reason:
+      "Nullable columns without defaults use catalog-only expansion without rewriting existing rows; the existing 5s lock_timeout and 60s statement_timeout bound acquisition and execution, while client backfill runs in committed online batches.",
+  },
+  {
+    migration: "20261018220000_client_invoices",
+    form: "alter-column",
+    reason:
+      "Dropping the matter column NOT NULL flag changes metadata without scanning or rewriting rows; the NOT VALID scope check and tenant guard retain new-write invariants under the existing 5s lock_timeout and 60s statement_timeout.",
+  },
+  {
+    migration: "20261018220000_client_invoices",
+    form: "add-constraint",
+    reason:
+      "The scope and recorded-snapshot CHECK constraints are added NOT VALID without an initial table scan; new writes remain checked and the existing online validation phase scans later, after releasing schema locks, under unchanged 5s/60s migration limits.",
+  },
+  {
+    migration: "20261018220000_client_invoices",
+    form: "add-foreign-key",
+    reason:
+      "Both client references are added NOT VALID without scanning old rows; tenant and client triggers continue checking new writes, and validation runs in the online phase after short catalog locks governed by the unchanged 5s lock_timeout and 60s statement_timeout.",
+  },
+  {
+    migration: "20261018220000_client_invoices",
+    form: "create-trigger",
+    reason:
+      "Installing the three invoice, line and matter guards registers catalog entries without scanning existing rows; each guard enforces the reviewed tenant and client relationship on subsequent writes, under unchanged 5s lock_timeout and 60s statement_timeout.",
+  },
+  {
+    migration: "20261018220000_client_invoices",
+    form: "create-policy",
+    reason:
+      "The reviewed complete-document and restrictive line policies plus tenant-bound reset policies replace catalog definitions without scanning invoice rows; their organization and actor predicates remain intact, under unchanged 5s lock_timeout and 60s statement_timeout.",
+  },
+  {
+    migration: "20261021165000_invoice_matter_retention",
+    form: "add-foreign-key",
+    reason:
+      "Each atomic swap replaces matter cascades with restrictive NO ACTION NOT VALID references without scanning rows; new writes retain referential checks and four registered online validations run later, after releasing schema locks, under unchanged 1s lock_timeout and 30s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:

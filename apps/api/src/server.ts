@@ -41,6 +41,7 @@ import {
   clauseCategoriesRoute,
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
+import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
@@ -615,7 +616,8 @@ const api = new Elysia()
           .use(billingCodesRoute)
           .use(ratesRoute)
           .use(expensesRoute)
-          .use(invoicesRoute),
+          .use(invoicesRoute)
+          .use(clientInvoicesRoute),
       )
       // Issuer settings share one link: every `.use` here deepens the
       // app's type, and the chain sits at TypeScript's instantiation limit.

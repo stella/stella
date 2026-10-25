@@ -355,6 +355,8 @@ export const LIMITS = {
   /** Per-source cap on activity rows read for one day of suggestions. */
   timeSuggestionSignalsPerSourceMax: 1000,
   invoicesPerWorkspace: 10_000,
+  clientInvoiceMatters: 50,
+  invoiceSourceItemsPerKind: 500,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.

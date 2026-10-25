@@ -512,6 +512,17 @@
     "batchActions": "Actions groupées",
     "billable": "Facturable",
     "billedAmount": "Montant facturé",
+    "clientComposer": {
+      "flatFeeNote": "Facturez les dossiers au forfait depuis la page des factures du dossier.",
+      "includeMatter": "Inclure {matterName}",
+      "invalidPeriod": "Choisissez une date de fin égale ou postérieure à la date de début.",
+      "loadFailed": "Impossible de charger le travail non facturé. Réessayez.",
+      "matterSubtotal": "Total du dossier TTC : {amount} · {share} de la facture",
+      "periodEnd": "Fin de période",
+      "periodStart": "Début de période",
+      "title": "Facturer le client",
+      "visibility": "Cette facture est visible uniquement par les personnes ayant accès à tous les dossiers inclus et les administrateurs de facturation."
+    },
     "codes": {
       "activity": "Activité",
       "activityCode": "Code d'activité",
@@ -654,6 +665,11 @@
       "invoiceDate": "Date de la facture",
       "invoiceDetail": "Détail de la facture",
       "invoiceNumber": "Numéro de facture",
+      "lineOverrides": {
+        "editedRecorded": "Modifié · enregistré : {description}, {quantity} × {rate}",
+        "quantity": "Quantité",
+        "resetRecorded": "Rétablir les valeurs enregistrées"
+      },
       "linkedExpenses": "Dépenses liées",
       "linkedTimeEntries": "Entrées de temps liées",
       "markPaid": "Marquer comme payée",

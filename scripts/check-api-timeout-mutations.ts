@@ -22,6 +22,7 @@ const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/better-auth-oauth-resource-repair.ts`,
   `${API_SOURCE}db/decision-date-ceiling-repair.ts`,
   `${API_SOURCE}db/chat-content-v3-backfill.ts`,
+  `${API_SOURCE}db/client-invoice-backfill.ts`,
 ]);
 
 // These operator commands construct their own SQL client, apart from rootDb.

@@ -8,6 +8,7 @@ import {
   countryCodeOf,
   czechVatBandOf,
   effectiveVatRateBps,
+  exportMattersOf,
   invoiceDescriptionOf,
   type InvoiceExportLine,
   type InvoiceExportRecord,
@@ -125,7 +126,13 @@ const invoice = (record: InvoiceExportRecord): string => {
           : "",
         text(
           "inv:text",
-          clip(description ?? `${record.matter.name} ${record.number}`, 240),
+          clip(
+            description ??
+              `${exportMattersOf(record)
+                .map((matter) => matter.name)
+                .join(", ")} ${record.number}`,
+            240,
+          ),
         ),
         el(
           "inv:partnerIdentity",

@@ -7,6 +7,7 @@ import {
   countryCodeOf,
   effectiveVatRateBps,
   exportFileNamer,
+  exportMattersOf,
   invoiceDescriptionOf,
   type InvoiceExportLine,
   type InvoiceExportRecord,
@@ -226,7 +227,13 @@ const document = (record: InvoiceExportRecord): string => {
           text("cbc:Note", invoiceDescriptionOf(record)),
         ]),
     text("cbc:DocumentCurrencyCode", currency),
-    text("cbc:BuyerReference", record.reference ?? record.matter.reference),
+    text(
+      "cbc:BuyerReference",
+      record.reference ??
+        exportMattersOf(record)
+          .flatMap((matter) => matter.reference ?? [])
+          .join(", "),
+    ),
     record.originalNumber
       ? el(
           "cac:BillingReference",

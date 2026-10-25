@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { cents } from "@stll/money";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   ADVANCE_INVOICE,
@@ -350,5 +352,79 @@ describe("spreadsheets", () => {
       cell?.type === "amount" ? cell.amountMinor : undefined;
     expect(amount(row?.[11])).toBe(0);
     expect(amount(row?.[12])).toBe(0);
+  });
+});
+
+describe("client invoice export attribution", () => {
+  test("every exported line retains its own matter and the complete invoice total", () => {
+    assertProperty(
+      "every exported line retains its own matter and the complete invoice total",
+      fc.property(
+        fc.array(
+          fc.record({
+            matterIndex: fc.integer({ min: 0, max: 5 }),
+            amount: fc.integer({ min: 1, max: 100_000 }),
+          }),
+          { minLength: 2, maxLength: 30 },
+        ),
+        (items) => {
+          const lines = items.map(({ matterIndex, amount }, index) => ({
+            matter: {
+              id: `matter-${matterIndex}`,
+              name: `Matter ${matterIndex}`,
+              reference: `REF-${matterIndex}`,
+            },
+            description: `Work ${index}`,
+            netAmountMinor: cents(amount),
+          }));
+          const record = exportRecord({
+            number: "20260017",
+            scope: {
+              type: "client",
+              clientId: "client",
+              matters: [
+                ...new Map(
+                  lines.map((line) => [line.matter.id, line.matter]),
+                ).values(),
+              ],
+            },
+            lines,
+          });
+          const ledes = buildLedes1998b([record])
+            .unwrap()
+            .trimEnd()
+            .split("\r\n")
+            .slice(2);
+          const table = buildInvoiceLinesTable([record], "en");
+          expect(ledes).toHaveLength(lines.length);
+          expect(table.rows).toHaveLength(lines.length);
+          for (const [index, line] of lines.entries()) {
+            expect(ledes.at(index)?.split("|").at(3)).toBe(
+              line.matter.reference,
+            );
+            expect(ledes.at(index)?.split("|").at(4)).toBe(
+              (record.totals.netAmountMinor / 100).toFixed(2),
+            );
+            expect(table.rows.at(index)?.at(14)).toEqual({
+              type: "text",
+              value: line.matter.name,
+            });
+            expect(table.rows.at(index)?.at(15)).toEqual({
+              type: "text",
+              value: line.matter.reference,
+            });
+          }
+          const summary = buildInvoiceSummaryTable([record], "en");
+          expect(summary.rows.at(0)?.at(3)).toEqual({
+            type: "text",
+            value: [
+              ...new Map(
+                lines.map((line) => [line.matter.id, line.matter.name]),
+              ).values(),
+            ].join(", "),
+          });
+        },
+      ),
+    );
   });
 });

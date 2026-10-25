@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { calculateDocumentTotals, standardVatRateOn } from "@stll/invoicing";
 import type {
   InvoiceTotals,
@@ -232,8 +233,13 @@ export const parseHoursInput = (text: string): number | null => {
     return null;
   }
   const fraction = match?.groups?.["fraction"] ?? "";
-  const hundredThousandths =
-    Number(whole) * 10_000 + Number(fraction.padEnd(4, "0") || "0");
+  const wholeHours = parseIntegerToken(whole, { sign: "unsigned" }).unwrap(
+    "Hours grammar admits at most four decimal digits",
+  );
+  const fractionalHours = parseIntegerToken(fraction.padEnd(4, "0"), {
+    sign: "unsigned",
+  }).unwrap("Hours grammar admits at most four fractional decimal digits");
+  const hundredThousandths = wholeHours * 10_000 + fractionalHours;
   return Math.round((hundredThousandths * 60) / 10_000);
 };
 

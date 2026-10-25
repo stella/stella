@@ -93,6 +93,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `clauses.versions.restore` | write | stella:knowledge_write | — | generic invoke → `stella capability clauses versions-restore` |
 | `clauses.versions.summarize` | write | stella:knowledge_write | — | generic invoke → `stella capability clauses versions-summarize` |
 
+## client-invoices
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `client-invoices.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices create` |
+| `client-invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices prefill` |
+
 ## contacts
 
 | Capability | Access | Scope | Feature | Reachable via |

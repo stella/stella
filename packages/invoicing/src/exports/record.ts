@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   type CentsAmount,
   currencyMinorUnitDigits,
@@ -14,11 +16,18 @@ import type {
 /** Where an exported line came from, so e-billing formats can type it. */
 export type InvoiceExportLineSource = "manual" | "time_entry" | "expense";
 
+export type InvoiceExportMatter = {
+  id: string;
+  name: string;
+  reference: string | null;
+};
+
 /**
  * One invoice line as an export file carries it. Amounts are signed minor
  * units: a credit note's lines are negative.
  */
 export type InvoiceExportLine = {
+  matter: InvoiceExportMatter;
   position: number;
   description: string;
   /** Decimal string, as stored (`numeric(18, 4)`); null on a legacy total. */
@@ -62,11 +71,33 @@ export type InvoiceExportRecord = {
   currency: string;
   reference: string | null;
   notes: string | null;
-  matter: { id: string; name: string; reference: string | null };
+  scope:
+    | { type: "matter"; matter: InvoiceExportMatter }
+    | {
+        type: "client";
+        clientId: string;
+        matters: readonly InvoiceExportMatter[];
+      };
   seller: InvoiceExportSeller;
   buyer: InvoiceParty;
   lines: InvoiceExportLine[];
   totals: InvoiceTotals;
+};
+
+/** Participating matters; the invoice's client scope never substitutes an anchor. */
+export const exportMattersOf = ({
+  scope,
+}: Pick<InvoiceExportRecord, "scope">): readonly InvoiceExportMatter[] => {
+  switch (scope.type) {
+    case "matter":
+      return [scope.matter];
+    case "client":
+      return scope.matters;
+    default: {
+      scope satisfies never;
+      return panic("Unknown invoice export scope");
+    }
+  }
 };
 
 /**

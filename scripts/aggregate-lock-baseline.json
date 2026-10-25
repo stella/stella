@@ -1464,12 +1464,6 @@
     "reason": "rollback to savepoint in apps/api/src/handlers/hosted-usage-webhook/replay.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
   },
   {
-    "file": "apps/api/src/handlers/invoices/document-type.ts",
-    "fingerprint": "04c4864c40ca369cffa87c626eb992d3f079a7477396832620e3dea2780849fe",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/invoices/document-type.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/invoices/lines/create.ts",
     "fingerprint": "0f2e8449ee672932545b6ae451a31fe87d20c2d7a96156856238a37a7efaf197",
     "count": 1,
@@ -1480,12 +1474,6 @@
     "fingerprint": "3966aea5af7239eec9ed02e516d5a2d40af867f55c3b2164061e09b3070acdbf",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/invoices/lines/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/invoices/lock-invoice.ts",
-    "fingerprint": "0c39b43defa802eb5ffb1a72c2a14d6916c622b7b879d9cf8c00ce91a4af288f",
-    "count": 1,
-    "reason": "The invoice lock also reads the stored invoice language; the lock scope and order are unchanged."
   },
   {
     "file": "apps/api/src/handlers/legislation/ingestion.ts",
@@ -2191,12 +2179,6 @@
   },
   {
     "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
     "fingerprint": "86e86b48a33efe2319b7ef02a9159bace150fbfb4216c448d54196c201af76a1",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2206,12 +2188,6 @@
     "fingerprint": "e2b4b6e3a17c005240702eb246339afa1581b4a4798e2528cc69a78844feed15",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "e7ab61f96abd40bcc7fb027ae53ba4700e4579eeec11c41b03a7fdbd444ef03c",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/billing/daily-target.ts",
@@ -2236,18 +2212,6 @@
     "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-insert.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "2c7c57ce23d0b4126039dd033c46b966411d63e36fe63cbbf15dab2aa4ec9ec5",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "2e7e640a1c6f753b5d5271a42be4dcbbc0564f06ef4c3f6aae1a3549439ee26f",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",
