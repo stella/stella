@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ["src/index.ts", "src/path.ts"],
   format: ["esm"],
   platform: "neutral",
-  dts: true,
+  dts: { generator: "oxc" },
   outDir: "dist",
   clean: true,
 });

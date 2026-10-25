@@ -25,14 +25,14 @@ import { panic } from "better-result";
 
 import { resolvePath } from "./path.js";
 
-export const NUMERIC_FUNCTION_NAMES = Object.freeze([
+export const NUMERIC_FUNCTION_NAMES: readonly [
   "min",
   "max",
   "round",
   "abs",
   "floor",
   "ceil",
-] as const);
+] = Object.freeze(["min", "max", "round", "abs", "floor", "ceil"] as const);
 
 export type NumericFunctionName = (typeof NUMERIC_FUNCTION_NAMES)[number];
 

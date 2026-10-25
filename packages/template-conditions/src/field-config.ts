@@ -84,7 +84,9 @@ export const ARRAY_FILTER_NAMES = [
   "required",
   "min_items",
   "max_items",
-] as const satisfies readonly FilterName[];
+] as const;
+
+ARRAY_FILTER_NAMES satisfies readonly FilterName[];
 
 export const isArrayFilterName = (name: FilterName): boolean =>
   ARRAY_FILTER_NAMES.some((candidate) => candidate === name);
