@@ -34,6 +34,7 @@ const STEPS = [
 ] as const;
 
 type FixtureOptions = {
+  baseUrl?: string;
   failure?: { step: string; kind: "http" | "transport" | "malformed" };
   repeatRefresh?: number;
   responseBody?: { step: string; body: unknown };
@@ -43,12 +44,13 @@ type FixtureOptions = {
 };
 
 const createTransport = ({
+  baseUrl = BASE_URL,
   failure,
   repeatRefresh,
   responseBody,
   wrongCallbackState,
-  callbackIssuer = `${BASE_URL}/api/auth`,
-  metadataIssuer = `${BASE_URL}/api/auth`,
+  callbackIssuer = `${baseUrl}/api/auth`,
+  metadataIssuer = `${baseUrl}/api/auth`,
 }: FixtureOptions = {}) => {
   const requests: { url: URL; headers: Headers; body: string; step: string }[] =
     [];
@@ -103,8 +105,8 @@ const createTransport = ({
       case "/.well-known/oauth-protected-resource/mcp":
         step = "discovery";
         response = Response.json({
-          resource: `${BASE_URL}/mcp`,
-          authorization_servers: [`${BASE_URL}/api/auth`],
+          resource: `${baseUrl}/mcp`,
+          authorization_servers: [`${baseUrl}/api/auth`],
         });
         break;
       case "/.well-known/oauth-authorization-server/api/auth": {
@@ -120,6 +122,13 @@ const createTransport = ({
         response = Response.json(metadata);
         break;
       }
+      case "/api/auth/oauth2/register":
+        step = "register";
+        response = Response.json(
+          { client_id: "registered-loopback-client" },
+          { status: 201 },
+        );
+        break;
       case "/api/auth/oauth2/authorize":
         step = "authorize";
         authorizeUrl = url;
@@ -322,6 +331,43 @@ describe("per-run OAuth refresh journey", () => {
     expect(
       again.requests.find(({ step }) => step === "refresh 1")?.body,
     ).toContain("refresh_token=refresh-0");
+  });
+
+  test("registers a public loopback client on a plain http target, which publishes no client document", async () => {
+    const localUrl = "http://127.0.0.1:3101";
+    const { fetcher, requests } = createTransport({ baseUrl: localUrl });
+    const results = await runRefreshJourney(
+      { ...OPTIONS, baseUrl: localUrl },
+      fetcher,
+    );
+    expect(summarize(results)).toEqual({ failed: 0, skipped: 0 });
+    expect(results.map(({ name }) => name).slice(0, 4)).toEqual(
+      ["bootstrap", "discovery", "register", "authorize"].map(
+        (step) => `OAuth refresh: ${step}`,
+      ),
+    );
+    const registration = requests.filter(({ step }) => step === "register");
+    expect(registration).toHaveLength(1);
+    expect(JSON.parse(registration[0]?.body ?? "")).toMatchObject({
+      redirect_uris: ["http://127.0.0.1/callback"],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+    });
+    const clientIds = new Set(
+      requests.flatMap(({ url, body, step }) => {
+        if (step === "authorize") {
+          return [url.searchParams.get("client_id")];
+        }
+        return step === "token" || step === "revoke"
+          ? [new URLSearchParams(body).get("client_id")]
+          : [];
+      }),
+    );
+    expect(clientIds).toEqual(new Set(["registered-loopback-client"]));
+    const authorize = requests.find(({ step }) => step === "authorize");
+    expect(
+      new URL(authorize?.url.searchParams.get("redirect_uri") ?? "").hostname,
+    ).toBe("127.0.0.1");
   });
 
   test.each(

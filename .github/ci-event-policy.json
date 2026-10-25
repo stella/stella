@@ -169,6 +169,7 @@
     "ci.yml/pr-heavy-gate": "pr-fast",
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
+    "api-served-mcp.yml/journeys": "pr-fast",
     "dependency-audit.yml/audit": "main",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",

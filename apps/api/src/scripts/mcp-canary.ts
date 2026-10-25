@@ -25,7 +25,7 @@ import {
   DESKTOP_ACCOUNT_POLICY,
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
-import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
+import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
@@ -959,13 +959,25 @@ export const evaluateRegistration = ({
   );
 };
 
+/** Known third-party clients publish their metadata on their own hosts. A
+ * target that must not depend on those hosts (a local server) turns the probes
+ * that fetch them off explicitly, and each one is reported as skipped. */
+export const THIRD_PARTY_FETCHES_SKIP_REASON =
+  "third-party fetches are off (MCP_CANARY_THIRD_PARTY_FETCHES=skip): client metadata and authorize probes for this client did not run";
+
 type OAuthJourneyOptions = {
   baseUrl: string;
   mode: "frequent" | "full";
   frontendUrl?: string | undefined;
+  thirdPartyFetches?: "run" | "skip";
 };
 export const runOAuthJourneys = async (
-  { baseUrl, mode, frontendUrl }: OAuthJourneyOptions,
+  {
+    baseUrl,
+    mode,
+    frontendUrl,
+    thirdPartyFetches = "run",
+  }: OAuthJourneyOptions,
   fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> => {
   const results: ProbeResult[] = [];
@@ -1052,6 +1064,10 @@ export const runOAuthJourneys = async (
   for (const clientId of clients) {
     if (CANARY_CLIENT_IDS.some((knownClientId) => knownClientId === clientId)) {
       const metadataName = `client metadata ${clientId}`;
+      if (thirdPartyFetches === "skip") {
+        results.push(skipped(metadataName, THIRD_PARTY_FETCHES_SKIP_REASON));
+        continue;
+      }
       const metadataResult = await runNamedProbe(metadataName, async () => {
         // A third-party host that cannot be reached is an upstream state,
         // never a canary failure; rate limiting keeps its own result.
@@ -1687,6 +1703,8 @@ const reviewTaskListSchema = v.object({
   ),
 });
 
+const REVIEW_CALLBACK_PATH = "/callback";
+
 // The canary owns this receiver; only its exact callback URL is fetched, with
 // no cookie, password, edge credential or bearer header.
 const createReviewCallback = (state: string) => {
@@ -1696,7 +1714,7 @@ const createReviewCallback = (state: string) => {
     port: 0,
     fetch: (request) => {
       const url = new URL(request.url);
-      if (url.pathname !== "/callback") {
+      if (url.pathname !== REVIEW_CALLBACK_PATH) {
         return new Response(null, { status: 404 });
       }
       const receivedCode = url.searchParams.get("code");
@@ -1708,7 +1726,7 @@ const createReviewCallback = (state: string) => {
     },
   });
   return {
-    redirectUri: `http://127.0.0.1:${String(server.port)}/callback`,
+    redirectUri: `http://127.0.0.1:${String(server.port)}${REVIEW_CALLBACK_PATH}`,
     code: () => code,
     close: async () => await server.stop(true),
   };
@@ -1974,17 +1992,55 @@ const discoverReviewOAuth = async (context: ReviewJourneyContext) => {
   return { metadata, advertisedIssuer };
 };
 
+/**
+ * An https deployment publishes the CLI's client document, whose URL is the
+ * journey's client_id. A plain http target (a local server) has none, so the
+ * journey registers a public loopback client there, as the CLI does.
+ */
+const registerReviewClient = async (
+  context: ReviewJourneyContext,
+  metadata: v.InferOutput<typeof authorizationMetadataSchema>,
+) => {
+  const { state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "register";
+  const registered = await request(metadata.registration_endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    expectedStatus: 201,
+    body: JSON.stringify({
+      application_type: "native",
+      client_name: CANARY_CLIENT_NAME,
+      grant_types: ["authorization_code", "refresh_token"],
+      // Loopback redirects match on any port (RFC 8252 §7.3).
+      redirect_uris: [`http://127.0.0.1${REVIEW_CALLBACK_PATH}`],
+      response_types: ["code"],
+      scope: context.scope,
+      token_endpoint_auth_method: "none",
+    }),
+  });
+  if (
+    !v.is(v.object({ client_id: v.pipe(v.string(), v.nonEmpty()) }), registered)
+  ) {
+    reject("expected a registered public client");
+  }
+  complete();
+  return registered.client_id;
+};
+
 const authorizeReviewOAuth = async (
   context: ReviewJourneyContext,
   metadata: v.InferOutput<typeof authorizationMetadataSchema>,
 ) => {
   const { baseUrl, state, complete, request } = context;
   const reject: (assertion: string) => never = context.reject;
+  const clientId =
+    cliClientMetadataUrl(baseUrl) ??
+    (await registerReviewClient(context, metadata));
   state.step = "authorize";
   const verifier = randomBytes(32).toString("base64url");
   const stateValue = randomBytes(32).toString("base64url");
   state.callback = createReviewCallback(stateValue);
-  const clientId = new URL(CLI_CLIENT_METADATA_PATH, baseUrl).toString();
   const authorize = new URL(metadata.authorization_endpoint);
   authorize.search = new URLSearchParams({
     client_id: clientId,
@@ -2742,11 +2798,21 @@ const run = async () => {
     process.exitCode = 1;
     return;
   }
+  const thirdPartyFetches =
+    process.env["MCP_CANARY_THIRD_PARTY_FETCHES"] ?? "run";
+  if (thirdPartyFetches !== "run" && thirdPartyFetches !== "skip") {
+    console.error(
+      "[mcp-canary] MCP_CANARY_THIRD_PARTY_FETCHES must be run or skip.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const results = [
     ...(await runOAuthJourneys({
       baseUrl,
       mode,
       frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      thirdPartyFetches,
     })),
     ...(await runPublicProbes(baseUrl)),
   ];
@@ -2845,7 +2911,7 @@ const run = async () => {
   );
   if (skips > 0) {
     console.log(
-      `[mcp-canary] ${String(skips)} probe(s) skipped: journey coverage is incomplete; configure the named credentials.`,
+      `[mcp-canary] ${String(skips)} probe(s) skipped: journey coverage is incomplete; each SKIP line names its reason.`,
     );
   }
   if (

@@ -1,0 +1,117 @@
+name: Served MCP journeys
+
+defaults:
+  run:
+    shell: bash
+
+# The MCP user journeys (apps/api/src/scripts/mcp-canary.ts) against the
+# release API bundle served on Bun.serve, over a real socket. Pull requests run
+# it when they change how the API serves requests: the server and its request
+# pipeline, the HTTP layer, MCP, authentication, rate limits and admission, the
+# bundle build, the runtime or its dependencies, or the journeys themselves.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/api-served-mcp.yml
+      - scripts/served-mcp-journeys.sh
+      - apps/api/Dockerfile
+      - apps/api/scripts/build-server-bundle.ts
+      - apps/api/scripts/strip-source-map-content.ts
+      - scripts/bundled-consumers.ts
+      - apps/api/src/server*.ts
+      - apps/api/src/api-pipeline.ts
+      - apps/api/src/api-routes.ts
+      - apps/api/src/http/**
+      - apps/api/src/mcp/**
+      - apps/api/src/handlers/mcp/**
+      - apps/api/src/handlers/smoke/**
+      - apps/api/src/lib/auth/**
+      - apps/api/src/lib/rate-limit/**
+      - apps/api/src/lib/load/**
+      - apps/api/src/lib/smoke-session/**
+      - apps/api/src/lib/endpoints.ts
+      - apps/api/src/lib/capability-request*.ts
+      - apps/api/src/lib/client-ip*.ts
+      - apps/api/src/lib/browser-origin-guard.ts
+      - apps/api/src/lib/security-headers.ts
+      - apps/api/src/lib/sse.ts
+      - apps/api/src/lib/observability/request-*.ts
+      - apps/api/src/scripts/mcp-canary*.ts
+      - packages/cli/src/auth/client-metadata-document.ts
+      # The Bun runtime pin and the locked dependencies (the MCP SDK among them).
+      - package.json
+      - bun.lock
+
+permissions: {}
+
+# One run per pull request: a new push supersedes the running one.
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  journeys:
+    name: MCP journeys against the served API
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Log in to the CI image mirror
+        continue-on-error: true
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # The development stack's Postgres (non-superuser owner, production
+      # parity settings) and Valkey, from the CI image mirror when available.
+      - name: Start Postgres and Valkey
+        timeout-minutes: 5
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+        run: |
+          bun scripts/ci-service-images.ts --compose docker-compose.yml > "$RUNNER_TEMP/ci-compose.json"
+          export COMPOSE_FILE="$PWD/docker-compose.yml:$RUNNER_TEMP/ci-compose.json"
+          bash scripts/retry.sh docker compose --profile dev up -d --wait postgres valkey
+
+      - name: Log out of the CI image mirror
+        if: always()
+        run: docker logout ghcr.io
+
+      - name: Run the MCP journeys against the served API bundle
+        timeout-minutes: 8
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/stella
+          REDIS_URL: redis://127.0.0.1:6379
+          SERVED_MCP_API_LOG: ${{ runner.temp }}/served-api.log
+        run: bash scripts/served-mcp-journeys.sh
+
+      - name: Upload the API log
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: served-mcp-api-log
+          path: ${{ runner.temp }}/served-api.log
+          if-no-files-found: ignore
+          retention-days: 7

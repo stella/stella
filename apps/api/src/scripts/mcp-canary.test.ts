@@ -44,6 +44,7 @@ import {
   runReviewAccountJourney,
   runStagingCredentialJourneys,
   summarize,
+  THIRD_PARTY_FETCHES_SKIP_REASON,
 } from "./mcp-canary";
 
 const REVIEW_BASE_URL = "https://api.example";
@@ -1592,6 +1593,40 @@ describe("OAuth client journeys", () => {
     expect(await new Response(registration?.init.body).json()).toMatchObject({
       redirect_uris: LOOPBACK_REDIRECTS,
     });
+  });
+
+  test("skipped third-party fetches report each known client and never reach its host", async () => {
+    const { fetcher, requests } = fakeOAuth();
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "full",
+        thirdPartyFetches: "skip",
+      },
+      fetcher,
+    );
+    expect(results.filter(({ status }) => status === "skipped")).toStrictEqual(
+      CANARY_CLIENT_IDS.map((clientId) => ({
+        name: `client metadata ${clientId}`,
+        status: "skipped",
+        detail: THIRD_PARTY_FETCHES_SKIP_REASON,
+      })),
+    );
+    expect(
+      requests.filter(({ url }) => url.origin !== "https://api.example"),
+    ).toStrictEqual([]);
+    const authorizedClients = new Set(
+      requests
+        .filter(({ url }) => url.pathname === "/oauth/authorize")
+        .map(({ url }) => url.searchParams.get("client_id")),
+    );
+    expect(authorizedClients).toStrictEqual(new Set(["dynamic-client"]));
+    expect(
+      results
+        .filter(({ status }) => status !== "skipped")
+        .every(({ status }) => status === "passed"),
+    ).toBe(true);
   });
 
   test("reports unavailable client metadata once without probing authorize", async () => {
