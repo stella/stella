@@ -118,8 +118,19 @@ export const qrSvg = (payload: string, ecc: "L" | "M" = "M") => {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path fill="#000" d="${runs.join("")}"/></svg>`;
 };
 
+/** The country's name in the invoice language; an unknown code prints as stored. */
+const countryName = (code: string | null, lang: string) => {
+  // The column is free text; only an ISO 3166 alpha-2 code has a display name.
+  if (code === null || !/^[A-Z]{2}$/u.test(code)) {
+    return code;
+  }
+  const name = new Intl.DisplayNames([lang], { type: "region" }).of(code);
+  return name === undefined || name === code ? code : name;
+};
+
 type PartyOptions = {
   heading: string;
+  lang: string;
   labels: Labels;
   value: {
     name: string | null;
@@ -138,6 +149,7 @@ type PartyOptions = {
 
 const party = ({
   heading,
+  lang,
   labels: l,
   value,
   printedIds,
@@ -149,7 +161,7 @@ const party = ({
     value.addressLine1,
     value.addressLine2,
     compact([value.postalCode, value.city]).join(" "),
-    value.country,
+    countryName(value.country, lang),
   ]),
   ids: fields([
     [
@@ -241,6 +253,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         ? null
         : party({
             heading: l.seller,
+            lang,
             labels: l,
             value: { ...seller, name: seller.legalName },
             printedIds: profile.partyIds.seller,
@@ -248,6 +261,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
           }),
     buyer: party({
       heading: l.buyer,
+      lang,
       labels: l,
       value: {
         name: invoice.buyerName,
@@ -304,7 +318,14 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       seller === null
         ? null
         : {
+            // What a payer needs beside the QR code: amount, due date, reference.
             fields: fields([
+              [l.total, money(totals.grossAmountMinor)],
+              [
+                l.dueDate,
+                invoice.dueDate === null ? null : date(invoice.dueDate),
+              ],
+              [l.reference, invoice.reference],
               ["IBAN", seller.iban],
               ["BIC", seller.bic],
             ]),
