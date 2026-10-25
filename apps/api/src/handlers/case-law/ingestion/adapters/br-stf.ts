@@ -1048,7 +1048,7 @@ export const assembleBrStfDecision = async ({
         sourceRaw,
         ...(sourceRawObjects === undefined ? {} : { sourceRawObjects }),
       }),
-      parserVersion: PARSER_VERSIONS[KEY],
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.BR_STF],
       documentAst: parsed?.documentAst ?? EMPTY_AST,
       sourceRaw,
       ...(sourceRawObjects === undefined ? {} : { sourceRawObjects }),
