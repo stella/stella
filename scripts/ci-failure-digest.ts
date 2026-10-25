@@ -49,15 +49,18 @@ const MAX_TAIL_TESTS = 30;
 const MAX_TAIL_DETAIL = 12;
 const TAIL_WINDOW = 40;
 
-export type FailureKind =
-  | "infra"
-  | "test"
-  | "typecheck"
-  | "lint"
-  | "ratchet"
-  | "policy"
-  | "build"
-  | "other";
+const FAILURE_KINDS = [
+  "infra",
+  "test",
+  "typecheck",
+  "lint",
+  "ratchet",
+  "policy",
+  "build",
+  "other",
+] as const;
+
+export type FailureKind = (typeof FAILURE_KINDS)[number];
 
 export type FailureLine = {
   readonly message: string;
@@ -1532,17 +1535,6 @@ const parseLine = (value: unknown): FailureLine[] => {
     },
   ];
 };
-
-const FAILURE_KINDS: readonly FailureKind[] = [
-  "infra",
-  "test",
-  "typecheck",
-  "lint",
-  "ratchet",
-  "policy",
-  "build",
-  "other",
-];
 
 const isFailureKind = (value: unknown): value is FailureKind =>
   FAILURE_KINDS.some((kind) => kind === value);
