@@ -77,23 +77,23 @@
   },
   {
     "name": "Select typecheck parity coverage",
-    "reason": "The TypeScript and Bun diagnostics comparison was retired: Bun check is the only type checker."
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
   },
   {
     "name": "Typecheck parity (all checked projects)",
-    "reason": "The TypeScript and Bun diagnostics comparison was retired: Bun check is the only type checker."
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
   },
   {
     "name": "Record typecheck parity report",
-    "reason": "The TypeScript and Bun diagnostics comparison was retired: Bun check is the only type checker."
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
   },
   {
     "name": "Upload typecheck parity report",
-    "reason": "The TypeScript and Bun diagnostics comparison was retired: Bun check is the only type checker."
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
   },
   {
     "name": "Typecheck command rejects errors",
-    "reason": "Seeded compiler probes run only through explicit Manual checks dispatch."
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
   },
   {
     "name": "Dependabot group guard",
