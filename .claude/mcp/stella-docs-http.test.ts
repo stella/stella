@@ -313,31 +313,32 @@ describe("shared documentation MCP HTTP server", () => {
         resolve();
       });
     });
-    const statusLine = await new Promise<string>((resolve, reject) => {
-      let received = "";
-      socket.on("data", (data) => {
-        received += data.toString();
-        if (received.includes("\r\n")) {
-          resolve(received.split("\r\n")[0] ?? "");
-        }
-      });
-      // Before the status line any socket error is a failure; after it, the
-      // server's close of the unfinished upload is expected.
-      socket.on("error", (error) => {
-        if (!received.includes("\r\n")) {
-          reject(error);
-        }
-      });
-    });
-    expect(statusLine).toContain(" 413 ");
-    // The server does not keep reading the unfinished upload indefinitely: it
-    // drops the connection after its linger window, while the client is still
-    // uploading. The test awaits that close itself; a server that kept the
-    // upload open never closes it and fails on the test's default timeout.
     try {
+      const statusLine = await new Promise<string>((resolve, reject) => {
+        let received = "";
+        socket.on("data", (data) => {
+          received += data.toString();
+          if (received.includes("\r\n")) {
+            resolve(received.split("\r\n")[0] ?? "");
+          }
+        });
+        // Before the status line any socket error is a failure; after it, the
+        // server's close of the unfinished upload is expected.
+        socket.on("error", (error) => {
+          if (!received.includes("\r\n")) {
+            reject(error);
+          }
+        });
+      });
+      expect(statusLine).toContain(" 413 ");
+      // The server does not keep reading the unfinished upload indefinitely: it
+      // drops the connection after its linger window, while the client is still
+      // uploading. The test awaits that close itself; a server that kept the
+      // upload open never closes it and fails on the test's default timeout.
       await socketClosed;
     } finally {
       clearInterval(keepUploading);
+      socket.destroy();
     }
   });
 
