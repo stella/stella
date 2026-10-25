@@ -26,7 +26,7 @@ const mattersResponseSchema = v.object({ workspaces: v.array(matterSchema) });
 
 export type MatterSummary = v.InferOutput<typeof matterSchema>;
 
-export class MattersRequestError extends TaggedError("MattersRequestError")<{
+class MattersRequestError extends TaggedError("MattersRequestError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
@@ -44,8 +44,8 @@ const requestMatters = async (
   fetch: Fetch,
   serverUrl: string,
   accessToken: string,
-): Promise<Result<MatterSummary[], MattersRequestError>> =>
-  await Result.tryPromise({
+): Promise<Result<MatterSummary[], MattersRequestError>> => {
+  const answered = await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(
         fetch,
@@ -58,22 +58,36 @@ const requestMatters = async (
         },
       );
       if (!response.ok) {
-        throw new MattersRequestError({
-          message: `The matters request responded ${response.status}`,
-          status: response.status,
-        });
+        return { status: response.status, json: undefined };
       }
       const json: unknown = await response.json();
-      return v.parse(mattersResponseSchema, json).workspaces;
+      return { status: response.status, json };
     },
     catch: (cause) =>
-      cause instanceof MattersRequestError
-        ? cause
-        : new MattersRequestError({
-            message: "The matters request failed",
-            cause,
-          }),
+      new MattersRequestError({ message: "The matters request failed", cause }),
   });
+  if (Result.isError(answered)) {
+    return Result.err(answered.error);
+  }
+  const { status, json } = answered.value;
+  if (json === undefined) {
+    return Result.err(
+      new MattersRequestError({
+        message: `The matters request responded ${status}`,
+        status,
+      }),
+    );
+  }
+  const matters = v.safeParse(mattersResponseSchema, json);
+  return matters.success
+    ? Result.ok(matters.output.workspaces)
+    : Result.err(
+        new MattersRequestError({
+          message: "The matters request answered an unexpected body",
+          cause: new v.ValiError(matters.issues),
+        }),
+      );
+};
 
 /**
  * The person's matters, most recently active first. A rejected token is

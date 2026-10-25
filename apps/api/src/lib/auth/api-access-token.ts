@@ -17,7 +17,6 @@
  * and the MCP modules import `lib/auth.ts`.
  */
 
-import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import { Result, TaggedError } from "better-result";
 import type { JWTPayload } from "jose";
 import * as v from "valibot";
@@ -36,6 +35,8 @@ import {
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
+import { getVerifyBearerToken } from "@/api/mcp/auth";
+import type { VerifyBearerToken } from "@/api/mcp/auth";
 
 /**
  * Every REST route an API access token may open, by Elysia route pattern,
@@ -144,12 +145,6 @@ const readClaims = (
   });
 };
 
-type VerifyBearerToken = ReturnType<
-  ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
->["verifyBearerToken"];
-
-let defaultVerifyBearerToken: VerifyBearerToken | undefined;
-
 export const authenticateApiAccessToken = async (
   token: string,
   {
@@ -160,9 +155,7 @@ export const authenticateApiAccessToken = async (
     readonly verifyToken?: VerifyBearerToken | undefined;
   },
 ): Promise<Result<ApiAccessTokenSession, ApiAccessTokenError>> => {
-  defaultVerifyBearerToken ??=
-    oauthProviderResourceClient().getActions().verifyBearerToken;
-  const verify = verifyToken ?? defaultVerifyBearerToken;
+  const verify = verifyToken ?? getVerifyBearerToken();
   const payload = await Result.tryPromise({
     try: async () =>
       await verify(token, {

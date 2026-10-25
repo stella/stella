@@ -22,8 +22,8 @@ const requestTokens = async (
   fetch: Fetch,
   tokenEndpoint: string,
   parameters: Record<string, string>,
-): Promise<Result<TokenResponse, TokenError>> =>
-  await Result.tryPromise({
+): Promise<Result<TokenResponse, TokenError>> => {
+  const answered = await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(fetch, tokenEndpoint, {
         method: "POST",
@@ -34,20 +34,34 @@ const requestTokens = async (
         body: new URLSearchParams(parameters).toString(),
       });
       const json: unknown = await response.json();
-      if (!response.ok) {
-        const refusal = v.safeParse(oauthErrorSchema, json);
-        throw new TokenError({
-          message: `The token endpoint responded ${response.status}`,
-          oauthError: refusal.success ? refusal.output.error : undefined,
-        });
-      }
-      return v.parse(tokenResponseSchema, json);
+      return { status: response.ok ? null : response.status, json };
     },
     catch: (cause) =>
-      cause instanceof TokenError
-        ? cause
-        : new TokenError({ message: "The token request failed", cause }),
+      new TokenError({ message: "The token request failed", cause }),
   });
+  if (Result.isError(answered)) {
+    return Result.err(answered.error);
+  }
+  const { status, json } = answered.value;
+  if (status !== null) {
+    const refusal = v.safeParse(oauthErrorSchema, json);
+    return Result.err(
+      new TokenError({
+        message: `The token endpoint responded ${status}`,
+        oauthError: refusal.success ? refusal.output.error : undefined,
+      }),
+    );
+  }
+  const tokens = v.safeParse(tokenResponseSchema, json);
+  return tokens.success
+    ? Result.ok(tokens.output)
+    : Result.err(
+        new TokenError({
+          message: "The token endpoint answered an unexpected body",
+          cause: new v.ValiError(tokens.issues),
+        }),
+      );
+};
 
 export const redeemAuthorizationCode = async ({
   clientId,
@@ -112,9 +126,9 @@ export const revokeRefreshToken = async ({
   if (revocationEndpoint === undefined) {
     return Result.ok(undefined);
   }
-  return await Result.tryPromise({
-    try: async () => {
-      const response = await fetchWithTimeout(fetch, revocationEndpoint, {
+  const answered = await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(fetch, revocationEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -122,16 +136,18 @@ export const revokeRefreshToken = async ({
           token: refreshToken,
           token_type_hint: "refresh_token",
         }).toString(),
-      });
-      if (!response.ok) {
-        throw new TokenError({
-          message: `The revocation endpoint responded ${response.status}`,
-        });
-      }
-    },
+      }),
     catch: (cause) =>
-      cause instanceof TokenError
-        ? cause
-        : new TokenError({ message: "The revocation request failed", cause }),
+      new TokenError({ message: "The revocation request failed", cause }),
   });
+  if (Result.isError(answered)) {
+    return Result.err(answered.error);
+  }
+  return answered.value.ok
+    ? Result.ok(undefined)
+    : Result.err(
+        new TokenError({
+          message: `The revocation endpoint responded ${answered.value.status}`,
+        }),
+      );
 };

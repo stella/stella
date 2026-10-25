@@ -16,7 +16,7 @@ export const encodeBase64Url = (bytes: Uint8Array): string =>
   btoa(String.fromCodePoint(...bytes))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
-    .replace(/=+$/u, "");
+    .replaceAll("=", "");
 
 export type PkcePair = {
   readonly codeVerifier: string;

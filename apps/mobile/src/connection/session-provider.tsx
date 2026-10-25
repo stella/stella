@@ -99,12 +99,15 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       });
       if (Result.isError(stored)) {
         // A grant the phone cannot keep is one nobody can use; give it back.
-        await revokeRefreshToken({
-          clientId: session.clientId,
-          fetch,
-          refreshToken: session.refreshToken,
-          revocationEndpoint: session.revocationEndpoint,
-        });
+        // Sign-in fails either way, and an unrevoked grant expires unused.
+        (
+          await revokeRefreshToken({
+            clientId: session.clientId,
+            fetch,
+            refreshToken: session.refreshToken,
+            revocationEndpoint: session.revocationEndpoint,
+          })
+        ).unwrapOr(undefined);
         return Result.err(stored.error);
       }
       setState({
@@ -117,18 +120,22 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       if (state.status === "signed-in") {
         const session = state.source.session();
         // Best effort: an unreachable server cannot keep the phone signed in.
-        await revokeRefreshToken({
-          clientId: session.clientId,
-          fetch,
-          refreshToken: session.refreshToken,
-          revocationEndpoint: session.revocationEndpoint,
-        });
+        (
+          await revokeRefreshToken({
+            clientId: session.clientId,
+            fetch,
+            refreshToken: session.refreshToken,
+            revocationEndpoint: session.revocationEndpoint,
+          })
+        ).unwrapOr(undefined);
       }
       // The refresh token is revoked already, so a session the keychain
       // keeps fails its first refresh and ends; signing out still happens.
-      await Result.tryPromise(async () => {
-        await deviceSessionStore.clear();
-      });
+      (
+        await Result.tryPromise(async () => {
+          await deviceSessionStore.clear();
+        })
+      ).unwrapOr(undefined);
       setState({ status: "signed-out", ended: false });
     },
     end: () => {

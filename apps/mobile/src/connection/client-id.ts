@@ -46,7 +46,7 @@ export const resolveClientId = async ({
       }),
     );
   }
-  return await Result.tryPromise({
+  const answered = await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(fetch, endpoint, {
         method: "POST",
@@ -65,19 +65,35 @@ export const resolveClientId = async ({
         }),
       });
       if (!response.ok) {
-        throw new ClientRegistrationError({
-          message: `Client registration responded ${response.status}`,
-        });
+        return { status: response.status, json: undefined };
       }
       const json: unknown = await response.json();
-      return v.parse(registrationResponseSchema, json).client_id;
+      return { status: response.status, json };
     },
     catch: (cause) =>
-      cause instanceof ClientRegistrationError
-        ? cause
-        : new ClientRegistrationError({
-            message: "Client registration failed",
-            cause,
-          }),
+      new ClientRegistrationError({
+        message: "Client registration failed",
+        cause,
+      }),
   });
+  if (Result.isError(answered)) {
+    return Result.err(answered.error);
+  }
+  const { status, json } = answered.value;
+  if (json === undefined) {
+    return Result.err(
+      new ClientRegistrationError({
+        message: `Client registration responded ${status}`,
+      }),
+    );
+  }
+  const registration = v.safeParse(registrationResponseSchema, json);
+  return registration.success
+    ? Result.ok(registration.output.client_id)
+    : Result.err(
+        new ClientRegistrationError({
+          message: "Client registration answered an unexpected body",
+          cause: new v.ValiError(registration.issues),
+        }),
+      );
 };

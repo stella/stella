@@ -553,6 +553,10 @@
       "reason": "Requires a mcp fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
+      "id": "GET /v1/mcp/oauth/mobile-client-metadata.json",
+      "reason": "Serves a fixed client metadata document built from configuration; it reads no persisted rows, so nothing grows with data."
+    },
+    {
       "id": "GET /v1/me/data-exports/",
       "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },

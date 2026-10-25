@@ -5,6 +5,7 @@ import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { SafeId } from "@/api/lib/branded-types";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import {
+  AGENT_RUN_TOKEN_PURPOSE,
   getMcpResourceUrl,
   MCP_OAUTH_SCOPES,
   type McpOAuthScope,
@@ -80,7 +81,6 @@ export const AGENT_RUN_DEFAULT_SCOPES = MCP_OAUTH_SCOPES.filter(
 
 /** Agent-run tokens are short-lived: a run should outlive its token rarely. */
 const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
-export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
 
 export type AgentRunTokenClaims = {
   sub: string;

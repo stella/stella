@@ -46,7 +46,10 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
-import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import {
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
+} from "@/api/mcp/api-key-auth";
 import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
@@ -1520,7 +1523,11 @@ export const createMcpHttpRequestHandler = ({
         try {
           const authenticated = await measureMcpPhase(
             "auth",
-            async () => await authenticateMcpRequest(token, { mode }),
+            async () =>
+              await authenticateMcpRequest(token, {
+                mode,
+                resolveApiKeySession: resolveMachineApiKeySession,
+              }),
           );
           if (Result.isError(authenticated)) {
             return failureResponse(authenticated.error, requestId);

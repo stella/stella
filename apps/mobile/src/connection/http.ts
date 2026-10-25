@@ -4,7 +4,7 @@ import { Result } from "better-result";
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 /** A phone on a bad network must give up rather than leave a screen spinning. */
-export const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * `fetch` that aborts after `REQUEST_TIMEOUT_MS`. Built on a controller and a
