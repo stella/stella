@@ -1026,6 +1026,7 @@
       "ai": "KI",
       "human": "Mensch"
     },
+    "oldestDecisions": "Älteste Entscheidungen",
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
@@ -1132,6 +1133,8 @@
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",
+      "oldest": "Älteste",
+      "oldestUnavailable": "Eine Suche wird nach Relevanz oder mit den neuesten zuerst sortiert. Leeren Sie die Suche, um die ältesten Entscheidungen zuerst anzuzeigen.",
       "relevance": "Beste Treffer"
     },
     "viewer": {
@@ -6628,10 +6631,12 @@
       "selectOperator": "Operator auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
       "singleSelect": "Einfachauswahl",
-      "sortAscending": "Aufsteigend sortieren",
       "sortAscendingDate": "Älteste zuerst",
-      "sortDescending": "Absteigend sortieren",
+      "sortAscendingNumber": "Niedrigste zuerst",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Neueste zuerst",
+      "sortDescendingNumber": "Höchste zuerst",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {In # Option aufteilen} other {In # Optionen aufteilen}}",
       "suggestWithAI": "Mit KI vorschlagen",
       "text": "Text",

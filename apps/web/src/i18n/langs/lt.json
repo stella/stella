@@ -1026,6 +1026,7 @@
       "ai": "DI",
       "human": "Žmonių"
     },
+    "oldestDecisions": "Seniausi sprendimai",
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
@@ -1132,6 +1133,8 @@
     "showWholeHeadnote": "Rodyti visą santrauką",
     "sort": {
       "newest": "Naujausi",
+      "oldest": "Seniausi",
+      "oldestUnavailable": "Paieškos rezultatai rikiuojami pagal aktualumą arba nuo naujausių. Norėdami pirmiausia matyti seniausius sprendimus, išvalykite paiešką.",
       "relevance": "Tinkamiausi"
     },
     "viewer": {
@@ -6628,10 +6631,12 @@
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
       "singleSelect": "Vienas pasirinkimas",
-      "sortAscending": "Rūšiuoti didėjimo tvarka",
       "sortAscendingDate": "Seniausi pirmi",
-      "sortDescending": "Rūšiuoti mažėjimo tvarka",
+      "sortAscendingNumber": "Mažiausi pirmi",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Naujausi pirmi",
+      "sortDescendingNumber": "Didžiausi pirmi",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Skaidyti į # parinktį} few {Skaidyti į # parinktis} many {Skaidyti į # parinkties} other {Skaidyti į # parinkčių}}",
       "suggestWithAI": "Pasiūlyti su DI",
       "text": "Tekstas",

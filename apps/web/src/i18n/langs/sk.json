@@ -1026,6 +1026,7 @@
       "ai": "AI",
       "human": "Ľudské"
     },
+    "oldestDecisions": "Najstaršie rozhodnutia",
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
@@ -1132,6 +1133,8 @@
     "showWholeHeadnote": "Zobraziť celú právnu vetu",
     "sort": {
       "newest": "Najnovšie",
+      "oldest": "Najstaršie",
+      "oldestUnavailable": "Vyhľadávanie radí výsledky podľa relevantnosti alebo od najnovších. Ak chcete zobraziť najskôr najstaršie rozhodnutia, vymažte vyhľadávanie.",
       "relevance": "Najrelevantnejšie"
     },
     "viewer": {
@@ -6628,10 +6631,12 @@
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
       "singleSelect": "Jednoduchý výber",
-      "sortAscending": "Radiť vzostupne",
       "sortAscendingDate": "Od najstarších",
-      "sortDescending": "Radiť zostupne",
+      "sortAscendingNumber": "Od najnižšej hodnoty",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Od najnovších",
+      "sortDescendingNumber": "Od najvyššej hodnoty",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností}}",
       "suggestWithAI": "Navrhnúť pomocou AI",
       "text": "Text",

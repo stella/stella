@@ -4,6 +4,10 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
+import {
+  DECISION_LIST_SORTS,
+  type DecisionListSort,
+} from "@stll/api-contract/search";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -120,6 +124,12 @@ const systemAuditPurgeCutoff = new Date(
   Temporal.Instant.from(QUERY_PLAN_SAMPLE.systemAudit.now).epochMilliseconds -
     SYSTEM_AUDIT_RETENTION_DAYS * DAY_IN_MS,
 );
+
+/** One browse walk per order: each direction commits its own access path. */
+const DECISION_LIST_PLAN_IDS = {
+  newest: "case-law.decisions-list",
+  oldest: "case-law.decisions-list-oldest",
+} as const satisfies Record<DecisionListSort, string>;
 
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
@@ -297,20 +307,21 @@ export const QUERY_PLAN_REGISTRY = [
     },
     contract: planContracts["legislation.sitemap-index-read"],
   },
-  {
-    id: "case-law.decisions-list",
-    class: "page",
-    role: "public-law-reader",
-    build: (tx) =>
+  ...DECISION_LIST_SORTS.map((sort) => ({
+    id: DECISION_LIST_PLAN_IDS[sort],
+    class: "page" as const,
+    role: "public-law-reader" as const,
+    build: (tx: Transaction) =>
       listDecisionsPageQuery({
         cursor: undefined,
         limit: LIMITS.caseLawSearchPageSizeDefault,
         query: { country: sampleCountry },
+        sort,
         tx,
       }),
-    seed: "case-law",
-    contract: planContracts["case-law.decisions-list"],
-  },
+    seed: "case-law" as const,
+    contract: planContracts[DECISION_LIST_PLAN_IDS[sort]],
+  })),
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
     class: "point",

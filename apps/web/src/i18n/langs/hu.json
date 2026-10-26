@@ -1026,6 +1026,7 @@
       "ai": "AI",
       "human": "Emberi"
     },
+    "oldestDecisions": "Legrégebbi határozatok",
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
@@ -1132,6 +1133,8 @@
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",
+      "oldest": "Legrégebbi",
+      "oldestUnavailable": "A keresés találatai relevancia szerint vagy a legújabbtól kezdve rendeződnek. A legrégebbi határozatok elöl való megjelenítéséhez törölje a keresést.",
       "relevance": "Legrelevánsabb"
     },
     "viewer": {
@@ -6628,10 +6631,12 @@
       "selectOperator": "Operátor kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
       "singleSelect": "Egyszeres választás",
-      "sortAscending": "Növekvő rendezés",
       "sortAscendingDate": "Legrégebbi elöl",
-      "sortDescending": "Csökkenő rendezés",
+      "sortAscendingNumber": "Legkisebb elöl",
+      "sortAscendingText": "A → Zs",
       "sortDescendingDate": "Legújabb elöl",
+      "sortDescendingNumber": "Legnagyobb elöl",
+      "sortDescendingText": "Zs → A",
       "splitOptions": "{count, plural, one {Felosztás # lehetőségre} other {Felosztás # lehetőségre}}",
       "suggestWithAI": "Javaslat AI-val",
       "text": "Szöveg",

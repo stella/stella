@@ -32,7 +32,8 @@ import { PinProperty } from "@/components/workspaces/properties/pin-property";
 import { PropertyConditions } from "@/components/workspaces/properties/property-conditions";
 import { PropertyPopoverTrigger } from "@/components/workspaces/properties/shared";
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
-import { toSortHint } from "@/components/workspaces/property-utils";
+import { ALL_SORT_DIRECTIONS_AVAILABLE } from "@/components/workspaces/properties/sort-property.logic";
+import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import type { TableHeader } from "@/components/workspaces/table/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -403,7 +404,8 @@ export const PropertyPopover = ({
             )}
             <SortProperty
               column={header.column}
-              sortHint={toSortHint(property.content.type)}
+              directions={ALL_SORT_DIRECTIONS_AVAILABLE}
+              kind={PROPERTY_SORT_KINDS[property.content.type]}
             />
             <Separator />
             <div className="flex flex-col p-1">

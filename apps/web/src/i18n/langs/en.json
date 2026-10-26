@@ -1026,6 +1026,7 @@
       "ai": "AI",
       "human": "Human"
     },
+    "oldestDecisions": "Oldest decisions",
     "pagination": {
       "goToPage": "Go to page {page}",
       "label": "Result pages",
@@ -1132,6 +1133,8 @@
     "showWholeHeadnote": "Show whole headnote",
     "sort": {
       "newest": "Newest",
+      "oldest": "Oldest",
+      "oldestUnavailable": "A search is ordered by relevance or newest first. Clear the search to list the oldest decisions first.",
       "relevance": "Most relevant"
     },
     "viewer": {
@@ -6628,10 +6631,12 @@
       "selectOperator": "Select operator",
       "setPromptPlaceholder": "Set a prompt to extract the information",
       "singleSelect": "Single Select",
-      "sortAscending": "Sort ascending",
       "sortAscendingDate": "Oldest first",
-      "sortDescending": "Sort descending",
+      "sortAscendingNumber": "Lowest first",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Newest first",
+      "sortDescendingNumber": "Highest first",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Suggest with AI",
       "text": "Text",

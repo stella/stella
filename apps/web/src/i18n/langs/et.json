@@ -1026,6 +1026,7 @@
       "ai": "AI",
       "human": "Inimeste"
     },
+    "oldestDecisions": "Vanimad lahendid",
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
@@ -1132,6 +1133,8 @@
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
+      "oldest": "Vanimad",
+      "oldestUnavailable": "Otsingu tulemused järjestatakse asjakohasuse järgi või uuemad enne. Vanimate lahendite esmalt nägemiseks tühjendage otsing.",
       "relevance": "Asjakohaseimad"
     },
     "viewer": {
@@ -6628,10 +6631,12 @@
       "selectOperator": "Valige operaator",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
       "singleSelect": "Ühekordne valik",
-      "sortAscending": "Sorteeri kasvavalt",
       "sortAscendingDate": "Vanemad enne",
-      "sortDescending": "Sorteeri kahanevalt",
+      "sortAscendingNumber": "Väiksemad enne",
+      "sortAscendingText": "A → Ü",
       "sortDescendingDate": "Uuemad enne",
+      "sortDescendingNumber": "Suuremad enne",
+      "sortDescendingText": "Ü → A",
       "splitOptions": "{count, plural, one {Jaga # valikuks} other {Jaga # valikuks}}",
       "suggestWithAI": "Soovita AI-ga",
       "text": "Tekst",
