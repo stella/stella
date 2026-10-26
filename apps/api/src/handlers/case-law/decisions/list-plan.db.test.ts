@@ -120,7 +120,7 @@ type BrowseFilter = Exclude<keyof BrowseQuery, "cursor" | "limit" | "offset">;
 
 /** The indexes whose order is the walk's: a page is a range of one of them. */
 const WALK_SCAN =
-  /Index Scan Backward using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\n\s+Index Cond: ([^\n]+)/u;
+  /Index Scan Backward using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_published_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\n\s+Index Cond: ([^\n]+)/u;
 
 type FilterAccess =
   | {
