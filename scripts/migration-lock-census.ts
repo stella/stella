@@ -895,7 +895,7 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     migration: "20261026090000_case_law_sitemap_changes",
     form: "row-level-security",
     reason:
-      "ENABLE and FORCE RLS apply to the sitemap change log created empty in the same migration, before publication, under 1s lock_timeout and 30s statement_timeout.",
+      "ENABLE and FORCE RLS apply to the sitemap change log and month horizon tables, both created empty in the same migration, before publication, under 1s lock_timeout and 30s statement_timeout.",
   },
   {
     migration: "20261026090000_case_law_sitemap_changes",

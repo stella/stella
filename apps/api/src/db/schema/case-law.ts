@@ -2535,6 +2535,36 @@ export const caseLawSitemapChanges = p.pgTable(
   ],
 );
 
+/**
+ * The snapshot horizon of the count each sitemap month's shard rows were
+ * written from: the oldest transaction still running when that count read.
+ * The refresh replaces a month only from a count at least as new, so an
+ * overlapping run that counted earlier cannot overwrite a newer count. Kept
+ * apart from `case_law_sitemap_shards` because an emptied month has no shard
+ * row left to carry it, and its horizon still fences an older count.
+ */
+export const caseLawSitemapMonthHorizons = p.pgTable(
+  "case_law_sitemap_month_horizons",
+  {
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    countedHorizon: xid8("counted_horizon").notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_sitemap_month_horizons_pkey",
+      columns: [t.country, t.year, t.month],
+    }),
+    p.pgPolicy("case_law_sitemap_month_horizon_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
 export const CASE_LAW_BROWSE_FACET_KINDS = [
   "country",
   "court",

@@ -617,6 +617,106 @@ test(
 );
 
 test(
+  "a whole-country row larger than one run's budget finishes over successive runs",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    await db.insert(caseLawSitemapChanges).values({
+      country: "CZE",
+      year: SITEMAP_WHOLE_COUNTRY,
+      month: SITEMAP_WHOLE_COUNTRY,
+    });
+    const first = await refreshCaseLawSitemapShards(refreshDb, {
+      clock: spentClock(),
+    });
+    // The expansion is the run's one unit: it logs every month and consumes
+    // the whole-country row in one write, so no later run starts it over.
+    expect(first).toEqual({ type: "pending", months: 0 });
+    const logged = await loggedMonths();
+    expect(logged).not.toContain(
+      `CZE/${SITEMAP_WHOLE_COUNTRY}/${SITEMAP_WHOLE_COUNTRY}`,
+    );
+    expect(logged.length).toBeGreaterThan(3);
+    expect(logged.every((month) => month.startsWith("CZE/"))).toBe(true);
+
+    const { runs } = await refreshUntilDone(refreshDb, {
+      clock: spentClock(),
+    });
+    // One month per run.
+    expect(runs).toBe(logged.length);
+    expect(await loggedMonths()).toEqual([]);
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+/**
+ * The test handle, running `pause` once after the first transaction that
+ * counted a month commits and before the run writes that count.
+ */
+const pausingAfterCount = (pause: () => Promise<void>) => {
+  const dialect = new PgDialect();
+  let paused = false;
+  const pausing = {
+    transaction: async (work: (tx: unknown) => Promise<unknown>) => {
+      let counted = false;
+      const result = await db.transaction(
+        async (tx) =>
+          await work(
+            new Proxy(tx, {
+              get: (target, property, receiver) =>
+                property === "execute"
+                  ? async (query: SQL) => {
+                      counted ||= dialect
+                        .sqlToQuery(query)
+                        .sql.includes("count(*)::int AS total");
+                      return await target.execute(query);
+                    }
+                  : Reflect.get(target, property, receiver),
+            }),
+          ),
+      );
+      if (counted && !paused) {
+        paused = true;
+        await pause();
+      }
+      return result;
+    },
+  };
+  // SAFETY: forwards every call to the PGlite handle.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
+  return pausing as unknown as RefreshDb;
+};
+
+test(
+  "a run that counted before an overlapping run wrote a newer count cannot overwrite it",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    await insertOne({ decisionDate: "2010-10-10" });
+    // Run A counts October, then waits while run B counts a newer change of
+    // the same month, writes it and consumes its log rows.
+    const runA = pausingAfterCount(async () => {
+      await insertOne({ decisionDate: "2010-10-20" });
+      await refreshUntilDone(refreshDb);
+      expect(await loggedMonths()).toEqual([]);
+    });
+    expect(await refreshCaseLawSitemapShards(runA)).toMatchObject({
+      type: "refreshed",
+      months: 0,
+    });
+    expect(
+      (await snapshot()).find(
+        (shard) =>
+          shard.country === "CZE" &&
+          shard.year === "2010" &&
+          shard.month === "10",
+      )?.total,
+    ).toBe(2);
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
   "rows of transactions still running when a run begins wait for a later run",
   async () => {
     await refreshUntilDone(refreshDb);

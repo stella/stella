@@ -104,7 +104,7 @@
   "case-law.sitemap-month-count": {
     "scans": [
       {
-        "position": "root/0/0/0",
+        "position": "root/1/0/0/0",
         "relation": "case_law_decisions",
         "nodeType": "Index Only Scan",
         "index": "case_law_decisions_sitemap_shard_published_idx"

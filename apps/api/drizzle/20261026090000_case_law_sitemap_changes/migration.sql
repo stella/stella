@@ -27,6 +27,25 @@ CREATE POLICY "case_law_sitemap_change_owner_access" ON "case_law_sitemap_change
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_changes" FROM stella;--> statement-breakpoint
 
+-- The snapshot horizon of the count each sitemap month was written from. A
+-- month is replaced only from a count at least as new, so an overlapping run
+-- that counted earlier cannot overwrite a newer count; an emptied month keeps
+-- its row here, with no shard row left to carry the horizon.
+CREATE TABLE "case_law_sitemap_month_horizons" (
+  "country" text NOT NULL,
+  "year" text NOT NULL,
+  "month" text NOT NULL,
+  "counted_horizon" xid8 NOT NULL,
+  CONSTRAINT "case_law_sitemap_month_horizons_pkey" PRIMARY KEY ("country", "year", "month")
+);--> statement-breakpoint
+
+ALTER TABLE "case_law_sitemap_month_horizons" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_sitemap_month_horizons" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+-- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all and stella none (revoked below); no other role is granted
+CREATE POLICY "case_law_sitemap_month_horizon_owner_access" ON "case_law_sitemap_month_horizons"
+  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_month_horizons" FROM stella;--> statement-breakpoint
+
 -- A decision's shard is its country and month, the bucket of its id, its
 -- source (the redistribution gate), its updated_at (the shard's last
 -- modification) and its publication. A write that changes any of these, for

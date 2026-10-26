@@ -9,10 +9,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
+  caseLawSitemapMonthHorizons,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -59,6 +62,9 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(caseLawSitemapChanges)
         .where(eq(caseLawSitemapChanges.country, COUNTRY));
+      await db
+        .delete(caseLawSitemapMonthHorizons)
+        .where(eq(caseLawSitemapMonthHorizons.country, COUNTRY));
     });
 
     const insertDecisions = async (decisionDate: string, count: number) => {
@@ -226,6 +232,65 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         );
       expect(counted?.total).toBe(1);
+    });
+
+    test("a run that counted before an overlapping run wrote a newer count cannot overwrite it", async () => {
+      await insertDecisions("1903-01-15", 1);
+      await refreshUntilDone();
+      expect(await listedMonths()).toContain("1903/01:1");
+      await insertDecisions("1903-01-16", 1);
+
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        // SAFETY: the second session's refresh opens its transactions
+        // through the gated handle, the same surface the root pool provides.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- second test session stands in for an overlapping run
+        const runB = openClient().db as unknown as RefreshDb;
+        let paused = false;
+        // Run A counts January, then waits while run B, in its own session,
+        // counts a newer change of the same month, writes it and consumes
+        // its log rows.
+        const runA = {
+          transaction: async (work: (tx: unknown) => Promise<unknown>) => {
+            let counted = false;
+            const result = await db.transaction(
+              async (tx) =>
+                await work(
+                  new Proxy(tx, {
+                    get: (target, property, receiver) =>
+                      property === "execute"
+                        ? async (query: SQL) => {
+                            counted ||= new PgDialect()
+                              .sqlToQuery(query)
+                              .sql.includes("count(*)::int AS total");
+                            return await target.execute(query);
+                          }
+                        : Reflect.get(target, property, receiver),
+                  }),
+                ),
+            );
+            if (counted && !paused) {
+              paused = true;
+              await insertDecisions("1903-01-17", 1);
+              await refreshUntilDone(runB);
+              expect(await listedMonths()).toContain("1903/01:3");
+              expect(await loggedMonths()).toEqual([]);
+            }
+            return result;
+          },
+        };
+        // SAFETY: forwards every transaction to the gated handle.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
+        const runADb = runA as unknown as RefreshDb;
+        expect(await refreshCaseLawSitemapShards(runADb)).toMatchObject({
+          type: "refreshed",
+          months: 0,
+        });
+        expect(paused).toBe(true);
+      });
+
+      // Run A's write was refused: the month keeps run B's newer count.
+      expect(await listedMonths()).toContain("1903/01:3");
+      expect(await loggedMonths()).toEqual([]);
     });
   });
 }
