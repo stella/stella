@@ -12,6 +12,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -107,9 +109,9 @@ const actor = createRootRunActor(
 );
 const outputEntityId = createSafeId<"entity">();
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const translateSpy = spyOn(translationAI, "translateTaggedSegments");
-const writeSpy = spyOn(entityWriter, "createEntityFromBuffer");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
+let translateSpy: Mock<typeof translationAI.translateTaggedSegments>;
+let writeSpy: Mock<typeof entityWriter.createEntityFromBuffer>;
 
 const readRun = async () =>
   (
@@ -126,6 +128,10 @@ const sourceReads = () =>
   );
 
 beforeEach(async () => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  translateSpy = spyOn(translationAI, "translateTaggedSegments");
+  writeSpy = spyOn(entityWriter, "createEntityFromBuffer");
+
   settingsSpy.mockReset();
   translateSpy.mockReset();
   writeSpy.mockReset();
@@ -172,6 +178,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(documentTranslationUnits)
     .where(eq(documentTranslationUnits.runId, runId));

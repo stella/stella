@@ -125,7 +125,7 @@ test("inherits a parent describe reset in a nested describe", async () => {
   ).toEqual([]);
 });
 
-test("does not apply standalone mock resets to spies", async () => {
+test("reports a module-scope spy", async () => {
   expect(
     await lintSingleRule(
       rule,
@@ -134,6 +134,55 @@ test("does not apply standalone mock resets to spies", async () => {
         'spyOn(console, "log");',
         "beforeEach(() => mock.clearAllMocks());",
         'test("uncovered", () => {});',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([2]);
+});
+
+test("accepts a spy created in beforeEach and restored in afterEach", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { afterEach, beforeEach, mock, spyOn, test } from "bun:test";',
+        'beforeEach(() => spyOn(console, "log"));',
+        "afterEach(() => mock.restore());",
+        'test("covered", () => {});',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});
+
+test("reports a spy when restore is in beforeEach", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { beforeEach, mock, spyOn, test } from "bun:test";',
+        'beforeEach(() => spyOn(console, "log"));',
+        "beforeEach(() => mock.restore());",
+        'test("uncovered", () => {});',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([2]);
+});
+
+test("inherits a parent describe afterEach for a nested spy", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { afterEach, beforeEach, describe, mock, spyOn, test } from "bun:test";',
+        'describe("parent", () => {',
+        "  afterEach(() => mock.restore());",
+        '  describe("nested", () => {',
+        '    beforeEach(() => spyOn(console, "log"));',
+        '    test("covered", () => {});',
+        "  });",
+        "});",
       ].join("\n"),
       { plugin },
     ),

@@ -1,4 +1,13 @@
-import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import {
   RESOURCE_TYPE,
@@ -9,15 +18,35 @@ import {
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import type { SseSessionLivenessReader } from "@/api/lib/sse";
+import type {
+  broadcast as Broadcast,
+  revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
+  SseSessionLivenessReader,
+  startSse as StartSse,
+  stopSse as StopSse,
+  subscribe as Subscribe,
+} from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
 
-beforeEach(() => {
+beforeEach(async () => {
+  setIntervalSpy = spyOn(globalThis, "setInterval");
+  clearIntervalSpy = spyOn(globalThis, "clearInterval");
+
   createRedisClientMock.mockClear();
+  const clientsBeforeImport = createdClients.length;
+  const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
+  const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
+  ({ broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
+    await import("@/api/lib/sse"));
+  clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
+  redisClientsCreatedDuringImport =
+    createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
+  intervalsStartedDuringImport =
+    setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
 });
 
 type MessageHandler = (message: string) => void;
@@ -125,23 +154,21 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 // still schedule and clear a real timer; the spies only let the tests
 // observe whether the module called them, matching how sse.ts calls the
 // global functions directly.
-const setIntervalSpy = spyOn(globalThis, "setInterval");
-const clearIntervalSpy = spyOn(globalThis, "clearInterval");
+let setIntervalSpy: Mock<typeof globalThis.setInterval>;
+let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
-const clientsBeforeImport = createdClients.length;
-const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
-const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
-const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
-  await import("@/api/lib/sse");
+let broadcast: typeof Broadcast;
+let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
+let startSse: typeof StartSse;
+let stopSse: typeof StopSse;
+let subscribe: typeof Subscribe;
 
 // Measure the import itself. Bun's --rerun-each retains mock history between
 // iterations, so absolute call counts include lifecycle calls from earlier
 // runs even though importing (or retrieving) the module performed no work.
-const clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
-const redisClientsCreatedDuringImport =
-  createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
-const intervalsStartedDuringImport =
-  setIntervalSpy.mock.calls.length - intervalCallsBeforeImport;
+let clientsCreatedDuringImport = 0;
+let redisClientsCreatedDuringImport = 0;
+let intervalsStartedDuringImport = 0;
 
 // Let the fire-and-forget subscribe promise inside startSse settle. A timer
 // turn drains the whole pending microtask queue, so this does not depend on
@@ -256,6 +283,10 @@ const broadcastTestEvent = (
     publishWorkspace: publishWorkspaceEventMock,
   });
 };
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {

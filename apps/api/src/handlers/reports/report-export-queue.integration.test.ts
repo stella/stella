@@ -11,6 +11,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -97,13 +99,13 @@ const actor = {
   exportId,
 };
 
-const reportDataSpy = spyOn(reportData, "buildReportData");
-const textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
-const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
-const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+let reportDataSpy: Mock<typeof reportData.buildReportData>;
+let textModelSpy: Mock<typeof modelTransport.generateTanStackTextForTask>;
+let objectModelSpy: Mock<typeof modelTransport.generateTanStackObjectForTask>;
+let chatObjectSpy: Mock<typeof chatRuntime.generateChatObject>;
 // Every model run resolves its model here, and every AI condition decides here.
-const resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
-const decideSpy = spyOn(decisions, "decide");
+let resolveModelSpy: Mock<typeof modelTransport.resolveTanStackTextModel>;
+let decideSpy: Mock<typeof decisions.decide>;
 
 const readExport = async () =>
   (
@@ -118,6 +120,13 @@ const objectWrites = () =>
   fakeS3.requests.filter((request) => request.method === "PUT");
 
 beforeEach(async () => {
+  reportDataSpy = spyOn(reportData, "buildReportData");
+  textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
+  chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+  resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
+  decideSpy = spyOn(decisions, "decide");
+
   reportDataSpy.mockClear();
   textModelSpy.mockClear();
   objectModelSpy.mockClear();
@@ -148,6 +157,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.delete(reportExports).where(eq(reportExports.id, exportId));
   await testDb
     .insert(member)
