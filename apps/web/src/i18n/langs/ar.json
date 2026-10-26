@@ -1043,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
-      "human": "بشرية"
+      "human": "بشرية",
+      "toggleState": "{label}: {state, select, on {تشغيل} other {إيقاف}}"
     },
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",

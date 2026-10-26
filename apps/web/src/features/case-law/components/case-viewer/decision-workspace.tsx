@@ -21,12 +21,13 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
+import { ScrollTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
+import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -199,6 +200,41 @@ const MARKS_FOR_NOTES_FILTER = {
 const NotesFilterAllIcon = ({ className }: { className?: string }) => (
   <MatterIcon className={className} variant="all" />
 );
+
+type ReaderPanelToggleProps = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onPress: () => void;
+  pressed: boolean;
+};
+
+/** One toggle of the margin's floating display panel. */
+const ReaderPanelToggle = ({
+  icon: Icon,
+  label,
+  onPress,
+  pressed,
+}: ReaderPanelToggleProps) => {
+  const t = useTranslations();
+  return (
+    <Tooltip
+      content={t("caseLaw.notesFilter.toggleState", {
+        label,
+        state: pressed ? "on" : "off",
+      })}
+      render={
+        <InspectorRailIconButton
+          aria-label={label}
+          aria-pressed={pressed}
+          className={cn("rounded-none", pressed && "bg-muted text-foreground")}
+          onClick={onPress}
+        />
+      }
+    >
+      <Icon className="size-4" />
+    </Tooltip>
+  );
+};
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const user = useMaybeAuthenticatedUser();
@@ -812,9 +848,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <ChromeHeaderActions>
-        <ReaderProvisionModeToggle mode={provisions} size="page" />
-      </ChromeHeaderActions>
+      {/* The margin's panel holds the toggle. Below `lg` neither is drawn
+          and the provisions open under their paragraphs, so the header holds
+          it, as the inspector's pane does. */}
+      {answerPlacement === "inline" && (
+        <ChromeHeaderActions>
+          <ReaderProvisionModeToggle mode={provisions} size="page" />
+        </ChromeHeaderActions>
+      )}
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
@@ -834,32 +875,26 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           key={decisionId}
         />
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">
-          {notesFilterOptions.map((option) => {
-            const Icon = option.icon;
-            const isActive = notesFilter === option.value;
-            return (
-              <Tooltip
-                content={option.label}
-                key={option.value}
-                render={
-                  <InspectorRailIconButton
-                    aria-label={option.label}
-                    aria-pressed={isActive}
-                    className={cn(
-                      "rounded-none",
-                      isActive && "bg-muted text-foreground",
-                    )}
-                    onClick={() => {
-                      annotations.clearActive();
-                      setNotesFilter(option.value);
-                    }}
-                  />
-                }
-              >
-                <Icon className="size-4" />
-              </Tooltip>
-            );
-          })}
+          {notesFilterOptions.map((option) => (
+            <ReaderPanelToggle
+              icon={option.icon}
+              key={option.value}
+              label={option.label}
+              onPress={() => {
+                annotations.clearActive();
+                setNotesFilter(option.value);
+              }}
+              pressed={notesFilter === option.value}
+            />
+          ))}
+          {/* The filter picks one source; the provisions show beside any. */}
+          <Separator orientation="vertical" />
+          <ReaderPanelToggle
+            icon={ScrollTextIcon}
+            label={t("caseLaw.viewer.provisionsCited")}
+            onPress={provisions.toggle}
+            pressed={provisions.expandProvisions}
+          />
         </div>
         {/* The text column is the grid's inline-end column at every width, so
             the bar's corner of this box is the text's corner, as in the

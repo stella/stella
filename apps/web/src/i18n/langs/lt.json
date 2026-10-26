@@ -1043,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "DI",
-      "human": "Žmonių"
+      "human": "Žmonių",
+      "toggleState": "{label}: {state, select, on {įjungta} other {išjungta}}"
     },
     "pagination": {
       "goToPage": "Eiti į {page} psl.",

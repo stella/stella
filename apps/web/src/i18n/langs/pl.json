@@ -1043,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ludzkie"
+      "human": "Ludzkie",
+      "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
     },
     "pagination": {
       "goToPage": "Przejdź do strony {page}",

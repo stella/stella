@@ -1043,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Lidské"
+      "human": "Lidské",
+      "toggleState": "{label}: {state, select, on {zapnuto} other {vypnuto}}"
     },
     "pagination": {
       "goToPage": "Přejít na stránku {page}",

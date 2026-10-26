@@ -1043,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Emberi"
+      "human": "Emberi",
+      "toggleState": "{label}: {state, select, on {be} other {ki}}"
     },
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",

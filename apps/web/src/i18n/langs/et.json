@@ -1043,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Inimeste"
+      "human": "Inimeste",
+      "toggleState": "{label}: {state, select, on {sees} other {väljas}}"
     },
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
