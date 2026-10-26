@@ -189,10 +189,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Rejoin sentences split across paragraphs, drop page numbers after the closing rule and join marked superscript article numbers.",
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
