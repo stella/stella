@@ -161,27 +161,18 @@ test("every MCP scenario names a registered tool", () => {
   }
 });
 
-// The HTTP core lists a route without the trailing slash Elysia gave a
-// prefix's index route; a base ledger may still spell it with one.
-const withoutTrailingSlash = (entries: string[]) =>
-  entries.map((entry) =>
-    entry.endsWith("/") && !entry.endsWith(" /") ? entry.slice(0, -1) : entry,
-  );
-
-for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
+for (const { kind, surface, ledger, measured } of [
   {
     kind: "api",
     surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
-    normalizeBaseEntries: withoutTrailingSlash,
   },
   {
     kind: "mcp",
     surface: mcpScalingSurface(DEFAULT_MCP_TOOL_DEFINITIONS),
     ledger: mcpLedger,
     measured: mcpScalingScenarios.map(({ name }) => name),
-    normalizeBaseEntries: undefined,
   },
 ]) {
   describe(`${kind} scaling census`, () => {
@@ -216,7 +207,7 @@ for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
           // A write route this change mounts may enter with its reason.
           normalizeBaseEntries: (base) =>
             withNewWriteRoutes({
-              base: normalizeBaseEntries?.(base) ?? base,
+              base,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,

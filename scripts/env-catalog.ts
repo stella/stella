@@ -62,6 +62,9 @@ type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
   ...Object.keys(rateLimitBudgetEnvSchema),
+  "EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL",
+  "EMAIL_EVENTS_QUEUE_URL",
+  "EMAIL_EVENTS_TOPIC_ARN",
   "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
   "LIST_VERIFICATION_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
@@ -245,6 +248,12 @@ const EXAMPLE_VALUES: Record<string, string> = {
   DB_SSLMODE: "require",
   DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
+  EMAIL_EVENTS_QUEUE_URL:
+    "https://sqs.eu-west-1.amazonaws.com/123456789012/ses-events",
+  EMAIL_EVENTS_TOPIC_ARN:
+    "arn:aws:sns:eu-west-1:123456789012:ses-notifications",
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL:
+    "https://sqs.eu-west-1.amazonaws.com/123456789012/ses-events-dlq",
   INBOUND_MAIL_DOMAIN: "inbound.example.com",
   INBOUND_MAIL_QUEUE_URL:
     "https://sqs.eu-west-1.amazonaws.com/123456789012/inbound-mail",
@@ -472,10 +481,16 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
+  EMAIL_EVENTS_QUEUE_URL:
+    "SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<name>) subscribed to the mail provider's bounce and complaint topic, reached in the region it names. Set with the other EMAIL_EVENTS_* keys to mark undeliverable account addresses; unset disables it.",
+  EMAIL_EVENTS_TOPIC_ARN:
+    "SNS topic the mail provider publishes bounce and complaint events to; deliveries from any other topic are refused.",
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL:
+    "Dead-letter queue of EMAIL_EVENTS_QUEUE_URL, in the same region; its depth is reported on every run.",
   INBOUND_MAIL_DOMAIN:
     "Dedicated catch-all domain for matter inbound addresses. Unset disables address creation.",
   INBOUND_MAIL_QUEUE_URL:
-    "SQS queue subscribed to the SES receipt topic. Set with the other INBOUND_MAIL_* transport keys to file inbound mail; unset disables receiving.",
+    "SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<name>) subscribed to the SES receipt topic, reached in the region it names. Set with the other INBOUND_MAIL_* transport keys to file inbound mail; unset disables receiving.",
   INBOUND_MAIL_TOPIC_ARN:
     "SNS topic the SES receipt rule publishes to. Queue messages from any other topic are left for the dead-letter queue.",
   INBOUND_MAIL_BUCKET:
@@ -682,6 +697,9 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL: "another EMAIL_EVENTS_* key is set",
+  EMAIL_EVENTS_QUEUE_URL: "another EMAIL_EVENTS_* key is set",
+  EMAIL_EVENTS_TOPIC_ARN: "another EMAIL_EVENTS_* key is set",
   INBOUND_MAIL_BUCKET: "another INBOUND_MAIL_* transport key is set",
   INBOUND_MAIL_DOMAIN: "an INBOUND_MAIL_* transport key is set",
   INBOUND_MAIL_KEY_PREFIX: "another INBOUND_MAIL_* transport key is set",
@@ -872,6 +890,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  EMAIL_EVENTS_QUEUE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  EMAIL_EVENTS_TOPIC_ARN: ENV_CREDENTIAL_KIND.notCredential,
   INBOUND_MAIL_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
   INBOUND_MAIL_DOMAIN: ENV_CREDENTIAL_KIND.notCredential,
   INBOUND_MAIL_KEY_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
@@ -1456,6 +1477,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // The release resolve job exports the network retry helper's path, staged
+  // from the workflow's own revision, for its git fetches.
+  "NETWORK_RETRY_SCRIPT",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
   // the commit it deploys, the infrastructure repository and its App token,
   // the readiness endpoint and edge header, and the bounds tests shorten.
