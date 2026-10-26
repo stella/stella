@@ -13,7 +13,6 @@ import path from "node:path";
 // with its ancestor or needs the explicit condition; review and remove entries,
 // never add one.
 const REVIEW_PENDING = new Set([
-  "autofix.yml#regenerate-derived-files",
   "ci.yml#api-image-smoke",
   "ci.yml#ci-checks-generated",
   "ci.yml#dependency-malware",

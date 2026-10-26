@@ -141,6 +141,49 @@ const namedCiStep = (workflow: unknown, name: string) => {
 };
 
 describe("Dependabot Bun autofix boundary", () => {
+  test("routes action pins to snapshot-only autofix without changing Bun updates", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    const bunStart = workflow.indexOf("  dependabot-bun-autofix:");
+    const scopeStart = workflow.indexOf("  regenerate-scope:");
+    const discoverStart = workflow.indexOf(
+      "  discover-classification-sources:",
+    );
+    const checkoutStart = workflow.indexOf(
+      "  checkout-classification-sources:",
+    );
+    const actionsStart = workflow.indexOf(
+      "  dependabot-actions-snapshot-autofix:",
+    );
+    const derivedStart = workflow.indexOf("  regenerate-derived-files:");
+    const bunJob = workflow.slice(bunStart, scopeStart);
+    const discoveryJobs = workflow.slice(discoverStart, actionsStart);
+    const actionsJob = workflow.slice(actionsStart, derivedStart);
+
+    expect(bunStart).toBeGreaterThanOrEqual(0);
+    expect(actionsStart).toBeGreaterThan(checkoutStart);
+    expect(bunJob).toContain(
+      "startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')",
+    );
+    expect(bunJob).not.toContain("dependabot/github_actions/");
+    expect(bunJob).toContain("bun --no-env-file dedupe --lockfile-only");
+    expect(discoveryJobs).toContain("!cancelled()");
+    expect(discoveryJobs).toContain("dependabot/github_actions/");
+    expect(actionsJob).toContain("!cancelled()");
+    expect(actionsJob).toContain("dependabot/github_actions/");
+    expect(actionsJob).toContain(
+      `bun scripts/ci-job-classification/snapshots.ts --write "\${source_args[@]}"`,
+    );
+    expect(actionsJob).toContain(
+      'bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"',
+    );
+    expect(actionsJob).toContain(".github/ci-job-classification-sources.json");
+    expect(actionsJob).toContain(".github/ci-job-classification-decisions/**");
+    expect(actionsJob).toContain("- name: Push workflow snapshot autofixes");
+    expect(actionsJob).not.toContain("Dedupe lockfile");
+    expect(actionsJob).not.toContain("Fix changed files");
+    expect(actionsJob).not.toContain("autofix-plan.ts run");
+  });
+
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const restrictionStep = workflow.indexOf(
@@ -336,7 +379,9 @@ describe("changed-file autofix boundary", () => {
     const pushStep = job.indexOf("- name: Push autofixes");
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
     expect(pushStep).toBeGreaterThan(restrictionStep);
-    expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
+    expect(job.indexOf("autofix-ci/action@", pushStep)).toBeGreaterThan(
+      pushStep,
+    );
   });
 
   test("finds a named CI guard inside a nested parallel group", () => {

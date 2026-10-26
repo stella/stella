@@ -440,9 +440,14 @@ jobs:
     name: Discover reusable workflow sources
     needs: regenerate-scope
     if: >-
-      needs.regenerate-scope.result == 'success'
-      && needs.regenerate-scope.outputs.ready == 'true'
-      && needs.regenerate-scope.outputs.needed != 'false'
+      !cancelled()
+      && ((needs.regenerate-scope.result == 'success'
+           && needs.regenerate-scope.outputs.ready == 'true'
+           && needs.regenerate-scope.outputs.needed != 'false')
+          || (github.actor != 'autofix-ci[bot]'
+              && github.event.pull_request.user.login == 'dependabot[bot]'
+              && github.event.pull_request.head.repo.full_name == github.repository
+              && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -477,7 +482,9 @@ jobs:
   checkout-classification-sources:
     name: Checkout reusable workflow source
     needs: discover-classification-sources
-    if: needs.discover-classification-sources.result == 'success'
+    if: >-
+      !cancelled()
+      && needs.discover-classification-sources.result == 'success'
     strategy:
       matrix: ${{ fromJSON(needs.discover-classification-sources.outputs.matrix) }}
     runs-on: ubuntu-24.04
@@ -516,11 +523,103 @@ jobs:
             artifact-marker
           include-hidden-files: true
 
+  dependabot-actions-snapshot-autofix:
+    name: Autofix Dependabot workflow snapshots
+    needs: checkout-classification-sources
+    if: >-
+      !cancelled()
+      && needs.checkout-classification-sources.result == 'success'
+      && github.actor != 'autofix-ci[bot]'
+      && github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout Dependabot head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify trusted snapshot sources
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          git diff --quiet "$BASE_SHA" "$HEAD_SHA" --
+          scripts/ci-job-classification
+          package.json
+          bun.lock
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Download pinned classification sources
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        timeout-minutes: 2
+        with:
+          pattern: classification-source-*
+          path: ${{ runner.temp }}/classification-sources
+
+      - name: Regenerate workflow snapshots
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          source_args=()
+          while IFS= read -r spec_file; do
+            source_args+=(--source "$(cat "$spec_file")=$(dirname "$spec_file")/source")
+          done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
+          bun scripts/ci-job-classification/snapshots.ts --write "${source_args[@]}"
+          bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"
+
+      - name: Restrict generated changes
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
+            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
+            exit 1
+          fi
+          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . \
+            ':(exclude).github/ci-job-classification-sources.json' \
+            ':(exclude).github/ci-job-classification-decisions/**')"
+          unexpected_untracked="$(git ls-files --others --exclude-standard -- . \
+            ':(exclude).github/ci-job-classification-sources.json' \
+            ':(exclude).github/ci-job-classification-decisions/**')"
+          if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
+            echo "::error::Autofix changed files outside classification snapshot outputs."
+            git status --short
+            exit 1
+          fi
+          git diff --check -- .github/ci-job-classification-sources.json \
+            .github/ci-job-classification-decisions
+
+      - name: Push workflow snapshot autofixes
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "chore: regenerate workflow snapshots"
+
   regenerate-derived-files:
     name: Autofix changed files
     needs: [regenerate-scope, checkout-classification-sources]
     if: >-
-      needs.regenerate-scope.result == 'success'
+      !cancelled()
+      && needs.regenerate-scope.result == 'success'
       && needs.regenerate-scope.outputs.ready == 'true'
       && needs.regenerate-scope.outputs.needed != 'false'
     runs-on: ubuntu-24.04

@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Regenerates and pushes job-classification snapshots for same-repository Dependabot workflow pin updates; no release publication, tag creation, or deployment.",
+  "reviewedDigest": "47bdc1c2cad2d67c3ce41e39a1a32058afdde3e09ca2818e3af2ad054c470155"
+}
