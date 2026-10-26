@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { classifyLineWrap, LINE_WRAP_TYPE } from "@stll/legal-ast/line-wrap";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 /**
@@ -14,13 +15,15 @@ import { normalizeUnicode } from "@stll/text-normalize";
  * open with a number or a Roman numeral reads as a heading or a paragraph
  * number.
  *
- * Two things together make a text a typescript: most of its lines end at
- * one width, and many of them end there mid-sentence, the next line going
- * on in lowercase or the word split by a hyphen. Short paragraphs of
- * similar length share a width too, but each ends its sentence. Only in a
- * typescript are line ends read as wrapping, and even there a line that
- * ends a sentence ends its paragraph unless the typewriter stretched it to
- * the margin.
+ * Paragraphs are rebuilt here, at ingestion: a parser stores real
+ * paragraphs, and the raw payload stays the verbatim published record.
+ * Whether a text is fixed-width wrapped at all, and at which column, is
+ * decided by the one shared classifier (`classifyLineWrap` in
+ * `@stll/legal-ast/line-wrap`): most lines end near one column, and many
+ * line boundaries fall inside a sentence. Short paragraphs of similar
+ * length share a width too, but each ends its sentence. This module owns
+ * what a typescript's line ends mean: which continue a paragraph, which
+ * hyphen a margin added, and what residue the typewriter left.
  */
 
 /** Where a printed line sits on the page, from its untrimmed text. */
@@ -51,18 +54,6 @@ type PrintedLineJoin = (typeof LINE_JOINS)[keyof typeof LINE_JOINS];
 export type ContinuingJoin = Exclude<PrintedLineJoin, typeof LINE_JOINS.BREAK>;
 
 const HARD_WRAP = {
-  /** Fewest printed lines that can show a margin. */
-  minLines: 8,
-  /** Shortest line counted when looking for the margin. */
-  minMarginWidth: 40,
-  /** Widest margin a typescript had; wider lines are paragraphs. */
-  maxMarginWidth: 100,
-  /** Share of the lines that must end at the margin. */
-  minShare: 0.5,
-  /** Lines that must end at the margin mid-sentence, at least. */
-  minWrapped: 4,
-  /** Share of the lines that must end at the margin mid-sentence. */
-  minWrappedShare: 0.25,
   /**
    * A justified line ends at the margin; a ragged one (a bold ruling, a
    * line whose next word was long) up to a short word before it.
@@ -155,60 +146,20 @@ const endsAtMargin = (line: PrintedLine, margin: number): boolean =>
   line.width <= margin + HARD_WRAP.slackAbove;
 
 /**
- * A line the margin cut mid-sentence: it ends at the margin, and either its
- * last word is hyphenated or it ends without punctuation and the next line
- * goes on in lowercase.
- */
-const wrapsMidSentence = (
-  above: PrintedLine | null,
-  line: PrintedLine | null,
-  margin: number,
-): boolean =>
-  above !== null &&
-  line !== null &&
-  line.text !== "" &&
-  endsAtMargin(above, margin) &&
-  (lineEndHyphenOf(above.text) !== null ||
-    (!SENTENCE_END_RE.test(above.text) && /^\p{Ll}/u.test(line.text)));
-
-/**
- * The width most lines end at, when they share one and the text wraps at
- * it mid-sentence often enough to be a typescript.
+ * The column a typescript's lines end at, or `null` for a text that is not
+ * one. Whether a text is fixed-width wrapped is decided by the one shared
+ * classifier, which the reader's display of unreparsed rows uses too.
  */
 const hardWrapMarginOf = (
   lines: readonly (PrintedLine | null)[],
 ): number | null => {
-  const printed = lines.filter(
-    (line): line is PrintedLine => line !== null && line.width > 0,
+  const classification = classifyLineWrap(
+    lines.map((line) =>
+      line === null ? null : `${" ".repeat(line.indent)}${line.text}`,
+    ),
   );
-  if (printed.length < HARD_WRAP.minLines) {
-    return null;
-  }
-  const counts = new Map<number, number>();
-  for (const { width } of printed) {
-    if (
-      width >= HARD_WRAP.minMarginWidth &&
-      width <= HARD_WRAP.maxMarginWidth
-    ) {
-      counts.set(width, (counts.get(width) ?? 0) + 1);
-    }
-  }
-  const margin = [...counts.entries()]
-    .toSorted(([leftWidth, left], [rightWidth, right]) =>
-      right === left ? rightWidth - leftWidth : right - left,
-    )
-    .at(0)?.[0];
-  if (margin === undefined) {
-    return null;
-  }
-  const atMargin = printed.filter((line) => endsAtMargin(line, margin)).length;
-  const wrapped = lines.filter((line, index) =>
-    wrapsMidSentence(line, lines[index + 1] ?? null, margin),
-  ).length;
-  return atMargin / printed.length >= HARD_WRAP.minShare &&
-    wrapped >= HARD_WRAP.minWrapped &&
-    wrapped / printed.length >= HARD_WRAP.minWrappedShare
-    ? margin
+  return classification.type === LINE_WRAP_TYPE.FIXED_WIDTH_WRAPPED
+    ? classification.width
     : null;
 };
 

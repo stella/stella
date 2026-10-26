@@ -4,6 +4,7 @@ import { readdir } from "node:fs/promises";
 import * as v from "valibot";
 
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
+import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
 
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -208,6 +209,17 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
         (block) => block.type === "paragraph" && block.role === "holding",
       )?.plainText,
     ).toBe(ruling);
+  });
+
+  test("leaves nothing for the display joiner of unreparsed rows to join", async () => {
+    for (const name of await fixtureNames()) {
+      const { documentAst } = await parsedFixture(name);
+
+      expect(
+        planBlockLineWrap(documentAst.blocks).classification,
+        name,
+      ).toEqual({ type: LINE_WRAP_TYPE.UNWRAPPED });
+    }
   });
 
   test("leaves no letter-spaced text, markup or sentence headings", async () => {

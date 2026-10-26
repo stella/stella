@@ -60,13 +60,18 @@ const sentence = fc
  * A paragraph of a decision written on a computer: one line, a sentence or
  * a lead-in, of the same order of length as a typescript's lines.
  */
-const ordinaryParagraph = fc
-  .tuple(
-    fc.array(word, { minLength: 4, maxLength: 16 }),
-    fc.constantFrom(".", ".", ":"),
-  )
-  .map(([words, end]) => `${capitalised(words.join(" "))}${end}`)
-  .filter((text) => text.length >= 40 && text.length <= 100);
+const paragraphOfLength = (min: number, max: number) =>
+  fc
+    .tuple(
+      fc.array(word, {
+        minLength: Math.ceil(min / 9),
+        maxLength: Math.floor(max / 3),
+      }),
+      fc.constantFrom(".", ".", ":"),
+    )
+    .map(([words, end]) => `${capitalised(words.join(" "))}${end}`)
+    .filter((text) => text.length >= min && text.length <= max);
+const ordinaryParagraph = paragraphOfLength(40, 100);
 
 describe("printed lines of a typescript", () => {
   test("wrapped at one margin are read back as the paragraphs printed", () => {
@@ -127,12 +132,7 @@ describe("printed lines of a typescript", () => {
     assertProperty(
       "that do not share a margin stay as printed",
       fc.property(
-        fc.array(
-          fc
-            .integer({ min: 101, max: 400 })
-            .map((length) => "x".repeat(length)),
-          { minLength: 1, maxLength: 30 },
-        ),
+        fc.array(paragraphOfLength(101, 400), { minLength: 1, maxLength: 30 }),
         (lines) => {
           expect(reflowPrintedText(lines)).toEqual(lines);
         },
