@@ -8,6 +8,7 @@ import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragr
 import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
+import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text";
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
@@ -361,6 +362,20 @@ const decisionAnalysisView = (
 
   return { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis };
 };
+
+/** The cited-provision cards as margin notes, when the margin shows them. */
+const provisionMarginItems = (
+  shown: boolean,
+  cards: readonly DecisionProvisionCard[],
+): ProvisionMarginItem[] =>
+  shown
+    ? cards.map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+        citations,
+        id: `provision:${id}`,
+        kind: "provision",
+        startAnchorId,
+      }))
+    : [];
 
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
@@ -835,16 +850,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...(showsMarginProvisions
-      ? marginCitations.visibleCards.map(
-          ({ citations, id, startAnchorId }): ProvisionMarginItem => ({
-            citations,
-            id: `provision:${id}`,
-            kind: "provision",
-            startAnchorId,
-          }),
-        )
-      : []),
+    ...provisionMarginItems(
+      showsMarginProvisions,
+      marginCitations.visibleCards,
+    ),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
