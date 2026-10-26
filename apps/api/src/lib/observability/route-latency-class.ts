@@ -1,3 +1,4 @@
+import type { ApiRouteKey } from "@/api/http/api-route-types";
 import { isAiRequest } from "@/api/lib/observability/request-context";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
 
@@ -843,7 +844,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/workspaces/:workspaceId/anonymization-terms": "crud",
   "PUT /v1/workspaces/:workspaceId/contacts": "crud",
   "PUT /v1/workspaces/:workspaceId/members": "crud",
-} as const satisfies Record<string, RequestClass>;
+} as const satisfies Record<ApiRouteKey, RequestClass>;
 
 const DECLARED_CLASSES = new Map(Object.entries(ROUTE_LATENCY_CLASSES));
 

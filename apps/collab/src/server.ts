@@ -90,6 +90,7 @@ type CreateCollabServerBaseOptions = {
   maxDebounceMs?: number;
   port: number;
   roomHeartbeatIntervalMs?: number;
+  roomActivityHeartbeatIntervalMs?: number;
   shutdownDrainTimeoutMs?: number;
   snapshotStoreRetryBaseDelayMs?: number;
   snapshotStoreRetryMaxDelayMs?: number;
@@ -144,8 +145,12 @@ const storeSnapshotResponseSchema = v.strictObject({
   storedAt: v.string(),
 });
 
+// An API task of the previous release ignores `includeCanEdit` and omits
+// `canEdit`; the permission then stays as the last authentication or token
+// refresh observed it.
 const heartbeatResponseSchema = v.strictObject({
   activeAt: v.string(),
+  canEdit: v.optional(v.boolean()),
 });
 
 const flushRequestSchema = v.pipe(
@@ -172,6 +177,7 @@ const ROOM_RETIRING_SNAPSHOT_STORE_STATUSES: ReadonlySet<number> = new Set([
 const FOLIO_COLLABORATOR_COLOR_SPACE = 16_777_215;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
+const PERMISSION_CHANGED_CLOSE_REASON = "Collaboration permission changed";
 
 const presenceColorFromUserId = (userId: string) => {
   let hash = 0;
@@ -210,6 +216,12 @@ class CollabSnapshotRoomRetiredError extends TaggedError(
 
 class CollabSnapshotPendingError extends TaggedError(
   "CollabSnapshotPendingError",
+)<{
+  message: string;
+}> {}
+
+class CollabPermissionChangedError extends TaggedError(
+  "CollabPermissionChangedError",
 )<{
   message: string;
 }> {}
@@ -368,7 +380,9 @@ export const createCollabServer = async (
     hostname = "0.0.0.0",
     maxDebounceMs = 10_000,
     port,
-    roomHeartbeatIntervalMs = ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
+    roomActivityHeartbeatIntervalMs,
+    roomHeartbeatIntervalMs = roomActivityHeartbeatIntervalMs ??
+      ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS,
     serviceToken,
     shutdownDrainTimeoutMs = SHUTDOWN_DRAIN_TIMEOUT_MS,
     snapshotStoreRetryBaseDelayMs = SNAPSHOT_STORE_RETRY_BASE_DELAY_MS,
@@ -420,6 +434,25 @@ export const createCollabServer = async (
       );
     }
     clearRoomTokens(roomName, resetGeneration);
+  };
+  // Only the sockets admitted under this token carry its permission; the
+  // room's other participants keep theirs.
+  const closeTokenConnections = (tokenState: CollabRoomTokenState) => {
+    const closedSockets = new Set<ManagedWebSocketLike>();
+    for (const [socketId, socketTokenState] of tokenStatesBySocketId) {
+      if (socketTokenState !== tokenState) {
+        continue;
+      }
+      const connection = managedConnectionsBySocketId.get(socketId);
+      if (connection === undefined || closedSockets.has(connection.socket)) {
+        continue;
+      }
+      closedSockets.add(connection.socket);
+      connection.socket.close(
+        FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+        PERMISSION_CHANGED_CLOSE_REASON,
+      );
+    }
   };
   const closeManagedConnectionsForRetry = (reason: string) => {
     for (const { socket } of managedConnections) {
@@ -712,6 +745,14 @@ export const createCollabServer = async (
       if (existing.token !== token) {
         existing.refreshInFlight = null;
       }
+      // Sockets already in the room were admitted under the previous
+      // permission; the shared state must not adopt the new one silently.
+      const requiresReconnect =
+        existing.activeConnections > 0 &&
+        (existing.canEdit !== canEdit || existing.generation !== generation);
+      if (requiresReconnect) {
+        closeTokenConnections(existing);
+      }
       existing.token = token;
       existing.tokenExpiresAtMs = tokenExpiresAtMs;
       existing.canEdit = canEdit;
@@ -775,7 +816,7 @@ export const createCollabServer = async (
       if (tokenStates.get(state.token) === state) {
         scheduleTokenRefresh(state);
         if (requiresReconnect) {
-          hocuspocus.closeConnections(state.roomName);
+          closeTokenConnections(state);
         }
       }
 
@@ -805,12 +846,21 @@ export const createCollabServer = async (
 
   const heartbeatRoom = async (state: CollabRoomTokenState) => {
     const token = await getFreshRoomToken(state);
-    await postJson({
+    const heartbeat = await postJson({
       apiUrl,
-      body: { roomId: state.roomId, token },
+      body: { roomId: state.roomId, token, includeCanEdit: true },
       path: "/folio-collab-rooms/heartbeat",
       schema: heartbeatResponseSchema,
     });
+    if (
+      heartbeat.canEdit !== undefined &&
+      state.canEdit !== heartbeat.canEdit
+    ) {
+      state.canEdit = heartbeat.canEdit;
+      throw new CollabPermissionChangedError({
+        message: "Collaboration permission changed.",
+      });
+    }
   };
 
   const scheduleRoomHeartbeat = (tokenState: CollabRoomTokenState) => {
@@ -831,7 +881,12 @@ export const createCollabServer = async (
           }
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          if (CollabPermissionChangedError.is(error)) {
+            clearRoomHeartbeat(tokenState);
+            closeTokenConnections(tokenState);
+            return;
+          }
           hocuspocus.closeConnections(state.tokenState.roomName);
           clearRoomTokens(state.tokenState.roomName);
         });
