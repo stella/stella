@@ -3,6 +3,13 @@ import type { RefObject } from "react";
 
 import { useLocale, useTranslations } from "use-intl";
 
+import type {
+  ReaderAnnotationColor,
+  ReaderAnnotationStyle,
+} from "@stll/api-contract/legal-reader-annotations";
+import { Button } from "@stll/ui/button";
+import { AddCommentIcon } from "@stll/ui/icons";
+
 import { composerText } from "@/components/chat-editor-source";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
@@ -23,6 +30,10 @@ import {
   SelectionCopyMenu,
   useSelectionCopy,
 } from "@/components/selection-toolbar-actions";
+import {
+  MarkColorSwatches,
+  MarkStyleButtons,
+} from "@/components/selection-toolbar-marks";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -44,9 +55,23 @@ type PdfSelectionDocument = PdfCitedDocument & {
   fileFieldId: string;
 };
 
+/** What the bar does with a highlight or comment on the selected words. */
+export type PdfSelectionMarking = {
+  onComment: (passage: PdfSelectionPassage) => void;
+  onHighlight: (
+    passage: PdfSelectionPassage,
+    look: { color: ReaderAnnotationColor; style: ReaderAnnotationStyle },
+  ) => void;
+};
+
 type PdfSelectionToolbarProps = {
   chat: PdfSelectionChat;
   citedDocument: PdfSelectionDocument;
+  /** Marks the selection; absent where the document has no mark store,
+   *  so the bar offers no highlight that would not survive a reload. */
+  marking?: PdfSelectionMarking | undefined;
+  /** Receives the bar's node, so the host can tell a press on it apart. */
+  onAttach?: ((node: HTMLDivElement | null) => void) | undefined;
   /** The viewer's page number for a text layer's page id. */
   pageNumberOf: (pageId: string) => number | null;
   /** The element holding the PDF's pages: only words inside it get the bar. */
@@ -61,10 +86,8 @@ type Selected = {
 
 /**
  * What a reader can do with words selected in a matter PDF: copy them with
- * the document's citation, or hand them to the document's chat. The bar is
- * the case-law reader's, without marks: a matter document has no annotation
- * store, so it offers none rather than a highlight that would not survive a
- * reload.
+ * the document's citation, hand them to the document's chat, or highlight
+ * and comment on them with the case-law reader's colours and styles.
  *
  * Every DOM access goes through the viewer's own container, so the module
  * carries no browser global and renders nothing on the server.
@@ -72,6 +95,8 @@ type Selected = {
 export const PdfSelectionToolbar = ({
   chat,
   citedDocument,
+  marking,
+  onAttach,
   pageNumberOf,
   rootRef,
 }: PdfSelectionToolbarProps) => {
@@ -81,10 +106,12 @@ export const PdfSelectionToolbar = ({
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
     barRef.current = node;
+    onAttach?.(node);
   };
   const [doc, setDoc] = useState<Document | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [style, setStyle] = useState<ReaderAnnotationStyle>("highlight");
   const selectionCopy = useSelectionCopy();
   // The listeners below are installed once; the page list changes under them
   // as the document loads, so they read the latest one.
@@ -272,6 +299,32 @@ export const PdfSelectionToolbar = ({
               );
             }}
           />
+        )}
+        {marking === undefined ? null : (
+          <>
+            <span className="bg-border mx-1 h-4 w-px" />
+            <MarkStyleButtons current={style} onPick={setStyle} />
+            <div className="flex items-center gap-1.5 px-1">
+              <MarkColorSwatches
+                onPick={(color) => {
+                  marking.onHighlight(passage, { color, style });
+                  clearSelection();
+                }}
+              />
+            </div>
+            <span className="bg-border mx-1 h-4 w-px" />
+            <Button
+              onClick={() => {
+                marking.onComment(passage);
+                clearSelection();
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <AddCommentIcon className="size-3.5" />
+              {t("folio.comment")}
+            </Button>
+          </>
         )}
       </div>
     </SelectionToolbar>

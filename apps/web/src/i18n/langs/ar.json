@@ -6470,6 +6470,18 @@
     },
     "pdf": {
       "adjustForDarkMode": "تهيئة الصفحات للوضع الداكن",
+      "annotations": {
+        "commentedBy": "تعليق من {name}",
+        "detachedHeading": "ليست في هذا الإصدار",
+        "detachedOtherVersion": "أُنشئ في الإصدار {version}؛ وقد تغيّر نص الصفحة منذ ذلك الحين.",
+        "detachedTextChanged": "لم تعد هذه الكلمات في الصفحة {page}.",
+        "empty": "حدّد كلمات في المستند، ثم اختر تعليق.",
+        "highlightedBy": "تمييز بواسطة {name}",
+        "refusedNoText": "لا يوجد في هذه الصفحة نص يمكن تمييزه. شغّل التعرّف على النص في المستند أولًا.",
+        "refusedNotFound": "لم يُعثر على هذه الكلمات في نص الصفحة. حدّدها مرة أخرى.",
+        "refusedTooLong": "هذا المقطع أطول من أن يُميَّز. حدّد مقطعًا أقصر.",
+        "visibilityShared": "مشارك مع الملف القانوني"
+      },
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل المستند",
       "evidence": "التبرير",

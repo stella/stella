@@ -5,23 +5,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  AddCommentIcon,
-  Building2Icon,
-  HighlighterIcon,
-  LockIcon,
-  SparklesIcon,
-  StrikethroughIcon,
-  Trash2Icon,
-  UnderlineIcon,
-  WavesIcon,
-} from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
+import { AddCommentIcon, SparklesIcon, Trash2Icon } from "@stll/ui/icons";
 
-import {
-  ANNOTATION_COLORS,
-  ANNOTATION_STYLES,
-} from "@/components/legal-reader/annotations/annotation-types";
 import type {
   AnnotationColor,
   AnnotationStyle,
@@ -54,6 +39,11 @@ import {
   SelectionCopyMenu,
   useSelectionCopy,
 } from "@/components/selection-toolbar-actions";
+import {
+  MarkColorSwatches,
+  MarkStyleButtons,
+  MarkVisibilityToggle,
+} from "@/components/selection-toolbar-marks";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -112,13 +102,6 @@ type ReaderSelectionSnapshot = {
 };
 
 const NO_SELECTED_SPANS: readonly SelectionAnchor[] = [];
-
-const STYLE_ICONS = {
-  highlight: HighlighterIcon,
-  underline: UnderlineIcon,
-  squiggly: WavesIcon,
-  strikethrough: StrikethroughIcon,
-} as const satisfies Record<AnnotationStyle, unknown>;
 
 /**
  * What a reader can do with selected words in a decision or a statute: send
@@ -533,49 +516,6 @@ export const AnnotationToolbar = ({
     return null;
   }
 
-  const colorSwatches = (onPick: (color: AnnotationColor) => void) =>
-    ANNOTATION_COLORS.map((color) => (
-      <Tooltip
-        content={t(colorLabelKey(color))}
-        key={color}
-        render={
-          <button
-            aria-label={t(colorLabelKey(color))}
-            className="focus-visible:ring-ring size-4 rounded-full ring-offset-1 transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:outline-none"
-            onClick={() => onPick(color)}
-            style={{ backgroundColor: `var(--option-${color})` }}
-            type="button"
-          />
-        }
-      />
-    ));
-
-  const styleButtons = (
-    current: AnnotationStyle,
-    onPick: (style: AnnotationStyle) => void,
-  ) =>
-    ANNOTATION_STYLES.map((option) => {
-      const Icon = STYLE_ICONS[option];
-      return (
-        <Tooltip
-          content={t(styleLabelKey(option))}
-          key={option}
-          render={
-            <Button
-              aria-label={t(styleLabelKey(option))}
-              aria-pressed={current === option}
-              className={cn(current === option && "bg-accent text-foreground")}
-              onClick={() => onPick(option)}
-              size="icon-xs"
-              variant="ghost"
-            />
-          }
-        >
-          <Icon className="size-3.5" />
-        </Tooltip>
-      );
-    });
-
   let content: ReactNode;
   if (activeAnnotation !== null) {
     if (!activeAnnotation.mine) {
@@ -611,28 +551,33 @@ export const AnnotationToolbar = ({
         <div className="flex flex-wrap items-center gap-1">
           {activeAnnotation.kind === "highlight" && (
             <>
-              {styleButtons(activeAnnotation.style ?? "highlight", (next) => {
-                detached(
-                  controller.update({
-                    change: "style",
-                    id: activeAnnotation.id,
-                    style: next,
-                  }),
-                  "legal-reader.annotation-restyle",
-                );
-              })}
-              <span className="bg-border mx-1 h-4 w-px" />
-              <div className="flex items-center gap-1.5 px-1">
-                {colorSwatches((color) => {
+              <MarkStyleButtons
+                current={activeAnnotation.style ?? "highlight"}
+                onPick={(next) => {
                   detached(
                     controller.update({
-                      change: "color",
-                      color,
+                      change: "style",
                       id: activeAnnotation.id,
+                      style: next,
                     }),
-                    "legal-reader.annotation-recolor",
+                    "legal-reader.annotation-restyle",
                   );
-                })}
+                }}
+              />
+              <span className="bg-border mx-1 h-4 w-px" />
+              <div className="flex items-center gap-1.5 px-1">
+                <MarkColorSwatches
+                  onPick={(color) => {
+                    detached(
+                      controller.update({
+                        change: "color",
+                        color,
+                        id: activeAnnotation.id,
+                      }),
+                      "legal-reader.annotation-recolor",
+                    );
+                  }}
+                />
               </div>
               <span className="bg-border mx-1 h-4 w-px" />
             </>
@@ -661,7 +606,7 @@ export const AnnotationToolbar = ({
             </>
           )}
           {mode === "authenticated" && (
-            <VisibilityToggle
+            <MarkVisibilityToggle
               onChange={(next) => {
                 detached(
                   controller.update({
@@ -672,6 +617,7 @@ export const AnnotationToolbar = ({
                   "legal-reader.annotation-visibility",
                 );
               }}
+              sharedLabel={t("legalReader.annotations.visibilityShared")}
               value={activeAnnotation.visibility}
             />
           )}
@@ -745,9 +691,11 @@ export const AnnotationToolbar = ({
         {spans.length > 0 && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
-            {styleButtons(style, setStyle)}
+            <MarkStyleButtons current={style} onPick={setStyle} />
             <div className="flex items-center gap-1.5 px-1">
-              {colorSwatches((color) => createHighlight(spans, color))}
+              <MarkColorSwatches
+                onPick={(color) => createHighlight(spans, color)}
+              />
             </div>
             {onCompose !== undefined && (
               <>
@@ -784,86 +732,4 @@ export const AnnotationToolbar = ({
       {content}
     </SelectionToolbar>
   );
-};
-
-const VisibilityToggle = ({
-  onChange,
-  value,
-}: {
-  onChange: (next: AnnotationVisibility) => void;
-  value: AnnotationVisibility;
-}) => {
-  const t = useTranslations();
-  const shared = value === "shared";
-  const label = shared
-    ? t("legalReader.annotations.visibilityShared")
-    : t("knowledge.agentSkills.scopePrivate");
-
-  return (
-    <Tooltip
-      content={label}
-      render={
-        <Button
-          aria-label={label}
-          aria-pressed={shared}
-          className="text-2xs gap-1 px-1.5"
-          onClick={() => onChange(shared ? "private" : "shared")}
-          size="sm"
-          variant="ghost"
-        />
-      }
-    >
-      {shared ? (
-        <Building2Icon className="size-3.5" />
-      ) : (
-        <LockIcon className="size-3.5" />
-      )}
-      {label}
-    </Tooltip>
-  );
-};
-
-const colorLabelKey = (color: AnnotationColor) => {
-  switch (color) {
-    case "yellow": {
-      return "legalReader.annotations.colorYellow" as const;
-    }
-    case "green": {
-      return "legalReader.annotations.colorGreen" as const;
-    }
-    case "sky": {
-      return "legalReader.annotations.colorSky" as const;
-    }
-    case "violet": {
-      return "legalReader.annotations.colorViolet" as const;
-    }
-    case "red": {
-      return "legalReader.annotations.colorRed" as const;
-    }
-    default: {
-      color satisfies never;
-      return panic(`Unhandled color: ${String(color)}`);
-    }
-  }
-};
-
-const styleLabelKey = (style: AnnotationStyle) => {
-  switch (style) {
-    case "highlight": {
-      return "legalReader.annotations.styleHighlight" as const;
-    }
-    case "underline": {
-      return "folio.underline" as const;
-    }
-    case "squiggly": {
-      return "legalReader.annotations.styleSquiggly" as const;
-    }
-    case "strikethrough": {
-      return "legalReader.annotations.styleStrikethrough" as const;
-    }
-    default: {
-      style satisfies never;
-      return panic(`Unhandled style: ${String(style)}`);
-    }
-  }
 };

@@ -6470,6 +6470,18 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode",
+      "annotations": {
+        "commentedBy": "Comment by {name}",
+        "detachedHeading": "Not on this version",
+        "detachedOtherVersion": "Made on version {version}; the page now reads differently.",
+        "detachedTextChanged": "The words are no longer on page {page}.",
+        "empty": "Select words in the document, then choose Comment.",
+        "highlightedBy": "Highlighted by {name}",
+        "refusedNoText": "This page has no text to mark. Run text recognition on the document first.",
+        "refusedNotFound": "These words were not found in the page's text. Select them again.",
+        "refusedTooLong": "This passage is too long to mark. Select a shorter one.",
+        "visibilityShared": "Shared with the matter"
+      },
       "backToPeek": "Back to peek",
       "entitySidebar": "Document details",
       "evidence": "Justification",

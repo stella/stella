@@ -6470,6 +6470,18 @@
     },
     "pdf": {
       "adjustForDarkMode": "Kohanda lehekülgi tumedale režiimile",
+      "annotations": {
+        "commentedBy": "Kommentaar: {name}",
+        "detachedHeading": "Pole selles versioonis",
+        "detachedOtherVersion": "Loodud versioonis {version}; lehekülje tekst on vahepeal muutunud.",
+        "detachedTextChanged": "Neid sõnu pole enam leheküljel {page}.",
+        "empty": "Valige dokumendis sõnad ja seejärel Kommenteeri.",
+        "highlightedBy": "Esile tõstnud: {name}",
+        "refusedNoText": "Sellel leheküljel pole märgitavat teksti. Käivitage esmalt dokumendi teksti tuvastamine.",
+        "refusedNotFound": "Neid sõnu ei leitud lehekülje tekstist. Valige need uuesti.",
+        "refusedTooLong": "See lõik on märkimiseks liiga pikk. Valige lühem.",
+        "visibilityShared": "Jagatud toimikuga"
+      },
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Dokumendi üksikasjad",
       "evidence": "Tõend",

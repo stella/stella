@@ -6470,6 +6470,18 @@
     },
     "pdf": {
       "adjustForDarkMode": "Prispôsobiť stránky pre tmavý režim",
+      "annotations": {
+        "commentedBy": "Komentár: {name}",
+        "detachedHeading": "Mimo túto verziu",
+        "detachedOtherVersion": "Vytvorené vo verzii {version}; text strany sa medzitým zmenil.",
+        "detachedTextChanged": "Tieto slová už na strane {page} nie sú.",
+        "empty": "Označte slová v dokumente a zvoľte Komentár.",
+        "highlightedBy": "Zvýraznenie: {name}",
+        "refusedNoText": "Na tejto strane nie je text na označenie. Najprv na dokumente spustite rozpoznávanie textu.",
+        "refusedNotFound": "Tieto slová sa v texte strany nenašli. Označte ich znova.",
+        "refusedTooLong": "Táto pasáž je na označenie príliš dlhá. Vyberte kratšiu.",
+        "visibilityShared": "Zdieľané so spisom"
+      },
       "backToPeek": "Späť do náhľadu",
       "entitySidebar": "Detaily dokumentu",
       "evidence": "Príloha",

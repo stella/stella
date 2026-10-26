@@ -6470,6 +6470,18 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo escuro",
+      "annotations": {
+        "commentedBy": "Comentário de {name}",
+        "detachedHeading": "Fora desta versão",
+        "detachedOtherVersion": "Criado na versão {version}; a página agora diz outra coisa.",
+        "detachedTextChanged": "Estas palavras não estão mais na página {page}.",
+        "empty": "Selecione palavras no documento e escolha Comentário.",
+        "highlightedBy": "Destacado por {name}",
+        "refusedNoText": "Esta página não tem texto para marcar. Execute primeiro o reconhecimento de texto no documento.",
+        "refusedNotFound": "Estas palavras não foram encontradas no texto da página. Selecione-as novamente.",
+        "refusedTooLong": "Este trecho é longo demais para marcar. Selecione um mais curto.",
+        "visibilityShared": "Compartilhado com o caso"
+      },
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes do documento",
       "evidence": "Justificativa",

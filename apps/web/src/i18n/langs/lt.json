@@ -6470,6 +6470,18 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",
+      "annotations": {
+        "commentedBy": "Komentaras: {name}",
+        "detachedHeading": "Ne šioje versijoje",
+        "detachedOtherVersion": "Sukurta {version} versijoje; puslapio tekstas nuo tada pasikeitė.",
+        "detachedTextChanged": "Šių žodžių {page} puslapyje nebėra.",
+        "empty": "Pažymėkite dokumento žodžius ir pasirinkite Komentaras.",
+        "highlightedBy": "Paryškino: {name}",
+        "refusedNoText": "Šiame puslapyje nėra teksto, kurį būtų galima pažymėti. Pirmiausia paleiskite dokumento teksto atpažinimą.",
+        "refusedNotFound": "Šių žodžių puslapio tekste nerasta. Pažymėkite juos dar kartą.",
+        "refusedTooLong": "Ši ištrauka per ilga pažymėti. Pasirinkite trumpesnę.",
+        "visibilityShared": "Bendrinama su byla"
+      },
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
       "evidence": "Įrodymas",
