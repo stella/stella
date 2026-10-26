@@ -81,7 +81,10 @@ export const MemoryRow = ({
       }
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow:failure",
+        scope: { type: "handler", handlerId: "MemoryRow:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });
@@ -93,7 +96,10 @@ export const MemoryRow = ({
       stellaToast.add({ title: t("deletedToast"), type: "success" });
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow.delete:failure",
+        scope: { type: "handler", handlerId: "MemoryRow.delete:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });

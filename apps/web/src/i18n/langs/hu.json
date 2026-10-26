@@ -1505,7 +1505,7 @@
       "label": "Szimulált AI"
     },
     "modelSelector": {
-      "allModels": "Összes modell ({count, number})",
+      "allModels": "Összes modell",
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
       "belowFrontier": "A legjobb kompromisszumok alatt",
@@ -4789,7 +4789,6 @@
     "modelError": "A modell nem tudta befejezni ezt a választ.",
     "networkError": "A kapcsolat megszakadt. Próbálja újra.",
     "regenerate": "Válasz újragenerálása",
-    "selectionError": "Jelöljön ki szöveget egyetlen bekezdésen belül (legfeljebb 2000 karaktert).",
     "send": "Kiegészítő kérdés küldése",
     "share": "Megosztás a csapattal",
     "timeoutError": "Lejárt a válaszadás időkorlátja. Próbálja újra.",
@@ -6663,6 +6662,12 @@
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {
       "parties": "Felek"
+    },
+    "switcher": {
+      "searchPlaceholder": "Ügy keresése…",
+      "trigger": "Ügy váltása",
+      "viewAll": "Összes ügy megjelenítése",
+      "viewAllForClient": "{clientName} ügyfél összes ügyének megjelenítése"
     },
     "table": {
       "clearFlags": "Jelölések törlése",

@@ -352,6 +352,7 @@ const loadCoverage = async (
 ) =>
   await loadCaseLawCoverage({
     excludedSourceIds: [],
+    onPartialFailure: () => undefined,
     now: NOW,
     readSources: async () =>
       await readAsReader(readCaseLawCoverageSourcesQuery),

@@ -108,6 +108,7 @@ import {
   uploadFileEncryption,
 } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -201,7 +202,13 @@ const enqueueDocumentTranslationRuns = async (
   let handedOff = 0;
   for (const [index, outcome] of outcomes.entries()) {
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: runs.at(index)?.runId ?? "" });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "documenttranslation.enqueueDocumentTranslationRuns.outcome_error",
+          { runId: runs.at(index)?.runId ?? "" },
+        ),
+      );
       continue;
     }
     handedOff += 1;
@@ -484,7 +491,13 @@ const loadDeepLApiKey = async (
     catch: (cause) => cause,
   });
   if (Result.isError(decrypted)) {
-    captureError(decrypted.error, { runId: actor.runId });
+    captureError(
+      decrypted.error,
+      handlerErrorContext(
+        "documenttranslation.loadDeepLApiKey.decrypted_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("provider_unavailable");
   }
   return Result.ok(decrypted.value);
@@ -529,7 +542,13 @@ const translateCommentsWithAI = async (
       catch: (cause) => cause,
     });
     if (Result.isError(response)) {
-      captureError(response.error, { runId: actor.runId });
+      captureError(
+        response.error,
+        handlerErrorContext(
+          "documenttranslation.translateNextBatch.response_error",
+          { runId: actor.runId },
+        ),
+      );
       return Result.err(documentTranslationProviderErrorCode(response.error));
     }
     for (const comment of batch) {
@@ -566,7 +585,13 @@ const translateCommentsWithDeepL = async (
     catch: (cause) => cause,
   });
   if (Result.isError(response)) {
-    captureError(response.error, { runId: actor.runId });
+    captureError(
+      response.error,
+      handlerErrorContext(
+        "documenttranslation.translateCommentsWithDeepL.response_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err(documentTranslationProviderErrorCode(response.error));
   }
   return mapDeepLCommentTranslations(comments, response.value);
@@ -592,7 +617,13 @@ const translateWithDeepL = async (
     catch: (cause) => cause,
   });
   if (Result.isError(translated)) {
-    captureError(translated.error, { runId: actor.runId });
+    captureError(
+      translated.error,
+      handlerErrorContext(
+        "documenttranslation.translateWithDeepL.translated_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err(documentTranslationProviderErrorCode(translated.error));
   }
   const output = resolveTranslatedOutput({
@@ -700,7 +731,13 @@ const translateDocxWithAI = async (
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
-      captureError(result.error, { runId: actor.runId });
+      captureError(
+        result.error,
+        handlerErrorContext(
+          "documenttranslation.translateNextBatch.result_error",
+          { runId: actor.runId },
+        ),
+      );
       return Result.err(documentTranslationProviderErrorCode(result.error));
     }
     const updates: { unitKey: string; targetText: string }[] = [];
@@ -739,7 +776,13 @@ const translateDocxWithAI = async (
     })
   ).andThen((patched) => patched);
   if (Result.isError(applied)) {
-    captureError(applied.error, { runId: actor.runId });
+    captureError(
+      applied.error,
+      handlerErrorContext(
+        "documenttranslation.translateDocxWithAI.applied_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   const output = resolveTranslatedOutput({
@@ -944,7 +987,13 @@ const translateBilingualWithAI = async (
     catch: (cause) => cause,
   });
   if (Result.isError(formattedBuffer)) {
-    captureError(formattedBuffer.error, { runId: actor.runId });
+    captureError(
+      formattedBuffer.error,
+      handlerErrorContext(
+        "documenttranslation.translateBilingualWithAI.formattedBuffer_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   const operations = buildFormattingPreservingOperations(
@@ -959,12 +1008,24 @@ const translateBilingualWithAI = async (
     fileName: run.sourceFileName,
   });
   if (Result.isError(scannedFormatted)) {
-    captureError(scannedFormatted.error, { runId: actor.runId });
+    captureError(
+      scannedFormatted.error,
+      handlerErrorContext(
+        "documenttranslation.translateBilingualWithAI.scannedFormatted_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   const applied = await applyAiEditsToDocx(scannedFormatted.value, operations);
   if (Result.isError(applied)) {
-    captureError(applied.error, { runId: actor.runId });
+    captureError(
+      applied.error,
+      handlerErrorContext(
+        "documenttranslation.translateBilingualWithAI.applied_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   if (applied.value.skipped.length > 0) {
@@ -1025,7 +1086,12 @@ const executeRun = async ({
       })
     ).andThen((resolved) => resolved);
     if (Result.isError(prepared)) {
-      captureError(prepared.error, { runId: actor.runId });
+      captureError(
+        prepared.error,
+        handlerErrorContext("documenttranslation.executeRun.prepared_error", {
+          runId: actor.runId,
+        }),
+      );
       return DocxReviewError.is(prepared.error)
         ? "unsupported_review_markup"
         : "unsupported_format";
@@ -1038,7 +1104,13 @@ const executeRun = async ({
       })
     ).andThen((units) => units);
     if (Result.isError(readComments)) {
-      captureError(readComments.error, { runId: actor.runId });
+      captureError(
+        readComments.error,
+        handlerErrorContext(
+          "documenttranslation.executeRun.readComments_error",
+          { runId: actor.runId },
+        ),
+      );
       return "unsupported_format";
     }
     comments = readComments.value;
@@ -1151,7 +1223,13 @@ const executeRun = async ({
       })
     ).andThen((patched) => patched);
     if (Result.isError(withComments)) {
-      captureError(withComments.error, { runId: actor.runId });
+      captureError(
+        withComments.error,
+        handlerErrorContext(
+          "documenttranslation.executeRun.withComments_error",
+          { runId: actor.runId },
+        ),
+      );
       return "format_validation_failed";
     }
     completedOutput = { ...completedOutput, buffer: withComments.value };
@@ -1184,7 +1262,10 @@ const executeRun = async ({
       mimeType: completedOutput.mimeType,
       scanned: scanned.value,
     }),
-    { mimeType: completedOutput.mimeType, runId: actor.runId },
+    handlerErrorContext("documentTranslation.detectEncryption", {
+      mimeType: completedOutput.mimeType,
+      runId: actor.runId,
+    }),
   );
   if (encryption === null) {
     return "format_validation_failed";
@@ -1247,7 +1328,12 @@ const executeRun = async ({
     },
   });
   if (Result.isError(created)) {
-    captureError(created.error, { runId: actor.runId });
+    captureError(
+      created.error,
+      handlerErrorContext("documenttranslation.executeRun.created_error", {
+        runId: actor.runId,
+      }),
+    );
     return "internal";
   }
   return null;
@@ -1272,7 +1358,13 @@ export const processDocumentTranslationRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureError(result.error, { runId: actor.runId });
+    captureError(
+      result.error,
+      handlerErrorContext(
+        "documenttranslation.processDocumentTranslationRun.result_error",
+        { runId: actor.runId },
+      ),
+    );
     await setRunFailed(actor, "internal");
     return;
   }
@@ -1382,10 +1474,22 @@ export const initDocumentTranslationRunWorker = ({
     if (job) {
       setRunFailed(brandActor(job.data), "internal").catch(
         (markError: unknown) =>
-          captureError(markError, { runId: job.data.runId }),
+          captureError(
+            markError,
+            handlerErrorContext(
+              "documenttranslation.initDocumentTranslationRunWorker.markError",
+              { runId: job.data.runId },
+            ),
+          ),
       );
     }
-    captureError(error, { runId: job?.data.runId ?? "" });
+    captureError(
+      error,
+      handlerErrorContext(
+        "documenttranslation.initDocumentTranslationRunWorker",
+        { runId: job?.data.runId ?? "" },
+      ),
+    );
   });
   worker.on(
     "error",

@@ -1505,7 +1505,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos os modelos ({count, number})",
+      "allModels": "Todos os modelos",
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
       "belowFrontier": "Abaixo dos melhores equilíbrios",
@@ -4789,7 +4789,6 @@
     "modelError": "O modelo não conseguiu concluir esta resposta.",
     "networkError": "A conexão foi interrompida. Tente novamente.",
     "regenerate": "Gerar resposta novamente",
-    "selectionError": "Selecione texto dentro de um único parágrafo (até 2.000 caracteres).",
     "send": "Enviar pergunta de acompanhamento",
     "share": "Compartilhar com a equipe",
     "timeoutError": "O tempo limite para a resposta foi excedido. Tente novamente.",
@@ -6663,6 +6662,12 @@
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
       "parties": "Partes"
+    },
+    "switcher": {
+      "searchPlaceholder": "Encontrar um caso…",
+      "trigger": "Trocar de caso",
+      "viewAll": "Ver todos os casos",
+      "viewAllForClient": "Ver todos os casos do cliente {clientName}"
     },
     "table": {
       "clearFlags": "Limpar sinalizadores",

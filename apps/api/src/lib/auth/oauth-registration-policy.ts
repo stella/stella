@@ -11,10 +11,12 @@ import type { HookEndpointContext } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 
-import type { McpOAuthScope } from "@stll/api-contract";
-
 import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
+import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/db/oauth-scope-policy";
 import {
   isLoopbackRedirectUri,
   OAUTH_CLIENT_REGISTRATION_PATH,
@@ -25,37 +27,6 @@ import {
 } from "@/api/lib/rate-limit/auth-request-budget";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { isRecord } from "@/api/lib/type-guards";
-
-export const OAUTH_REGISTRATION_SCOPE_POLICY = {
-  openid: "open",
-  profile: "open",
-  email: "open",
-  offline_access: "open",
-  "stella:search": "open",
-  "stella:read": "open",
-  "stella:law_read": "open",
-  "stella:templates": "open",
-  "stella:documents_write": "open",
-  "stella:matters_write": "open",
-  "stella:contacts_write": "open",
-  "stella:chat": "open",
-  "stella:memory_write": "elevated",
-  "stella:knowledge_write": "open",
-  "stella:billing_write": "open",
-  "stella:admin_read": "elevated",
-  "stella:admin_write": "elevated",
-  "stella:onboarding": "open",
-  "stella:skills": "open",
-  "stella:external_mcps": "elevated",
-  "stella:feedback": "open",
-  "stella:search_anonymized": "open",
-  "stella:read_anonymized": "open",
-  "stella:templates_anonymized": "open",
-} as const satisfies Record<McpOAuthScope, "open" | "elevated">;
-
-export const OPEN_REGISTRATION_SCOPES = Object.entries(
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-).flatMap(([scope, policy]) => (policy === "open" ? [scope] : []));
 
 const OPEN_REGISTRATION_SCOPE_SET: ReadonlySet<string> = new Set(
   OPEN_REGISTRATION_SCOPES,
@@ -332,16 +303,24 @@ const resolveNativeAuthorizationClient = async (
   return null;
 };
 
+/** The one resource a partner client's authorizations target. */
+type PartnerResource = {
+  url: string;
+  isPartnerClient: (clientId: string) => Promise<boolean>;
+};
+
 type OAuthPolicyMiddlewareOptions = {
   policy: OAuthScopePolicyContext;
   discoveries: readonly ClientDiscovery[];
   noInteractionRequests: WeakSet<Request>;
+  partnerResource: PartnerResource;
 };
 
 const createOAuthPolicyMiddleware = ({
   policy,
   discoveries,
   noInteractionRequests,
+  partnerResource,
 }: OAuthPolicyMiddlewareOptions) =>
   createAuthMiddleware(async (ctx) => {
     if (ctx.path === OAUTH_CLIENT_REGISTRATION_PATH) {
@@ -389,6 +368,17 @@ const createOAuthPolicyMiddleware = ({
       model: "oauthClient",
       where: [{ field: "clientId", value: clientId }],
     });
+    // A partner's generic OAuth connector sends no `resource` (RFC 8707);
+    // without one the token carries no audience and the MCP endpoint refuses
+    // it. A partner client is linked to this one resource only. The client
+    // kind is not part of the provider's model, so it is read separately,
+    // and only for requests that name no resource.
+    const targetResource =
+      stored !== null &&
+      parameters["resource"] === undefined &&
+      (await partnerResource.isPartnerClient(clientId))
+        ? { resource: partnerResource.url }
+        : {};
     const resolved = await resolveNativeAuthorizationClient(ctx, {
       stored,
       clientId,
@@ -414,12 +404,17 @@ const createOAuthPolicyMiddleware = ({
     if (consentPrompt === "none" && ctx.request) {
       noInteractionRequests.add(ctx.request);
     }
-    if (grantable === scope && consentPrompt === undefined) {
+    if (
+      grantable === scope &&
+      consentPrompt === undefined &&
+      !("resource" in targetResource)
+    ) {
       return UNCHANGED;
     }
     const authorizationPolicy = {
       scope: grantable,
       ...(consentPrompt === undefined ? {} : { prompt: consentPrompt }),
+      ...targetResource,
     };
     return fromBody
       ? { context: { body: authorizationPolicy } }
@@ -485,9 +480,11 @@ export const createStellaOAuthProvider = (
   options: StellaOAuthProviderOptions,
   {
     verifiedOrigins,
+    partnerResource,
     requestBudget,
   }: {
     verifiedOrigins: readonly string[];
+    partnerResource: PartnerResource;
     requestBudget: {
       storage: ReturnType<typeof createAuthRateLimitStorage>;
       enabled: boolean;
@@ -571,6 +568,7 @@ export const createStellaOAuthProvider = (
             policy,
             discoveries,
             noInteractionRequests,
+            partnerResource,
           }),
         },
       ],
