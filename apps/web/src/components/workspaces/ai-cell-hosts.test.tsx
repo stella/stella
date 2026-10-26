@@ -8,7 +8,12 @@ import { IntlProvider } from "use-intl";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { repoRelativePath } from "@stll/portable-path";
-import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
+import {
+  isObjectLiteralProperty,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree.ts";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
@@ -182,24 +187,27 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
     const adapters = new Set<string>();
     let mountsTable = false;
     let ownsAiColumnFactory = false;
-    for (const statement of source.program.body) {
+    for (const statement of source.module.staticImports) {
+      const named = statement.entries.filter(
+        (entry) => entry.importName.name !== null,
+      );
+      // `{ … }` with no named entry (`import {} from`) still counts as a
+      // type-only binding list, while a side-effect import has none.
+      const hasNamedBindings =
+        named.length > 0 ||
+        source.sourceText
+          .slice(statement.start, statement.moduleRequest.start)
+          .includes("{");
+      // `isType` marks every binding of `import type …` and each inline
+      // `type` binding; a type-only import carries no runtime dependency.
       if (
-        statement.type !== "ImportDeclaration" ||
-        statement.importKind === "type"
+        (statement.entries.length > 0 &&
+          statement.entries.every((entry) => entry.isType)) ||
+        (hasNamedBindings && named.every((entry) => entry.isType))
       ) {
         continue;
       }
-      const specifier = statement.source.value;
-      const bindings = statement.specifiers;
-      if (
-        bindings.length > 0 &&
-        bindings.every(
-          (element) =>
-            element.type === "ImportSpecifier" && element.importKind === "type",
-        )
-      ) {
-        continue;
-      }
+      const specifier = statement.moduleRequest.value;
       let resolved: string | undefined;
       if (specifier.startsWith("@/")) {
         resolved = path.resolve(sourceRoot, specifier.slice(2));
@@ -227,73 +235,82 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
       }
       const names =
         target === "components/workspaces/ai-cell" ? aiCellNames : tableNames;
-      for (const element of bindings) {
-        if (
-          element.type === "ImportSpecifier" &&
-          element.importKind !== "type" &&
-          exports.has(
-            element.imported.type === "Identifier"
-              ? element.imported.name
-              : element.imported.value,
-          )
-        ) {
-          names.add(element.local.name);
+      for (const entry of statement.entries) {
+        if (entry.isType) {
+          continue;
         }
-        if (element.type === "ImportNamespaceSpecifier") {
+        if (
+          entry.importName.name !== null &&
+          exports.has(entry.importName.name)
+        ) {
+          names.add(entry.localName.value);
+        }
+        // oxc-parser declares ImportNameKind as an ambient const enum of
+        // strings.
+        const kind: string = entry.importName.kind;
+        if (kind === "NamespaceObject") {
           for (const name of exports) {
-            names.add(`${element.local.name}.${name}`);
+            names.add(`${entry.localName.value}.${name}`);
           }
         }
       }
     }
-    const hasCellFactory = (node: Node): boolean => {
+    const hasCellFactory = (root: Node): boolean => {
       let found = false;
-      walk(node, (child) => {
+      walk(root, (node, ancestors) => {
         if (
-          (child.type === "Property" &&
-            text.slice(child.key.start, child.key.end) === "cell") ||
-          (child.type === "CallExpression" &&
-            child.callee.type === "Identifier" &&
-            child.callee.name === "getPropertyColumnRender")
+          found ||
+          (isObjectLiteralProperty(node, ancestors.at(-1)) &&
+            node.kind === "init" &&
+            !node.method &&
+            !node.shorthand &&
+            !node.computed &&
+            source.sourceText.slice(node.key.start, node.key.end) === "cell") ||
+          (node.type === "CallExpression" &&
+            node.callee.type === "Identifier" &&
+            node.callee.name === "getPropertyColumnRender")
         ) {
           found = true;
+          return "skip-children";
         }
+        return undefined;
       });
       return found;
+    };
+    // Each node's owner is the nearest enclosing named variable or function
+    // declaration, the node itself included.
+    const ownerOf = (node: Node, ancestors: readonly Node[]) => {
+      for (const current of [...ancestors, node].toReversed()) {
+        if (
+          current.type === "VariableDeclarator" &&
+          current.id.type === "Identifier"
+        ) {
+          return current.id.name;
+        }
+        if (current.type === "FunctionDeclaration") {
+          return current.id?.name;
+        }
+      }
+      return undefined;
     };
     walk(source.program, (node, ancestors) => {
       if (
         node.type === "SwitchCase" &&
         node.test?.type === "Literal" &&
-        typeof node.test.value === "string" &&
-        ["question", "property"].includes(node.test.value) &&
+        (node.test.value === "question" || node.test.value === "property") &&
         hasCellFactory(node)
       ) {
         ownsAiColumnFactory = true;
       }
-      if (node.type !== "JSXOpeningElement") {
-        return;
-      }
-      let owner: string | undefined;
-      for (const ancestor of ancestors.toReversed()) {
-        if (
-          ancestor.type === "VariableDeclarator" &&
-          ancestor.id.type === "Identifier"
-        ) {
-          owner = ancestor.id.name;
-          break;
+      if (node.type === "JSXOpeningElement") {
+        const tag = source.sourceText.slice(node.name.start, node.name.end);
+        const owner = ownerOf(node, ancestors);
+        if (aiCellNames.has(tag) && owner !== undefined) {
+          adapters.add(owner);
         }
-        if (ancestor.type === "FunctionDeclaration") {
-          owner = ancestor.id?.name;
-          break;
+        if (tableNames.has(tag)) {
+          mountsTable = true;
         }
-      }
-      const tag = text.slice(node.name.start, node.name.end);
-      if (aiCellNames.has(tag) && owner !== undefined) {
-        adapters.add(owner);
-      }
-      if (tableNames.has(tag)) {
-        mountsTable = true;
       }
     });
     modules.set(file.replace(/\.tsx?$/u, ""), {

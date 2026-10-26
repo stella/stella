@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree.ts";
 
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import {
@@ -34,25 +34,27 @@ const anchorIdsInSource = (
   fileName: string,
 ): ReadonlySet<GuideAnchorId> => {
   const ids = new Set<GuideAnchorId>();
-  const sourceFile = parseSource(fileName, source);
-  walk(sourceFile.program, (node) => {
+  walk(parseSource(fileName, source).program, (node) => {
     if (
-      node.type === "CallExpression" &&
-      node.callee.type === "Identifier" &&
-      node.callee.name === "guideAnchor"
+      node.type !== "CallExpression" ||
+      node.callee.type !== "Identifier" ||
+      node.callee.name !== "guideAnchor"
     ) {
-      const argument = node.arguments.at(0);
-      if (
-        argument?.type === "MemberExpression" &&
-        !argument.computed &&
-        argument.object.type === "Identifier" &&
-        argument.object.name === "GUIDE_ANCHORS" &&
-        argument.property.type === "Identifier"
-      ) {
-        const id = anchorIdByKey.get(argument.property.name);
-        if (id) {
-          ids.add(id);
-        }
+      return;
+    }
+    const first = node.arguments.at(0);
+    // `GUIDE_ANCHORS?.key` is still a property access of the registry.
+    const argument =
+      first?.type === "ChainExpression" ? first.expression : first;
+    if (
+      argument?.type === "MemberExpression" &&
+      !argument.computed &&
+      argument.object.type === "Identifier" &&
+      argument.object.name === "GUIDE_ANCHORS"
+    ) {
+      const id = anchorIdByKey.get(argument.property.name);
+      if (id) {
+        ids.add(id);
       }
     }
   });

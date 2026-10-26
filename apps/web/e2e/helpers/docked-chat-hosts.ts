@@ -3,12 +3,17 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 import {
+  type ImportDeclaration,
   type JSXOpeningElement,
+  type ModuleExportName,
   type Node,
+  type ObjectProperty,
   type ParsedSource,
-  parseSource as parseSyntax,
+  parseSource,
+  type StringLiteral,
+  type TSInterfaceDeclaration,
   walk,
-} from "@stll/scripts/src/syntax-tree";
+} from "@stll/scripts/src/syntax-tree.ts";
 
 import type { AppFrameScope } from "../../src/routes/-app-frame-scope";
 import { APP_FRAME_SCOPE } from "../../src/routes/-app-frame-scope";
@@ -26,13 +31,67 @@ const PROVIDER_SURFACES = new Map<string, DockedChatSurface>([
   ["routes/knowledge/-components/template-studio-chat.tsx", "template"],
 ]);
 
-const parseSource = (file: string) => ({
-  ...parseSyntax(file, readFileSync(file, "utf-8")),
-  fileName: file,
-});
-type Source = ParsedSource & { fileName: string };
-const textOf = (node: { start: number; end: number }, source: ParsedSource) =>
-  source.sourceText.slice(node.start, node.end);
+const readSource = (file: string): ParsedSource =>
+  parseSource(file, readFileSync(file, "utf-8"));
+
+const isStringLiteral = (
+  node: Node | null | undefined,
+): node is StringLiteral =>
+  node?.type === "Literal" && typeof node.value === "string";
+
+/** `name: value` in an object literal: no shorthand, method or accessor. */
+const isPropertyAssignment = (
+  node: Node | null | undefined,
+): node is ObjectProperty =>
+  node?.type === "Property" &&
+  node.kind === "init" &&
+  !node.method &&
+  !node.shorthand;
+
+/** The property name as written; a computed `[key]` never matches a name. */
+const propertyName = (
+  property: ObjectProperty,
+  { sourceText }: ParsedSource,
+): string | undefined =>
+  property.computed
+    ? undefined
+    : sourceText.slice(property.key.start, property.key.end);
+
+const textOf = (node: Node, { sourceText }: ParsedSource): string =>
+  sourceText.slice(node.start, node.end);
+
+const moduleExportName = (name: ModuleExportName): string =>
+  name.type === "Literal" ? name.value : name.name;
+
+const importDeclarations = (source: ParsedSource): ImportDeclaration[] =>
+  source.program.body.filter(
+    (statement): statement is ImportDeclaration =>
+      statement.type === "ImportDeclaration",
+  );
+
+/** Top-level declarations, exported or not. */
+const topLevelDeclarations = (source: ParsedSource): Node[] =>
+  source.program.body.flatMap((statement): Node[] => {
+    if (statement.type === "ExportNamedDeclaration") {
+      return statement.declaration === null ? [] : [statement.declaration];
+    }
+    return [statement];
+  });
+
+/** Visits every object literal property that assigns a value. */
+const visitPropertyAssignments = (
+  root: Node,
+  visit: (property: ObjectProperty) => void,
+): void => {
+  walk(root, (node, ancestors) => {
+    if (
+      ancestors.at(-1)?.type === "ObjectExpression" &&
+      isPropertyAssignment(node)
+    ) {
+      visit(node);
+    }
+  });
+};
 
 type ResolveSourceOptions = { from: string; specifier: string };
 const resolveSource = ({
@@ -61,90 +120,85 @@ const resolveSource = ({
 
 /** Read route metadata only; route component implementation is irrelevant. */
 export const declaredAppFrameScope = (
-  source: Source,
+  source: ParsedSource,
+  fileName: string,
 ): AppFrameScope | undefined => {
   const scopeImports = new Set<string>();
-  for (const statement of source.program.body) {
-    if (
-      statement.type !== "ImportDeclaration" ||
-      !/(?:^|\/)-app-frame-scope$/u.test(statement.source.value)
-    ) {
+  for (const statement of importDeclarations(source)) {
+    if (!/(?:^|\/)-app-frame-scope$/u.test(statement.source.value)) {
       continue;
     }
     for (const binding of statement.specifiers) {
       if (
         binding.type === "ImportSpecifier" &&
-        (binding.imported.type === "Identifier"
-          ? binding.imported.name
-          : binding.imported.value) === "APP_FRAME_SCOPE"
+        moduleExportName(binding.imported) === "APP_FRAME_SCOPE"
       ) {
         scopeImports.add(binding.local.name);
       }
     }
   }
   let scope: AppFrameScope | undefined;
-  const visit = (node: Node): undefined => {
+  visitPropertyAssignments(source.program, (node) => {
     if (
-      node.type === "Property" &&
-      textOf(node.key, source) === "staticData" &&
-      node.value.type === "ObjectExpression"
+      propertyName(node, source) !== "staticData" ||
+      node.value.type !== "ObjectExpression"
     ) {
-      for (const property of node.value.properties) {
-        if (
-          property.type !== "Property" ||
-          textOf(property.key, source) !== "appFrame"
-        ) {
-          continue;
-        }
-        const value = property.value;
-        if (
-          value.type !== "MemberExpression" ||
-          value.computed ||
-          value.property.type !== "Identifier" ||
-          value.object.type !== "Identifier" ||
-          !scopeImports.has(value.object.name)
-        ) {
-          throw new Error(
-            `Unsupported appFrame metadata in ${source.fileName}`,
-          );
-        }
-        switch (value.property.name) {
-          case "none":
-            scope = APP_FRAME_SCOPE.none;
-            break;
-          case "member":
-            scope = APP_FRAME_SCOPE.member;
-            break;
-          case "knowledge":
-            scope = APP_FRAME_SCOPE.knowledge;
-            break;
-          default:
-            throw new Error(`Unknown appFrame metadata in ${source.fileName}`);
-        }
+      return;
+    }
+    for (const property of node.value.properties) {
+      if (
+        !isPropertyAssignment(property) ||
+        propertyName(property, source) !== "appFrame"
+      ) {
+        continue;
+      }
+      const value = property.value;
+      if (
+        value.type !== "MemberExpression" ||
+        value.computed ||
+        value.object.type !== "Identifier" ||
+        !scopeImports.has(value.object.name)
+      ) {
+        throw new Error(`Unsupported appFrame metadata in ${fileName}`);
+      }
+      switch (value.property.name) {
+        case "none":
+          scope = APP_FRAME_SCOPE.none;
+          break;
+        case "member":
+          scope = APP_FRAME_SCOPE.member;
+          break;
+        case "knowledge":
+          scope = APP_FRAME_SCOPE.knowledge;
+          break;
+        default:
+          throw new Error(`Unknown appFrame metadata in ${fileName}`);
       }
     }
-  };
-  walk(source.program, visit);
+  });
   return scope;
 };
 
 /** A preview-only PDF viewer returns its viewport without the docked chat
  * reader it otherwise wraps, so it mounts no reader dock. */
-const mountsNoReaderDock = (node: JSXOpeningElement, source: Source): boolean =>
+const mountsNoReaderDock = (
+  node: JSXOpeningElement,
+  source: ParsedSource,
+): boolean =>
   textOf(node.name, source) === "PeekPdfViewer" &&
   node.attributes.some(
     (attribute) =>
       attribute.type === "JSXAttribute" &&
       textOf(attribute.name, source) === "interactionMode" &&
-      attribute.value?.type === "Literal" &&
+      isStringLiteral(attribute.value) &&
       attribute.value.value === "preview-only",
   );
 
 /** Follow rendered component imports, rather than utility imports or inherited shells. */
-export const renderedImports = (source: Source): string[] => {
+export const renderedImports = (source: ParsedSource): string[] => {
   const rendered = new Set<string>();
   const dynamicImports = new Map<string, Set<string>>();
-  walk(source.program, (node) => {
+  walk(source.program, (node, ancestors) => {
     if (
       node.type === "JSXOpeningElement" &&
       !mountsNoReaderDock(node, source)
@@ -152,8 +206,9 @@ export const renderedImports = (source: Source): string[] => {
       rendered.add(textOf(node.name, source).split(".").at(0) ?? "");
     }
     if (
-      node.type === "Property" &&
-      textOf(node.key, source) === "component" &&
+      ancestors.at(-1)?.type === "ObjectExpression" &&
+      isPropertyAssignment(node) &&
+      propertyName(node, source) === "component" &&
       node.value.type === "Identifier"
     ) {
       rendered.add(node.value.name);
@@ -161,14 +216,13 @@ export const renderedImports = (source: Source): string[] => {
     if (
       node.type === "VariableDeclarator" &&
       node.id.type === "Identifier" &&
-      node.init
+      node.init !== null
     ) {
       const imports = new Set<string>();
       walk(node.init, (child) => {
         if (
           child.type === "ImportExpression" &&
-          child.source.type === "Literal" &&
-          typeof child.source.value === "string"
+          isStringLiteral(child.source)
         ) {
           imports.add(child.source.value);
         }
@@ -179,21 +233,16 @@ export const renderedImports = (source: Source): string[] => {
     }
   });
   const imports = new Set<string>();
-  for (const statement of source.program.body) {
-    if (
-      statement.type !== "ImportDeclaration" ||
-      statement.importKind === "type"
-    ) {
+  for (const statement of importDeclarations(source)) {
+    if (statement.importKind === "type") {
       continue;
     }
-    if (
-      statement.specifiers.some(
-        (binding) =>
-          (binding.type !== "ImportSpecifier" ||
-            binding.importKind !== "type") &&
-          rendered.has(binding.local.name),
-      )
-    ) {
+    const isRendered = statement.specifiers.some((specifier) =>
+      specifier.type === "ImportSpecifier"
+        ? specifier.importKind !== "type" && rendered.has(specifier.local.name)
+        : rendered.has(specifier.local.name),
+    );
+    if (isRendered) {
       imports.add(statement.source.value);
     }
   }
@@ -207,68 +256,63 @@ export const renderedImports = (source: Source): string[] => {
 
 /** Resolve JSX bindings through imports so renaming the provider cannot hide a host. */
 const mountsDockedChatProvider = (file: string): boolean => {
-  const source = parseSource(file);
+  const source = readSource(file);
   const providerTags = new Set<string>();
-  for (const statement of source.program.body) {
-    if (statement.type !== "ImportDeclaration") {
-      continue;
-    }
+  for (const statement of source.module.staticImports) {
     if (
       resolveSource({
         from: file,
-        specifier: statement.source.value,
+        specifier: statement.moduleRequest.value,
       }) !== path.join(SOURCE_ROOT, "components/chat/docked-chat-stack.tsx")
     ) {
       continue;
     }
-    if (statement.importKind === "type") {
-      continue;
-    }
-    for (const binding of statement.specifiers) {
-      if (binding.type === "ImportNamespaceSpecifier") {
-        providerTags.add(`${binding.local.name}.DockedChatStackProvider`);
+    for (const entry of statement.entries) {
+      // oxc-parser declares ImportNameKind as an ambient const enum of strings.
+      const kind: string = entry.importName.kind;
+      if (entry.isType) {
+        continue;
+      }
+      if (kind === "NamespaceObject") {
+        providerTags.add(`${entry.localName.value}.DockedChatStackProvider`);
       }
       if (
-        binding.type === "ImportSpecifier" &&
-        binding.importKind !== "type" &&
-        (binding.imported.type === "Identifier"
-          ? binding.imported.name
-          : binding.imported.value) === "DockedChatStackProvider"
+        kind === "Name" &&
+        entry.importName.name === "DockedChatStackProvider"
       ) {
-        providerTags.add(binding.local.name);
+        providerTags.add(entry.localName.value);
       }
     }
   }
+  if (providerTags.size === 0) {
+    return false;
+  }
   let found = false;
-  const visit = (node: Node): undefined => {
+  walk(source.program, (node) => {
     if (
       node.type === "JSXOpeningElement" &&
       providerTags.has(textOf(node.name, source))
     ) {
       found = true;
     }
-  };
-  walk(source.program, visit);
+  });
   return found;
 };
 
-const isServerEndpoint = (file: string): boolean => {
+const isServerEndpoint = (source: ParsedSource): boolean => {
   let serverHandlers = false;
-  const visit = (node: Node): undefined => {
+  visitPropertyAssignments(source.program, (node) => {
     if (
-      node.type === "Property" &&
-      textOf(node.key, source) === "server" &&
+      propertyName(node, source) === "server" &&
       node.value.type === "ObjectExpression"
     ) {
       serverHandlers = node.value.properties.some(
         (property) =>
-          property.type === "Property" &&
-          textOf(property.key, source) === "handlers",
+          isPropertyAssignment(property) &&
+          propertyName(property, source) === "handlers",
       );
     }
-  };
-  const source = parseSource(file);
-  walk(source.program, visit);
+  });
   return serverHandlers;
 };
 
@@ -304,13 +348,20 @@ export const readDockedChatHosts = (): {
       );
     }
   }
-  const treePath = path.join(SOURCE_ROOT, "routeTree.gen.ts");
-  const tree = parseSource(treePath);
-  const routeSources = new Map<string, string>();
-  for (const statement of tree.program.body) {
-    if (statement.type !== "ImportDeclaration") {
-      continue;
+  // Route files are read for metadata, endpoints and rendered imports alike.
+  const parsedRoutes = new Map<string, ParsedSource>();
+  const readRoute = (file: string): ParsedSource => {
+    let source = parsedRoutes.get(file);
+    if (source === undefined) {
+      source = readSource(file);
+      parsedRoutes.set(file, source);
     }
+    return source;
+  };
+  const treePath = path.join(SOURCE_ROOT, "routeTree.gen.ts");
+  const tree = readSource(treePath);
+  const routeSources = new Map<string, string>();
+  for (const statement of importDeclarations(tree)) {
     const routeSource = resolveSource({
       from: treePath,
       specifier: statement.source.value,
@@ -324,29 +375,29 @@ export const readDockedChatHosts = (): {
       }
     }
   }
+  const declarations = topLevelDeclarations(tree);
   const parentSymbols = new Map<string, string>();
-  for (const statement of tree.program.body) {
+  for (const statement of declarations) {
     if (statement.type !== "VariableDeclaration") {
       continue;
     }
     for (const declaration of statement.declarations) {
       if (
         declaration.id.type !== "Identifier" ||
-        !declaration.init ||
-        declaration.init.type !== "CallExpression"
+        declaration.init?.type !== "CallExpression"
       ) {
         continue;
       }
       const argument = declaration.init.arguments.at(0);
       const options =
         argument?.type === "TSAsExpression" ? argument.expression : argument;
-      if (!options || options.type !== "ObjectExpression") {
+      if (options?.type !== "ObjectExpression") {
         continue;
       }
       for (const property of options.properties) {
         if (
-          property.type === "Property" &&
-          textOf(property.key, tree) === "getParentRoute" &&
+          isPropertyAssignment(property) &&
+          propertyName(property, tree) === "getParentRoute" &&
           property.value.type === "ArrowFunctionExpression" &&
           property.value.body.type === "Identifier"
         ) {
@@ -373,25 +424,19 @@ export const readDockedChatHosts = (): {
       if (file === undefined) {
         throw new Error(`Missing route source: ${current}`);
       }
-      const scope = declaredAppFrameScope(parseSource(file));
+      const scope = declaredAppFrameScope(readRoute(file), file);
       if (scope !== undefined) {
         return scope;
       }
     }
     throw new Error(`No appFrame metadata for route: ${symbol}`);
   };
-  const routes = tree.program.body
-    .map((statement) =>
-      statement.type === "ExportNamedDeclaration"
-        ? statement.declaration
-        : statement,
-    )
-    .find(
-      (statement) =>
-        statement?.type === "TSInterfaceDeclaration" &&
-        statement.id.name === "FileRoutesByTo",
-    );
-  if (routes?.type !== "TSInterfaceDeclaration") {
+  const routes = declarations.find(
+    (statement): statement is TSInterfaceDeclaration =>
+      statement.type === "TSInterfaceDeclaration" &&
+      statement.id.name === "FileRoutesByTo",
+  );
+  if (routes === undefined) {
     throw new Error("Generated route tree lacks FileRoutesByTo");
   }
   // These owners render inherited docks; their descendant readers are not
@@ -420,7 +465,7 @@ export const readDockedChatHosts = (): {
     }
     let children = importGraph.get(file);
     if (children === undefined) {
-      children = renderedImports(parseSource(file))
+      children = renderedImports(readRoute(file))
         .map((specifier) => resolveSource({ from: file, specifier }))
         .filter((child): child is string => child !== undefined);
       importGraph.set(file, children);
@@ -453,23 +498,22 @@ export const readDockedChatHosts = (): {
   for (const member of routes.body.body) {
     if (
       member.type !== "TSPropertySignature" ||
-      member.key.type !== "Literal" ||
-      typeof member.key.value !== "string" ||
+      member.computed ||
+      !isStringLiteral(member.key) ||
       member.typeAnnotation === null
     ) {
       throw new Error("Unknown generated route record in FileRoutesByTo");
     }
+    const template = member.key.value;
     const symbol = textOf(member.typeAnnotation.typeAnnotation, tree)
       .replace(/^typeof\s+/u, "")
       .replace(/WithChildren$/u, "");
     const file = routeSources.get(symbol);
     if (file === undefined) {
-      throw new Error(
-        `No owning source for route ${member.key.value}: ${symbol}`,
-      );
+      throw new Error(`No owning source for route ${template}: ${symbol}`);
     }
     const source = readFileSync(file, "utf-8");
-    if (isServerEndpoint(file)) {
+    if (isServerEndpoint(readRoute(file))) {
       continue;
     }
     const routeId = /createFileRoute\(\s*["']([^"']+)["']/u.exec(source)?.at(1);
@@ -491,7 +535,7 @@ export const readDockedChatHosts = (): {
     }
     if (surfaces.size > 0) {
       hosts.push({
-        template: member.key.value,
+        template,
         surfaces: [...surfaces].toSorted(),
       });
     }

@@ -1,17 +1,12 @@
 import { expect, test } from "bun:test";
 
-import { parseSource as parseSyntax } from "@stll/scripts/src/syntax-tree";
+import { parseSource } from "@stll/scripts/src/syntax-tree.ts";
 
 import {
   declaredAppFrameScope,
   readDockedChatHosts,
   renderedImports,
 } from "../helpers/docked-chat-hosts";
-
-const parseSource = (fileName: string, source: string) => ({
-  ...parseSyntax(fileName, source),
-  fileName,
-});
 
 test.each(["member", "knowledge", "none"])(
   "reads declared %s scope independently of route names",
@@ -21,21 +16,18 @@ test.each(["member", "knowledge", "none"])(
       `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
 export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${scope} } });`,
     );
-    expect(declaredAppFrameScope(source)).toBe(scope);
+    expect(declaredAppFrameScope(source, "renamed-route.tsx")).toBe(scope);
   },
 );
 
 test("absent metadata inherits while unsupported metadata fails", () => {
-  const parse = (source: string) => parseSource("route.tsx", source);
+  const scopeOf = (source: string) =>
+    declaredAppFrameScope(parseSource("route.tsx", source), "route.tsx");
   expect(
-    declaredAppFrameScope(
-      parse('export const Route = createFileRoute("/_protected")({});'),
-    ),
+    scopeOf('export const Route = createFileRoute("/_protected")({});'),
   ).toBeUndefined();
   expect(() =>
-    declaredAppFrameScope(
-      parse("const value = { staticData: { appFrame: arbitrary } };"),
-    ),
+    scopeOf("const value = { staticData: { appFrame: arbitrary } };"),
   ).toThrow("Unsupported appFrame metadata");
 });
 

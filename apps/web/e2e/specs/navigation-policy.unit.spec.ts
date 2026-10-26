@@ -3,13 +3,13 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
-import type { IdentifierNode as Identifier } from "@stll/scripts/src/syntax-estree-names";
 import {
   type CallExpression,
-  type MemberExpression,
+  type IdentifierReference,
   parseSource,
+  type StaticMemberExpression,
   walk,
-} from "@stll/scripts/src/syntax-tree";
+} from "@stll/scripts/src/syntax-tree.ts";
 
 const E2E_ROOT = path.resolve(import.meta.dirname, "..");
 const READINESS_LIFECYCLES = new Set(["commit", "domcontentloaded"]);
@@ -55,19 +55,18 @@ const specFiles = async (directory: string): Promise<string[]> => {
 
 const navigationViolations = async (filePath: string): Promise<string[]> => {
   const sourceText = await readFile(filePath, "utf-8");
-  const sourceFile = parseSource(filePath, sourceText);
+  const source = parseSource(filePath, sourceText);
   const violations: string[] = [];
 
-  walk(sourceFile.program, (node) => {
+  walk(source.program, (node) => {
     if (node.type === "CallExpression" && isPageNavigation(node)) {
-      const lifecycle = navigationLifecycle(node);
+      const lifecycle = navigationLifecycle(node, sourceText);
       if (!READINESS_LIFECYCLES.has(lifecycle ?? "")) {
-        const { line } = sourceFile.locate(node.start);
+        const { line } = source.locate(node.start);
         violations.push(
-          `${repoRelativePath(E2E_ROOT, filePath)}:${line} uses ${sourceText.slice(
-            node.callee.property.start,
-            node.callee.property.end,
-          )} without waitUntil: "commit" or "domcontentloaded"`,
+          `${repoRelativePath(E2E_ROOT, filePath)}:${line} uses ${
+            node.callee.property.name
+          } without waitUntil: "commit" or "domcontentloaded"`,
         );
       }
     }
@@ -76,30 +75,39 @@ const navigationViolations = async (filePath: string): Promise<string[]> => {
 };
 
 type PageNavigationCall = CallExpression & {
-  callee: MemberExpression & { object: Identifier; property: Identifier };
+  callee: StaticMemberExpression & { object: IdentifierReference };
 };
+
 const isPageNavigation = (call: CallExpression): call is PageNavigationCall =>
   call.callee.type === "MemberExpression" &&
   !call.callee.computed &&
+  call.callee.property.type === "Identifier" &&
   call.callee.object.type === "Identifier" &&
   call.callee.object.name === "page" &&
-  call.callee.property.type === "Identifier" &&
   NAVIGATION_OPTIONS_INDEX.has(call.callee.property.name);
-const navigationLifecycle = (call: PageNavigationCall): string | null => {
+
+const navigationLifecycle = (
+  call: PageNavigationCall,
+  sourceText: string,
+): string | null => {
   const options = call.arguments.at(
     NAVIGATION_OPTIONS_INDEX.get(call.callee.property.name) ?? 0,
   );
-  if (!options || options.type !== "ObjectExpression") {
+  if (options?.type !== "ObjectExpression") {
     return null;
   }
+  // The first `waitUntil: value` entry; shorthand, methods, accessors and
+  // computed keys never name it.
   const waitUntil = options.properties.find(
     (property) =>
       property.type === "Property" &&
+      property.kind === "init" &&
+      !property.method &&
+      !property.shorthand &&
       !property.computed &&
-      property.key.type === "Identifier" &&
-      property.key.name === "waitUntil",
+      sourceText.slice(property.key.start, property.key.end) === "waitUntil",
   );
-  if (!waitUntil || waitUntil.type !== "Property") {
+  if (waitUntil?.type !== "Property") {
     return null;
   }
   return waitUntil.value.type === "Literal" &&
