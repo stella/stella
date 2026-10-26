@@ -1,9 +1,5 @@
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
-
-export class TestShardPlanningError extends Error {
-  override name = "TestShardPlanningError";
-  readonly _tag = "TestShardPlanningError";
-}
 
 export const API_TEST_SHARD_ENV = "API_TEST_SHARD";
 
@@ -85,7 +81,7 @@ export const readTestDurationWeights = (
 ): TestDurationWeights => {
   const weights = parseTestDurationWeights(value);
   if (weights === undefined) {
-    throw new TestShardPlanningError("Invalid test duration weights");
+    return panic("Invalid test duration weights");
   }
   return weights;
 };
@@ -93,7 +89,7 @@ export const readTestDurationWeights = (
 export const durationSeconds = (value: unknown): Record<string, number> => {
   const weights = parseTestDurationWeights(value);
   if (weights === undefined) {
-    throw new TestShardPlanningError("Invalid test duration weights");
+    return panic("Invalid test duration weights");
   }
   return Object.fromEntries(
     Object.entries(weights).map(([file, { seconds }]) => [file, seconds]),
@@ -112,7 +108,7 @@ export const testFileDurationWeights = (
         return [];
       }
       if (!isDurationSample(duration)) {
-        throw new TestShardPlanningError(`Invalid duration for ${file}`);
+        return panic(`Invalid duration for ${file}`);
       }
       return [duration];
     })
@@ -136,12 +132,10 @@ export const partitionTestFiles = ({
   count,
 }: PartitionTestFilesOptions): string[][] => {
   if (!Number.isSafeInteger(count) || count < 1) {
-    throw new TestShardPlanningError(
-      "Test shard count must be a positive integer",
-    );
+    return panic("Test shard count must be a positive integer");
   }
   if (new Set(files).size !== files.length) {
-    throw new TestShardPlanningError("Test paths must be unique");
+    return panic("Test paths must be unique");
   }
   const canonicalFiles = files.toSorted();
   const weights = testFileDurationWeights(canonicalFiles, durations);
@@ -151,7 +145,7 @@ export const partitionTestFiles = ({
   const weight = (file: string) => {
     const duration = weights[file];
     if (duration === undefined) {
-      throw new TestShardPlanningError(`Missing resolved duration for ${file}`);
+      return panic(`Missing resolved duration for ${file}`);
     }
     return duration;
   };
@@ -164,7 +158,7 @@ export const partitionTestFiles = ({
   )) {
     let bin = bins.at(0);
     if (bin === undefined) {
-      throw new TestShardPlanningError("Test shard bins must exist");
+      return panic("Test shard bins must exist");
     }
     for (const candidate of bins) {
       if (candidate.seconds < bin.seconds) {
@@ -191,7 +185,7 @@ export const parseApiTestShard = (value: string | undefined) => {
     !Number.isSafeInteger(count) ||
     index > count
   ) {
-    throw new TestShardPlanningError(
+    return panic(
       `Invalid ${API_TEST_SHARD_ENV}: expected i/n with 1 <= i <= n`,
     );
   }
@@ -218,9 +212,7 @@ export const planPostgresTestShards = ({
         return [];
       }
       if (!isDurationSample(seconds)) {
-        throw new TestShardPlanningError(
-          `Invalid Postgres test duration: ${file}`,
-        );
+        return panic(`Invalid Postgres test duration: ${file}`);
       }
       return [seconds];
     })
@@ -238,7 +230,7 @@ export const planPostgresTestShards = ({
       for (const file of shardFiles) {
         const duration = weights[file];
         if (duration === undefined) {
-          throw new TestShardPlanningError(`Missing duration: ${file}`);
+          return panic(`Missing duration: ${file}`);
         }
         seconds += duration;
       }
@@ -280,9 +272,7 @@ export const planPostgresShardCount = ({
     minShards < 1 ||
     maxShards < minShards
   ) {
-    throw new TestShardPlanningError(
-      "Postgres shard bounds must satisfy 1 <= min <= max",
-    );
+    return panic("Postgres shard bounds must satisfy 1 <= min <= max");
   }
   const total = planPostgresTestShards({ files, durations, count: 1 }).reduce(
     (sum, { seconds }) => sum + seconds,
@@ -323,26 +313,22 @@ export const readPostgresTestDurations = (
     return {};
   }
 
-  let contents: string;
-  try {
-    contents = readFileSync(durationPath, "utf-8");
-  } catch {
+  const contents = Result.try(() => readFileSync(durationPath, "utf-8"));
+  if (contents.isErr()) {
     console.log(
       "::notice::Postgres duration cache unreadable; using conservative estimates",
     );
     return {};
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(contents);
-  } catch {
+  const parsed = Result.try((): unknown => JSON.parse(contents.value));
+  if (parsed.isErr()) {
     console.log(
       "::notice::Postgres duration cache unreadable; using conservative estimates",
     );
     return {};
   }
-  const weights = parseTestDurationWeights(parsed);
+  const weights = parseTestDurationWeights(parsed.value);
   if (weights === undefined) {
     console.log(
       "::notice::Postgres duration cache has an invalid schema; using conservative estimates",

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
@@ -7,12 +8,9 @@ import {
   planPostgresShardCount,
   postgresShardMatrix,
   readPostgresTestDurations,
-  TestShardPlanningError,
 } from "../packages/scripts/src/test-shard-planning";
 
-const fail = (message: string): never => {
-  throw new TestShardPlanningError(message);
-};
+const fail = (message: string): never => panic(message);
 
 type PostgresShardOutputsOptions = {
   files: readonly string[];
