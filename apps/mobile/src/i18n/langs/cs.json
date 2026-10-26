@@ -23,7 +23,16 @@
       "yesterday": "Včera",
       "week": "Posledních 7 dní",
       "earlier": "Dříve"
-    }
+    },
+    "newChat": "Nová konverzace",
+    "composerPlaceholder": "Zeptejte se stelly",
+    "send": "Odeslat",
+    "stop": "Zastavit",
+    "sendFailed": "Zprávu se nepodařilo odeslat. Zkuste to znovu.",
+    "answerWorking": "Pracuji…",
+    "answerStopped": "Zastaveno.",
+    "answerNeedsInput": "Tato odpověď čeká na váš vstup. Pokračujte v ní ve webové aplikaci stella.",
+    "answerFailed": "Odpověď se nepodařilo dokončit."
   },
   "tasks": {
     "description": "Podívejte se, co vyžaduje pozornost, aniž byste otevírali celý pracovní prostor.",
