@@ -2,17 +2,21 @@ import { Result, TaggedError } from "better-result";
 import { readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import {
+  type Expression,
+  type Node,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import {
   lexShell,
   parseBunFlags,
   programWords,
   SOURCE_FILE,
 } from "./install-free-ci";
-import { parseSource } from "./parse-memo";
+import { parseSyntax } from "./parse-memo";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 export class OfflineCheckPolicyError extends TaggedError(
@@ -247,26 +251,29 @@ export const parseOfflineImportAllowances = (
     };
   });
 };
-const isRawFetchCall = (node: ts.Node): boolean => {
+const isRawFetchCall = (node: Node, parent: Node | undefined): boolean => {
   if (
-    ts.isPropertyAccessExpression(node) &&
-    ts.isCallExpression(node.parent) &&
-    node.parent.expression === node
+    node.type === "MemberExpression" &&
+    !node.computed &&
+    parent?.type === "CallExpression" &&
+    parent.callee === node
   ) {
     return false;
   }
-  const expression = ts.isCallExpression(node) ? node.expression : node;
-  if (ts.isIdentifier(expression)) {
+  const expression = node.type === "CallExpression" ? node.callee : node;
+  if (expression.type === "Identifier") {
     return (
-      ts.isCallExpression(node) &&
-      ["fetch", "fetchWithTimeout"].includes(expression.text)
+      node.type === "CallExpression" &&
+      ["fetch", "fetchWithTimeout"].includes(expression.name)
     );
   }
   return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === "fetch" &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === "globalThis"
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier" &&
+    expression.property.name === "fetch" &&
+    expression.object.type === "Identifier" &&
+    expression.object.name === "globalThis"
   );
 };
 
@@ -277,21 +284,37 @@ const forbiddenBunMembers = new Set([
   "spawn",
   "spawnSync",
 ]);
-const isBunGlobal = (node: ts.Expression): boolean => {
+const isBunGlobal = (node: Expression): boolean => {
+  // An optional chain (`globalThis?.Bun`) is wrapped as a whole.
   if (
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isNonNullExpression(node)
+    node.type === "ParenthesizedExpression" ||
+    node.type === "ChainExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSNonNullExpression"
   ) {
     return isBunGlobal(node.expression);
   }
   return (
-    (ts.isIdentifier(node) && node.text === "Bun") ||
-    (ts.isPropertyAccessExpression(node) &&
-      node.name.text === "Bun" &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "globalThis")
+    (node.type === "Identifier" && node.name === "Bun") ||
+    (node.type === "MemberExpression" &&
+      !node.computed &&
+      node.property.type === "Identifier" &&
+      node.property.name === "Bun" &&
+      node.object.type === "Identifier" &&
+      node.object.name === "globalThis")
   );
+};
+
+// A module specifier written as a string or a template without
+// substitutions.
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
 };
 
 type OfflineImportGraphOptions = {
@@ -343,11 +366,12 @@ export const offlineImportGraphViolations = ({
       continue;
     }
     const file = resolvedEntry.value;
-    if (visited.has(file) || file.endsWith(".json")) {
+    // Imported data (JSON, text assets) holds no code to follow.
+    if (visited.has(file) || !SOURCE_FILE.test(file)) {
       continue;
     }
     visited.add(file);
-    const source = parseSource({
+    const source = parseSyntax({
       fileName: file,
       text: readFileSync(file, "utf-8"),
     });
@@ -380,8 +404,20 @@ export const offlineImportGraphViolations = ({
       }
       pending.push(resolved.value);
     };
-    const visit = (node: ts.Node): void => {
-      if (isRawFetchCall(node)) {
+    const followTarget = (target: Node | undefined) => {
+      const specifier = target === undefined ? undefined : literalText(target);
+      if (specifier === undefined) {
+        classify(
+          file,
+          "dynamic-module",
+          "Dynamic module target cannot be enumerated",
+        );
+      } else {
+        follow(specifier);
+      }
+    };
+    walk(source.program, (node, ancestors) => {
+      if (isRawFetchCall(node, ancestors.at(-1))) {
         classify(
           file,
           "fetch",
@@ -389,75 +425,62 @@ export const offlineImportGraphViolations = ({
         );
       }
       if (
-        ts.isPropertyAccessExpression(node) &&
-        isBunGlobal(node.expression) &&
-        forbiddenBunMembers.has(node.name.text)
+        node.type === "MemberExpression" &&
+        !node.computed &&
+        node.property.type === "Identifier" &&
+        isBunGlobal(node.object) &&
+        forbiddenBunMembers.has(node.property.name)
       ) {
         classify(
           file,
-          `Bun.${node.name.text}`,
-          `Bun.${node.name.text} is forbidden`,
+          `Bun.${node.property.name}`,
+          `Bun.${node.property.name} is forbidden`,
         );
       }
-      if (ts.isElementAccessExpression(node) && isBunGlobal(node.expression)) {
+      if (
+        node.type === "MemberExpression" &&
+        node.computed &&
+        isBunGlobal(node.object)
+      ) {
         violation(file, "Computed access on Bun is forbidden");
       }
       if (
-        ts.isVariableDeclaration(node) &&
-        node.initializer &&
-        isBunGlobal(node.initializer)
+        node.type === "VariableDeclarator" &&
+        node.init &&
+        isBunGlobal(node.init)
       ) {
         // Aliasing or destructuring the global would hide transport member references.
         violation(file, "Aliasing the Bun global is forbidden");
       }
-      if (
-        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-        node.moduleSpecifier &&
-        ts.isStringLiteralLike(node.moduleSpecifier) &&
-        !(
-          ts.isImportDeclaration(node) &&
-          node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-        ) &&
-        !(ts.isExportDeclaration(node) && node.isTypeOnly)
-      ) {
-        follow(node.moduleSpecifier.text);
+      if (node.type === "ImportDeclaration" && node.importKind !== "type") {
+        follow(node.source.value);
       }
       if (
-        ts.isImportEqualsDeclaration(node) &&
-        !node.isTypeOnly &&
-        ts.isExternalModuleReference(node.moduleReference)
+        (node.type === "ExportNamedDeclaration" ||
+          node.type === "ExportAllDeclaration") &&
+        node.source &&
+        node.exportKind !== "type"
       ) {
-        const target = node.moduleReference.expression;
-        if (ts.isStringLiteralLike(target)) {
-          follow(target.text);
-        } else {
-          classify(
-            file,
-            "dynamic-module",
-            "Dynamic module target cannot be enumerated",
-          );
-        }
+        follow(node.source.value);
       }
       if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require"))
+        node.type === "TSImportEqualsDeclaration" &&
+        node.importKind !== "type" &&
+        node.moduleReference.type === "TSExternalModuleReference"
       ) {
-        const target = node.arguments.at(0);
-        if (target && ts.isStringLiteralLike(target)) {
-          follow(target.text);
-        } else {
-          classify(
-            file,
-            "dynamic-module",
-            "Dynamic module target cannot be enumerated",
-          );
-        }
+        followTarget(node.moduleReference.expression);
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
+      if (node.type === "ImportExpression") {
+        followTarget(node.source);
+      }
+      if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      ) {
+        followTarget(node.arguments.at(0));
+      }
+    });
   }
   for (const [key, reason] of allowed) {
     if (reason.trim() === "") {
