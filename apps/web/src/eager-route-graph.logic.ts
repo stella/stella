@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
-import * as ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 const SCRIPT_EXTENSION = /\.[cm]?[jt]sx?$/u;
 const CANDIDATE_SUFFIXES = [
@@ -16,48 +16,43 @@ const CANDIDATE_SUFFIXES = [
   "/index.tsx",
 ];
 
+// Statements rather than oxc's module record: the record drops
+// `export {} from "x"`, which still evaluates x eagerly.
 const collectStaticImports = (file: string, text: string) => {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false);
   const imports: string[] = [];
-  for (const statement of source.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      const clause = statement.importClause;
-      if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-        continue;
+  for (const statement of parseSource(file, text).program.body) {
+    if (statement.type === "ImportDeclaration") {
+      const typeOnly =
+        statement.importKind === "type" ||
+        (statement.specifiers.length > 0 &&
+          statement.specifiers.every(
+            (specifier) =>
+              specifier.type === "ImportSpecifier" &&
+              specifier.importKind === "type",
+          ));
+      if (!typeOnly) {
+        imports.push(statement.source.value);
       }
-      const bindings = clause?.namedBindings;
-      if (
-        clause?.name === undefined &&
-        bindings !== undefined &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.length > 0 &&
-        bindings.elements.every((element) => element.isTypeOnly)
-      ) {
-        continue;
-      }
-      if (ts.isStringLiteral(statement.moduleSpecifier)) {
-        imports.push(statement.moduleSpecifier.text);
+      continue;
+    }
+    if (statement.type === "ExportAllDeclaration") {
+      if (statement.exportKind !== "type") {
+        imports.push(statement.source.value);
       }
       continue;
     }
     if (
-      !ts.isExportDeclaration(statement) ||
-      statement.isTypeOnly ||
-      statement.moduleSpecifier === undefined ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.source === null ||
+      statement.exportKind === "type" ||
+      (statement.specifiers.length > 0 &&
+        statement.specifiers.every(
+          (specifier) => specifier.exportKind === "type",
+        ))
     ) {
       continue;
     }
-    const clause = statement.exportClause;
-    if (
-      clause !== undefined &&
-      ts.isNamedExports(clause) &&
-      clause.elements.length > 0 &&
-      clause.elements.every((element) => element.isTypeOnly)
-    ) {
-      continue;
-    }
-    imports.push(statement.moduleSpecifier.text);
+    imports.push(statement.source.value);
   }
   return imports;
 };
