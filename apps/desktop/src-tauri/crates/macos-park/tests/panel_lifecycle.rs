@@ -41,13 +41,16 @@ fn main() {
   use activation::{ActivationReturn, activate_with_key_window, return_activation};
   use objc2::rc::{Retained, autoreleasepool};
   use objc2::runtime::{AnyObject, ClassBuilder};
-  use objc2_app_kit::{NSBackingStoreType, NSRunningApplication, NSWorkspace};
+  use objc2_app_kit::{
+    NSApplicationActivationPolicy, NSBackingStoreType, NSRunningApplication, NSWorkspace,
+  };
   use objc2_foundation::{NSPoint, NSRect, NSSize};
   use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
 
   autoreleasepool(|_| {
     let main_thread = MainThreadMarker::new().expect("AppKit requires the main thread");
     let application = NSApplication::sharedApplication(main_thread);
+    assert!(application.setActivationPolicy(NSApplicationActivationPolicy::Regular));
     let own_process_id = NSRunningApplication::currentApplication().processIdentifier();
     // The app the user was in before stella's editor opened. Production
     // records it the same way, before activating; the harness can observe a
