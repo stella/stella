@@ -22,7 +22,7 @@ import {
   parseBfdiDocument,
   parseBfdiListing,
 } from "./bfdi";
-import { SOFT_LAW_ADMISSIONS, configureSoftLawAdapter } from "./registry";
+import { configureSoftLawAdapter, SOFT_LAW_ADMISSIONS } from "./registry";
 
 const ORIGIN = "https://www.bfdi.bund.de";
 const INDEX = `${ORIGIN}/DE/Fachthemen/Datenschutzpraxis/Datenverarbeitung/Datenverarbeitung-node.html`;

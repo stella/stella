@@ -3,8 +3,8 @@ import { parseArgs } from "node:util";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
-  SOFT_LAW_ADMISSIONS,
   configureSoftLawAdapter,
+  SOFT_LAW_ADMISSIONS,
 } from "@/api/handlers/soft-law/adapters/registry";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";

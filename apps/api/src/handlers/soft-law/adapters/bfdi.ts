@@ -17,11 +17,11 @@ import type {
 import type { SoftLawResponse } from "@/api/lib/legal-search/soft-law-access-types";
 import { extractSoftLawPdfText } from "@/api/lib/legal-search/soft-law-document-text";
 import {
+  type SoftLawAdapterConfiguration,
+  type SoftLawEntry,
   SoftLawIngestionError,
   SoftLawItemError,
-  type SoftLawEntry,
   type SoftLawSourceAdapter,
-  type SoftLawAdapterConfiguration,
 } from "@/api/lib/legal-search/soft-law-types";
 
 const ORIGIN = "https://www.bfdi.bund.de";
