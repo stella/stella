@@ -5,6 +5,7 @@ import * as v from "valibot";
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_OAUTH_PROTOCOL_SCOPES,
+  type OAuthConsentClient,
 } from "@stll/api-contract";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
@@ -168,12 +169,56 @@ describe("OAuth dynamic client registration", () => {
       PRIVATE_CACHE_CONTROL,
     );
     expect(await details.json()).toEqual({
-      client_name: "Example connector",
+      client: { type: "unverified", name: "Example connector" },
       redirectTargets: ["connector.example"],
       clientIdHost: null,
-      unverified: true,
-      verifiedBrand: null,
     });
+  });
+
+  test("consent details name a product only by its registered redirects", async () => {
+    const browser = await signInHuman("consent-presentation@example.test");
+    for (const [redirectUris, client] of [
+      [
+        ["https://claude.ai/api/mcp/auth_callback"],
+        { type: "verified", brand: "claude" },
+      ],
+      [
+        ["https://claude.ai/api/mcp/auth_callback/"],
+        { type: "unverified", name: "Claude" },
+      ],
+      [
+        [
+          "https://claude.ai/api/mcp/auth_callback",
+          "https://connector.example/callback",
+        ],
+        { type: "unverified", name: "Claude" },
+      ],
+    ] as const satisfies readonly (readonly [
+      readonly string[],
+      OAuthConsentClient,
+    ])[]) {
+      const response = await registerClient({
+        client_name: "Claude",
+        redirect_uris: [...redirectUris],
+      });
+      expect(response.status).toBe(201);
+      const registered = v.parse(
+        v.looseObject({ client_id: v.string() }),
+        await response.json(),
+      );
+      const details = await getAuth().handler(
+        new Request(
+          `${getAuthEndpointUrl("oauth2/consent-info")}?client_id=${registered.client_id}`,
+          { headers: browser.headers() },
+        ),
+      );
+      expect(details.status).toBe(200);
+      expect(
+        v.parse(v.looseObject({ client: v.unknown() }), await details.json())
+          .client,
+        redirectUris.join(" "),
+      ).toEqual(client);
+    }
   });
 
   test.each(acceptanceCases)("registers %s", async (_label, fixture) => {

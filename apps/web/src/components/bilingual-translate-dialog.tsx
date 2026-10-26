@@ -9,7 +9,7 @@ import { type ReactNode, useState } from "react";
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -54,6 +54,7 @@ import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type BilingualTranslateDialogProps = {
   workspaceId: string;
@@ -92,10 +93,7 @@ export const BilingualTranslateDialog = ({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   // The dialogs live on the document route; the view stays, the document changes.
-  const viewId = useParams({
-    strict: false,
-    select: (params) => params.viewId ?? "all",
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
 
   const [open, setOpen] = useState(false);
   const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(

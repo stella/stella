@@ -1,6 +1,7 @@
 import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -56,11 +57,11 @@ test.each([100, 650])(
             activeAnnotation={null}
             activeSpans={[]}
             controller={{
-              create: async () => undefined,
+              create: async () => Result.ok(undefined),
               redo: async () => undefined,
-              remove: async () => undefined,
+              remove: async () => Result.ok(undefined),
               undo: async () => undefined,
-              update: async () => undefined,
+              update: async () => Result.ok(undefined),
             }}
             mode="guest"
             onActivateAnnotation={() => undefined}
