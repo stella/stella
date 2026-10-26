@@ -4,6 +4,7 @@ import type { OrganizationAIAvailability } from "@stll/api-contract/organization
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { READER_ASIDE_RESIZE_SLOT } from "../../src/features/case-law/components/case-viewer/decision-workspace.logic";
 import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -298,6 +299,34 @@ for (const { locale, dir, messages } of WIDE_CASES) {
       for (const note of notes) {
         expect(intersects(barBox, note)).toBe(false);
       }
+    });
+
+    test("the bar follows the notes column as it is resized", async ({
+      page,
+    }) => {
+      await openDecision(page);
+      const aside = notesColumn(page);
+      await expect(aside.getByText(TOPICS[0], { exact: true })).toBeVisible();
+      const before = await box(aside);
+      const handle = await box(
+        aside.locator(`[data-slot="${READER_ASIDE_RESIZE_SLOT}"]`),
+      );
+      // Toward the column's inline end widens it, in either direction.
+      const towardEnd = dir === "rtl" ? -40 : 40;
+      const y = handle.y + handle.height / 2;
+      await page.mouse.move(handle.x + handle.width / 2, y);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + handle.width / 2 + towardEnd, y, {
+        steps: 4,
+      });
+      await page.mouse.up();
+      // The grab point sits a few pixels inside the column's edge.
+      await expect
+        .poll(async () => (await box(aside)).width)
+        .toBeGreaterThan(before.width + 30);
+      expect(intersects(await box(controlsBar(page)), await box(aside))).toBe(
+        false,
+      );
     });
   });
 }

@@ -1073,8 +1073,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                         return;
                       }
 
+                      // The handle is on the column's inline end, which is
+                      // its left edge in a right-to-left layout.
+                      const bounds = aside.getBoundingClientRect();
                       const newWidth =
-                        event.clientX - aside.getBoundingClientRect().left;
+                        getComputedStyle(aside).direction === "rtl"
+                          ? bounds.right - event.clientX
+                          : event.clientX - bounds.left;
                       setPanelWidth(Math.min(400, Math.max(120, newWidth)));
                     }}
                     onPointerUp={() => {
