@@ -17,6 +17,10 @@ const someFilter: WorkspaceView["layout"]["filters"] = [
   { type: "group", combinator: "and", children: [] },
 ];
 
+const overviewId = "019a0000-0000-7000-8000-000000000401";
+const filesId = "019a0000-0000-7000-8000-000000000402";
+const otherFilesId = "019a0000-0000-7000-8000-000000000403";
+
 const folderReveal = {
   entityId: "folder_1",
   fallbackFolderId: "folder_1",
@@ -26,16 +30,37 @@ const folderReveal = {
 
 describe("reveal navigation", () => {
   test("reads the active view id from workspace paths", () => {
-    expect(getCurrentWorkspaceViewId("/workspaces/ws_1/files", "ws_1")).toBe(
-      "files",
-    );
+    expect(
+      [
+        `/workspaces/ws_1/${filesId}`,
+        `/workspaces/ws_1/${filesId}/document`,
+        `/workspaces/ws_1/${DEFAULT_WORKSPACE_VIEW_ID}`,
+      ].map((pathname) => getCurrentWorkspaceViewId(pathname, "ws_1")),
+    ).toEqual([filesId, filesId, DEFAULT_WORKSPACE_VIEW_ID]);
   });
 
   test("ignores paths outside the target workspace", () => {
     expect(getCurrentWorkspaceViewId("/chat", "ws_1")).toBeNull();
     expect(
-      getCurrentWorkspaceViewId("/workspaces/ws_2/files", "ws_1"),
+      getCurrentWorkspaceViewId(`/workspaces/ws_2/${filesId}`, "ws_1"),
     ).toBeNull();
+  });
+
+  test("a matter page that is not a view names no view", () => {
+    expect(
+      [
+        "/workspaces/ws_1/reports/export-1",
+        "/workspaces/ws_1/correspondence",
+      ].map((pathname) => getCurrentWorkspaceViewId(pathname, "ws_1")),
+    ).toEqual([null, null]);
+    expect(
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        entityId: "doc_1",
+        pathname: "/workspaces/ws_1/reports/export-1",
+        views: [view(overviewId, "overview")],
+      }).params.viewId,
+    ).toBe(DEFAULT_WORKSPACE_VIEW_ID);
   });
 
   test("opens the file tree, not the first view, and reveals the entity", () => {
@@ -55,20 +80,20 @@ describe("reveal navigation", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        pathname: "/workspaces/ws_1/overview",
-        views: [view("overview", "overview"), view("files", "filesystem")],
+        pathname: `/workspaces/ws_1/${overviewId}`,
+        views: [view(overviewId, "overview"), view(filesId, "filesystem")],
       }).params.viewId,
-    ).toBe("files");
+    ).toBe(filesId);
   });
 
   test("stays on the current tree view when there are several", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        pathname: "/workspaces/ws_1/files-2/document",
-        views: [view("files-1", "filesystem"), view("files-2", "filesystem")],
+        pathname: `/workspaces/ws_1/${otherFilesId}/document`,
+        views: [view(filesId, "filesystem"), view(otherFilesId, "filesystem")],
       }).params.viewId,
-    ).toBe("files-2");
+    ).toBe(otherFilesId);
   });
 
   test("prefers an unfiltered tree, whose filters cannot hide the entity", () => {
