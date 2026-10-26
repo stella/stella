@@ -151,7 +151,7 @@ case "$endpoint" in
     sha="\${endpoint#repos/stella/stella/commits/}"
     sha="\${sha%%/*}"
     if [[ "$sha" == "${releaseSha}" ]]; then
-      printf '%s\\n' '[[{"number":1,"title":"chore: release v1.2.3","state":"open","merged_at":null,"head":{"sha":"${releaseSha}","repo":{"full_name":"stella/stella"}},"base":{"sha":"${mainSha}","ref":"main","repo":{"full_name":"stella/stella"}}}]]'
+      printf '%s\\n' '[[{"number":1,"title":"chore: release v1.2.3","state":"open","draft":false,"merged_at":null,"head":{"sha":"${releaseSha}","repo":{"full_name":"stella/stella"}},"base":{"sha":"${mainSha}","ref":"main","repo":{"full_name":"stella/stella"}}}]]'
     else printf '%s\\n' '[[]]'; fi
     ;;
   repos/stella/stella/commits/*)
