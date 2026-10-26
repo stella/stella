@@ -134,7 +134,7 @@ test("a denied approval restored as an SDK error shows only its denial status", 
 
 const renderDocxEditApproval = (
   locale: "en" | "cs",
-  input: { operations: readonly unknown[] },
+  input: { operations: unknown[] },
 ) => {
   const catalog = locale === "cs" ? czech : messages;
   setTranslator(createTranslator({ locale, messages: catalog }));
