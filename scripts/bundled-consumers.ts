@@ -214,19 +214,19 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --sourcemap=linked --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --sourcemap=linked --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming collab.js apps/collab/src/index.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles --public-path /app/ --entry-naming collab.js apps/collab/src/index.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      'bun build --define __STELLA_RELEASE__=true --target bun --splitting --outdir /app/bundles --public-path /app/ --entry-naming "[name].js" --chunk-naming "chunk-[hash].js" apps/api/src/scripts/backfill-case-law-slugs.ts apps/api/scripts/seed-usage-policies.ts apps/api/scripts/replay-provider-events.ts apps/api/src/scripts/better-auth-migration-audit.ts apps/api/src/scripts/better-auth-microsoft-identity-map.ts apps/api/src/scripts/better-auth-17-backfill.ts apps/api/src/scripts/database-census.ts apps/api/src/scripts/better-auth-sign-in-replay.ts apps/api/src/scripts/replay-case-law-source.ts apps/api/src/scripts/review-account.ts apps/api/src/scripts/partner-oauth-client.ts apps/api/src/scripts/replay-tick.ts apps/api/src/scripts/import-cz-us-roster.ts apps/api/src/scripts/eu-completion-tick.ts apps/api/src/scripts/eu-completion-control.ts apps/api/src/scripts/redact-case-law-decision.ts apps/api/src/scripts/case-law-raw-layout.ts apps/api/src/scripts/complete-sk-us-raw.ts apps/api/src/scripts/decision-analysis-candidates.ts apps/api/src/scripts/decision-analysis-input.ts apps/api/src/scripts/decision-analysis-save.ts apps/api/src/scripts/repair-publisher-absent-text.ts apps/api/src/scripts/repair-cz-ns-court.ts apps/api/scripts/classify-citations.ts apps/api/src/scripts/apply-reviewed-citation-labels.ts apps/api/src/scripts/corpus-generation.ts apps/api/src/scripts/corpus-snippet-compare.ts apps/api/src/scripts/image-smoke-model-ingress.ts apps/api/src/scripts/image-smoke.ts',
+      'bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --splitting --outdir /app/bundles --public-path /app/ --entry-naming "[name].js" --chunk-naming "chunk-[hash].js" apps/api/src/scripts/backfill-case-law-slugs.ts apps/api/scripts/seed-usage-policies.ts apps/api/scripts/replay-provider-events.ts apps/api/src/scripts/better-auth-migration-audit.ts apps/api/src/scripts/better-auth-microsoft-identity-map.ts apps/api/src/scripts/better-auth-17-backfill.ts apps/api/src/scripts/database-census.ts apps/api/src/scripts/better-auth-sign-in-replay.ts apps/api/src/scripts/replay-case-law-source.ts apps/api/src/scripts/review-account.ts apps/api/src/scripts/partner-oauth-client.ts apps/api/src/scripts/replay-tick.ts apps/api/src/scripts/import-cz-us-roster.ts apps/api/src/scripts/eu-completion-tick.ts apps/api/src/scripts/eu-completion-control.ts apps/api/src/scripts/redact-case-law-decision.ts apps/api/src/scripts/case-law-raw-layout.ts apps/api/src/scripts/complete-sk-us-raw.ts apps/api/src/scripts/decision-analysis-candidates.ts apps/api/src/scripts/decision-analysis-input.ts apps/api/src/scripts/decision-analysis-save.ts apps/api/src/scripts/repair-publisher-absent-text.ts apps/api/src/scripts/repair-cz-ns-court.ts apps/api/scripts/classify-citations.ts apps/api/src/scripts/apply-reviewed-citation-labels.ts apps/api/src/scripts/corpus-generation.ts apps/api/src/scripts/corpus-snippet-compare.ts apps/api/src/scripts/image-smoke-model-ingress.ts apps/api/src/scripts/image-smoke.ts',
     bootCheck: {
       type: "docker-run",
       dockerfile: "apps/api/Dockerfile",
@@ -236,7 +236,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming sanctions-matcher-worker.js apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming sanctions-matcher-worker.js apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -246,7 +246,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js --external @firecrawl/anydoc-linux-arm64-musl --external @firecrawl/anydoc-linux-x64-musl apps/api/src/lib/search/extraction-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js --external @firecrawl/anydoc-linux-arm64-musl --external @firecrawl/anydoc-linux-x64-musl apps/api/src/lib/search/extraction-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -256,13 +256,13 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/apps/api/src/db --public-path /app/apps/api/src/db/ --entry-naming migrate.js apps/api/src/db/migrate.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/apps/api/src/db --public-path /app/apps/api/src/db/ --entry-naming migrate.js apps/api/src/db/migrate.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming ocr-local-worker.js apps/api/src/lib/ocr-local/ocr-local-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming ocr-local-worker.js apps/api/src/lib/ocr-local/ocr-local-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -272,7 +272,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming ocr-searchable-pdf-worker.js apps/api/src/lib/ocr-searchable-pdf-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming ocr-searchable-pdf-worker.js apps/api/src/lib/ocr-searchable-pdf-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -282,7 +282,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming office-evidence-worker.js apps/api/src/lib/files/office-evidence-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming office-evidence-worker.js apps/api/src/lib/files/office-evidence-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -292,7 +292,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming pdf-worker.js apps/api/src/lib/files/pdf-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming pdf-worker.js apps/api/src/lib/files/pdf-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -302,7 +302,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
@@ -357,7 +357,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/legal-atlas-runner/package.json",
     command:
-      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=external --outdir dist --entry-naming eu-ecj-refetch.js ../api/src/scripts/eu-ecj-refetch.ts",
+      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --minify --keep-names --sourcemap=external --outdir dist --entry-naming eu-ecj-refetch.js ../api/src/scripts/eu-ecj-refetch.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -367,7 +367,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/legal-atlas-runner/package.json",
     command:
-      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=external --outdir dist --entry-naming index.js src/index.ts",
+      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --minify --keep-names --sourcemap=external --outdir dist --entry-naming index.js src/index.ts",
     bootCheck: {
       type: "docker-run",
       dockerfile: "apps/legal-atlas-runner/Dockerfile",
