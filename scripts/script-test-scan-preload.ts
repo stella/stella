@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const logPath = process.env["SCRIPT_TEST_SCAN_LOG"];
 
@@ -16,7 +17,7 @@ const writeScan = (record: ScanRecord) => {
 
 const directoryName = (value: unknown): string => {
   if (value instanceof URL) {
-    return value.pathname;
+    return fileURLToPath(value);
   }
   return typeof value === "string" || value instanceof Buffer
     ? value.toString()
@@ -43,8 +44,14 @@ const installDirectoryWrapper = (
  * record; a census test keeps this table complete.
  */
 export const DIRECTORY_SCAN_APIS = {
-  fs: ["readdir", "readdirSync", "opendir", "opendirSync", "glob", "globSync"],
-  promises: ["readdir", "opendir", "glob"],
+  fs: ["readdir", "readdirSync", "opendir", "opendirSync"],
+  promises: ["readdir", "opendir"],
+} as const;
+
+/** The node:fs glob APIs: a pattern (or patterns) scanned from `cwd`. */
+export const GLOB_SCAN_APIS = {
+  fs: ["glob", "globSync"],
+  promises: ["glob"],
 } as const;
 
 const wrapScanApi = (owner: object, name: string) => {
@@ -66,6 +73,41 @@ for (const name of DIRECTORY_SCAN_APIS.fs) {
 }
 for (const name of DIRECTORY_SCAN_APIS.promises) {
   wrapScanApi(fs.promises, name);
+}
+
+const globCwd = (options: unknown): string =>
+  typeof options === "object" &&
+  options !== null &&
+  "cwd" in options &&
+  options.cwd !== undefined
+    ? resolvedDirectoryName(options.cwd)
+    : process.cwd();
+
+const wrapGlobApi = (owner: object, name: string) => {
+  const original: unknown = Reflect.get(owner, name);
+  if (typeof original !== "function") {
+    return;
+  }
+  installDirectoryWrapper(
+    owner,
+    name,
+    function (this: unknown, ...args: unknown[]): unknown {
+      const directory = globCwd(args[1]);
+      const patterns = Array.isArray(args[0]) ? args[0] : [args[0]];
+      for (const pattern of patterns) {
+        writeScan(
+          typeof pattern === "string" ? { directory, pattern } : { directory },
+        );
+      }
+      return Reflect.apply(original, this, args);
+    },
+  );
+};
+for (const name of GLOB_SCAN_APIS.fs) {
+  wrapGlobApi(fs, name);
+}
+for (const name of GLOB_SCAN_APIS.promises) {
+  wrapGlobApi(fs.promises, name);
 }
 
 const globDirectory = (value: unknown): string => {

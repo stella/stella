@@ -14,6 +14,7 @@ import { readCiCheckCommandText } from "./ci-check-pool-registry";
 import { comparisonBase } from "./ci-comparison-base";
 import {
   balanceTestFiles,
+  decodeTraceString,
   parseScriptTestArguments,
   prepareStrace,
   SCAN_PRELOAD_PATH,
@@ -347,6 +348,22 @@ describe("script test impact selection", () => {
   });
 });
 
+test("trace paths decode strace escapes before they are matched", () => {
+  expect(decodeTraceString("data/tab\\there.txt")).toBe("data/tab\there.txt");
+  expect(decodeTraceString("data/line\\nbreak")).toBe("data/line\nbreak");
+  expect(decodeTraceString('data/quote\\"d\\\\x')).toBe('data/quote"d\\x');
+  expect(decodeTraceString("data/caf\\303\\251.txt")).toBe("data/café.txt");
+  expect(decodeTraceString("data/plain-ü.txt")).toBe("data/plain-ü.txt");
+  expect(
+    undeclaredTracedFiles({
+      trace: `1 openat(AT_FDCWD</repo>, "${path.resolve("data/tab\\there.txt")}", O_RDONLY) = 3`,
+      closure: new Set(),
+      declared: [],
+      tracked: new Set(["data/tab\there.txt"]),
+    }),
+  ).toEqual(["data/tab\there.txt"]);
+});
+
 test("tracing names tracked reads outside the closure and declarations", () => {
   expect(
     undeclaredTracedFiles({
@@ -586,18 +603,26 @@ describe("directory scan coverage", () => {
     const log = path.join(root, "scans.log");
     mkdirSync(path.join(root, "fixtures/data"), { recursive: true });
     mkdirSync(path.join(root, "fixtures/listed"), { recursive: true });
+    mkdirSync(path.join(root, "fixtures/with space"), { recursive: true });
     writeFileSync(path.join(root, "fixtures/data/a.txt"), "a");
     writeFileSync(path.join(root, "fixtures/listed/b.txt"), "b");
     writeFileSync(
       path.join(root, "subject.test.ts"),
       [
         'import { expect, test } from "bun:test";',
-        'import { readdirSync } from "node:fs";',
+        'import fs, { readdirSync } from "node:fs";',
         'import { opendir } from "node:fs/promises";',
+        'import path from "node:path";',
+        'import { pathToFileURL } from "node:url";',
         'test("calls through", async () => {',
         '  process.chdir("fixtures");',
         '  expect(readdirSync("data")).toEqual(["a.txt"]);',
         '  expect([...new Bun.Glob("*.txt").scanSync({ cwd: "data" })]).toEqual(["a.txt"]);',
+        // Bun keeps named node:fs imports bound to the original functions,
+        // so the preload sees calls through the module object; strace sees
+        // the directory opens either way.
+        '  expect(fs.globSync("*.txt", { cwd: "listed" })).toEqual(["b.txt"]);',
+        '  expect(fs.readdirSync(new URL("with%20space", pathToFileURL(path.join(process.cwd(), "/"))))).toEqual([]);',
         "  const names = [];",
         '  for await (const entry of await opendir("listed")) names.push(entry.name);',
         '  expect(names).toEqual(["b.txt"]);',
@@ -625,6 +650,14 @@ describe("directory scan coverage", () => {
         `"directory":"${path.join(root, "fixtures/data")}"`,
       );
       expect(readFileSync(log, "utf-8")).toContain('"pattern":"*.txt"');
+      // node:fs glob scans its pattern from `cwd`, not from the pattern.
+      expect(readFileSync(log, "utf-8")).toContain(
+        `{"directory":"${path.join(root, "fixtures/listed")}","pattern":"*.txt"}`,
+      );
+      // A file: URL is decoded, so the scan names the real directory.
+      expect(readFileSync(log, "utf-8")).toContain(
+        `"directory":"${path.join(root, "fixtures/with space")}"`,
+      );
       // A promise-API listing leaves a scan record too, so a declaration
       // that covers only today's files cannot pass for it.
       expect(readFileSync(log, "utf-8")).toContain(
@@ -638,7 +671,8 @@ describe("directory scan coverage", () => {
 
 test("the scan preload wraps every node:fs API that lists a directory", async () => {
   const fs = await import("node:fs");
-  const { DIRECTORY_SCAN_APIS } = await import("./script-test-scan-preload");
+  const { DIRECTORY_SCAN_APIS, GLOB_SCAN_APIS } =
+    await import("./script-test-scan-preload");
   const listing = /^(?:readdir|opendir|glob)(?:Sync)?$/u;
   expect(
     Object.keys(fs.default)
@@ -649,7 +683,7 @@ test("the scan preload wraps every node:fs API that lists a directory", async ()
       )
       .toSorted(),
   ).toEqual(
-    DIRECTORY_SCAN_APIS.fs
+    [...DIRECTORY_SCAN_APIS.fs, ...GLOB_SCAN_APIS.fs]
       .filter((name) => typeof Reflect.get(fs.default, name) === "function")
       .toSorted(),
   );
@@ -662,7 +696,7 @@ test("the scan preload wraps every node:fs API that lists a directory", async ()
       )
       .toSorted(),
   ).toEqual(
-    DIRECTORY_SCAN_APIS.promises
+    [...DIRECTORY_SCAN_APIS.promises, ...GLOB_SCAN_APIS.promises]
       .filter(
         (name) => typeof Reflect.get(fs.default.promises, name) === "function",
       )

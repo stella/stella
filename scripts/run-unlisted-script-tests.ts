@@ -253,8 +253,14 @@ export const selectScriptTests = ({
   const graph = buildImportGraph(realRoot, [
     ...tests.filter((test) => test.endsWith(".ts")),
     RUNNER_PATH,
+    SCAN_PRELOAD_PATH,
   ]);
-  const runnerClosure = graph.closure(RUNNER_PATH);
+  // Every test runs with the scan preload, which the runner names but does
+  // not import.
+  const runnerClosure = new Set([
+    ...graph.closure(RUNNER_PATH),
+    ...graph.closure(SCAN_PRELOAD_PATH),
+  ]);
   if (
     changed.some(
       (file) =>
@@ -342,6 +348,55 @@ const scan = (pattern: string): string[] => [
 ];
 
 const TRACE_STRING_LIMIT = 65_535;
+
+const TRACE_ESCAPES: Readonly<Record<string, number>> = {
+  n: 0x0a,
+  t: 0x09,
+  r: 0x0d,
+  v: 0x0b,
+  f: 0x0c,
+  "\\": 0x5c,
+  '"': 0x22,
+  "'": 0x27,
+};
+
+/**
+ * A path as strace printed it, back as the bytes it names: strace writes
+ * `\t`, `\n`, `\\`, `\"` and similar C escapes, and every other unprintable
+ * or non-ASCII byte as a 1–3 digit octal escape.
+ */
+export const decodeTraceString = (value: string): string => {
+  const bytes: number[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const char = String.fromCodePoint(value.codePointAt(index) ?? 0);
+    if (char !== "\\") {
+      bytes.push(...Buffer.from(char, "utf-8"));
+      index += char.length - 1;
+      continue;
+    }
+    const next = value[index + 1] ?? "";
+    const escape = TRACE_ESCAPES[next];
+    if (escape !== undefined) {
+      bytes.push(escape);
+      index += 1;
+      continue;
+    }
+    let digits = "";
+    while (
+      digits.length < 3 &&
+      (value[index + 1 + digits.length] ?? "") >= "0" &&
+      (value[index + 1 + digits.length] ?? "") <= "7"
+    ) {
+      digits += value[index + 1 + digits.length];
+    }
+    if (digits === "") {
+      panic(`Unknown strace escape in trace record: ${value}`);
+    }
+    bytes.push(Number.parseInt(digits, 8));
+    index += digits.length;
+  }
+  return Buffer.from(bytes).toString("utf-8");
+};
 // strace marks a string it cut short with "..." after the closing quote.
 const TRUNCATED_STRING = /"\.\.\./u;
 const assertWholeRecord = (line: string) => {
@@ -370,7 +425,7 @@ export const undeclaredTracedFiles = ({
     if (match?.[1] === undefined) {
       continue;
     }
-    const openedPath = match[1].replaceAll('\\"', '"');
+    const openedPath = decodeTraceString(match[1]);
     const directory = pathDirectoryAnnotation(line);
     const absolute = path.isAbsolute(openedPath)
       ? path.normalize(openedPath)
@@ -453,7 +508,7 @@ const updateWorkingDirectory = (
 ): boolean => {
   const annotatedDirectory = /\bAT_FDCWD<([^>]+)>/u.exec(line)?.[1];
   if (annotatedDirectory !== undefined) {
-    workingDirectories.set(pid, annotatedDirectory);
+    workingDirectories.set(pid, decodeTraceString(annotatedDirectory));
   }
   const changedDirectory = /\bchdir\("((?:\\.|[^"\\])*)"\)\s+=\s+0/u.exec(
     line,
@@ -461,7 +516,10 @@ const updateWorkingDirectory = (
   if (changedDirectory !== undefined) {
     const cwd = workingDirectories.get(pid);
     if (cwd !== undefined) {
-      workingDirectories.set(pid, path.resolve(cwd, changedDirectory));
+      workingDirectories.set(
+        pid,
+        path.resolve(cwd, decodeTraceString(changedDirectory)),
+      );
     }
     return true;
   }
@@ -471,7 +529,7 @@ const updateWorkingDirectory = (
   if (changedFdDirectory === undefined) {
     return false;
   }
-  workingDirectories.set(pid, changedFdDirectory);
+  workingDirectories.set(pid, decodeTraceString(changedFdDirectory));
   return true;
 };
 
@@ -553,7 +611,7 @@ const commandScans = (trace: string): ScanRecord[] => {
       continue;
     }
     const args = [...call.matchAll(/"((?:\\.|[^"\\])*)"/gu)].map((match) =>
-      (match[1] ?? "").replaceAll('\\"', '"'),
+      decodeTraceString(match[1] ?? ""),
     );
     const executable = path.basename(args[0] ?? "");
     const cwd = workingDirectories.get(pid);

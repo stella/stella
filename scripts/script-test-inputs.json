@@ -6,6 +6,7 @@
       "docs/self-hosting.md"
     ],
     "scripts/api-test-impact.test.ts": ["**"],
+    "scripts/baseline-paths.test.ts": ["**"],
     "scripts/bundled-consumers.test.ts": ["**"],
     "scripts/check-actionlint-baseline.test.ts": [".github/**"],
     "scripts/check-ci-job-classification.test.ts": [".github/**"],
@@ -121,7 +122,6 @@
     "scripts/autofix-baseline-prune.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/autofix-pure-generators.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/autofix-push-scope.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/baseline-paths.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/bot-refresh-auto-merge.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/bundle-worker-only-groups.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/cargo-deny-fetch.test.ts": "Uses only temporary fixtures and its static import closure.",
