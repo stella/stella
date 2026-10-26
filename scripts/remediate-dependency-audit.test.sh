@@ -22,6 +22,10 @@ cat > "$fixture/bin/bun" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'bun %s\n' "$*" >> "$TEST_CALLS"
+if [[ "$*" == "--no-env-file scripts/dependency-audit.ts --assess" ]]; then
+  echo 'GHSA-new-pinned package pinned_resolution_blocked: lift package.json resolutions.package'
+  exit "${TEST_ASSESS_STATUS:-0}"
+fi
 if [[ "$*" == "--no-env-file scripts/dependency-audit.ts --prune-baseline" ]]; then
   if [[ "${TEST_STALE:-false}" == true ]]; then
     echo pruned > scripts/dependency-audit-baseline.json
@@ -90,10 +94,25 @@ git init --bare -q "$TEST_REMOTE"
 git remote add origin "$TEST_REMOTE"
 
 TEST_OPEN_PRS=1 bash "$subject"
-refute_call '^bun |^git push |^gh pr create '
+[[ "$(grep -Ec '^bun .* --assess$' "$TEST_CALLS")" == 1 ]]
+refute_call '^git push |^gh pr create '
+: > "$TEST_CALLS"
+if TEST_OPEN_PRS=1 TEST_ASSESS_STATUS=1 bash "$subject" > "$fixture/report"; then
+  echo 'An open partial remediation must not hide an unresolved pinned advisory.' >&2
+  exit 1
+fi
+grep -q 'GHSA-new-pinned.*pinned_resolution_blocked.*resolutions.package' "$fixture/report"
+[[ "$(grep -Ec '^bun .* --assess$' "$TEST_CALLS")" == 1 ]]
+refute_call '^git push |^gh pr create '
+: > "$TEST_CALLS"
+if TEST_OPEN_PRS=1 TEST_ASSESS_STATUS=3 bash "$subject"; then
+  echo 'An assessment failure must stop remediation.' >&2
+  exit 1
+fi
+refute_call '^gh pr list |^git push |^gh pr create '
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 bash "$subject"
-[[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 2 ]]
+[[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 3 ]]
 refute_call '^gh issue |^git push |^gh pr create '
 : > "$TEST_CALLS"
 TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true bash "$subject"

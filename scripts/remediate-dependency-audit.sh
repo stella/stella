@@ -3,11 +3,19 @@ set -euo pipefail
 
 fix_branch="${FIX_BRANCH:-automation/dependency-audit-fix}"
 
+# Assess the current tree before deduplication: an existing pull request is
+# not evidence that it covers a newly published advisory or a pinned package.
+audit_status=0
+bun --no-env-file scripts/dependency-audit.ts --assess || audit_status=$?
+if (( audit_status > 2 )); then
+  exit "$audit_status"
+fi
+
 # A stable branch makes retries and the six-hour schedule converge on one
 # open fix pull request.
 if [[ "$(gh pr list --state open --head "$fix_branch" --json number --jq length)" != 0 ]]; then
-  echo "An open dependency audit fix pull request already exists."
-  exit 0
+  echo "An open dependency audit fix pull request already exists; unresolved findings above still require action."
+  exit "$audit_status"
 fi
 
 # `bun audit fix` exits 1 while unfixable advisories remain, even after it

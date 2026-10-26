@@ -18,6 +18,7 @@ import {
   readBaseline,
   runDependencyAuditCli,
   runReleaseCheck as executeReleaseAudit,
+  writeBaseline,
 } from "./dependency-audit";
 import {
   expiringAcceptances,
@@ -351,6 +352,49 @@ describe("audit acceptance expiry", () => {
     );
     expect(result.status).toBe(2);
     expect(result.info.some((line) => line.endsWith("LAPSED"))).toBe(true);
+  });
+
+  test("routine checks warn after date expiry while owner changes refuse it", async () => {
+    const baseline = auditBaseline("2026-10-01");
+    const options = { baseline, now: () => new Date("2026-10-02T00:00:00Z") };
+    expect(
+      await check([currentAdvisory], { ...options, enforceDateExpiry: false }),
+    ).toBe(0);
+    expect(
+      await check([currentAdvisory], { ...options, enforceDateExpiry: true }),
+    ).toBe(2);
+    expect(
+      expiringAcceptances({
+        accepted: baseline.accepted,
+        current: [currentAdvisory],
+        today: "2026-10-02",
+      }),
+    ).toHaveLength(1);
+  });
+
+  test("routine checks still fail on invalid expiry and untilPatched terms", async () => {
+    const options = {
+      now: () => new Date("2026-10-02T00:00:00Z"),
+      enforceDateExpiry: false,
+    };
+    expect(
+      await check([currentAdvisory], {
+        ...options,
+        baseline: auditBaseline("not-a-date"),
+      }),
+    ).toBe(2);
+    const baseline = auditBaseline("2026-10-01");
+    baseline.accepted = baseline.accepted.map((entry) => ({
+      ...entry,
+      untilPatched: true,
+    }));
+    expect(
+      await check([currentAdvisory], {
+        ...options,
+        baseline,
+        latestVersion: async () => "1.4.1",
+      }),
+    ).toBe(2);
   });
 
   test("an acceptance without terms never lapses", () => {
@@ -778,4 +822,35 @@ describe("acceptance identity", () => {
     const accepted = await runCheck([currentAdvisory], baseline, "2026-10-02");
     expect(accepted.status).toBe(0);
   });
+});
+
+test("baseline regeneration preserves scoped terms for each advisory identity", async () => {
+  const temporary = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
+  const baselinePath = path.join(temporary, "baseline.json");
+  const baseline = auditBaseline("2026-11-01");
+  baseline.accepted = ["first", "second"].map((name) => ({
+    id: currentAdvisory.id,
+    severity: currentAdvisory.severity,
+    title: currentAdvisory.title,
+    package: name,
+    owner: name,
+    reason: `Reviewed ${name}`,
+    expiresOn: "2026-11-01",
+    affectedPaths: [`parent/${name}`],
+  }));
+  try {
+    await Bun.write(baselinePath, JSON.stringify(baseline));
+    await writeBaseline(
+      baseline.accepted.map((entry) => ({
+        ...entry,
+        vulnerableVersions: "<=1.4.0",
+      })),
+      baselinePath,
+    );
+    expect((await readBaseline(baselinePath)).accepted).toEqual(
+      baseline.accepted,
+    );
+  } finally {
+    rmSync(temporary, { force: true, recursive: true });
+  }
 });

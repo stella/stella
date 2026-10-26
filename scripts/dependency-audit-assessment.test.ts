@@ -1,0 +1,161 @@
+import { describe, expect, test } from "bun:test";
+
+import type { Advisory, BaselineEntry } from "./dependency-audit";
+import { assessAdvisories } from "./dependency-audit-assessment";
+
+const lockfile = await Bun.file(
+  new URL("fixtures/dependency-audit/bun-lock.json", import.meta.url),
+).text();
+const zod = {
+  id: "GHSA-mrhx-c7xc-m3w5",
+  package: "zod",
+  severity: "high",
+  title:
+    "Zod can exhaust memory while validating oversized constrained collections",
+  vulnerableVersions: "<4.6.6",
+} satisfies Advisory;
+const sdk = {
+  id: "GHSA-22jm-h49p-29qw",
+  package: "@modelcontextprotocol/sdk",
+  severity: "high",
+  title:
+    "MCP TypeScript SDK: Experimental tasks were not tied to the session that created them",
+  vulnerableVersions: ">=1.24.0 <1.32.0",
+} satisfies Advisory;
+const acceptance = {
+  ...zod,
+  owner: "supply-chain",
+  reason: "Consumers require major 3",
+  expiresOn: "2026-11-23",
+  affectedPaths: ["@mcp-ui/client/zod", "@expo/cli/zod"],
+} satisfies BaselineEntry;
+const versions = new Map([
+  ["zod", ["3.25.76", "4.6.5", "4.6.6", "4.6.7"]],
+  ["@modelcontextprotocol/sdk", ["1.31.0", "1.32.0", "1.32.1"]],
+]);
+
+describe("every advisory is assessed against its actual resolutions", () => {
+  test("names all parents that cannot accept a patched major", () => {
+    const result = assessAdvisories({
+      advisories: [zod],
+      accepted: [acceptance],
+      lockfile,
+      manifest: {},
+      versions,
+    });
+    expect(result).toHaveLength(1);
+    const state = result.at(0)?.disposition;
+    expect(state?.status).toBe("upstream_blocked");
+    if (state?.status !== "upstream_blocked") {
+      throw new Error("Expected upstream blockers");
+    }
+    expect(
+      state.blockers.some((blocker) =>
+        blocker.includes("@mcp-ui/client requires zod ^3.23.8"),
+      ),
+    ).toBe(true);
+    expect(
+      state.blockers.some((blocker) =>
+        blocker.includes("@expo/cli requires zod ^3.25.76"),
+      ),
+    ).toBe(true);
+    expect(result.at(0)?.acceptance?.owner).toBe("supply-chain");
+  });
+
+  test("a second advisory cannot disappear behind an accepted advisory", () => {
+    for (const field of ["resolutions", "overrides"]) {
+      const result = assessAdvisories({
+        advisories: [zod, sdk],
+        accepted: [acceptance],
+        lockfile: lockfile.replaceAll(
+          "@modelcontextprotocol/sdk@1.32.1",
+          "@modelcontextprotocol/sdk@1.31.0",
+        ),
+        manifest: { [field]: { "@modelcontextprotocol/sdk": "1.31.0" } },
+        versions,
+      });
+      expect(result.map(({ advisory }) => advisory.id)).toEqual([
+        zod.id,
+        sdk.id,
+      ]);
+      expect(result.at(1)?.disposition.status).toBe(
+        "pinned_resolution_blocked",
+      );
+      expect(result.at(1)?.action).toContain(
+        `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+      );
+    }
+  });
+
+  test("a selectable compatible patch is fix_available", () => {
+    const [result] = assessAdvisories({
+      advisories: [sdk],
+      accepted: [],
+      lockfile: lockfile.replaceAll(
+        "@modelcontextprotocol/sdk@1.32.1",
+        "@modelcontextprotocol/sdk@1.31.0",
+      ),
+      manifest: {},
+      versions,
+    });
+    expect(result?.disposition.status).toBe("fix_available");
+    expect(result?.action).toContain("1.32.1");
+  });
+
+  test("an acceptance remains explicit when a compatible patch exists", () => {
+    const entry = {
+      ...acceptance,
+      ...sdk,
+      affectedPaths: ["@modelcontextprotocol/sdk"],
+    };
+    const [result] = assessAdvisories({
+      advisories: [sdk],
+      accepted: [entry],
+      lockfile: lockfile.replaceAll(
+        "@modelcontextprotocol/sdk@1.32.1",
+        "@modelcontextprotocol/sdk@1.31.0",
+      ),
+      manifest: {},
+      versions,
+    });
+    expect(result?.disposition.status).toBe("accepted");
+    expect(result?.acceptance?.expiresOn).toBe("2026-11-23");
+  });
+
+  test("acceptance never extends to a new vulnerable path", () => {
+    const newPath = lockfile.replace(
+      '"packages": {',
+      '"packages": { "new-parent/zod": ["zod@3.25.76", "", {}],',
+    );
+    expect(() =>
+      assessAdvisories({
+        advisories: [zod],
+        accepted: [acceptance],
+        lockfile: newPath,
+        manifest: {},
+        versions,
+      }),
+    ).toThrow("does not cover lockfile paths: new-parent/zod");
+  });
+
+  test("missing registry evidence and duplicate acceptances fail closed", () => {
+    expect(() =>
+      assessAdvisories({
+        advisories: [zod],
+        accepted: [],
+        lockfile,
+        manifest: {},
+        versions: new Map(),
+      }),
+    ).toThrow("Missing registry versions");
+    expect(() =>
+      assessAdvisories({
+        advisories: [zod],
+        accepted: [acceptance, acceptance],
+        lockfile,
+        manifest: {},
+        versions,
+      }),
+    ).toThrow("Duplicate acceptance");
+  });
+});
