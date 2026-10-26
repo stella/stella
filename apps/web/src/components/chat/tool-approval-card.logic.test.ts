@@ -61,13 +61,13 @@ describe("describeProposedDocxEdits", () => {
       },
     ]);
 
-    expect(edits.map(({ summary }) => summary.key)).toEqual([
-      "docxReview.summary.replaceInBlock",
-      "docxReview.summary.replaceParagraph",
-      "docxReview.summary.insertAfter",
-      "docxReview.summary.deleteParagraph",
-      "docxReview.summary.commentOnParagraph",
-      "docxReview.summary.replaceSelection",
+    expect(edits.map(({ summary }) => summary)).toEqual([
+      "Replace “3 months'” with “60 days'”",
+      "Rewrite a paragraph",
+      "Insert a paragraph",
+      "Delete a paragraph",
+      "Comment on a paragraph",
+      "Replace the selected text with “60 days'”",
     ]);
     expect(edits.map(({ text }) => text)).toEqual([
       null,
@@ -87,8 +87,6 @@ describe("describeProposedDocxEdits", () => {
       { type: "deleteBlock", blockId },
     ]);
 
-    expect(edits.map(({ summary }) => summary.key)).toEqual([
-      "docxReview.summary.deleteParagraph",
-    ]);
+    expect(edits.map(({ summary }) => summary)).toEqual(["Delete a paragraph"]);
   });
 });

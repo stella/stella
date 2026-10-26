@@ -156,7 +156,7 @@ const SuggestChangesSummary = ({
   activeFileName,
   operations,
 }: SuggestChangesSummaryProps) => {
-  const t = useTranslations();
+  const t = useTranslations("chat.tool");
   const edits = describeProposedDocxEdits(operations);
   const previewEdits = edits.slice(0, 3);
   // Only describable operations can be "more"; the count line above still
@@ -171,7 +171,7 @@ const SuggestChangesSummary = ({
         </div>
       )}
       <div className="text-muted-foreground">
-        {t("chat.tool.docxEditSummary", { count: operations.length })}
+        {t("docxEditSummary", { count: operations.length })}
       </div>
       {previewEdits.map((edit, index) => (
         <div
@@ -180,7 +180,7 @@ const SuggestChangesSummary = ({
           key={index}
         >
           <span className="text-foreground-strong-muted truncate">
-            {t(edit.summary.key, edit.summary.values)}
+            {edit.summary}
           </span>
           {edit.text !== null && (
             <span className="text-muted-foreground truncate">{edit.text}</span>
@@ -189,7 +189,7 @@ const SuggestChangesSummary = ({
       ))}
       {hiddenCount > 0 && (
         <div className="text-muted-foreground">
-          {t("chat.tool.docxEditMore", { count: hiddenCount })}
+          {t("docxEditMore", { count: hiddenCount })}
         </div>
       )}
     </div>

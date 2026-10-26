@@ -2,11 +2,8 @@ import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import { parseSuggestChangesInput } from "@stll/folio-agents";
 import { FOLIO_DOCUMENT_OPERATION_TYPES } from "@stll/folio-core";
 
-import {
-  describeOperationSummary,
-  describeSuggestionChange,
-} from "@/components/ai-suggestions/review-operation-labels";
-import type { OperationSummaryMessage } from "@/components/ai-suggestions/review-operation-labels";
+import { describeSuggestionChange } from "@/components/ai-suggestions/review-operation-labels";
+import { summarizeOperation } from "@/components/ai-suggestions/review-suggestion-builder";
 import {
   isApprovalOnceChatToolName,
   isToolApprovedByGrant,
@@ -95,7 +92,8 @@ export const describeSuggestChangesApplyOutcome = (
 
 /** One proposed DOCX edit, as the approval card words it. */
 export type ProposedDocxEdit = {
-  summary: OperationSummaryMessage;
+  /** The kind of change, worded by the review panel's own summary. */
+  summary: string;
   /** The wording the edit puts in the document, when the summary does not quote it. */
   text: string | null;
 };
@@ -129,5 +127,5 @@ export const describeProposedDocxEdits = (
       change?.type === "text" && operation.type !== "replaceRange"
         ? change.text
         : null;
-    return [{ summary: describeOperationSummary(operation), text }];
+    return [{ summary: summarizeOperation(operation), text }];
   });
