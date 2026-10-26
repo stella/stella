@@ -1,9 +1,10 @@
-import { QueryClient, QueryObserver, useQuery } from "@tanstack/react-query";
+import { QueryObserver, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { expectTypeOf } from "bun:test";
 
 import { queryView } from "./query-view.logic";
 import type { QueryView } from "./query-view.logic";
+import { createAppQueryClient } from "./react-query";
 
 const useInlineQueryView = () => {
   const view = queryView(
@@ -26,7 +27,7 @@ expectTypeOf(useInlineQueryView).returns.toEqualTypeOf<
 >();
 
 const observerQueryView = () => {
-  const observer = new QueryObserver(new QueryClient(), {
+  const observer = new QueryObserver(createAppQueryClient(), {
     queryKey: ["query-view", "observer-inference"],
     queryFn: async () => await Promise.resolve({ body: "Revision" }),
     enabled: false,
