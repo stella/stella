@@ -97,6 +97,10 @@ import {
   reconcileDocumentReviewRuns,
 } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import {
+  RECEIVE_EMAIL_DELIVERABILITY_TASK,
+  receiveEmailDeliverability,
+} from "@/api/lib/scheduler/tasks/email-deliverability-receive";
+import {
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
   sweepFileComparisonUploads,
 } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -236,6 +240,7 @@ const SCHEDULER_TASKS = {
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
   [BACKFILL_SANCTIONS_MONITORING_TASK]: backfillSanctionsMonitoringTask,
   [DRAIN_SANCTIONS_MONITORING_TASK]: drainSanctionsMonitoringTask,
+  [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,

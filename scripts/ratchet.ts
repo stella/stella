@@ -89,11 +89,13 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
 
-// The single owners of a transport: callers reach fetch and Bun SQL clients
-// through them, so their own acquisition is the capability, not a legacy site.
+// The single owners of a transport: callers reach fetch, Bun SQL and SQS
+// clients through them, so their own acquisition is the capability, not a
+// legacy site.
 const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
   "apps/api/src/lib/safe-outbound-fetch.ts",
   "apps/api/src/db/sql-client.ts",
+  "apps/api/src/lib/email/sns-queue-drain.ts",
 ]);
 
 // Shared source globs + exclusions for the app-source metrics.
