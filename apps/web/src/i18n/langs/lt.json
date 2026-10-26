@@ -507,6 +507,24 @@
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
+    "approval": {
+      "approveSelected": "Patvirtinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
+      "empty": "Šioje byloje nieko nelaukia patvirtinimo.",
+      "failed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+      "myTime": "Mano laikas",
+      "refusals": {
+        "invalidEntry": "Pridėkite aprašymą ir patikrinkite darbo datą, tada patvirtinkite įrašą.",
+        "notApprover": "Šį įrašą gali patvirtinti tik jam priskirtas tvirtintojas arba administratorius.",
+        "notFound": "Šio įrašo nebėra. Atnaujinkite sąrašą.",
+        "runningTimer": "Prieš tvirtindami įrašą sustabdykite veikiantį laikmatį.",
+        "unpriced": "Šis įrašas neturi įkainio. Nustatykite šios bylos įkainį ir tada patvirtinkite įrašą.",
+        "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
+      },
+      "returnComment": "Grąžinimo priežastis",
+      "selectEntry": "Pasirinkti įrašą",
+      "timeEntries": "Laiko įrašai",
+      "title": "Patvirtinimai"
+    },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
     "batchActions": "Grupiniai veiksmai",
@@ -594,6 +612,7 @@
       "openInvoice": "Atidaryti sąskaitą",
       "otherCurrency": "{count, plural, one {# eilutė užregistruota} few {# eilutės užregistruotos} many {# eilutės užregistruota} other {# eilučių užregistruota}} kita valiuta nei {currency} ir lieka atskirai sąskaitai.",
       "outsideScope": "Nepatenka į PVM taikymo sritį, 0 %",
+      "pendingApprovals": "{count, plural, one {# elementas laukia} few {# elementai laukia} many {# elemento laukia} other {# elementų laukia}} patvirtinimo. Peržiūrėti patvirtinimus.",
       "rate": "Įkainis",
       "readyDescription": "Išrašant sąskaitai suteikiamas kitas jūsų numerių serijos numeris ir ji užrakinama. Juodraštį galima toliau redaguoti.",
       "readyTitle": "Paruošta išrašyti",
@@ -2058,7 +2077,6 @@
       "orLetUsKnowAt": "arba parašykite mums adresu",
       "viewDocumentation": "Peržiūrėti dokumentaciją"
     },
-    "enterKey": "↵",
     "error": "Klaida",
     "expenses": "Išlaidos",
     "export": {
@@ -4772,6 +4790,7 @@
     "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
     "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
     "regenerate": "Generuoti atsakymą iš naujo",
+    "selectionError": "Pažymėkite tekstą iš paties sprendimo.",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
     "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
@@ -5361,7 +5380,7 @@
     "importDescription": "Stiliai ištraukiami į naują DOCX failą be turinio.",
     "importTitle": "Importuoti stilių rinkinį",
     "loadFailed": "Nepavyko įkelti stilių rinkinių",
-    "newDocument": "Naujas dokumentas",
+    "newDocument": "Naujas DOCX dokumentas",
     "pickerDescription": "Pasirinkite naujo failo formatavimo sistemą.",
     "renameTitle": "Pervadinti stilių rinkinį",
     "replace": "Pakeisti šaltinį",
@@ -5645,7 +5664,7 @@
     "moveToMatter": "Įrašyti į bylą",
     "moveToMatterAnyway": "Vis tiek įrašyti",
     "myDefaultLookupFormat": "Mano numatytasis",
-    "newFromTemplate": "Naujas dokumentas iš šablono",
+    "newFromTemplate": "Naujas DOCX dokumentas iš šablono",
     "newFromTemplateFillHint": "Užpildykite laukus; dokumentas bus sukurtas šioje byloje.",
     "newTemplate": "Naujas šablonas",
     "noTemplates": "Šablonų dar nėra",
@@ -6028,6 +6047,7 @@
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",
+        "editInApplication": "Redaguoti programoje <bdi>{application}</bdi>",
         "editLocallyPrompt": "Redaguokite šį failą vietoje ir sinchronizuokite pakeitimus su stella.",
         "forceRelease": "Priverstinai atlaisvinti",
         "notOpenedDescription": "stella desktop nepatvirtino, kad atsidarė <bdi>{application}</bdi>. Paleiskite stella desktop ir bandykite dar kartą.",
@@ -6051,13 +6071,15 @@
         "alreadyInstalled": "Jau įdiegta? Prijunkite",
         "connect": "Prijungti stella desktop",
         "connected": "stella desktop prijungta",
+        "download": "Atsisiųsti stella desktop",
         "editNone": "Atsisiųskite stella desktop, kad galėtumėte redaguoti šį failą",
         "editOutdated": "Atnaujinkite stella desktop, kad galėtumėte redaguoti",
         "editReason": "Redagavimas kompiuteryje atveria failą jūsų kompiuterio programoje per stella desktop.",
         "signCurrent": "Pasirašyti su stella desktop",
         "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
         "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
-        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop."
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
+        "update": "Atnaujinti stella desktop"
       },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
@@ -6070,8 +6092,10 @@
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
+      "ocrBatchHelp": "Eilėje esantys dokumentai apdorojami kitame OCR pakete.",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
-      "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
+      "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
+      "ocrQueuedForBatch": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
         "alreadySigningTitle": "Pasirašymas stella desktop jau vyksta",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
@@ -6128,6 +6152,7 @@
         "waitingDescription": "Programoje stella desktop pasirinkite pasirašymo sertifikatą, kad pasirašytumėte šį PDF.",
         "waitingTitle": "Laukiama stella desktop"
       },
+      "queueForOcr": "Įtraukti į OCR eilę",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ką daryti su failu {fileName}",
@@ -6139,7 +6164,6 @@
       "removeMetadata": "Pašalinti dokumento metaduomenis",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
-      "runOcr": "Įtraukti OCR į eilę",
       "scrubFailed": "Nepavyko pašalinti šio failo metaduomenų, todėl nieko neatsisiųsta",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
@@ -6427,6 +6451,7 @@
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
       "client": "Klientas",
+      "movedToClient": "Byla <bdi>{matterName}</bdi> perkelta klientui <bdi>{clientName}</bdi>",
       "noClient": "Klientas nepriskirtas",
       "noClientOptional": "Be kliento (neprivaloma)",
       "noParties": "Šioje byloje nėra pridėtų šalių.",
@@ -6445,7 +6470,9 @@
       "personalLabel": "Asmeninė",
       "promoteCta": "Paaukštinti į klientinę",
       "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
+      "promoteToClientConfirm": "Byla <bdi>{matterName}</bdi> bus priskirta klientui <bdi>{clientName}</bdi> ir bendrinama su komanda. Jos nebebus galima grąžinti į asmeninę.",
       "promotedSuccess": "Byla paaukštinta",
+      "recentClients": "Naujausi klientai",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",
@@ -6657,6 +6684,12 @@
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {
       "parties": "Šalys"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rasti bylą…",
+      "trigger": "Pakeisti bylą",
+      "viewAll": "Rodyti visas bylas",
+      "viewAllForClient": "Rodyti visas kliento {clientName} bylas"
     },
     "table": {
       "clearFlags": "Išvalyti žymas",

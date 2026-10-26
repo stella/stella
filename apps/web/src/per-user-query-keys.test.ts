@@ -133,10 +133,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       lawHistoryKeys.list({
         scope: { organizationId: ORG, userId: USER },
         filter: "all",
+        country: "CZE",
       }),
     ],
     opaqueKeys: {
-      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
         KEY_TYPE_HAS_USER,
     },
   },

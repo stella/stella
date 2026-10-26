@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+
 import "@/api/tests/setup-env";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
@@ -38,7 +40,7 @@ import {
 test("request stages are integral log fields without metric dimensions", () => {
   expect(
     buildRequestStageRecord({
-      route: "/v1/law/statutes/search",
+      route: "/v1/law/statutes/search" satisfies ApiRoutePath,
       tool: "search_legislation",
       stage: "candidate_hydration",
       durationMs: 12.6,
@@ -229,7 +231,7 @@ describe("buildRequestDurationRecord", () => {
     durationMs: 1234.7,
     requestClass: "ai" as const,
     statusCode: 200,
-    route: "/v1/templates/suggest-fields",
+    route: "/v1/templates/suggest-fields" satisfies ApiRoutePath,
     timestamp: 1_700_000_000_000,
   };
 

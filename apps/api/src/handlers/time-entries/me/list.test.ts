@@ -5,6 +5,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -225,7 +226,7 @@ const listFor = async (query: ListCtx["query"]) =>
       asTestRaw<ListCtx>({
         query,
         request: new Request("https://example.test/time-entries/me"),
-        route: "/time-entries/me",
+        route: "/v1/time-entries/me" satisfies ApiRoutePath,
         safeDb: createSafeDb(
           testDb,
           [ids.wsA1, ids.wsA2, deletingWorkspaceId, internalWorkspaceId],
@@ -504,7 +505,7 @@ test("my day includes the owner's internal work without exposing other members o
         asTestRaw<ListCtx>({
           query: { date: DAY },
           request: new Request("https://example.test/time-entries/me"),
-          route: "/time-entries/me",
+          route: "/v1/time-entries/me" satisfies ApiRoutePath,
           safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },

@@ -507,6 +507,24 @@
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "approval": {
+      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "empty": "Rien n’attend d’approbation dans ce dossier.",
+      "failed": "La modification n’a pas été enregistrée. Réessayez.",
+      "myTime": "Mon temps",
+      "refusals": {
+        "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
+        "notFound": "Cette saisie n’existe plus. Actualisez la liste.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant d’approuver cette saisie.",
+        "unpriced": "Cette saisie n’a pas de tarif. Définissez un tarif pour ce dossier, puis approuvez-la.",
+        "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
+      },
+      "returnComment": "Motif du renvoi",
+      "selectEntry": "Sélectionner la saisie",
+      "timeEntries": "Saisies de temps",
+      "title": "Approbations"
+    },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",
@@ -594,6 +612,7 @@
       "openInvoice": "Ouvrir la facture",
       "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
       "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent}} une approbation. Vérifier les approbations.",
       "rate": "Taux",
       "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
       "readyTitle": "Prête à émettre",
@@ -2058,7 +2077,6 @@
       "orLetUsKnowAt": "ou écrivez-nous à",
       "viewDocumentation": "Voir la documentation"
     },
-    "enterKey": "↵",
     "error": "Erreur",
     "expenses": "Dépenses",
     "export": {
@@ -4772,6 +4790,7 @@
     "modelError": "Le modèle n’a pas pu terminer cette réponse.",
     "networkError": "La connexion a été interrompue. Réessayez.",
     "regenerate": "Régénérer la réponse",
+    "selectionError": "Sélectionnez du texte dans la décision elle-même.",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
     "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
@@ -5361,7 +5380,7 @@
     "importDescription": "Les styles sont extraits dans un nouveau DOCX sans contenu.",
     "importTitle": "Importer un jeu de styles",
     "loadFailed": "Impossible de charger les jeux de styles",
-    "newDocument": "Nouveau document",
+    "newDocument": "Nouveau document DOCX",
     "pickerDescription": "Choisissez le système de mise en forme du nouveau fichier.",
     "renameTitle": "Renommer le jeu de styles",
     "replace": "Remplacer la source",
@@ -5645,7 +5664,7 @@
     "moveToMatter": "Enregistrer dans un dossier",
     "moveToMatterAnyway": "Enregistrer quand même",
     "myDefaultLookupFormat": "Mon format par défaut",
-    "newFromTemplate": "Nouveau document à partir d'un modèle",
+    "newFromTemplate": "Nouveau document DOCX à partir d'un modèle",
     "newFromTemplateFillHint": "Remplissez les champs ; le document sera créé dans ce dossier.",
     "newTemplate": "Nouveau modèle",
     "noTemplates": "Aucun modèle pour le moment",
@@ -6028,6 +6047,7 @@
         "action": "Modifier dans l’app de bureau",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",
+        "editInApplication": "Modifier dans <bdi>{application}</bdi>",
         "editLocallyPrompt": "Modifiez ce fichier localement et synchronisez les changements avec stella.",
         "forceRelease": "Forcer la libération",
         "notOpenedDescription": "stella desktop n’a pas confirmé l’ouverture de <bdi>{application}</bdi>. Lancez stella desktop puis réessayez.",
@@ -6051,13 +6071,15 @@
         "alreadyInstalled": "Déjà installé ? Le connecter",
         "connect": "Connecter stella desktop",
         "connected": "stella desktop est connecté",
+        "download": "Télécharger stella desktop",
         "editNone": "Téléchargez stella desktop pour modifier ce fichier",
         "editOutdated": "Mettez à jour stella desktop pour modifier",
         "editReason": "La modification sur ordinateur ouvre le fichier dans une application de votre ordinateur via stella desktop.",
         "signCurrent": "Signer avec stella desktop",
         "signNone": "Téléchargez stella desktop pour signer ce PDF",
         "signOutdated": "Mettez à jour stella desktop pour signer",
-        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop."
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
+        "update": "Mettre à jour stella desktop"
       },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",
@@ -6070,8 +6092,10 @@
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",
       "ocrAlreadyProcessed": "La reconnaissance de texte est déjà terminée",
+      "ocrBatchHelp": "Les documents en file d’attente sont traités lors du prochain lot OCR.",
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
-      "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
+      "ocrQueued": "Reconnaissance de texte mise en file d’attente",
+      "ocrQueuedForBatch": "Reconnaissance de texte ajoutée au prochain lot OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Une signature est déjà en cours dans stella desktop",
         "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
@@ -6128,6 +6152,7 @@
         "waitingDescription": "Choisissez un certificat de signature dans stella desktop pour signer ce PDF.",
         "waitingTitle": "En attente de stella desktop"
       },
+      "queueForOcr": "Mettre en file d’attente pour l’OCR",
       "rateLimited": "Débit limité; reprise dans {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Que faire de {fileName}",
@@ -6139,7 +6164,6 @@
       "removeMetadata": "Supprimer les métadonnées du document",
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
       "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers}}",
-      "runOcr": "Mettre l’OCR en file d’attente",
       "scrubFailed": "Les métadonnées de ce fichier n’ont pas pu être supprimées, rien n’a donc été téléchargé",
       "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués}} sur {total, number}",
       "uploadedSuccessfully": "Fichiers importés avec succès",
@@ -6427,6 +6451,7 @@
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
+      "movedToClient": "Dossier <bdi>{matterName}</bdi> déplacé vers <bdi>{clientName}</bdi>",
       "noClient": "Aucun client attribué",
       "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
@@ -6445,7 +6470,9 @@
       "personalLabel": "Personnel",
       "promoteCta": "Promouvoir au client",
       "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
+      "promoteToClientConfirm": "Le dossier <bdi>{matterName}</bdi> sera associé à <bdi>{clientName}</bdi> et partagé avec l'équipe. Il ne pourra plus redevenir personnel.",
       "promotedSuccess": "Dossier promu",
+      "recentClients": "Clients récents",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",
@@ -6657,6 +6684,12 @@
     "referenceTaken": "Ce numéro de référence est déjà utilisé",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rechercher un dossier…",
+      "trigger": "Changer de dossier",
+      "viewAll": "Voir tous les dossiers",
+      "viewAllForClient": "Voir tous les dossiers du client {clientName}"
     },
     "table": {
       "clearFlags": "Effacer les marqueurs",
