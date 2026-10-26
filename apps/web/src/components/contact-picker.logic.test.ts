@@ -9,6 +9,8 @@ import type { Workspace } from "@/lib/workspaces/types";
 
 type ClientMatter = Pick<Workspace, "client" | "lastActivityAt">;
 
+const contactId = (id: string) => toSafeId<"contact">(id);
+
 const matter = (
   clientId: string | null,
   lastActivityAt: string,
@@ -17,7 +19,7 @@ const matter = (
     clientId === null
       ? null
       : {
-          id: toSafeId<"contact">(clientId),
+          id: contactId(clientId),
           displayName: `Client ${clientId}`,
           type: "organization",
           responsibleAttorneyName: null,
@@ -36,9 +38,9 @@ describe("recent client suggestions", () => {
     ]);
 
     expect(ranked.map(({ id, matterCount }) => [id, matterCount])).toEqual([
-      ["a", 3],
-      ["b", 1],
-      ["c", 1],
+      [contactId("a"), 3],
+      [contactId("b"), 1],
+      [contactId("c"), 1],
     ]);
   });
 
@@ -54,7 +56,10 @@ describe("recent client suggestions", () => {
       matter("utc", utcText),
     ]);
 
-    expect(ranked.map(({ id }) => id)).toEqual(["utc", "offset"]);
+    expect(ranked.map(({ id }) => id)).toEqual([
+      contactId("utc"),
+      contactId("offset"),
+    ]);
   });
 
   it("skips personal matters", () => {
@@ -66,7 +71,7 @@ describe("recent client suggestions", () => {
 
     expect(ranked).toEqual([
       {
-        id: "a",
+        id: contactId("a"),
         displayName: "Client a",
         type: "organization",
         matterCount: 1,
@@ -86,7 +91,7 @@ describe("recent client suggestions", () => {
       matter("c", "2026-01-01T09:00:00.000Z"),
     ]);
 
-    expect(ranked.map(({ id }) => id)).toEqual(["c", "b", "d"]);
+    expect(ranked.map(({ id }) => id)).toEqual(["c", "b", "d"].map(contactId));
   });
 
   it("keeps the most recent clients up to the suggestion limit", () => {
@@ -100,9 +105,8 @@ describe("recent client suggestions", () => {
 
     expect(ranked).toHaveLength(RECENT_CLIENT_SUGGESTIONS_MAX);
     expect(ranked.map(({ id }) => id)).toEqual(
-      Array.from(
-        { length: RECENT_CLIENT_SUGGESTIONS_MAX },
-        (_, rank) => `client-${day(clientCount - 1 - rank)}`,
+      Array.from({ length: RECENT_CLIENT_SUGGESTIONS_MAX }, (_, rank) =>
+        contactId(`client-${day(clientCount - 1 - rank)}`),
       ),
     );
   });

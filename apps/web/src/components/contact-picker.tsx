@@ -242,8 +242,6 @@ export const ContactPicker = ({
     }
   })();
 
-  const retrySuggestions = () =>
-    detached(suggestionView.retry(), "contact-picker.suggestions-retry");
   const suggestionStatus = (() => {
     switch (suggestionView.type) {
       case "pending":
@@ -256,7 +254,12 @@ export const ContactPicker = ({
         return (
           <ContactReadError
             error={suggestionView.error}
-            onRetry={retrySuggestions}
+            onRetry={() =>
+              detached(
+                suggestionView.retry(),
+                "contact-picker.suggestions-retry",
+              )
+            }
           />
         );
       case "empty":
@@ -270,7 +273,12 @@ export const ContactPicker = ({
         return suggestionView.refetchError !== undefined ? (
           <ContactReadError
             error={suggestionView.refetchError}
-            onRetry={retrySuggestions}
+            onRetry={() =>
+              detached(
+                suggestionView.retry(),
+                "contact-picker.suggestions-retry",
+              )
+            }
           />
         ) : null;
       default:
