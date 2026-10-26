@@ -462,6 +462,51 @@ const ClipboardCardFooterMetadata = ({
   );
 };
 
+type ClipboardFormatShortcutsProps = {
+  onClearPreview: () => void;
+  onCopy: (format: ClipboardCopyFormat) => void;
+  onPreview: (format: ClipboardCopyFormat) => void;
+};
+
+/** The active formatted card's paste format row; highlighting a format previews it. */
+const ClipboardFormatShortcuts = ({
+  onClearPreview,
+  onCopy,
+  onPreview,
+}: ClipboardFormatShortcutsProps) => {
+  const t = useTranslations("clipboard");
+  return (
+    <div
+      className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+      data-clipboard-format-shortcuts=""
+    >
+      <button
+        type="button"
+        onClick={() => onCopy("original")}
+        onFocus={() => onPreview("original")}
+        onPointerEnter={() => onPreview("original")}
+        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+      >
+        <kbd className="font-mono">↵</kbd>
+        {t("originalFormatting")}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={() => onCopy("plainText")}
+        onBlur={onClearPreview}
+        onFocus={() => onPreview("plainText")}
+        onPointerEnter={() => onPreview("plainText")}
+        onPointerLeave={onClearPreview}
+        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+      >
+        <kbd className="font-mono">⇧↵</kbd>
+        {t("plainText")}
+      </button>
+    </div>
+  );
+};
+
 const ClipboardCard = ({
   active,
   selected,
@@ -673,34 +718,11 @@ const ClipboardCard = ({
       </button>
 
       {formatShortcutsVisible ? (
-        <div
-          className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
-          data-clipboard-format-shortcuts=""
-        >
-          <button
-            type="button"
-            onClick={() => onCopy(item, "original")}
-            onFocus={() => previewShortcutFormat("original")}
-            onPointerEnter={() => previewShortcutFormat("original")}
-            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
-          >
-            <kbd className="font-mono">↵</kbd>
-            {t("originalFormatting")}
-          </button>
-          <span aria-hidden="true">·</span>
-          <button
-            type="button"
-            onClick={() => onCopy(item, "plainText")}
-            onBlur={clearShortcutPreview}
-            onFocus={() => previewShortcutFormat("plainText")}
-            onPointerEnter={() => previewShortcutFormat("plainText")}
-            onPointerLeave={clearShortcutPreview}
-            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
-          >
-            <kbd className="font-mono">⇧↵</kbd>
-            {t("plainText")}
-          </button>
-        </div>
+        <ClipboardFormatShortcuts
+          onClearPreview={clearShortcutPreview}
+          onCopy={(copyFormat) => onCopy(item, copyFormat)}
+          onPreview={previewShortcutFormat}
+        />
       ) : null}
 
       <Button
