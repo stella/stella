@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PencilIcon } from "@stll/ui/icons";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import type { MyTimeEntriesPage } from "@/lib/workspaces/queries/my-time-entries";
 import type { MyTimeSuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";

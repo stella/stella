@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 
 import type { Week, WeekTotals } from "@/features/my-week/my-week.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   plainDateEpoch,
