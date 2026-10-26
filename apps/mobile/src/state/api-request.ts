@@ -20,11 +20,18 @@ export type Load<T> = {
   readonly result: Result<T, ApiError>;
 };
 
+type ApiRequest<TSchema extends v.GenericSchema> = {
+  readonly path: string;
+  readonly schema: TSchema;
+  /** A JSON body makes the request a POST. */
+  readonly body?: unknown;
+};
+
 const requestJson = async <TSchema extends v.GenericSchema>(
   fetch: Fetch,
   url: string,
   accessToken: string,
-  schema: TSchema,
+  { schema, body }: Omit<ApiRequest<TSchema>, "path">,
 ): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> => {
   const answered = await Result.tryPromise({
     try: async () => {
@@ -32,7 +39,11 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${accessToken}`,
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         },
+        ...(body === undefined
+          ? {}
+          : { method: "POST", body: JSON.stringify(body) }),
       });
       if (!response.ok) {
         return { status: response.status, json: undefined };
@@ -87,25 +98,23 @@ export const withAccessToken = async <T>(
   });
 
 /**
- * A GET on the signed-in server, read through `schema`. The server is
- * validated against at runtime rather than trusted by type: a phone runs
- * whatever build it installed, so the server it talks to may be newer than
- * the app.
+ * One JSON request to the signed-in server, read through `schema`. The
+ * server is validated against at runtime rather than trusted by type: a
+ * phone runs whatever build it installed, so the server it talks to may be
+ * newer than the app.
  */
-export const getApiJson = async <TSchema extends v.GenericSchema>({
+export const requestApi = async <TSchema extends v.GenericSchema>({
   fetch,
-  path,
-  schema,
   source,
-}: {
+  path,
+  ...request
+}: ApiRequest<TSchema> & {
   readonly fetch: Fetch;
-  readonly path: string;
-  readonly schema: TSchema;
   readonly source: AccessTokenSource;
 }): Promise<Result<v.InferOutput<TSchema>, ApiError>> => {
   const url = `${source.session().serverUrl}${path}`;
   return await withAccessToken(
     source,
-    async (token) => await requestJson(fetch, url, token, schema),
+    async (token) => await requestJson(fetch, url, token, request),
   );
 };

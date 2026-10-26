@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
-import { getApiJson } from "@/state/api-request";
+import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 
 /** The person's own threads, most recently active first; the API admits the app's chat scope on it. */
@@ -90,7 +90,7 @@ export const listChatThreads = async ({
     const query =
       cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`;
     const page = yield* Result.await(
-      getApiJson({
+      requestApi({
         fetch,
         path: `${THREADS_PATH}${query}`,
         schema: threadsPageSchema,

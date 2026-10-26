@@ -46,6 +46,36 @@
     "loadFailed": "Nepavyko įkelti jūsų bylų.",
     "retry": "Bandyti dar kartą"
   },
+  "matter": {
+    "documents": "Dokumentai",
+    "tasks": "Užduotys",
+    "emptyTitle": "Kol kas čia nieko nėra",
+    "emptyDescription": "Čia bus rodomi šios bylos dokumentai ir užduotys.",
+    "loadFailed": "Nepavyko įkelti bylos.",
+    "loadMoreFailed": "Nepavyko įkelti daugiau įrašų.",
+    "loadMore": "Įkelti daugiau",
+    "retry": "Bandyti dar kartą",
+    "untitled": "Be pavadinimo",
+    "updated": "Atnaujinta {time}",
+    "kind": {
+      "folder": "Aplankas",
+      "document": "Dokumentas",
+      "task": "Užduotis"
+    },
+    "status": {
+      "open": "Atvira",
+      "in_progress": "Vykdoma",
+      "in_review": "Peržiūrima",
+      "done": "Atlikta",
+      "cancelled": "Atšaukta"
+    }
+  },
+  "entity": {
+    "type": "Tipas",
+    "reference": "Numeris",
+    "currentVersion": "Dabartinė versija",
+    "loadFailed": "Nepavyko įkelti šio įrašo."
+  },
   "signIn": {
     "title": "Prisijunkite prie stella",
     "description": "Įveskite savo stella serverio adresą. Prisijungimą patvirtinsite naršyklėje.",

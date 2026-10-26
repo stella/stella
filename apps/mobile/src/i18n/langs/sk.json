@@ -46,6 +46,36 @@
     "loadFailed": "Vaše spisy sa nepodarilo načítať.",
     "retry": "Skúsiť znova"
   },
+  "matter": {
+    "documents": "Dokumenty",
+    "tasks": "Úlohy",
+    "emptyTitle": "Zatiaľ tu nič nie je",
+    "emptyDescription": "Tu sa zobrazia dokumenty a úlohy tohto spisu.",
+    "loadFailed": "Spis sa nepodarilo načítať.",
+    "loadMoreFailed": "Ďalšie položky sa nepodarilo načítať.",
+    "loadMore": "Načítať ďalšie",
+    "retry": "Skúsiť znova",
+    "untitled": "Bez názvu",
+    "updated": "Upravené {time}",
+    "kind": {
+      "folder": "Priečinok",
+      "document": "Dokument",
+      "task": "Úloha"
+    },
+    "status": {
+      "open": "Otvorená",
+      "in_progress": "Rozpracovaná",
+      "in_review": "Na kontrolu",
+      "done": "Hotová",
+      "cancelled": "Zrušená"
+    }
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Spisová značka",
+    "currentVersion": "Aktuálna verzia",
+    "loadFailed": "Položku sa nepodarilo načítať."
+  },
   "signIn": {
     "title": "Prihláste sa do aplikácie stella",
     "description": "Zadajte adresu svojho servera stella. Prihlásenie potvrdíte v prehliadači.",

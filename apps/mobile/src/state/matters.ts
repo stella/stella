@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
-import { getApiJson } from "@/state/api-request";
+import { requestApi } from "@/state/api-request";
 import type { ApiError, Load } from "@/state/api-request";
 
 /** The REST route the web app lists matters from; the API admits the app's token on it. */
@@ -34,7 +34,7 @@ export const listMatters = async ({
 }): Promise<Result<MatterSummary[], ApiError>> =>
   await Result.gen(async function* () {
     const { workspaces } = yield* Result.await(
-      getApiJson({
+      requestApi({
         fetch,
         path: MATTERS_PATH,
         schema: mattersResponseSchema,

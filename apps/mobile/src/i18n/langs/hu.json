@@ -46,6 +46,36 @@
     "loadFailed": "Az ügyeit nem sikerült betölteni.",
     "retry": "Próbálja újra"
   },
+  "matter": {
+    "documents": "Dokumentumok",
+    "tasks": "Feladatok",
+    "emptyTitle": "Még nincs itt semmi",
+    "emptyDescription": "Az ügy dokumentumai és feladatai itt jelennek meg.",
+    "loadFailed": "Az ügyet nem sikerült betölteni.",
+    "loadMoreFailed": "További elemeket nem sikerült betölteni.",
+    "loadMore": "Továbbiak betöltése",
+    "retry": "Újra",
+    "untitled": "Névtelen",
+    "updated": "Módosítva: {time}",
+    "kind": {
+      "folder": "Mappa",
+      "document": "Dokumentum",
+      "task": "Feladat"
+    },
+    "status": {
+      "open": "Nyitott",
+      "in_progress": "Folyamatban",
+      "in_review": "Ellenőrzésre vár",
+      "done": "Kész",
+      "cancelled": "Visszavonva"
+    }
+  },
+  "entity": {
+    "type": "Típus",
+    "reference": "Ügyszám",
+    "currentVersion": "Aktuális verzió",
+    "loadFailed": "Az elemet nem sikerült betölteni."
+  },
   "signIn": {
     "title": "Bejelentkezés a stella szolgáltatásba",
     "description": "Adja meg a stella szerver címét. A bejelentkezést a böngészőben hagyja jóvá.",

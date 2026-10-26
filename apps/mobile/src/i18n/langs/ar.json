@@ -46,6 +46,36 @@
     "loadFailed": "تعذّر تحميل ملفاتك القانونية.",
     "retry": "حاول مرة أخرى"
   },
+  "matter": {
+    "documents": "المستندات",
+    "tasks": "المهام",
+    "emptyTitle": "لا يوجد شيء بعد",
+    "emptyDescription": "ستظهر هنا مستندات هذه القضية ومهامها.",
+    "loadFailed": "تعذّر تحميل هذه القضية.",
+    "loadMoreFailed": "تعذّر تحميل المزيد من العناصر.",
+    "loadMore": "تحميل المزيد",
+    "retry": "إعادة المحاولة",
+    "untitled": "بلا عنوان",
+    "updated": "عُدّل {time}",
+    "kind": {
+      "folder": "مجلد",
+      "document": "مستند",
+      "task": "مهمة"
+    },
+    "status": {
+      "open": "مفتوحة",
+      "in_progress": "قيد التنفيذ",
+      "in_review": "قيد المراجعة",
+      "done": "منجزة",
+      "cancelled": "ملغاة"
+    }
+  },
+  "entity": {
+    "type": "النوع",
+    "reference": "المرجع",
+    "currentVersion": "الإصدار الحالي",
+    "loadFailed": "تعذّر تحميل هذا العنصر."
+  },
   "signIn": {
     "title": "سجّل الدخول إلى stella",
     "description": "أدخل عنوان خادم stella الخاص بك. ستوافق على تسجيل الدخول في المتصفح.",

@@ -46,6 +46,36 @@
     "loadFailed": "Impossible de charger vos dossiers.",
     "retry": "Réessayer"
   },
+  "matter": {
+    "documents": "Documents",
+    "tasks": "Tâches",
+    "emptyTitle": "Rien pour l’instant",
+    "emptyDescription": "Les documents et tâches de ce dossier apparaîtront ici.",
+    "loadFailed": "Ce dossier n’a pas pu être chargé.",
+    "loadMoreFailed": "Les éléments suivants n’ont pas pu être chargés.",
+    "loadMore": "Charger plus",
+    "retry": "Réessayer",
+    "untitled": "Sans titre",
+    "updated": "Modifié {time}",
+    "kind": {
+      "folder": "Classeur",
+      "document": "Document",
+      "task": "Tâche"
+    },
+    "status": {
+      "open": "Ouverte",
+      "in_progress": "En cours",
+      "in_review": "En relecture",
+      "done": "Terminée",
+      "cancelled": "Annulée"
+    }
+  },
+  "entity": {
+    "type": "Type",
+    "reference": "Référence",
+    "currentVersion": "Version actuelle",
+    "loadFailed": "Cet élément n’a pas pu être chargé."
+  },
   "signIn": {
     "title": "Se connecter à stella",
     "description": "Saisissez l’adresse de votre serveur stella. Vous validerez la connexion dans votre navigateur.",

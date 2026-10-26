@@ -46,6 +46,36 @@
     "loadFailed": "Nie udało się wczytać Twoich spraw.",
     "retry": "Spróbuj ponownie"
   },
+  "matter": {
+    "documents": "Dokumenty",
+    "tasks": "Zadania",
+    "emptyTitle": "Na razie nic tu nie ma",
+    "emptyDescription": "Tu pojawią się dokumenty i zadania tej sprawy.",
+    "loadFailed": "Nie udało się wczytać sprawy.",
+    "loadMoreFailed": "Nie udało się wczytać kolejnych pozycji.",
+    "loadMore": "Wczytaj więcej",
+    "retry": "Spróbuj ponownie",
+    "untitled": "Bez tytułu",
+    "updated": "Zmieniono {time}",
+    "kind": {
+      "folder": "Folder",
+      "document": "Dokument",
+      "task": "Zadanie"
+    },
+    "status": {
+      "open": "Otwarte",
+      "in_progress": "W toku",
+      "in_review": "Do przeglądu",
+      "done": "Zakończone",
+      "cancelled": "Anulowane"
+    }
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Sygnatura",
+    "currentVersion": "Bieżąca wersja",
+    "loadFailed": "Nie udało się wczytać tej pozycji."
+  },
   "signIn": {
     "title": "Zaloguj się do stella",
     "description": "Wpisz adres swojego serwera stella. Logowanie potwierdzisz w przeglądarce.",

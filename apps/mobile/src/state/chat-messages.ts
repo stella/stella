@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
-import { getApiJson } from "@/state/api-request";
+import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 
 /**
@@ -116,7 +116,7 @@ export const readChatThread = async ({
 }): Promise<Result<ChatMessagesPage, ApiError>> =>
   await Result.gen(async function* () {
     const page = yield* Result.await(
-      getApiJson({
+      requestApi({
         fetch,
         path: threadPath(threadId),
         schema: messagesPageSchema,
@@ -140,7 +140,7 @@ export const readOlderChatMessages = async ({
 }): Promise<Result<ChatMessagesPage, ApiError>> =>
   await Result.gen(async function* () {
     const page = yield* Result.await(
-      getApiJson({
+      requestApi({
         fetch,
         path: `${threadPath(threadId)}/older?before=${encodeURIComponent(before)}`,
         schema: messagesPageSchema,

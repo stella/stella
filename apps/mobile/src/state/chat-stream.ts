@@ -8,7 +8,7 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import {
   ApiRequestError,
-  getApiJson,
+  requestApi,
   withAccessToken,
 } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
@@ -445,7 +445,7 @@ export const probeChatTurn = async ({
 }): Promise<Result<TurnProbe, ApiError>> =>
   await Result.gen(async function* () {
     const probe = yield* Result.await(
-      getApiJson({
+      requestApi({
         fetch,
         path: `${turnPath(threadId, turnId)}/resume`,
         schema: turnProbeSchema,

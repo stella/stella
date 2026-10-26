@@ -46,6 +46,36 @@
     "loadFailed": "Vaše spisy se nepodařilo načíst.",
     "retry": "Zkusit znovu"
   },
+  "matter": {
+    "documents": "Dokumenty",
+    "tasks": "Úkoly",
+    "emptyTitle": "Zatím tu nic není",
+    "emptyDescription": "Zde se zobrazí dokumenty a úkoly tohoto spisu.",
+    "loadFailed": "Spis se nepodařilo načíst.",
+    "loadMoreFailed": "Další položky se nepodařilo načíst.",
+    "loadMore": "Načíst další",
+    "retry": "Zkusit znovu",
+    "untitled": "Bez názvu",
+    "updated": "Upraveno {time}",
+    "kind": {
+      "folder": "Složka",
+      "document": "Dokument",
+      "task": "Úkol"
+    },
+    "status": {
+      "open": "Otevřený",
+      "in_progress": "Rozpracovaný",
+      "in_review": "Ke kontrole",
+      "done": "Hotový",
+      "cancelled": "Zrušený"
+    }
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Číslo jednací",
+    "currentVersion": "Aktuální verze",
+    "loadFailed": "Položku se nepodařilo načíst."
+  },
   "signIn": {
     "title": "Přihlaste se do aplikace stella",
     "description": "Zadejte adresu svého serveru stella. Přihlášení potvrdíte v prohlížeči.",

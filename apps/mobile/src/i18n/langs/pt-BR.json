@@ -46,6 +46,36 @@
     "loadFailed": "Não foi possível carregar seus casos.",
     "retry": "Tente novamente"
   },
+  "matter": {
+    "documents": "Documentos",
+    "tasks": "Tarefas",
+    "emptyTitle": "Nada por aqui ainda",
+    "emptyDescription": "Os documentos e tarefas deste caso aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar este caso.",
+    "loadMoreFailed": "Não foi possível carregar mais itens.",
+    "loadMore": "Carregar mais",
+    "retry": "Tentar novamente",
+    "untitled": "Sem título",
+    "updated": "Atualizado {time}",
+    "kind": {
+      "folder": "Pasta",
+      "document": "Documento",
+      "task": "Tarefa"
+    },
+    "status": {
+      "open": "Aberta",
+      "in_progress": "Em andamento",
+      "in_review": "Em revisão",
+      "done": "Concluída",
+      "cancelled": "Cancelada"
+    }
+  },
+  "entity": {
+    "type": "Tipo",
+    "reference": "Referência",
+    "currentVersion": "Versão atual",
+    "loadFailed": "Não foi possível carregar este item."
+  },
   "signIn": {
     "title": "Entre no stella",
     "description": "Informe o endereço do seu servidor stella. Você aprova o login no navegador.",
