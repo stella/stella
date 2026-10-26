@@ -59,14 +59,14 @@ const createSettingsDb = (): {
   operationCount: () => number;
 } => {
   let operationCount = 0;
-  const safeDb: SafeDb = async <T>(
-    operation: (tx: Transaction) => Promise<T>,
-  ) => {
-    operationCount += 1;
-    return operationCount === 1
-      ? Result.ok(asTestRaw<T>(undecryptableRow))
-      : Result.ok(await operation(writeRejectingTx));
-  };
+  const safeDb = asTestRaw<SafeDb>(
+    async (operation: (tx: Transaction) => Promise<unknown>) => {
+      operationCount += 1;
+      return operationCount === 1
+        ? Result.ok(undecryptableRow)
+        : Result.ok(await operation(writeRejectingTx));
+    },
+  );
   return { safeDb, operationCount: () => operationCount };
 };
 

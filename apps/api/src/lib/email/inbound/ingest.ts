@@ -10,6 +10,7 @@ import type {
   CorrespondenceProvenance,
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
+import { declareFingerprintFields } from "@stll/errors";
 import { createSha256 } from "@stll/sha256/bun";
 
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
@@ -77,7 +78,11 @@ class InboundIngestError extends TaggedError("InboundIngestError")<{
     | "verification-unavailable"
     | "scan-unavailable"
     | "persistence-unavailable";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type ClassifiedDelivery =
   | { status: "drop"; sender: string | null; reason: CorrespondenceDropReason }

@@ -38,7 +38,7 @@ export const MatterDocumentPicker = ({
   const [initialPickedEntityIds] = useState(() => [...pickedEntityIds]);
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
   const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  useQueryViewError(filesView, "MatterDocumentPicker:query");
   const files = filesView.type === "items" ? filesView.items : undefined;
 
   const documents = filterVisibleDocuments(files ?? [], search);

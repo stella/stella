@@ -924,7 +924,10 @@ export const SearchDialog = ({
   const analytics = useAnalytics();
   useExternalSyncEffect(() => {
     if (searchError) {
-      analytics.captureError(searchError);
+      analytics.captureError(searchError, {
+        fingerprintKey: "SearchDialog:searchError",
+        scope: { type: "handler", handlerId: "SearchDialog:searchError" },
+      });
     }
   }, [analytics, searchError]);
 
@@ -973,7 +976,10 @@ export const SearchDialog = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure",
+        scope: { type: "handler", handlerId: "SearchDialog:failure" },
+      });
     },
   });
 
@@ -987,7 +993,10 @@ export const SearchDialog = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-2",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-2" },
+      });
     },
   });
 
@@ -1015,7 +1024,10 @@ export const SearchDialog = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-3",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-3" },
+      });
     },
   });
 
@@ -1044,7 +1056,10 @@ export const SearchDialog = ({
       return threadRef.threadId;
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-4",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-4" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
@@ -1104,7 +1119,13 @@ export const SearchDialog = ({
       }
       detached(
         navigateToTarget().catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "SearchDialog.navigateAfterClose:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SearchDialog.navigateAfterClose:failure",
+            },
+          });
           notifyUserError(error, t("common.somethingWentWrong"));
         }),
         "search-dialog.navigate-to-target",

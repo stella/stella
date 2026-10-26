@@ -172,7 +172,10 @@ export const ChatInputSurface = ({
   // failure into telemetry alone leaves the send silently lost.
   const handleSubmitError = useCallback(
     (error: unknown): void => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatInputSurface:failure",
+        scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
