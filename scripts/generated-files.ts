@@ -281,6 +281,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/db/flow-run-transition-spec.ts",
       "apps/api/src/lib/db/transition-sql.ts",
       "apps/api/scripts/generate-transition-triggers.ts",
+      "scripts/generated-artifacts.ts",
     ],
     write: [
       "bun",
@@ -288,7 +289,7 @@ const GENERATOR_DECLARATIONS = [
       "--write",
     ],
     check: ["bun", "apps/api/scripts/generate-transition-triggers.ts"],
-    autofix: false,
+    autofix: true,
     after: ["status-tables"],
   },
   {
@@ -660,11 +661,13 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "scripts/changeset-policy.json",
       "scripts/check-published-package-lists.ts",
+      "scripts/changeset-guard.ts",
+      "scripts/changeset-entry.ts",
     ],
     write: ["bun", "scripts/check-published-package-lists.ts", "--write"],
     check: null,
     checkedBy: "Published package lists match the release policy",
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -830,6 +833,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "apps/web/src/i18n/glossary.json",
+      "packages/locales/src/**",
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "packages/text-normalize/src/**",
@@ -842,7 +846,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/i18n",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -987,7 +991,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generate-manifest.ts",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -999,13 +1003,19 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "packages/template-packs/content",
+      "packages/template-packs/package.json",
       "packages/template-packs/src/fixtures/content/**",
       "packages/template-packs/scripts/generate-manifest.ts",
+      "packages/template-packs/src/content-identity.ts",
+      "packages/template-packs/src/public-packs.ts",
+      "packages/template-packs/src/schema.ts",
+      "packages/portable-path/src/**",
+      "packages/sha256/src/**",
     ],
     write: ["bun", "--filter", "@stll/template-packs", "generate"],
-    check: null,
-    unchecked: "Package tests check both manifests without a dedicated CI step",
-    autofix: false,
+    // Both the content and fixture manifests must match their committed inputs.
+    check: ["bun", "--filter", "@stll/template-packs", "generate:check"],
+    autofix: true,
     after: [],
   },
   {
@@ -1020,6 +1030,10 @@ const GENERATOR_DECLARATIONS = [
       "packages/skills/skills/**",
       "packages/skills/scripts/generate-manifests.ts",
       "packages/skills/src/format.ts",
+      "packages/skills/src/frontmatter.ts",
+      "packages/skills/src/required-tools.ts",
+      "packages/portable-path/src/**",
+      "packages/sha256/src/**",
     ],
     write: ["bun", "--filter", "@stll/skills", "generate"],
     check: [
@@ -1028,7 +1042,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/generate-manifests.ts",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -1154,8 +1168,10 @@ const GENERATOR_DECLARATIONS = [
       "packages/*/GEMINI.md",
       "apps/api/src/handlers/case-law/AGENTS.md",
       "apps/api/src/handlers/case-law/GEMINI.md",
-      ".agents/skills/**/SKILL.md",
-      ".claude/skills/**/SKILL.md",
+      ".agents/skills/**",
+      ".claude/skills/**",
+      ".ai/generated-agent-files.txt",
+      ".coderabbit.yaml",
     ],
     inputs: [
       ".ai/manifest.json",
