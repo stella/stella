@@ -193,6 +193,7 @@ import type {
   ReviewPaneSwap,
 } from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { filterPlaybooksByName } from "@/components/inspector/playbook-facet.logic";
@@ -3986,6 +3987,7 @@ const ReviewResultCard = ({
             onAddCounterpartyNote={addCounterpartyNote}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
+                delivery: FILE_CHAT_DRAFT_DELIVERY.draft,
                 fileFieldId: targetFileFieldId,
                 markdown: buildFindingChatDraft({
                   item,

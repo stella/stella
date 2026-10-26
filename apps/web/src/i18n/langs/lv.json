@@ -6533,6 +6533,11 @@
       },
       "passwordLabel": "Ievadiet PDF paroli",
       "previousPage": "Iepriekšējā lappuse",
+      "selection": {
+        "explainPassagePrompt": "Izskaidro šo {citation} fragmentu:\n\n„{quote}”",
+        "pageLocator": "{page}. lpp.",
+        "pageRangeLocator": "{start}.–{end}. lpp."
+      },
       "showOriginal": "Rādīt oriģinālās lapas",
       "unlock": "Atbloķēt"
     },

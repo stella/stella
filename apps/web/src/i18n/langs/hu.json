@@ -6533,6 +6533,11 @@
       },
       "passwordLabel": "Adja meg a PDF jelszavát",
       "previousPage": "Előző oldal",
+      "selection": {
+        "explainPassagePrompt": "Magyarázd el a(z) {citation} alábbi részletét:\n\n„{quote}”",
+        "pageLocator": "{page}. o.",
+        "pageRangeLocator": "{start}–{end}. o."
+      },
       "showOriginal": "Eredeti oldalak megjelenítése",
       "unlock": "Feloldás"
     },
