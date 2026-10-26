@@ -289,7 +289,7 @@ test("a failed account refresh does not report a committed unlink as failed", as
     expect(client.getQueryData(linkedAccountsOptions("user").queryKey)).toEqual(
       [linkedMicrosoftAccount],
     );
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   } finally {
     invalidation.mockRestore();
     fetch.mockRestore();
