@@ -215,7 +215,8 @@ export const drainSnsQueue = async ({
       return;
     }
     for (const failedId of failedIds) {
-      const message = byEntryId.get(failedId);
+      const message =
+        failedId === undefined ? undefined : byEntryId.get(failedId);
       releaseFailed += 1;
       logger.warn(`${logPrefix}.release_failed`, {
         "queue.delivery_id": message?.MessageId ?? "unknown",
