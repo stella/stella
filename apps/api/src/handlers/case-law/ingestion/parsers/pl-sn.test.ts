@@ -1,3 +1,4 @@
+import { ops, PDF, PdfArray, PdfNumber, PdfString } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
@@ -387,9 +388,15 @@ describe("reading recorded Supreme Court PDFs", () => {
     expect(appeal).toContain("zasadę zaufania obywatela do państwa");
     expect(appeal).toContain("(art. 7 w związku z art. 2 Konstytucji RP)");
     expect(appeal).toContain("I NSNc 592/21");
+    // Two such spaces in a row, either side of a one-letter word: each is
+    // read apart, though the gaps either side of `6` are the same width.
+    expect(appeal).toContain("Sądu Najwyższego: z 6 października 2021 r.");
     expect(`${ruling}\n${appeal}`).not.toMatch(/SąduNajwyższego|\p{Ll}\p{Lu}/u);
   });
 
+  // Covers the running-header rule on a second page layout. This fixture
+  // prints every word space as a glyph, so it reads the same with or without
+  // the positioned spaces above.
   test("the running header is dropped where a sentence runs over the page break", async () => {
     const paragraphs = await supremeCourtParagraphs(
       "pl-sn-i-csk-3410-25",
@@ -422,5 +429,98 @@ describe("reading recorded Supreme Court PDFs", () => {
         paragraph.startsWith("Istotnie, jak argumentuje się w tych środkach"),
       ),
     ).toBe(true);
+  });
+});
+
+const TYPESET_SIZE = 12;
+
+/**
+ * One shown piece of a typeset line: its weight, the character spacing it is
+ * set with (in ems), and its `TJ` array, where a number shifts the next glyph
+ * by thousandths of an em (a negative one to the right).
+ */
+type TypesetPiece = {
+  readonly bold?: boolean;
+  readonly tracking?: number;
+  readonly show: readonly (string | number)[];
+};
+
+/** A one-page PDF of Helvetica lines, each shown piece by piece. */
+const typesetPdf = async (
+  lines: readonly (readonly TypesetPiece[])[],
+): Promise<Uint8Array> => {
+  const pdf = PDF.create();
+  const page = pdf.addPage();
+  const regular = page.registerFont("Helvetica");
+  const bold = page.registerFont("Helvetica-Bold");
+  page.drawOperators(
+    lines.flatMap((pieces, index) => [
+      ops.beginText(),
+      ops.setTextMatrix(1, 0, 0, 1, 72, 700 - index * 2 * TYPESET_SIZE),
+      ...pieces.flatMap(({ bold: isBold, tracking = 0, show }) => [
+        ops.setFont(isBold === true ? bold : regular, TYPESET_SIZE),
+        ops.setCharSpacing(tracking * TYPESET_SIZE),
+        ops.showTextArray(
+          new PdfArray(
+            show.map((item) =>
+              typeof item === "string"
+                ? PdfString.fromString(item)
+                : PdfNumber.of(item),
+            ),
+          ),
+        ),
+      ]),
+      ops.endText(),
+    ]),
+  );
+  return await pdf.save();
+};
+
+/** The text of each line the Supreme Court reading extracts. */
+const supremeCourtLineTexts = async (pdfBytes: Uint8Array): Promise<string[]> =>
+  (
+    await extractPlSnLines(pdfBytes, PL_PDF_PARAGRAPH_START.INDENT, {
+      supremeCourt: { docket: "I CSK 1/26" },
+    })
+  ).flatMap((line) =>
+    line.type === "text" ? [line.runs.map(({ text }) => text).join("")] : [],
+  );
+
+describe("reading word spaces set by position alone", () => {
+  test("a letter-spaced token stays whole where it starts or ends at another font", async () => {
+    // `2-9` is bold and set 0.29 em apart, past the 0.11 em a word space
+    // needs, between regular glyphs set with none. On the first line the
+    // gap after `9` keeps the spacing; on the second `9` is set close.
+    // `of the` is spaced by position alone and must still be read apart.
+    const lines = await supremeCourtLineTexts(
+      await typesetPdf([
+        [
+          { show: ["in points ("] },
+          { bold: true, tracking: 0.29, show: ["2-9"] },
+          { show: [") of", -200, "the charge"] },
+        ],
+        [
+          { show: ["in points ("] },
+          { bold: true, tracking: 0.29, show: ["2-"] },
+          { bold: true, show: ["9"] },
+          { show: [") of", -200, "the charge"] },
+        ],
+      ]),
+    );
+
+    expect(lines).toEqual([
+      "in points (2-9) of the charge",
+      "in points (2-9) of the charge",
+    ]);
+  });
+
+  test("a document that prints no space glyph is measured against a typographic space", async () => {
+    // The extractor itself fills the 0.6 em gap with a space as wide as the
+    // gap; taken for the font's space, it would leave the 0.2 em gap joined.
+    const lines = await supremeCourtLineTexts(
+      await typesetPdf([[{ show: ["foo", -200, "bar", -600, "baz"] }]]),
+    );
+
+    expect(lines).toEqual(["foo bar baz"]);
   });
 });

@@ -868,6 +868,13 @@ type PdfTextChar = PdfTextLine["spans"][number]["chars"][number];
  */
 const POSITIONED_SPACE_RATIO = 0.4;
 
+/**
+ * A word space's width, in ems, for a document that prints no space glyph to
+ * measure: the narrow end of common text faces (Times 0.25 em, Arial
+ * 0.278 em).
+ */
+const TYPOGRAPHIC_SPACE_EM = 0.25;
+
 const SPACE_GLYPH = " ";
 
 /** The most common value, or `undefined` for none. */
@@ -887,26 +894,38 @@ const modeOf = (values: readonly number[]): number | undefined => {
   return mode;
 };
 
-/** A space's width per font, in ems, and the document's for fonts with none. */
+/**
+ * A space's width per font, in ems, and the width for a font that prints no
+ * space.
+ */
 type SpaceWidths = {
   readonly byFont: ReadonlyMap<string, number>;
-  readonly document: number;
+  readonly fallback: number;
 };
 
 /**
- * Each font's space width, read off the space glyphs the document does
- * print. The most common width, since a space the extractor inserted itself
- * spans whatever gap it filled. `undefined` when the document prints no
- * space at all, which leaves nothing to measure a gap against.
+ * Whether the glyph was read off the content stream. The extractor numbers
+ * each glyph it reads in stream order and places a space it inserts itself
+ * half a step after the glyph before it, so only a printed glyph carries a
+ * whole number.
  */
-const spaceWidthsOf = (
-  lines: readonly PdfTextLine[],
-): SpaceWidths | undefined => {
+const isPrinted = ({ sequenceIndex }: PdfTextChar): boolean =>
+  sequenceIndex !== undefined && Number.isInteger(sequenceIndex);
+
+/**
+ * Each font's space width, read off the space glyphs the document prints:
+ * the most common width per font, and across the document for a font that
+ * prints none. A space the extractor inserted is left out, since it spans
+ * whatever gap it filled rather than a space's width. A document that prints
+ * no space at all is measured against a typographic word space.
+ */
+const spaceWidthsOf = (lines: readonly PdfTextLine[]): SpaceWidths => {
   const widths = new Map<string, number[]>();
   for (const { spans } of lines) {
     for (const { chars } of spans) {
-      for (const { bbox, char, fontName, fontSize } of chars) {
-        if (char !== SPACE_GLYPH || fontSize <= 0) {
+      for (const char of chars) {
+        const { bbox, fontName, fontSize } = char;
+        if (char.char !== SPACE_GLYPH || !isPrinted(char) || fontSize <= 0) {
           continue;
         }
         const em = Math.round((bbox.width / fontSize) * 1000) / 1000;
@@ -919,15 +938,12 @@ const spaceWidthsOf = (
       }
     }
   }
-  const document = modeOf([...widths.values()].flat());
-  if (document === undefined) {
-    return undefined;
-  }
+  const fallback = modeOf([...widths.values()].flat()) ?? TYPOGRAPHIC_SPACE_EM;
   const byFont = new Map<string, number>();
   for (const [fontName, ems] of widths) {
-    byFont.set(fontName, modeOf(ems) ?? document);
+    byFont.set(fontName, modeOf(ems) ?? fallback);
   }
-  return { byFont, document };
+  return { byFont, fallback };
 };
 
 const gapBetween = (left: PdfTextChar, right: PdfTextChar): number =>
@@ -936,48 +952,80 @@ const gapBetween = (left: PdfTextChar, right: PdfTextChar): number =>
 const printsInk = ({ char }: PdfTextChar): boolean => char.trim().length > 0;
 
 /**
+ * The letter spacing after each glyph of a line, in points.
+ *
+ * It is read per run: the glyphs of one span (one font and size) between two
+ * spaces, which share whatever character spacing they were set with. A run
+ * is letter-spaced by the narrowest gap between its glyphs: about zero
+ * inside a word, and the tracking of a letter-spaced token (`2-9` set with
+ * character spacing), where every glyph stands the same gap from the next.
+ * That takes two gaps at least, so a run of two glyphs, whose one gap may be
+ * a word space, reads as not letter-spaced. A gap to a glyph of another run
+ * says nothing about either run's spacing.
+ */
+const letterSpacingOf = (line: PdfTextLine): number[] => {
+  const spacing: number[] = [];
+  for (const { chars } of line.spans) {
+    let start = spacing.length;
+    let gaps: number[] = [];
+    let last: PdfTextChar | undefined;
+    const close = () => {
+      const tracking = gaps.length >= 2 ? Math.max(0, Math.min(...gaps)) : 0;
+      spacing.fill(tracking, start);
+      gaps = [];
+      last = undefined;
+    };
+    for (const char of chars) {
+      if (!printsInk(char)) {
+        close();
+        spacing.push(0);
+        start = spacing.length;
+        continue;
+      }
+      if (last !== undefined) {
+        gaps.push(gapBetween(last, char));
+      }
+      last = char;
+      spacing.push(0);
+    }
+    close();
+  }
+  return spacing;
+};
+
+/**
  * The line with a space set wherever two glyphs stand a word space apart and
  * the text layer printed none between them.
  *
- * A gap is measured past the letter spacing around it: the narrower of the
- * gaps after the glyphs either side, the gap before a printed space
- * included. That is about zero inside a word, and the tracking inside a
- * letter-spaced run (`2-9` set with character spacing), where every glyph
- * is followed by the same gap, so a letter-spaced run is never split letter
- * by letter. The space joins the span of the glyph before it, as the
- * extractor's own inserted spaces do.
+ * A gap is measured past the letter spacing of the glyph before it (see
+ * `letterSpacingOf`), so a letter-spaced token is never split letter by
+ * letter, and is a word space past two fifths of that font's space. The
+ * space joins the span of the glyph before it, as the extractor's own
+ * inserted spaces do.
  */
 const withPositionedSpaces = (
   line: PdfTextLine,
   spaceWidths: SpaceWidths,
 ): PdfTextLine => {
   const chars = line.spans.flatMap((span) => span.chars);
-  // The gap after each printed glyph. A space glyph's own gap carries the
-  // justification's word spacing and says nothing about letter spacing.
-  const trailing = chars.map((char, index) => {
-    const next = chars[index + 1];
-    return printsInk(char) && next !== undefined
-      ? gapBetween(char, next)
-      : undefined;
-  });
+  const letterSpacing = letterSpacingOf(line);
   const spaceAfter = (index: number): PdfTextChar | undefined => {
     const previous = chars[index];
     const next = chars[index + 1];
-    const gap = trailing[index];
     if (
       previous === undefined ||
       next === undefined ||
-      gap === undefined ||
+      !printsInk(previous) ||
       !printsInk(next)
     ) {
       return undefined;
     }
-    const around = [trailing[index - 1], trailing[index + 1]].filter(
-      (value) => value !== undefined,
-    );
-    const tracking = Math.max(0, Math.min(gap, ...around));
+    const tracking =
+      letterSpacing[index] ??
+      panic(`No letter spacing was read for glyph ${index} of its line`);
+    const gap = gapBetween(previous, next);
     const space =
-      spaceWidths.byFont.get(previous.fontName) ?? spaceWidths.document;
+      spaceWidths.byFont.get(previous.fontName) ?? spaceWidths.fallback;
     const fontSize = (previous.fontSize + next.fontSize) / 2;
     if (gap - tracking <= space * fontSize * POSITIONED_SPACE_RATIO) {
       return undefined;
@@ -1139,10 +1187,7 @@ export const extractPlSnLines = async (
   const spaceWidths = spaceWidthsOf(textPages.flatMap(({ lines }) => lines));
   const spacedPages = textPages.map(({ height, lines }) => ({
     height,
-    lines:
-      spaceWidths === undefined
-        ? lines
-        : lines.map((line) => withPositionedSpaces(line, spaceWidths)),
+    lines: lines.map((line) => withPositionedSpaces(line, spaceWidths)),
   }));
   const bodySize = bodyFontSizeOf(spacedPages.flatMap(({ lines }) => lines));
   const pages = spacedPages.map(({ height, lines }, pageIndex) => {
