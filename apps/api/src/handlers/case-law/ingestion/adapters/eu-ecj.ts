@@ -9,7 +9,7 @@ import JSZip from "jszip";
 import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -70,6 +70,7 @@ import {
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
+  type EcjFormexBibliography,
   listEcjFormexFields,
   parseFormexBibliography,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
@@ -89,6 +90,7 @@ import type {
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
+import { DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY } from "@/api/lib/case-law/decision-language";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -606,6 +608,58 @@ export const celexToCaseNumber = (celex: string): string => {
   const prefix = CELEX_PREFIX[typeStr] ?? "C";
 
   return `${prefix}-${caseNum}/${year}`;
+};
+
+/**
+ * A docket inside the publisher's wording of it: `Case C-128/22`, `Věc
+ * 302/87.`, `Case 8-55.`, `Joined Cases C-6/90 and C-9/90`. The court
+ * letter is optional because the Court of Justice numbered its cases
+ * without one until the Court of First Instance was set up in 1989.
+ */
+const STATED_DOCKET =
+  /(?:(?<letter>[A-Z])\s*[-‑–]\s*)?(?<number>\d{1,4})\s*[/‑–-]\s*(?<year>\d{2})\b/gu;
+
+/** A run of digits as the number it names is written, `0120` as `120`. */
+const withoutLeadingZeros = (digits: string): string =>
+  digits.replace(/^0+(?=\d)/u, "");
+
+/**
+ * The decision's case number, as the publisher states it.
+ *
+ * The CELEX gives the case's ordinal and year but not how it was named:
+ * the `C-` prefix exists only since 1989, and an older case is `120/78`,
+ * never `C-120/78`. So the publisher's own statements of the docket (the
+ * Formex bibliography first, which is language-independent, then the
+ * notice's wording) decide whether the prefix is part of it. A docket
+ * they do not state keeps the CELEX reading.
+ */
+export const ecjCaseNumber = (
+  celex: string,
+  statements: readonly string[],
+): string => {
+  const derived = celexToCaseNumber(celex);
+  const parts = /^[A-Z]-(?<ordinal>\d+)\/(?<year>\d{2})$/u.exec(
+    derived,
+  )?.groups;
+  const ordinal = parts?.["ordinal"];
+  const year = parts?.["year"];
+  if (ordinal === undefined || year === undefined) {
+    return derived;
+  }
+  for (const statement of statements) {
+    for (const stated of statement.matchAll(STATED_DOCKET)) {
+      const { letter, number } = stated.groups ?? {};
+      if (
+        number === undefined ||
+        withoutLeadingZeros(number) !== withoutLeadingZeros(ordinal) ||
+        stated.groups?.["year"] !== year
+      ) {
+        continue;
+      }
+      return letter === undefined ? `${ordinal}/${year}` : derived;
+    }
+  }
+  return derived;
 };
 
 /** One language variant of one decision, as Cellar lists it. */
@@ -1127,6 +1181,36 @@ type ParsedManifestation = {
   keywords: string[];
 };
 
+/**
+ * The decision's sections, with the ruling under its own heading.
+ *
+ * The parser makes the sentence that introduces the operative part ("On
+ * those grounds, the Court hereby rules:") its heading. `sectionsFromAst`
+ * cuts at a level-1 heading and again where the ruling begins, so that
+ * heading would title an empty section ahead of an untitled ruling. An
+ * empty titled section followed by an untitled one gives it its title.
+ */
+const ecjSections = (blocks: readonly Block[]): DecisionSection[] => {
+  const folded: DecisionSection[] = [];
+  for (const section of sectionsFromAst(blocks)) {
+    const previous = folded.at(-1);
+    if (
+      previous?.text === "" &&
+      previous.title !== null &&
+      section.title === null
+    ) {
+      folded[folded.length - 1] = {
+        ...section,
+        index: previous.index,
+        title: previous.title,
+      };
+      continue;
+    }
+    folded.push({ ...section, index: folded.length });
+  }
+  return folded;
+};
+
 const parseManifestation = (
   input: ParseEcjDecisionInput,
 ): ParsedManifestation => {
@@ -1151,7 +1235,7 @@ const parseManifestation = (
     ) {
       return {
         documentAst: parsed.documentAst,
-        sections: sectionsFromAst(parsed.documentAst.blocks),
+        sections: ecjSections(parsed.documentAst.blocks),
         fulltext: parsed.fulltext,
         keywords: parsed.keywords,
       };
@@ -1397,6 +1481,40 @@ const ZIP_MEDIA_TYPE = "application/zip";
 const COURT_BY_CORPORATE_BODY: Readonly<Record<string, string>> = {
   CJ: "Court of Justice",
   GCEU: "General Court",
+  CST: "Civil Service Tribunal",
+};
+
+/**
+ * The same courts by the court code of their ECLI (`ECLI:EU:F:2006:112`),
+ * which every row carries and which is the record's own statement of the
+ * deciding court. The Civil Service Tribunal (2005–2016) is `F`.
+ */
+const COURT_BY_ECLI_CODE: Readonly<Record<string, string>> = {
+  C: "Court of Justice",
+  T: "General Court",
+  F: "Civil Service Tribunal",
+};
+
+/**
+ * Not anchored: whether the value is a well-formed ECLI is the item
+ * validator's call, which reports a malformed one as a typed failure, and
+ * the court it names is read either way.
+ */
+const ECLI_COURT_CODE = /\bECLI:EU:(?<code>[A-Z]+):/u;
+
+const courtFromEcli = (ecli: string): string | undefined => {
+  const code = ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
+  if (code === undefined) {
+    return undefined;
+  }
+  const court = COURT_BY_ECLI_CODE[code];
+  if (court === undefined) {
+    logger.warn("case_law.ingestion.unmapped_cjeu_ecli_court", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      ecliCourtCode: code,
+    });
+  }
+  return court;
 };
 
 /**
@@ -1406,7 +1524,11 @@ const COURT_BY_CORPORATE_BODY: Readonly<Record<string, string>> = {
 type EcjDecisionIdentity = {
   celex: string;
   ecli: string;
-  court: string;
+  /**
+   * The court a stored row was filed under, read only when neither its ECLI
+   * nor its publisher parts name one. A crawl has no such row.
+   */
+  court: string | undefined;
   decisionDate: string;
   decisionType: string;
   /** Lower-case language tag, as stored on the row. */
@@ -1520,7 +1642,8 @@ const noticeMetadata = (facts: EcjNoticeFacts) => ({
   celexType: facts.celexType,
   recordVersion: facts.recordVersion,
   referringCountry: facts.referringCountry,
-  procedureLanguage: facts.procedureLanguage,
+  // The language of the case, which an exact lookup answers in by default.
+  [DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY]: facts.procedureLanguage,
   procedureType: facts.procedureType,
   observations: facts.observations,
   nationalJudgment: facts.nationalJudgment,
@@ -1603,6 +1726,30 @@ const ecjPublisherMetadata = (
   };
 };
 
+type EcjStatedCourtOptions = {
+  ecli: string;
+  facts: EcjNoticeFacts | undefined;
+  bibliography: EcjFormexBibliography | undefined;
+  court: string | undefined;
+};
+
+/**
+ * The deciding court: the record's own ECLI first, then the publisher's
+ * corporate-body codes, then what a stored row was filed under.
+ */
+const ecjStatedCourt = ({
+  ecli,
+  facts,
+  bibliography,
+  court,
+}: EcjStatedCourtOptions): string | undefined =>
+  courtFromEcli(ecli) ??
+  courtFromNotice(facts?.courtCode.at(0)) ??
+  bibliography?.author
+    .map(courtFromNotice)
+    .find((name) => name !== undefined) ??
+  court;
+
 /**
  * Build the ingestion result for one stored envelope.
  *
@@ -1634,14 +1781,23 @@ const ecjDecisionFromParts = ({
     formexXml === undefined
       ? undefined
       : parseFormexBibliography(ecjFormexDocuments(formexXml));
-  const statedCourt =
-    courtFromNotice(facts?.courtCode.at(0)) ??
-    bibliography?.author
-      .map(courtFromNotice)
-      .find((name) => name !== undefined) ??
-    court;
+  const statedCourt = ecjStatedCourt({ ecli, facts, bibliography, court });
+  if (statedCourt === undefined) {
+    logger.warn("case_law.ingestion.cjeu_court_unstated", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex,
+      ecli,
+    });
+    return undefined;
+  }
 
-  const caseNumber = celexToCaseNumber(celex);
+  const celexCaseNumber = celexToCaseNumber(celex);
+  // A manifestation read without its Formex or its notice states nothing
+  // through the part it lacks.
+  const caseNumber = ecjCaseNumber(celex, [
+    ...(bibliography === undefined ? [] : bibliography.caseNumber),
+    ...(facts === undefined ? [] : facts.caseIdentifier),
+  ]);
   const { documentAst, sections, fulltext, keywords } = parseManifestation({
     caseNumber,
     ecli,
@@ -1698,6 +1854,11 @@ const ecjDecisionFromParts = ({
       // docket's other documents find no null-id row and are inserted, which is
       // the collapse being undone.
       ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
+      // Those rows were stored under the CELEX reading of the docket, which
+      // gives a case numbered before 1989 a letter it never had (`C-120/78`).
+      ...(caseNumber === celexCaseNumber
+        ? {}
+        : { legacyCaseNumber: celexCaseNumber }),
       ecli,
       court: statedCourt,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
@@ -1945,6 +2106,13 @@ const reparseQuarantinedEcj = (
   };
 };
 
+/**
+ * The manifestation an ingestion result's envelope carries, for callers that
+ * record it on its own: the parser fixtures are the XHTML, not the envelope.
+ */
+export const ecjEnvelopeDocument = (sourceRaw: string): string | undefined =>
+  decodeSourceRawEnvelope(sourceRaw)?.[RAW_PART.DOCUMENT];
+
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
 
@@ -2037,7 +2205,7 @@ const reparseStoredRaw = (
   const result = ecjDecisionFromParts({
     celex,
     ecli,
-    court: stored.court,
+    court: nonEmptyString(stored.court),
     decisionDate,
     decisionType:
       stored.decisionType ??
@@ -2402,8 +2570,6 @@ export const buildDecision = async (
     return undefined;
   }
 
-  const court = ecli.includes(":T:") ? "General Court" : "Court of Justice";
-
   // Fetch the language-specific XHTML stream from Cellar. The
   // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
   // a challenge instead of document content to server-side callers.
@@ -2489,7 +2655,7 @@ export const buildDecision = async (
   return ecjDecisionFromParts({
     celex,
     ecli,
-    court,
+    court: undefined,
     decisionDate: date,
     decisionType,
     language: ecjRowLanguage(lang),

@@ -507,6 +507,24 @@
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
+    "approval": {
+      "approveSelected": "Patvirtinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
+      "empty": "Šioje byloje nieko nelaukia patvirtinimo.",
+      "failed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+      "myTime": "Mano laikas",
+      "refusals": {
+        "invalidEntry": "Pridėkite aprašymą ir patikrinkite darbo datą, tada patvirtinkite įrašą.",
+        "notApprover": "Šį įrašą gali patvirtinti tik jam priskirtas tvirtintojas arba administratorius.",
+        "notFound": "Šio įrašo nebėra. Atnaujinkite sąrašą.",
+        "runningTimer": "Prieš tvirtindami įrašą sustabdykite veikiantį laikmatį.",
+        "unpriced": "Šis įrašas neturi įkainio. Nustatykite šios bylos įkainį ir tada patvirtinkite įrašą.",
+        "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
+      },
+      "returnComment": "Grąžinimo priežastis",
+      "selectEntry": "Pasirinkti įrašą",
+      "timeEntries": "Laiko įrašai",
+      "title": "Patvirtinimai"
+    },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
     "batchActions": "Grupiniai veiksmai",
@@ -594,6 +612,7 @@
       "openInvoice": "Atidaryti sąskaitą",
       "otherCurrency": "{count, plural, one {# eilutė užregistruota} few {# eilutės užregistruotos} many {# eilutės užregistruota} other {# eilučių užregistruota}} kita valiuta nei {currency} ir lieka atskirai sąskaitai.",
       "outsideScope": "Nepatenka į PVM taikymo sritį, 0 %",
+      "pendingApprovals": "{count, plural, one {# elementas laukia} few {# elementai laukia} many {# elemento laukia} other {# elementų laukia}} patvirtinimo. Peržiūrėti patvirtinimus.",
       "rate": "Įkainis",
       "readyDescription": "Išrašant sąskaitai suteikiamas kitas jūsų numerių serijos numeris ir ji užrakinama. Juodraštį galima toliau redaguoti.",
       "readyTitle": "Paruošta išrašyti",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "arba parašykite mums adresu",
       "viewDocumentation": "Peržiūrėti dokumentaciją"
     },
-    "enterKey": "↵",
     "error": "Klaida",
     "expenses": "Išlaidos",
     "export": {
@@ -2205,10 +2223,12 @@
     "scrollToTop": "Slinkti į viršų",
     "search": "Ieškoti...",
     "searchIn": "Ieškoti",
+    "searchMembers": "Ieškoti narių…",
     "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
     "selectAll": "Pasirinkti visus",
     "selectDate": "Pasirinkti datą…",
+    "selected": "Pasirinkta",
     "sessions": "Sesijos",
     "settings": "Nustatymai",
     "showAll": "Rodyti viską",
@@ -6210,8 +6230,7 @@
         "lead": "Atsakingas",
         "leadActive": "Atsakingas",
         "leadInactive": "Nustatyti atsakingą",
-        "noLead": "Nėra atsakingo",
-        "searchMembers": "Ieškoti narių…"
+        "noLead": "Nėra atsakingo"
       },
       "to": "Iki"
     },
@@ -6273,6 +6292,7 @@
       "deleteAll": "Ištrinti visus",
       "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
       "hideColumn": "Slėpti stulpelį",
+      "moveFailed": "{failed, plural, one {Nepavyko perkelti # iš {total} elementų.} few {Nepavyko perkelti # iš {total} elementų.} other {Nepavyko perkelti # iš {total} elementų.}}",
       "readOnlyGrouping": "Šis grupavimas yra tik skaitomas",
       "selectPropertyHint": "Pasirinkite savybę grupavimui įrankių juostoje",
       "uploadDocument": "Įkelti dokumentą",
@@ -6291,10 +6311,10 @@
       "addMember": "Pridėti narį",
       "addMemberDescription": "Pridėti komandos narį prie šios bylos",
       "alreadyMember": "Naudotojas jau yra narys",
+      "alreadyOnMatter": "Jau yra šioje byloje",
       "cannotRemoveLast": "Negalima pašalinti paskutinio nario",
       "noMembersFound": "Narių nerasta",
-      "removeMemberConfirm": "Pašalinti šį narį iš bylos?",
-      "selectMember": "Pasirinkti narį"
+      "removeMemberConfirm": "Pašalinti šį narį iš bylos?"
     },
     "newDocument": "Naujas dokumentas",
     "newFolder": "Naujas aplankas",
@@ -6515,6 +6535,11 @@
       },
       "passwordLabel": "Įveskite PDF slaptažodį",
       "previousPage": "Ankstesnis puslapis",
+      "selection": {
+        "explainPassagePrompt": "Paaiškink šią {citation} ištrauką:\n\n„{quote}“",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}–{end}"
+      },
       "showOriginal": "Rodyti originalius puslapius",
       "unlock": "Atrakinti"
     },

@@ -10,6 +10,7 @@ import {
   celexToCaseNumber,
   ECJ_DECISION_PATTERN,
   ECJ_TOTAL_COUNT_QUERY,
+  ecjCaseNumber,
   type EcjListedVariant,
   ecjVariantIdentity,
   euEcjAdapter as ecjAdapter,
@@ -117,6 +118,44 @@ const frBinding = withManifestation(firstFixtureBinding, {
 const deBinding = withManifestation(firstFixtureBinding, {
   cellarLanguage: "DEU",
   manifestationId: DE_MANIFESTATION_ID,
+});
+
+// -- the case number the publisher states --
+
+describe("ecjCaseNumber", () => {
+  test.each([
+    // Before 1989 the Court of Justice numbered cases without a letter.
+    { celex: "61978CJ0120", statements: ["Case 120/78."], expected: "120/78" },
+    { celex: "61955CJ0008", statements: ["Case 8-55."], expected: "8/55" },
+    { celex: "61987CJ0302", statements: ["Věc 302/87."], expected: "302/87" },
+    // A case still pending in 1989 took the letter.
+    {
+      celex: "61988CJ0070",
+      statements: ["Case C-70/88."],
+      expected: "C-70/88",
+    },
+    {
+      celex: "61990CJ0006",
+      statements: ["Joined Cases C-6/90 and C-9/90."],
+      expected: "C-6/90",
+    },
+    { celex: "62022CJ0128", statements: ["C-128/22"], expected: "C-128/22" },
+    { celex: "62005FJ0001", statements: ["Case F-1/05."], expected: "F-1/05" },
+  ])("$statements → $expected", ({ celex, statements, expected }) => {
+    expect(ecjCaseNumber(celex, statements)).toBe(expected);
+  });
+
+  test("reads the docket the CELEX names, not another one beside it", () => {
+    // A joined case's second docket is not this document's.
+    expect(
+      ecjCaseNumber("61990CJ0009", ["Joined Cases C-6/90 and C-9/90."]),
+    ).toBe("C-9/90");
+    expect(ecjCaseNumber("61978CJ0120", ["Case 121/78."])).toBe("C-120/78");
+  });
+
+  test("keeps the CELEX reading when the publisher states no docket", () => {
+    expect(ecjCaseNumber("62024CJ0436", [])).toBe("C-436/24");
+  });
 });
 
 // -- celexToCaseNumber --

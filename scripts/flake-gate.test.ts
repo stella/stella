@@ -52,6 +52,14 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
     ].join(""),
   );
   expect(source).not.toContain("CHANGED_FILES_JSON: $");
+  // Repeated tests read the API runtime their own jobs generate.
+  expect(source).toContain(
+    [
+      "          bun --cwd=packages/cli run codegen:runtime\n",
+      "          bun --cwd=apps/api run generate:capability-runtime\n",
+      `          cat > "$RUNNER_TEMP/changed-files.json"`,
+    ].join(""),
+  );
   expect(MAX_CHANGED_TEST_FILES).toBeGreaterThan(0);
   expect(REPEATS).toBe(5);
 });

@@ -68,28 +68,28 @@
     "fingerprint": "4e55ef31785ecc33332f67072513e6f3eaf6ddf71e7d8751af1670f9584156f3"
   },
   "eu-ecj": {
-    "version": 16,
-    "fingerprint": "a314df478ad9ddd604fd537cc9a64573aaae667f636f3b723d010c8cdbd2ba47"
+    "version": 17,
+    "fingerprint": "0acdb02c3500113ee9dd2f21ae37857a8ad44dc738793e4ee29026298e22e00e"
   },
   "hu-bhgy": {
     "version": 20,
     "fingerprint": "a76e71f182b3ffab1fc2ec5b0a5d1d96cc43810db347112f623032b12cac8fc1"
   },
   "pl-courts": {
-    "version": 14,
-    "fingerprint": "25fb125ee63a31acdbf5c8f02d3c0d30b097af0a826fe636c00d7bf68f370c05"
+    "version": 15,
+    "fingerprint": "dd0e9c9d6ad0fea3a6416ce99db3da249f77882ccf4347d6c3f7d52dade07330"
   },
   "pl-kio": {
-    "version": 8,
-    "fingerprint": "37583b9c704dc7755ac939c9b2f310bedf301dfdda341e337427a1af6175a04c"
+    "version": 9,
+    "fingerprint": "404e701b7c147b9f86912b2c007ccfbc2c9d6826594a6560276c1b3162d5cf01"
   },
   "pl-kis": {
-    "version": 9,
-    "fingerprint": "7a42a36aef7fb209efd9b1747dde933f903107bac46a7c767a8bf5d39e46372c"
+    "version": 10,
+    "fingerprint": "af057a5e881b143acd50b38c5f6c37fed4f9c6d650bd2aba141faed7b968a25e"
   },
   "pl-ncourt": {
-    "version": 13,
-    "fingerprint": "077abba50de1b65434b53cf4f1ed88f698eb782c9a6c13bae3421ac1e3db0fcf"
+    "version": 14,
+    "fingerprint": "7b242ba23afc943b67a6886976d1e31e96b3584c10d468feb5fe31515b3758f4"
   },
   "pl-nsa": {
     "version": 9,
@@ -104,16 +104,16 @@
     "fingerprint": "4eed7ece5a881d701ba9dfcbc9c2ddc053053181b2a3b25f46c96610152ff0bb"
   },
   "pl-uodo": {
-    "version": 13,
-    "fingerprint": "7e643859c580ba94797f91d868315f6855d5366ccf20829b5c89b98ccf8758b0"
+    "version": 14,
+    "fingerprint": "9d573a4efd65e07c3d5ca29351b4ffc60cab29d7851342510e2367597684c7f1"
   },
   "pl-uokik": {
     "version": 11,
     "fingerprint": "1f5726d89fea76c103346ee3c1a3da9373b9e88f62f909d366319c1c02072cca"
   },
   "sk-courts": {
-    "version": 17,
-    "fingerprint": "a64699064a6af112e8fbfc070250feaec96f9f60a214d092502160cb2f1fd6af"
+    "version": 18,
+    "fingerprint": "0859755c08ee5e54ba9581c3b1ee60f55ba583318c75ed4b87a91d0f019a5818"
   },
   "sk-us": {
     "version": 12,

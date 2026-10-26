@@ -207,6 +207,15 @@ export type RawIngestionResult = {
    */
   legacyEcli?: string | undefined;
   /**
+   * The docket an older adapter version stored this same publisher document
+   * under, where it differs from `caseNumber` (a court letter the publisher
+   * never printed, read off the publisher's own identifier). Like
+   * `legacyEcli`, it only lets the pipeline find the legacy null-id row this
+   * document produced, which it adopts only on ECLI or source URL proof; it
+   * is never stored.
+   */
+  legacyCaseNumber?: string | undefined;
+  /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on
    * `caseNumber`: a citation names the docket alone, so a number carrying a
@@ -298,6 +307,7 @@ type PlainTextResultFields = {
   sheetNumber?: PlainText | undefined;
   ecli?: PlainText | undefined;
   legacyEcli?: PlainText | undefined;
+  legacyCaseNumber?: PlainText | undefined;
   court: PlainText;
   decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
@@ -349,6 +359,7 @@ export const PLAIN_TEXT_RESULT_FIELDS = {
   sheetNumber: true,
   ecli: true,
   legacyEcli: true,
+  legacyCaseNumber: true,
   court: true,
   decisionType: true,
   metadata: true,
@@ -446,6 +457,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       sheetNumber: yield* optionalPlainText(raw.sheetNumber),
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
+      legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
