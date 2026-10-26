@@ -69,7 +69,8 @@ export const pdfSelectionPassage = ({
   root,
 }: PdfSelectionPassageOptions): PdfSelectionPassage | null => {
   const lines: string[] = [];
-  let pages: PdfPageSpan | null = null;
+  let firstPage: number | null = null;
+  let lastPage: number | null = null;
   for (const layer of root.querySelectorAll(`[${TEXT_LAYER_ATTRIBUTE}]`)) {
     const pageId = layer.getAttribute(TEXT_LAYER_ATTRIBUTE);
     if (pageId === null || !range.intersectsNode(layer)) {
@@ -80,11 +81,14 @@ export const pdfSelectionPassage = ({
     if (page === null || text.trim() === "") {
       continue;
     }
-    pages = { end: page, start: pages?.start ?? page };
+    firstPage ??= page;
+    lastPage = page;
     lines.push(text);
   }
   const quote = lines.join(" ").replaceAll(/\s+/gu, " ").trim();
-  return pages === null || quote === "" ? null : { pages, quote };
+  return firstPage === null || lastPage === null || quote === ""
+    ? null
+    : { pages: { end: lastPage, start: firstPage }, quote };
 };
 
 /** How the reader's language writes a page locator ("p. 3", "s. 3–4"). */
