@@ -397,6 +397,42 @@ test("run: text inside a block scalar is not a run key", () => {
   ]);
 });
 
+test("an aliased step is checked once, at its anchor's run line", () => {
+  const steps =
+    "jobs:\n  a:\n    steps:\n      - &fetch\n        name: Fetch\n        run: |\n          echo fetch\n          RUN\n  b:\n    steps:\n      - *fetch\n      - run: echo after";
+  expect(
+    check(".github/workflows/alias.yml", steps.replace("RUN", "echo done")),
+  ).toEqual([]);
+  expect(
+    check(".github/workflows/alias.yml", steps.replace("RUN", "! true")),
+  ).toEqual([
+    { file: ".github/workflows/alias.yml", line: 8, source: "! true" },
+  ]);
+  expect(
+    check(
+      ".github/workflows/alias-after.yml",
+      "jobs:\n  a:\n    steps:\n      - &fetch\n        run: echo fetch\n      - *fetch\n      - run: |\n          ! true\n          echo x",
+    ),
+  ).toEqual([
+    { file: ".github/workflows/alias-after.yml", line: 8, source: "! true" },
+  ]);
+});
+
+test("a merge key copy of a run step fails closed", () => {
+  expect(
+    check(
+      ".github/workflows/merge-key.yml",
+      "jobs:\n  a:\n    steps:\n      - &fetch\n        run: echo fetch\n      - <<: *fetch\n        name: Again",
+    ),
+  ).toEqual([
+    {
+      file: ".github/workflows/merge-key.yml",
+      line: 1,
+      source: "run values do not map one-to-one onto `run:` key lines",
+    },
+  ]);
+});
+
 test("operators inside [[ ]] belong to the conditional expression", () => {
   expect(
     check(

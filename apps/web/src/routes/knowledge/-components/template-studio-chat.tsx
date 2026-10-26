@@ -24,6 +24,7 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { executeFolioToolCall } from "@stll/folio-agents";
 import type {
   FolioAgentBridge,
@@ -35,8 +36,8 @@ import {
   getFolioDocumentOperationReceipts,
 } from "@stll/folio-core";
 import type {
-  FolioAIEditSkipReason,
   FolioAIEditSkippedOperation,
+  FolioAIEditSkipReason,
   FolioDocumentOperationBatch,
   FolioDocumentOperationResult,
 } from "@stll/folio-core";
@@ -67,7 +68,15 @@ import {
 import type { PromptBarPresetScope } from "@/components/ai-suggestions/host";
 import { scrollEditorToPos } from "@/components/ai-suggestions/scroll-editor-to-pos";
 import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
-import { useChatEditor } from "@/components/chat-editor-provider";
+import {
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
+  useChatEditor,
+} from "@/components/chat-editor-provider";
+import type {
+  ChatInputDraft,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
@@ -108,7 +117,7 @@ import { CHAT_EDIT_APPLY_MODE } from "@/lib/chat-edit-mode";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -135,8 +144,14 @@ const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
 /** Snapshot handed to folio when the Studio editor has not produced one yet. */
 const EMPTY_EDIT_SNAPSHOT: FolioAIEditSnapshot = { blocks: [], anchors: {} };
 
-const capturePromptSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
+const capturePromptSubmitError = (
+  error: unknown,
+  scope: HandlerExceptionScope,
+): void => {
+  getAnalytics().captureError(error, {
+    fingerprintKey: "capturePromptSubmitError:failure",
+    scope,
+  });
 };
 
 type TemplateStudioChatProps = {
@@ -219,10 +234,16 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       const response = await api.chat["template-thread"].rotate.post({
         templateId: toSafeId<"template">(props.templateId),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     if (Result.isError(rotated)) {
-      getAnalytics().captureError(rotated.error);
+      getAnalytics().captureError(rotated.error, {
+        fingerprintKey: "ResolvedTemplateStudioChat.rotateThread:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ResolvedTemplateStudioChat.rotateThread:failure",
+        },
+      });
       notifyUserError(rotated.error, t("common.somethingWentWrong"));
       return false;
     }
@@ -687,7 +708,12 @@ const TemplateStudioChatInner = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "chat-session.template-studio",
+    },
     chat,
+    timingSurface: "template-studio",
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
@@ -735,7 +761,12 @@ const TemplateStudioChatInner = ({
     });
   });
   useMountEffect(() => {
-    dispatchPendingPresetSend().catch(capturePromptSubmitError);
+    dispatchPendingPresetSend().catch((promptError: unknown) =>
+      capturePromptSubmitError(promptError, {
+        type: "handler",
+        handlerId: "template-chat.preset-send",
+      }),
+    );
   });
 
   /**
@@ -1211,7 +1242,13 @@ const TemplateStudioChatInner = ({
       } catch (toolCallError) {
         // Allow a retry on a later render of the same unresolved part.
         executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
-        getAnalytics().captureError(toolCallError);
+        getAnalytics().captureError(toolCallError, {
+          fingerprintKey: "TemplateStudioChatInner:toolCallError",
+          scope: {
+            type: "handler",
+            handlerId: "TemplateStudioChatInner:toolCallError",
+          },
+        });
         try {
           await addToolResult(
             {
@@ -1228,7 +1265,13 @@ const TemplateStudioChatInner = ({
             scopedContinuationOptions,
           );
         } catch (reportError) {
-          getAnalytics().captureError(reportError);
+          getAnalytics().captureError(reportError, {
+            fingerprintKey: "TemplateStudioChatInner:reportError",
+            scope: {
+              type: "handler",
+              handlerId: "TemplateStudioChatInner:reportError",
+            },
+          });
         }
       }
     },
@@ -1326,6 +1369,56 @@ const TemplateStudioChatInner = ({
 
   const pendingCount = orderedPending.length;
   const threadVisible = panelOpen && hasThreadContent;
+
+  async function handlePromptSubmit({
+    prompt,
+    files,
+  }: {
+    prompt: string;
+    files: ChatInputDraft["files"];
+  }): Promise<ChatSendOutcome> {
+    // ensureAIAvailable is a real round-trip; a concurrent "new chat"
+    // rotation can swap the active thread while it is in flight. This
+    // instance (keyed by chatThreadId) still targets its own thread,
+    // so bail if the active thread moved rather than deliver the send
+    // to a thread the user has already left.
+    const submittingThreadId = chatThreadId;
+    const sent = await Result.tryPromise(async () => {
+      if (!(await ensureAIAvailable())) {
+        return CHAT_SEND_KEPT;
+      }
+      const currentThreadId = queryClient.getQueryData(
+        templateChatThreadOptions({
+          activeOrganizationId,
+          key: { templateId, userId: user.id },
+        }).queryKey,
+      );
+      if (currentThreadId !== submittingThreadId) {
+        return CHAT_SEND_KEPT;
+      }
+      // Always pop the thread open on send, even if the user
+      // minimised it earlier.
+      setPanelOpen(true);
+      // The typed composer submit carries any (+) attachments
+      // (reference docs to lift clauses from); the scoped-preset
+      // path below stays text-only.
+      await sendMessage(
+        await buildChatRequestMessage({
+          files,
+          html: prompt,
+        }),
+      );
+      return CHAT_SEND_SENT;
+    });
+    if (Result.isError(sent)) {
+      capturePromptSubmitError(sent.error, {
+        type: "handler",
+        handlerId: "template-chat.prompt-send",
+      });
+      return CHAT_SEND_KEPT;
+    }
+    return sent.value;
+  }
 
   return (
     <ChatMattersContext value={{ createDocumentMattersView }}>
@@ -1464,43 +1557,7 @@ const TemplateStudioChatInner = ({
           onStop={() => {
             stop();
           }}
-          onSubmit={({ prompt, files }) => {
-            // ensureAIAvailable is a real round-trip; a concurrent "new chat"
-            // rotation can swap the active thread while it is in flight. This
-            // instance (keyed by chatThreadId) still targets its own thread,
-            // so bail if the active thread moved rather than deliver the send
-            // to a thread the user has already left.
-            const submittingThreadId = chatThreadId;
-            ensureAIAvailable()
-              .then(async (available) => {
-                if (!available) {
-                  return;
-                }
-                const currentThreadId = queryClient.getQueryData(
-                  templateChatThreadOptions({
-                    activeOrganizationId,
-                    key: { templateId, userId: user.id },
-                  }).queryKey,
-                );
-                if (currentThreadId !== submittingThreadId) {
-                  return;
-                }
-                // Always pop the thread open on send, even if the user
-                // minimised it earlier.
-                setPanelOpen(true);
-                // The typed composer submit carries any (+) attachments
-                // (reference docs to lift clauses from); the scoped-preset
-                // path below stays text-only.
-                await sendMessage(
-                  await buildChatRequestMessage({
-                    files,
-                    html: prompt,
-                  }),
-                );
-                return;
-              })
-              .catch(capturePromptSubmitError);
-          }}
+          onSubmit={handlePromptSubmit}
           pendingCount={pendingCount}
           presetScopeChooser={{
             appliesTo: (preset) => preset.id === SUGGEST_FIELDS_PRESET_ID,

@@ -474,3 +474,27 @@ test("visual preview configuration accepts an optional Lambda function identifie
     expect(v.safeParse(schema, value).success).toBe(false);
   }
 });
+
+test("monitoring session keys accept a bounded digest configuration", () => {
+  const schema = envApiServerSchema.SYNTHETIC_SESSION_KEYS;
+  const entry = {
+    label: "current",
+    sha256: "a".repeat(64),
+    notAfter: "2026-10-20T12:00:00Z",
+  };
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  expect(v.parse(schema, JSON.stringify([entry]))).toEqual([entry]);
+  expect(
+    v.parse(schema, JSON.stringify([entry, { ...entry, label: "next" }])),
+  ).toHaveLength(2);
+  for (const invalid of [
+    "invalid",
+    "[]",
+    JSON.stringify([entry, entry, entry]),
+    JSON.stringify([{ ...entry, sha256: "short" }]),
+    JSON.stringify([{ ...entry, notAfter: "tomorrow" }]),
+    JSON.stringify([{ ...entry, label: "" }]),
+  ]) {
+    expect(v.safeParse(schema, invalid).success).toBe(false);
+  }
+});

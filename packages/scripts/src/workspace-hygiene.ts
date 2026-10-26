@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { Result } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -28,6 +29,49 @@ const DEPENDENCY_FIELDS = [
   "peerDependencies",
   "optionalDependencies",
 ] as const;
+const DENIED_NPM_DEPENDENCIES = new Set([
+  "fuse.js",
+  "flexsearch",
+  "minisearch",
+  "lunr",
+  "fast-levenshtein",
+  "fastest-levenshtein",
+  "leven",
+  "js-levenshtein",
+  "string-similarity",
+  "ahocorasick",
+  "natural",
+  "match-sorter",
+  "cmdk",
+  "fuzzysort",
+  "@leeoniya/ufuzzy",
+  "fuzzball",
+  "rapidfuzz",
+  "fuzzywuzzy",
+]);
+const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
+  "jest",
+  "vitest",
+  "mocha",
+  "@types/jest",
+  "@types/vitest",
+  "@types/mocha",
+]);
+const DENIED_CARGO_DEPENDENCIES = new Set([
+  "strsim",
+  "levenshtein",
+  "edit-distance",
+  "fuzzy-matcher",
+  "triple_accel",
+  "rapidfuzz",
+]);
+const CARGO_DEPENDENCY_FIELDS = [
+  "dependencies",
+  "dev-dependencies",
+  "build-dependencies",
+] as const;
+// The docs MCP is installed independently outside the apps/packages workspaces.
+const STANDALONE_NPM_PACKAGE_JSON_PATHS = [".claude/mcp/package.json"] as const;
 const SKIPPED_SCAN_DIRS = new Set([
   ".cache",
   ".turbo",
@@ -55,23 +99,40 @@ const EXACT_PACKAGE_VERSION_PATTERN =
 const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
 ] as const;
+// `bun check` embeds the TypeScript 7 checker, so no workspace installs a
+// `typescript` package for it. Tools that need the TypeScript 7 compiler API
+// use `tsrs`; tools not yet ported import TypeScript 6 through the
+// `typescript6` alias, and Astro's checker, which supports only TypeScript 5
+// and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
-  native: "npm:typescript@7.0.2",
   oxlint: "1.87.0",
-  oxlintConfig: "1.4.0",
+  oxlintConfig: "1.7.0",
   tsgolint: "7.0.2003",
-  typescript6Compatibility: "6.0.3",
+  tsrs: "0.18.0-ts7.1.0-dev.20260929",
+  typescript6Api: "npm:typescript@6.0.3",
+  typescript6Astro: "6.0.3",
 } as const;
+// Workspaces whose own scripts import the TypeScript 6 compiler API; each
+// declares it so a filtered install links it.
+const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
+  "apps/api/package.json",
+  "packages/scripts/package.json",
+]);
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
-    dependency: "@astrojs/check",
+    dependency: "typescript",
     packagePath: "apps/landing/package.json",
     script:
       "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
+    specifier: "catalog:ts6",
+  },
+  astroCheck: {
+    dependency: "@astrojs/check",
+    packagePath: "apps/landing/package.json",
     specifier: "^0.9.9",
   },
   compilerApi: {
-    dependency: "typescript",
+    dependency: "typescript6",
     packagePath: "packages/scripts/package.json",
     specifier: "catalog:",
   },
@@ -145,6 +206,100 @@ const readDependencyNames = (packageJson: Record<string, unknown>) => {
 
   return dependencyNames;
 };
+
+const validateDeniedNpmDependencies = (
+  packageJsonPath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = [];
+  for (const field of DEPENDENCY_FIELDS) {
+    const dependencies = packageJson?.[field];
+    if (!isRecord(dependencies)) {
+      continue;
+    }
+    for (const [name, specifier] of Object.entries(dependencies)) {
+      const npmAlias =
+        typeof specifier === "string"
+          ? /^npm:(?<name>@[^/]+\/[^@]+|[^@/]+)(?:@|$)/u.exec(specifier)
+              ?.groups?.["name"]
+          : undefined;
+      const actualName = npmAlias ?? name;
+      if (DENIED_TEST_RUNNER_DEPENDENCIES.has(actualName)) {
+        issues.push({
+          message: `${actualName} is blocked; tests run on bun test`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
+      const deniedName = DENIED_NPM_DEPENDENCIES.has(actualName)
+        ? actualName
+        : undefined;
+      if (deniedName === undefined) {
+        continue;
+      }
+      issues.push({
+        message: `${deniedName} is blocked; use @stll/text-search for search functionality`,
+        path: packageJsonPath,
+      });
+    }
+  }
+  return issues;
+};
+
+const cargoDependencyEntries = (
+  manifest: Record<string, unknown>,
+): readonly (readonly [string, unknown])[] => {
+  const tables = [
+    manifest,
+    isRecord(manifest["workspace"]) ? manifest["workspace"] : {},
+    ...(isRecord(manifest["target"])
+      ? Object.values(manifest["target"]).filter(isRecord)
+      : []),
+  ];
+  return tables.flatMap((table) =>
+    CARGO_DEPENDENCY_FIELDS.flatMap((field) => {
+      const dependencies = table[field];
+      return isRecord(dependencies) ? Object.entries(dependencies) : [];
+    }),
+  );
+};
+
+const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
+  findFiles(
+    rootDir,
+    (filePath) => path.basename(filePath) === "Cargo.toml",
+  ).flatMap((manifestPath) => {
+    const parsed = Result.try((): unknown =>
+      Bun.TOML.parse(readFileSync(manifestPath, "utf-8")),
+    );
+    if (Result.isError(parsed)) {
+      return [
+        {
+          message: "Cargo.toml must contain valid TOML for dependency policy",
+          path: repoRelativePath(rootDir, manifestPath),
+        },
+      ];
+    }
+    const manifest = parsed.value;
+    if (!isRecord(manifest)) {
+      return [];
+    }
+    return cargoDependencyEntries(manifest).flatMap(([name, specifier]) => {
+      const packageName = isRecord(specifier)
+        ? specifier["package"]
+        : undefined;
+      const actualName = typeof packageName === "string" ? packageName : name;
+      if (!DENIED_CARGO_DEPENDENCIES.has(actualName)) {
+        return [];
+      }
+      return [
+        {
+          message: `${actualName} is blocked; use @stll/text-search for search functionality`,
+          path: repoRelativePath(rootDir, manifestPath),
+        },
+      ];
+    });
+  });
 
 const readDependencySpecifier = (
   packageJsonPath: string,
@@ -325,9 +480,9 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       specifier: TYPESCRIPT_TOOLCHAIN.oxlintConfig,
     },
     {
-      dependency: "@typescript/native",
+      dependency: "typescript6",
       field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.native,
+      specifier: "catalog:",
     },
     {
       dependency: "oxlint-tsgolint",
@@ -335,7 +490,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       specifier: TYPESCRIPT_TOOLCHAIN.tsgolint,
     },
     {
-      dependency: "typescript",
+      dependency: "tsrs",
       field: "devDependencies",
       specifier: "catalog:",
     },
@@ -345,9 +500,14 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       specifier: TYPESCRIPT_TOOLCHAIN.oxlint,
     },
     {
-      dependency: "typescript",
+      dependency: "tsrs",
       field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Compatibility,
+      specifier: TYPESCRIPT_TOOLCHAIN.tsrs,
+    },
+    {
+      dependency: "typescript6",
+      field: "catalog",
+      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Api,
     },
   ] as const;
 
@@ -359,6 +519,19 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
 
     issues.push({
       message: `${field}.${dependency} must be ${specifier}; found ${actual ?? "missing"}`,
+      path: "package.json",
+    });
+  }
+
+  const catalogs = rootPackage?.["catalogs"];
+  const astroTypeScript = readStringProperty(
+    isRecord(catalogs) ? catalogs : null,
+    "ts6",
+    "typescript",
+  );
+  if (astroTypeScript !== TYPESCRIPT_TOOLCHAIN.typescript6Astro) {
+    issues.push({
+      message: `catalogs.ts6.typescript must be ${TYPESCRIPT_TOOLCHAIN.typescript6Astro}; found ${astroTypeScript ?? "missing"}`,
       path: "package.json",
     });
   }
@@ -441,23 +614,24 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
         });
       }
 
-      const typescript = readDependencySpecifier(packageJsonPath, "typescript");
       if (
-        typescript !== null &&
-        relativePackagePath !==
-          TYPESCRIPT6_COMPATIBILITY.compilerApi.packagePath
+        readDependencySpecifier(packageJsonPath, "typescript") !== null &&
+        relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath
       ) {
         issues.push({
           message:
-            "TypeScript 6 is compatibility-only and may only be declared by packages/scripts for the compiler API",
+            "typescript is not a workspace dependency: bun check embeds TypeScript 7 and tsrs serves its compiler API; only apps/landing pins its own TypeScript 6 for Astro's checker",
           path: relativePackagePath,
         });
       }
 
-      if (readDependencySpecifier(packageJsonPath, "@typescript/native")) {
+      if (
+        readDependencySpecifier(packageJsonPath, "typescript6") !== null &&
+        !TYPESCRIPT6_API_PACKAGE_PATHS.has(relativePackagePath)
+      ) {
         issues.push({
           message:
-            "@typescript/native is a root-owned TypeScript 7 compiler dependency",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
           path: relativePackagePath,
         });
       }
@@ -739,7 +913,7 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
       }));
     });
 
-export const validateWorkspaceRoot = (
+export const validateWorkspaceRoot = async (
   rootDir: string,
   appBoundaryOptions: AppBoundaryOptions = {},
   {
@@ -747,16 +921,27 @@ export const validateWorkspaceRoot = (
   }: {
     requirePreparedApiTypecheck?: boolean;
   } = {},
-): WorkspaceIssue[] => {
+): Promise<WorkspaceIssue[]> => {
   const issues: WorkspaceIssue[] = [
-    ...validateApiTypecheckProjects(rootDir, {
+    ...(await validateApiTypecheckProjects(rootDir, {
       requirePrepared: requirePreparedApiTypecheck,
-    }),
-    ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
+    })),
+    ...(await validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions)),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
     ...validateBabelToolchains(rootDir),
     ...validateTypeScriptToolchain(rootDir),
+    ...validateDeniedNpmDependencies(
+      "package.json",
+      readPackageJson(path.resolve(rootDir, "package.json")),
+    ),
+    ...STANDALONE_NPM_PACKAGE_JSON_PATHS.flatMap((relativePath) =>
+      validateDeniedNpmDependencies(
+        relativePath,
+        readPackageJson(path.resolve(rootDir, relativePath)),
+      ),
+    ),
+    ...validateDeniedCargoDependencies(rootDir),
   ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
@@ -812,6 +997,10 @@ export const validateWorkspaceRoot = (
       }
 
       issues.push(
+        ...validateDeniedNpmDependencies(
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
+        ),
         ...validateBunTypeOwnership(
           path.resolve(parentPath, entry.name),
           relativePath,
@@ -845,7 +1034,7 @@ if (import.meta.main) {
       `Skipping API typecheck ownership: prepared configs are not generated yet (${unprepared.join(", ")}).`,
     );
   }
-  const issues = validateWorkspaceRoot(
+  const issues = await validateWorkspaceRoot(
     process.cwd(),
     {},
     {

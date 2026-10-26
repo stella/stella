@@ -8,7 +8,6 @@ import { Temporal } from "temporal-polyfill/full";
 
 import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
-import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import {
@@ -28,16 +27,16 @@ import {
 } from "./mcp-client.js";
 import {
   CACHE_SCHEMA_VERSION,
+  type CacheEnv,
   cachePathFor,
   computeDelta,
   DEFAULT_TTL_SECONDS,
   isCacheStale,
   isDeltaEmpty,
   readCacheFile,
-  writeCacheFile,
-  type CacheEnv,
   type RegistryCacheFile,
   type RegistryDelta,
+  writeCacheFile,
 } from "./registry-cache.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type {
@@ -290,12 +289,17 @@ export type RefreshOutcome =
       status: "refreshed";
       deltaEmpty: boolean;
       nudge?: string;
+      unsupported?: boolean;
       featureAccess?: CallerFeatureAccess;
       registry: CurrentRegistry;
     };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
-type FetchLatestVersion = () => Promise<string | undefined>;
+
+const cachedVersionPolicy = (raw: RawToolsList) => ({
+  ...(raw.cliMinimum === undefined ? {} : { cliMinimum: raw.cliMinimum }),
+  ...(raw.cliLatest === undefined ? {} : { cliLatest: raw.cliLatest }),
+});
 
 /**
  * Refresh the per-origin cache (spec S5.3). Force-refreshes on `auth login`;
@@ -312,7 +316,6 @@ export const refreshRegistryCache = async ({
   ttlSeconds = DEFAULT_TTL_SECONDS,
   currentVersion = CLI_VERSION,
   fetchRaw,
-  fetchLatestVersion,
   bakedListings,
 }: {
   serverOrigin: string;
@@ -323,7 +326,6 @@ export const refreshRegistryCache = async ({
   ttlSeconds?: number;
   currentVersion?: string;
   fetchRaw?: FetchRaw;
-  fetchLatestVersion?: FetchLatestVersion;
   bakedListings?: readonly RegistryToolListing[];
 }): Promise<RefreshOutcome> => {
   const filePath = cachePathFor(serverOrigin, env);
@@ -347,13 +349,7 @@ export const refreshRegistryCache = async ({
   const fetcher: FetchRaw =
     fetchRaw ??
     (async () => await fetchToolsListRaw({ serverUrl: serverOrigin, token }));
-  const latestFetcher = fetchLatestVersion ?? fetchLatestCliVersion;
-  const [raw, latestVersion] = await Promise.all([
-    fetcher(),
-    Result.tryPromise(async () => await latestFetcher()).then((result) =>
-      Result.isOk(result) ? result.value : undefined,
-    ),
-  ]);
+  const raw = await fetcher();
   if (Result.isError(raw)) {
     if (raw.error.admission !== undefined) {
       return { status: "admission-refused", refusal: raw.error.admission };
@@ -385,11 +381,9 @@ export const refreshRegistryCache = async ({
     ],
   });
 
-  // Resolve the update channel from npm, the publication source of truth. The
-  // server still supplies only its independently-owned minimum-version policy.
   const nudge = buildVersionNudge({
     current: currentVersion,
-    latest: latestVersion,
+    latest: raw.value.cliLatest,
     minimum: raw.value.cliMinimum,
     lastNudged: existing?.lastNudgedVersion,
   });
@@ -427,6 +421,7 @@ export const refreshRegistryCache = async ({
       ? {}
       : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
+    ...cachedVersionPolicy(raw.value),
   };
   await writeCacheFile(filePath, file);
   return {
@@ -437,5 +432,8 @@ export const refreshRegistryCache = async ({
       ? {}
       : { featureAccess: trust.featureAccess }),
     ...(nudge.line === undefined ? {} : { nudge: nudge.line }),
+    ...(nudge.unsupported === undefined
+      ? {}
+      : { unsupported: nudge.unsupported }),
   };
 };

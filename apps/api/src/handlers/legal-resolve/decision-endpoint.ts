@@ -1,78 +1,63 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
 import type {
   SafeHandlerGenerator,
   TokenHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 
-import { authorizeLegalResolveRequestOnce } from "./authorization";
 import { resolveDecision } from "./decision";
-import {
-  type GetLegalResolveAuthorization,
-  legalResolveBaseConfig,
-  type LegalResolveRouteResponse,
-  prepareLegalResolveRequest,
+import type {
+  GetLegalResolveAuthorization,
+  LegalResolveResolved,
 } from "./route-handler";
-
-const strictQuery = t.Object({ identifier: t.String({ maxLength: 512 }) });
+import {
+  legalResolveBaseConfig,
+  verifyLegalResolveCaller,
+} from "./route-handler";
 
 type DecisionRouteHandlerOptions = {
   getAuthorization: GetLegalResolveAuthorization;
   resolve?: typeof resolveDecision;
+  onResolved?: LegalResolveResolved;
 };
 
 const decisionConfig = {
   ...legalResolveBaseConfig,
   contract: "patch",
-  query: permissiveRouteSchema({ keys: ["identifier"] }),
+  query: v.object({
+    identifier: v.pipe(v.string(), v.maxLength(512)),
+  }),
 } satisfies TokenHandlerConfig;
 
 // The generator is written inline so the config types its context.
 const createDecisionEndpoint = ({
   getAuthorization,
   resolve = resolveDecision,
+  onResolved,
 }: DecisionRouteHandlerOptions) =>
   createSafeTokenHandler(
     decisionConfig,
+    verifyLegalResolveCaller(getAuthorization),
     async function* ({
+      caller,
       params,
       query,
       request,
-      set,
-    }): SafeHandlerGenerator<LegalResolveRouteResponse> {
-      const prepared = await prepareLegalResolveRequest({
-        getAuthorization,
-        params,
-        query,
-        querySchema: strictQuery,
-        request,
-        set,
-      });
-      if (prepared.status === "rejected") {
-        return Result.ok(prepared.body);
-      }
-      if (prepared.status === "invalid") {
-        return Result.err(
-          new HandlerError({ status: 422, message: prepared.message }),
-        );
-      }
+    }): SafeHandlerGenerator<LegalResolveResponse> {
       const response = yield* Result.ok(
         await resolve({
-          admission: prepared.authorization.admission,
-          country: prepared.params.country,
-          identifier: prepared.query.identifier,
+          admission: caller.admission,
+          country: params.country,
+          identifier: query.identifier,
         }),
       );
+      onResolved?.(request, response);
       return Result.ok(response);
     },
   );
-
-export const legalResolveDecisionEndpoint = createDecisionEndpoint({
-  getAuthorization: authorizeLegalResolveRequestOnce,
-});
 
 export const createLegalResolveDecisionHandler = createDecisionEndpoint;

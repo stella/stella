@@ -144,14 +144,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
-    "writes": {
-      "delete:oauthClient": 1,
-      "delete:oauthConsent": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/agent-auth-idjag.ts::bindCeremonyToIssuer",
     "writes": {
       "update:agentRegistration": 1
@@ -1822,23 +1814,9 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::endOrganizationEvaluation",
-    "writes": {
-      "update:organizationAccessStates": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/usage/organization-access-state.ts::recordMissingOrganizationAccessStates",
     "writes": {
       "insert:?": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordNewOrganizationAccessState",
-    "writes": {
-      "insert:organizationAccessStates": 1
     },
     "reason": "Usage metering or counter row that is itself the accounting record."
   },

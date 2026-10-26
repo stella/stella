@@ -10,10 +10,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
 import {
-  SK_COLLECTION_SERIES,
   SK_COLLECTION_PARSER_VERSION,
-  SkCollectionIssueError,
+  SK_COLLECTION_SERIES,
   type SkCollectionIssueCache,
+  SkCollectionIssueError,
 } from "@/api/lib/legal-search/sk-collection-enrichment";
 
 import samples from "./__fixtures__/sk-collection-headnotes.json";

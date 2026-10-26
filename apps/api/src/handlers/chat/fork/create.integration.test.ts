@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -28,9 +28,11 @@ import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
   type copyOrganizationFile,
@@ -134,9 +136,11 @@ type SeededAttachment = {
 };
 
 const seedAttachment = async ({
+  organizationId,
   threadId,
   userId,
 }: {
+  organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 }): Promise<SeededAttachment> => {
@@ -145,13 +149,15 @@ const seedAttachment = async ({
   const s3Key = createUserFileKey({
     fileId,
     mimeType: IMAGE_MIME_TYPE,
-    userId,
+    organizationId,
   });
-  const thumbnailKey = createUserFileKey({
-    fileId: thumbnailFileId,
-    mimeType: THUMBNAIL_MIME_TYPE,
-    userId,
-  });
+  const thumbnailKey =
+    createUserFileThumbnailKey({
+      sourceKey: s3Key,
+      thumbnailFileId,
+      organizationId,
+      uploaderUserId: userId,
+    }) ?? panic("The seeded attachment key must have a valid owner");
   await testDb.insert(userFiles).values({
     fileName: "exhibit.png",
     id: fileId,
@@ -207,7 +213,11 @@ const seedThread = async ({
   });
 
   const attachment = withAttachment
-    ? await seedAttachment({ threadId, userId: owner })
+    ? await seedAttachment({
+        organizationId: organizationId ?? ids.orgA,
+        threadId,
+        userId: owner,
+      })
     : null;
 
   const messageIds = texts.map(() =>
@@ -272,6 +282,7 @@ const forkContext = ({
     query: workspaceId ? { workspaceId } : {},
     recordAuditEvent: async () => await Promise.resolve(),
     request: new Request("http://localhost/v1/chat/threads/fork"),
+    route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
     safeDb: db,
     session: { activeOrganizationId: organizationId ?? ids.orgA },
     user: { id: userId ?? ids.userA1 },
@@ -279,6 +290,8 @@ const forkContext = ({
 
 const threadsContext = (): ThreadsCtx =>
   asTestRaw<ThreadsCtx>({
+    request: new Request("http://localhost/v1/chat/threads"),
+    route: "/v1/chat/threads" satisfies ApiRoutePath,
     memberRole: sessionMemberRole("owner"),
     query: { limit: 100 },
     safeDb,
@@ -327,7 +340,7 @@ const messageTexts = (
   );
 
 /**
- * A safe handler returns its payload directly and an Elysia status response on
+ * A safe handler returns its payload directly and an HTTP core status response on
  * failure, so a `code` property is how a rejection presents itself here.
  */
 const expectForked = async (pending: ReturnType<typeof forkThread.handler>) => {
@@ -509,11 +522,13 @@ test("duplicates attachments so neither thread's deletion touches the other's ob
   // The thumbnail's key is derived from `thumbnailFileId` at delete time, so
   // reusing that id would silently share one object between the two threads.
   expect(copiedFile.thumbnailFileId).not.toBe(attachment.thumbnailFileId);
-  const copiedThumbnailKey = createUserFileKey({
-    fileId: copiedFile.thumbnailFileId ?? "",
-    mimeType: THUMBNAIL_MIME_TYPE,
-    userId: ids.userA1,
-  });
+  const copiedThumbnailKey =
+    createUserFileThumbnailKey({
+      sourceKey: copiedFile.s3Key,
+      thumbnailFileId: copiedFile.thumbnailFileId ?? "",
+      organizationId: ids.orgA,
+      uploaderUserId: ids.userA1,
+    }) ?? panic("The copied attachment key must have a valid owner");
   expect(copiedThumbnailKey).not.toBe(attachment.thumbnailKey);
 
   // Both objects exist independently in storage.
@@ -759,6 +774,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
         promptCachingEnabled: false,
         query: {},
         request: new Request("http://localhost/v1/chat/threads/messages"),
+        route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -826,6 +842,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb: narrowed,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -851,6 +868,7 @@ test("a thread that was never forked reports no provenance", async () => {
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -1094,7 +1112,11 @@ test.each([true, false])(
     const attachments = [source.attachment];
     for (let index = 1; index < 130; index += 1) {
       attachments.push(
-        await seedAttachment({ threadId: source.threadId, userId: ids.userA1 }),
+        await seedAttachment({
+          organizationId: ids.orgA,
+          threadId: source.threadId,
+          userId: ids.userA1,
+        }),
       );
     }
     expect(attachments.length).toBeGreaterThan(128);
@@ -1218,7 +1240,7 @@ test.each([true, false])(
         expect(file.thumbnailFileId).not.toBeNull();
         expect(
           fakeS3.objects.has(
-            `${BUCKET}/${createUserFileKey({ fileId: file.thumbnailFileId ?? "", mimeType: THUMBNAIL_MIME_TYPE, userId: ids.userA1 })}`,
+            `${BUCKET}/${createUserFileThumbnailKey({ sourceKey: file.s3Key, thumbnailFileId: file.thumbnailFileId ?? "", organizationId: ids.orgA, uploaderUserId: ids.userA1 }) ?? panic("The copied attachment key must have a valid owner")}`,
           ),
         ).toBe(true);
       }

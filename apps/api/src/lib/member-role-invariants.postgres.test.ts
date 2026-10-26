@@ -20,9 +20,10 @@ import {
 } from "@/api/lib/membership-role-invariants";
 import { cents } from "@/api/lib/money";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
@@ -68,6 +69,10 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     name: "Membership",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values(
     owners.map(({ userId, memberId }) => ({

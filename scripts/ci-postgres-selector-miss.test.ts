@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
 
-import {
-  POSTGRES_CERTIFIABLE_SHARD_COUNTS,
-  POSTGRES_TEST_SHARD_IDS,
-} from "../apps/api/scripts/postgres-test-shards";
+import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
 import {
   formatPostgresSelectorMisses,
   fullPostgresRunSha,
@@ -182,7 +179,7 @@ test("legacy service jobs and repeated shards cannot certify full Postgres cover
   ).toBeFalse();
 });
 
-test("historical runs are certified by the shard topology they ran with", () => {
+test("runs certify only with exactly today's shard topology", () => {
   const steps = [
     { name: "Run Postgres-gated API suites", conclusion: "success" },
   ];
@@ -192,17 +189,23 @@ test("historical runs are certified by the shard topology they ran with", () => 
       conclusion: shard === failed ? "failure" : "success",
       steps,
     }));
-  for (const count of POSTGRES_CERTIFIABLE_SHARD_COUNTS) {
-    const shards = Array.from({ length: count }, (_, index) => index + 1);
-    expect(hasSuccessfulPostgresShards(run(shards))).toBeTrue();
-    for (const shard of shards) {
-      expect(hasSuccessfulPostgresShards(run(shards, shard))).toBeFalse();
+  const shards: readonly number[] = POSTGRES_TEST_SHARD_IDS;
+  expect(shards).toEqual(
+    Array.from({ length: shards.length }, (_, index) => index + 1),
+  );
+  expect(hasSuccessfulPostgresShards(run(shards))).toBeTrue();
+  for (const shard of shards) {
+    expect(hasSuccessfulPostgresShards(run(shards, shard))).toBeFalse();
+    // A run lacking any one shard never passes as a smaller topology.
+    expect(
+      hasSuccessfulPostgresShards(run(shards.filter((id) => id !== shard))),
+    ).toBeFalse();
+  }
+  // Runs from other shard counts never certify today's coverage.
+  for (let count = 1; count <= shards.length + 1; count += 1) {
+    if (count !== shards.length) {
+      const other = Array.from({ length: count }, (_, index) => index + 1);
+      expect(hasSuccessfulPostgresShards(run(other))).toBeFalse();
     }
   }
-  // A failed third shard of a three-shard run never passes as a two-shard run.
-  expect(hasSuccessfulPostgresShards(run([1, 2, 3], 3))).toBeFalse();
-  expect(hasSuccessfulPostgresShards(run([1]))).toBeFalse();
-  expect(hasSuccessfulPostgresShards(run([1, 3]))).toBeFalse();
-  expect(hasSuccessfulPostgresShards(run([2, 3]))).toBeFalse();
-  expect(hasSuccessfulPostgresShards(run([1, 2, 3, 4]))).toBeFalse();
 });

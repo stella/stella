@@ -1,11 +1,11 @@
 import type {
   BoundOAuthMetadata,
-  ProtectedResourceMetadata,
-  UpstreamAuthorizationServerMetadata,
   buildAuthorizeUrl,
   exchangeAuthorizationCode,
+  ProtectedResourceMetadata,
   refreshOAuthToken,
   registerOAuthClient,
+  UpstreamAuthorizationServerMetadata,
 } from "@/api/lib/mcp-upstream/oauth";
 
 declare const discoveredMetadata: {

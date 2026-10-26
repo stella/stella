@@ -124,6 +124,7 @@ fn set_tray_icon(
 
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
+const UPDATES_MANAGED_ITEM: &str = "updates-managed";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
 const COPY_DIAGNOSTICS_ACTION: &str = "copy-diagnostics";
 const EMAIL_SUPPORT_ACTION: &str = "email-support";
@@ -291,9 +292,12 @@ fn build_tray_menu_with_activity(
     builder = builder.separator();
   }
 
-  builder = builder.item(
-    &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
-  );
+  if !crate::managed_policy::current().clipboard_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
+        .build(app)?,
+    );
+  }
   if let Some(activity) = activity {
     builder = builder.item(
       &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
@@ -328,17 +332,25 @@ fn build_tray_menu_with_activity(
       .build(app)?,
   );
 
-  // Check for updates
-  builder = builder.item(
-    &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-      .enabled(!matches!(
-        snapshot.update.status,
-        crate::types::DesktopUpdateStatus::Checking
-          | crate::types::DesktopUpdateStatus::Downloading
-          | crate::types::DesktopUpdateStatus::Applying
-      ))
-      .build(app)?,
-  );
+  // Check for updates, unless the organization deploys them itself
+  if crate::managed_policy::current().updates_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
+        .enabled(false)
+        .build(app)?,
+    );
+  } else {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
+        .enabled(!matches!(
+          snapshot.update.status,
+          crate::types::DesktopUpdateStatus::Checking
+            | crate::types::DesktopUpdateStatus::Downloading
+            | crate::types::DesktopUpdateStatus::Applying
+        ))
+        .build(app)?,
+    );
+  }
 
   // Support submenu
   let support_menu = SubmenuBuilder::new(app, t("tray.support"))

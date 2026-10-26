@@ -1,0 +1,346 @@
+{
+  "format": 1,
+  "scenario": "approve-mid-tool",
+  "provider": "bedrock",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "entries": [
+    {
+      "type": "expect_outbound",
+      "label": "ask",
+      "request": {
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "text": "Delete the draft"
+                }
+              ]
+            }
+          ],
+          "system": [
+            {
+              "text": "[system prompt]"
+            }
+          ],
+          "inferenceConfig": {
+            "maxTokens": 64000,
+            "temperature": 0
+          },
+          "toolConfig": {
+            "tools": [
+              "ask-user",
+              "request_secret",
+              "use_connector_secret",
+              "execute_typescript",
+              "discover_tools",
+              "load-skill",
+              "read-skill-resource",
+              "counterparty_check",
+              "update-entity-fields",
+              "list_templates",
+              "describe_template",
+              "fill_template",
+              "suggest_template_fields",
+              "search-chat-history",
+              "expand-chat-history",
+              "search-past-chats",
+              "create-document",
+              "review_folder_consistency",
+              "set_practice_jurisdictions",
+              "create_template",
+              "configure_template_fields",
+              "save_document",
+              "delete_document",
+              "set_field_value",
+              "save_matter",
+              "delete_matter",
+              "save_contact",
+              "delete_contact",
+              "save_task",
+              "delete_task",
+              "link_matter_contact",
+              "save_clause",
+              "delete_clause",
+              "save_playbook",
+              "run_playbook",
+              "create_reader_annotation",
+              "update_reader_annotation",
+              "delete_reader_annotation",
+              "add_matter_member",
+              "remove_matter_member",
+              "update_organization_settings",
+              "mcp__external__delete",
+              "spawn_subagents"
+            ],
+            "toolChoice": {
+              "auto": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "tool-call"
+    },
+    {
+      "type": "expect_outbound",
+      "label": "after-approval",
+      "request": {
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "text": "Delete the draft"
+                }
+              ]
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "toolUse": {
+                    "toolUseId": "[id-1]",
+                    "name": "mcp__external__delete",
+                    "input": {
+                      "name": "draft"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "toolResult": {
+                    "toolUseId": "[id-1]",
+                    "content": [
+                      {
+                        "text": "{\"deleted\":\"draft\"}"
+                      }
+                    ],
+                    "status": "success"
+                  }
+                }
+              ]
+            }
+          ],
+          "system": [
+            {
+              "text": "[system prompt]"
+            }
+          ],
+          "inferenceConfig": {
+            "maxTokens": 64000,
+            "temperature": 0
+          },
+          "toolConfig": {
+            "tools": [
+              "ask-user",
+              "request_secret",
+              "use_connector_secret",
+              "execute_typescript",
+              "discover_tools",
+              "load-skill",
+              "read-skill-resource",
+              "counterparty_check",
+              "update-entity-fields",
+              "list_templates",
+              "describe_template",
+              "fill_template",
+              "suggest_template_fields",
+              "search-chat-history",
+              "expand-chat-history",
+              "search-past-chats",
+              "create-document",
+              "review_folder_consistency",
+              "set_practice_jurisdictions",
+              "create_template",
+              "configure_template_fields",
+              "save_document",
+              "delete_document",
+              "set_field_value",
+              "save_matter",
+              "delete_matter",
+              "save_contact",
+              "delete_contact",
+              "save_task",
+              "delete_task",
+              "link_matter_contact",
+              "save_clause",
+              "delete_clause",
+              "save_playbook",
+              "run_playbook",
+              "create_reader_annotation",
+              "update_reader_annotation",
+              "delete_reader_annotation",
+              "add_matter_member",
+              "remove_matter_member",
+              "update_organization_settings",
+              "mcp__external__delete",
+              "spawn_subagents"
+            ],
+            "toolChoice": {
+              "auto": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text",
+      "pauses": [
+        {
+          "label": "answer-streaming",
+          "at": "text-open",
+          "afterFrame": 1
+        }
+      ]
+    },
+    {
+      "type": "expect_outbound",
+      "label": "next-message",
+      "request": {
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "text": "Delete the draft"
+                }
+              ]
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "toolUse": {
+                    "toolUseId": "[id-1]",
+                    "name": "mcp__external__delete",
+                    "input": {
+                      "name": "draft"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "toolResult": {
+                    "toolUseId": "[id-1]",
+                    "content": [
+                      {
+                        "text": "{\"deleted\":\"draft\"}"
+                      }
+                    ],
+                    "status": "success"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "text": "The cassette plays."
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "text": "Thanks"
+                }
+              ]
+            }
+          ],
+          "system": [
+            {
+              "text": "[system prompt]"
+            }
+          ],
+          "inferenceConfig": {
+            "maxTokens": 64000,
+            "temperature": 0
+          },
+          "toolConfig": {
+            "tools": [
+              "ask-user",
+              "request_secret",
+              "use_connector_secret",
+              "execute_typescript",
+              "discover_tools",
+              "load-skill",
+              "read-skill-resource",
+              "counterparty_check",
+              "update-entity-fields",
+              "list_templates",
+              "describe_template",
+              "fill_template",
+              "suggest_template_fields",
+              "search-chat-history",
+              "expand-chat-history",
+              "search-past-chats",
+              "create-document",
+              "review_folder_consistency",
+              "set_practice_jurisdictions",
+              "create_template",
+              "configure_template_fields",
+              "save_document",
+              "delete_document",
+              "set_field_value",
+              "save_matter",
+              "delete_matter",
+              "save_contact",
+              "delete_contact",
+              "save_task",
+              "delete_task",
+              "link_matter_contact",
+              "save_clause",
+              "delete_clause",
+              "save_playbook",
+              "run_playbook",
+              "create_reader_annotation",
+              "update_reader_annotation",
+              "delete_reader_annotation",
+              "add_matter_member",
+              "remove_matter_member",
+              "update_organization_settings",
+              "mcp__external__delete",
+              "spawn_subagents"
+            ],
+            "toolChoice": {
+              "auto": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text"
+    }
+  ]
+}

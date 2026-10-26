@@ -151,6 +151,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "no-unbounded-response-body/no-unbounded-response-body",
   "no-computed-key-record-assignment/no-computed-key-record-assignment",
   "no-direct-status-set/no-direct-status-set",
+  "require-polite-publisher-fetch/require-polite-publisher-fetch",
   ...SIZE_LINT_BACKLOG_RULES,
   ...BUILTIN_LINT_BACKLOG_RULES,
 ] as const;
@@ -408,6 +409,7 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "no-unbounded-response-body/no-unbounded-response-body": "off",
   "no-computed-key-record-assignment/no-computed-key-record-assignment": "off",
   "no-direct-status-set/no-direct-status-set": "off",
+  "require-polite-publisher-fetch/require-polite-publisher-fetch": "off",
 } satisfies DummyRuleMap &
   Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
 

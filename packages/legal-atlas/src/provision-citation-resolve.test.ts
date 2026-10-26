@@ -5,7 +5,10 @@ import {
   type ActTitleSpec,
   formatWorkIdentifier,
 } from "./provision-citation-profile";
-import { resolveProvisionCitation } from "./provision-citation-resolve";
+import {
+  anchorProvisionCitation,
+  resolveProvisionCitation,
+} from "./provision-citation-resolve";
 import { SK_PROFILE } from "./sk-provision-citation-profile";
 
 const TODAY = "2026-10-14";
@@ -274,6 +277,26 @@ describe("resolveProvisionCitation", () => {
     });
   });
 
+  test.each([
+    "§ 11 odst. 1 písm. g) a. t.",
+    "§ 11 odst. 1 písm. g) a.t.",
+    "§ 11 odst. 1 písm. g) a. t",
+    "§ 11 odst. 1 písm. g) advokátního tarifu",
+  ])("%s names the attorney tariff", (text) => {
+    expect(resolved(text)).toMatchObject({
+      workIdentifier: "177/1996 Sb.",
+      section: 11,
+      subsection: "1",
+      letter: "g",
+    });
+  });
+
+  test("the attorney tariff abbreviation does not reach back before the tariff", () => {
+    expect(resolve("§ 11 odst. 1 písm. g) a. t.", "1995-01-01").status).toBe(
+      "no_act",
+    );
+  });
+
   test("a section naming no act is refused as no act", () => {
     expect(resolve("§ 316 odst. 2").status).toBe("no_act");
     expect(resolve("§ 316 neznámého zákona").status).toBe("no_act");
@@ -371,5 +394,63 @@ describe("letters and canonical wording", () => {
     expect(resolved("§ 2 odst. 1 zákona č. 262/2006 Sb.").citation).toBe(
       "§ 2 odst. 1 262/2006 Sb.",
     );
+  });
+});
+
+describe("anchorProvisionCitation", () => {
+  test.each([
+    "§ 106 odst. 4 písm. e) ZP",
+    "§ 52 písm. g) zákoníku práce",
+    "§ 10 písm. ch) ZP",
+    "§ 301 ZP",
+    "§ 2 odst. 1 zákona č. 262/2006 Sb.",
+  ])("%s reads back from its publisher anchor", (text) => {
+    const { anchor, citation, workIdentifier } = resolved(text);
+    expect(
+      anchorProvisionCitation({ anchor, jurisdiction: "CZE", workIdentifier }),
+    ).toBe(citation);
+  });
+
+  test("a Slovak anchor reads in its own scheme and designators", () => {
+    const { anchor, citation, workIdentifier } = (() => {
+      const result = resolveProvisionCitation({
+        text: "§ 2 ods. 1 písm. a) zákona č. 311/2001 Z. z.",
+        profile: SK_PROFILE,
+        citedOn: TODAY,
+      });
+      if (result.status !== "resolved") {
+        throw new Error(`Slovak citation did not resolve: ${result.status}`);
+      }
+      return result;
+    })();
+    expect(
+      anchorProvisionCitation({ anchor, jurisdiction: "SVK", workIdentifier }),
+    ).toBe(citation);
+  });
+
+  test("an anchor its scheme does not mint, or a jurisdiction without one, has none", () => {
+    const workIdentifier = "262/2006 Sb.";
+    for (const anchor of [
+      "par_106-pism_e-odst_4",
+      "par_",
+      "par_106-",
+      "heading-3",
+      "paragraf-2.odsek-1",
+    ]) {
+      expect(
+        anchorProvisionCitation({
+          anchor,
+          jurisdiction: "CZE",
+          workIdentifier,
+        }),
+      ).toBeNull();
+    }
+    expect(
+      anchorProvisionCitation({
+        anchor: "par_2",
+        jurisdiction: "XYZ",
+        workIdentifier,
+      }),
+    ).toBeNull();
   });
 });

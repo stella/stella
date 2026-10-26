@@ -9,8 +9,8 @@ import {
   expectRegistryResponse,
   forEachRegistryMutation,
   mutatedRegistryPayload,
-  registryMutation,
   nullableRegistryString,
+  registryMutation,
   registryString,
 } from "../shared/property-test-helpers.test.js";
 import { lookupByCik } from "./client.js";

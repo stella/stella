@@ -1,4 +1,5 @@
 // parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
+// parser-output-unchanged: `<sup>` becomes a superscript only under the opt-in `superscripts` option; every walk without it unwraps it as before.
 // parser-output-unchanged: exports the existing script/style exclusion as a selector so pl-tk can clean its owned DOM clone once; other parsers keep using the unchanged tag predicate.
 // parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
@@ -33,13 +34,7 @@
  */
 
 import type * as cheerio from "cheerio";
-import {
-  type AnyNode,
-  type Element,
-  hasChildren,
-  isTag,
-  isText,
-} from "domhandler";
+import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
@@ -47,39 +42,14 @@ import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
-const EXCLUDED_HTML_TAGS = ["script", "style"];
+// parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
+import {
+  EXCLUDED_HTML_SELECTOR,
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@/api/lib/legal-search/parsers/visible-html-text";
 
-/** Selector for removing the same non-content elements before a DOM walk. */
-export const EXCLUDED_HTML_SELECTOR = "script, style";
-
-/** Content outside the decision text axis. */
-export const isExcludedHtmlTag = (tag: string): boolean =>
-  EXCLUDED_HTML_TAGS.includes(tag);
-
-/**
- * Read text without mutating the source DOM or retaining non-content tags.
- *
- * A walk rather than clone-and-remove: cheerio's `.find()` dedupes its
- * context of N children pairwise, which is quadratic on a wrapper holding
- * tens of thousands of paragraphs.
- */
-export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
-  let text = "";
-  const pending = el.toArray().toReversed();
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    if (isText(node)) {
-      text += node.data;
-      continue;
-    }
-    if (!hasChildren(node) || (isTag(node) && isExcludedHtmlTag(node.name))) {
-      continue;
-    }
-    for (const child of node.children.toReversed()) {
-      pending.push(child);
-    }
-  }
-  return text;
-};
+export { EXCLUDED_HTML_SELECTOR, isExcludedHtmlTag, visibleHtmlText };
 
 /** Repair-only projection for quarantine identities stored before visible text. */
 export const legacyQuarantineHtmlText = (
@@ -177,6 +147,12 @@ export type WalkInlinesOptions = {
    * text axis; any other element is walked as usual.
    */
   pageAnchor?: (element: Element) => InlinePageAnchor | undefined;
+  /**
+   * Read `<sup>` as a superscript inline. Off, its text is unwrapped onto
+   * the baseline as before; a publisher whose markup states superscripts
+   * the reader should show opts in.
+   */
+  superscripts?: boolean;
 };
 
 type InlinePageAnchor = Extract<Inline, { type: "page-anchor" }>;
@@ -279,6 +255,14 @@ export const walkInlines = (
           inlines.push({ type: "italic", children });
         } else {
           inlines.push(...children);
+        }
+        return;
+      }
+
+      if (options.superscripts === true && tag === "sup") {
+        const children = walk($child, childAnon);
+        if (children.length > 0) {
+          inlines.push({ type: "superscript", children });
         }
         return;
       }

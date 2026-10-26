@@ -25,6 +25,7 @@ CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD)"
 # The folder name identifies a migration in the deployed ledger. Reject
 # deletion or renaming of a migration already present at the merge base.
 bun scripts/check-migration-order.ts "$BASE_REF"
+bun scripts/check-migration-locks.ts --base "$BASE_REF"
 
 extract_schema_files() {
   local source_file="$1"
@@ -102,7 +103,7 @@ schema_file_has_migration_relevant_diff() {
   bun -e '
     const { spawnSync } = require("node:child_process");
     const fs = require("node:fs");
-    const ts = require("typescript");
+    const ts = require("typescript6");
 
     const baseRef = process.argv.at(1);
     const changedFile = process.argv.at(2);

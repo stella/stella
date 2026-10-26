@@ -41,6 +41,7 @@ import type { FileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
 import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -124,7 +125,11 @@ const seedThreadFile = async ({
 }) => {
   const threadId = createSafeId<"chatThread">();
   const fileId = createSafeId<"userFile">();
-  const s3Key = createUserFileKey({ fileId, mimeType: PDF_MIME_TYPE, userId });
+  const s3Key = createUserFileKey({
+    fileId,
+    mimeType: PDF_MIME_TYPE,
+    organizationId,
+  });
   await testDb.insert(chatThreads).values({
     id: threadId,
     dataWorkspaceIds,
@@ -159,6 +164,10 @@ beforeAll(async () => {
     name: "Workspace deletion fixture",
     slug: `workspace-deletion-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
   await testDb.insert(member).values([
     {

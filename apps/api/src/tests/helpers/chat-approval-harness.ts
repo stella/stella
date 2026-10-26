@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
@@ -14,6 +13,7 @@ import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatSendRequest,
+  IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
@@ -37,6 +37,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -53,8 +54,8 @@ import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
-  ChatHarnessProfile,
   ChatHarnessPhase,
+  ChatHarnessProfile,
 } from "@/api/tests/helpers/chat-harness-profile";
 import {
   findLiveViewViolations,
@@ -205,6 +206,11 @@ const CUT_SHORT_REASONS: ReadonlySet<string> = new Set([
   "user-stop",
 ]);
 
+/** The approval-gated tool's run failing (`failingApprovalNames`). */
+class ApprovalToolFailure extends TaggedError("ApprovalToolFailure")<{
+  message: string;
+}> {}
+
 /** The page's connection dropping because the process serving it died. */
 class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
   message: string;
@@ -247,8 +253,11 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  compactMessages = compactMessagesForContext,
   beforeTurnSettles,
   boundaryAnonymizer,
+  failingApprovalNames = [],
+  grantableApprovalConnectorId,
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -258,9 +267,13 @@ export const createApprovalHarness = ({
   scopedDb,
   sources = {},
   testDb,
+  textAdapterFactory,
   user,
   withDirectRefTool = false,
+  workspaceId: homeWorkspaceId,
 }: {
+  /** Observe or control the real send's pre-model compaction boundary. */
+  compactMessages?: typeof compactMessagesForContext | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -277,6 +290,18 @@ export const createApprovalHarness = ({
         threadId: SafeId<"chatThread">;
       }) => Promise<void>)
     | undefined;
+  /**
+   * Names the approval-gated tool fails on once approved: its run throws,
+   * as a write that the far side rejects does. It still counts in
+   * `executions`. None by default.
+   */
+  failingApprovalNames?: readonly string[] | undefined;
+  /**
+   * Serves `APPROVAL_TOOL_NAME` from this installed connector, so a stored
+   * grant on the connector covers it, as it covers a real connector's tools.
+   * None by default: no grant covers the tool.
+   */
+  grantableApprovalConnectorId?: SafeId<"mcpConnector"> | undefined;
   ids: TestIds;
   /**
    * Who sends, and the profile their page sends with each message
@@ -305,6 +330,12 @@ export const createApprovalHarness = ({
   promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
+  /** Home matter supplied by the route's authorized workspace boundary. */
+  workspaceId?: SafeId<"workspace"> | undefined;
+  /** Uses a local adapter through the same resolution seam as scripted replies. */
+  textAdapterFactory?: NonNullable<
+    Parameters<typeof installScriptedProvider>[0]
+  >["textAdapterFactory"];
   /** Defaults to the scripted provider. */
   model?: HarnessModel | undefined;
   /** The organization's model selection; defaults to the harness's own. */
@@ -337,24 +368,32 @@ export const createApprovalHarness = ({
   // Every database access of a turn goes to the test database; one that
   // reaches the shared pools escaped it, and fails the test at `close`.
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
-  const provider = model ?? installScriptedProvider();
+  const provider = model ?? installScriptedProvider({ textAdapterFactory });
   const executions: string[] = [];
-  const approvalTool = toolDefinition({
-    name: APPROVAL_TOOL_NAME,
-    description: "Server tool behind an approval",
-    // The optional field is what strict provider schemas send as null, and
-    // what a route that fills every field sends as "" (a note is never empty).
-    inputSchema: toTanStackToolSchema(
-      v.object({
-        name: v.string(),
-        note: v.optional(v.pipe(v.string(), v.minLength(1))),
-      }),
-    ),
-    needsApproval: true,
-  }).server(async ({ name }) => {
-    executions.push(name);
-    return await Promise.resolve({ deleted: name });
-  });
+  // Built for each request, as a connector's tools are: a grant ungates the
+  // request's own tool object.
+  const createApprovalTool = () =>
+    toolDefinition({
+      name: APPROVAL_TOOL_NAME,
+      description: "Server tool behind an approval",
+      // The optional field is what strict provider schemas send as null, and
+      // what a route that fills every field sends as "" (a note is never empty).
+      inputSchema: toTanStackToolSchema(
+        v.object({
+          name: v.string(),
+          note: v.optional(v.pipe(v.string(), v.minLength(1))),
+        }),
+      ),
+      needsApproval: true,
+    }).server(async ({ name }) => {
+      executions.push(name);
+      if (failingApprovalNames.includes(name)) {
+        throw new ApprovalToolFailure({
+          message: `The external service could not delete ${name}`,
+        });
+      }
+      return await Promise.resolve({ deleted: name });
+    });
   const refLedger = createRefStabilityLedger();
   /** The registry the newest request built: the one a running tool uses. */
   let requestRegistry: ChatRefRegistry | undefined;
@@ -397,13 +436,25 @@ export const createApprovalHarness = ({
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
         close,
-        connectors: [],
+        connectors:
+          grantableApprovalConnectorId === undefined
+            ? []
+            : [
+                {
+                  connectorId: grantableApprovalConnectorId,
+                  description: "The harness's external service",
+                  displayName: "External",
+                  slug: "external",
+                  toolNames: ["delete"],
+                  exposedToolNames: [APPROVAL_TOOL_NAME],
+                },
+              ],
         source: createStellaMcpToolSource({
           closeClients: close,
           sourceTools: sources.lazyExternalTools ?? {},
         }),
         tools: {
-          [APPROVAL_TOOL_NAME]: approvalTool,
+          [APPROVAL_TOOL_NAME]: createApprovalTool(),
           ...(withDirectRefTool
             ? { [DIRECT_REF_TOOL_NAME]: directRefTool }
             : {}),
@@ -415,7 +466,7 @@ export const createApprovalHarness = ({
         sources.web ?? { urlFetcher: null, webSearchProvider: null },
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
-    compactMessagesForContext,
+    compactMessagesForContext: compactMessages,
     streamResponse: async (props) => {
       // The run owns every terminal path, including checkpoint restoration and
       // failures that produce no onFinish event. Its notification only wakes
@@ -479,7 +530,7 @@ export const createApprovalHarness = ({
   ): SendMessageCtx => {
     const request = createTornDownRequest({
       signal,
-      url: "http://localhost/v1/chat/send",
+      url: "http://localhost/v1/chat",
     });
     if (sources.contextMatterIds !== undefined) {
       // The matters the page's context names, as its composer sends them
@@ -510,7 +561,10 @@ export const createApprovalHarness = ({
         ]),
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
-      getWorkspaceAccess: async () => await Promise.resolve(null),
+      getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+        workspaceId === homeWorkspaceId
+          ? { id: workspaceId, status: "active" }
+          : null,
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -519,7 +573,7 @@ export const createApprovalHarness = ({
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
-      route: "/v1/chat/send",
+      route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },
@@ -597,11 +651,13 @@ export const createApprovalHarness = ({
 
   /** A request built by hand rather than by a web client. */
   const sendContext = ({
+    activeFile,
     message,
     resume,
     runId,
     threadId,
   }: {
+    activeFile?: IncomingActiveFile | undefined;
     message: ChatSendRequest["message"];
     /** A continuation names the interrupted run it resumes. */
     resume?: { interruptedRunId: string; items: InterruptResume } | undefined;
@@ -613,6 +669,8 @@ export const createApprovalHarness = ({
         ? {}
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
+      activeFile,
+      workspaceId: homeWorkspaceId,
       contextMatterIds: [],
       message,
       runId,
@@ -622,6 +680,8 @@ export const createApprovalHarness = ({
     };
     return contextFromBody(
       asTestRaw<SendBody>({
+        activeFile,
+        workspaceId: homeWorkspaceId,
         threadId,
         runId: forwardedProps.runId,
         state: {},
@@ -721,7 +781,8 @@ export const createApprovalHarness = ({
           `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
           { method: "POST" },
         ),
-        route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+        route:
+          "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         set,
@@ -1242,13 +1303,15 @@ export const createApprovalHarness = ({
    * has ended and been checked.
    */
   const postChatBody = async (
-    raw: unknown,
+    posted: unknown,
     signal: AbortSignal | undefined,
   ): Promise<{ done: Promise<void>; response: Response }> => {
-    if (!Value.Check(agUiSendMessageBodySchema, raw)) {
-      const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
+    // Decoded exactly as the route decodes it: unknown keys are dropped.
+    const decoded = v.safeParse(agUiSendMessageBodySchema, posted);
+    if (!decoded.success) {
+      const errors = decoded.issues
         .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
+        .map((issue) => `${v.getDotPath(issue) ?? "$"}: ${issue.message}`);
       clientFindings.push(
         ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
           { invalidBody: errors },
@@ -1261,6 +1324,7 @@ export const createApprovalHarness = ({
         }),
       };
     }
+    const raw = decoded.output;
     const endRecord = beginRecord(raw);
     if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
       provider.promptLedgerOf(raw.threadId).replacesTail();
@@ -1356,7 +1420,8 @@ export const createApprovalHarness = ({
           },
           query: Object.fromEntries(url.searchParams),
           request: new Request(url.toString(), init),
-          route: `/v1/chat/threads/:threadId/turns/:turnId/${delivery}`,
+          route:
+            `/v1/chat/threads/:threadId/turns/:turnId/${delivery}` satisfies ApiRoutePath,
           safeDb,
           scopedDb,
           session: { activeOrganizationId: ids.orgA },
@@ -1625,6 +1690,8 @@ export const createApprovalHarness = ({
 
   return {
     approveContext,
+    /** Resolves once no turn on the thread is still accepted or running. */
+    awaitSettledTurns,
     checkWebClient,
     /**
      * Makes `threadId`'s next web request die mid-run: the process serving
@@ -1722,6 +1789,14 @@ export const createApprovalHarness = ({
     },
     send,
     sendContext,
+    /**
+     * The send route's answer to `ctx`, with nothing read around it: no
+     * oracle, no barrier. What a measurement of the route's own work drives;
+     * the caller reads the response and waits for its turn to settle.
+     */
+    sendUnchecked: handle,
+    /** The Stop route, as a web client's Stop button reaches it. */
+    stopTurn: postCancelTurn,
   };
 };
 

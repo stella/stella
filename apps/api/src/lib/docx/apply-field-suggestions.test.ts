@@ -40,7 +40,7 @@ describe("applyFieldSuggestions", () => {
     const { xml, fields, unapplied } = applyFieldSuggestions(
       docXml,
       suggestions,
-    );
+    ).unwrap();
 
     expect(xml).toContain("Acting on behalf of {{company.name}}");
     expect(xml).toContain(">{{signatory.name}}<");
@@ -67,7 +67,7 @@ describe("applyFieldSuggestions", () => {
     const { xml, fields, unapplied } = applyFieldSuggestions(
       docXml,
       suggestions,
-    );
+    ).unwrap();
     expect(xml).toBe(docXml); // unchanged
     expect(fields).toEqual([]);
     expect(unapplied).toEqual(suggestions);
@@ -78,7 +78,7 @@ describe("applyFieldSuggestions", () => {
     const docXml = `<w:body>${wt("type is w:t here")}</w:body>`;
     const { xml } = applyFieldSuggestions(docXml, [
       { literalText: "w:t", fieldPath: "x" },
-    ]);
+    ]).unwrap();
     // The <w:t> tags themselves are intact; only the text content changed.
     expect(xml.startsWith("<w:body><w:p><w:r><w:t")).toBe(true);
     expect(xml).toContain("type is {{x}} here");
@@ -89,7 +89,7 @@ describe("applyFieldSuggestions", () => {
     const { xml, fields } = applyFieldSuggestions(docXml, [
       { literalText: "ACME", fieldPath: "co" },
       { literalText: "", fieldPath: "ignored" },
-    ]);
+    ]).unwrap();
     expect(xml).toContain("{{co}} and {{co}} again");
     expect(fields).toEqual([{ path: "co" }]);
   });

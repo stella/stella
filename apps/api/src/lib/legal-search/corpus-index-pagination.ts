@@ -14,9 +14,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { classifyCorpusHit } from "@/api/lib/legal-search/corpus-hit-disposition";
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
   CorpusIndexHit,
@@ -41,8 +41,8 @@ import {
   type CorpusIndexRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  type CorpusSearchOrder,
   corpusEngineSortBy,
+  type CorpusSearchOrder,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
@@ -397,6 +397,23 @@ export const emptyCorpusIndexScan = (): CorpusIndexScanReport => ({
   earlyStopped: false,
   roundCapHit: false,
   highlightRounds: 0,
+});
+
+/**
+ * Two scans one request ran in sequence, reported as one: the counts and
+ * index time add up, and either scan stopping early or at the round cap is
+ * reported, so a request that scanned twice is never reported as one scan.
+ */
+export const sumCorpusIndexScans = (
+  first: CorpusIndexScanReport,
+  second: CorpusIndexScanReport,
+): CorpusIndexScanReport => ({
+  rounds: first.rounds + second.rounds,
+  passagesScanned: first.passagesScanned + second.passagesScanned,
+  indexMs: first.indexMs + second.indexMs,
+  earlyStopped: first.earlyStopped || second.earlyStopped,
+  roundCapHit: first.roundCapHit || second.roundCapHit,
+  highlightRounds: first.highlightRounds + second.highlightRounds,
 });
 
 /**

@@ -52,7 +52,7 @@
 // operations in ROOT_OPERATION_RESULTS, each named with the one file it may
 // be awaited in and why its result is not a handle.
 
-import ts from "typescript";
+import ts from "typescript6";
 
 import { parseSource } from "./parse-memo";
 
@@ -110,7 +110,7 @@ export const ROOT_OPERATION_RESULTS = {
     reason: "Returns one page of an organization's machine key rows.",
   },
   recordNewOrganizationAccessState: {
-    file: "apps/api/src/lib/auth.ts",
+    file: "apps/api/src/lib/usage/organization-access-state-owner.ts",
     reason: "Records a new organization's access state; returns nothing.",
   },
   readUserProfessionalUse: {

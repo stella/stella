@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { getDomain } from "tldts";
 import * as v from "valibot";
 
-import { withTimeout, TimeoutError } from "@stll/concurrency/with-timeout";
+import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -479,7 +479,10 @@ const discoverOAuthMetadataWithinDeadline = async (
 const randomBase64Url = (byteLength: number): string => {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64url");
+  return Buffer.from(bytes).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 };
 
 export const createPkce = () => {
@@ -499,10 +502,7 @@ export const getMcpOAuthRedirectUri = (): string => {
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
 
 export type AuthorizationResponseRegistrationMode =
-  | "cimd"
-  | "dcr"
-  | "pre_registered"
-  | "unknown";
+  "cimd" | "dcr" | "pre_registered" | "unknown";
 
 type KnownAuthorizationResponseRegistrationMode = Exclude<
   AuthorizationResponseRegistrationMode,

@@ -9,8 +9,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   activeAuthorizedWorkspaceQuery,
-  authorizedWorkspaceIdSubquery,
   authorizedWorkspaceIds,
+  authorizedWorkspaceIdSubquery,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -98,7 +98,10 @@ describe.skipIf(!runPostgresTests)(
           });
           const outcome = await scopedDb(async (tx) => ({
             set: await readAuthorizedWorkspaces(tx, { organizationId }),
-            ids: await authorizedWorkspaceIds(tx, { organizationId }),
+            ids: await authorizedWorkspaceIds(tx, {
+              organizationId,
+              workspaceIds: [assignedId, closingId, otherId],
+            }),
             assigned: await activeAuthorizedWorkspaceQuery(tx, assignedId),
             other: await activeAuthorizedWorkspaceQuery(tx, otherId),
             // Candidates come from a VALUES list, not a row-policy table,
@@ -122,8 +125,7 @@ describe.skipIf(!runPostgresTests)(
               { id: closingId, status: "deleting" },
             ]),
           );
-          expect(outcome.set.value.activeIds).toEqual([assignedId]);
-          expect(outcome.ids.value).toEqual([assignedId]);
+          expect([...outcome.ids.value]).toEqual([assignedId]);
           expect(outcome.assigned).toEqual([{ id: assignedId }]);
           expect(outcome.other).toEqual([]);
           expect(outcome.compared).toEqual([{ id: assignedId }]);

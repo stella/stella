@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import {
   createHeavyWorkSlot,
@@ -17,11 +18,11 @@ import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
-  caseLawReplayBatches,
   caseLawReplayAuditEvents,
+  caseLawReplayBatches,
   caseLawReplayBlocked,
-  caseLawReplaySourceProgress,
   caseLawReplayDailyRows,
+  caseLawReplaySourceProgress,
   caseLawSources,
   databaseBackfillStates,
 } from "@/api/db/schema";
@@ -33,10 +34,10 @@ import {
   type StoredRawReader,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  runBackgroundReplayTick,
   type BackgroundReplayBatch,
   type BackgroundReplaySource,
   type BackgroundReplayTickReport,
+  runBackgroundReplayTick,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/background-replay-runner";
 import { createBackgroundReplayStore } from "@/api/handlers/case-law/ingestion/background-replay-store";
@@ -62,6 +63,10 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  RAW_SOURCE_FAMILY,
+  rawSourcePayloadKey,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   openGatedTestDatabase,
@@ -69,6 +74,10 @@ import {
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
+
+/** A replayed raw key is reported only when the reserved batch has one. */
+const replayedKeyOf = (key: string | null) =>
+  key === null ? {} : { replayedSourceRawS3Key: key };
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -89,6 +98,7 @@ const startReplayFixtureStorage = () => {
 
 const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
   visited: 1,
+  writeOutcomes: { unchanged: 0, rewritten: 1, failed: 0 },
   outcomes: {
     applied: 1,
     unchanged: 0,
@@ -185,7 +195,7 @@ if (!databaseUrl || !enabled) {
       });
       const ids = Array.from({ length: 3 }, () =>
         createSafeId<"caseLawDecision">(),
-      ).toSorted();
+      ).toSorted(compareCodeUnit);
       await db.insert(caseLawDecisions).values(
         ids.map((id, index) => ({
           id,
@@ -195,7 +205,16 @@ if (!databaseUrl || !enabled) {
           country: "CZE",
           language: "cs",
           parserVersion: 1,
-          sourceRawS3Key: `fixture/${id}`,
+          sourceHash: "a".repeat(64),
+          sourceHashVersion: 1,
+          sourceRawS3Key: rawSourcePayloadKey({
+            owner: {
+              family: RAW_SOURCE_FAMILY.CASE_LAW,
+              sourceId: source.id,
+              documentId: id,
+            },
+            data: "<html>stored fixture judgment</html>",
+          }),
         })),
       );
       let clock = Date.UTC(2026, 9, 1);
@@ -225,6 +244,22 @@ if (!databaseUrl || !enabled) {
         checkpoint,
       };
     };
+    const persistParsedFixture = async (batch: BackgroundReplayBatch) =>
+      await db.transaction(async (tx) => {
+        await tx
+          .update(caseLawDecisions)
+          .set({ parserVersion: batch.targetParserVersion })
+          .where(eq(caseLawDecisions.id, batch.decisionId));
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            parsedSourceHash: caseLawDecisions.sourceHash,
+            parsedSourceHashVersion: caseLawDecisions.sourceHashVersion,
+            parsedSourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+            updatedAt: caseLawDecisions.updatedAt,
+          })
+          .where(eq(caseLawDecisions.id, batch.decisionId));
+      });
     type Fixture = Awaited<ReturnType<typeof fixture>>;
     type TickOptions = {
       fixture: Fixture;
@@ -316,10 +351,7 @@ if (!databaseUrl || !enabled) {
               panic("Fixture replay requires an ingestion lease");
             }
             await lease.beforeDatabaseMark();
-            await db
-              .update(caseLawDecisions)
-              .set({ parserVersion: 2 })
-              .where(eq(caseLawDecisions.id, batch.decisionId));
+            await persistParsedFixture(batch);
             return applied(batch);
           },
           completeBatch: async (batch, completion) =>
@@ -327,6 +359,7 @@ if (!databaseUrl || !enabled) {
               ...completion,
               report: {
                 id: batch.decisionId,
+                ...replayedKeyOf(batch.sourceRawS3Key),
                 caseNumber: "fixture",
                 language: "cs",
                 outcome: REPLAY_ROW_OUTCOME.APPLIED,
@@ -376,8 +409,8 @@ if (!databaseUrl || !enabled) {
         } finally {
           await slots[0].close();
           await slots[1].close();
-          first.release();
-          second.release();
+          await first.release();
+          await second.release();
         }
       });
 
@@ -496,6 +529,10 @@ if (!databaseUrl || !enabled) {
         if (id === undefined) {
           panic("Expected first fixture decision");
         }
+        await db
+          .update(caseLawDecisions)
+          .set({ sourceRawS3Key: `fixture/${id}` })
+          .where(eq(caseLawDecisions.id, id));
         const fake = startReplayFixtureStorage();
         try {
           await withSlots({
@@ -580,10 +617,7 @@ if (!databaseUrl || !enabled) {
       if (batch.type !== "reserved") {
         panic("Expected reserved replay receipt");
       }
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, batch.batch.decisionId));
+      await persistParsedFixture(batch.batch);
       await withSlots({
         run: async ([slot]) => {
           const canonical = {
@@ -604,6 +638,160 @@ if (!databaseUrl || !enabled) {
           ).toMatchObject({ status: "completed", applied: 1 });
         },
       });
+    });
+
+    test("homing a legacy input requires a separately charged parse of its canonical key", async () => {
+      const state = await fixture(1);
+      const id = state.ids.at(0);
+      if (id === undefined) {
+        panic("Expected the homing fixture decision");
+      }
+      for (const otherId of state.ids.slice(1)) {
+        await db
+          .update(caseLawDecisions)
+          .set({ parserVersion: 3 })
+          .where(eq(caseLawDecisions.id, otherId));
+      }
+      const legacyKey = `fixture/legacy/${id}`;
+      const canonicalKey = rawSourcePayloadKey({
+        owner: {
+          family: RAW_SOURCE_FAMILY.CASE_LAW,
+          sourceId: state.source.id,
+          documentId: id,
+        },
+        data: "<html>stored fixture judgment</html>",
+      });
+      expect(canonicalKey).not.toBe(legacyKey);
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceRawS3Key: legacyKey })
+        .where(eq(caseLawDecisions.id, id));
+      const fake = startReplayFixtureStorage();
+      try {
+        await withSlots({
+          run: async ([slot]) => {
+            const first = await tick({
+              fixture: state,
+              slot,
+              maxRows: 1,
+              canonical: canonicalReplay(),
+            });
+            expect(first).toMatchObject({
+              attempted: 1,
+              applied: 0,
+              errors: 1,
+            });
+            expect(
+              (
+                await db
+                  .select()
+                  .from(caseLawDecisions)
+                  .where(eq(caseLawDecisions.id, id))
+              ).at(0),
+            ).toMatchObject({
+              parserVersion: 2,
+              sourceRawS3Key: canonicalKey,
+              parsedSourceRawS3Key: null,
+            });
+            expect(
+              await db
+                .select()
+                .from(caseLawReplayBlocked)
+                .where(eq(caseLawReplayBlocked.sourceId, state.source.id)),
+            ).toHaveLength(0);
+            state.advanceTime(BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs);
+            expect(
+              await tick({
+                fixture: state,
+                slot,
+                maxRows: 1,
+                canonical: canonicalReplay(),
+              }),
+            ).toMatchObject({ status: "budget-exhausted", attempted: 0 });
+            const writesAfterHoming = fake.requests.filter(
+              ({ method }) => method === "PUT",
+            ).length;
+            expect(writesAfterHoming).toBeGreaterThan(0);
+            state.nextDay();
+            expect(
+              await tick({
+                fixture: state,
+                slot,
+                maxRows: 1,
+                canonical: canonicalReplay(),
+              }),
+            ).toMatchObject({
+              attempted: 1,
+              errors: 0,
+              applied: 0,
+              blocked: 0,
+            });
+            expect(
+              (
+                await db
+                  .select()
+                  .from(caseLawDecisions)
+                  .where(eq(caseLawDecisions.id, id))
+              ).at(0),
+            ).toMatchObject({
+              parserVersion: 2,
+              sourceRawS3Key: canonicalKey,
+              parsedSourceRawS3Key: canonicalKey,
+            });
+            const reservations = await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id));
+            expect(reservations).toHaveLength(2);
+            expect(
+              reservations.find((row) => row.sourceRawS3Key === legacyKey),
+            ).toMatchObject({ status: "superseded", applied: 0, blocked: 0 });
+            expect(
+              reservations.find((row) => row.sourceRawS3Key === canonicalKey),
+            ).toMatchObject({
+              status: "completed",
+              outcome: REPLAY_ROW_OUTCOME.UNCHANGED,
+              applied: 0,
+            });
+            expect(
+              await db
+                .select()
+                .from(caseLawReplayDailyRows)
+                .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
+            ).toHaveLength(2);
+            expect(
+              (
+                await db
+                  .select()
+                  .from(caseLawReplayBlocked)
+                  .where(eq(caseLawReplayBlocked.sourceId, state.source.id))
+              ).at(0),
+            ).toMatchObject({
+              sourceRawS3Key: canonicalKey,
+              outcome: "unchanged",
+            });
+            expect(
+              await tick({
+                fixture: state,
+                slot,
+                maxRows: 1,
+                canonical: canonicalReplay(),
+              }),
+            ).toMatchObject({
+              status: "complete",
+              attempted: 0,
+              applied: 0,
+              blocked: 0,
+              errors: 0,
+            });
+            expect(
+              fake.requests.filter(({ method }) => method === "PUT"),
+            ).toHaveLength(writesAfterHoming);
+          },
+        });
+      } finally {
+        fake.stop();
+      }
     });
 
     test("canonical dry-run persists budgeted preview receipts while leaving decisions untouched", async () => {
@@ -829,10 +1017,22 @@ if (!databaseUrl || !enabled) {
         panic("Expected first fixture decision");
       }
       const fake = startReplayFixtureStorage();
-      fake.put(envBase.S3_BUCKET, `fixture/${id}`, "stored fixture bytes");
+      const rawKey = rawSourcePayloadKey({
+        owner: {
+          family: RAW_SOURCE_FAMILY.CASE_LAW,
+          sourceId: state.source.id,
+          documentId: id,
+        },
+        data: "stored fixture bytes",
+      });
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceRawS3Key: rawKey })
+        .where(eq(caseLawDecisions.id, id));
+      fake.put(envBase.S3_BUCKET, rawKey, "stored fixture bytes");
       const held = fake.holdNext({
         method: "GET",
-        keyIncludes: `fixture/${id}`,
+        keyIncludes: rawKey,
       });
       const controller = new AbortController();
       try {
@@ -1055,9 +1255,17 @@ if (!databaseUrl || !enabled) {
         process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = "false";
         process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = "";
         const fake = startReplayFixtureStorage();
+        const rawKey = rawSourcePayloadKey({
+          owner: {
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: state.source.id,
+            documentId: id,
+          },
+          data: "<html>stored fixture judgment</html>",
+        });
         fake.put(
           envBase.S3_BUCKET,
-          `fixture/${id}`,
+          rawKey,
           "<html>stored fixture judgment</html>",
           "text/html",
         );
@@ -1116,8 +1324,7 @@ if (!databaseUrl || !enabled) {
           if (readerMode === "real") {
             expect(
               fake.requests.some(
-                (request) =>
-                  request.method === "GET" && request.key === `fixture/${id}`,
+                (request) => request.method === "GET" && request.key === rawKey,
               ),
             ).toBe(true);
           }
@@ -1140,7 +1347,8 @@ if (!databaseUrl || !enabled) {
             fulltext: "Fixture judgment rederived from stored bytes.",
             corpusMirrorStatus: "settled",
           });
-          expect(row?.sourceRawS3Key).not.toBe(`fixture/${id}`);
+          expect(row?.sourceRawS3Key).toBe(rawKey);
+          expect(row?.parsedSourceRawS3Key).toBe(rawKey);
           expect(
             (
               await db
@@ -1369,10 +1577,9 @@ if (!databaseUrl || !enabled) {
             .select()
             .from(caseLawReplayDailyRows)
             .where(eq(caseLawReplayDailyRows.sourceId, state.source.id));
-          expect(charges.map((row) => row.budgetDay).toSorted()).toEqual([
-            "2026-10-01",
-            "2026-10-02",
-          ]);
+          expect(
+            charges.map((row) => row.budgetDay).toSorted(compareCodeUnit),
+          ).toEqual(["2026-10-01", "2026-10-02"]);
         },
       });
     });

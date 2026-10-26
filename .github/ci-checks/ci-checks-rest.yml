@@ -38,6 +38,12 @@ checks:
       # `if:` holds; scripts/generated-files-guard.test.ts binds each entry to
       # its owning job's condition. An empty entry delegates nothing.
       GENERATED_CHECKS_IN_OTHER_JOBS: ${{ format('["{0}","{1}"]', inputs.pr_depth_only != true && needs.ci-plan.outputs.scan_engine_wasm_required == 'true' && 'scan-engine-wasm' || '', (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true') && needs.ci-plan.outputs.run_required != 'false' && inputs.heavy_only != true && needs.ci-plan.outputs.package_checks_required == 'true' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && 'api-typecheck-projects' || '') }}
+      # A plan that proves the scan engine's inputs unchanged leaves its
+      # committed WebAssembly as scan-engine-wasm-drift last proved it; this
+      # job has no Rust cache, so rebuilding it here compiles the toolchain
+      # from source. scripts/generated-files-guard.test.ts binds the entry to
+      # the plan paths that cover the family.
+      GENERATED_CHECKS_UNCHANGED: ${{ format('["{0}"]', needs.ci-plan.outputs.scan_engine_wasm_required == 'false' && 'scan-engine-wasm' || '') }}
     id: generated_manifest
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
     # Guard A registers tracked generated files; Guard B checks the
@@ -80,6 +86,16 @@ checks:
     run: >-
       bun test --timeout 12000 --preload ./apps/api/src/tests/setup-env.ts
       apps/api/scripts/*.test.ts
+
+  - name: API test timeout guard
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: api_test_timeout_guard
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/API test timeout guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_api_test_timeout_guard != 'true') }}
+    run: |
+      bun test scripts/api-test-timeout-guard.test.ts
+      bun scripts/api-test-timeout-guard.ts
 
   - name: Test CLI runtime package parity
     env:
@@ -167,10 +183,9 @@ checks:
     run: bun scripts/check-resolution-ranges.ts
 
   - name: Quarantine-exclude guards
-    continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Reads wall clock to validate dated waivers or quarantine expiry."
+      CI_CHECK_CONTEXT: "Reads wall clock to reject first-party exclusion dates in the future."
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Quarantine-exclude guards')) }}
     # The 5-day release-age quarantine is excluded per package for
     # first-party @stll/* code, and bun matches those entries EXACTLY (a
@@ -179,8 +194,9 @@ checks:
     # stay quarantined — and a quarantined optionalDependency is skipped
     # SILENTLY, so the package imports fine and throws on first use. This
     # fails when the exclude list stops covering everything in the lock.
-    # Temporary third-party exemptions carry an exact expiry so the same
-    # check also fails once Bun's release-age gate can take over again.
+    # Temporary third-party exemptions must carry an exact expiry;
+    # scripts/dated-waivers.ts owns that expiry, and an elapsed one stops
+    # exempting new pins in the lockfile release-age guard.
     run: |
       bun test scripts/check-stll-quarantine-excludes.test.ts
       bun scripts/check-stll-quarantine-excludes.ts
@@ -247,8 +263,7 @@ checks:
         echo "VERSION unchanged; release queue history not required."
         exit 0
       fi
-      previous_tag="v$(git show "$BASE_SHA:VERSION" | tr -d '[:space:]')"
-      bun scripts/check-release-queue-history.ts --from "$previous_tag" --base "$BASE_SHA"
+      bun scripts/check-release-queue-history.ts --base "$BASE_SHA"
 
   # Same verdict the tag workflow gives after merge, delivered while the
   # release pull request can still wait for the Version Packages one.
@@ -259,43 +274,6 @@ checks:
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
-
-  # Hold CLI changesets while a release is open or main's VERSION awaits
-  # its tag. Pull request runs warn; merge queue runs enforce the hold.
-  - name: Release CLI changeset hold
-    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
-    env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Reads base history and current GitHub release state."
-      BASE_REF: ${{ github.base_ref || 'main' }}
-      EVENT_NAME: ${{ github.event_name }}
-      GH_TOKEN: ${{ github.token }}
-      MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
-      PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-      REPOSITORY: ${{ github.repository }}
-    run: |
-      set -euo pipefail
-      # Read the release state here, right before the decision: a release
-      # opened while this run was queued must still hold the pull request.
-      number="$PULL_REQUEST_NUMBER"
-      if [[ "$EVENT_NAME" == "merge_group" ]]; then
-        if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
-          echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
-          exit 1
-        fi
-        number="${BASH_REMATCH[1]}"
-      fi
-      state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
-      pending=$(bash scripts/release-pending.sh --repo "$REPOSITORY")
-      version_state=$(sed -n 's/^version_state=//p' <<<"$pending")
-      open_other=$(sed -n 's/^open_other=//p' <<<"$state")
-      current_is_release=$(sed -n 's/^current_is_release=//p' <<<"$state")
-      bun scripts/check-release-cli-changeset-hold.ts \
-        --base "origin/$BASE_REF" \
-        --event "$EVENT_NAME" \
-        --open-releases "$open_other" \
-        --version-state "$version_state" \
-        --is-release "$current_is_release"
 
   - name: CLI contract changeset guard
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
@@ -696,10 +674,11 @@ checks:
 
   - name: Suppression waiver ledger
     env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Reads wall clock to validate dated waivers or quarantine expiry."
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
       STELLA_VERIFY: check
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Suppression waiver ledger')) }}
+    id: static_check_123
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Suppression waiver ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_123 != 'true') }}
     # The ratchet budgets cap how many suppressions each lint rule carries.
     # For the security tier — tenancy, authorization, credential and audit
     # rules — a count is not enough, because two waivers of the same rule
@@ -707,7 +686,7 @@ checks:
     # one (rule, file, anchoring symbol, reason, evidence) and this guard
     # mirrors it against the tree in both directions, so adding a
     # suppression is a reviewable ledger edit and a stale entry cannot rot
-    # in place. Temporary waivers fail once their expiry passes. The
+    # in place. scripts/dated-waivers.ts owns temporary waiver expiry. The
     # --self-test run first proves the guard still detects each kind of
     # drift. Draft entries: `bun scripts/suppression-waivers.ts --seed`.
     run: |
@@ -830,25 +809,6 @@ checks:
       bun apps/api/scripts/capability-description-guard.ts --self-test
       bun apps/api/scripts/capability-description-guard.ts
 
-  - name: exactMirror route guard
-    env:
-      CI_CHECK_KIND: STATIC
-      CI_CHECK_INPUTS: tracked-tree+generated-inputs
-    id: static_check_054
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/exactMirror route guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_054 != 'true') }}
-    # Elysia builds an "exactMirror" serializer per route schema. Some
-    # schemas (recursive ones: t.Recursive, or a Type.Unsafe wrapping a
-    # self-referential TypeBox node) cannot be mirrored: Elysia logs the
-    # failure and falls back to slow per-request serialization, which can
-    # stall the API at boot. Typecheck and lint do not catch it. The
-    # guard builds the real app and forces every route's mirror to compile,
-    # failing if any cannot. The --self-test run first proves the detector
-    # still catches a known recursive schema, so a broken guard cannot pass
-    # silently.
-    run: |
-      bun apps/api/scripts/exact-mirror-guard.ts --self-test
-      bun apps/api/scripts/exact-mirror-guard.ts
-
   - name: MCP coverage guard
     env:
       CI_CHECK_KIND: STATIC
@@ -913,6 +873,8 @@ checks:
     run: |
       bun test packages/property-testing/src/convention.test.ts
       bun test packages/property-testing/src/ci-gate-coverage.test.ts
+      bun test scripts/db-property-budget-guard.test.ts
+      bun scripts/db-property-budget-guard.ts
 
   - name: Test marketing recording verification guard
     env:
@@ -1046,11 +1008,10 @@ checks:
     run: |
       bun test scripts/check-api-deployment.test.ts
       bun test scripts/check-staging-deploy-decision.test.ts
-      bun test scripts/check-release-cli-changeset-hold.test.ts
+      bun test scripts/release-version-dispatch.test.ts
       bash scripts/check-release-changelog.test.sh
       bash scripts/prepare-release-tag.test.sh
       bash scripts/release-pull-requests.test.sh
-      bash scripts/release-pending.test.sh
       bash scripts/check-main-merge-hold.test.sh
       bash scripts/create-release-manifest.test.sh
       bash scripts/promote-desktop-release.test.sh

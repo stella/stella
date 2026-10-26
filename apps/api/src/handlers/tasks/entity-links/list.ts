@@ -1,14 +1,14 @@
 import { Result } from "better-result";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const listEntityLinksParamsSchema = workspaceParams({
-  taskId: tSafeId("entity"),
+  taskId: resourceIdSchema("entity"),
 });
 
 const listEntityLinks = createSafeHandler(

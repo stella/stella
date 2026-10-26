@@ -12,17 +12,17 @@ import path from "node:path";
 
 import {
   boundedInstallProblems,
-  installWorkflowPolicy,
   compositeInstallProblems,
+  installWorkflowPolicy,
 } from "./ci-install-policy";
 import {
+  type Classification,
   conditionOperands,
   impliesCondition,
   importProblems,
+  type InstallFreeInvocation,
   installFreeInvocations,
   lexShell,
-  type Classification,
-  type InstallFreeInvocation,
 } from "./install-free-ci";
 import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
@@ -1584,6 +1584,25 @@ describe("install-free invocation classification", () => {
     ).not.toEqual(["install"]);
   });
 
+  test("a release gate recorder run is followed to the command it runs", () => {
+    for (const helper of [
+      '"$RUNNER_TEMP/release-gate.sh"',
+      "scripts/release-gate.sh",
+    ]) {
+      expect(
+        classify(`bash ${helper} run audit bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // Only `run <gate>` hands its words to a command.
+    expect(
+      classify("bash scripts/release-gate.sh verdict bun ci").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
   test("bounded installs and planner calls retain dependency coverage", () => {
     for (const prefix of [
       ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(
@@ -1682,6 +1701,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/detect-e2e-changes.test.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
+    "scripts/ci-pr-jobs-cli.ts",
   ]) {
     expect(loaded).toContain(file);
   }

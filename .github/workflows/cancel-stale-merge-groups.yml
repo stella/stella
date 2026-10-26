@@ -30,9 +30,12 @@ permissions: {}
 jobs:
   cancel:
     if: >-
-      github.event_name != 'delete'
+      (github.event_name != 'workflow_dispatch'
+      || github.ref == 'refs/heads/main')
+      && (github.event_name != 'delete'
       || (github.event.ref_type == 'branch'
           && startsWith(github.event.ref, 'gh-readonly-queue/'))
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -61,7 +64,9 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for status in queued in_progress; do
+          # Every status of a run that has not finished: a merge group held
+          # by concurrency is pending, one awaiting an environment waiting.
+          for status in requested queued pending waiting in_progress; do
             bash "$GH_RETRY_SCRIPT" api --paginate \
               "repos/$REPO/actions/runs?event=merge_group&status=$status&per_page=100" \
               --jq '.workflow_runs[] | "\(.id) \(.head_branch)"'

@@ -174,7 +174,7 @@ export const removedCommandError = ({
   baked: RouteNode;
   delta: RegistryDelta;
 }): string | undefined => {
-  if (delta.removed.length === 0) {
+  if (delta.removed.length === 0 && delta.changed.length === 0) {
     return undefined;
   }
   const segments = commandPathFromArgv(argv);
@@ -182,12 +182,11 @@ export const removedCommandError = ({
     return undefined;
   }
   const toolName = toolNameAt(baked, segments);
-  if (toolName === undefined || !delta.removed.includes(toolName)) {
+  if (
+    toolName === undefined ||
+    (!delta.removed.includes(toolName) && !delta.changed.includes(toolName))
+  ) {
     return undefined;
   }
-  return (
-    `stella ${segments.join(" ")} is not available on this server: it runs the ` +
-    `${toolName} tool, which the server's registry no longer lists.\n` +
-    "Run 'stella tools list' for the commands this server offers.\n"
-  );
+  return `this CLI is too old for this server; run npm i -g @stll/cli@latest\n`;
 };

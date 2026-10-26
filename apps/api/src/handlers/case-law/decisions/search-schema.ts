@@ -1,15 +1,13 @@
-import { Type } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
-import {
-  caseLawCourtYearSchema,
-  type CaseLawCourtYear,
-} from "@stll/api-contract/case-law-court-year";
+import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_REACH,
 } from "@stll/api-contract/search";
@@ -25,18 +23,15 @@ import {
   decisionHeadnotePreviewSchema,
   decisionKeywordsPreviewSchema,
 } from "@/api/lib/case-law/decision-headnote-schema";
-import { tDecisionPageOffset } from "@/api/lib/case-law/decision-page-offset";
-import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
+import { decisionPageOffsetSchema } from "@/api/lib/case-law/decision-page-offset";
 import { caseLawProvisionFilterSchema } from "@/api/lib/case-law/provision-filter";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import {
@@ -54,117 +49,98 @@ import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 
-const courtYearSchema = Type.Unsafe<CaseLawCourtYear>(
-  jsonSchemaToTypeBox(toJsonSchema(caseLawCourtYearSchema)),
-);
-
-export const searchDecisionsBodySchema = t.Object({
-  query: t.String({
-    minLength: 1,
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(
-    tPaginationCursor({
+export const searchDecisionsBodySchema = v.object({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+  ),
+  limit: v.optional(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
+  cursor: v.optional(
+    paginationCursorSchema({
       maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     }),
   ),
   // A page addressed by number: how many ranked results come before it.
   // Exclusive with `cursor`, and `offset + limit` stays within
   // `LIMITS.caseLawResultDepthMax`, so a jump costs one bounded request.
-  offset: t.Optional(tDecisionPageOffset()),
-  court: t.Optional(t.String({ maxLength: 512 })),
-  courts: t.Optional(
-    t.Array(t.String({ minLength: 1, maxLength: 512 }), {
-      minItems: 1,
-      maxItems: 16,
-    }),
+  offset: v.optional(decisionPageOffsetSchema()),
+  court: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  courts: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+      v.minLength(1),
+      v.maxLength(16),
+    ),
   ),
-  category: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
-  hasLegalSentence: t.Optional(t.Boolean()),
+  category: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  hasLegalSentence: v.optional(v.boolean()),
   // Decisions whose recorded provision links cite this provision. Applied to
   // live rows within the bounded candidate scan, like the metadata filters.
-  provision: t.Optional(caseLawProvisionFilterSchema),
+  provision: v.optional(caseLawProvisionFilterSchema),
   country: tPublicLawCountry,
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(tSafeId("caseLawSource")),
-  language: t.Optional(t.String({ maxLength: 8 })),
-  // A literal union, not `UnionEnum`: Elysia coerces an absent optional
-  // `UnionEnum` to its first member, and the handler owns the default.
-  sort: t.Optional(searchSortSchema),
+  dateFrom: v.optional(apiDateSchema),
+  dateTo: v.optional(apiDateSchema),
+  decisionType: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  sourceId: v.optional(resourceIdSchema("caseLawSource")),
+  language: v.optional(v.pipe(v.string(), v.maxLength(8))),
+  // Optional; the handler owns the default.
+  sort: v.optional(searchSortSchema),
   // How much of the matched passage each hit carries. A name rather than a
   // character count: the window is the search's to choose, and a caller that
   // could ask for arbitrary characters could ask for the whole decision.
-  excerpt: t.Optional(searchExcerptSchema),
+  excerpt: v.optional(searchExcerptSchema),
   // Require every word the query carries, function words included. Off by
   // default: a question asked in a sentence is the common entry, and no
   // judgment is written the way a question is asked. A caller that knows
   // every word matters — a quoted statutory formula, a name — asks for this.
-  strict: t.Optional(t.Boolean()),
+  strict: v.optional(v.boolean()),
   // Legal-vocabulary alternatives for the query's words ("kauce" beside
   // "jistota"), as the authenticated expansion endpoint proposed them. ORed in
   // beside each word, never instead of it; ignored under `strict` and for an
   // identifier. Absent, the search matches the words as typed.
-  alternatives: t.Optional(tLegalAlternatives),
+  alternatives: v.optional(tLegalAlternatives),
 });
 
-const searchWarningSchema = t.Object(
-  {
-    code: t.UnionEnum([...CASE_LAW_SEARCH_WARNING_CODES]),
-    message: boundedString(bytes.warning),
-    hint: boundedString(bytes.warning),
-  },
-  { additionalProperties: false },
-);
+const searchWarningSchema = v.strictObject({
+  code: v.picklist([...CASE_LAW_SEARCH_WARNING_CODES]),
+  message: boundedString(bytes.warning),
+  hint: boundedString(bytes.warning),
+});
 
 const nullableStringSchema = nullableBoundedString(bytes.date);
 
-const decisionIdentifierSchema = t.Object(
-  {
-    type: t.Union([
-      t.Literal(DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER),
-      t.Literal(DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
-      t.Literal(DECISION_IDENTIFIER_TYPES.ECLI),
-      t.Literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
-      t.Literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
-    ]),
-    value: boundedString(bytes.identifier),
-  },
-  { additionalProperties: false },
+// Every identifier type, read from the table: a new type is answerable the
+// day it is stored.
+const decisionIdentifierSchema = v.strictObject({
+  type: v.picklist(Object.values(DECISION_IDENTIFIER_TYPES)),
+  value: boundedString(bytes.identifier),
+});
+
+// A tuple with a rest, so the list is non-empty in the type as well as at
+// runtime; the transform names the result the canonical readonly contract.
+const decisionIdentifiersSchema = v.pipe(
+  v.tupleWithRest([decisionIdentifierSchema], decisionIdentifierSchema),
+  v.maxLength(DECISION_IDENTIFIER_MAX_COUNT),
+  v.transform((identifiers): DecisionIdentifiers => identifiers),
 );
 
-// SAFETY: JSON arrays have no readonly marker; the static type keeps the
-// canonical non-empty, readonly contract while the schema enforces its bounds.
-const decisionIdentifiersSchema = Type.Unsafe<DecisionIdentifiers>(
-  t.Array(decisionIdentifierSchema, {
-    minItems: 1,
-    maxItems: DECISION_IDENTIFIER_MAX_COUNT,
-  }),
-);
+const languageAlternateSchema = v.strictObject({
+  caseNumber: boundedString(bytes.caseNumber),
+  country: boundedString(bytes.country),
+  court: boundedString(bytes.court),
+  decisionDate: nullableStringSchema,
+  id: boundedString(bytes.id),
+  language: boundedString(bytes.language),
+  slug: nullableBoundedString(bytes.slug),
+});
 
-const languageAlternateSchema = t.Object(
-  {
-    caseNumber: boundedString(bytes.caseNumber),
-    country: boundedString(bytes.country),
-    court: boundedString(bytes.court),
-    decisionDate: nullableStringSchema,
-    id: boundedString(bytes.id),
-    language: boundedString(bytes.language),
-    slug: nullableBoundedString(bytes.slug),
-  },
-  { additionalProperties: false },
-);
-
-// SAFETY: JSON arrays have no readonly marker; the static type preserves the
-// canonical readonly view without copying every result on this search path.
-export const languageAlternatesSchema = Type.Unsafe<
-  readonly PublicDecisionLanguageAlternate[]
->(
-  t.Array(languageAlternateSchema, {
-    maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
-  }),
+// Readonly, as the canonical view is, so the search path passes the
+// alternates through without copying every result.
+export const languageAlternatesSchema = v.pipe(
+  v.array(languageAlternateSchema),
+  v.maxLength(LIMITS.caseLawLanguageAlternatesPerGroupMax),
+  v.readonly(),
 );
 
 /**
@@ -177,47 +153,43 @@ export const languageAlternatesSchema = Type.Unsafe<
  * should not see (a source id); null when the value is already what a reader
  * reads.
  */
-const searchFacetBucketsSchema = t.Array(
-  t.Object(
-    {
-      value: boundedString(bytes.facet),
-      label: nullableBoundedString(bytes.label),
-      count: Type.Integer({ minimum: 0 }),
-    },
-    { additionalProperties: false },
-  ),
-  { maxItems: LIMITS.caseLawYearFacetLimit },
+const searchFacetBucketSchema = v.strictObject({
+  value: boundedString(bytes.facet),
+  label: nullableBoundedString(bytes.label),
+  count: v.pipe(v.number(), v.integer(), v.minValue(0)),
+});
+
+const searchFacetBucketsSchema = v.pipe(
+  v.array(searchFacetBucketSchema),
+  v.maxLength(LIMITS.caseLawYearFacetLimit),
 );
 
 /** The type facet: canonical kinds, which the web labels per locale. */
-const decisionTypeFacetBucketsSchema = t.Array(
-  t.Object(
-    {
-      value: t.UnionEnum([...DECISION_TYPE_KINDS]),
+const decisionTypeFacetBucketsSchema = v.pipe(
+  v.array(
+    v.strictObject({
+      value: v.picklist([...DECISION_TYPE_KINDS]),
       label: nullableBoundedString(bytes.label),
-      count: Type.Integer({ minimum: 0 }),
-    },
-    { additionalProperties: false },
+      count: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    }),
   ),
-  { maxItems: DECISION_TYPE_KINDS.length },
+  v.maxLength(DECISION_TYPE_KINDS.length),
 );
 
-const sourceFacetBucketsSchema = t.Array(
-  t.Object(
-    {
+const sourceFacetBucketsSchema = v.pipe(
+  v.array(
+    v.strictObject({
       value: boundedString(bytes.facet),
       label: nullableBoundedString(bytes.label),
-      count: Type.Integer({ minimum: 0 }),
-      // Elysia's TypeBox module inference needs a tuple; a mapped array becomes never.
-      countType: t.Union([
-        t.Literal(FACET_COUNT_TYPE.EXACT),
-        t.Literal(FACET_COUNT_TYPE.AT_LEAST),
-        t.Literal(FACET_COUNT_TYPE.ESTIMATE),
+      count: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      countType: v.union([
+        v.literal(FACET_COUNT_TYPE.EXACT),
+        v.literal(FACET_COUNT_TYPE.AT_LEAST),
+        v.literal(FACET_COUNT_TYPE.ESTIMATE),
       ]),
-    },
-    { additionalProperties: false },
+    }),
   ),
-  { maxItems: LIMITS.caseLawYearFacetLimit },
+  v.maxLength(LIMITS.caseLawYearFacetLimit),
 );
 
 /**
@@ -225,127 +197,124 @@ const sourceFacetBucketsSchema = t.Array(
  * reader narrowing to "the supreme courts" is doing one thing, not picking
  * names off a flat list of twenty.
  */
-const searchCourtTiersSchema = t.Array(
-  t.Object(
-    {
-      tierLabel: t.UnionEnum([...COURT_TIER_LABELS]),
-      courts: t.Array(searchFacetBucketsSchema.items, {
-        maxItems: LIMITS.caseLawFacetLimit,
-      }),
-    },
-    { additionalProperties: false },
+const searchCourtTiersSchema = v.pipe(
+  v.array(
+    v.strictObject({
+      tierLabel: v.picklist([...COURT_TIER_LABELS]),
+      courts: v.pipe(
+        v.array(searchFacetBucketSchema),
+        v.maxLength(LIMITS.caseLawFacetLimit),
+      ),
+    }),
   ),
-  { maxItems: COURT_TIER_LABELS.length },
+  v.maxLength(COURT_TIER_LABELS.length),
 );
 
-export const searchDecisionsSuccessResponseSchema = t.Object(
-  {
-    hits: t.Array(
-      t.Object(
-        {
-          decisionId: boundedString(bytes.id),
-          caseNumber: boundedString(bytes.caseNumber),
-          /** What kind of reference `caseNumber` is. */
-          caseNumberType: t.UnionEnum([...DECISION_PRIMARY_REFERENCE_TYPES]),
-          slug: nullableBoundedString(bytes.slug),
-          ecli: nullableBoundedString(bytes.identifier),
-          identifiers: decisionIdentifiersSchema,
-          court: boundedString(bytes.court),
-          /**
-           * The court's short form, null where nothing states one. A reader
-           * scans it; the court name beside it carries the meaning on its own,
-           * so an unknown abbreviation is never a placeholder.
-           */
-          courtAbbreviation: nullableBoundedString(bytes.courtAbbreviation),
-          /** Where the court stands, which is what the abbreviation is drawn as. */
-          courtTier: t.UnionEnum([...COURT_TIER_LABELS]),
-          country: boundedString(bytes.country),
-          language: boundedString(bytes.language),
-          languageAlternates: languageAlternatesSchema,
-          decisionDate: nullableStringSchema,
-          decisionType: nullableBoundedString(bytes.decisionType),
-          sourceUrl: nullableBoundedString(bytes.sourceUrl),
-          headnote: decisionHeadnotePreviewSchema,
-          keywords: t.Union([decisionKeywordsPreviewSchema, t.Null()]),
-          headline: nullableBoundedString(bytes.headline),
-          textWithheldReason: t.Union([
-            t.Literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
-            t.Null(),
-          ]),
-          anchorId: nullableBoundedString(bytes.anchorId),
-          citationCount: t.Number(),
-          // The stored `ln(1 + weighted citations)` score search ranks by, so
-          // a caller can order or threshold on the same number the blend uses.
-          citationAuthority: t.Number(),
-          // Passages of this decision the query matched, within the scanned
-          // window: breadth, not weight. One on the Postgres branch and on an
-          // identifier lookup, which score whole decisions.
-          matchingPassages: Type.Integer({ minimum: 1 }),
-          createdAt: boundedString(bytes.date),
-        },
-        { additionalProperties: false },
-      ),
-      { maxItems: LIMITS.caseLawSearchPageSizeMax },
+export const searchDecisionsSuccessResponseSchema = v.object({
+  hits: v.pipe(
+    v.array(
+      v.object({
+        decisionId: boundedString(bytes.id),
+        caseNumber: boundedString(bytes.caseNumber),
+        /** What kind of reference `caseNumber` is. */
+        caseNumberType: v.picklist([...DECISION_PRIMARY_REFERENCE_TYPES]),
+        slug: nullableBoundedString(bytes.slug),
+        ecli: nullableBoundedString(bytes.identifier),
+        identifiers: decisionIdentifiersSchema,
+        court: boundedString(bytes.court),
+        /**
+         * The court's short form, null where nothing states one. A reader
+         * scans it; the court name beside it carries the meaning on its own,
+         * so an unknown abbreviation is never a placeholder.
+         */
+        courtAbbreviation: nullableBoundedString(bytes.courtAbbreviation),
+        /** Where the court stands, which is what the abbreviation is drawn as. */
+        courtTier: v.picklist([...COURT_TIER_LABELS]),
+        country: boundedString(bytes.country),
+        language: boundedString(bytes.language),
+        languageAlternates: languageAlternatesSchema,
+        decisionDate: nullableStringSchema,
+        decisionType: nullableBoundedString(bytes.decisionType),
+        sourceUrl: nullableBoundedString(bytes.sourceUrl),
+        headnote: decisionHeadnotePreviewSchema,
+        keywords: v.union([decisionKeywordsPreviewSchema, v.null()]),
+        headline: nullableBoundedString(bytes.headline),
+        textWithheldReason: v.union([
+          v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+          v.null(),
+        ]),
+        anchorId: nullableBoundedString(bytes.anchorId),
+        citationCount: v.number(),
+        // The stored `ln(1 + weighted citations)` score search ranks by, so
+        // a caller can order or threshold on the same number the blend uses.
+        citationAuthority: v.number(),
+        // Passages of this decision the query matched, within the scanned
+        // window: breadth, not weight. One on the Postgres branch and on an
+        // identifier lookup, which score whole decisions.
+        matchingPassages: v.pipe(v.number(), v.integer(), v.minValue(1)),
+        // Whether the decision holds every word of the query, or only some
+        // of them: a short first page is topped up with the latter, after
+        // every hit of the former.
+        match: v.picklist([...DECISION_SEARCH_MATCHES]),
+        createdAt: boundedString(bytes.date),
+      }),
     ),
-    // Page one only. The counts describe the whole result set, not the page,
-    // so they do not change as a reader pages and are not recomputed.
-    facets: t.Union([
-      t.Object(
-        {
-          court: searchCourtTiersSchema,
-          courtYear: courtYearSchema,
-          year: searchFacetBucketsSchema,
-          decisionType: decisionTypeFacetBucketsSchema,
-          source: sourceFacetBucketsSchema,
-          language: searchFacetBucketsSchema,
-        },
-        { additionalProperties: false },
-      ),
-      t.Null(),
-    ]),
-    total: searchTotalSchema,
-    nextCursor: nullableBoundedString(
-      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
-    ),
-    paginationOutcome: searchPaginationOutcomeSchema,
-    /**
-     * Whether a page addressed by offset was placed. `scan_budget` means the
-     * scan stopped before ranking every result in front of the page: its
-     * rows, however few, do not mark the end of the results.
-     */
-    pageReach: t.Union([
-      t.Literal(SEARCH_PAGE_REACH.REACHED),
-      t.Literal(SEARCH_PAGE_REACH.SCAN_BUDGET),
-    ]),
-    /**
-     * The query the engine actually answered: the words it required, with a
-     * phrase still quoted. Equal in meaning to the request's `query` when
-     * nothing was dropped, and always a query that re-runs the same search,
-     * so a caller paging or repeating sends this back rather than rebuilding
-     * it.
-     */
-    queryUsed: boundedString(bytes.queryUsed),
-    /**
-     * What this search answered that the request did not ask for. Empty for
-     * a search that required every word and found something.
-     */
-    warnings: t.Array(searchWarningSchema, {
-      maxItems: CASE_LAW_SEARCH_WARNING_CODES.length,
+    v.maxLength(LIMITS.caseLawSearchPageSizeMax),
+  ),
+  // Page one only. The counts describe the whole result set, not the page,
+  // so they do not change as a reader pages and are not recomputed.
+  facets: v.union([
+    v.object({
+      court: searchCourtTiersSchema,
+      courtYear: caseLawCourtYearSchema,
+      year: searchFacetBucketsSchema,
+      decisionType: decisionTypeFacetBucketsSchema,
+      source: sourceFacetBucketsSchema,
+      language: searchFacetBucketsSchema,
     }),
-  },
-  { additionalProperties: false },
-);
+    v.null(),
+  ]),
+  total: searchTotalSchema,
+  /** Hits on this page appended by the any-word phase, outside `total`. */
+  relaxedHitCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  nextCursor: nullableBoundedString(
+    CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+  ),
+  paginationOutcome: searchPaginationOutcomeSchema,
+  /**
+   * Whether a page addressed by offset was placed. `scan_budget` means the
+   * scan stopped before ranking every result in front of the page: its
+   * rows, however few, do not mark the end of the results.
+   */
+  pageReach: v.union([
+    v.literal(SEARCH_PAGE_REACH.REACHED),
+    v.literal(SEARCH_PAGE_REACH.SCAN_BUDGET),
+  ]),
+  /**
+   * The query the engine actually answered: the words it required, with a
+   * phrase still quoted. Equal in meaning to the request's `query` when
+   * nothing was dropped, and always a query that re-runs the same search,
+   * so a caller paging or repeating sends this back rather than rebuilding
+   * it.
+   */
+  queryUsed: boundedString(bytes.queryUsed),
+  /**
+   * What this search answered that the request did not ask for. Empty for
+   * a search that required every word and found something.
+   */
+  warnings: v.pipe(
+    v.array(searchWarningSchema),
+    v.maxLength(CASE_LAW_SEARCH_WARNING_CODES.length),
+  ),
+});
 
 export const searchDecisionsResponseSchema = withPublicCountryUnavailable({
   ...safePublicHandlerResponseSchemasWithStatusText(
     searchDecisionsSuccessResponseSchema,
   ),
   503: safePublicHandlerErrorOrStatusTextResponseSchema,
-  404: t.Union([
+  404: v.union([
     safePublicHandlerErrorOrStatusTextResponseSchema,
-    t.Object(
-      { error: t.Literal("Not Found") },
-      { additionalProperties: false },
-    ),
+    v.object({ error: v.literal("Not Found") }),
   ]),
 });

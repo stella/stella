@@ -1,5 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { Result, panic } from "better-result";
+import { INTERRUPT_BINDING_METADATA_KEY } from "@tanstack/ai/client";
+import type { InterruptBinding } from "@tanstack/ai/client";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,8 +14,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { compareCodeUnit } from "@stll/collation";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -474,10 +478,17 @@ let openGrants: StoredToolGrant[] = [];
 
 const openPage = async (
   recording: RecordedConversation,
-  { organizationId = ORGANIZATION_ID }: { organizationId?: string } = {},
+  {
+    organizationId = ORGANIZATION_ID,
+    routeHandoff,
+  }: {
+    organizationId?: string;
+    routeHandoff?: ChatRouteHandoffMessage;
+  } = {},
 ) =>
   await openChatThreadDomPage({
     organizationId,
+    routeHandoff,
     threadId: recording.threadId,
     toolGrants: [...openGrants],
   });
@@ -980,13 +991,42 @@ const finding = (
   where: string,
 ) => JSON.stringify({ oracle, where });
 
+/** Where a conversation's first message is typed. */
+const FIRST_SEND = {
+  /** On the thread page, which then sends it. */
+  threadPage: "thread-page",
+  /** On the new-chat route, which starts its stream and hands the running
+   *  runtime to the thread page. */
+  routeHandoff: "route-handoff",
+} as const;
+type FirstSend = (typeof FIRST_SEND)[keyof typeof FIRST_SEND];
+
+/** The new-chat route's first message: the recording's opening send. */
+const routeHandoffMessage = (
+  recording: RecordedConversation,
+): ChatRouteHandoffMessage => {
+  const first = recording.steps.at(0)?.action;
+  if (first?.type !== "send") {
+    return expect.unreachable(
+      `${recording.scenario} does not open with a message`,
+    );
+  }
+  return {
+    content: first.text,
+    id: toSafeId<"chatMessage">(first.messageId),
+  };
+};
+
 /**
  * Replays `scenario` through the rendered chat. After every step the user
  * could look at, what the page shows must be what the stored thread says,
  * and a second tab loading the thread must show the same; at the end the page
  * must have posted exactly the recorded requests.
  */
-const replay = async (scenario: string) => {
+const replay = async (
+  scenario: string,
+  firstSend: FirstSend = FIRST_SEND.threadPage,
+) => {
   const recording = readRecording(scenario);
   const server = createRecordedServer(
     recording,
@@ -994,7 +1034,12 @@ const replay = async (scenario: string) => {
   );
   routeRequest = server.fetch;
   openGrants = server.grants;
-  let live = await openPage(recording);
+  let live = await openPage(
+    recording,
+    firstSend === FIRST_SEND.routeHandoff
+      ? { routeHandoff: routeHandoffMessage(recording) }
+      : {},
+  );
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];
   const pendingActions: Promise<Result<void, unknown>>[] = [];
@@ -1010,7 +1055,10 @@ const replay = async (scenario: string) => {
       live = await openPage(recording);
     }
     const container = live.view.container;
-    await performAction({ action, container, live, server, pendingActions });
+    // The new-chat route already sent the opening message.
+    if (index > 0 || firstSend === FIRST_SEND.threadPage) {
+      await performAction({ action, container, live, server, pendingActions });
+    }
     const next = recording.steps[index + 1];
     if (next !== undefined && isAutomatic(next.action)) {
       // The page answers on its own; the check comes once it has.
@@ -1181,6 +1229,49 @@ const SUPERSEDE_SCENARIOS = new Set([
 /** A replay renders the thread once per checked step, in a second tab. */
 const REPLAY_TIMEOUT_MS = 60_000;
 
+/** A stored interrupt without a readable binding kind. */
+const UNBOUND_INTERRUPT = "unbound";
+
+/** The interrupts a recording's first turn ends in, by binding kind. */
+const firstTurnInterruptKinds = (recording: RecordedConversation): string[] => {
+  const stored = recording.steps.at(0)?.exchanges.at(-1)?.page.messages.at(-1);
+  const metadata = isJsonObject(stored) ? stored["metadata"] : undefined;
+  const resumeSnapshot = isJsonObject(metadata)
+    ? metadata["resumeSnapshot"]
+    : undefined;
+  const pending = isJsonObject(resumeSnapshot)
+    ? resumeSnapshot["pendingInterrupts"]
+    : undefined;
+  return Array.isArray(pending)
+    ? pending.map((interrupt: unknown) => {
+        const interruptMetadata = isJsonObject(interrupt)
+          ? interrupt["metadata"]
+          : undefined;
+        const binding = isJsonObject(interruptMetadata)
+          ? interruptMetadata[INTERRUPT_BINDING_METADATA_KEY]
+          : undefined;
+        const kind = isJsonObject(binding) ? binding["kind"] : undefined;
+        return typeof kind === "string" ? kind : UNBOUND_INTERRUPT;
+      })
+    : [];
+};
+
+/**
+ * Whether a recording's first turn ends in each interrupt the SDK can bind,
+ * so the new-chat route replays hand each one to the thread page mid-turn.
+ */
+const FIRST_TURN_INTERRUPT_COVERAGE = {
+  "client-tool-execution": { type: "recorded" },
+  generic: {
+    reason: "The server defines no generic interrupt; its tools bind theirs.",
+    type: "not-recorded",
+  },
+  "tool-approval": { type: "recorded" },
+} as const satisfies Record<
+  InterruptBinding["kind"],
+  { type: "recorded" } | { reason: string; type: "not-recorded" }
+>;
+
 describe("a recorded conversation, rendered", () => {
   test.each(SCENARIOS)(
     "%s shows what the server stored, live and in a second tab",
@@ -1189,6 +1280,28 @@ describe("a recorded conversation, rendered", () => {
     },
     REPLAY_TIMEOUT_MS,
   );
+
+  test.each(SCENARIOS)(
+    "%s, its first message sent from the new-chat route, shows what the server stored, live and in a second tab",
+    async (scenario) => {
+      await replay(scenario, FIRST_SEND.routeHandoff);
+    },
+    REPLAY_TIMEOUT_MS,
+  );
+
+  test("a first turn sent from the new-chat route ends in every interrupt kind the server binds", () => {
+    const reached = new Set(
+      SCENARIOS.flatMap((scenario) =>
+        firstTurnInterruptKinds(readRecording(scenario)),
+      ),
+    );
+    const recorded = Object.entries(FIRST_TURN_INTERRUPT_COVERAGE).flatMap(
+      ([kind, coverage]) => (coverage.type === "recorded" ? [kind] : []),
+    );
+    expect([...reached].toSorted(compareCodeUnit)).toEqual(
+      recorded.toSorted(compareCodeUnit),
+    );
+  });
 
   test.each([...SUPERSEDE_SCENARIOS])(
     "%s sends the new message and never answers the replaced card",

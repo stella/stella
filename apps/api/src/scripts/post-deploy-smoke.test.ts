@@ -5,8 +5,8 @@ import nodePath from "node:path";
 import {
   allChecksPassed,
   buildChatSmokeBody,
-  evaluateChatStreamPrefix,
   evaluateChatStreamContentType,
+  evaluateChatStreamPrefix,
   evaluateHealthRevision,
   evaluateHttpCheck,
   isExpectedChatBusinessResponse,
@@ -16,6 +16,7 @@ import {
   streamPrefixHasError,
   streamPrefixHasMeaningfulFrame,
 } from "@/api/scripts/post-deploy-smoke";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 describe("post-deploy smoke module graph", () => {
   test("loads without the app environment", async () => {
@@ -292,7 +293,9 @@ describe("readStreamPrefix", () => {
       }),
     );
 
-    const prefix = await readStreamPrefix(response, { timeoutMs: 50 });
+    const prefix = await readStreamPrefix(response, {
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+    });
     expect(prefix).toBe(
       'data: {"type":"RUN_STARTED"}\n\ndata: {"type":"TEXT_MESSAGE_START"}\n\ndata: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n',
     );
@@ -315,7 +318,9 @@ describe("readStreamPrefix", () => {
       }),
     );
 
-    const prefix = await readStreamPrefix(response, { timeoutMs: 50 });
+    const prefix = await readStreamPrefix(response, {
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+    });
     expect(prefix).toContain('"type":"RUN_ERROR"');
     expect(evaluateChatStreamPrefix(prefix).ok).toBe(false);
   });
@@ -332,7 +337,7 @@ describe("readStreamPrefix", () => {
 
     let message = "";
     try {
-      await readStreamPrefix(response, { timeoutMs: 5 });
+      await readStreamPrefix(response, { timeoutMs: 5 }); // timeout under test
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
     }

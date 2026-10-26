@@ -7,11 +7,11 @@ import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import {
   checkReviewAccountAccess,
   narrowReviewOrganizationScopes,
+  resolveReviewAccountBodyEmailOperation,
+  resolveReviewAccountSessionOperation,
   REVIEW_ACCOUNT_EXCLUDED_SCOPES,
   REVIEW_ACCOUNT_OPERATION,
   REVIEW_ACCOUNT_POLICY,
-  resolveReviewAccountBodyEmailOperation,
-  resolveReviewAccountSessionOperation,
 } from "@/api/lib/auth/review-account-policy";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 
@@ -172,7 +172,16 @@ describe("restricted review account auth endpoints", () => {
       "forget-password",
       REVIEW_ACCOUNT_OPERATION.changePassword,
     ],
-    ["/email-otp/send-verification-otp", "sign-in", null],
+    [
+      "/email-otp/send-verification-otp",
+      "sign-in",
+      REVIEW_ACCOUNT_OPERATION.emailCodeSignIn,
+    ],
+    [
+      "/email-otp/send-verification-otp",
+      "email-verification",
+      REVIEW_ACCOUNT_OPERATION.verifyEmail,
+    ],
     ["/sign-in/email", undefined, null],
   ] as const)("%s (%p) performs %p", (path, otpType, operation) => {
     expect(resolveReviewAccountBodyEmailOperation({ path, otpType })).toBe(

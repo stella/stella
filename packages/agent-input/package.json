@@ -1,6 +1,6 @@
 {
   "name": "@stll/agent-input",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
   "keywords": [
     "agent",
@@ -29,7 +29,12 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./country": "./src/country.ts",
+    "./date-value": "./src/date-value.ts",
+    "./locale": "./src/locale.ts",
+    "./numeric-token": "./src/numeric-token.ts",
+    "./string-list": "./src/string-list.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -43,7 +48,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/agent-input",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-input",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "dependencies": {
@@ -51,7 +55,7 @@
     "@stll/fuzzy-search": "catalog:",
     "@stll/template-conditions": "workspace:^",
     "@stll/text-normalize": "workspace:^",
-    "@stll/time": "workspace:^",
+    "@stll/time": "0.4.1",
     "better-result": "catalog:"
   },
   "devDependencies": {

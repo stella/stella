@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
+import ts from "typescript6";
 
 // The browser launcher deliberately hands ownership to the user's desktop.
 // Every other asynchronous process in the runner belongs to its dev session.

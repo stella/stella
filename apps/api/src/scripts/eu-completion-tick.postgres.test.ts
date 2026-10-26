@@ -27,8 +27,8 @@ import {
 import sparqlFixture from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
-  withPublisherGateFixture,
   abortableSleep,
+  withPublisherGateFixture,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { ecjCompletionFingerprint } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
@@ -58,6 +58,7 @@ import {
 import { runEuCompletionTickFixture } from "@/api/tests/helpers/eu-completion-tick";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -1030,7 +1031,7 @@ if (!databaseUrl || !enabled) {
             });
           } finally {
             await slot.close();
-            session.release();
+            await session.release();
           }
         });
       });
@@ -1066,7 +1067,7 @@ if (!databaseUrl || !enabled) {
                 {
                   adapterKey: ADAPTER_KEYS.EU_ECJ,
                   fetchStage: "listing",
-                  timeoutMs: 1000,
+                  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
                 },
               );
               const report = await runEuCompletionTickFixture(

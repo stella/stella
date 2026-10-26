@@ -1,6 +1,6 @@
 import { panic } from "better-result";
-import Elysia from "elysia";
 
+import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import { DAY_IN_MS } from "@stll/time";
 
 import { recordLegalResolveAudit } from "@/api/db/root";
@@ -11,39 +11,36 @@ import {
   type LegalResolveAuthorizationDependencies,
 } from "@/api/handlers/legal-resolve/authorization";
 import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
-import {
-  createLegalResolveDecisionHandler,
-  legalResolveDecisionEndpoint,
-} from "@/api/handlers/legal-resolve/decision-endpoint";
+import { createLegalResolveDecisionHandler } from "@/api/handlers/legal-resolve/decision-endpoint";
 import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
+import { createLegalResolveLawHandler } from "@/api/handlers/legal-resolve/law-endpoint";
+import type {
+  GetLegalResolveAuthorization,
+  LegalResolveResolved,
+} from "@/api/handlers/legal-resolve/route-handler";
 import {
-  createLegalResolveLawHandler,
-  legalResolveLawEndpoint,
-} from "@/api/handlers/legal-resolve/law-endpoint";
-import type { GetLegalResolveAuthorization } from "@/api/handlers/legal-resolve/route-handler";
-import {
-  serviceResolveAuditOutcome,
   serviceResolveAuditCountry,
+  serviceResolveAuditOutcome,
 } from "@/api/handlers/legal-resolve/service-audit";
+import type { RequestContext } from "@/api/http/context";
+import { HTTP_FAILURE, isHttpFailure } from "@/api/http/errors";
+import { setResponseHeaders } from "@/api/http/headers";
+import { mount, routes } from "@/api/http/route";
+import type { Middleware } from "@/api/http/route";
 import { isServiceResolveSession } from "@/api/lib/db/service-client-contract";
 import type { LegalResolveSession } from "@/api/lib/db/service-client-contract";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import type {
   RateLimitContext,
   RateLimitOptions,
 } from "@/api/lib/rate-limit/contracts";
 import { rateLimit, scopedRateLimitKey } from "@/api/lib/rate-limit/rate-limit";
 import {
-  createRedisRateLimitRequestKey,
   createRedisRateLimit,
+  createRedisRateLimitRequestKey,
 } from "@/api/lib/rate-limit/redis-context";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
 import { LEGAL_RESOLVE_RESOURCE_ROUTES } from "@/api/mcp/resource-policy-contract";
 
@@ -146,6 +143,10 @@ export const createLegalResolveRoute = ({
     publicLawEnabled ??
     (() => isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"));
   const auditedRequests = new WeakSet<Request>();
+  const resolvedResponses = new WeakMap<Request, LegalResolveResponse>();
+  const onResolved: LegalResolveResolved = (request, response) => {
+    resolvedResponses.set(request, response);
+  };
   const usesDefaultAuthorization =
     authenticate === undefined &&
     publicLawEnabled === undefined &&
@@ -162,101 +163,126 @@ export const createLegalResolveRoute = ({
               : { resolveSessionContext }),
           }),
       );
-  const decisionHandler =
-    usesDefaultAuthorization && resolveDecisionRequest === resolveDecision
-      ? legalResolveDecisionEndpoint
-      : createLegalResolveDecisionHandler({
-          getAuthorization,
-          resolve: resolveDecisionRequest,
-        });
-  const lawHandler =
-    usesDefaultAuthorization && resolveLaw === resolveLawCitation
-      ? legalResolveLawEndpoint
-      : createLegalResolveLawHandler({ getAuthorization, resolve: resolveLaw });
+  const decisionHandler = createLegalResolveDecisionHandler({
+    getAuthorization,
+    resolve: resolveDecisionRequest,
+    onResolved,
+  });
+  const lawHandler = createLegalResolveLawHandler({
+    getAuthorization,
+    resolve: resolveLaw,
+    onResolved,
+  });
 
-  return new Elysia()
-    .mapResponse(async ({ set, request, responseValue, params }) => {
-      if (set.status === 401) {
-        set.headers["WWW-Authenticate"] = getMcpWwwAuthenticateHeader({
-          error: request.headers.has("authorization")
-            ? "invalid_token"
-            : "none",
-          mode: "law",
-        });
-      }
-      set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
-      if (auditedRequests.has(request)) {
-        return;
-      }
-      const authorization =
-        await getAuthorization.getExistingAuthorization(request);
-      if (authorization?.session === undefined) {
-        return;
-      }
-      auditedRequests.add(request);
-      await recordAudit({
-        principal: authorization.session,
-        credentialKey: credentialKey(authorization.session),
-        route: new URL(request.url).pathname.includes("/case/")
-          ? "case"
-          : "law",
-        country: serviceResolveAuditCountry(params["country"] ?? ""),
-        outcome: serviceResolveAuditOutcome(
-          responseValue,
-          resolveResponseStatus({ response: responseValue, set }),
-        ),
-      });
-    })
-    .use(
-      deploymentFeatureGate(
-        () =>
-          publicLawEnabled?.() ??
-          isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+  /**
+   * Audits each answered call of a verified caller once, by the outcome its
+   * status and resolved envelope show; never the query or the document.
+   */
+  const auditAnswer = async (ctx: RequestContext, status: number) => {
+    const { request } = ctx;
+    if (auditedRequests.has(request)) {
+      return;
+    }
+    const authorization =
+      await getAuthorization.getExistingAuthorization(request);
+    if (authorization?.session === undefined) {
+      return;
+    }
+    auditedRequests.add(request);
+    await recordAudit({
+      principal: authorization.session,
+      credentialKey: credentialKey(authorization.session),
+      route: ctx.path.includes("/case/") ? "case" : "law",
+      country: serviceResolveAuditCountry(ctx.params["country"] ?? ""),
+      outcome: serviceResolveAuditOutcome(
+        resolvedResponses.get(request),
+        status,
       ),
-    )
-    .group("", (app) =>
-      app
-        .use(
-          rateLimit(
-            decisionRateLimit ?? {
-              ...createLegalResolveRateLimitOptions(
-                "decision",
-                getAuthorization,
-              ),
-              ...(rateLimitContext === undefined
-                ? {}
-                : { context: rateLimitContext }),
+    });
+  };
+
+  const legalResolveAnswer: Middleware = async (ctx, inner) => {
+    try {
+      const response = await inner();
+      await auditAnswer(ctx, response.status);
+      return response.status === 401
+        ? setResponseHeaders(
+            response,
+            {
+              "WWW-Authenticate": getMcpWwwAuthenticateHeader({
+                error: ctx.request.headers.has("authorization")
+                  ? "invalid_token"
+                  : "none",
+                mode: "law",
+              }),
             },
-          ),
-        )
-        .get(
-          LEGAL_RESOLVE_RESOURCE_ROUTES.decision.path,
-          decisionHandler.handler,
-          {
-            params: decisionHandler.config.params,
-            query: decisionHandler.config.query,
-            response: decisionHandler.config.response,
+            { overwrite: true },
+          )
+        : response;
+    } catch (error) {
+      // A verified caller's rejected input or a faulty answer is still an
+      // outcome of its call.
+      if (isHttpFailure(error) && error.kind === HTTP_FAILURE.invalidRequest) {
+        await auditAnswer(ctx, 422);
+      }
+      if (isHttpFailure(error) && error.kind === HTTP_FAILURE.invalidResponse) {
+        await auditAnswer(ctx, 500);
+      }
+      throw error;
+    }
+  };
+
+  return mount(
+    [
+      routes(
+        {
+          [LEGAL_RESOLVE_RESOURCE_ROUTES.decision.path]: {
+            GET: decisionHandler,
           },
-        ),
-    )
-    .group("", (app) =>
-      app
-        .use(
-          rateLimit(
-            lawRateLimit ?? {
-              ...createLegalResolveRateLimitOptions("law", getAuthorization),
-              ...(rateLimitContext === undefined
-                ? {}
-                : { context: rateLimitContext }),
-            },
-          ),
-        )
-        .get(LEGAL_RESOLVE_RESOURCE_ROUTES.law.path, lawHandler.handler, {
-          params: lawHandler.config.params,
-          query: lawHandler.config.query,
-          response: lawHandler.config.response,
+        },
+        {
+          middleware: [
+            rateLimit(
+              decisionRateLimit ?? {
+                ...createLegalResolveRateLimitOptions(
+                  "decision",
+                  getAuthorization,
+                ),
+                ...(rateLimitContext === undefined
+                  ? {}
+                  : { context: rateLimitContext }),
+              },
+            ),
+          ],
+        },
+      ),
+      routes(
+        { [LEGAL_RESOLVE_RESOURCE_ROUTES.law.path]: { GET: lawHandler } },
+        {
+          middleware: [
+            rateLimit(
+              lawRateLimit ?? {
+                ...createLegalResolveRateLimitOptions("law", getAuthorization),
+                ...(rateLimitContext === undefined
+                  ? {}
+                  : { context: rateLimitContext }),
+              },
+            ),
+          ],
+        },
+      ),
+    ],
+    {
+      // The audit sees every answer, the feature gate's included; the gate
+      // runs before the limiter so a disabled deployment spends no budget.
+      middleware: [
+        legalResolveAnswer,
+        deploymentFeatureGate("FEATURE_PUBLIC_LAW", {
+          isEnabled: isPublicLawEnabled,
         }),
-    );
+      ],
+    },
+  );
 };
 
 export const legalResolveRoute = createLegalResolveRoute();

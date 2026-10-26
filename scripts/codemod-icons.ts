@@ -23,7 +23,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -330,14 +330,16 @@ const moduleSource = readFileSync(modulePath, "utf-8");
 
 // The semantic entries the module declares by hand, e.g.
 // `export { BookOpenIcon as SkillIcon } from "lucide-react";`.
-const semantic = new Set(
-  Array.from(
-    moduleSource.matchAll(
-      /^export \{ \w+ as (?<name>\w+) \} from "lucide-react";$/gmu,
-    ),
-    (match) => match.groups?.["name"] ?? "",
+const semanticEntries = Array.from(
+  moduleSource.matchAll(
+    /^export \{ (?<glyph>\w+) as (?<name>\w+) \} from "lucide-react";$/gmu,
   ),
+  (match) => ({
+    glyph: match.groups?.["glyph"] ?? "",
+    name: match.groups?.["name"] ?? "",
+  }),
 );
+const semantic = new Set(semanticEntries.map((entry) => entry.name));
 
 // Every name a file imports from the icon module, semantic entries aside.
 const ICON_IMPORT =
@@ -427,10 +429,17 @@ const main = (): void => {
       failures.push(
         `'${name}' is imported from the icon module but is not a lucide icon.`,
       );
-    } else if (SEMANTIC_REWRITES[glyph] !== undefined) {
-      failures.push(
-        `'${name}' has a semantic entry; import the entry instead of the plain glyph.`,
-      );
+    } else {
+      // Read from the module rather than SEMANTIC_REWRITES, so a glyph that
+      // gains a semantic entry can never return to the plain list.
+      const entries = semanticEntries
+        .filter((entry) => glyphOf(entry.glyph) === glyph)
+        .map((entry) => entry.name);
+      if (entries.length > 0) {
+        failures.push(
+          `'${name}' has a semantic entry; import ${entries.join(" or ")} instead of the plain glyph, or add an entry for the meaning it draws.`,
+        );
+      }
     }
   }
 

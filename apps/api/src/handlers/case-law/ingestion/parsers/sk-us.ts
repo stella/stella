@@ -1,4 +1,4 @@
-// parser-output-unchanged: the script/style check now calls the shared exclusion helper, which excludes the same two tags.
+// parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *

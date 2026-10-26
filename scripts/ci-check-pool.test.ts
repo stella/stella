@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,26 +16,30 @@ import { assertProperty } from "@stll/property-testing";
 import {
   blockingFailures,
   checkLogText,
+  type CheckResult,
+  conditionHolds,
   continueOnErrorHolds,
   failedCheckAnnotation,
+  type Launched,
+  partitionChecks,
   planChecks,
+  type PlannedCheck,
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
   resolveEnv,
   runChecks,
+  selectChecks,
   summaryTable,
-  type CheckResult,
-  type Launched,
-  type PlannedCheck,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkPoolJob,
+  checkPoolStepRun,
   parseCheckPool,
-  readCheckPool,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { evaluate, type Value } from "./github-expression";
@@ -49,6 +60,32 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   continueOnError: undefined,
   step: { name },
   ...extra,
+});
+
+test("an exact named subset retains manifest order", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  expect(selectChecks(checks, "Third,First").map(({ name }) => name)).toEqual([
+    "First",
+    "Third",
+  ]);
+  expect(selectChecks(checks, undefined)).toEqual(checks);
+  expect(() => selectChecks(checks, "First,Missing")).toThrow(
+    "Unknown check name(s): Missing",
+  );
+});
+
+test("matrix partitions cover every pooled check exactly once", () => {
+  const checks = [check("First"), check("Second"), check("Third")];
+  const selected = ["1/2", "2/2"].flatMap((partition) =>
+    partitionChecks(checks, partition),
+  );
+  expect(selected.map(({ name }) => name).toSorted()).toEqual(
+    checks.map(({ name }) => name).toSorted(),
+  );
+  expect(new Set(selected).size).toBe(checks.length);
+  expect(() => partitionChecks(checks, "3/2")).toThrow(
+    "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
+  );
 });
 
 test("failed checks emit one annotation with their first actionable cause", () => {
@@ -79,6 +116,48 @@ test("failed checks emit one annotation with their first actionable cause", () =
   expect(failedCheckAnnotation(result, "loading\nno diagnostic")).toBe(
     "::error title=FAILED check%3A Unit tests::exit code 1",
   );
+});
+
+test("a check that passes its own tests reports its first finding, never a passing test", () => {
+  const result = { name: "CI network step retries and timeouts", detail: "x" };
+  expect(
+    failedCheckAnnotation(
+      result,
+      [
+        "bun test v1.4.3 (c6da4a4d3)",
+        "",
+        "::group::scripts/check-ci-network-steps.test.ts:",
+        "(pass) shell detection > curl with its own retry-all-errors budget counts as retried [0.09ms]",
+        "(pass) allowlist > every entry needs a reason [1.10ms]",
+        "::endgroup::",
+        "",
+        " 43 pass",
+        " 0 fail",
+        " 46 expect() calls",
+        "Ran 43 tests across 1 file. [119.00ms]",
+        ".github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+        ".github/workflows/release.yml: prepare-web-image: docker pull needs a step timeout-minutes",
+      ].join("\n"),
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A CI network step retries and timeouts::.github/actions/build-web-image/action.yml: Report carried web asset and image sizes: route docker pull through scripts/retry.sh",
+  );
+  // A finding is named by its path, even one with a line and no extension.
+  expect(
+    failedCheckAnnotation(
+      { name: "Ratchet guard", detail: "x" },
+      "bun test v1.4.3 (c6da4a4d3)\n(pass) ratchet > counts [1ms]\napps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE\nerror: script exited with code 1",
+    ),
+  ).toBe(
+    "::error title=FAILED check%3A Ratchet guard::apps/web/Dockerfile:15: uncataloged env PREVIOUS_WEB_IMAGE",
+  );
+  // A word that merely contains "error" is not an error line.
+  expect(
+    failedCheckAnnotation(
+      { name: "Policy", detail: "exit code 1" },
+      "(pass) retry-all-errors budget [1ms]\nchecking mirrors\nnothing matched",
+    ),
+  ).toBe("::error title=FAILED check%3A Policy::exit code 1");
 });
 
 test("failed check annotations escape and truncate their messages", () => {
@@ -113,6 +192,8 @@ test("each pooled job runs its registry from exactly one pool step", () => {
     expect(pools.map((step) => [step["name"], checkPoolJob(step)])).toEqual([
       [CHECK_POOL_STEP_NAMES[job], job],
     ]);
+    expect(pools.at(0)?.["run"]).toBe(checkPoolStepRun(job));
+    expect(checkPoolJob({ run: checkPoolStepRun(job) })).toBe(job);
     // Guards see every pooled check as a step of the job, right after the pool.
     const index = steps.indexOf(pools[0] ?? {});
     const pooled = readCheckPool(job).map(({ name }) => name);
@@ -230,6 +311,45 @@ test("pooled conditions keep change selection, receipt reuse and event gates", (
   );
   expect(reused).not.toContain("Test unsignalled skip detection");
   expect(reused).toContain("Ratchet scanner invariants");
+});
+
+test("an unset root check selection keeps every pooled check, as GitHub reads it", () => {
+  // A main PR-depth run whose planner was unavailable writes no root_checks
+  // output, so toJSON(needs) omits the key. GitHub evaluates the selection
+  // gate `root_checks == ''` as true for the unset output; the pool must
+  // agree, or main skips the checks every pull request then inherits as red.
+  for (const job of CHECK_POOL_JOBS) {
+    const checks = readCheckPool(job);
+    const names = (rootChecks: Value | undefined) =>
+      planChecks(
+        checks,
+        poolContext({
+          github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
+          needs: {
+            "ci-plan": {
+              outputs: {
+                package_checks_required: "true",
+                ...(rootChecks === undefined
+                  ? {}
+                  : { root_checks: rootChecks }),
+              },
+            },
+          },
+          steps: {
+            checkout: { outcome: "success", outputs: {} },
+            install: { outcome: "success", outputs: {} },
+          },
+          inputs: { depth: "fast", heavy_only: false, pr_depth_only: true },
+        }),
+      ).flatMap((entry) =>
+        entry.status === "selected" ? [entry.check.name] : [],
+      );
+    const all = JSON.stringify(
+      Object.keys(ROOT_CHECK_INPUTS[job]).map((name) => `${job}/${name}`),
+    );
+    expect(names(undefined), job).toEqual(names(""));
+    expect(names(undefined), job).toEqual(names(all));
+  }
 });
 
 const EXPRESSION = (body: string) => `\${{ ${body} }}`;
@@ -365,6 +485,130 @@ test("a launched check runs as a bash step with its env, output and timeout", as
   }
 });
 
+// timeout: The signal fixture has a 10 s child watchdog; allow its forced
+// cleanup to finish before the outer test can terminate.
+test("cancellation retains bounded running and buffered failure diagnostics and stops children", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-cancel-"));
+  const scripts = path.join(directory, "scripts");
+  const registry = path.join(directory, ".github/ci-checks");
+  mkdirSync(scripts);
+  mkdirSync(registry, { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  const fifo = path.join(directory, "ready.fifo");
+  const pidFile = path.join(directory, "child.pid");
+  expect(Bun.spawnSync(["mkfifo", fifo]).exitCode).toBe(0);
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  writeFileSync(
+    path.join(registry, "ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        {
+          name: "Blocked first",
+          run: [
+            `printf '%s\\n' discarded-prefix '${"x".repeat(20 * 1024)}' 'Checking fixture-generator'`,
+            "sleep 600 &",
+            'echo $! > "$FIXTURE_CHILD_PID"',
+            'printf "ready\\n" > "$FIXTURE_READY_FIFO"',
+            "wait",
+          ].join("\n"),
+          env: { FIXTURE_CHILD_PID: pidFile, FIXTURE_READY_FIFO: fifo },
+        },
+        {
+          name: "Buffered failure",
+          run: 'read -r ready < "$FIXTURE_READY_FIFO"\necho "::error::buffered fixture failure"\nexit 1',
+          env: { FIXTURE_READY_FIFO: fifo },
+        },
+        ...Array.from({ length: 9 }, (_, index) => ({
+          name: `Buffered log ${index}`,
+          run: `printf '%s\\n' '${(index % 2 === 0 ? "\n" : "é🙂\n\n").repeat(20 * 1024)}'`,
+        })),
+        { name: "Later check", run: "sleep 600" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      path.join(scripts, "ci-check-pool.ts"),
+      "run",
+      "ci-checks-rest",
+    ],
+    {
+      cwd: directory,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        RUNNER_TEMP: directory,
+        CI_CHECK_POOL_CONCURRENCY: "2",
+        CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+        CI_CHECK_POOL_STEPS: "{}",
+        CI_CHECK_POOL_INPUTS: "{}",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 10_000,
+      killSignal: "SIGKILL",
+    },
+  );
+  const stderr = new Response(child.stderr).text();
+  let output = "";
+  let status: "waiting" | "signalled" = "waiting";
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  try {
+    for await (const chunk of child.stdout) {
+      output += decoder.decode(chunk, { stream: true });
+      if (
+        status === "waiting" &&
+        output.includes("Starting check: Later check")
+      ) {
+        // The FIFO proves the first log was written; worker reuse proves the
+        // second check settled, while registry ordering still holds its log.
+        expect(output).not.toContain("::group::Buffered failure");
+        child.kill("SIGTERM");
+        status = "signalled";
+      }
+    }
+    output += decoder.decode();
+    expect(await stderr).toBe("");
+    expect(status).toBe("signalled");
+    expect(await child.exited).toBe(130);
+    expect(output).toContain("Interrupted check: Blocked first (running)");
+    expect(output).toContain("| Checking fixture-generator");
+    expect(output).toContain("Interrupted check: Buffered failure (completed)");
+    expect(output).toContain("| ::error::buffered fixture failure");
+    expect(output).not.toContain("discarded-prefix");
+    expect(output).not.toMatch(/^::error::buffered fixture failure$/mu);
+    expect(output).toContain(
+      "Log tail omitted: cancellation output limit reached.",
+    );
+    const diagnostics = output.slice(
+      output.indexOf("::group::Interrupted check:"),
+    );
+    expect(diagnostics).toContain("é🙂");
+    expect(diagnostics).toContain("�");
+    expect(Buffer.byteLength(diagnostics)).toBeLessThanOrEqual(64 * 1024);
+    expect([...diagnostics.matchAll(/^::group::/gmu)]).toHaveLength(
+      [...diagnostics.matchAll(/^::endgroup::$/gmu)].length,
+    );
+    const pid = readFileSync(pidFile, "utf-8").trim();
+    expect(pid).toMatch(/^[1-9]\d*$/u);
+    const state = Bun.spawnSync(["ps", "-o", "stat=", "-p", pid]);
+    // Linux may retain an already-killed orphan briefly as a zombie.
+    expect(new TextDecoder().decode(state.stdout).trim()).toMatch(/^Z.*$|^$/u);
+  } finally {
+    if (child.exitCode === null) {
+      child.kill("SIGTERM");
+    }
+    await child.exited;
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 20_000);
+
 test("flattening steps that already carry their pooled checks adds none", () => {
   for (const job of CHECK_POOL_JOBS) {
     const steps = workflowJobSteps(workflow, job);
@@ -478,6 +722,21 @@ test("every real pooled continue-on-error is decidable in both events", () => {
   }
 });
 
+test("every real pooled condition is decidable in both events", () => {
+  // The pool decides `cancelled()` but no other status function, so a
+  // condition such as `success()` would fail the pool step at run time.
+  for (const job of CHECK_POOL_JOBS) {
+    for (const pooled of readCheckPool(job)) {
+      for (const event of ["pull_request", "merge_group"]) {
+        expect(
+          () => conditionHolds(pooled.condition, context(event, "")),
+          `${job}: ${pooled.name}`,
+        ).not.toThrow();
+      }
+    }
+  }
+});
+
 test("every pooled expression reads only contexts the pool provides", () => {
   const roots = new Set<string>();
   const recording = {
@@ -553,21 +812,39 @@ test("only a failed check's own error commands reach the job log", () => {
     "::error file=a.ts,line=1::Expected refusal",
     "  ::error::already indented",
     "::warning::advisory note",
-    "::group::nested",
+    "::group::scripts/a.test.ts:",
+    "(pass) a [0.10ms]",
+    "  ::endgroup::",
+    "##[group]rendered",
+    "##[endgroup]",
     "ok",
   ].join("\n");
+  // The runner trims leading whitespace before it reads a command, so only a
+  // removed command or a non-blank prefix is inert.
+  const flat = ["scripts/a.test.ts:", "(pass) a [0.10ms]", "rendered", "ok"];
   const neutralized = [
-    " ::error::Release history includes a fixture pull request",
-    " ::error file=a.ts,line=1::Expected refusal",
-    "  ::error::already indented",
+    "| ::error::Release history includes a fixture pull request",
+    "| ::error file=a.ts,line=1::Expected refusal",
+    "|   ::error::already indented",
     "::warning::advisory note",
-    " ::group::nested",
-    "ok",
+    ...flat,
   ].join("\n");
   for (const outcome of ["success", "skipped"] as const) {
-    expect(checkLogText(output, outcome)).toBe(neutralized);
+    const text = checkLogText(output, outcome);
+    expect(text).toBe(neutralized);
+    for (const line of text.split("\n")) {
+      expect(line.trimStart()).not.toMatch(
+        /^(?:::(?:error|group|endgroup)\b|##\[)/u,
+      );
+    }
   }
   expect(checkLogText(output, "failure")).toBe(
-    output.replace("::group::nested", " ::group::nested"),
+    [
+      "::error::Release history includes a fixture pull request",
+      "::error file=a.ts,line=1::Expected refusal",
+      "  ::error::already indented",
+      "::warning::advisory note",
+      ...flat,
+    ].join("\n"),
   );
 });

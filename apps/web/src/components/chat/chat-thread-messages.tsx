@@ -14,17 +14,15 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import type { AIErrorKind } from "@stll/api-contract";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
-  FileTextIcon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
@@ -42,6 +40,8 @@ import {
 } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
+import { AttachmentChip } from "@/components/chat/attachment-chip";
+import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
 import {
   countProcessWork,
   getLatestCompletedResearchPartIndex,
@@ -67,8 +67,8 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
-  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
+  CHAT_MESSAGE_RENDER_POLICY,
   collectAnonRestorations,
   DATA_URL_PREFIX,
   decodeBase64DataUrl,
@@ -103,6 +103,7 @@ import {
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canRetryChatRequest,
 } from "@/components/chat/chat-user-actions";
 import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -123,6 +124,7 @@ import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { DocumentIcon } from "@/components/document-icon";
 import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
@@ -131,8 +133,8 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
-  findChatRequestError,
   type ChatRequestError,
+  findChatRequestError,
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
@@ -146,6 +148,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import {
+  AI_FAILURE_ERROR_KEYS,
+  aiErrorKindFromMessage,
+} from "@/lib/errors/ai-failure";
+import type { AIFailureTranslationKey } from "@/lib/errors/ai-failure";
 import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -421,6 +428,7 @@ export const ChatThreadMessages = ({
                             messages,
                           })}
                           canRetry={canRetryAssistantMessage({
+                            error,
                             isGenerating: generationActive,
                             messageId: message.id,
                             messages,
@@ -906,7 +914,10 @@ const downloadDataAttachment = ({
 }: DownloadDataAttachmentOptions): void => {
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
-    getAnalytics().captureError(decoded.error);
+    getAnalytics().captureError(decoded.error, {
+      fingerprintKey: "downloadDataAttachment:failure",
+      scope: { type: "handler", handlerId: "downloadDataAttachment:failure" },
+    });
     notifyUserError(decoded.error, errorTitle);
     return;
   }
@@ -948,9 +959,9 @@ const UserAttachments = ({
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
         const key = `${filename ?? "attachment"}-${index}`;
-        const contentUrl = getUserFileContentUrl(url) ?? url;
+        const contentUrl = getUserFileContentUrl(url);
         const fallbackLabel = t("chat.attachment");
-        if (IMAGE_MEDIA_TYPES.includes(mimeType)) {
+        if (IMAGE_MEDIA_TYPES.includes(mimeType) && contentUrl) {
           // The backend sets `placeholder` (a blur data URL) only when a
           // thumbnail was generated, so its presence doubles as "serve the
           // smaller thumbnail instead of the full original."
@@ -977,48 +988,32 @@ const UserAttachments = ({
           );
         }
 
-        const attachmentContent = (
-          <>
-            <FileTextIcon className="size-3" />
-            <span>{filename ?? fallbackLabel}</span>
-          </>
-        );
-        const attachmentClassName = cn(
-          "flex items-center gap-1.5",
-          "bg-muted/50 rounded-md px-2 py-1",
-          "text-muted-foreground text-xs",
-        );
-
-        if (contentUrl.startsWith(DATA_URL_PREFIX)) {
-          return (
-            <button
-              className={attachmentClassName}
-              key={key}
-              onClick={() =>
-                downloadDataAttachment({
-                  errorTitle: t("errors.actionFailed"),
-                  fileName: filename ?? fallbackLabel,
-                  mimeType,
-                  url: contentUrl,
-                })
-              }
-              type="button"
-            >
-              {attachmentContent}
-            </button>
-          );
+        const title = filename ?? fallbackLabel;
+        let open: AttachmentChipOpen = { type: "none" };
+        if (contentUrl?.startsWith(DATA_URL_PREFIX)) {
+          open = {
+            type: "action",
+            onClick: () =>
+              downloadDataAttachment({
+                errorTitle: t("errors.actionFailed"),
+                fileName: title,
+                mimeType,
+                url: contentUrl,
+              }),
+          };
+        } else if (contentUrl !== null) {
+          open = { type: "link", href: contentUrl };
         }
-
         return (
-          <a
-            className={attachmentClassName}
-            href={sanitizeHref(contentUrl)}
+          <AttachmentChip
+            icon={({ className }) => (
+              <DocumentIcon className={className} mimeType={mimeType} />
+            )}
             key={key}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {attachmentContent}
-          </a>
+            kind="file"
+            open={open}
+            title={title}
+          />
         );
       })}
     </div>
@@ -1067,30 +1062,8 @@ const ThinkingIndicator = ({
   );
 };
 
-type MappedChatErrorKind = Exclude<AIErrorKind, "unknown">;
-
-// The backend's chat stream returns an AIErrorKind as the error message.
-// Unknown and non-AI errors deliberately fall through to generic copy.
-const CHAT_ERROR_TRANSLATION_KEYS = {
-  provider_billing: "chat.sendErrorProviderBilling",
-  empty_completion: "chat.sendErrorEmptyCompletion",
-  loop_detected: "chat.sendErrorLoopDetected",
-  model_unavailable: "chat.sendErrorModelUnavailable",
-  provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
-  provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
-  // A chat turn keeps a `length` answer and carries no schema or deadline of
-  // its own, so these reach it only through a structured side call; each
-  // reads as its nearest chat outcome.
-  output_incomplete: "chat.sendErrorStreamIncomplete",
-  output_invalid: "chat.sendError",
-  output_moderated: "chat.sendError",
-  deadline_exceeded: "chat.sendErrorProviderUnavailable",
-  provider_unavailable: "chat.sendErrorProviderUnavailable",
-  quota_exhausted: "chat.sendErrorQuotaExhausted",
-} as const satisfies Record<MappedChatErrorKind, TranslationKey>;
-
 type ChatErrorTranslationKey =
-  | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
+  | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
@@ -1102,11 +1075,6 @@ const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
   not_started: "chat.sendErrorNotStarted",
 } as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
-const isMappedChatErrorKind = (
-  message: string,
-): message is keyof typeof CHAT_ERROR_TRANSLATION_KEYS =>
-  message in CHAT_ERROR_TRANSLATION_KEYS;
-
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);
   if (requestError !== undefined) {
@@ -1115,8 +1083,10 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
-  if (isMappedChatErrorKind(error.message)) {
-    return CHAT_ERROR_TRANSLATION_KEYS[error.message];
+  // An unknown kind keeps the chat's own copy, which points to support.
+  const kind = aiErrorKindFromMessage(error.message);
+  if (kind !== undefined && kind !== "unknown") {
+    return AI_FAILURE_ERROR_KEYS[AI_FAILURE_CODES[kind]];
   }
   return "chat.sendError";
 };
@@ -1130,8 +1100,7 @@ export const ChatErrorMessage = ({
   error: Error;
   isGenerating: boolean;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
@@ -1144,9 +1113,12 @@ export const ChatErrorMessage = ({
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
-  const errorMessage = rejectedInput
-    ? t("errors.api.validation")
-    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
+  let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
+  if (!canRetryChatRequest(error)) {
+    errorMessage = t("chat.sendErrorContinuationRejected");
+  } else if (rejectedInput) {
+    errorMessage = t("errors.api.validation");
+  }
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1192,7 +1164,7 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
-          {onResend && (
+          {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
               onClick={() => {
@@ -1289,8 +1261,7 @@ const AssistantMessageActions = ({
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   /** Present on the main chat surface; enables the export action. Omitted on
    *  embedded surfaces (file-chat overlay, template studio) that don't export. */
   threadRef?: ChatThreadRef | undefined;
@@ -1396,10 +1367,7 @@ type ChatThreadMessagesProps = {
   messages: ChatUIMessage[];
   onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
   answerRewriteAvailability?:
-    | "available"
-    | "anonymized"
-    | "unknown"
-    | undefined;
+    "available" | "anonymized" | "unknown" | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1407,8 +1375,7 @@ type ChatThreadMessagesProps = {
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
-    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
-    | undefined;
+    ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
@@ -1426,8 +1393,7 @@ type ChatThreadMessagesProps = {
   /** Mirrors an ask-user card's local edit-mode up to the page so it can
    *  keep treating a reopened answered card as a live clarification. */
   onAskUserEditingChange?:
-    | ((toolCallId: string, isEditing: boolean) => void)
-    | undefined;
+    ((toolCallId: string, isEditing: boolean) => void) | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     destination: CreateDocumentDestination,
@@ -1637,6 +1603,13 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
+      {
+        fingerprintKey: "UnknownChatActivity:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "UnknownChatActivity:ClientTelemetryError",
+        },
+      },
     );
   }, [activitySession, activityType, analytics]);
   return null;
@@ -1792,8 +1765,7 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
 };
 
 type ProcessStepTitleKey =
-  | ReturnType<typeof getChatToolTitleKey>
-  | "chat.reasoning";
+  ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
 
 const getProcessStepTitleKey = (
   entry: AssistantPartRenderEntry,
@@ -1902,6 +1874,7 @@ const AssistantMessageParts = ({
   // already did so.
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
+  const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
@@ -1926,7 +1899,7 @@ const AssistantMessageParts = ({
         <AssistantThinkingPart
           components={streamdownComponents}
           displayState={thinkingDisplayState}
-          isStreaming={isTurnActive && index === renderEntries.length - 1}
+          isStreaming={index === streamingEntryIndex}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1948,6 +1921,7 @@ const AssistantMessageParts = ({
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
           components={streamdownComponents}
+          isStreaming={index === streamingEntryIndex}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
           partIndex={index}
@@ -2239,11 +2213,13 @@ const AssistantProcessGroup = ({
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "size-3.5 shrink-0 transition-transform",
             isOpen && "rotate-90",
           )}
+          flip={!isOpen}
+          icon={ChevronRightIcon}
         />
         <span className="text-xs font-medium">
           <SwapText
@@ -2356,6 +2332,7 @@ const AssistantThinkingPart = ({
       </summary>
       <AssistantThinkingBody
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2424,10 +2401,12 @@ const AssistantThinkingHeader = ({
 
 const AssistantThinkingBody = ({
   components,
+  isStreaming,
   restorationPairs,
   text,
 }: {
   components: ChatThreadMessagesProps["streamdownComponents"];
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => (
@@ -2444,6 +2423,7 @@ const AssistantThinkingBody = ({
           "[&_code]:text-2xs",
         )}
         components={components}
+        isStreaming={isStreaming}
         restorationPairs={restorationPairs}
         text={text}
       />
@@ -2454,6 +2434,7 @@ const AssistantThinkingBody = ({
 const AssistantTextPart = ({
   className,
   components,
+  isStreaming,
   restorationPairs,
   partIndex,
   sourceOffsets = false,
@@ -2461,6 +2442,8 @@ const AssistantTextPart = ({
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
+  /** The model is still writing this turn: the last block may be incomplete. */
+  isStreaming: boolean;
   restorationPairs: readonly ChatAnonRestoration[];
   partIndex?: number;
   sourceOffsets?: boolean;
@@ -2483,6 +2466,7 @@ const AssistantTextPart = ({
       <MessageResponse
         components={components}
         data-text-part-index={partIndex}
+        isAnimating={isStreaming}
         sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
@@ -2495,6 +2479,7 @@ const AssistantTextPart = ({
     <MessageResponse
       components={components}
       data-text-part-index={partIndex}
+      isAnimating={isStreaming}
       sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}

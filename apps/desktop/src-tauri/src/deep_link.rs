@@ -57,8 +57,9 @@ fn is_safe_handoff_token(value: &str) -> bool {
 }
 
 fn normalize_and_validate_api_base_url(value: &str) -> Result<String, String> {
-  config::normalize_self_host_api_base_url(value)
-    .map_err(|_| "Invalid desktop edit API URL.".to_string())
+  config::normalize_self_host_api_base_url(value).map_err(
+    crate::logging::with_cause_logged("Invalid desktop edit API URL."),
+  )
 }
 
 /// Reserves the approval channel for a single in-flight prompt. Returns the
@@ -74,6 +75,7 @@ fn try_reserve_self_host_connect_sender(
     return Err(sender);
   }
   *guard = Some(sender);
+  drop(guard);
   Ok(())
 }
 
@@ -314,6 +316,9 @@ pub fn handle_url(
           }
           updater::CheckOutcome::Failed(error) => {
             tracing::warn!(error = %error, "deep link updater check failed");
+          }
+          updater::CheckOutcome::Disabled => {
+            tracing::debug!("deep link updater check skipped: updates are managed");
           }
         }
       });
@@ -702,8 +707,9 @@ async fn confirm_and_trust_self_host(
     }
   }
 
-  let mut mgr = manager.lock().await;
-  mgr
+  manager
+    .lock()
+    .await
     .trust_self_host_connection(web_origin, api_base_url)
     .await;
   Ok(())
@@ -849,10 +855,11 @@ pub(crate) async fn show_connection_confirmation(
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
           set_self_host_connect_response(false);
-          if let Some(sender) = closed_sender
+          let sender = closed_sender
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
+            .take();
+          if let Some(sender) = sender
             && sender.send(()).is_err()
           {
             tracing::debug!("self-host connection window close had no waiter");
@@ -884,8 +891,12 @@ pub(crate) async fn show_connection_confirmation(
       );
       tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
         .await
-        .map_err(|_| "A self-host connection dialog is already open.".to_string())?
-        .map_err(|_| "A self-host connection dialog is already open.".to_string())?;
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?;
       Ok(outcome)
     }
     Err(error) => {
@@ -980,6 +991,7 @@ async fn acknowledge_desktop_edit_handoff_opened(
   .send()
   .await
   .map_err(|e| format!("stella desktop could not acknowledge the edit handoff: {e}"))?;
+  drop(account);
 
   if response.status().is_success() {
     return Ok(());
@@ -1067,7 +1079,7 @@ async fn redeem_and_open_desktop_edit(
   let result = {
     let mut mgr = manager.lock().await;
     recheck_handoff_account(&app_handle, &account).await?;
-    mgr.open_file(request, Some(prefetched_buffer)).await
+    mgr.open_file(request, prefetched_buffer).await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;

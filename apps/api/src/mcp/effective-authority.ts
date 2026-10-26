@@ -2,8 +2,8 @@ import type { PermissionInput } from "@stll/permissions";
 
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
-  hasMemberPermission,
   authorizedMemberRole,
+  hasMemberPermission,
   SESSION_CREDENTIAL,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";

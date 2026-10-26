@@ -2,14 +2,15 @@
 // so they launch no browser and need no dev server or storageState.
 import { describe, expect, test } from "bun:test";
 
+import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
-  NETWORK_DEPTH_METHOD,
-  type NetworkBaseline,
-  type RouteNetworkMetrics,
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  NETWORK_DEPTH_METHOD,
+  type NetworkBaseline,
   normalizeApiPath,
   responseSizeAllowance,
+  type RouteNetworkMetrics,
   waitForQuietPeriod,
 } from "../helpers/network";
 
@@ -520,6 +521,11 @@ describe("diffNetworkBaseline", () => {
   });
 });
 
+test("declarations use the depth method the route smoke measures", () => {
+  // The baseline scope script runs install-free, so it keeps its own copy.
+  expect(SCOPE_NETWORK_DEPTH_METHOD).toBe(NETWORK_DEPTH_METHOD);
+});
+
 describe("mergeNetworkBaseline", () => {
   test("no existing baseline yields a snapshot", () => {
     const merged = mergeNetworkBaseline(
@@ -560,6 +566,28 @@ describe("mergeNetworkBaseline", () => {
       });
     },
   );
+
+  test("a lower timing sample never tightens a declared depth", () => {
+    // A declaration is stamped with the current method when it is applied.
+    const declared: NetworkBaseline = {
+      "/views": {
+        depth: 9,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /v1/views/:id"],
+      },
+    };
+    const recorded = mergeNetworkBaseline(
+      declared,
+      new Map([["/views", metrics(["GET /v1/views/:id"], 6)]]),
+    );
+    expect(recorded["/views"]?.depth).toBe(9);
+    // A later, ordinary sample within the declared budget still passes.
+    const { problems } = diffNetworkBaseline(
+      recorded,
+      new Map([["/views", metrics(["GET /v1/views/:id"], 7)]]),
+    );
+    expect(problems).toEqual([]);
+  });
 
   test("requests accumulate as a union and depth takes the max", () => {
     const existing: NetworkBaseline = {

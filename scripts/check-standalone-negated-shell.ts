@@ -719,22 +719,31 @@ const RUN_KEY = /^\s*(?:-\s+)?run:/u;
 const RUN_BLOCK_SCALAR = /^\s*(?:-\s+)?run:\s*[|>]/u;
 
 // Every `run` key in document order; non-string values (e.g. `defaults.run`)
-// keep their slot so the order lines up with the key lines.
-const collectRunValues = (value: unknown, runs: unknown[]) => {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectRunValues(item, runs);
-    }
+// keep their slot so the order lines up with the key lines. A YAML alias
+// (`- *step`) parses to the anchored node itself and writes no key line of
+// its own, so each node is walked once, at its anchor, where its key lines
+// are. A merge key (`<<: *step`) copies keys into a new node instead; that
+// copy has no key line of its own and fails closed.
+const collectRunValues = (
+  value: unknown,
+  runs: unknown[],
+  seen = new Set<object>(),
+) => {
+  if (typeof value !== "object" || value === null || seen.has(value)) {
     return;
   }
-  if (typeof value !== "object" || value === null) {
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectRunValues(item, runs, seen);
+    }
     return;
   }
   for (const [key, child] of Object.entries(value)) {
     if (key === "run") {
       runs.push(child);
     }
-    collectRunValues(child, runs);
+    collectRunValues(child, runs, seen);
   }
 };
 
@@ -820,6 +829,7 @@ export const findStandaloneNegatedShellStatements = (
 
 const trackedSources = (): Map<string, string> => {
   const files = execFileSync("git", ["ls-files", "-z"], {
+    maxBuffer: 2 ** 30,
     cwd: REPO_ROOT,
     encoding: "utf-8",
   })

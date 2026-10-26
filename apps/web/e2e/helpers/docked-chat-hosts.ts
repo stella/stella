@@ -1,9 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import type { AppFrameScope } from "../../src/routes/-app-frame-scope";
+import { APP_FRAME_SCOPE } from "../../src/routes/-app-frame-scope";
 import { selectAppFrame } from "../../src/routes/-app-frame.logic";
 
 type DockedChatSurface = "inspector" | "reader" | "template";
@@ -52,12 +54,99 @@ const resolveSource = ({
   );
 };
 
+/** Read route metadata only; route component implementation is irrelevant. */
+export const declaredAppFrameScope = (
+  source: ts.SourceFile,
+): AppFrameScope | undefined => {
+  const scopeImports = new Set<string>();
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !/(?:^|\/)-app-frame-scope$/u.test(statement.moduleSpecifier.text)
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    for (const binding of bindings.elements) {
+      if ((binding.propertyName ?? binding.name).text === "APP_FRAME_SCOPE") {
+        scopeImports.add(binding.name.text);
+      }
+    }
+  }
+  let scope: AppFrameScope | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(source) === "staticData" &&
+      ts.isObjectLiteralExpression(node.initializer)
+    ) {
+      for (const property of node.initializer.properties) {
+        if (
+          !ts.isPropertyAssignment(property) ||
+          property.name.getText(source) !== "appFrame"
+        ) {
+          continue;
+        }
+        const value = property.initializer;
+        if (
+          !ts.isPropertyAccessExpression(value) ||
+          !ts.isIdentifier(value.expression) ||
+          !scopeImports.has(value.expression.text)
+        ) {
+          throw new Error(
+            `Unsupported appFrame metadata in ${source.fileName}`,
+          );
+        }
+        switch (value.name.text) {
+          case "none":
+            scope = APP_FRAME_SCOPE.none;
+            break;
+          case "member":
+            scope = APP_FRAME_SCOPE.member;
+            break;
+          case "knowledge":
+            scope = APP_FRAME_SCOPE.knowledge;
+            break;
+          default:
+            throw new Error(`Unknown appFrame metadata in ${source.fileName}`);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return scope;
+};
+
+/** A preview-only PDF viewer returns its viewport without the docked chat
+ * reader it otherwise wraps, so it mounts no reader dock. */
+const mountsNoReaderDock = (
+  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  source: ts.SourceFile,
+): boolean =>
+  node.tagName.getText(source) === "PeekPdfViewer" &&
+  node.attributes.properties.some(
+    (attribute) =>
+      ts.isJsxAttribute(attribute) &&
+      attribute.name.getText(source) === "interactionMode" &&
+      attribute.initializer !== undefined &&
+      ts.isStringLiteral(attribute.initializer) &&
+      attribute.initializer.text === "preview-only",
+  );
+
 /** Follow rendered component imports, rather than utility imports or inherited shells. */
-const renderedImports = (source: ts.SourceFile): string[] => {
+export const renderedImports = (source: ts.SourceFile): string[] => {
   const rendered = new Set<string>();
   const dynamicImports = new Map<string, Set<string>>();
   const collect = (node: ts.Node): void => {
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      !mountsNoReaderDock(node, source)
+    ) {
       rendered.add(node.tagName.getText(source).split(".").at(0) ?? "");
     }
     if (
@@ -264,6 +353,64 @@ export const readDockedChatHosts = (): {
       }
     }
   }
+  const parentSymbols = new Map<string, string>();
+  for (const statement of tree.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        !declaration.initializer ||
+        !ts.isCallExpression(declaration.initializer)
+      ) {
+        continue;
+      }
+      const argument = declaration.initializer.arguments.at(0);
+      const options =
+        argument && ts.isAsExpression(argument)
+          ? argument.expression
+          : argument;
+      if (!options || !ts.isObjectLiteralExpression(options)) {
+        continue;
+      }
+      for (const property of options.properties) {
+        if (
+          ts.isPropertyAssignment(property) &&
+          property.name.getText(tree) === "getParentRoute" &&
+          ts.isArrowFunction(property.initializer) &&
+          ts.isIdentifier(property.initializer.body)
+        ) {
+          parentSymbols.set(
+            declaration.name.text,
+            property.initializer.body.text.replace(/Import$/u, ""),
+          );
+        }
+      }
+    }
+  }
+  const scopeForRoute = (symbol: string): AppFrameScope => {
+    const visited = new Set<string>();
+    for (
+      let current: string | undefined = symbol;
+      current !== undefined;
+      current = parentSymbols.get(current)
+    ) {
+      if (visited.has(current)) {
+        throw new Error(`Cyclic route parents: ${current}`);
+      }
+      visited.add(current);
+      const file = routeSources.get(current);
+      if (file === undefined) {
+        throw new Error(`Missing route source: ${current}`);
+      }
+      const scope = declaredAppFrameScope(parseSource(file));
+      if (scope !== undefined) {
+        return scope;
+      }
+    }
+    throw new Error(`No appFrame metadata for route: ${symbol}`);
+  };
   const routes = tree.statements.find(
     (statement) =>
       ts.isInterfaceDeclaration(statement) &&
@@ -354,19 +501,11 @@ export const readDockedChatHosts = (): {
     if (routeId === undefined) {
       throw new Error(`No route id in ${file}`);
     }
-    // Every layout above the route takes part in frame selection, as in the
-    // router's matches (e.g. `/_protected/admin` picks the admin frame).
-    const segments = routeId.split("/").filter((segment) => segment !== "");
-    const routeIds = [
-      "__root__",
-      ...segments.map(
-        (_, index) => `/${segments.slice(0, index + 1).join("/")}`,
-      ),
-      routeId,
-    ];
+    const routeIds = ["__root__", routeId];
     const surfaces = new Set(discover(file));
     const memberFrame =
       selectAppFrame({
+        scope: scopeForRoute(symbol),
         routeIds,
         hasRouteUser: true,
         publicKnowledge: true,

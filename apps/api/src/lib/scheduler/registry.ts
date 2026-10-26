@@ -28,6 +28,10 @@ import {
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import {
+  REPORT_CASE_LAW_FRESHNESS_TASK,
+  reportCaseLawFreshnessTask,
+} from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
@@ -69,6 +73,10 @@ import {
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import {
+  CHECK_DATA_INVARIANTS_TASK,
+  checkDataInvariants,
+} from "@/api/lib/scheduler/tasks/data-invariants";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -76,6 +84,10 @@ import {
   RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
   recoverDocumentDeadlineScouts,
 } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import {
+  DISPATCH_NATIVE_EXTRACTION_TASK,
+  dispatchNativeExtraction,
+} from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import {
   DISPATCH_DOCUMENT_OCR_TASK,
   dispatchDocumentOcr,
@@ -125,12 +137,12 @@ import {
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
-  MEMORY_CURATOR_TASK,
   curateAiMemories,
+  MEMORY_CURATOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-curator";
 import {
-  MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
+  MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
@@ -165,6 +177,10 @@ import {
   refreshSanctionsSourcesTask,
 } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import {
+  AUDIT_SCHEDULER_PAUSES_TASK,
+  auditSchedulerPauses,
+} from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -193,8 +209,8 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
-  WORK_ATTENTION_SCOUT_TASK,
   runWorkAttentionScoutTask,
+  WORK_ATTENTION_SCOUT_TASK,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import {
   BACKFILL_WORK_OBLIGATIONS_TASK,
@@ -210,9 +226,11 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
+  [CHECK_DATA_INVARIANTS_TASK]: checkDataInvariants,
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
@@ -222,6 +240,7 @@ const SCHEDULER_TASKS = {
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
+  [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
@@ -234,6 +253,7 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
   [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
   [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,

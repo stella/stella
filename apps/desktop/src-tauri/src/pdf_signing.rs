@@ -270,10 +270,11 @@ pub fn submit_dialog_choice(
 /// Release a dialog that was closed with the window control rather than with
 /// a button, so the flow does not wait out its timeout.
 fn cancel_dialog() {
-  if let Some(bridge) = DIALOG_BRIDGE
+  let bridge = DIALOG_BRIDGE
     .lock()
     .unwrap_or_else(|e| e.into_inner())
-    .take()
+    .take();
+  if let Some(bridge) = bridge
     && bridge.choice.send(DialogChoice::Cancel).is_err()
   {
     tracing::debug!("PDF signing dialog choice had no waiter");
@@ -286,6 +287,7 @@ fn reserve_dialog(bridge: DialogBridge) -> Result<(), ()> {
     return Err(());
   }
   *guard = Some(bridge);
+  drop(guard);
   Ok(())
 }
 
@@ -533,8 +535,9 @@ pub async fn redeem_and_sign(
   // The API names the origin the session lives on; it only counts if the user
   // already trusts it, exactly as the deep link's own origin had to.
   let session_api_base_url =
-    config::normalize_self_host_api_base_url(&redeemed.api_base_url)
-      .map_err(|_| "Invalid PDF signing API URL.".to_string())?;
+    config::normalize_self_host_api_base_url(&redeemed.api_base_url).map_err(
+      crate::logging::with_cause_logged("Invalid PDF signing API URL."),
+    )?;
   if session_api_base_url != api_base_url {
     return Err(crate::handoff::Failure::AccountMismatch.into());
   }

@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
@@ -21,10 +23,11 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import {
-  currentActionCostIdentity,
   type ActionCostObservation,
+  currentActionCostIdentity,
 } from "@/api/lib/usage/action-costs/context";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -128,15 +131,27 @@ describe("finite HTTP action admission", () => {
             },
             { admit: async () => Result.err(refusal) },
           );
-          const app = new Elysia().post("/action", async ({ set }) => {
-            set.headers["access-control-allow-origin"] = "https://example.test";
-            set.headers["x-content-type-options"] = "nosniff";
-            set.headers["x-request-id"] = "request_example";
-            return await endpoint.handler(asTestRaw({ ...context(), set }));
-          });
-          const response = await app.handle(
-            new Request("http://localhost/action", { method: "POST" }),
+          const action: RouteDefinition = {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              const { set } = ctx;
+              set.headers["access-control-allow-origin"] =
+                "https://example.test";
+              set.headers["x-content-type-options"] = "nosniff";
+              set.headers["x-request-id"] = "request_example";
+              return await endpoint.handler(asTestRaw({ ...context(), set }));
+            },
+          };
+          await using server = serveForTest(
+            createHttpApp({
+              middleware: [],
+              routes: routes({ "/action": { POST: action } }),
+            }),
           );
+          const response = await server.fetch("http://localhost/action", {
+            method: "POST",
+          });
           expect(response.status).toBe(metadata.status);
           expect(response.headers.get("access-control-allow-origin")).toBe(
             "https://example.test",

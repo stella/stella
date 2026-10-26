@@ -88,6 +88,130 @@ describe("run step fetches", () => {
   });
 });
 
+describe("cargo dependency resolution", () => {
+  const cargo = (command: string) =>
+    scanShell(command, "cargo").map((fetch) => [fetch.kind, fetch.wrapped]);
+  const resolution = "cargo dependency resolution";
+
+  test("a cargo build, test or lint downloads missing crates", () => {
+    expect(
+      cargo(
+        [
+          "cargo check --workspace --locked",
+          "cargo +1.99.0 test --locked",
+          "cargo clippy --all-targets --locked -- -D warnings",
+          "cargo doc --no-deps --locked",
+          "cargo deny check advisories",
+          "tauri build --target aarch64-apple-darwin",
+        ].join("\n"),
+      ),
+    ).toEqual(Array.from({ length: 6 }, () => [resolution, false]));
+  });
+
+  test("an offline cargo command downloads nothing", () => {
+    expect(
+      cargo(
+        [
+          "cargo test --frozen --workspace",
+          "cargo clippy --offline -- -D warnings",
+          "cargo deny --offline check bans",
+          "CARGO_NET_OFFLINE=true cargo build --release",
+          "cargo metadata --no-deps --format-version 1",
+          "cargo fmt -- --check",
+          "cargo --version",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("an offline flag passed to the program under test is not cargo's", () => {
+    expect(cargo("cargo test --locked -- --offline --exact")).toEqual([
+      [resolution, false],
+    ]);
+  });
+
+  test("a cargo command through retry.sh is retried", () => {
+    expect(cargo("bash scripts/retry.sh cargo test --locked")).toEqual([
+      [resolution, true],
+    ]);
+  });
+
+  test("a bare cargo build in a step fails the retry rule", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Lint
+        run: cargo clippy --manifest-path Cargo.toml --locked -- -D warnings
+`),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Lint: route ${resolution} (${WORKFLOW}) through scripts/retry.sh`,
+      `${WORKFLOW}: build: Lint: ${resolution} (${WORKFLOW}) needs a step timeout-minutes`,
+    ]);
+  });
+
+  test("a retried fetch then a frozen build passes", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path Cargo.toml --locked
+      - name: Lint
+        run: cargo clippy --manifest-path Cargo.toml --frozen -- -D warnings
+`),
+    });
+
+    expect(report.errors).toEqual([]);
+  });
+
+  const scoped = (jobEnv: string, stepEnv: string) => `name: Fixture
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+${jobEnv}    steps:
+      - name: Build
+${stepEnv}        run: cargo build --locked
+`;
+
+  test("CARGO_NET_OFFLINE in the step or job env keeps cargo offline", () => {
+    for (const source of [
+      scoped("", `        env:\n          CARGO_NET_OFFLINE: "true"\n`),
+      scoped(`    env:\n      CARGO_NET_OFFLINE: true\n`, ""),
+    ]) {
+      expect(check({ [WORKFLOW]: source }).errors).toEqual([]);
+    }
+  });
+
+  test("a step env that turns CARGO_NET_OFFLINE off overrides the job", () => {
+    const report = check({
+      [WORKFLOW]: scoped(
+        `    env:\n      CARGO_NET_OFFLINE: "true"\n`,
+        `        env:\n          CARGO_NET_OFFLINE: "false"\n`,
+      ),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Build: route ${resolution} (${WORKFLOW}) through scripts/retry.sh`,
+      `${WORKFLOW}: build: Build: ${resolution} (${WORKFLOW}) needs a step timeout-minutes`,
+    ]);
+  });
+
+  test("a package script a step invokes is scanned", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Prepare toolchain
+        timeout-minutes: 10
+        run: bash packages/engine/scripts/toolchain.sh
+`),
+      "packages/engine/scripts/toolchain.sh":
+        "cargo fetch --locked --target wasm32-unknown-unknown\n",
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Prepare toolchain: route cargo fetch/install (packages/engine/scripts/toolchain.sh) through scripts/retry.sh`,
+    ]);
+  });
+});
+
 describe("shell detection", () => {
   test("loopback readiness probes are not fetches", () => {
     expect(

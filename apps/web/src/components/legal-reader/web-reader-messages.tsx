@@ -16,6 +16,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "statutes.diffRemoved": t("statutes.diffRemoved"),
     "statutes.diffInserted": t("statutes.diffInserted"),
     "common.copyLink": t("common.copyLink"),
+    "common.copied": t("common.copied"),
     "common.back": t("common.back"),
     "caseLaw.viewer.legalSentence": t("caseLaw.viewer.legalSentence"),
     "caseLaw.viewer.abstract": t("caseLaw.viewer.abstract"),

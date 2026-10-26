@@ -55,18 +55,21 @@ import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
+  type AtRisFixtureAdapter,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
   plCourtsSearchFixture,
   plKioFixture,
   plKisFixture,
-  plNsaFixture,
   plNcourtFixture,
+  plNsaFixture,
   plSnFixture,
   plTkFixture,
   plUodoFixture,
@@ -74,8 +77,6 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type AtRisFixtureAdapter,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
@@ -130,6 +131,7 @@ const SURFACE_EVIDENCE = {
     { kind: "page-recording", file: "cz-us-page.json.gz" },
   ],
   [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
+  [ADAPTER_KEYS.CZ_UOHS]: [{ kind: "built", fixture: czUohsFixture }],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },

@@ -5,11 +5,13 @@ import { Temporal } from "@stll/time";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { searchWeb } from "@/api/lib/web-search/search";
+import type { WebSearchRequestObserver } from "@/api/lib/web-search/search";
 import {
   fetchUrlOutputSchema,
-  webSearchOutputSchema,
   WEB_SEARCH_FRESHNESS,
   WEB_SEARCH_JURISDICTIONS,
+  webSearchOutputSchema,
 } from "@/api/lib/web-search/types";
 import type {
   FetchUrlOutput,
@@ -18,7 +20,6 @@ import type {
   WebSearchProvider,
 } from "@/api/lib/web-search/types";
 
-const WEB_SEARCH_TIMEOUT_MS = 10_000;
 const FETCH_URL_TIMEOUT_MS = 20_000;
 const FETCH_URL_DEFAULT_MAX_CHARS = 8000;
 const FETCH_URL_MAX_CHARS = 20_000;
@@ -126,6 +127,7 @@ const fenceUntrustedContent = ({
 const createWebSearchTool = (
   provider: WebSearchProvider,
   fetchableUrls: FetchUrlAllowlist,
+  observeWebSearch: WebSearchRequestObserver,
 ) =>
   toolDefinition({
     name: WEB_SEARCH_TOOL_NAME,
@@ -149,12 +151,14 @@ const createWebSearchTool = (
       const normalizedFreshness = freshness ?? "any";
       const normalizedMaxResults = maxResults ?? 6;
       try {
-        const { results, answer } = await provider.search({
+        const { results, answer } = await searchWeb({
+          provider,
+          observer: observeWebSearch,
           query,
           jurisdiction: normalizedJurisdiction,
           freshness: normalizedFreshness,
           maxResults: normalizedMaxResults,
-          signal: composeSignal(context.abortSignal, WEB_SEARCH_TIMEOUT_MS),
+          abortSignal: context.abortSignal,
         });
         // Re-mint ids so they're stable per (toolCall, index) — the
         // frontend uses them for citation chip resolution and the
@@ -237,15 +241,18 @@ const createFetchUrlTool = (
 export const createWebSearchTools = ({
   webSearchProvider,
   urlFetcher,
+  observeWebSearch = () => undefined,
 }: {
   webSearchProvider: WebSearchProvider;
   urlFetcher: UrlFetcher | null;
+  observeWebSearch?: WebSearchRequestObserver | undefined;
 }): WebSearchToolSet => {
   const fetchableUrls: FetchUrlAllowlist = new Set();
   const tools: WebSearchToolSet = {
     [WEB_SEARCH_TOOL_NAME]: createWebSearchTool(
       webSearchProvider,
       fetchableUrls,
+      observeWebSearch,
     ),
   };
 

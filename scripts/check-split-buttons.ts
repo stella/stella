@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const OWNER = "packages/ui/src/components/split-button.tsx";

@@ -83,7 +83,7 @@ describe("sandboxed Typst rendering of an untrusted template", () => {
   });
 
   test("kills a render that runs past the time limit", async () => {
-    const bounded = session({ timeoutMs: 2000 });
+    const bounded = session({ timeoutMs: 2000 }); // timeout under test
     const outcome = await bounded.render(request(ENDLESS));
     expect(outcome).toMatchObject({ status: "rejected", reason: "timeout" });
     // The outcome is returned only after the renderer process exited, so

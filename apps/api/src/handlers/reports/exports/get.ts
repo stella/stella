@@ -13,13 +13,14 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { reportExports } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
-import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import { callerDownloadSource, presignDownloadUrl } from "@/api/lib/s3-presign";
 
 import { resolvedReportResultFieldId } from "../result-field";
 
@@ -54,7 +55,7 @@ const config = {
     consumesServices: false,
   },
   access: "write",
-  params: workspaceParams({ exportId: tSafeId("reportExport") }),
+  params: workspaceParams({ exportId: resourceIdSchema("reportExport") }),
 } satisfies WorkspaceHandlerConfig;
 
 const readReportExport = createSafeHandler(
@@ -133,7 +134,10 @@ const readReportExport = createSafeHandler(
           Result.tryPromise({
             try: async () =>
               await presignDownloadUrl(resultS3Key, {
+                userId: user.id,
                 expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
+                source: callerDownloadSource(session),
+                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
                 fileName: downloadFileName(resultS3Key),
                 scope: {
                   keyspace: "exports",

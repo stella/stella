@@ -40,10 +40,14 @@ import {
 import { PromptBar } from "@/components/ai-suggestions/host";
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import {
-  ChatSubmitPreservedError,
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
-import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import type {
+  ChatDraftAttachment,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import {
   composerStoredMarkdown,
   composerText,
@@ -110,9 +114,9 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  type ChatThreadRef,
   createChatThreadId,
   getChatThreadKey,
-  type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -137,15 +141,6 @@ const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
         threadId: tab.id,
         workspaceId: tab.workspaceId,
       };
-
-/** What one prompt submission did. */
-const PROMPT_SUBMIT_OUTCOME = {
-  SENT: "sent",
-  UNAVAILABLE: "unavailable",
-  FAILED: "failed",
-} as const;
-type PromptSubmitOutcome =
-  (typeof PROMPT_SUBMIT_OUTCOME)[keyof typeof PROMPT_SUBMIT_OUTCOME];
 
 export const ChatTabPanel = ({
   tab,
@@ -182,10 +177,10 @@ export const ChatTabPanel = ({
   const t = useTranslations();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatTabPanel:failure",
+        scope: { type: "handler", handlerId: "ChatTabPanel:failure" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
@@ -299,7 +294,9 @@ export const ChatTabPanel = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.inspector" },
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
@@ -315,10 +312,10 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }): Promise<PromptSubmitOutcome> => {
+    }): Promise<ChatSendOutcome> => {
       try {
         if (!(await ensureAIAvailable())) {
-          return PROMPT_SUBMIT_OUTCOME.UNAVAILABLE;
+          return CHAT_SEND_KEPT;
         }
 
         // PromptBar emits the raw editor HTML; the backend parses
@@ -326,10 +323,11 @@ export const ChatTabPanel = ({
         await sendMessage(
           await buildChatRequestMessage({ files, html: prompt }),
         );
-        return PROMPT_SUBMIT_OUTCOME.SENT;
+        return CHAT_SEND_SENT;
       } catch (submitError) {
+        // Reported here, so the composer only takes the draft back.
         capturePromptSubmitError(submitError);
-        return PROMPT_SUBMIT_OUTCOME.FAILED;
+        return CHAT_SEND_KEPT;
       }
     },
   );
@@ -522,7 +520,7 @@ export const ChatTabPanel = ({
       // it instead of losing it.
       settleQueuedChatSend(
         threadRef,
-        outcome === PROMPT_SUBMIT_OUTCOME.SENT ? "sent" : "not-sent",
+        outcome.kind === "sent" ? "sent" : "not-sent",
       );
     } finally {
       queuedSendInFlight.current = false;
@@ -542,7 +540,7 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(prompt, {
         new: (args) => {
@@ -571,16 +569,15 @@ export const ChatTabPanel = ({
         },
       });
       if (!handledReserved) {
-        await handlePromptSubmit({ prompt, files });
-        return;
+        return await handlePromptSubmit({ prompt, files });
       }
 
       const newThreadMessage = newThreadMessages.at(0);
       if (newThreadMessage === undefined) {
-        return;
+        return CHAT_SEND_SENT;
       }
       if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+        return CHAT_SEND_KEPT;
       }
       const newThreadId = createChatThreadId();
       const newThreadRef: ChatThreadRef =
@@ -604,6 +601,7 @@ export const ChatTabPanel = ({
       });
       leave();
       resetChatTabId(tab.id, newThreadId);
+      return CHAT_SEND_SENT;
     },
   );
 
@@ -750,9 +748,10 @@ export const ChatTabPanel = ({
                   detached(
                     editorController.submit(async (draft) => {
                       if (!(await ensureAIAvailable())) {
-                        return;
+                        return CHAT_SEND_KEPT;
                       }
                       await sendMessage(await buildChatRequestMessage(draft));
+                      return CHAT_SEND_SENT;
                     }),
                     "chat-tab-panel.submit",
                   );
@@ -824,7 +823,7 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useChatContextLabel:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];

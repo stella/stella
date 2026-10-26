@@ -11,6 +11,7 @@ import {
   test,
 } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
 
 import { getS3 } from "@/api/lib/s3";
@@ -22,9 +23,9 @@ import {
   hasScopedSessionTimeForPresign,
   headObject,
   isS3KeyInSigningScope,
-  prewarmScopedDownloadSigning,
   presignDownloadUrl,
   presignUploadUrl,
+  prewarmScopedDownloadSigning,
   readTenantS3ArrayBuffer,
   readTenantS3ObjectSize,
   resetAwsS3ClientForTesting,
@@ -34,7 +35,11 @@ import {
   setTenantS3OperationHooksForTesting,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
-import type { S3SigningScope } from "@/api/lib/s3-presign";
+import type {
+  PresignDownloadOptions,
+  S3SigningScope,
+} from "@/api/lib/s3-presign";
+import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
@@ -122,6 +127,7 @@ describe("presignUploadUrl", () => {
 
   test("binds checksum, content-length, and content-type into the signature", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "tmp/presign-shape-probe",
       expiresIn: 60,
       contentType: "application/octet-stream",
@@ -162,6 +168,7 @@ describe("presignUploadUrl", () => {
 
   test("signs the PUT method, not GET", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "tmp/presign-method-probe",
       expiresIn: 60,
       contentType: "text/plain",
@@ -185,6 +192,7 @@ describe("presignUploadUrl", () => {
 
   test("binds temporary upload tagging into a request header", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "org_1/ws_1/tmp/presign-tagging-probe",
       expiresIn: 60,
       contentType: "application/octet-stream",
@@ -212,12 +220,146 @@ describe("presignUploadUrl", () => {
 describe("presignDownloadUrl", () => {
   test("requires storage to return the shared no-store cache policy", async () => {
     const url = await presignDownloadUrl("org_1/ws_1/file_1.pdf", {
+      userId: null,
       expiresIn: 60,
+      source: { kind: "background", reason: "storage cache policy test" },
+      readSessionAuthority: async () => null,
     });
 
     expect(new URL(url).searchParams.get("response-cache-control")).toBe(
       "private, no-store",
     );
+  });
+
+  const syntheticOptions = (expiresAt: Date) =>
+    ({
+      userId: SYNTHETIC_PRINCIPAL.user.id,
+      organizationId: SYNTHETIC_PRINCIPAL.org.id,
+      expiresIn: 900,
+      source: { kind: "request", sessionId: "synthetic-session-download" },
+      readSessionAuthority: async () => ({
+        sessionId: "synthetic-session-download",
+        expiresAt,
+      }),
+      scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+    }) satisfies PresignDownloadOptions;
+
+  test("bounds a dedicated-principal download to the configured lifetime", async () => {
+    const url = await presignDownloadUrl(
+      `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+      syntheticOptions(new Date(Date.now() + 5 * 60 * 1000)),
+    );
+
+    expect(
+      Number(new URL(url).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(60);
+  });
+
+  test("bounds a dedicated-principal download to the remaining session lifetime", async () => {
+    const url = await presignDownloadUrl(
+      `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+      syntheticOptions(new Date(Date.now() + 20_000)),
+    );
+
+    expect(
+      Number(new URL(url).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(20);
+  });
+
+  test("keeps the requested lifetime for a regular user's background download", async () => {
+    const url = await presignDownloadUrl("org_1/file.pdf", {
+      userId: "user_1",
+      organizationId: "org_1",
+      expiresIn: 900,
+      source: { kind: "background", reason: "regular-user export" },
+      readSessionAuthority: async () => null,
+      scope: { organizationId: "org_1" },
+    });
+
+    expect(new URL(url).searchParams.get("X-Amz-Expires")).toBe("900");
+  });
+
+  test("refuses dedicated-principal uploads", async () => {
+    expect(
+      await rejectionOf(
+        presignUploadUrl({
+          userId: SYNTHETIC_PRINCIPAL.user.id,
+          key: `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+          expiresIn: 900,
+          contentType: "application/pdf",
+          contentLength: HELLO_BYTES.byteLength,
+          sha256Base64: HELLO_SHA256_BASE64,
+          scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+        }),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
+  });
+
+  test.each([
+    {
+      name: "monitoring user in another organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        organizationId: "org_1",
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "another user in the monitoring organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        userId: "user_1",
+      },
+    },
+    {
+      name: "monitoring file in another organization",
+      key: "org_1/file.pdf",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "inactive dedicated session",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        readSessionAuthority: async () => null,
+      },
+    },
+    {
+      name: "dedicated-principal email with other identifiers",
+      options: {
+        userId: "user_1",
+        organizationId: "org_1",
+        email: SYNTHETIC_PRINCIPAL.user.email,
+        expiresIn: 900,
+        source: { kind: "request", sessionId: "session_1" },
+        readSessionAuthority: async () => null,
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "dedicated principal without a request session",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        source: { kind: "background", reason: "scheduled export" },
+      },
+    },
+  ])("refuses $name", async ({ key, options }) => {
+    expect(
+      await rejectionOf(
+        presignDownloadUrl(
+          key ?? `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+          options,
+        ),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
   });
 });
 
@@ -750,6 +892,7 @@ describe.skipIf(!rustfsReachable)(
 
     test("S3 rejects a PUT whose body sha256 does not match the signed checksum", async () => {
       const presign = await presignUploadUrl({
+        userId: null,
         key: probeKey,
         expiresIn: 60,
         contentType: "application/octet-stream",
@@ -781,6 +924,7 @@ describe.skipIf(!rustfsReachable)(
 
     test("S3 accepts a matching PUT and Bun's native reader returns its bytes", async () => {
       const presign = await presignUploadUrl({
+        userId: null,
         key: probeKey,
         expiresIn: 60,
         contentType: "application/octet-stream",
@@ -824,6 +968,7 @@ describe.skipIf(!rustfsReachable)(
       // Seed source via a presigned PUT so the helper's auth path
       // matches what finalize will use in real traffic.
       const seed = await presignUploadUrl({
+        userId: null,
         key: sourceKey,
         expiresIn: 60,
         contentType: "application/octet-stream",

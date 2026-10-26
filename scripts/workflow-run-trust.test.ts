@@ -24,9 +24,8 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
+  "ci-runner-loss-retry.yml",
   "cla.yml",
-  "generated-conflicts-publish.yml",
-  "marketing-screenshots-publish.yml",
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",
@@ -192,6 +191,110 @@ const workflowRunWorkflows = () =>
       isRecord(workflow) && triggers(workflow["on"]).includes("workflow_run"),
   );
 
+const PRIVILEGED_MANUAL_JOB =
+  /(?:TAURI_SIGNING_PRIVATE_KEY|AZURE_CLIENT_SECRET|STELLA_[A-Z_]*PRIVATE_KEY|DOCKERHUB_TOKEN|POSTHOG_CLI_API_KEY|create-github-app-token|"(?:attestations|artifact-metadata|deployments|id-token|packages|pages)"\s*:\s*"write")/u;
+
+const canRunOnFeatureDispatch = (
+  name: string,
+  jobs: Record<string, unknown>,
+  seen = new Set<string>(),
+): boolean => {
+  if (seen.has(name)) {
+    return true;
+  }
+  const job = jobs[name];
+  if (!isRecord(job)) {
+    return true;
+  }
+  const condition = conditionOf(job);
+  if (
+    condition.trim() !== "" &&
+    definitelyFalse(condition, {
+      values: {
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/feature",
+        "github.repository": "stella/stella",
+      },
+      fallback: (path) =>
+        path.startsWith("github.event.workflow_run.") ? "" : undefined,
+      status: {
+        always: true,
+        success: true,
+        failure: false,
+        cancelled: false,
+      },
+    })
+  ) {
+    return false;
+  }
+  const nextSeen = new Set(seen).add(name);
+  const gatedNeeds = needsOf(job).filter(
+    (need) => !canRunOnFeatureDispatch(need, jobs, nextSeen),
+  );
+  if (gatedNeeds.length === 0) {
+    return true;
+  }
+  return (
+    RUNS_AFTER_SKIP.test(condition) &&
+    runsAfterSkippedGate(condition, gatedNeeds)
+  );
+};
+
+const featureDispatchPrivilegeProblems = (
+  file: string,
+  workflow: unknown,
+): string[] => {
+  if (
+    !isRecord(workflow) ||
+    !triggers(workflow["on"]).includes("workflow_dispatch")
+  ) {
+    return [];
+  }
+  const jobs = isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  return Object.entries(jobs).flatMap(([name, job]) =>
+    isRecord(job) &&
+    PRIVILEGED_MANUAL_JOB.test(JSON.stringify(job)) &&
+    canRunOnFeatureDispatch(name, jobs)
+      ? [`${file}: privileged job '${name}' can run from a feature ref`]
+      : [],
+  );
+};
+
+// These pre-existing diagnostic and maintenance paths intentionally run on a
+// selected ref. Keep each job explicit so new privilege-bearing jobs fail the
+// guard, and remove an allowance when that path moves behind a protected-ref
+// dispatcher.
+const FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES = {
+  "audit-branch-protection.yml: privileged job 'audit-fork-approval' can run from a feature ref":
+    "Exercises the configured fork-approval policy without mutating it.",
+  "catalogue-upstream.yml: privileged job 'catalogue-upstream' can run from a feature ref":
+    "Runs the upstream catalogue comparison for an operator-selected revision.",
+  "ci.yml: privileged job 'e2e-production-shard' can run from a feature ref":
+    "Runs an operator-selected production-mode browser shard.",
+  "ci.yml: privileged job 'e2e-vite-canary' can run from a feature ref":
+    "Runs the Vite compatibility canary for an operator-selected revision.",
+  "ci.yml: privileged job 'marketing-screenshots' can run from a feature ref":
+    "Runs screenshot validation for an operator-selected revision.",
+  "ci.yml: privileged job 'route-smoke' can run from a feature ref":
+    "Runs route smoke checks for an operator-selected revision.",
+  "cla.yml: privileged job 'verify-signatures' can run from a feature ref":
+    "Supports a manual signature-policy diagnostic.",
+  "dated-waiver-healing.yml: privileged job 'heal' can run from a feature ref":
+    "Supports a dry-run waiver-healing diagnostic.",
+  "dependency-audit.yml: privileged job 'remediate' can run from a feature ref":
+    "Supports an operator-triggered dependency remediation branch.",
+  "main-heavy.yml: privileged job 'suites' can run from a feature ref":
+    "Runs heavy CI suites for an explicitly selected revision.",
+  "main-pr-depth.yml: privileged job 'suites' can run from a feature ref":
+    "Runs pull-request depth suites for an explicitly selected revision.",
+  "model-catalog-check.yml: privileged job 'model-catalog-check' can run from a feature ref":
+    "Supports a manual model-catalog compatibility diagnostic.",
+  "nightly-test.yml: privileged job 'marketing-screenshots' can run from a feature ref":
+    "Runs the nightly screenshot suite for an operator-selected revision.",
+  "quarantine-prune.yml: privileged job 'prune' can run from a feature ref":
+    "Supports a dry-run quarantine maintenance diagnostic.",
+} as const;
+
 // Events that start a run nobody is watching. Pull request, merge queue and
 // manual dispatch runs report to the person who started them.
 const UNATTENDED_EVENTS = new Set([
@@ -208,12 +311,10 @@ const UNATTENDED_EVENTS = new Set([
 const UNALERTED_UNATTENDED_WORKFLOWS: Record<string, string> = {
   "bot-refresh-auto-merge.yml":
     "Runs after each pull request's checks; a failure affects one bot pull request and shows on it.",
+  "ci-runner-loss-retry.yml":
+    "Runs after a failed pull request run; if the retry fails, that pull request's own red CI still shows on it.",
   "cla.yml":
     "Its workflow_run leg posts the signature status on the contributor's pull request, where a failure shows.",
-  "generated-conflicts-publish.yml":
-    "Follows a manually dispatched resolution run whose dispatcher watches the outcome.",
-  "marketing-screenshots-publish.yml":
-    "Follows a manually dispatched capture run whose dispatcher watches the outcome.",
   "scheduled-run-alerts.yml":
     "The alerting workflow itself cannot report its own failed delivery.",
 };
@@ -637,6 +738,233 @@ describe("workflow_run trust", () => {
 
   test("ignores workflows without a workflow_run trigger", () => {
     expect(trustProblems({ on: ["push"], jobs: { a: {} } })).toEqual([]);
+  });
+});
+
+// GitHub creates no workflow_run event for a run that GITHUB_TOKEN started,
+// so a workflow_run trigger never fires for a workflow this repository
+// dispatches with GITHUB_TOKEN, and nothing reports it. The dispatching run
+// starts the next step itself and follows it instead. Over-approximated: any
+// step that calls a dispatch endpoint and names a followed workflow's file
+// (or builds the file name at run time) counts, unless its token is a
+// GitHub App token minted in the job.
+const DISPATCH_CALL =
+  /createWorkflowDispatch|\/dispatches\b|\bgh workflow run\b/u;
+const COMPUTED_WORKFLOW_FILE = /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\.ya?ml\b/u;
+const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
+// Dispatches whose targets only the failed-run alerting workflow follows,
+// keyed by `<workflow file>#<step name>`, with the workflows each starts.
+const ALERTING_WORKFLOW = "scheduled-run-alerts.yml";
+const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
+  "main-heavy.yml#Dispatch release PR-depth checks": ["main-pr-depth.yml"],
+  "main-heavy.yml#Dispatch version commit staging": ["deploy-staging.yml"],
+  "network-baseline-request.yml#Request main recording": [
+    "network-baseline-record.yml",
+  ],
+  "release-pr.yml#Dispatch the version commit": ["release-tag.yml"],
+  "release-proof.yml#Dispatch pinned release proofs once": [
+    "deploy-staging.yml",
+    "main-heavy.yml",
+  ],
+  "release.yml#Dispatch release-health.yml": ["release-health.yml"],
+};
+
+// Built, not written literally: a `${...}` in a plain string reads as a
+// broken template literal to the linter.
+const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
+
+type DispatchSite = { site: string; targets: string[]; computed: boolean };
+
+/** Followed workflow file -> the workflow_run workflows that follow it. */
+const followersOf = (
+  workflows: { file: string; workflow: unknown }[],
+): Map<string, string[]> => {
+  const fileByName = new Map<string, string>();
+  for (const { file, workflow } of workflows) {
+    if (isRecord(workflow) && typeof workflow["name"] === "string") {
+      fileByName.set(workflow["name"], file);
+    }
+  }
+  const followers = new Map<string, string[]>();
+  for (const { file: follower, workflow } of workflows) {
+    const on = isRecord(workflow) ? workflow["on"] : undefined;
+    const trigger = isRecord(on) ? on["workflow_run"] : undefined;
+    const names = isRecord(trigger) ? trigger["workflows"] : undefined;
+    for (const name of Array.isArray(names) ? names : []) {
+      const file = fileByName.get(String(name));
+      if (file !== undefined) {
+        followers.set(file, [...(followers.get(file) ?? []), follower]);
+      }
+    }
+  }
+  return followers;
+};
+
+const tokenDispatchesOfFollowed = (
+  workflows: { file: string; workflow: unknown }[],
+): DispatchSite[] => {
+  const followed = [...followersOf(workflows).keys()];
+  const sites: DispatchSite[] = [];
+  for (const { file, workflow } of workflows) {
+    const jobs =
+      isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+    for (const job of Object.values(jobs)) {
+      const steps =
+        isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [];
+      for (const step of steps) {
+        if (!isRecord(step)) {
+          continue;
+        }
+        const text = JSON.stringify(step);
+        if (!DISPATCH_CALL.test(text)) {
+          continue;
+        }
+        const tokens = [
+          isRecord(step["with"]) ? step["with"]["github-token"] : undefined,
+          isRecord(step["env"]) ? step["env"]["GH_TOKEN"] : undefined,
+          isRecord(step["env"]) ? step["env"]["GITHUB_TOKEN"] : undefined,
+        ].filter((token) => token !== undefined);
+        if (
+          tokens.length > 0 &&
+          tokens.every(
+            (token) => typeof token === "string" && APP_TOKEN.test(token),
+          )
+        ) {
+          continue;
+        }
+        const computed = COMPUTED_WORKFLOW_FILE.test(text);
+        const targets = computed
+          ? followed
+          : followed.filter((target) => text.includes(target));
+        if (targets.length > 0) {
+          sites.push({
+            site: `${file}#${String(step["name"])}`,
+            targets: targets.toSorted(),
+            computed,
+          });
+        }
+      }
+    }
+  }
+  return sites;
+};
+
+describe("a followed run is never started with GITHUB_TOKEN", () => {
+  test("no workflow_run trigger follows a workflow dispatched with GITHUB_TOKEN", () => {
+    const workflows = allWorkflows();
+    const sites = tokenDispatchesOfFollowed(workflows);
+    expect(
+      sites
+        .filter(({ site }) => !Object.hasOwn(ALERT_ONLY_TOKEN_DISPATCHES, site))
+        .map(({ site, targets }) => `${site} -> ${targets.join(", ")}`),
+    ).toEqual([]);
+    // An exemption names a dispatch that still exists, so a stale entry
+    // fails here instead of lingering.
+    expect(Object.keys(ALERT_ONLY_TOKEN_DISPATCHES).toSorted()).toEqual(
+      sites.map(({ site }) => site).toSorted(),
+    );
+    const followers = followersOf(workflows);
+    for (const { site, targets, computed } of sites) {
+      const declared = ALERT_ONLY_TOKEN_DISPATCHES[site] ?? [];
+      // A file name built at run time cannot be read here; the entry
+      // declares it, and every declared target is checked below.
+      if (!computed) {
+        expect(declared, site).toEqual(targets);
+      }
+      for (const target of declared) {
+        expect(followers.get(target), `${site} -> ${target}`).toEqual([
+          ALERTING_WORKFLOW,
+        ]);
+      }
+    }
+  });
+
+  const fixture = (step: Record<string, unknown>) => [
+    {
+      file: "publish.yml",
+      workflow: {
+        name: "Publish",
+        on: { workflow_run: { workflows: ["Build"] } },
+        jobs: {},
+      },
+    },
+    { file: "build.yml", workflow: { name: "Build", on: "workflow_dispatch" } },
+    {
+      file: "start.yml",
+      workflow: { jobs: { start: { steps: [{ name: "Start", ...step }] } } },
+    },
+  ];
+
+  test("reports every token shape that starts the followed workflow", () => {
+    for (const step of [
+      {
+        uses: "actions/github-script@fixture",
+        with: {
+          script:
+            "github.rest.actions.createWorkflowDispatch({ workflow_id: 'build.yml' })",
+        },
+      },
+      {
+        run: "gh api --method POST repos/o/r/actions/workflows/build.yml/dispatches",
+        env: { GH_TOKEN: githubExpression("github.token") },
+      },
+      {
+        run: "gh workflow run build.yml",
+        env: { GH_TOKEN: githubExpression("secrets.GITHUB_TOKEN") },
+      },
+      {
+        run: 'for workflow in build; do gh workflow run "$workflow.yml"; done',
+        env: { GH_TOKEN: githubExpression("github.token") },
+      },
+      {
+        run: "gh workflow run build.yml",
+        env: {
+          GH_TOKEN: githubExpression("steps.app.outputs.token"),
+          GITHUB_TOKEN: githubExpression("github.token"),
+        },
+      },
+    ]) {
+      expect(
+        tokenDispatchesOfFollowed(fixture(step)).map(({ site, targets }) => ({
+          site,
+          targets,
+        })),
+        JSON.stringify(step),
+      ).toEqual([{ site: "start.yml#Start", targets: ["build.yml"] }]);
+    }
+  });
+
+  test("accepts an App token and dispatches of workflows nothing follows", () => {
+    expect(
+      tokenDispatchesOfFollowed(
+        fixture({
+          run: "gh workflow run build.yml",
+          env: { GH_TOKEN: githubExpression("steps.app.outputs.token") },
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      tokenDispatchesOfFollowed(
+        fixture({ run: "gh workflow run publish.yml" }),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("workflow_dispatch trust", () => {
+  test("privileged manual jobs require the protected main workflow ref", () => {
+    const problems = allWorkflows().flatMap(({ file, workflow }) =>
+      featureDispatchPrivilegeProblems(file, workflow),
+    );
+    const allowances = new Set(
+      Object.keys(FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES),
+    );
+    const current = new Set(problems);
+    const unexpected = problems.filter((problem) => !allowances.has(problem));
+    const stale = [...allowances]
+      .filter((allowance) => !current.has(allowance))
+      .map((allowance) => `stale allowance: ${allowance}`);
+    expect([...unexpected, ...stale]).toEqual([]);
   });
 });
 

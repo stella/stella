@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { parsePlainDate } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -20,8 +22,8 @@ import {
 import { claimInvoiceExpenses } from "@/api/handlers/invoices/entries/add";
 import {
   ATTACHED_ENTRY_LINE_VAT,
-  type AttachedEntryLineDraftsOptions,
   attachedEntryLineDrafts,
+  type AttachedEntryLineDraftsOptions,
   insertInvoiceLines,
   type LineVat,
   manualLineDraft,
@@ -37,7 +39,10 @@ import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
+import {
+  invoiceLanguageSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";
@@ -47,59 +52,72 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "./concurrent-modification";
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
 
-type InvoiceDocumentType = Static<typeof tInvoiceDocumentType>;
+type InvoiceDocumentType = v.InferOutput<typeof tInvoiceDocumentType>;
 
-const createInvoiceBodySchema = t.Object({
-  invoiceNumber: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  documentType: t.Optional(tInvoiceDocumentType),
-  originalInvoiceId: t.Optional(tSafeId("invoice")),
-  invoiceDate: t.String({ format: "date" }),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  currency: tCurrencyCode,
-  notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  timeEntryIds: t.Array(tSafeId("timeEntry"), {
-    minItems: 0,
-    maxItems: 500,
-  }),
-  expenseIds: t.Optional(
-    t.Array(tSafeId("expense"), {
-      minItems: 0,
-      maxItems: 500,
-      description:
-        "Approved, billable, not-yet-invoiced expenses of the matter to bill on this invoice",
-    }),
+const createInvoiceBodySchema = v.object({
+  invoiceNumber: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   ),
-  entryAdjustments: t.Optional(
-    t.Array(
-      t.Object({
-        timeEntryId: tSafeId("timeEntry"),
-        billedMinutes: t.Integer({
-          minimum: 0,
-          maximum: 100_000,
-          description:
-            "Minutes to bill for the entry; its logged duration stays",
-        }),
-        noCharge: t.Boolean({
-          description: "Show the entry on the invoice at no charge",
-        }),
-      }),
-      {
-        maxItems: 500,
-        description:
-          "Billed minutes and no-charge to set on entries in timeEntryIds before they are billed; needs approval rights",
-      },
+  documentType: v.optional(tInvoiceDocumentType),
+  originalInvoiceId: v.optional(resourceIdSchema("invoice")),
+  invoiceDate: apiDateSchema,
+  dueDate: v.optional(v.nullable(apiDateSchema)),
+  reference: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+  currency: currencyCodeSchema,
+  language: v.optional(invoiceLanguageSchema),
+  notes: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
+  timeEntryIds: v.pipe(
+    v.array(resourceIdSchema("timeEntry")),
+    v.minLength(0),
+    v.maxLength(500),
+  ),
+  expenseIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("expense")),
+      v.minLength(0),
+      v.maxLength(500),
+      v.description(
+        "Approved, billable, not-yet-invoiced expenses of the matter to bill on this invoice",
+      ),
     ),
   ),
-  sellerProfileId: t.Optional(tSafeId("sellerProfile")),
-  taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  expectedTotalAmount: t.Optional(
-    t.Integer({
-      minimum: -Number.MAX_SAFE_INTEGER,
-      maximum: Number.MAX_SAFE_INTEGER,
-      description:
+  entryAdjustments: v.optional(
+    v.pipe(
+      v.array(
+        v.object({
+          timeEntryId: resourceIdSchema("timeEntry"),
+          billedMinutes: v.pipe(
+            v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100_000)),
+            v.description(
+              "Minutes to bill for the entry; its logged duration stays",
+            ),
+          ),
+          noCharge: v.pipe(
+            v.boolean(),
+            v.description("Show the entry on the invoice at no charge"),
+          ),
+        }),
+      ),
+      v.maxLength(500),
+      v.description(
+        "Billed minutes and no-charge to set on entries in timeEntryIds before they are billed; needs approval rights",
+      ),
+    ),
+  ),
+  sellerProfileId: v.optional(resourceIdSchema("sellerProfile")),
+  taxableSupplyDate: v.optional(v.nullable(apiDateSchema)),
+  expectedTotalAmount: v.optional(
+    v.pipe(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(-Number.MAX_SAFE_INTEGER),
+        v.maxValue(Number.MAX_SAFE_INTEGER),
+      ),
+      v.description(
         "Gross total in minor units that the caller reviewed; the invoice is not created when the computed total differs",
-    }),
+      ),
+    ),
   ),
 });
 
@@ -125,7 +143,7 @@ type CreateInvoiceResult = {
   entryCount: number;
   expenseCount: number;
 };
-type CreateInvoiceBody = Static<typeof createInvoiceBodySchema>;
+type CreateInvoiceBody = v.InferOutput<typeof createInvoiceBodySchema>;
 // The request with its optional lists resolved once, so no step re-defaults them.
 type CreateInvoiceInput = Omit<
   CreateInvoiceBody,
@@ -508,15 +526,13 @@ const resolveCreationDefaults = async (
     documentType === "credit_note"
       ? body.invoiceDate
       : await lastWorkDate(tx, { workspaceId, body });
-  const prefill =
-    documentType === "credit_note"
-      ? null
-      : await resolveInvoicePrefill(tx, {
-          organizationId,
-          workspaceId,
-          sellerProfileId: body.sellerProfileId,
-          supplyDate: body.taxableSupplyDate ?? workDate,
-        });
+  const resolvedPrefill = await resolveInvoicePrefill(tx, {
+    organizationId,
+    workspaceId,
+    sellerProfileId: body.sellerProfileId,
+    supplyDate: body.taxableSupplyDate ?? workDate,
+  });
+  const prefill = documentType === "credit_note" ? null : resolvedPrefill;
   if (prefill?.sellerSource === "not_found") {
     return Result.err(
       new HandlerError({
@@ -535,7 +551,12 @@ const resolveCreationDefaults = async (
     body.dueDate === undefined && prefill !== null
       ? dueDateAfter(body.invoiceDate, prefill.dueDays)
       : (body.dueDate ?? null);
-  return Result.ok({ prefill, taxableSupplyDate, dueDate });
+  return Result.ok({
+    prefill,
+    taxableSupplyDate,
+    dueDate,
+    language: body.language ?? resolvedPrefill.language,
+  });
 };
 
 type CreateDraftInvoiceOptions = {
@@ -834,7 +855,7 @@ const createDraftInvoice = async (
   if (defaults.isErr()) {
     return Result.err(defaults.error);
   }
-  const { prefill, taxableSupplyDate, dueDate } = defaults.value;
+  const { prefill, taxableSupplyDate, dueDate, language } = defaults.value;
   if (prefill?.vat.reason === "no_vat_rate") {
     return Result.err(
       new HandlerError({
@@ -872,6 +893,7 @@ const createDraftInvoice = async (
       taxableSupplyDate,
       reference: body.reference ?? null,
       currency: body.currency,
+      language,
       notes: body.notes ?? null,
       status: INVOICE_STATUS.DRAFT,
       sellerProfileId: prefill?.seller?.id ?? null,
@@ -899,6 +921,7 @@ const createDraftInvoice = async (
         : {
             vatTreatment: prefill.vat.vatTreatment,
             vatRateBps: prefill.vat.vatRateBps,
+            exemptionReason: null,
           },
     documentType,
     originalInvoiceId,

@@ -1,8 +1,8 @@
 import {
   RESOURCE_TYPE,
-  toResourceName,
   type ResourceRef,
   type ResourceType,
+  toResourceName,
 } from "@stll/api-contract";
 
 import type { RESOURCE_AUTHORIZATION_DISPOSITION } from "@/api/lib/resource-authorization";

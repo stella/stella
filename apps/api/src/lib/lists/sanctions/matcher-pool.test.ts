@@ -26,8 +26,8 @@ import { createSanctionsMatcherPoolCore } from "./matcher-pool-core";
 import type { SanctionsMatcherSession } from "./matcher-pool-core";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
 import type {
-  SanctionsMatcherFailureCause,
   reportSanctionsScreeningFailure,
+  SanctionsMatcherFailureCause,
 } from "./screening-failure";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
@@ -782,7 +782,7 @@ test("real worker work exhaustion retains its edition and screens the next cache
   }
   const corpus = {
     version: list("Acme").version,
-    entries: Array.from({ length: 20_000 }, (_, index) => ({
+    entries: Array.from({ length: 3 }, (_, index) => ({
       ...template,
       sourceId: `work-limit-${index}`,
       names: [
@@ -797,9 +797,21 @@ test("real worker work exhaustion retains its edition and screens the next cache
     name: "Registered a b c d e f g h i j k l m n o p q r s t u v z",
     entityType: "organisation" as const,
   };
-  const direct = screen(buildScreeningIndex([corpus]), query, {
+  const index = buildScreeningIndex([corpus]);
+  let spent = 0;
+  screen(index, query, {
     cutoff: DEFAULT_CUTOFF,
     limit: 10,
+    onWork: (usage) => {
+      spent = usage.spent;
+    },
+  }).unwrap();
+  expect(spent).toBeGreaterThan(1);
+  const maxWork = spent - 1;
+  const direct = screen(index, query, {
+    cutoff: DEFAULT_CUTOFF,
+    limit: 10,
+    maxWork,
   });
   expect(direct.isErr() && direct.error.code).toBe("work-limit");
   const recorded = recordingMatcherWorker();
@@ -825,18 +837,19 @@ test("real worker work exhaustion retains its edition and screens the next cache
     expect(
       await pool.run(
         async (session) =>
-          await session.match({ ...requestBase, list: corpus, query }),
+          await session.match({ ...requestBase, list: corpus, query, maxWork }),
       ),
     ).toEqual({ status: "completed", value: { status: "work-limit" } });
     const transferred = { ...recorded.work };
     const safeQuery = {
-      name: "Registered Entity 42 Holdings",
+      name: "Registered Entity 2 Holdings",
       entityType: "organisation" as const,
     };
-    const expected = screen(buildScreeningIndex([corpus]), safeQuery, {
+    const expected = screen(index, safeQuery, {
       cutoff: DEFAULT_CUTOFF,
       limit: 10,
     }).unwrap();
+    expect(expected.possibleMatches.length).toBeGreaterThan(0);
     expect(
       await pool.run(async (session) => {
         expect(session.hasEdition("eu", "work-limit")).toBe(true);

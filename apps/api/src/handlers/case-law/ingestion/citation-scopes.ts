@@ -6,7 +6,8 @@ import { isDocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
-import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
+// parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
+import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
 

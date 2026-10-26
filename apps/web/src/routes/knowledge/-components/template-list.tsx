@@ -26,15 +26,16 @@ import {
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
 import {
+  AiActionIcon,
   CheckIcon,
   DownloadIcon,
   PencilLineIcon,
@@ -42,7 +43,6 @@ import {
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";

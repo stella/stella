@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -465,7 +465,7 @@ describe("model dispatch scope", () => {
         modelTier,
       });
       expect(() =>
-        assertModelDispatchScope({ organizationId, admission }),
+        assertModelDispatchScope({ organizationId, userId: null, admission }),
       ).not.toThrow();
     }
   });
@@ -474,6 +474,7 @@ describe("model dispatch scope", () => {
     expect(() =>
       assertModelDispatchScope({
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     ).not.toThrow();
@@ -489,12 +490,13 @@ describe("minted model tier", () => {
     const scopedDb = mock(async () => await Promise.reject(new Error("read")));
     const modelTier = await admitModelDispatch({
       organizationId: mintAuthProviderId<"organization">(),
+      userId: null,
       actionKind: "chat.send",
       organizationStateDb: asTestRaw<ScopedDb>(scopedDb),
       signal: new AbortController().signal,
       run: async (admission) => await Promise.resolve(admission.modelTier),
     });
-    expect(modelTier).toBe(MANAGED_MODEL_TIER.standard);
+    expect(modelTier.unwrap()).toBe(MANAGED_MODEL_TIER.standard);
     expect(scopedDb).not.toHaveBeenCalled();
   });
 
@@ -508,6 +510,7 @@ describe("minted model tier", () => {
       await rejectionOf(
         admitModelDispatch({
           organizationId: mintAuthProviderId<"organization">(),
+          userId: null,
           actionKind: "chat.send",
           organizationStateDb: asTestRaw<ScopedDb>(scopedDb),
           signal: new AbortController().signal,

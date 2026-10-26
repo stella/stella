@@ -45,6 +45,7 @@ import type {
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { SkillResourcePanel } from "@/components/inspector/skill-resource-panel";
 import { useDocxTabEditSession } from "@/components/inspector/use-docx-tab-edit-session";
+import { useFileFullViewNavigation } from "@/components/inspector/use-file-full-view-navigation";
 import { useFileTabRename } from "@/components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
@@ -55,6 +56,7 @@ import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-she
 import { TaskDetailPanel } from "@/components/workspaces/tasks/task-detail-panel";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -90,15 +92,6 @@ const isInspectorWorkspaceOrigin = (
   "color" in value &&
   (typeof value.color === "string" || value.color === null);
 
-const hasInAppHistoryEntry = (): boolean => {
-  const state: unknown = window.history.state;
-  if (typeof state !== "object" || state === null) {
-    return false;
-  }
-  const idx: unknown = Reflect.get(state, "idx");
-  return typeof idx === "number" && idx > 0;
-};
-
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
@@ -121,6 +114,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // and a mismatched one would throw under TanStack Router's
   // route-typed navigation when the inspector is open off-workspace.
   const navigate = useNavigate();
+  const { leaveFullView, openFullView } = useFileFullViewNavigation();
   const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
   const panelQueryClient = useQueryClient();
 
@@ -280,7 +274,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             return undefined;
           })
           .catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "InspectorPanel:failure",
+              scope: { type: "handler", handlerId: "InspectorPanel:failure" },
+            });
           });
         return;
       }
@@ -319,7 +316,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         try {
           await action.flushPendingChanges();
         } catch (error) {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "InspectorPanel:failure-2",
+            scope: { type: "handler", handlerId: "InspectorPanel:failure-2" },
+          });
         }
       }
       // The edit session lives in the document route now. Drop the
@@ -338,17 +338,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         scaleOffset: 0,
         sidebar: openAnonymizeSidebar ? "anonymize" : "entity",
       });
-      await navigate({
-        to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId: activeTab.workspaceId, viewId: "all" },
-        search: {
-          entity: activeTab.entityId,
-          field: activeTab.id,
-          justification: undefined,
-          justificationPage: undefined,
-          ...(carryEditing && { editing: true }),
-        },
-      });
+      documentOpenTiming.requested(activeTab.id, "full-view");
+      await openFullView(activeTab, { carryEditing });
       // Switch the surviving tab into "metadata-only" persona only
       // after full-view navigation succeeds; otherwise side peek stays
       // visually intact on rejected or aborted transitions.
@@ -366,32 +357,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     activeTab,
     docxActionsRef.current,
     editingDocxTabId,
-    navigate,
+    openFullView,
     setEditingDocxTabId,
     setPdfViewerState,
   ]);
-
-  const handleMinimizeFromFullView = useCallback(
-    (tab: FileTab) => {
-      // Drop back to side-peek persona and return to the screen
-      // where the file was maximized from. Full-view internal file
-      // switches use replace navigation, so browser back lands on
-      // the original table/overview/filesystem context.
-      useInspectorTabsStore.getState().setFileMetadataLane(tab.id, "closed");
-      if (hasInAppHistoryEntry()) {
-        window.history.back();
-        return;
-      }
-      detached(
-        navigate({
-          to: "/workspaces/$workspaceId/$viewId",
-          params: { workspaceId: tab.workspaceId, viewId: "all" },
-        }),
-        "inspector-panel.navigate",
-      );
-    },
-    [navigate],
-  );
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently
@@ -600,7 +569,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             editingTabId={editingTabId}
             editValue={editValue}
             handleCloseTab={handleCloseTab}
-            handleMinimizeFromFullView={handleMinimizeFromFullView}
+            handleMinimizeFromFullView={leaveFullView}
             handleOpenFullView={handleOpenFullView}
             handleResetZoom={handleResetZoom}
             handleWheelZoom={handleWheelZoom}

@@ -19,6 +19,39 @@ case "$*" in
   *"/statuses?per_page=100"*) echo '[[]]' ;;
   # The release queue history check reads single pages, never --slurp.
   "api repos/stella/stella/commits/$TEST_CANDIDATE/pulls?per_page=100") printf '%s\n' "$TEST_CANDIDATE_PULLS" ;;
+  *"query="*"ReleaseCommitHistory"*)
+    jq -nc \
+      --arg sha "$TEST_CANDIDATE" \
+      --argjson pulls "$TEST_CANDIDATE_PULLS" \
+      --argjson timeline "$TEST_TIMELINE" \
+      --argjson runs "$TEST_MG_RUNS" '
+      {
+        data: {
+          repository: {
+            c0: {
+              oid: $sha,
+              associatedPullRequests: {
+                pageInfo: {hasNextPage: false},
+                nodes: ($pulls | map({
+                  number,
+                  title,
+                  url: .html_url,
+                  mergedAt: .merged_at,
+                  mergeCommit: {oid: .merge_commit_sha},
+                  timelineItems: $timeline.data.repository.pullRequest.timelineItems
+                }))
+              },
+              checkSuites: {
+                pageInfo: {hasNextPage: false, endCursor: null},
+                nodes: ($runs.workflow_runs | map({
+                  conclusion: (if .conclusion == "success" then "SUCCESS" else (.conclusion | ascii_upcase) end),
+                  workflowRun: {event, file: {path: ".github/workflows/ci.yml"}}
+                }))
+              }
+            }
+          }
+        }
+      }' ;;
   "api graphql "*"number=1") printf '%s\n' "$TEST_TIMELINE" ;;
   *"/actions/workflows/ci.yml/runs?head_sha=$TEST_CANDIDATE&event=merge_group&"*) printf '%s\n' "$TEST_MG_RUNS" ;;
   *"/actions/workflows/ci.yml/runs?"*) echo '{"workflow_runs":[]}' ;;
@@ -161,8 +194,11 @@ expect_failure 'receipt with unreadable queue history' 'merge-group receipt = no
 reset_health
 use_receipt
 TEST_TIMELINE=$(queue_timeline MergedEvent)
-bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
+# Captured: the history check reports the admin merge as a workflow ::error::
+# command, which would otherwise annotate this passing job as failed.
+bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output" 2> "$fixture/error"
 grep -qx "sha=$TEST_CANDIDATE" "$fixture/output"
+grep -q 'not validated through the merge queue' "$fixture/error"
 echo 'ok   an admin merge still releases with green heavy statuses'
 reset_health
 TEST_HEAVY_STATUS=$(jq '.state="failure"' <<< "$TEST_HEAVY_STATUS")
@@ -220,16 +256,17 @@ git checkout -q --detach "$main"
 output=$(bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE")
 [[ "$output" == "$(printf 'sha=%s\nvalue=1.2.3\ntag=v1.2.3' "$TEST_CANDIDATE")" ]]
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
-echo 'ok   explicit candidate and newest verified default'
-# A newer commit verified on staging but not heavy-green is passed over.
-export TEST_LATER="$main" TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+echo 'ok   explicit candidate and version commit default'
+# Even a fully green later main commit cannot replace the version commit.
+export TEST_LATER="$main" TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"},{"context":"main/pr-depth","state":"success"}]]'
+expect_failure 'green later main commit' "version commit $TEST_CANDIDATE" "$main"
 [[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
-export TEST_LATER_STATUSES='[[{"context":"main/heavy","state":"success"}]]'
-[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
-export TEST_LATER_STATUSES='[[{"context":"staging/verified","state":"success"},{"context":"main/heavy","state":"success"}]]'
-[[ "$(bash "$subject" --repo stella/stella)" == "$output" ]]
+# Selection never falls back to another green commit when the version commit is red.
+export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}]]'
+expect_failure 'default version commit is red' 'RELEASE_STATUS_NOT_GREEN' ''
+export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 unset TEST_LATER TEST_LATER_STATUSES
-echo 'ok   default skips a newer commit missing either status'
+echo 'ok   only the version commit can be selected, regardless of later gates'
 # Execute the real workflow tag block against a local remote; HEAD is newer.
 git init --bare -q "$fixture/remote"
 export TEST_REMOTE="$fixture/remote"
@@ -338,6 +375,8 @@ fi
 echo 'ok   push re-checks the history behind the receipt'
 printf '%s\n' '---' '"@stll/example": patch' '---' 'Pending note' > .changeset/pending.md
 git add .changeset/pending.md
+printf '1.2.4\n' > VERSION
+git add VERSION
 git commit -qm changeset
 TEST_CANDIDATE=$(git rev-parse HEAD)
 git update-ref refs/remotes/origin/main HEAD

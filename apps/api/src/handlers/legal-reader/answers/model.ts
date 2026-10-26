@@ -113,6 +113,7 @@ export const runReaderAnswerModel = async (
   const resolved = await Result.tryPromise({
     try: async () =>
       await resolveModel({
+        userId: input.admission.userId,
         admission: input.admission,
         dataClass: "customer",
         managedAIResidency: input.managedAIResidency,
@@ -186,6 +187,7 @@ export const runReaderAnswerModel = async (
   const streamed = await Result.tryPromise({
     try: async () => {
       for await (const chunk of streamRun({
+        userId: input.admission.userId,
         admission: input.admission,
         model,
         adapter: textAdapterWithNormalizedStops(model),

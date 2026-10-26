@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
-import * as ts from "typescript";
+import * as ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 

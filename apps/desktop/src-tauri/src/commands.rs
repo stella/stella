@@ -121,7 +121,10 @@ pub async fn finish_session(
   let result = mgr.finish_session(&session_id);
   if result {
     mgr.persist_sessions_public().await;
-    mgr.retry_session(&session_id).await;
+  }
+  drop(mgr);
+  if result {
+    crate::session_manager::retry_session(Arc::clone(state.inner()), &session_id).await;
   }
   Ok(result)
 }
@@ -135,7 +138,10 @@ pub async fn retry_session(
   let result = mgr.retry_session_now(&session_id);
   if result {
     mgr.persist_sessions_public().await;
-    mgr.retry_session(&session_id).await;
+  }
+  drop(mgr);
+  if result {
+    crate::session_manager::retry_session(Arc::clone(state.inner()), &session_id).await;
   }
   Ok(result)
 }
@@ -232,8 +238,14 @@ pub async fn respond_to_takeover(
   approved: bool,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
-  Ok(mgr.respond_to_takeover(&session_id, approved).await)
+  Ok(
+    crate::session_manager::respond_to_takeover(
+      Arc::clone(state.inner()),
+      &session_id,
+      approved,
+    )
+    .await,
+  )
 }
 
 #[tauri::command]

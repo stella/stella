@@ -1,6 +1,10 @@
 import type { SQLWrapper } from "drizzle-orm";
 
-import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  INVOICE_LANGUAGES,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -16,9 +20,9 @@ import {
   centsColumn,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
   organizationCheck,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -26,11 +30,11 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   workspaceIdCheck,
   wsOrganizationPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   BankAccount,
@@ -88,11 +92,16 @@ export const contacts = p.pgTable(
       length: 64,
     }),
     taxId: p.varchar("tax_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    // Null means the payer status has not been established.
+    vatPayer: p.boolean("vat_payer"),
     bankAccounts: jsonb("bank_accounts").$type<BankAccount[]>(),
     billingAddress: jsonb("billing_address").$type<BillingAddress>(),
     defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
+    /** Language preferred for invoices sent to this contact; null uses the issuer default. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
 
     // Attorney responsibility
     originatingAttorneyId: p
@@ -112,6 +121,13 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.check(
+      "contacts_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
@@ -756,6 +772,7 @@ export const schedulerJobs = p.pgTable(
     payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
     pausedBy: p.text("paused_by"),
+    pausedSince: timestamptz("paused_since"),
     pausedUntil: timestamptz("paused_until"),
     pauseReason: p.text("pause_reason"),
     nextRunAt: timestamptz("next_run_at").notNull(),
@@ -778,9 +795,22 @@ export const schedulerJobs = p.pgTable(
       .on(table.enabled, table.nextRunAt),
     p.index("scheduler_jobs_task_idx").on(table.task),
     p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    p
+      .index("scheduler_jobs_paused_until_idx")
+      .on(table.pausedUntil)
+      .where(sql`${table.pausedUntil} IS NOT NULL`),
     p.check(
       "scheduler_jobs_pause_attribution_check",
       sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
+    ),
+    p.check(
+      "scheduler_jobs_pause_finite_check",
+      sql`${table.pausedUntil} IS NULL OR isfinite(${table.pausedUntil})`,
+    ),
+    // The pause audit watches every pause, so it can never be paused itself.
+    p.check(
+      "scheduler_jobs_pause_audit_unpausable_check",
+      sql`${table.id} <> 'scheduler.pauseAudit.hourly' OR ${table.pausedUntil} IS NULL`,
     ),
     p.pgPolicy("scheduler_jobs_no_stella_access", {
       for: "all",

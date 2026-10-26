@@ -122,6 +122,15 @@ the court. This enables re-parsing without re-downloading.
 
 ### 4. No heuristics where structure exists
 
+Bump a source's `SOURCE_FINGERPRINT_VERSIONS` entry only when its fingerprint
+changes over the same stored bytes: what the adapter passes to
+`sourceFingerprint` from bytes it already stores, or the hashing itself. A
+change to which bytes an adapter stores is not fingerprint-only; those rows
+must be rewritten through the normal changed path when next observed. Bump the
+parser version separately only when parser output changes. A fingerprint-only
+version lets ingestion refresh the stored hash from stored raw without parsing,
+rewriting the decision, or reindexing it.
+
 If the source gives you structure (HTML tags, JSON sections,
 RTF markers), use it. Do not write regex-based heuristics to
 split or classify text when the source already provides the
@@ -445,6 +454,11 @@ restarts the slice. A saved page that disappears after a withdrawal must also
 restart from page zero, not retry the invalid offset forever. The follow-up
 window must begin at the snapshot boundary plus one, not at a fresh rolling
 lookback, or a long crawl/outage creates a permanent gap.
+
+Reconciliation slices get this pass from the shared walker
+(`listReconciliationSlice` in `ingestion/slice-listing.ts`): it lists every
+non-empty slice twice and refuses one whose two passes name different
+identities, so an adapter verifies only the windows its own cursor walks.
 
 **The steady-state follow-up is a frontier, not a window.** Once the sweep has
 seen the collection, the cursor carries the last publisher window it verified

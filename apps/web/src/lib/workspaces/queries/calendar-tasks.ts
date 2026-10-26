@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { ConditionNode } from "@/lib/types";
 import { normalizeVisibleFieldIds } from "@/lib/workspaces/queries/entities.logic";
 import type { ViewSort } from "@/lib/workspaces/queries/entities.logic";
@@ -59,7 +59,7 @@ const fetchCalendarTasks = async ({
       { fetch: { signal: signal ?? null } },
     );
 
-  return unwrapEden(response).tasks;
+  return unwrapApiResponse(response).tasks;
 };
 
 export type CalendarTask = Awaited<

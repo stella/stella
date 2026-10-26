@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 /**
  * Bilingual-translation trigger + dialog.
  *
@@ -16,10 +16,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -30,23 +30,24 @@ import { BookOpenCheckIcon } from "@stll/ui/icons";
 
 import {
   BilingualReviewGlossary,
+  type GlossaryDraft,
   glossaryDraftsFrom,
   glossaryIssue,
   toGlossaryEntries,
-  type GlossaryDraft,
 } from "@/components/bilingual-review-glossary";
 import { BilingualReviewRows } from "@/components/bilingual-review-rows";
 import { BilingualRunPanel } from "@/components/bilingual-run-panel";
 import {
   BILINGUAL_FORMS_MAX,
-  createBilingualRun,
-  prepareBilingualTranslation,
   type BilingualPreparedRow,
   type BilingualRowDisposition,
+  createBilingualRun,
+  prepareBilingualTranslation,
 } from "@/components/bilingual-translate-queries";
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { defaultLanguagePair } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
@@ -77,9 +78,7 @@ type BilingualReviewState = {
  * mirrored here.
  */
 type BilingualTranslateState =
-  | { step: "pick" }
-  | BilingualReviewState
-  | { step: "run"; runId: string };
+  { step: "pick" } | BilingualReviewState | { step: "run"; runId: string };
 
 export const BilingualTranslateDialog = ({
   workspaceId,
@@ -108,8 +107,18 @@ export const BilingualTranslateDialog = ({
   const [state, setState] = useState<BilingualTranslateState>({ step: "pick" });
   const [initialReview, setInitialReview] = useState("");
 
-  const reportFailure = (error: unknown, title: string) => {
-    analytics.captureError(error);
+  type ReportFailureOptions = {
+    title: string;
+    fingerprintKey: ExceptionFingerprintKey;
+  };
+  const reportFailure = (
+    error: unknown,
+    { title, fingerprintKey }: ReportFailureOptions,
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, title, {
       description: userErrorFromThrown(error, t("errors.actionFailed")),
     });
@@ -136,7 +145,10 @@ export const BilingualTranslateDialog = ({
       setState(review);
     },
     onError: (error: unknown) => {
-      reportFailure(error, t("bilingualTranslate.error.prepareTitle"));
+      reportFailure(error, {
+        title: t("bilingualTranslate.error.prepareTitle"),
+        fingerprintKey: "BilingualTranslateDialog:prepare",
+      });
     },
   });
 
@@ -159,7 +171,10 @@ export const BilingualTranslateDialog = ({
       setState({ step: "run", runId });
     },
     onError: (error: unknown) => {
-      reportFailure(error, t("bilingualTranslate.error.startTitle"));
+      reportFailure(error, {
+        title: t("bilingualTranslate.error.startTitle"),
+        fingerprintKey: "BilingualTranslateDialog:start",
+      });
     },
   });
 

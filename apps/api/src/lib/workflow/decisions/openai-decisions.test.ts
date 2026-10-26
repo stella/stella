@@ -15,14 +15,15 @@ import {
 } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   choice,
-  noul,
   createSystemOneClient,
+  noul,
 } from "@/api/lib/workflow/decisions/system-one";
 import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import fixture from "./fixtures/openai-decision.json";
 
@@ -366,6 +367,26 @@ describe("OpenAI Decisions boundary", () => {
     }
   });
 
+  test("uses bounded backoff for a retry-after value with exponent notation", async () => {
+    const delays: number[] = [];
+    const client = createOpenAIDecisionsClient({
+      apiKey: "fixture-key",
+      fetcher: async () =>
+        new Response("limited", {
+          status: 429,
+          headers: { "retry-after": "2e0" },
+        }),
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+    });
+
+    const result = await client.ask({ state, questions });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(delays).toEqual([400, 800]);
+  });
+
   test("recovers after a 429 using exponential backoff", async () => {
     let attempts = 0;
     const delays: number[] = [];
@@ -639,7 +660,7 @@ test("expires the idle response read when the transport stops producing data", a
   let attemptSignal: AbortSignal | null | undefined;
   const client = createOpenAIDecisionsClient({
     apiKey: "fixture",
-    timeoutMs: 1,
+    timeoutMs: 1, // timeout under test
     fetcher: async (_url, init) => {
       attemptSignal = init?.signal;
       return new Response(
@@ -673,7 +694,7 @@ test("accepts the response byte ceiling and cancels overflow before JSON parsing
   const makeClient = (body: string) =>
     createOpenAIDecisionsClient({
       apiKey: "fixture",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       fetcher: async () =>
         new Response(
           new ReadableStream({

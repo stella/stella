@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -16,6 +16,7 @@ const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/migration-runner.ts`,
   `${API_SOURCE}db/online-migrations.ts`,
   `${API_SOURCE}db/online-index-gate.ts`,
+  `${API_SOURCE}db/online-ddl.ts`,
   `${API_SOURCE}db/corpus-schema-lane.ts`,
   `${API_SOURCE}db/corpus-projection-delete-receipt-repair.ts`,
   `${API_SOURCE}db/better-auth-oauth-resource-repair.ts`,
@@ -27,7 +28,7 @@ const MIGRATION_OWNERS = new Set([
 const STANDALONE_CONNECTION_OWNERS = new Set([
   `${API_SOURCE}scripts/better-auth-17-backfill.ts`,
   `${API_SOURCE}scripts/better-auth-microsoft-identity-map.ts`,
-  `${API_SOURCE}scripts/better-auth-migration-audit.ts`,
+  `${API_SOURCE}scripts/better-auth-migration-audit-command.ts`,
   `${API_SOURCE}scripts/database-census.ts`,
   `${API_SOURCE}scripts/seed-migration-rehearsal.ts`,
 ]);

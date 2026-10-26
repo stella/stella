@@ -485,6 +485,10 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    disposition: "excluded",
+    reason: "the complete JSON-LD export is covered by adapter fixture tests",
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**

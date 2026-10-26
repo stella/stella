@@ -7,10 +7,10 @@ import {
   isResourceType,
   parseResourceName,
   parseResourceRef,
-  resourceRef,
   RESOURCE_ID_TYPE,
   RESOURCE_NAME_PREFIX,
   RESOURCE_TYPE,
+  resourceRef,
   toResourceName,
 } from "./resource-ref";
 import { toSafeId } from "./safe-id";

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,15 +19,15 @@ import * as v from "valibot";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  CLI_CONTRACT_SURFACE_PATHS,
   canonicalJson,
+  CLI_CONTRACT_SURFACE_PATHS,
+  type CliContractSurface,
+  type CliContractSurfacePart,
   findSurfaceDrift,
   readHeadSurface,
   readPublishedPackageSurface,
-  type CliContractSurface,
-  type CliContractSurfacePart,
 } from "./check-cli-release-coupling";
-import { GENERATORS, type Generator } from "./generated-files";
+import { type Generator, GENERATORS } from "./generated-files";
 import {
   findUnbuildableGeneratedImports,
   formatGeneratedImportViolation,
@@ -39,7 +40,8 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_DIRECTORY = "packages/cli";
 const COMMAND_TIMEOUT_MS = 180_000;
-const TEST_TIMEOUT_MS = 600_000;
+// Measured p95 is 20.8 s; this test must perform a fresh real CLI build and pack.
+const TEST_TIMEOUT_MS = 45_000;
 const RUNTIME_SOURCES = [
   "src/generated/route-map.ts",
   "src/generated/tool-annotations.ts",
@@ -53,6 +55,7 @@ const EXPORTED_PATHS = [
   // Historical base revisions still import the root metadata.
   "scripts/generated-files.ts",
 ];
+const COMPILER_WRAPPER = "packages/scripts/src/tsc-native.ts";
 // The exported tree is parameterized; bind its source scope to the same
 // export inventory so unresolved scans retain named package checks.
 export const CI_MARKDOWN_READER_INPUTS = EXPORTED_PATHS;
@@ -183,6 +186,14 @@ const exportRevision = (root: string, revision: string): Tree => {
     path.join(REPO_ROOT, "node_modules"),
     path.join(root, "node_modules"),
     "dir",
+  );
+  // The compiler wrapper resolves the compiler inside node_modules, which every
+  // export shares with the checkout, so it comes from the checkout too: an
+  // older revision's wrapper can name a compiler path that is no longer
+  // installed.
+  copyFileSync(
+    path.join(REPO_ROOT, COMPILER_WRAPPER),
+    path.join(root, COMPILER_WRAPPER),
   );
   return { root, revision };
 };
@@ -484,6 +495,21 @@ describe("generated imports", () => {
       },
       generators: [derived, committed],
     });
+
+  test.each([
+    "import(`./generated/missing`);",
+    "require(`./generated/missing`);",
+    'require("./generated/missing", 2);',
+    'type Missing = import("./generated/missing");',
+  ])("generated imports retain module references in %s", (source) => {
+    expect(scan({ source })).toEqual([
+      {
+        importer,
+        specifier: "./generated/missing",
+        missing: "packages/probe/src/generated/missing.ts",
+      },
+    ]);
+  });
 
   test("a tracked generated module is buildable", () => {
     expect(

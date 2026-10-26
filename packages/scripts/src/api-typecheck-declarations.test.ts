@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
-  existsSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,7 +11,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -19,15 +18,17 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { readApiTypecheckConfig } from "./api-typecheck-config";
 import {
   apiDeclarationCacheInputs,
-  missingDeclarationCacheInputs,
   emitApiTypecheckDeclarations,
+  missingDeclarationCacheInputs,
   regenerateApiDeclarationSurface,
+  typescriptModuleReferences,
   writeApiDeclarationSurface,
 } from "./api-typecheck-declarations";
 import { nativeTypecheckProgramFiles } from "./api-typecheck-inputs";
 import { readTurboTypecheckInputs } from "./turbo-typecheck-inputs";
+import { createProgram } from "./typescript-program";
 
-test("declarations follow public type imports without serializing runtime-only route exports", () => {
+test("declarations follow public type imports without serializing runtime-only route exports", async () => {
   const directory = mkdtempSync(
     path.join(tmpdir(), "api-declaration-surface-"),
   );
@@ -44,7 +45,7 @@ test("declarations follow public type imports without serializing runtime-only r
       path.join(directory, "surface.ts"),
       "import { routes } from './runtime';\nimport type { View } from './types';\nexport const view = (): View => routes;\n",
     );
-    const options: ts.CompilerOptions = {
+    const options = {
       noCheck: true,
       noEmit: false,
       declaration: true,
@@ -53,22 +54,23 @@ test("declarations follow public type imports without serializing runtime-only r
       outDir: path.join(directory, "declarations"),
       types: [],
     };
-    const program = ts.createProgram(
-      [path.join(directory, "surface.ts")],
-      options,
-    );
-    // The fixture actually reaches the serialization defect under full emit.
-    expect(
-      program
-        .emit(undefined, () => undefined)
-        .diagnostics.map(({ code }) => code),
-    ).toContain(4094);
     const project = path.join(directory, "tsconfig.json");
     writeFileSync(
       project,
       JSON.stringify({ compilerOptions: options, files: ["surface.ts"] }),
     );
-    const result = emitApiTypecheckDeclarations(project);
+    const opened = await createProgram({ configPath: project });
+    try {
+      // The fixture actually reaches the serialization defect under full emit.
+      expect(
+        (await opened.program.emitToString()).diagnostics.map(
+          ({ code }) => code,
+        ),
+      ).toContain(4094);
+    } finally {
+      await opened.close();
+    }
+    const result = await emitApiTypecheckDeclarations(project);
     expect(result.diagnostics).toEqual([]);
     expect(result.files.toSorted()).toEqual(
       ["surface.ts", "types.ts"]
@@ -86,7 +88,9 @@ test("declarations follow public type imports without serializing runtime-only r
       path.join(directory, "surface.ts"),
       "export type View = number;\n",
     );
-    expect(emitApiTypecheckDeclarations(project).diagnostics).toEqual([]);
+    expect((await emitApiTypecheckDeclarations(project)).diagnostics).toEqual(
+      [],
+    );
     expect(existsSync(path.join(directory, "declarations/types.d.ts"))).toBe(
       false,
     );
@@ -95,7 +99,9 @@ test("declarations follow public type imports without serializing runtime-only r
       "export { routes } from './runtime';\n",
     );
     expect(
-      emitApiTypecheckDeclarations(project).diagnostics.map(({ code }) => code),
+      (await emitApiTypecheckDeclarations(project)).diagnostics.map(
+        ({ code }) => code,
+      ),
     ).toContain(4094);
     expect(existsSync(path.join(directory, "declarations/runtime.d.ts"))).toBe(
       false,
@@ -114,7 +120,7 @@ test.each([
   "mcp/server-core.ts",
 ])(
   "declarations reject retained runtime boundaries and report the import chain: %s",
-  (module) => {
+  async (module) => {
     const directory = mkdtempSync(
       path.join(tmpdir(), "api-declaration-boundary-"),
     );
@@ -155,9 +161,13 @@ test.each([
           files: [surface],
         }),
       );
-      expect(() => emitApiTypecheckDeclarations(project)).toThrow(
-        `Forbidden API runtime declaration dependency: ${surface} -> ${bridge} -> ${forbidden}`,
-      );
+      expect(
+        await rejectionOf(emitApiTypecheckDeclarations(project)),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          `Forbidden API runtime declaration dependency: ${surface} -> ${bridge} -> ${forbidden}`,
+        ),
+      });
       expect(existsSync(path.join(directory, "declarations"))).toBe(false);
     } finally {
       rmSync(directory, { recursive: true, force: true });
@@ -165,7 +175,7 @@ test.each([
   },
 );
 
-test("declaration cache inputs cover roots and transitive emitted dependencies without directory exclusions", () => {
+test("declaration cache inputs cover roots and transitive emitted dependencies without directory exclusions", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-declaration-inputs-"));
   const api = path.join(root, "apps/api");
   const project = path.join(api, "tsconfig.declarations.json");
@@ -195,7 +205,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
         files: ["src/handlers/visual-sandbox/browser/manifest.ts"],
       }),
     );
-    const inputs = apiDeclarationCacheInputs(project);
+    const inputs = await apiDeclarationCacheInputs(project);
     expect(inputs).toContain("**");
     expect(inputs).not.toContain("!src/handlers/visual-sandbox/browser/**");
     const writeInputs = (values: string[]) =>
@@ -208,7 +218,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
         }),
       );
     writeInputs(inputs);
-    const result = emitApiTypecheckDeclarations(project);
+    const result = await emitApiTypecheckDeclarations(project);
     expect(result.diagnostics).toEqual([]);
     expect(result.files.toSorted()).toEqual([manifest, leaf].toSorted());
     expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
@@ -217,9 +227,13 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
       expect(missingDeclarationCacheInputs(result.files, project)).toEqual([
         removed,
       ]);
-      expect(() => emitApiTypecheckDeclarations(project)).toThrow(
-        "Emitted API sources missing from declaration cache inputs",
-      );
+      expect(
+        await rejectionOf(emitApiTypecheckDeclarations(project)),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          "Emitted API sources missing from declaration cache inputs",
+        ),
+      });
     }
     writeInputs([...inputs, "!src/handlers/visual-sandbox/browser/**"]);
     expect(
@@ -230,9 +244,9 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
   }
 });
 
-test.each(["permissive-route-schema.ts", "server-analytics.ts"])(
+test.each(["server-analytics.ts"])(
   "shared utilities remain serializable without admitting runtime routes: %s",
-  (filename) => {
+  async (filename) => {
     const root = mkdtempSync(path.join(tmpdir(), "api-schema-boundary-"));
     const source = path.join(root, `apps/api/src/lib/${filename}`);
     try {
@@ -253,7 +267,9 @@ test.each(["permissive-route-schema.ts", "server-analytics.ts"])(
           files: [source],
         }),
       );
-      expect(emitApiTypecheckDeclarations(project).diagnostics).toEqual([]);
+      expect((await emitApiTypecheckDeclarations(project)).diagnostics).toEqual(
+        [],
+      );
       expect(
         existsSync(
           path.join(
@@ -268,7 +284,7 @@ test.each(["permissive-route-schema.ts", "server-analytics.ts"])(
   },
 );
 
-test("source-only route assertions do not enter the declaration surface", () => {
+test("source-only route assertions do not enter the declaration surface", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-route-assertion-"));
   const source = path.join(root, "apps/api/src");
   try {
@@ -296,7 +312,7 @@ test("source-only route assertions do not enter the declaration surface", () => 
         files: [path.join(source, "policy.ts")],
       }),
     );
-    const result = emitApiTypecheckDeclarations(project);
+    const result = await emitApiTypecheckDeclarations(project);
     expect(result.diagnostics).toEqual([]);
     expect(result.files).toEqual([path.join(source, "policy.ts")]);
     expect(
@@ -313,7 +329,7 @@ test("source-only route assertions do not enter the declaration surface", () => 
   }
 });
 
-test("workspace symlink imports hash their source files and satisfy emitted-input coverage", () => {
+test("workspace symlink imports hash their source files and satisfy emitted-input coverage", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-workspace-inputs-"));
   const api = path.join(root, "apps/api");
   const shared = path.join(root, "packages/shared");
@@ -350,7 +366,7 @@ test("workspace symlink imports hash their source files and satisfy emitted-inpu
         files: ["src/surface.ts"],
       }),
     );
-    const inputs = apiDeclarationCacheInputs(project);
+    const inputs = await apiDeclarationCacheInputs(project);
     expect(inputs).toContain("$TURBO_ROOT$/packages/shared/**");
     expect(
       inputs.some(
@@ -363,7 +379,7 @@ test("workspace symlink imports hash their source files and satisfy emitted-inpu
         tasks: { "@stll/api#generate:typecheck-declarations": { inputs } },
       }),
     );
-    const result = emitApiTypecheckDeclarations(project);
+    const result = await emitApiTypecheckDeclarations(project);
     expect(result.diagnostics).toEqual([]);
     expect(result.files).toHaveLength(2);
     expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
@@ -418,7 +434,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
         include: [],
       }),
     );
-    const emitted = emitApiTypecheckDeclarations(project);
+    const emitted = await emitApiTypecheckDeclarations(project);
     expect(emitted.diagnostics).toEqual([]);
     expect(writeApiDeclarationSurface(project, emitted.files)).toEqual([
       "src/leaf.ts",
@@ -487,7 +503,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
       `// retain configuration comments\n${JSON.stringify({
         tasks: {
           "@stll/api#generate:typecheck-declarations": {
-            inputs: apiDeclarationCacheInputs(project),
+            inputs: await apiDeclarationCacheInputs(project),
           },
         },
       })}\n`,
@@ -512,9 +528,13 @@ test("declaration aliases resolve transitive API contracts without checking thei
       turbo,
       JSON.stringify({ tasks: { [producer]: { inputs: [] } } }),
     );
-    expect(() => emitApiTypecheckDeclarations(project)).toThrow(
-      "Emitted API sources missing from declaration cache inputs",
-    );
+    expect(
+      await rejectionOf(emitApiTypecheckDeclarations(project)),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "Emitted API sources missing from declaration cache inputs",
+      ),
+    });
     expect(
       (await regenerateApiDeclarationSurface(project, "update-inputs"))
         .diagnostics,
@@ -526,9 +546,11 @@ test("declaration aliases resolve transitive API contracts without checking thei
     const staleTests = JSON.parse(readFileSync(consumer, "utf-8"));
     staleTests.files.push("src/deleted.test.ts");
     writeFileSync(testsProject, JSON.stringify(staleTests));
-    expect(() => emitApiTypecheckDeclarations(project)).toThrow(
-      "Missing declaration source",
-    );
+    expect(
+      await rejectionOf(emitApiTypecheckDeclarations(project)),
+    ).toMatchObject({
+      message: expect.stringContaining("Missing declaration source"),
+    });
     expect(
       (await regenerateApiDeclarationSurface(project)).diagnostics,
     ).toEqual([]);
@@ -647,20 +669,24 @@ test("stable wrappers prepare and restore exact roots and owners without committ
     });
     writeFileSync(turbo, turboSource);
     const before = wrappers.map((file) => readFileSync(file, "utf-8"));
-    expect(() => readApiTypecheckConfig(project)).toThrow(
-      "run bun --filter @stll/api generate:typecheck-declarations",
-    );
+    expect(await rejectionOf(readApiTypecheckConfig(project))).toMatchObject({
+      message: expect.stringContaining(
+        "run bun --filter @stll/api generate:typecheck-declarations",
+      ),
+    });
     expect(
       (await regenerateApiDeclarationSurface(project)).diagnostics,
     ).toEqual([]);
-    expect(readApiTypecheckConfig(project).fileNames).toEqual([
+    expect((await readApiTypecheckConfig(project)).fileNames).toEqual([
       path.join(api, "src/value.ts"),
     ]);
     expect(
-      readApiTypecheckConfig(path.join(api, "tsconfig.tests.json")).fileNames,
+      (await readApiTypecheckConfig(path.join(api, "tsconfig.tests.json")))
+        .fileNames,
     ).toEqual([path.join(api, "src/value.test.ts")]);
     expect(
-      readApiTypecheckConfig(path.join(api, "tsconfig.src.json")).fileNames,
+      (await readApiTypecheckConfig(path.join(api, "tsconfig.src.json")))
+        .fileNames,
     ).toContain(path.join(api, "src/routes.test.ts"));
     write("src/extra.ts", "export type Extra = string;\n");
     write(
@@ -670,7 +696,7 @@ test("stable wrappers prepare and restore exact roots and owners without committ
     expect(
       (await regenerateApiDeclarationSurface(project)).diagnostics,
     ).toEqual([]);
-    expect(readApiTypecheckConfig(project).fileNames).toContain(
+    expect((await readApiTypecheckConfig(project)).fileNames).toContain(
       path.join(api, "src/extra.ts"),
     );
     expect(wrappers.map((file) => readFileSync(file, "utf-8"))).toEqual(before);
@@ -679,11 +705,11 @@ test("stable wrappers prepare and restore exact roots and owners without committ
     const cached = path.join(root, "cached");
     cpSync(output, cached, { recursive: true });
     rmSync(output, { recursive: true });
-    expect(() => readApiTypecheckConfig(project)).toThrow(
-      "Missing prepared API typecheck config",
-    );
+    expect(await rejectionOf(readApiTypecheckConfig(project))).toMatchObject({
+      message: expect.stringContaining("Missing prepared API typecheck config"),
+    });
     cpSync(cached, output, { recursive: true });
-    expect(readApiTypecheckConfig(project).fileNames).toContain(
+    expect((await readApiTypecheckConfig(project)).fileNames).toContain(
       path.join(api, "src/extra.ts"),
     );
     const files = nativeTypecheckProgramFiles(
@@ -694,4 +720,19 @@ test("stable wrappers prepare and restore exact roots and owners without committ
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("reads a JSON module in the program as referencing nothing", () => {
+  expect(
+    typescriptModuleReferences(
+      '{\n  "name": "@stll/cli",\n  "exports": { ".": "./src/index.ts" }\n}\n',
+      "/repo/packages/cli/package.json",
+    ),
+  ).toEqual({ imports: new Set(), dynamic: false });
+  expect(
+    typescriptModuleReferences(
+      'import { a } from "./a";\nexport * from "./b";\nawait import(name);\n',
+      "/repo/src/index.ts",
+    ),
+  ).toEqual({ imports: new Set(["./a", "./b"]), dynamic: true });
 });

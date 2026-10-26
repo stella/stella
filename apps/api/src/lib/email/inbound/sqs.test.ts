@@ -17,15 +17,15 @@ import {
 } from "@/api/lib/email/inbound/sqs";
 import {
   logger,
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import { createFakeSqsQueue } from "@/api/tests/helpers/fake-sqs";
 
 const topicArn = "arn:aws:sns:eu-west-1:123456789012:inbound-mail";
 const queueUrl = "https://sqs.eu-west-1.amazonaws.com/123456789012/inbound";
-const token = generateInboundAddressToken();
+const token = generateInboundAddressToken({ userId: null });
 const subject = "Confidential settlement terms";
 const raw = new TextEncoder().encode(
   `From: Member <member@example.test>\r\nTo: Counsel <counsel@outside.test>\r\nSubject: ${subject}\r\nDate: Sat, 26 Sep 2026 12:00:00 +0000\r\nMessage-ID: <queue@example.test>\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nPrivileged body text.\r\n`,

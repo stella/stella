@@ -3,13 +3,17 @@
 //
 // Rules, checked over every workflow and repository composite action:
 // - retry: a `run:` command that fetches (curl, wget, cargo fetch/install,
-//   bun install/ci/add, npm/pnpm/yarn install, npx/bunx of a remote package,
+//   any other cargo command that resolves the dependency graph, bun
+//   install/ci/add, npm/pnpm/yarn install, npx/bunx of a remote package,
 //   docker pull, playwright install, gh release download, git clone) runs
 //   through scripts/retry.sh, or scripts/gh-retry.sh for the GitHub API. A
 //   curl that carries its own `--retry N --retry-all-errors` budget counts as
 //   retried, and a curl or wget that only names a loopback address is a
-//   readiness probe, not a fetch. Repository shell scripts a step invokes are
-//   scanned too; a script invoked through retry.sh is retried as a whole.
+//   readiness probe, not a fetch. A cargo command that runs `--frozen` or
+//   `--offline`, or under `CARGO_NET_OFFLINE=true` (inline, or in the step,
+//   job or workflow env), downloads nothing: its crates come from a retried
+//   `cargo fetch --locked` before it. Repository shell scripts a step invokes
+//   are scanned too; a script invoked through retry.sh is retried as a whole.
 // - timeout: a workflow step that fetches, in its own `run:`, in a script it
 //   invokes, or through a repository composite action, declares its own
 //   `timeout-minutes`. The job deadline does not count: it bounds the whole
@@ -34,6 +38,12 @@ import { flattenWorkflowSteps } from "./workflow-steps";
 const ALLOWLIST_REL = BASELINE_PATHS.ciNetworkSteps;
 
 export type NetworkRule = "retry" | "timeout";
+
+/** What the environment of a scanned command already guarantees. */
+export type ShellContext = {
+  /** CARGO_NET_OFFLINE=true: cargo resolves from its local cache only. */
+  cargoOffline?: boolean;
+};
 
 export type NetworkFetch = {
   kind: string;
@@ -76,6 +86,35 @@ const FETCH_PATTERNS: readonly { kind: string; pattern: RegExp }[] = [
   },
   { kind: "git clone", pattern: /\bgit\s+(?:-c\s+\S+\s+)*clone(?=\s|$)/u },
 ];
+
+// Cargo downloads every crate missing from its cache whenever a command reads
+// the dependency graph, so building, testing and linting fetch just as
+// `cargo fetch` does. The Tauri CLI drives the same cargo build.
+const CARGO_RESOLVE =
+  /\bcargo\s+(?:\+\S+\s+)?(?:build|b|check|c|test|t|clippy|doc|d|run|r|bench|rustc|rustdoc|tree|metadata|deny|nextest|llvm-cov|update|generate-lockfile|vendor|package|publish|tauri)(?=\s|$)|\btauri\s+(?:build|dev|bundle)(?=\s|$)/u;
+const CARGO_OFFLINE_FLAG = /(?:^|\s)--(?:frozen|offline)(?=[\s=]|$)/u;
+const CARGO_OFFLINE_ASSIGNMENT = /\bCARGO_NET_OFFLINE=["']?true["']?(?=\s)/u;
+const CARGO_NO_DEPS = /(?:^|\s)--no-deps(?=\s|$)/u;
+
+/** Whether a cargo command that reads the dependency graph may download. */
+const cargoResolveFetches = (
+  segment: string,
+  context: ShellContext,
+): boolean => {
+  const match = CARGO_RESOLVE.exec(segment);
+  if (match === null || context.cargoOffline === true) {
+    return false;
+  }
+  // Arguments after `--` belong to the program cargo runs, not to cargo.
+  const own = segment.slice(match.index).split(/\s--(?=\s|$)/u)[0] ?? "";
+  const metadataOnly = /^cargo\s+(?:\+\S+\s+)?metadata\b/u.test(own);
+  return !(
+    CARGO_OFFLINE_FLAG.test(own) ||
+    CARGO_OFFLINE_ASSIGNMENT.test(segment.slice(0, match.index)) ||
+    // Package metadata without the dependency graph reads only manifests.
+    (metadataOnly && CARGO_NO_DEPS.test(own))
+  );
+};
 
 // Shell syntax that may precede a command without changing what it runs.
 const CONTROL_PREFIX =
@@ -289,6 +328,7 @@ export const scanShell = (
   source: string,
   label: string,
   declared: ReadonlySet<string> = new Set(),
+  context: ShellContext = {},
 ): NetworkFetch[] =>
   logicalLines(source).flatMap((line) =>
     segments(line).flatMap((segment): NetworkFetch[] => {
@@ -306,8 +346,19 @@ export const scanShell = (
             },
           ]
         : [];
+      const cargo: NetworkFetch[] = cargoResolveFetches(segment, context)
+        ? [
+            {
+              kind: "cargo dependency resolution",
+              wrapped,
+              command: segment,
+              source: label,
+            },
+          ]
+        : [];
       return [
         ...runner,
+        ...cargo,
         ...FETCH_PATTERNS.flatMap(({ kind, pattern }) => {
           const match = pattern.exec(segment);
           if (match === null) {
@@ -343,7 +394,7 @@ type ScriptReference = { file: string; wrapped: boolean };
 // is cheaper than missing an invocation behind `if !`, `$(...)`, `source` or a
 // pipeline, and an over-report can be allowlisted with a reason.
 const SCRIPT_REFERENCE =
-  /(?:(?:\$\{?GITHUB_WORKSPACE\}?|\$\{\{\s*github\.workspace\s*\}\})\/(?<workspace>[\w./-]+\.sh)|(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})\/(?<action>[\w./-]+\.sh)|(?<![\w./-])\.\/(?<dot>[\w./-]+\.sh)|(?<=^|[^\w./-]|\.[\w-]+\/)(?<rooted>(?:scripts|\.github)\/[\w./-]+\.sh))/gu;
+  /(?:(?:\$\{?GITHUB_WORKSPACE\}?|\$\{\{\s*github\.workspace\s*\}\})\/(?<workspace>[\w./-]+\.sh)|(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})\/(?<action>[\w./-]+\.sh)|(?<![\w./-])\.\/(?<dot>[\w./-]+\.sh)|(?<=^|[^\w./-]|\.[\w-]+\/)(?<rooted>(?:scripts|\.github|apps|packages)\/[\w./-]+\.sh))/gu;
 const RETRY_SCRIPTS = new Set(["scripts/retry.sh", "scripts/gh-retry.sh"]);
 
 const joined = (dir: string, file: string): string =>
@@ -508,14 +559,16 @@ type RunContext = {
   label: string;
   /** Working directory relative to the repository root. */
   cwd?: string;
+  /** Guarantees of the step environment, inherited by invoked scripts. */
+  shell?: ShellContext;
 };
 
 export const runFetches = (
   repo: Repository,
   run: string,
-  { actionDir, label, cwd = ".", declared }: RunContext,
+  { actionDir, label, cwd = ".", declared, shell = {} }: RunContext,
 ): NetworkFetch[] => {
-  const fetches = scanShell(run, label, declared);
+  const fetches = scanShell(run, label, declared, shell);
   const visited = new Set<string>();
   const follow = (
     source: string,
@@ -539,7 +592,7 @@ export const runFetches = (
       if (script === null) {
         continue;
       }
-      for (const fetch of scanShell(script, reference.file, declared)) {
+      for (const fetch of scanShell(script, reference.file, declared, shell)) {
         fetches.push({ ...fetch, wrapped: fetch.wrapped || inherited });
       }
       follow(script, path.posix.dirname(reference.file), inherited, depth + 1);
@@ -573,6 +626,28 @@ const stepName = (step: Record<string, unknown>, index: number): string => {
     }
   }
   return `step ${index + 1}`;
+};
+
+/** The innermost of the given `env:` scopes that sets the variable. */
+const envValue = (
+  scopes: readonly Record<string, unknown>[],
+  name: string,
+): unknown => {
+  for (const scope of scopes) {
+    const env = scope["env"];
+    if (record(env) && env[name] !== undefined) {
+      return env[name];
+    }
+  }
+  return undefined;
+};
+
+/** What the step's env, then its job's, then its workflow's guarantee. */
+const shellContext = (
+  ...scopes: readonly Record<string, unknown>[]
+): ShellContext => {
+  const offline = envValue(scopes, "CARGO_NET_OFFLINE");
+  return { cargoOffline: offline === true || offline === "true" };
 };
 
 const defaultWorkingDirectory = (scope: Record<string, unknown>): unknown => {
@@ -668,6 +743,7 @@ export const networkViolations = (
           // Composite actions have no defaults; only the step can set it.
           cwd: workingDirectory({}, {}, rawStep),
           declared,
+          shell: shellContext(rawStep),
         });
         summary.fetches.push(...fetches);
         const unwrapped = fetches.filter((fetch) => !fetch.wrapped);
@@ -716,6 +792,7 @@ export const networkViolations = (
             actionDir: null,
             label: file,
             cwd: workingDirectory(parsed, rawJob, step),
+            shell: shellContext(step, rawJob, parsed),
           });
           // A download inside an invoked script hangs the step exactly like
           // an inline one, so script fetches count for the timeout rule too.

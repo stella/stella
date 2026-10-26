@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
@@ -10,6 +10,7 @@ import {
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
   caseLawRefineOutputSchema,
+  isIncompleteCaseLawRefineGeneration,
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -53,10 +54,14 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
-  body: t.Object({
-    query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
+  body: v.object({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
     country: tPublicLawCountry,
-    locale: t.Optional(t.String({ maxLength: 16 })),
+    locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
   }),
   requiresUsage: { actionType: "chat", modelTask: "search-expand" },
 } satisfies HandlerConfig;
@@ -146,6 +151,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             task: "search-expand",
@@ -173,6 +179,12 @@ const refineCaseLawSearch = createSafeRootHandler(
         },
       });
       if (generated.isErr()) {
+        if (
+          attempt < CASE_LAW_REFINE_MAX_ATTEMPTS &&
+          isIncompleteCaseLawRefineGeneration(generated.error)
+        ) {
+          continue;
+        }
         return Result.err(
           aiHandlerError(generated.error, {
             status: 502,

@@ -90,9 +90,8 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
 
 // --- Templates ---------------------------------------------------------------
 
-// Key order is oxfmt's package.json order, and the arrays below are the ones it
-// keeps on one line: a scaffold that needs reformatting turns the first
-// `bun run format` into an unrelated diff. `new-package.test.ts` holds the
+// The arrays below are the ones the formatter keeps on one line: a scaffold
+// that needs reformatting turns the first `bun fmt` into an unrelated diff. `new-package.test.ts` holds the
 // templates to what the formatter actually produces.
 
 const packageJsonTemplate = ({
@@ -115,7 +114,6 @@ const packageJsonTemplate = ({
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",
         lint: `cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/${name}`,
         "lint:fix": `cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/${name}`,
-        format: "bun ../../scripts/run-oxfmt.ts .",
       },
       devDependencies: {
         "@stll/typescript-config": "workspace:*",
@@ -127,7 +125,7 @@ const packageJsonTemplate = ({
   )}\n`;
 
 // Written out rather than stringified: `JSON.stringify` breaks every array
-// across lines, and oxfmt keeps these on one.
+// across lines, and the formatter keeps these on one.
 const TSCONFIG_TEMPLATE = `{
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {

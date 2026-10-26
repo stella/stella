@@ -17,6 +17,7 @@ import {
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
 import { outboundPermitContract } from "@/api/lib/safe-outbound-fetch.type-test";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 describe("fetchWithResolvedAddress", () => {
   test("connects to the pre-resolved address while preserving the URL host", async () => {
@@ -29,7 +30,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/probe`),
         });
 
@@ -58,7 +59,7 @@ describe("fetchWithResolvedAddress", () => {
             { address: "127.0.0.1", family: 4 },
           ],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/probe`),
         });
 
@@ -81,7 +82,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 4,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/large`),
         });
 
@@ -101,7 +102,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/redirect`),
         });
 
@@ -122,7 +123,7 @@ describe("fetchWithResolvedAddress", () => {
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           redirect: "manual",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/redirect`),
         });
 
@@ -152,7 +153,7 @@ describe("fetchWithResolvedAddress", () => {
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           signal: AbortSignal.timeout(1000),
-          timeoutMs: 50,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           timeoutPolicy: "headers",
           url: new URL(`http://example.test:${port}/slow-body`),
         });
@@ -180,7 +181,7 @@ describe("fetchWithResolvedAddress", () => {
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           signal: controller.signal,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/stalled`),
         });
         setTimeout(() => {
@@ -210,7 +211,7 @@ describe("fetchWithResolvedAddress", () => {
             addresses: [{ address: "127.0.0.1", family: 4 }],
             maxBytes: 1024,
             signal: controller.signal,
-            timeoutMs: 1000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             url: new URL(`http://example.test:${port}/pre-aborted`),
           });
           expect(result.isErr()).toBe(true);
@@ -233,7 +234,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/redirect`),
         } as const;
         const refused = await fetchStreamWithResolvedAddress(options);
@@ -287,7 +288,7 @@ describe("fetchWithResolvedAddress", () => {
                 addresses: [{ address: "127.0.0.1", family: 4 }],
                 maxBytes: 1024,
                 redirect: "manual",
-                timeoutMs: 1000,
+                timeoutMs: HAPPY_PATH_TIMEOUT_MS,
                 url: transportUrl,
               });
             },
@@ -326,7 +327,7 @@ describe("fetchWithResolvedAddress", () => {
               maxBytes: 1024,
               redirect: "manual",
               signal: controller.signal,
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               url: new URL(target),
             }),
         });
@@ -352,7 +353,7 @@ describe("fetchWithResolvedAddress", () => {
           permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/events`),
         });
 
@@ -387,7 +388,7 @@ describe("fetchWithResolvedAddress", () => {
             { address: "127.0.0.1", family: 4 },
           ],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/events`),
         });
 
@@ -683,7 +684,7 @@ describe("validateOutboundFetchTarget", () => {
           await new Promise(() => {
             // Intentionally never resolves: the validation deadline must win.
           }),
-        timeoutMs: 5,
+        timeoutMs: 5, // timeout under test
       },
     );
 
@@ -704,7 +705,7 @@ describe("validateOutboundFetchTarget", () => {
             // The abort must settle validation while DNS is still pending.
           }),
         signal: controller.signal,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       },
     );
     controller.abort();
@@ -805,7 +806,7 @@ describe("outbound request authority", () => {
         addresses: [],
         maxBytes: 1024,
         permit: grantThirdPartyOutboundPermit(),
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         url: new URL("file:///fixture"),
       });
       expect(result.isErr()).toBe(true);

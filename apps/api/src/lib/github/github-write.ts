@@ -30,9 +30,7 @@ export class GithubWriteError extends TaggedError("GithubWriteError")<{
 
 /** A field of a GitHub write body: a safe value, or a list of safe values. */
 type GithubWriteValue =
-  | GithubSafeText
-  | GithubSafeTitle
-  | readonly GithubSafeText[];
+  GithubSafeText | GithubSafeTitle | readonly GithubSafeText[];
 
 /** A GitHub write body; every field is a value the outbound owner produced. */
 export type GithubWriteBody = Readonly<Record<string, GithubWriteValue>>;
@@ -66,20 +64,20 @@ export const serializeGithubWriteBody = (body: GithubWriteBody): string =>
 
 /** Sends one write and answers with GitHub's parsed JSON response. */
 export const githubWrite = async (
-  request: GithubWriteRequest,
+  write: GithubWriteRequest,
 ): Promise<Result<unknown, GithubWriteError>> => {
   const response = await Result.tryPromise({
     try: async () =>
-      await fetchWithTimeout(`${GITHUB_API_BASE}/${request.path}`, {
-        method: request.method,
+      await fetchWithTimeout(`${GITHUB_API_BASE}/${write.path}`, {
+        method: write.method,
         timeout: { type: "idle", ms: GITHUB_REQUEST_TIMEOUT_MS },
         headers: {
           accept: "application/vnd.github+json",
-          authorization: `Bearer ${request.token}`,
+          authorization: `Bearer ${write.token}`,
           "content-type": "application/json",
           "x-github-api-version": GITHUB_API_VERSION,
         },
-        body: serializeGithubWriteBody(request.body),
+        body: serializeGithubWriteBody(write.body),
       }),
     catch: (cause) =>
       new GithubWriteError({ message: "GitHub request failed", cause }),

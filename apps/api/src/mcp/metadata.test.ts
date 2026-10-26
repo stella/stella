@@ -5,15 +5,16 @@ import path from "node:path";
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  getMcpProtectedResourceMetadataUrl,
+  getMcpResourceUrl,
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_LAW_RESOURCE_SCOPES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
-  getMcpProtectedResourceMetadataUrl,
-  getMcpResourceUrl,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
@@ -25,8 +26,8 @@ import {
   getMcpLogoUri,
   getMcpProtectedResourceMetadata,
   getMcpServerIcons,
-  MCP_LOGO_PATH,
   getMcpWwwAuthenticateHeader,
+  MCP_LOGO_PATH,
 } from "@/api/mcp/metadata";
 
 describe("MCP protected resource metadata", () => {
@@ -49,7 +50,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -102,7 +103,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -128,7 +129,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -155,10 +156,10 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(headers.get("Access-Control-Allow-Methods")).toBe("GET, OPTIONS");
     expect(headers.get("Access-Control-Allow-Headers")).toBe(
-      "Authorization, Content-Type, MCP-Protocol-Version",
+      MCP_DISCOVERY_ALLOWED_HEADERS.join(", "),
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
+      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
     );
     expect(headers.get("x-stella-api-contract-version")).toBe(
       String(STELLA_MCP_API_CONTRACT_VERSION),
@@ -166,7 +167,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("x-stella-cli-latest")).toBe(STELLA_CLI_LATEST_VERSION);
     expect(headers.get("Cache-Control")).toBeNull();
   });
 
@@ -183,7 +184,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("x-stella-cli-latest")).toBe(STELLA_CLI_LATEST_VERSION);
   });
 
   test("owns the transport preflight it advertises", () => {

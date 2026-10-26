@@ -1,6 +1,6 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql, getColumns } from "drizzle-orm";
+import { eq, getColumns, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -8,10 +8,10 @@ import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   featureEnrolments,
-  legalListClaims,
   legalListClaimReviewEvents,
-  legalListVerificationRuns,
+  legalListClaims,
   legalListVerificationBlocks,
+  legalListVerificationRuns,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -160,7 +160,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
           FROM pg_class WHERE relnamespace = ${schema}::regnamespace
             AND relname IN ('legal_list_verification_runs', 'legal_list_claims', 'legal_list_claim_review_events')
           ORDER BY relname`;
-        expect(posture).toEqual([
+        expect([...posture]).toEqual([
           {
             name: "legal_list_claim_review_events",
             enabled: true,
@@ -277,11 +277,13 @@ describe.skipIf(!enabled)("list verification row security", () => {
           `GRANT SELECT ON fields, stella_authorized_workspaces TO ${ownerRole}`,
         );
         await client.unsafe(`SET ROLE ${ownerRole}`);
-        expect(
-          await client.unsafe<{ rolsuper: boolean; rolbypassrls: boolean }[]>(
+        expect([
+          ...(await client.unsafe<
+            { rolsuper: boolean; rolbypassrls: boolean }[]
+          >(
             "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user",
-          ),
-        ).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+          )),
+        ]).toEqual([{ rolsuper: false, rolbypassrls: false }]);
         expect(await db.select().from(legalListVerificationRuns)).toHaveLength(
           1,
         );
@@ -512,18 +514,24 @@ describe.skipIf(!enabled)("list evidence row security", () => {
           SELECT relname AS name, relforcerowsecurity AS forced
           FROM pg_class WHERE relnamespace = ${schema}::regnamespace AND relkind = 'r'
           ORDER BY relname`;
-        expect(posture).toEqual(tables.map((name) => ({ name, forced: true })));
+        expect([...posture]).toEqual(
+          tables.map((name) => ({ name, forced: true })),
+        );
         for (const table of tables) {
           await client.unsafe(`SET ROLE ${ownerRole}`);
-          expect(
-            await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
-          ).toEqual([{ id: 1 }]);
+          expect([
+            ...(await client.unsafe<{ id: number }[]>(
+              `SELECT id FROM ${table}`,
+            )),
+          ]).toEqual([{ id: 1 }]);
           await client.unsafe(`INSERT INTO ${table} VALUES (2)`);
           await client.unsafe("RESET ROLE");
           await client.unsafe("SET ROLE stella");
-          expect(
-            await client.unsafe<{ id: number }[]>(`SELECT id FROM ${table}`),
-          ).toEqual([]);
+          expect([
+            ...(await client.unsafe<{ id: number }[]>(
+              `SELECT id FROM ${table}`,
+            )),
+          ]).toEqual([]);
           // The driver's own `code` is not the SQLSTATE; read it where the
           // shared failure snapshot finds it, and keep the denial exact.
           expect(

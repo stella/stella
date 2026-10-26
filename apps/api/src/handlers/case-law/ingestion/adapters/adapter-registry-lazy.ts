@@ -27,6 +27,7 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.CZ_US]: async () => (await import("./cz-us")).czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: async () =>
     (await import("./cz-regional")).czRegionalAdapter,
+  [ADAPTER_KEYS.CZ_UOHS]: async () => (await import("./cz-uohs")).czUohsAdapter,
   [ADAPTER_KEYS.SK_COURTS]: async () =>
     (await import("./sk-courts")).skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,

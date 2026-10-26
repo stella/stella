@@ -450,6 +450,7 @@ test("a mixed research run sends only planned typed questions to its generative 
     generation: (prompt) => ({
       dataClass: "customer",
       task: "short-text",
+      userId: toSafeId<"user">("user-mixed-research"),
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,

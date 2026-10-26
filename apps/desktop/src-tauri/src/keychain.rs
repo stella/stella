@@ -13,6 +13,7 @@ use std::{
 };
 
 use crate::config::KEYCHAIN_SERVICE_NAME;
+use crate::logging::with_cause_logged;
 use keyring_core::{Entry, Error};
 
 const ACCOUNT_CONNECTION_KEY: &str = "account:connection:v1";
@@ -59,7 +60,7 @@ fn delete_legacy_registry_account() {
 pub async fn delete_account_connection() -> Result<(), String> {
   tokio::task::spawn_blocking(|| delete_account_keys(delete_named_credential))
     .await
-    .map_err(|_| "Account Keychain task failed".to_string())?
+    .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 pub async fn store_account_connection(value: String) -> Result<(), String> {
@@ -67,10 +68,12 @@ pub async fn store_account_connection(value: String) -> Result<(), String> {
     delete_legacy_registry_account();
     named_entry(ACCOUNT_CONNECTION_KEY)?
       .set_password(&value)
-      .map_err(|_| "Could not save desktop account in Keychain".to_string())
+      .map_err(with_cause_logged(
+        "Could not save desktop account in Keychain",
+      ))
   })
   .await
-  .map_err(|_| "Account Keychain task failed".to_string())?
+  .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 pub async fn get_account_connection() -> Result<Option<String>, String> {
@@ -84,8 +87,8 @@ pub async fn get_account_connection() -> Result<Option<String>, String> {
   });
   tokio::time::timeout(std::time::Duration::from_secs(5), read)
     .await
-    .map_err(|_| "Account Keychain read timed out".to_string())?
-    .map_err(|_| "Account Keychain task failed".to_string())?
+    .map_err(with_cause_logged("Account Keychain read timed out"))?
+    .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 #[derive(Debug)]
@@ -125,7 +128,7 @@ fn ensure_default_store() -> Result<(), String> {
 
   let _guard = KEYRING_INIT_LOCK
     .lock()
-    .map_err(|_| "keychain init lock poisoned".to_string())?;
+    .map_err(with_cause_logged("keychain init lock poisoned"))?;
   if KEYRING_INIT.get().is_some() {
     return Ok(());
   }
@@ -269,10 +272,18 @@ pub enum LocalDataKeyLookup {
 pub fn get_local_data_key(key: LocalDataKey<'_>) -> Result<LocalDataKeyLookup, String> {
   let key_entry = named_entry(&key.account())?;
   match key_entry.get_secret() {
-    Ok(secret) => secret
-      .try_into()
-      .map(LocalDataKeyLookup::Found)
-      .map_err(|_| format!("{} key has an invalid length", key.account())),
+    Ok(secret) => {
+      secret
+        .try_into()
+        .map(LocalDataKeyLookup::Found)
+        .map_err(|secret: Vec<u8>| {
+          format!(
+            "{} key has an invalid length: {}",
+            key.account(),
+            secret.len()
+          )
+        })
+    }
     Err(Error::NoEntry) => Ok(LocalDataKeyLookup::Missing),
     Err(e) => Err(format!("keychain read error: {e}")),
   }
@@ -299,19 +310,21 @@ pub async fn get_account_rotation() -> Result<Option<String>, String> {
   });
   tokio::time::timeout(std::time::Duration::from_secs(5), read)
     .await
-    .map_err(|_| "Account Keychain read timed out".to_string())?
-    .map_err(|_| "Account Keychain task failed".to_string())?
+    .map_err(with_cause_logged("Account Keychain read timed out"))?
+    .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 pub async fn set_account_rotation(value: Option<String>) -> Result<(), String> {
   tokio::task::spawn_blocking(move || match value {
     Some(value) => named_entry(ACCOUNT_ROTATION_KEY)?
       .set_password(&value)
-      .map_err(|_| "Could not stage account rotation in Keychain".to_string()),
+      .map_err(with_cause_logged(
+        "Could not stage account rotation in Keychain",
+      )),
     None => delete_named_credential(ACCOUNT_ROTATION_KEY),
   })
   .await
-  .map_err(|_| "Account Keychain task failed".to_string())?
+  .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 pub async fn account_expired() -> Result<bool, String> {
@@ -323,7 +336,7 @@ pub async fn account_expired() -> Result<bool, String> {
     }
   })
   .await
-  .map_err(|_| "Account Keychain task failed".to_string())?
+  .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 fn mark_account_expired_with(
@@ -331,6 +344,10 @@ fn mark_account_expired_with(
   mut delete: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
   write_marker()?;
+  // Remove the device identity before the account record. If this fails, the
+  // durable expiry marker makes the next read retry cleanup, while the saved
+  // account prevents a new link from reusing the old key.
+  delete(ACCOUNT_DEVICE_KEY)?;
   let mut failure = None;
   for key in ACCOUNT_KEYS_TO_DELETE
     .into_iter()
@@ -351,19 +368,21 @@ pub async fn mark_account_expired() -> Result<(), String> {
       || {
         named_entry(ACCOUNT_EXPIRED_KEY)?
           .set_password("expired")
-          .map_err(|_| "Could not save account expiry in Keychain".to_string())
+          .map_err(with_cause_logged(
+            "Could not save account expiry in Keychain",
+          ))
       },
       delete_named_credential,
     )
   })
   .await
-  .map_err(|_| "Account Keychain task failed".to_string())?
+  .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 pub async fn clear_account_expired() -> Result<(), String> {
   tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_EXPIRED_KEY))
     .await
-    .map_err(|_| "Account Keychain task failed".to_string())?
+    .map_err(with_cause_logged("Account Keychain task failed"))?
 }
 
 pub(crate) async fn get_account_device_key() -> Result<Option<String>, String> {
@@ -376,8 +395,8 @@ pub(crate) async fn get_account_device_key() -> Result<Option<String>, String> {
   });
   tokio::time::timeout(std::time::Duration::from_secs(5), read)
     .await
-    .map_err(|_| "Desktop device Keychain read timed out")?
-    .map_err(|_| "Desktop device Keychain task failed")?
+    .map_err(with_cause_logged("Desktop device Keychain read timed out"))?
+    .map_err(with_cause_logged("Desktop device Keychain task failed"))?
 }
 
 pub(crate) async fn store_account_device_key(
@@ -386,16 +405,18 @@ pub(crate) async fn store_account_device_key(
   tokio::task::spawn_blocking(move || {
     named_entry(ACCOUNT_DEVICE_KEY)?
       .set_password(&value)
-      .map_err(|_| "Could not save desktop device key in Keychain".into())
+      .map_err(with_cause_logged(
+        "Could not save desktop device key in Keychain",
+      ))
   })
   .await
-  .map_err(|_| "Desktop device Keychain task failed")?
+  .map_err(with_cause_logged("Desktop device Keychain task failed"))?
 }
 
 pub(crate) async fn delete_account_device_key() -> Result<(), String> {
   tokio::task::spawn_blocking(|| delete_named_credential(ACCOUNT_DEVICE_KEY))
     .await
-    .map_err(|_| "Desktop device Keychain task failed")?
+    .map_err(with_cause_logged("Desktop device Keychain task failed"))?
 }
 
 #[cfg(test)]
@@ -463,7 +484,7 @@ mod tests {
       .is_err()
     );
     assert!(marked.get());
-    assert_eq!(deleted.len(), ACCOUNT_KEYS_TO_DELETE.len() - 1);
+    assert_eq!(deleted, [ACCOUNT_DEVICE_KEY]);
     assert!(
       mark_account_expired_with(
         || Err("marker unavailable".into()),
@@ -471,5 +492,29 @@ mod tests {
       )
       .is_err()
     );
+  }
+
+  #[test]
+  fn expiry_removes_the_device_identity_before_account_credentials() {
+    let mut deleted = Vec::new();
+    mark_account_expired_with(
+      || Ok(()),
+      |key| {
+        deleted.push(key.to_string());
+        Ok(())
+      },
+    )
+    .unwrap();
+
+    let expected_after_device = ACCOUNT_KEYS_TO_DELETE
+      .into_iter()
+      .filter(|key| *key != ACCOUNT_EXPIRED_KEY)
+      .map(String::from)
+      .collect::<Vec<_>>();
+    assert_eq!(
+      deleted.first().map(String::as_str),
+      Some(ACCOUNT_DEVICE_KEY)
+    );
+    assert_eq!(&deleted[1..], expected_after_device.as_slice());
   }
 }

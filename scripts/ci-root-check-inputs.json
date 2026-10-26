@@ -23,6 +23,11 @@
     "Tauri counterpart autofix tests": ["@stll/desktop"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "API test timeout guard": [
+      "apps/api/**/*.test.ts",
+      "scripts/api-test-timeout-guard.ts",
+      "scripts/api-test-timeout-guard.test.ts"
+    ],
     "Test oxlint plugins": [
       ".oxlint-plugins/**",
       "oxlint*.ts",
@@ -118,7 +123,6 @@
     "Release changelog guard": ["**"],
     "Release queue history guard": ["**"],
     "Release CLI coupling guard": ["**"],
-    "Release CLI changeset hold": ["**"],
     "CLI contract changeset guard": ["**"],
     "SQL performance suppression summary": ["**"],
     "Release marketing provenance warning": ["**"],
@@ -247,7 +251,7 @@
       "docs/module-ownership/**",
       "docs/module-ownership.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Outbound transport ownership": [
       "apps/api/**",
@@ -268,11 +272,11 @@
       "docs/module-ownership/**",
       "scripts/**",
       ".oxlint-plugins/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Generated artifact formatting invariants": [
       "@stll/scripts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/**"
     ],
     "Schema introspection invariants": [
@@ -285,7 +289,7 @@
       "packages/ui/src/styles/theme.css",
       "DESIGN.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Suppression waiver ledger": [
       "apps/*/src/**",
@@ -321,14 +325,13 @@
     "Model catalog generation guard": [
       "@stll/ai-catalog",
       "@stll/fetch",
-      "@stll/time",
+      "@stll/stable-stringify",
       "packages/scripts/fixtures/**",
       "scripts/**"
     ],
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
-    "exactMirror route guard": ["@stll/api"],
     "MCP coverage guard": ["@stll/api", "@stll/cli"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],
@@ -610,7 +613,6 @@
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
-    "Check workflow job classifications": ["**"],
     "Compute affected flag": ["**"],
     "Format": ["**"],
     "Test unsignalled skip detection": ["**"],
@@ -621,6 +623,7 @@
     "Deployment feature guard": ["**"],
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
+    "Tracked file sizes": ["**"],
     "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
@@ -645,5 +648,23 @@
       "packages/*/package.json",
       "bun.lock"
     ]
+  },
+  "code-quality-web-rest": {
+    "Restore generated sources": ["**"],
+    "Prepare environment": ["**"],
+    "Install the docs MCP server": ["**"],
+    "Typecheck coverage": ["**"],
+    "Run independent code-quality checks": ["**"],
+    "Code quality (web)": ["**"],
+    "Result consumption (web)": ["**"],
+    "Code quality (rest)": ["**"],
+    "Query cache types": ["**"],
+    "Dead columns": ["**"],
+    "Projection totality": ["**"],
+    "Aggregate ownership": ["**"],
+    "Split-button census": ["**"],
+    "Database awaits in loops": ["**"],
+    "API timeout mutation guard": ["**"],
+    "Result consumption (rest)": ["**"]
   }
 }

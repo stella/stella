@@ -7,7 +7,9 @@ import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
+import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { detached } from "@/lib/detached";
 
 import {
@@ -27,6 +29,7 @@ type UseDocxCheckpointAutosaveOptions = {
   markDirty: () => void;
   saveCheckpoint: EditSession["saveCheckpoint"];
   setAutosaveStatus: (status: AutosaveStatus) => void;
+  timingSurface: DocumentTimingSurface;
 };
 
 /**
@@ -42,6 +45,7 @@ export const useDocxCheckpointAutosave = ({
   markDirty,
   saveCheckpoint,
   setAutosaveStatus,
+  timingSurface,
 }: UseDocxCheckpointAutosaveOptions) => {
   const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
 
@@ -67,8 +71,19 @@ export const useDocxCheckpointAutosave = ({
       return;
     }
     setAutosaveStatus("syncing");
+    const timer = startKeyActionTimer(getAnalytics(), {
+      action: "document-save",
+      surface: timingSurface,
+    });
     const buffer = await ref.save({ selective: true });
     const outcome = buffer ? await saveCheckpoint(buffer) : "failed";
+    // Only a confirmed checkpoint is a round trip; a failed or released save
+    // ends early and would read as fast.
+    if (outcome === "saved") {
+      timer.finish();
+    } else {
+      timer.cancel();
+    }
     setAutosaveStatus(
       resolveCheckpointAutosaveStatus({
         buffer: buffer ?? null,
@@ -78,7 +93,13 @@ export const useDocxCheckpointAutosave = ({
   });
 
   const reportCheckpointSaveError = useLatestCallback((error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "useDocxCheckpointAutosave:failure",
+      scope: {
+        type: "handler",
+        handlerId: "useDocxCheckpointAutosave:failure",
+      },
+    });
     setAutosaveStatus("pending");
   });
 

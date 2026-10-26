@@ -103,6 +103,7 @@ const entityRow = {
   workspaceId: toSafeId<"workspace">("ws_1"),
 };
 const findFirstMock = mock(async () => entityRow);
+let selectedEntityRow = entityRow;
 type VersionRow = {
   deletedAt: Date | null;
   id: SafeId<"entityVersion">;
@@ -124,7 +125,33 @@ const transactionMock = mock(
 
 const database = asTestRaw<NonNullable<IndexEntityDependencies["database"]>>({
   query: {
-    entities: { findFirst: findFirstMock },
+    entities: {
+      findFirst: async () => {
+        selectedEntityRow = await findFirstMock();
+        return selectedEntityRow;
+      },
+    },
+    extractedContent: {
+      findMany: async () =>
+        selectedEntityRow.extractedContent
+          ? [
+              {
+                ...selectedEntityRow.extractedContent,
+                entityId: selectedEntityRow.id,
+                workspaceId: selectedEntityRow.workspaceId,
+                entity: {
+                  name: selectedEntityRow.name,
+                  workspace: { status: "active" },
+                  currentVersion: {
+                    ...selectedEntityRow.currentVersion,
+                    deletedAt: null,
+                  },
+                  versions: versionRows,
+                },
+              },
+            ]
+          : [],
+    },
     entityVersions: { findMany: versionsFindManyMock },
   },
   select: selectMock,
@@ -149,6 +176,7 @@ beforeEach(() => {
   ]);
   findFirstMock.mockClear();
   findFirstMock.mockResolvedValue(entityRow);
+  selectedEntityRow = entityRow;
   versionRows = currentVersionOnly();
   versionsFindManyMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();

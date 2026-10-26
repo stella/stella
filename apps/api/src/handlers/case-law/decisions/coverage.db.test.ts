@@ -4,15 +4,19 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  caseLawCoverageSlices,
   caseLawDecisions,
-  publishedCaseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
@@ -22,6 +26,10 @@ import {
 } from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
+import {
+  readCaseLawCoverageYearsQuery,
+  summarizeCaseLawCoverageYears,
+} from "@/api/handlers/case-law/decisions/coverage-years";
 import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
@@ -53,9 +61,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const NOW = new Date("2026-09-19T12:00:00.000Z");
 const HOUR_IN_MS = 60 * 60 * 1000;
 
-/** CZE is the admitted country; SVK is ingested and not admitted. */
+/** CZE is the admitted country; AUT is ingested and not admitted. */
 const czSourceId = createSafeId<"caseLawSource">();
-const skSourceId = createSafeId<"caseLawSource">();
+const atSourceId = createSafeId<"caseLawSource">();
 const disabledSourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
 
@@ -124,9 +132,9 @@ beforeAll(
         storedTotalAsOf: new Date(NOW.getTime() - 2 * HOUR_IN_MS),
       }),
       caseLawSourceRow({
-        id: skSourceId,
-        adapterKey: ADAPTER_KEYS.SK_COURTS,
-        name: "sk",
+        id: atSourceId,
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        name: "at",
         enabled: true,
         // Older than the delayed window: this source reads as stalled.
         lastSyncAt: new Date(NOW.getTime() - 30 * 24 * HOUR_IN_MS),
@@ -191,12 +199,12 @@ beforeAll(
         createdAt: new Date(NOW.getTime() - HOUR_IN_MS),
         metadata: LISTING_ONLY,
       }),
-      // One Slovak row, and one withheld Czech row that must reach nothing.
+      // One Austrian row, and one withheld Czech row that must reach nothing.
       decisionRow({
-        caseNumber: "sk one",
-        country: "SVK",
-        court: "Najvyšší súd",
-        sourceId: skSourceId,
+        caseNumber: "at one",
+        country: "AUT",
+        court: "Oberster Gerichtshof",
+        sourceId: atSourceId,
         createdAt: new Date(NOW.getTime() - HOUR_IN_MS),
       }),
       decisionRow({
@@ -344,6 +352,7 @@ const loadCoverage = async (
 ) =>
   await loadCaseLawCoverage({
     excludedSourceIds: [],
+    onPartialFailure: () => undefined,
     now: NOW,
     readSources: async () =>
       await readAsReader(readCaseLawCoverageSourcesQuery),
@@ -351,6 +360,10 @@ const loadCoverage = async (
       await readAsReader(
         async (tx) =>
           await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
+      ),
+    readYearCompleteness: async (sources) =>
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),
       ),
     readFacets: async (country) =>
       Result.ok({
@@ -366,7 +379,183 @@ const loadCoverage = async (
   });
 
 test(
-  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
+  "slice ledgers report complete, short, and unlisted years while unsliced sources are explicit",
+  async () => {
+    const db = drizzle({ client });
+    await db.insert(caseLawCoverageSlices).values([
+      {
+        sourceId: czSourceId,
+        slice: "2023-01-01",
+        reported: 2,
+        collected: 2,
+        checkedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2024-01-01",
+        reported: 5,
+        collected: 3,
+        checkedAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-02",
+        walkError: "publisher_unavailable",
+        checkedAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+      {
+        sourceId: czSourceId,
+        slice: "2025-01-03",
+        walkError: "rate_limited",
+        checkedAt: new Date("2026-01-04T00:00:00.000Z"),
+      },
+    ]);
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      expect(czech?.knownGaps).toEqual({
+        type: "reconciled",
+        summary: { missing: 2, shortSlices: 1, unlistedSlices: 2 },
+        years: [
+          { year: 2023, type: "complete" },
+          {
+            year: 2024,
+            type: "gaps",
+            missing: 2,
+            shortSlices: 1,
+          },
+          {
+            year: 2025,
+            type: "unlisted",
+            missing: 0,
+            shortSlices: 0,
+            unlistedSlices: 2,
+          },
+        ],
+      });
+
+      const unsliced = await readAsReader(
+        async (tx) =>
+          await readCaseLawCoverageYearsQuery(tx, [
+            { id: czSourceId, adapterKey: ADAPTER_KEYS.PL_NSA },
+          ]),
+      );
+      expect(unsliced.get(String(czSourceId))).toEqual({
+        type: "not_reconciled",
+        reason:
+          "The source listing is not partitioned into calendar-date slices.",
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a walk error never reaches the public coverage response",
+  async () => {
+    const db = drizzle({ client });
+    const secret = "k3y-6348-walk";
+    await db.insert(caseLawCoverageSlices).values({
+      sourceId: czSourceId,
+      slice: "2022-03-04",
+      walkError: `AdapterFetchError: GET https://listing.example/rozhodnuti?key=${secret}&strana=2 refused`,
+      checkedAt: new Date("2026-01-05T00:00:00.000Z"),
+    });
+
+    try {
+      const coverage = await loadCoverage();
+      if (Result.isError(coverage)) {
+        throw coverage.error;
+      }
+      const czech = coverage.value.countries
+        .find(({ country }) => country === "CZE")
+        ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+      // The failed walk still counts as an unread listing period.
+      expect(
+        czech?.knownGaps.type === "reconciled"
+          ? czech.knownGaps.years.find(({ year }) => year === 2022)
+          : undefined,
+      ).toEqual({
+        year: 2022,
+        type: "unlisted",
+        missing: 0,
+        shortSlices: 0,
+        unlistedSlices: 1,
+      });
+      const body = JSON.stringify(coverage.value);
+      for (const leaked of [
+        secret,
+        "key=",
+        "listing.example",
+        "AdapterFetchError",
+      ]) {
+        expect(body).not.toContain(leaked);
+      }
+      // The public role holds no grant on the column at all.
+      // Drizzle wraps the driver error, so the refusal is on the cause.
+      expect(
+        await rejectionOf(
+          readAsReader(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT walk_error FROM case_law_coverage_slices LIMIT 1`,
+              ),
+          ),
+        ),
+      ).toMatchObject({
+        cause: { message: expect.stringContaining("permission denied") },
+      });
+    } finally {
+      await db
+        .delete(caseLawCoverageSlices)
+        .where(eq(caseLawCoverageSlices.sourceId, czSourceId));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test("per-year missing counts sum to the source missing count", () => {
+  assertProperty(
+    "per-year missing counts sum to the source missing count",
+    fc.property(
+      fc.array(
+        fc.record({
+          year: fc.integer({ min: 1900, max: 2100 }),
+          missing: fc.nat({ max: 10_000 }),
+          shortSlices: fc.nat({ max: 366 }),
+          unlistedSlices: fc.nat({ max: 366 }),
+        }),
+      ),
+      (rows) => {
+        const result = summarizeCaseLawCoverageYears(rows);
+        let missingFromYears = 0;
+        for (const year of result.years) {
+          if (year.type === "gaps") {
+            missingFromYears += year.missing;
+          }
+          if (year.type === "unlisted") {
+            missingFromYears += year.missing;
+          }
+        }
+        expect(missingFromYears).toBe(result.summary.missing);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+test(
+  "year bounds span every held decision, indexed or not",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -497,21 +686,16 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
+        readCaseLawCoverageSourcesQuery(tx),
       );
-      const unknown = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
-      );
-      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: null,
-        decisionYearTo: null,
-      });
+      // Held, not searchable: the unindexed endpoints still bound the years,
+      // while withdrawn and listing-only decisions never do.
       expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: 2000,
-        decisionYearTo: 2010,
+        decisionYearFrom: 1800,
+        decisionYearTo: 2020,
         pendingTextCount: 0,
       });
-      expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({
+      expect(sources.find(({ id }) => id === atSourceId)).toMatchObject({
         decisionYearFrom: null,
         decisionYearTo: null,
       });
@@ -589,9 +773,9 @@ test(
     const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
     // The withheld source is filtered in SQL, so it never reaches the loader.
     expect(sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual([
+      ADAPTER_KEYS.AT_COURTS,
       ADAPTER_KEYS.CZ_NS,
       ADAPTER_KEYS.CZ_NSS,
-      ADAPTER_KEYS.SK_COURTS,
     ]);
     const czech = sources.find(
       ({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS,
@@ -681,7 +865,7 @@ test(
         // and the registry is deployment state, so the two legitimately
         // disagree. Without a manifest there is no country to file it under.
         for (const source of sources) {
-          if (source.adapterKey === ADAPTER_KEYS.SK_COURTS) {
+          if (source.adapterKey === ADAPTER_KEYS.AT_COURTS) {
             source.adapterKey = "retired-adapter";
           }
         }
@@ -693,11 +877,11 @@ test(
       return;
     }
 
-    // Slovakia had exactly that one source, so the country disappears rather
+    // Austria had exactly that one source, so the country disappears rather
     // than reporting an empty corpus, and nothing of it lands on a neighbour.
     expect(
       coverage.value.countries.map(({ country }) => country),
-    ).not.toContain("SVK");
+    ).not.toContain("AUT");
     expect(coverage.value.totals.stored.decisions).toBe(4);
     for (const entry of coverage.value.countries) {
       expect(entry.sources.map(({ adapterKey }) => adapterKey)).not.toContain(
@@ -730,12 +914,12 @@ test(
     );
     expect(cze).toMatchObject({ decisionYearFrom: 1981, decisionYearTo: 2026 });
 
-    const svk = byCountry.get("SVK");
-    expect(svk?.availability).toBe(
+    const aut = byCountry.get("AUT");
+    expect(aut?.availability).toBe(
       CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
     );
-    expect(svk).toMatchObject({ stored: { decisions: 1 } });
-    expect(svk && "searchable" in svk).toBe(false);
+    expect(aut).toMatchObject({ stored: { decisions: 1 } });
+    expect(aut && "searchable" in aut).toBe(false);
 
     // The two populations are reported apart and never summed, and the total
     // count states the oldest of the counts behind it.
@@ -788,9 +972,9 @@ test(
       notCountedSources: 0,
     });
 
-    const svk = byCountry.get("SVK");
-    expect(svk?.health).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
-    expect(svk?.sources.at(0)?.completeness).toMatchObject({
+    const aut = byCountry.get("AUT");
+    expect(aut?.health).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
+    expect(aut?.sources.at(0)?.completeness).toMatchObject({
       state: "measured",
       reportedBy: "operator",
       reported: 4,

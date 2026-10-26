@@ -3,6 +3,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { withPublisherRequestRateLimit } from "./publisher-policy";
 import {
@@ -112,12 +113,12 @@ describe("completion request boundary", () => {
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         });
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         });
       },
     });
@@ -148,7 +149,7 @@ describe("completion request boundary", () => {
               await fetchPublisher(target, {
                 adapterKey: ADAPTER_KEYS.EU_ECJ,
                 fetchStage: "document",
-                timeoutMs: 1000,
+                timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               }),
           }),
         catch: (error) => error,
@@ -194,7 +195,7 @@ describe("completion request boundary", () => {
               await fetchPublisher(target, {
                 adapterKey: ADAPTER_KEYS.EU_ECJ,
                 fetchStage: "document",
-                timeoutMs: 1000,
+                timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               }),
           }),
         catch: (error) => error,
@@ -230,7 +231,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         );
         const second = await Result.tryPromise(
@@ -238,7 +239,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         );
         expect(first.isErr()).toBe(true);
@@ -272,7 +273,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         }),
       catch: (error) => error,
@@ -310,7 +311,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               retryPolicy: "publisher-backoff",
               isRateLimitRedirect: (response) => response.status === 302,
             }),
@@ -348,7 +349,7 @@ describe("completion request boundary", () => {
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         }),
     });
     expect(response.status).toBe(200);
@@ -404,7 +405,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         }),
       catch: (error) => error,

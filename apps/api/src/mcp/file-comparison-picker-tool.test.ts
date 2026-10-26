@@ -3,18 +3,18 @@ import { describe, expect, test } from "bun:test";
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   handleOpenFileComparisonTool,
   OPEN_FILE_COMPARISON_OUTPUT_CONTRACT,
   OPEN_FILE_COMPARISON_TOOL_DEFINITION,
 } from "@/api/mcp/file-comparison-picker-tool";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const contextFor = (memberRole: string): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+const contextFor = (memberRole: string): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set<string>(),
     accessibleWorkspaceStatusById: new Map(),

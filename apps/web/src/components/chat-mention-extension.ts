@@ -2,6 +2,7 @@ import MentionExtension from "@tiptap/extension-mention";
 import { mergeAttributes, ReactNodeViewRenderer } from "@tiptap/react";
 
 import type {
+  BusinessRegistrySlug,
   ChatCorpusScope,
   EntityKind,
   ResourceRef,
@@ -46,6 +47,18 @@ export type ChatMentionOption =
       category: "corpus";
       kind: "corpus";
       scope: ChatCorpusScope;
+    })
+  | (ChatMentionOptionBase & {
+      /** A business registry the turn is scoped to. */
+      category: "registry";
+      kind: "registry";
+      registry: BusinessRegistrySlug;
+    })
+  | (ChatMentionOptionBase & {
+      /** One of the user's MCP connectors the turn is scoped to. */
+      category: "connector";
+      kind: "connector";
+      connector: string;
     });
 
 export type ChatReferenceCategory = ChatMentionOption["category"];

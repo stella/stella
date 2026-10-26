@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -19,10 +19,10 @@ import { isPathInside } from "@stll/portable-path";
 import {
   QUARANTINE_REGISTRY_ENV,
   QUARANTINE_REPORT_DIR_ENV,
-  quarantineRecordSchema,
-  serializeRegistry,
   type QuarantineEntry,
   type QuarantineRecord,
+  quarantineRecordSchema,
+  serializeRegistry,
 } from "./flaky-test-quarantine";
 
 const PRELOAD = path.join(import.meta.dir, "flaky-test-quarantine-preload.ts");

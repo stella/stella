@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -64,89 +66,142 @@ export type ParserVersionScopes<
   };
 };
 
+/** Evaluate a declared scope against the selectors present on one stored row. */
+export const matchesParserReparseScope = <
+  Registry extends Record<string, ParserReparseFeature>,
+>(
+  scope: ParserReparseScope<Registry>,
+  matchesFeature: (feature: Registry[keyof Registry]) => boolean,
+  registry: Registry,
+): boolean => {
+  switch (scope.type) {
+    case "all":
+      return true;
+    case "features":
+      return scope.features.some((feature) =>
+        matchesFeature(registry[feature]),
+      );
+    default:
+      scope satisfies never;
+      return panic(`Unhandled parser re-parse scope: ${String(scope)}`);
+  }
+};
+
+export const storedFeaturesForParserReparseScope = <
+  Registry extends Record<string, ParserReparseFeature>,
+>(
+  scope: ParserReparseScope<Registry>,
+  registry: Registry,
+): readonly ParserReparseFeature[] => {
+  switch (scope.type) {
+    case "all":
+      return [];
+    case "features":
+      return scope.features.map(
+        (feature) =>
+          registry[feature] ?? panic(`Unregistered parser feature: ${feature}`),
+      );
+    default:
+      scope satisfies never;
+      return panic(`Unhandled parser re-parse scope: ${String(scope)}`);
+  }
+};
+
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 18,
+    version: 19,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 25,
+    version: 28,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "paragraph text, ruling roles, separate-opinion headings and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 11,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
-    version: 13,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_SN]: {
-    version: 6,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIO]: {
-    version: 6,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_TK]: {
-    version: 7,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_NCOURT]: {
     version: 12,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 14,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_SN]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIO]: {
+    version: 8,
+    scope: {
+      type: "all",
+      reason:
+        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
+    },
+  },
+  [ADAPTER_KEYS.PL_TK]: {
+    version: 8,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NSA]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Rejoin sentences split across paragraphs, drop page numbers after the closing rule and join marked superscript article numbers.",
+    },
+  },
+  [ADAPTER_KEYS.PL_NCOURT]: {
+    version: 13,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.AT_COURTS]: {
@@ -227,45 +282,59 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 9,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.EU_ECJ]: {
-    version: 15,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.HU_BHGY]: {
-    version: 18,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIS]: {
-    version: 8,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_UODO]: {
-    version: 12,
-    scope: {
-      type: "all",
-      reason: "scope declarations start with this contract",
-    },
-  },
-  [ADAPTER_KEYS.PL_UOKIK]: {
     version: 10,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.EU_ECJ]: {
+    version: 16,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.HU_BHGY]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIS]: {
+    version: 9,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UODO]: {
+    version: 13,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    version: 11,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    version: 3,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
     },
   },
 } as const satisfies ParserVersionScopes<

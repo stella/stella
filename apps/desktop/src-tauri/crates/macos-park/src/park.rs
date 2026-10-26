@@ -1,7 +1,8 @@
 use objc2::runtime::{AnyClass, AnyObject, Bool, NSObjectProtocol};
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-  NSApplication, NSPanel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+  NSApplication, NSPanel, NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior,
+  NSWindowStyleMask,
 };
 use tauri::{Runtime, WebviewWindow};
 
@@ -179,6 +180,10 @@ fn present_panel(ns_window: &NSWindow) {
     content.setHidden(false);
   }
   ns_window.makeFirstResponder(first_responder.as_deref());
+  // Above the modal-panel level: the panel never activates, so the app it
+  // pastes into stays active, and that app's modal dialogs (sign-in, save)
+  // sit at the modal level, which covers a floating window.
+  ns_window.setLevel(NSStatusWindowLevel);
   ns_window.makeKeyAndOrderFront(None);
 }
 

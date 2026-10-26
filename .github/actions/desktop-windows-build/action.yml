@@ -73,6 +73,9 @@ runs:
       shell: bash
       working-directory: apps/desktop
       env:
+        # The caller fetches the locked crates through scripts/retry.sh
+        # first; the build itself never reaches the registry.
+        CARGO_NET_OFFLINE: "true"
         SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
         # SPA origins the shipped distribution build trusts at runtime.
         # Read at compile time by config.rs via option_env!(); builds

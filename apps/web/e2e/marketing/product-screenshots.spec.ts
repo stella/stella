@@ -8,8 +8,8 @@ import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
 import marketingCaseLaw from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
-import { setFixedBrowserTime } from "../helpers/clock";
 import {
   getMarketingAgentThreadId,
   MARKETING_AGENT_FIRST_QUESTION,
@@ -325,7 +325,7 @@ test("capture landing product screenshots", async ({
         // These decisions have analysis cached server-side. Wait for the
         // automatic fetch so the capture never lands on the loading margin.
         await expect(
-          page.getByRole("group", { name: "Outline" }),
+          page.getByRole("group", { name: "Contents" }),
         ).toBeVisible();
         // Decision routes intentionally seed their inspector tabs without
         // opening the pane. This capture includes the chat, so open it as an

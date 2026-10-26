@@ -25,13 +25,16 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   user_code: v.optional(v.string()),
 });
 
 export const Route = createFileRoute("/agent-claim")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
@@ -66,7 +69,7 @@ function AgentClaimPage() {
   const organizationsView = useQueryView(
     useQuery(organizationListOptions(userId)),
   );
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "AgentClaimPage:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
 
@@ -197,7 +200,7 @@ type ConfirmResult =
   | { status: "invalid" };
 
 // The confirm endpoint is mounted at the API root (not under /v1), so it is
-// absent from the `eden.v1` treaty. Call it directly; the session cookie is
+// outside `api`. Call it directly; the session cookie is
 // sent via `credentials: "include"`.
 const confirmAgentClaim = async (userCode: string): Promise<ConfirmResult> => {
   const response = await fetchWithTimeout(

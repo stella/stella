@@ -18,11 +18,11 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 import {
-  createS3ObjectIfAbsent,
   copyReplayS3Object,
+  createS3ObjectIfAbsent,
   deleteS3ObjectWithSignal,
-  listS3ObjectKeys,
   headS3ObjectWithSignal,
+  listS3ObjectKeys,
   readS3ObjectBoundedIfPresent,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -508,14 +508,11 @@ export const isUnmovableRawObjectError = (error: unknown): boolean =>
  * server-side copy failed. A failed read or check of the source throws.
  */
 export type RawObjectCopyFailure =
-  | RawSourceObjectCopyError
-  | RawSourceWriteWindowClosedError
-  | S3PresignError;
+  RawSourceObjectCopyError | RawSourceWriteWindowClosedError | S3PresignError;
 
 /** Why storing a decision's raw payload and its files did not happen. */
 export type RawSourceWriteFailure =
-  | RawSourceObjectUnhomeableError
-  | RawObjectCopyFailure;
+  RawSourceObjectUnhomeableError | RawObjectCopyFailure;
 
 /** Largest object a copy reads to check its bytes against its digest. */
 const RAW_COPY_VERIFY_MAX_BYTES = 64 * 1024 * 1024;

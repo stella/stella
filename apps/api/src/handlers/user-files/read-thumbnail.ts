@@ -1,15 +1,17 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { createUserFileKey } from "@/api/lib/files/utils";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const readUserFileThumbnail = createSafeRootHandler(
   {
@@ -18,12 +20,12 @@ const readUserFileThumbnail = createSafeRootHandler(
     permissions: { chat: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
-    params: t.Object({ fileId: tSafeId("userFile") }),
+    params: v.object({ fileId: resourceIdSchema("userFile") }),
   },
   async function* ({
     params: { fileId },
     safeDb,
-    session: { activeOrganizationId },
+    session: { activeOrganizationId, id: sourceSessionId },
     user,
     recordAuditEvent,
   }) {
@@ -33,6 +35,8 @@ const readUserFileThumbnail = createSafeRootHandler(
           await tx
             .select({
               thumbnailFileId: userFiles.thumbnailFileId,
+              s3Key: userFiles.s3Key,
+              userId: userFiles.userId,
               workspaceId: chatThreads.workspaceId,
             })
             .from(userFiles)
@@ -58,17 +62,24 @@ const readUserFileThumbnail = createSafeRootHandler(
           return null;
         }
 
-        const thumbnailKey = createUserFileKey({
-          fileId: file.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId: user.id,
+        const thumbnailKey = createUserFileThumbnailKey({
+          sourceKey: file.s3Key,
+          thumbnailFileId: file.thumbnailFileId,
+          organizationId: activeOrganizationId,
+          uploaderUserId: brandPersistedUserId(file.userId),
         });
+        if (thumbnailKey === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
+          userId: user.id,
+          source: callerDownloadSource({ id: sourceSessionId }),
           s3Key: thumbnailKey,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,

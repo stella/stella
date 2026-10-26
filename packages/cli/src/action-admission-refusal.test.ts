@@ -36,6 +36,7 @@ const EXPECTED_EXITS = {
   action_concurrency_busy: EXIT_CODES.server,
   action_not_enabled: EXIT_CODES.featureDisabled,
   action_admission_unavailable: EXIT_CODES.server,
+  action_feature_disabled: EXIT_CODES.featureDisabled,
 } as const satisfies Record<ActionAdmissionCode, number>;
 
 const render = async (
@@ -201,7 +202,6 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
           env: { XDG_CACHE_HOME: `/tmp/stella-refusal-${Bun.randomUUIDv7()}` },
           force: true,
           fetchRaw: async () => Result.err(error),
-          fetchLatestVersion: async () => undefined,
         });
         expect(refresh).toEqual({ status: "admission-refused", refusal });
       }

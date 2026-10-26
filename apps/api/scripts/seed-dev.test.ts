@@ -4,6 +4,7 @@ import {
   createMockDocx,
   createSeedEmail,
   SEED_EMAIL_FILE_NAMES,
+  userFileCleanupKeys,
 } from "./seed-dev";
 import {
   buildExportReviewCitationSeeds,
@@ -85,5 +86,33 @@ describe("email viewer seeds", () => {
       expect(outer.startsWith(inner)).toBe(false);
       expect(inner.startsWith(outer)).toBe(false);
     }
+  });
+});
+
+describe("chat attachment seed cleanup", () => {
+  test("deletes sources and thumbnails for both persisted key forms", () => {
+    const organizationId = "org_1";
+    const userId = "user_1";
+    const deleted = [
+      {
+        organizationId,
+        userId,
+        s3Key: `${organizationId}/organization-source.png`,
+        thumbnailFileId: "organization-thumbnail",
+      },
+      {
+        organizationId,
+        userId,
+        s3Key: `${userId}/uploader-source.png`,
+        thumbnailFileId: "uploader-thumbnail",
+      },
+    ].flatMap(userFileCleanupKeys);
+
+    expect(deleted).toEqual([
+      "org_1/organization-source.png",
+      "org_1/organization-thumbnail.webp",
+      "user_1/uploader-source.png",
+      "user_1/uploader-thumbnail.webp",
+    ]);
   });
 });

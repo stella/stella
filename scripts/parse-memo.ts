@@ -7,7 +7,7 @@
 // The memo keeps only the most recent texts: the scan visits one file at a
 // time, so a small window catches every repeat without holding the whole
 // tree's syntax in memory.
-import ts from "typescript";
+import ts from "typescript6";
 
 type ParseDialect = ts.ScriptKind.TS | ts.ScriptKind.TSX;
 

@@ -2,12 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
-const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";
 const PACKAGE_JSON_GLOB = "{apps,packages}/*/package.json";
 
 const PROPERTY_SCRIPT = "test:property";
@@ -17,27 +16,66 @@ const SELF_PATH = "packages/property-testing/src/convention.test.ts";
 
 type PropertyTestFile = { relativePath: string; source: string };
 
-const collectPropertyTestFiles = async (): Promise<PropertyTestFile[]> => {
-  const glob = new Bun.Glob(TEST_FILE_GLOB);
-  const files: PropertyTestFile[] = [];
-  for await (const relativePath of glob.scan({ cwd: REPO_ROOT })) {
-    if (
-      relativePath.includes("node_modules") ||
-      relativePath.startsWith("packages/property-testing/")
-    ) {
-      continue;
-    }
-    const source = await Bun.file(path.resolve(REPO_ROOT, relativePath)).text();
-    if (
-      (source.includes("fast-check") ||
-        source.includes("@stll/property-testing")) &&
-      inspectPropertyTest({ relativePath, source }).propertyCalls > 0
-    ) {
-      files.push({ relativePath, source });
+// Files read at once while scanning; macOS defaults to 256 open descriptors.
+const READ_CONCURRENCY = 64;
+
+// Every test file that mentions fast-check or the shared helpers, read once
+// when the module loads. The guards below filter this list in memory, so no
+// test body walks the repository (three serial whole-repository walks inside
+// test bodies used to outlast Bun's per-test timeout on a loaded runner).
+const scanPropertyCandidates = async (): Promise<PropertyTestFile[]> => {
+  const relativePaths: string[] = [];
+  for await (const relativePath of new Bun.Glob(
+    "{apps,packages,scripts}/**/*.test.{ts,tsx}",
+  ).scan({ cwd: REPO_ROOT })) {
+    if (!relativePath.includes("node_modules")) {
+      relativePaths.push(relativePath);
     }
   }
-  return files;
+  const candidates: PropertyTestFile[] = [];
+  for (let start = 0; start < relativePaths.length; start += READ_CONCURRENCY) {
+    const batch = await Promise.all(
+      relativePaths
+        .slice(start, start + READ_CONCURRENCY)
+        .map(async (relativePath) => ({
+          relativePath,
+          source: await Bun.file(path.resolve(REPO_ROOT, relativePath)).text(),
+        })),
+    );
+    candidates.push(
+      ...batch.filter(
+        ({ source }) =>
+          source.includes("fast-check") ||
+          source.includes("@stll/property-testing"),
+      ),
+    );
+  }
+  return candidates.toSorted((a, b) =>
+    a.relativePath.localeCompare(b.relativePath),
+  );
 };
+
+const PROPERTY_CANDIDATES = await scanPropertyCandidates();
+
+// One TypeScript parse per file, shared by every guard that inspects it.
+const inspections = new Map<string, ReturnType<typeof inspectPropertyTest>>();
+const inspectOnce = (file: PropertyTestFile) => {
+  const cached = inspections.get(file.relativePath);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const inspection = inspectPropertyTest(file);
+  inspections.set(file.relativePath, inspection);
+  return inspection;
+};
+
+const collectPropertyTestFiles = (): PropertyTestFile[] =>
+  PROPERTY_CANDIDATES.filter(
+    (file) =>
+      !file.relativePath.startsWith("scripts/") &&
+      !file.relativePath.startsWith("packages/property-testing/") &&
+      inspectOnce(file).propertyCalls > 0,
+  );
 
 const inspectPropertyTest = ({ relativePath, source }: PropertyTestFile) => {
   const parsed = ts.createSourceFile(
@@ -223,9 +261,7 @@ const SPAWN_MODULES: Record<string, ReadonlySet<string> | "all"> = {
 const PROPERTY_BUILDERS = new Set(["asyncProperty", "property"]);
 
 type FunctionNode =
-  | ts.ArrowFunction
-  | ts.FunctionDeclaration
-  | ts.FunctionExpression;
+  ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
 
 // Reports property predicates that spawn a process, directly or through a
 // function declared in the same file.
@@ -379,40 +415,24 @@ const inspectPropertySpawns = ({ relativePath, source }: PropertyTestFile) => {
   return violations;
 };
 
-const collectSpawningProperties = async (): Promise<string[]> => {
-  const violations: string[] = [];
-  for await (const relativePath of new Bun.Glob("scripts/**/*.test.ts").scan({
-    cwd: REPO_ROOT,
-  })) {
-    if (relativePath.includes("node_modules")) {
-      continue;
-    }
-    const source = await Bun.file(path.resolve(REPO_ROOT, relativePath)).text();
-    if (source.includes("fast-check")) {
-      violations.push(...inspectPropertySpawns({ relativePath, source }));
-    }
-  }
-  return violations.toSorted();
-};
+const collectSpawningProperties = (): string[] =>
+  PROPERTY_CANDIDATES.filter(
+    ({ relativePath, source }) =>
+      relativePath.startsWith("scripts/") &&
+      relativePath.endsWith(".test.ts") &&
+      source.includes("fast-check"),
+  )
+    .flatMap((file) => inspectPropertySpawns(file))
+    .toSorted();
 
-const collectViolations = async (): Promise<string[]> => {
-  const violations: string[] = [];
-  // Root tooling tests also exercise properties, outside workspace runners.
-  for await (const relativePath of new Bun.Glob(
-    "{apps,packages,scripts}/**/*.test.{ts,tsx}",
-  ).scan({ cwd: REPO_ROOT })) {
-    if (relativePath.includes("node_modules") || relativePath === SELF_PATH) {
-      continue;
-    }
-    const source = await Bun.file(path.resolve(REPO_ROOT, relativePath)).text();
-    if (source.includes("fast-check")) {
-      violations.push(
-        ...inspectPropertyTest({ relativePath, source }).violations,
-      );
-    }
-  }
-  return violations.toSorted();
-};
+// Root tooling tests also exercise properties, outside workspace runners.
+const collectViolations = (): string[] =>
+  PROPERTY_CANDIDATES.filter(
+    ({ relativePath, source }) =>
+      relativePath !== SELF_PATH && source.includes("fast-check"),
+  )
+    .flatMap((file) => inspectOnce(file).violations)
+    .toSorted();
 
 // Workspace directory ("apps/web", "packages/boe") of a repo-relative path.
 const workspaceOf = (relativePath: string): string =>
@@ -450,12 +470,12 @@ const collectPropertyScriptCommands = async (): Promise<
 };
 
 describe("property-test convention", () => {
-  test("every property runner call uses configured parameters", async () => {
-    expect(await collectViolations()).toEqual([]);
+  test("every property runner call uses configured parameters", () => {
+    expect(collectViolations()).toEqual([]);
   });
 
-  test("no root tooling property predicate spawns a process", async () => {
-    expect(await collectSpawningProperties()).toEqual([]);
+  test("no root tooling property predicate spawns a process", () => {
+    expect(collectSpawningProperties()).toEqual([]);
   });
 
   test("finds spawns in predicates directly and through local helpers", () => {
@@ -567,22 +587,7 @@ describe("property-test convention", () => {
 
   test("every workspace property selector includes both assertion APIs", async () => {
     const fixtureRoot = mkdtempSync(path.join(tmpdir(), "property-selectors-"));
-    const legacyPath = "src/legacy.test.ts";
-    const sharedPath = "src/shared.test.ts";
-    const expectedPaths = [legacyPath, sharedPath];
     try {
-      mkdirSync(path.join(fixtureRoot, "src"));
-      await Promise.all([
-        Bun.write(path.join(fixtureRoot, legacyPath), "fc.assert(property);"),
-        Bun.write(
-          path.join(fixtureRoot, sharedPath),
-          'assertProperty("shared", property);',
-        ),
-        Bun.write(
-          path.join(fixtureRoot, "src/ordinary.test.ts"),
-          'test("ordinary", () => {});',
-        ),
-      ]);
       const violations: string[] = [];
       for (const [
         workspace,
@@ -603,14 +608,49 @@ describe("property-test convention", () => {
           }
           continue;
         }
-        // Exercise the manifest's selector without starting the test runner.
         const selector = /\$\((grep\s[^)]+)\)/u.exec(command)?.at(1);
-        if (selector === undefined) {
+        // Accept the literal root operands and include flags used by the
+        // manifests; unrelated test roots need not belong to this runner.
+        const roots =
+          selector === undefined
+            ? undefined
+            : /^grep\s+-rlE\s+'[^']+'\s+([a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*(?:\s+[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*)*)(?:\s+--include='[^']+')*$/u
+                .exec(selector)
+                ?.at(1)
+                ?.split(/\s+/u);
+        if (
+          selector === undefined ||
+          roots === undefined ||
+          roots.length === 0
+        ) {
           violations.push(
-            `${workspace}: test:property has no recognized property selector`,
+            `${workspace}: test:property has no recognized literal-root selector`,
           );
           continue;
         }
+        for (const root of roots) {
+          mkdirSync(path.join(fixtureRoot, root), { recursive: true });
+          await Promise.all([
+            Bun.write(
+              path.join(fixtureRoot, root, "legacy.test.ts"),
+              "fc.assert(property);",
+            ),
+            Bun.write(
+              path.join(fixtureRoot, root, "shared.test.ts"),
+              'assertProperty("shared", property);',
+            ),
+            Bun.write(
+              path.join(fixtureRoot, root, "ordinary.test.ts"),
+              'test("ordinary", () => {});',
+            ),
+          ]);
+        }
+        const expectedPaths = [...new Set(roots)]
+          .flatMap((root) => [
+            `${root}/legacy.test.ts`,
+            `${root}/shared.test.ts`,
+          ])
+          .toSorted();
         const selectionProcess = Bun.spawn(["sh", "-c", selector], {
           cwd: fixtureRoot,
           stdout: "pipe",
@@ -647,7 +687,7 @@ describe("property-test convention", () => {
    */
   test("workspaces with fc.assert tests and test:property scripts coincide", async () => {
     const withPropertyTests = new Set(
-      (await collectPropertyTestFiles()).map(({ relativePath }) =>
+      collectPropertyTestFiles().map(({ relativePath }) =>
         workspaceOf(relativePath),
       ),
     );

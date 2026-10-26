@@ -1,3 +1,5 @@
+import { DOCUMENT_PANEL_BOTTOM_INSET } from "@stll/ui/panel-inset";
+
 /** Gap between the selected line and its actions. */
 export const SELECTION_TOOLBAR_OFFSET_PX = 8;
 /** The least the bar keeps between itself and a clipping edge. */
@@ -39,6 +41,14 @@ export const selectionToolbarBounds = (root: HTMLElement): DOMRect | null => {
       top = Math.max(top, rect.top);
       bottom = Math.min(bottom, rect.bottom);
       clippedVertically = true;
+    }
+    // Docked chrome (the floating composer) publishes the strip it covers on
+    // its host; read it inline, because descendants inherit the property.
+    const inset = Number.parseFloat(
+      element.style.getPropertyValue(DOCUMENT_PANEL_BOTTOM_INSET),
+    );
+    if (inset > 0) {
+      bottom = Math.min(bottom, rect.bottom - inset);
     }
   }
   // A reader without its own scroller still starts below the page chrome.

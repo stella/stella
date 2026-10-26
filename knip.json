@@ -11,7 +11,10 @@
       "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
-        "@typescript/native",
+        "tsrs",
+        // Git hooks load packages/scripts/src/syntax-tree.ts, which imports it;
+        // hook-dependencies.test.ts requires the root to declare it.
+        "oxc-parser",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",
@@ -48,7 +51,7 @@
         // Generated entrypoints and shards remain visible after hydration.
         "src/mcp/generated/**/*.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
-        "src/eden-contract.ts",
+        "src/web-contract.ts",
         // Callable receiver boundary for authenticated mail transport hosts.
         "src/lib/email/inbound/runtime.ts",
         "src/lib/files/pdf-worker.ts!",
@@ -71,7 +74,6 @@
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
         "src/tests/case-law/update-adapter-fixtures.ts",
         "src/tests/load/*.ts",
-        "src/tests/exact-mirror-guard.ts",
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "drizzle.config.ts",
@@ -88,6 +90,7 @@
         // Derived and gitignored: the TanStack Router plugin skips gitignored
         // files, but configured entries are globbed without .gitignore.
         "src/routeTree.gen.ts!",
+        "src/route-templates.gen.ts!",
         // The generated route tree is ignored; this route owns billing dialogs
         // loaded by the router and must remain in Knip's usage graph.
         "src/routes/_protected.workspaces/$workspaceId/timesheets.tsx",
@@ -238,10 +241,7 @@
         "src/dev-postgres.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
-      ],
-      // generated-artifact-format.ts runs the oxfmt binary as a process, which
-      // knip cannot see; filtered installs need it declared here.
-      "ignoreDependencies": ["oxfmt"]
+      ]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries
@@ -255,14 +255,6 @@
     },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
-    },
-    "packages/test-kit": {
-      "entry": [
-        "src/index.ts",
-        "src/db-clock.ts",
-        "src/forbid-network.ts",
-        "src/**/*.test.ts"
-      ]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]
@@ -299,7 +291,7 @@
     "packages/infosoud/src/constants.ts": ["duplicates"]
   },
   "exclude": ["exports", "types"],
-  "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
+  "ignoreBinaries": ["docker", "tsc", "bun", "tail", "fmt"],
   "ignoreDependencies": [
     "@stll/typescript-config",
     // Declared ahead of the text-search engine migration so its PRs share one

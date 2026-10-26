@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon, DownloadIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import {
   classifyViewerError,
   viewerRetryDelayMs,
@@ -23,6 +24,7 @@ import { reloadForStaleDeployment } from "@/lib/preload-error-recovery";
  * that keeps failing shows up by name.
  */
 export type ViewerSurface =
+  | "avt-original-pdf"
   | "chat-draft-docx"
   | "document-docx"
   | "document-office"
@@ -78,26 +80,25 @@ type ViewerFailedProps = {
 const ViewerFailed = ({ onDownload, onRetry }: ViewerFailedProps) => {
   const t = useTranslations();
   return (
-    <div
+    <RecoverableErrorStatus
       className="flex h-full min-h-32 flex-col items-center justify-center gap-3 px-6 text-center"
-      role="alert"
-    >
-      <AlertTriangleIcon className="text-foreground-disabled size-8" />
-      <p className="text-muted-foreground text-sm text-balance">
-        {t("fileDetail.displayFailed")}
-      </p>
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <Button onClick={onRetry} size="sm" variant="outline">
-          {t("common.tryAgain")}
-        </Button>
-        {onDownload !== undefined && (
-          <Button onClick={onDownload} size="sm" variant="ghost">
-            <DownloadIcon />
-            {t("common.download")}
+      icon={<AlertTriangleIcon className="text-foreground-disabled size-8" />}
+      message={t("fileDetail.displayFailed")}
+      messageClassName="text-muted-foreground text-sm text-balance"
+      actions={
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button onClick={onRetry} size="sm" variant="outline">
+            {t("common.tryAgain")}
           </Button>
-        )}
-      </div>
-    </div>
+          {onDownload !== undefined && (
+            <Button onClick={onDownload} size="sm" variant="ghost">
+              <DownloadIcon />
+              {t("common.download")}
+            </Button>
+          )}
+        </div>
+      }
+    />
   );
 };
 
@@ -201,6 +202,13 @@ class ViewerErrorBoundary extends Component<
         message: `[${area}] ${recovery.type} after attempt ${String(attempt)}: ${error.message}`,
         cause: error,
       }),
+      {
+        fingerprintKey: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        scope: {
+          type: "handler",
+          handlerId: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        },
+      },
     );
   }
 

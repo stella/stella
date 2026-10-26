@@ -22,11 +22,11 @@ import {
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 import {
+  CORPUS_TRANSFER_MAX_BYTES,
   corpusContentHash,
   corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  CORPUS_TRANSFER_MAX_BYTES,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
@@ -47,6 +47,7 @@ import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombsto
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 /** Nothing erased: the denial list a read consults when the case is not it. */
 const noTombstones = async (): Promise<ReadonlySet<string>> =>
@@ -147,7 +148,7 @@ describe("readCorpusText bounded corpus read", () => {
       await readCorpusText("legal-corpus/never/text.zst", {
         readObject: async () => await neverSettles,
         readTombstones: noTombstones,
-        timeoutMs: 25,
+        timeoutMs: 25, // timeout under test
       });
     } catch (error) {
       captured = error;
@@ -165,7 +166,7 @@ describe("readCorpusText bounded corpus read", () => {
         return await Promise.resolve(zstdCompress("hello corpus"));
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
 
     expect(text).toBe("hello corpus");
@@ -760,7 +761,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(member);
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
 
     expect(text).toBe("packed corpus text");
@@ -777,7 +778,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(zstdCompress("x"));
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     // A member at the bound is served as one frame, so the digest the
     // address carries is that frame's.

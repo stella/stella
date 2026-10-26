@@ -15,8 +15,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
+import type { SQL } from "bun";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
@@ -24,6 +23,7 @@ import { errorOutputLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { isRecord } from "@/api/lib/type-guards";
 import { normalizeBetterAuthOAuthBaseUrl } from "@/api/mcp/resource-policy-contract";
@@ -238,7 +238,7 @@ const run = async (
     );
   }
   const { oauthBaseUrl, sessionSample } = parsed.value;
-  const client = new SQL({
+  const client = createSqlClient({
     connectionTimeout: DATABASE_CONNECTION_TIMEOUT_SECONDS,
     max: 1,
     url: databaseUrl,
@@ -257,7 +257,7 @@ const run = async (
     kid: SIGNING_KEY_ID,
     use: "sig",
   };
-  const database = drizzle({ client });
+  const database = createDatabase({ client });
   const auth = betterAuth({
     logger: errorOutputLogger,
     baseURL: oauthBaseUrl,

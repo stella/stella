@@ -7,8 +7,8 @@ import {
   parsePdfSigningDeadline,
   PDF_SIGNING_POLL_INTERVAL_MS,
   pdfSigningFinalizedQueryKeys,
-  pdfSigningStartErrorCode,
   type PdfSigningSessionSnapshot,
+  pdfSigningStartErrorCode,
   resolvePdfSignTarget,
 } from "@/components/inspector/pdf-signing.logic";
 

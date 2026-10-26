@@ -80,7 +80,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -134,7 +134,13 @@ jobs:
           toolchain: 1.99.0
           targets: aarch64-apple-darwin
 
+      # The locked crates download once, retried as a unit; the smoke then
+      # builds --frozen, so only the probe itself reaches the network.
+      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target aarch64-apple-darwin
+
       - name: Smoke native desktop transport against hosted API
         env:
           STELLA_DESKTOP_SMOKE_API_URL: ${{ steps.target.outputs.base_url }}
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target aarch64-apple-darwin --locked registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target aarch64-apple-darwin --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact

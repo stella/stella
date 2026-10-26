@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
@@ -20,9 +20,13 @@ const POLISH_TIMEOUT_MS = 20_000;
 const MAX_OUTPUT_TOKENS = 4096;
 const MAX_NARRATIVE_LENGTH = 10_000;
 
-const polishNarrativeBodySchema = t.Object({
-  narrative: t.String({ minLength: 1, maxLength: MAX_NARRATIVE_LENGTH }),
-  instruction: t.String({ minLength: 1, maxLength: 2000 }),
+const polishNarrativeBodySchema = v.object({
+  narrative: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(MAX_NARRATIVE_LENGTH),
+  ),
+  instruction: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
 });
 
 const TIME_NARRATIVE_SYSTEM_PROMPT = `You revise a legal-services time-entry narrative.
@@ -122,6 +126,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackTextForTask({
+            userId: user.id,
             dataClass: "customer",
             admission: configuredModelAdmission({ modelAdmission }),
             abortSignal: request.signal,

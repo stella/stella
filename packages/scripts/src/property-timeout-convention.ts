@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "typescript6";
 
 const BUN_TIMEOUT_APIS = new Set([
   "afterAll",

@@ -12,11 +12,11 @@ import {
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
-  CorpusIndexError,
-  type CorpusIndexDeleteSettlementRead,
-  type CorpusIndexSettlementSplit,
   corpusIndexCommittedIngestTimeoutMs,
+  type CorpusIndexDeleteSettlementRead,
+  CorpusIndexError,
   corpusIndexScoredSearchRequest,
+  type CorpusIndexSettlementSplit,
   getCorpusIndexClient,
   parseCorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -25,8 +25,8 @@ import {
   DECISION_TIMESTAMP_FIELD,
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
-  corpusIndexConfigFromManifest,
   CORPUS_INDEX_MANIFESTS,
+  corpusIndexConfigFromManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   NATIVE_SCAN_TRANSPORT,
@@ -41,9 +41,9 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
+  type ActionCostObservation,
   actionRequestObserver,
   runObservedAction,
-  type ActionCostObservation,
 } from "@/api/lib/usage/action-costs/context";
 import {
   testAppliedProjectionsFor,
@@ -1448,8 +1448,7 @@ type PropertySplit = {
   publish_timestamp: number | null;
   create_timestamp: number;
   maturity:
-    | { type: "mature" }
-    | { type: "immature"; maturation_period_millis: number };
+    { type: "mature" } | { type: "immature"; maturation_period_millis: number };
 };
 
 const propertySplitArb: fc.Arbitrary<PropertySplit> = fc.record({
@@ -2023,7 +2022,7 @@ test("a search aborts within the remaining shared-request budget", async () => {
     indexId: "case_law_v8_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
-    timeoutMs: 20,
+    timeoutMs: 20, // timeout under test
   });
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {

@@ -54,6 +54,7 @@ import type {
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -75,9 +76,7 @@ class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
 }> {}
 
 export type DocumentReadDeferral =
-  | PublisherPacingOutcome
-  | "ownership-busy"
-  | "ownership-lost";
+  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
@@ -167,7 +166,13 @@ const recordFailure = (
   // that, and it must not be escalated into the read it was recording a
   // failure for.
   Result.try(() => {
-    captureError(error, { source: CAPTURE_SOURCE, decisionId });
+    captureError(
+      error,
+      handlerErrorContext("decisions.recordFailure", {
+        source: CAPTURE_SOURCE,
+        decisionId,
+      }),
+    );
   }).unwrapOr(undefined);
 
 export const recordDocumentPacingOutcome = (

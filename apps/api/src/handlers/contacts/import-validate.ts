@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { validateContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
 import {
@@ -10,11 +10,12 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
-const importValidateBodySchema = t.Object({
+const importValidateBodySchema = v.object({
   taxIdScheme: taxIdSchemeSchema,
-  rows: t.Array(contactImportCandidateSchema, {
-    maxItems: LIMITS.contactsImportRowsMax,
-  }),
+  rows: v.pipe(
+    v.array(contactImportCandidateSchema),
+    v.maxLength(LIMITS.contactsImportRowsMax),
+  ),
 });
 
 const config = {

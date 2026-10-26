@@ -9,7 +9,9 @@ import {
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
 
+import { buildSendRequestBody } from "@/features/chat/chat-runtime";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { createUuid } from "@/lib/uuid";
 
 import {
@@ -18,6 +20,8 @@ import {
 } from "./browser-approval-mode";
 import {
   executeBrowserExtensionCommand,
+  getBrowserClientCapability,
+  isBrowserExtensionBridgeMounted,
   mountBrowserExtensionBridge,
 } from "./browser-extension-bridge";
 
@@ -356,5 +360,70 @@ describe("approval after the controlled tab changes", () => {
     report("controller-1", 7);
 
     expect(autoApprovesReads()).toBe(true);
+  });
+});
+
+describe("the bridge outlives every chat surface", () => {
+  const sendBody = () => {
+    const threadId = toChatThreadId("thread-new");
+    return buildSendRequestBody({
+      context: {},
+      key: { scope: "global", threadId },
+      messages: [
+        {
+          id: createUuid(),
+          parts: [{ content: "hello", type: "text" }],
+          role: "user",
+        },
+      ],
+      run: { runId: "run-new", threadId },
+    });
+  };
+
+  test("the first send of a fresh chat carries the browser client once the extension answered", () => {
+    connect();
+
+    expect(sendBody().browserClient).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    });
+  });
+
+  test("a send without a mounted bridge omits the browser client and is detectable", () => {
+    expect(isBrowserExtensionBridgeMounted()).toBe(false);
+    expect(sendBody().browserClient).toBeUndefined();
+  });
+
+  test("surfaces coming and going under the frame keep the pairing", () => {
+    connect();
+    const surface = mountBrowserExtensionBridge();
+    surface();
+
+    expect(isBrowserExtensionBridgeMounted()).toBe(true);
+    expect(getBrowserClientCapability()).toBeDefined();
+    expect(sendBody().browserClient).toBeDefined();
+  });
+});
+
+describe("the bridge mount site", () => {
+  test("only the app frame host mounts the bridge", async () => {
+    const root = new URL("../../..", import.meta.url).pathname;
+    const mounters: string[] = [];
+    for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
+      if (
+        file.includes(".test.") ||
+        file.endsWith("browser-extension-bridge.ts")
+      ) {
+        continue;
+      }
+      if (
+        (await Bun.file(`${root}${file}`).text()).includes(
+          "mountBrowserExtensionBridge",
+        )
+      ) {
+        mounters.push(file);
+      }
+    }
+
+    expect(mounters).toEqual(["routes/-app-frame-host.tsx"]);
   });
 });

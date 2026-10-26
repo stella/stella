@@ -72,10 +72,7 @@ type CorpusIndexFieldMapping = {
   // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
   // never name a tokenizer the doc mapping does not ship.
   tokenizer?:
-    | "raw"
-    | "default"
-    | "en_stem"
-    | (typeof CUSTOM_TOKENIZERS)[number]["name"];
+    "raw" | "default" | "en_stem" | (typeof CUSTOM_TOKENIZERS)[number]["name"];
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
   /** Fast-field resolution for a datetime; coarser truncates harder. */

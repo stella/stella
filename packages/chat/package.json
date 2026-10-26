@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.2.2",
+  "version": "0.2.8",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -49,7 +49,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/chat",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/chat",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
@@ -63,7 +62,7 @@
     "linkify-it": "6.1.0",
     "tldts": "7.4.18",
     "valibot": "catalog:",
-    "zod": "^4.5.4"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

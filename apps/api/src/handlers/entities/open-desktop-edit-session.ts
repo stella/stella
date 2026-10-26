@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
+import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -18,7 +18,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   expiredOwnDesktopEditSessionTargetPredicates,
@@ -41,11 +41,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
-const openDesktopEditSessionBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  force: t.Optional(t.Boolean()),
-  propertyId: tSafeId("property"),
+const openDesktopEditSessionBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  force: v.optional(v.boolean()),
+  propertyId: resourceIdSchema("property"),
 });
 
 type OpenDesktopEditSessionResponse = {
@@ -61,10 +64,11 @@ type OpenDesktopEditSessionResponse = {
 };
 
 type OpenDesktopEditSessionHandlerProps = {
-  body: Static<typeof openDesktopEditSessionBodySchema>;
+  body: v.InferOutput<typeof openDesktopEditSessionBodySchema>;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  source: SignedDownloadSource;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
@@ -204,20 +208,24 @@ const hasActiveFolioCollabRoom = async ({
 
 const buildExistingOpenDesktopEditSessionResponse = async ({
   existingSession,
+  userId,
   organizationId,
   propertyId,
   recordAuditEvent,
   sessionToken,
   sessionTokenHash,
+  source,
   tx,
   workspaceId,
 }: {
   existingSession: ExistingOpenDesktopEditSession;
+  userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   propertyId: SafeId<"property">;
   recordAuditEvent: AuditRecorder;
   sessionToken: string;
   sessionTokenHash: string;
+  source: SignedDownloadSource;
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
 }) => {
@@ -271,10 +279,13 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     return {
       baseVersionNumber: baseVersion.versionNumber,
       downloadUrl: await presignDesktopEditDownloadFromFileId({
+        readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+        userId,
         fileId: existingSession.checkpointFileId,
         fileName: existingSession.fileName,
         fileType: existingSession.fileType,
         organizationId,
+        source,
         workspaceId,
       }),
       fileName: existingSession.fileName,
@@ -307,8 +318,11 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   return {
     baseVersionNumber: baseVersion.versionNumber,
     downloadUrl: await presignDesktopEditFileDownload({
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+      userId,
       fileTarget: baseVersionTarget,
       organizationId,
+      source,
       workspaceId,
     }),
     fileName: baseVersionTarget.fileContent.fileName,
@@ -326,10 +340,15 @@ export const openDesktopEditSessionHandler = async function* ({
   organizationId,
   recordAuditEvent,
   safeDb,
+  source,
   userId,
   workspaceId,
 }: OpenDesktopEditSessionHandlerProps) {
-  const sessionToken = createDesktopEditSessionToken();
+  requireSessionCredentialIssuer("desktopEdit", { userId, organizationId });
+  const sessionToken = createDesktopEditSessionToken({
+    userId,
+    organizationId,
+  });
   const sessionTokenHash = hashDesktopEditSessionToken(sessionToken);
 
   // Force-takeover: reassign one open session to the current user by
@@ -435,12 +454,14 @@ export const openDesktopEditSessionHandler = async function* ({
       if (existingSession) {
         return {
           value: await buildExistingOpenDesktopEditSessionResponse({
+            userId,
             existingSession,
             organizationId,
             propertyId,
             recordAuditEvent,
             sessionToken,
             sessionTokenHash,
+            source,
             tx,
             workspaceId,
           }),
@@ -527,8 +548,11 @@ export const openDesktopEditSessionHandler = async function* ({
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
           downloadUrl: await presignDesktopEditFileDownload({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+            userId,
             fileTarget: currentTarget,
             organizationId,
+            source,
             workspaceId,
           }),
           fileName: currentTarget.fileContent.fileName,
@@ -655,6 +679,7 @@ const openDesktopEditSession = createSafeHandler(
       organizationId: session.activeOrganizationId,
       recordAuditEvent,
       safeDb,
+      source: callerDownloadSource(session),
       userId: user.id,
       workspaceId,
     });

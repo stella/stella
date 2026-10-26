@@ -80,9 +80,7 @@ export type DecisionIdentifierKind = "docket" | "ecli" | "reporter" | "neutral";
  * do not claim is text, verbatim.
  */
 export type DecisionQueryIntent =
-  | { type: "empty" }
-  | DecisionIdentifierIntent
-  | { type: "text"; text: string };
+  { type: "empty" } | DecisionIdentifierIntent | { type: "text"; text: string };
 
 const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
 

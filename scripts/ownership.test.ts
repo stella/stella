@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {
@@ -23,9 +23,9 @@ import {
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
+  renderOwnershipDocument,
   ROOT_CONNECTION_DOORS,
   SCHEMA_INTROSPECTION,
-  renderOwnershipDocument,
   validateOwnership,
 } from "./ownership";
 import { loadOwnershipDeclarations } from "./ownership-loader.ts";
@@ -121,13 +121,14 @@ test("independent row additions merge cleanly and pass the production check", ()
       "scripts/ownership-loader.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/schema-introspection.ts",
       "scripts/ownership/status-transition.ts",
       ".oxlint-plugins/module-id.ts",
       ".oxlint-plugins/database-access.ts",
       "apps/api/src/lib/db/status-tables.gen.ts",
       "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
     ]) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       copyFileSync(path.join(repoRoot, file), path.join(root, file));

@@ -14,6 +14,7 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import { parseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
@@ -96,6 +97,16 @@ const readCzNs: EvidenceReader = async (fixture) =>
       }).documentAst,
     };
   });
+
+const readCzUohs: EvidenceReader = async (fixture) => [
+  {
+    id: fixture,
+    ast: await parseCzUohsDocumentPdf(await bytesOf(fixture), {
+      caseNumber: path.basename(fixture),
+      sourceUrl: fixture,
+    }),
+  },
+];
 
 const readCzNss: EvidenceReader = async (fixture) => [
   {
@@ -352,6 +363,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-ns": readCzNs,
   "cz-nss": readCzNss,
   "cz-us": readCzUs,
+  "cz-uohs": readCzUohs,
   "sk-courts": null,
   "sk-us": readSkUs,
   "pl-courts": null,

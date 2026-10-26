@@ -10,8 +10,8 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toPersistedChatMessageContentV3,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";

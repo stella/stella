@@ -1,4 +1,4 @@
-// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+// parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
@@ -34,9 +34,14 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
+import type {
+  Block,
+  DecisionDocumentAst,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
-import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
+import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -45,8 +50,8 @@ import {
   inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
-  visibleHtmlText,
   stripFurniturePrefix,
+  visibleHtmlText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -66,7 +71,7 @@ export type ParseNssDecisionInput = {
 };
 
 type ParseNssDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -85,13 +90,14 @@ export const parseNssDecisionHtml = (
     { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
     input.html,
     blocks,
+    { document: $ },
   );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "nssoud.cz",

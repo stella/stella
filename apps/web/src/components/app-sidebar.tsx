@@ -23,6 +23,7 @@ import {
   useMatch,
   useRouterState,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -36,6 +37,7 @@ import {
   CircleHelpIcon,
   Clock3Icon,
   EllipsisVerticalIcon,
+  FileTextIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   PinIcon,
@@ -60,10 +62,13 @@ import { cn } from "@stll/ui/utils";
 
 import {
   chatActivityByWorkspace,
+  getMatterBillingLinks,
+  MATTER_BILLING_LINK_KINDS,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
-  resolveEntityActivityDestination,
+  type MatterBillingLink,
   resolveAutomaticExpandedMatterId,
+  resolveEntityActivityDestination,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
@@ -200,14 +205,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
-  const showTimesheetLink = timeBillingPreviewEnabled && canReadTimeEntries;
+  const canReadInvoices = usePermissions({ workspace: ["read"] });
+  const matterBillingLinks = getMatterBillingLinks({
+    canReadInvoices,
+    canReadTimeEntries,
+    timeBillingPreviewEnabled,
+  });
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
     includePublicLaw: publicLawPreviewEnabled,
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
-    includeTimesheets: showTimesheetLink,
+    includeTimesheets: timeBillingPreviewEnabled && canReadTimeEntries,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
@@ -653,25 +663,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Tooltip
-            content={
+          <Button
+            className={SIDE_RAIL_ICON_BUTTON_SIZE}
+            disabled={!mounted}
+            onClick={toggleSidebar}
+            size="icon"
+            tooltip={
               isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
             }
-            render={
-              <Button
-                className={SIDE_RAIL_ICON_BUTTON_SIZE}
-                onClick={toggleSidebar}
-                size="icon"
-                variant="muted"
-              />
-            }
-            side="right"
+            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
             <span className="sr-only">
               {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
             </span>
-          </Tooltip>
+          </Button>
         </div>
       </SidebarHeader>
 
@@ -737,17 +743,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       })()}
                     </SidebarMenuItem>
                   </NavContextMenu>
-                  {item.id === "matters" && canCreateMatter ? (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={handleCreateWorkspace}
-                        tooltip={t("common.newMatter")}
-                      >
-                        <PlusIcon />
-                        <span>{t("common.newMatter")}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ) : null}
                 </Fragment>
               );
             })}
@@ -784,7 +779,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       onEntityDrop={handleEntityDropOnMatter}
                       onExpandedChange={() => toggleMatterExpansion(ws.id)}
                       onReorder={reorderPinned}
-                      showTimesheetLink={showTimesheetLink}
+                      billingLinks={matterBillingLinks}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -810,7 +805,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       onDeleted={handleMatterDeleted}
                       onEntityDrop={handleEntityDropOnMatter}
                       onExpandedChange={() => toggleMatterExpansion(ws.id)}
-                      showTimesheetLink={showTimesheetLink}
+                      billingLinks={matterBillingLinks}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -890,8 +885,7 @@ const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
-  | { type: "automatic" }
-  | { type: "selected"; workspaceId: string | null };
+  { type: "automatic" } | { type: "selected"; workspaceId: string | null };
 
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.
@@ -1028,7 +1022,7 @@ type MatterItemProps = {
   isActive: boolean;
   isPinned?: boolean;
   isExpanded: boolean;
-  showTimesheetLink: boolean;
+  billingLinks: MatterBillingLink[];
   onExpandedChange: () => void;
   onTogglePin: (id: string) => void;
   /** Navigate-away (or other cleanup) after the matter is deleted; the
@@ -1105,7 +1099,7 @@ const MatterItem = ({
   workspace: ws,
   isActive,
   isExpanded,
-  showTimesheetLink,
+  billingLinks,
   isPinned: _isPinnedProp,
   onTogglePin,
   onDeleted,
@@ -1201,7 +1195,7 @@ const MatterItem = ({
     })),
     status: activityStatus,
   });
-  const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
+  const hasExpandableContent = !activityIsKnownEmpty || billingLinks.length > 0;
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
@@ -1551,22 +1545,49 @@ const MatterItem = ({
         )}
         {isExpanded ? (
           <div id={`matter-activity-${ws.id}`}>
-            {showTimesheetLink && (
+            {billingLinks.length > 0 && (
               <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                  <MatterActivityRow>
-                    <Link
-                      activeProps={{ "data-active": true }}
-                      params={{ workspaceId: ws.id }}
-                      to="/workspaces/$workspaceId/timesheets"
-                    >
-                      <Clock3Icon className="text-muted-foreground size-3.5 shrink-0" />
-                      <span className="truncate">
-                        {t("billing.timesheets")}
-                      </span>
-                    </Link>
-                  </MatterActivityRow>
-                </SidebarMenuSubItem>
+                {billingLinks.map(({ kind }) => {
+                  switch (kind) {
+                    case MATTER_BILLING_LINK_KINDS.timesheets:
+                      return (
+                        <SidebarMenuSubItem key={kind}>
+                          <MatterActivityRow>
+                            <Link
+                              activeProps={{ "data-active": true }}
+                              params={{ workspaceId: ws.id }}
+                              to="/workspaces/$workspaceId/timesheets"
+                            >
+                              <Clock3Icon className="text-muted-foreground size-3.5 shrink-0" />
+                              <span className="truncate">
+                                {t("billing.timesheets")}
+                              </span>
+                            </Link>
+                          </MatterActivityRow>
+                        </SidebarMenuSubItem>
+                      );
+                    case MATTER_BILLING_LINK_KINDS.invoices:
+                      return (
+                        <SidebarMenuSubItem key={kind}>
+                          <MatterActivityRow>
+                            <Link
+                              activeProps={{ "data-active": true }}
+                              params={{ workspaceId: ws.id }}
+                              to="/workspaces/$workspaceId/invoices"
+                            >
+                              <FileTextIcon className="text-muted-foreground size-3.5 shrink-0" />
+                              <span className="truncate">
+                                {t("common.invoices")}
+                              </span>
+                            </Link>
+                          </MatterActivityRow>
+                        </SidebarMenuSubItem>
+                      );
+                    default:
+                      kind satisfies never;
+                      return panic("Unsupported matter billing link kind");
+                  }
+                })}
               </SidebarMenuSub>
             )}
             <MatterActivityList

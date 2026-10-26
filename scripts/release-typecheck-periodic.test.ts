@@ -1,10 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import {
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
+  PERIODIC_RELEASE_TYPECHECK_EVENTS,
+} from "./ci-plan-scope";
 import { evaluate } from "./github-expression";
 
 const workflow = v.parse(
@@ -36,7 +39,6 @@ const plannerStep =
   workflow.jobs["ci-plan"]?.steps?.find(
     ({ name }) => name === "Check changed file scope",
   ) ?? panic("Missing changed-file planner");
-const script = plannerStep.run ?? panic("Missing planner script");
 const plannerEnv = plannerStep.env ?? panic("Missing planner env");
 const caller = v.parse(
   v.looseObject({
@@ -60,90 +62,39 @@ const caller = v.parse(
   ),
 );
 
-type PlanOptions = {
-  event: string;
-  heavyOnly: boolean;
-  versionChanged?: boolean;
-  candidate?: string;
-  bindings?: Record<string, string>;
-  depth?: string;
-};
 const plan = ({
   event,
   heavyOnly,
   versionChanged = false,
-  candidate = script,
-  bindings = plannerEnv,
-  depth = "full",
-}: PlanOptions) => {
-  const directory = mkdtempSync(path.join(tmpdir(), "periodic-typecheck-"));
-  const output = path.join(directory, "output");
-  try {
-    const env = Object.fromEntries(
-      Object.entries(bindings).map(([name, expression]) => {
-        const value = evaluate(expression, {
-          values: {
-            "github.event_name": event,
-            "github.base_ref": "main",
-            "github.event.pull_request.base.sha": "",
-            "steps.target-base.outputs.base_sha": "",
-            "github.event.pull_request.title": "ordinary change",
-            "steps.depth.outputs.suite_depth": depth,
-            "inputs.heavy_only": heavyOnly,
-            "inputs.pr_depth_only": false,
-          },
-        });
-        if (
-          typeof value !== "string" &&
-          typeof value !== "boolean" &&
-          typeof value !== "number"
-        ) {
-          panic(`Planner env ${name} did not resolve to a scalar`);
-        }
-        return [name, String(value)];
-      }),
-    );
-    const result = Bun.spawnSync(
-      [
-        "bash",
-        "-euc",
-        `git() { if [[ "$*" == *--quiet* ]]; then return "$VERSION_DIFF"; fi; }\n${candidate}`,
-      ],
-      {
-        env: {
-          PATH: process.env["PATH"] ?? "",
-          ...env,
-          VERSION_DIFF: versionChanged ? "1" : "0",
-          RUNNER_TEMP: directory,
-          GITHUB_OUTPUT: output,
-        },
-      },
-    );
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    const outputs = Object.fromEntries(
-      readFileSync(output, "utf-8")
-        .trim()
-        .split("\n")
-        .map((line) => {
-          const separator = line.indexOf("=");
-          return [line.slice(0, separator), line.slice(separator + 1)];
-        }),
-    );
-    return (
-      outputs["release_typecheck_required"] ??
-      panic("Planner omitted release_typecheck_required")
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-};
-const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
+}: {
+  event: string;
+  heavyOnly: boolean;
+  versionChanged?: boolean;
+}) =>
+  computeChangedFileScope(
+    {
+      changedFiles: versionChanged ? ["VERSION"] : [],
+      comparisonBase: "base",
+      scopeUnknown: false,
+      eventName: event,
+      suiteDepth: "full",
+      heavyOnly,
+      prTitle: "",
+      versionChangedInHead: versionChanged,
+    },
+    {
+      ...DEFAULT_DETECTORS,
+      packageChecks: () => true,
+      landingBuild: () => false,
+      landingDeploy: () => false,
+      desktopBrowser: () => false,
+    },
+  ).release_typecheck_required;
+
+const assertPeriodic = () => {
   const required = plan({
     event: "schedule",
     heavyOnly: caller.jobs.suites.with.heavy_only,
-    depth: caller.jobs.suites.with.depth,
-    candidate,
-    bindings,
   });
   expect(
     required,
@@ -158,6 +109,8 @@ const assertPeriodic = (candidate = script, bindings = plannerEnv) => {
         "needs.ci-plan.outputs.release_typecheck_required": required,
         "needs.ci-plan.outputs.trusted": "true",
         "needs.ci-plan.outputs.run_required": "true",
+        // Scheduled main runs keep the queue-only suites.
+        "needs.ci-plan.outputs.heavy_proof": "true",
         "needs.ci-plan.outputs.queue_depth": "full",
       },
     }),
@@ -177,19 +130,12 @@ test("scheduled main-heavy plans and runs release typechecks without a VERSION c
 });
 
 test("restoring VERSION-only planning loses the non-release compiler trigger", () => {
-  const mutant = script.replace('[[ "$EVENT_NAME" == schedule ]] || ', "");
-  expect(mutant).not.toBe(script);
-  expect(() => assertPeriodic(mutant)).toThrow(
-    "non-release scheduled heavy runs must plan the full compiler",
-  );
+  expect(PERIODIC_RELEASE_TYPECHECK_EVENTS).toEqual(["schedule"]);
+  expect(plan({ event: "schedule", heavyOnly: true })).toBe("true");
+  expect(plan({ event: "push", heavyOnly: true })).toBe("false");
 });
 
 test("replacing the caller event binding with workflow_call loses the periodic trigger", () => {
   expect(plannerEnv["EVENT_NAME"]).toMatch(/^\$\{\{ github\.event_name \}\}$/u);
-  expect(() =>
-    assertPeriodic(script, {
-      ...plannerEnv,
-      EVENT_NAME: "'workflow_call'",
-    }),
-  ).toThrow("non-release scheduled heavy runs must plan the full compiler");
+  expect(plan({ event: "workflow_call", heavyOnly: true })).toBe("false");
 });

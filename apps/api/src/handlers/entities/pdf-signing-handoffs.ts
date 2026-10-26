@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   preflightPdfSigning,
@@ -21,6 +21,7 @@ import {
   openPdfSigningSession,
 } from "@/api/lib/files/pdf-signing/sessions";
 import { sanitizeSigningText } from "@/api/lib/files/pdf-signing/signing-text";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 /**
  * A user-supplied PAdES reason/location ends up inside the signature
@@ -30,8 +31,8 @@ import { sanitizeSigningText } from "@/api/lib/files/pdf-signing/signing-text";
  */
 const SIGNING_ANNOTATION_MAX_LENGTH = 256;
 
-const signingAnnotationSchema = t.Optional(
-  t.String({ maxLength: SIGNING_ANNOTATION_MAX_LENGTH }),
+const signingAnnotationSchema = v.optional(
+  v.pipe(v.string(), v.maxLength(SIGNING_ANNOTATION_MAX_LENGTH)),
 );
 
 const sanitizeSigningAnnotation = (value: string | undefined) =>
@@ -66,37 +67,40 @@ const PRECONDITION_MESSAGES = {
   too_large: "This PDF is too large to sign.",
 } as const satisfies Record<PdfSigningTargetRejection, string>;
 
-const stampLabelSchema = t.String({ maxLength: STAMP_LABEL_MAX_LENGTH });
+const stampLabelSchema = v.pipe(
+  v.string(),
+  v.maxLength(STAMP_LABEL_MAX_LENGTH),
+);
 
 /**
  * A visible stamp: a box drawn on the displayed page in fractions of it,
  * and the fixed labels in the signer's language. Omitted for an invisible
  * signature.
  */
-const stampRequestSchema = t.Optional(
-  t.Object({
-    box: t.Object({
-      height: t.Number(),
-      width: t.Number(),
-      x: t.Number(),
-      y: t.Number(),
+const stampRequestSchema = v.optional(
+  v.object({
+    box: v.object({
+      height: v.number(),
+      width: v.number(),
+      x: v.number(),
+      y: v.number(),
     }),
-    direction: t.UnionEnum(["ltr", "rtl"]),
-    labels: t.Object({
+    direction: v.picklist(["ltr", "rtl"]),
+    labels: v.object({
       date: stampLabelSchema,
       location: stampLabelSchema,
       reason: stampLabelSchema,
       signedBy: stampLabelSchema,
     }),
-    pageIndex: t.Integer({ minimum: 0 }),
-    timeZone: t.String({ minLength: 1, maxLength: 64 }),
+    pageIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    timeZone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   }),
 );
 
-const createPdfSigningHandoffBodySchema = t.Object({
-  entityId: tSafeId("entity"),
+const createPdfSigningHandoffBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
   location: signingAnnotationSchema,
-  propertyId: tSafeId("property"),
+  propertyId: resourceIdSchema("property"),
   reason: signingAnnotationSchema,
   stamp: stampRequestSchema,
 });
@@ -136,6 +140,10 @@ const createPdfSigningHandoff = createSafeHandler(
     user,
     workspaceId,
   }) {
+    requireSessionCredentialIssuer("pdfSigning", {
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const preflighted = yield* Result.await(
       preflightPdfSigning({
         entityId,
@@ -150,7 +158,10 @@ const createPdfSigningHandoff = createSafeHandler(
     );
 
     const sessionId = createSafeId<"pdfSigningSession">();
-    const handoffToken = createPdfSigningToken();
+    const handoffToken = createPdfSigningToken({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     const expiresAt = computePdfSigningHandoffExpiresAt();
 
     const created = yield* Result.await(

@@ -136,6 +136,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 
   try {
     return await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
       task: DERIVE_ASK_TASK,
       orgAIConfig,

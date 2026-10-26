@@ -12,11 +12,12 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
-  FACET_COUNT_TYPE,
-  SEARCH_PAGINATION_COMPLETE,
-  SEARCH_PAGE_REACH,
   countedSearchTotal,
+  DECISION_SEARCH_MATCHES,
+  FACET_COUNT_TYPE,
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGE_REACH,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
@@ -51,11 +52,12 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -203,58 +205,60 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
-const buildContext = (tx: unknown): McpRequestContext => {
+const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
-  return buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: ORGANIZATION_ID,
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
-      pinnedIds: [],
-    }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-    testDependencies: {
-      // Billing reads are enrolment-gated; this caller is enrolled so every
-      // projectable read runs.
-      featureAccessSnapshot: enrolledTimeBillingSnapshot({
-        organizationId: ORGANIZATION_ID,
-        userId: "user_1",
+  return authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: ORGANIZATION_ID,
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
+        pinnedIds: [],
       }),
-      readWorkspaceHandler: readWorkspaceHandlerMock,
-      readOverviewHandler: readOverviewHandlerMock,
-      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-      describeStoredTemplate: describeStoredTemplateMock,
-      getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      searchDecisionsHandler: searchDecisionsHandlerMock,
-      readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
-      readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
-      readGatedDecisionCitations: readGatedDecisionCitationsMock,
-      readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
-      searchLegislationHandler: searchLegislationHandlerMock,
-      resolveStatuteExpression: resolveStatuteExpressionMock,
-      resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
-      readPublicLegislationHandler: readPublicLegislationHandlerMock,
-      listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
-      readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
-      readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
-      readVersionBlocks: readVersionBlocksMock,
-      // The corpus gate has its own tests; here a document is reachable.
-      resolveAnnotationTarget: async () =>
-        await Promise.resolve({
-          status: "available" as const,
-          readBlocks: async () => await Promise.resolve([]),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+      testDependencies: {
+        // Billing reads are enrolment-gated; this caller is enrolled so every
+        // projectable read runs.
+        featureAccessSnapshot: enrolledTimeBillingSnapshot({
+          organizationId: ORGANIZATION_ID,
+          userId: "user_1",
         }),
-      searchConsolidatedLegislation: searchConsolidatedLegislationMock,
-      getLawTextBlock: getLawTextBlockMock,
-      executeRegistryLookup: executeRegistryLookupMock,
-    },
-  });
+        readWorkspaceHandler: readWorkspaceHandlerMock,
+        readOverviewHandler: readOverviewHandlerMock,
+        readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+        readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+        describeStoredTemplate: describeStoredTemplateMock,
+        getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
+        searchDecisionsHandler: searchDecisionsHandlerMock,
+        readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
+        readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
+        readGatedDecisionCitations: readGatedDecisionCitationsMock,
+        readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
+        searchLegislationHandler: searchLegislationHandlerMock,
+        resolveStatuteExpression: resolveStatuteExpressionMock,
+        resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
+        readPublicLegislationHandler: readPublicLegislationHandlerMock,
+        listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+        readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+        readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+        readVersionBlocks: readVersionBlocksMock,
+        // The corpus gate has its own tests; here a document is reachable.
+        resolveAnnotationTarget: async () =>
+          await Promise.resolve({
+            status: "available" as const,
+            readBlocks: async () => await Promise.resolve([]),
+          }),
+        searchConsolidatedLegislation: searchConsolidatedLegislationMock,
+        getLawTextBlock: getLawTextBlockMock,
+        executeRegistryLookup: executeRegistryLookupMock,
+      },
+    }),
+  );
 };
 
 /**
@@ -266,7 +270,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
 const contextFor = (
   toolName: ProjectableReadToolName,
   tx: unknown,
-): McpRequestContext =>
+): AuthorizedMcpRequestContext =>
   CHAT_READ_SCRIPT_POLICY[toolName] === "script"
     ? buildContext(tx)
     : {
@@ -476,50 +480,52 @@ const CONTRACT_CORPUS = {
           },
           stampedVersionCount: 0,
         } satisfies Awaited<ReturnType<typeof readWorkspaceHandler>>);
-        readOverviewHandlerMock.mockResolvedValue({
-          entityCount: 1,
-          documentCount: 1,
-          taskCount: 0,
-          recentEntities: [
-            {
-              entityId: toSafeId<"entity">(uid(2)),
-              name: "NDA draft.docx",
-              kind: "document",
-              status: null,
-              priority: null,
-              listItemType: null,
-              dueDate: null,
-              mimeType:
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              // The exact trio that tripped the prod backstop on every
-              // non-empty matter: primary-field plumbing ids, now stripped.
-              fieldId: uid(3),
-              propertyId: uid(4),
-              pdfFileId: uid(5),
-              encrypted: false,
-              createdAt: "2026-01-01T00:00:00.000Z",
-              updatedAt: null,
-              createdBy: "Jana",
-              createdByImage: null,
-              createdByDeletedAt: null,
-              assignedTo: "Petr",
-              assignedToImage: null,
-              assignedToDeletedAt: null,
-            },
-          ],
-          // The web agenda stays out of the matter detail projection.
-          upcomingAgenda: [
-            {
-              entityId: toSafeId<"entity">(uid(43)),
-              name: "File the response",
-              status: null,
-              dueDate: "2026-01-10",
-              assignedTo: "Petr",
-              assignedToImage: null,
-              assignedToDeletedAt: null,
-            },
-          ],
-        } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
+        readOverviewHandlerMock.mockResolvedValue(
+          Result.ok({
+            entityCount: 1,
+            documentCount: 1,
+            taskCount: 0,
+            recentEntities: [
+              {
+                entityId: toSafeId<"entity">(uid(2)),
+                name: "NDA draft.docx",
+                kind: "document",
+                status: null,
+                priority: null,
+                listItemType: null,
+                dueDate: null,
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                // The exact trio that tripped the prod backstop on every
+                // non-empty matter: primary-field plumbing ids, now stripped.
+                fieldId: uid(3),
+                propertyId: uid(4),
+                pdfFileId: uid(5),
+                encrypted: false,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: null,
+                createdBy: "Jana",
+                createdByImage: null,
+                createdByDeletedAt: null,
+                assignedTo: "Petr",
+                assignedToImage: null,
+                assignedToDeletedAt: null,
+              },
+            ],
+            // The web agenda stays out of the matter detail projection.
+            upcomingAgenda: [
+              {
+                entityId: toSafeId<"entity">(uid(43)),
+                name: "File the response",
+                status: null,
+                dueDate: "2026-01-10",
+                assignedTo: "Petr",
+                assignedToImage: null,
+                assignedToDeletedAt: null,
+              },
+            ],
+          } satisfies InferOk<Awaited<ReturnType<typeof readOverviewHandler>>>),
+        );
         readWorkspaceContactsHandlerMock.mockResolvedValue(
           Result.ok({
             contacts: [
@@ -632,6 +638,7 @@ const CONTRACT_CORPUS = {
         entity_id: entityRef(refRegistry, uid(12)),
       }),
       tx: () => ({
+        selectDistinct: () => chainable([{ id: WS }]),
         query: {
           entities: {
             findFirst: async () => ({
@@ -671,17 +678,49 @@ const CONTRACT_CORPUS = {
             findFirst: async () => ({ id: uid(60) }),
           },
           extractedContent: {
-            findFirst: async () => ({
-              charCount: EXTRACTED_TEXT.length,
-              ciphertext: extractedEnvelope.ciphertext,
-              extractedAt: new Date("2026-01-02"),
-              iv: extractedEnvelope.iv,
-              sourceEntityVersionId: uid(60),
-              sourceFieldId: uid(61),
-              sourceFileId: uid(63),
-              sourceSha256Hex: "a".repeat(64),
-              entity: { kind: "document", name: "NDA draft", workspaceId: WS },
-            }),
+            findMany: async () => [
+              {
+                charCount: EXTRACTED_TEXT.length,
+                ciphertext: extractedEnvelope.ciphertext,
+                entityId: uid(12),
+                extractedAt: new Date("2026-01-02"),
+                iv: extractedEnvelope.iv,
+                language: null,
+                ocrRunId: null,
+                sourceEntityVersionId: uid(60),
+                sourceFieldId: uid(61),
+                sourceFileId: uid(63),
+                sourceSha256Hex: "a".repeat(64),
+                workspaceId: WS,
+                entity: {
+                  name: "NDA draft",
+                  workspaceId: WS,
+                  workspace: { status: "active" },
+                  versions: [{ id: uid(60) }],
+                  currentVersion: {
+                    id: uid(60),
+                    createdAt: new Date("2026-01-01"),
+                    deletedAt: null,
+                    fields: [
+                      {
+                        id: uid(61),
+                        content: {
+                          version: 1,
+                          type: "file",
+                          id: uid(63),
+                          fileName: "NDA draft.pdf",
+                          mimeType: "application/pdf",
+                          sizeBytes: 12_345,
+                          encrypted: false,
+                          sha256Hex: "a".repeat(64),
+                          pdfFileId: uid(64),
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
           },
         },
       }),
@@ -1401,6 +1440,7 @@ const CONTRACT_CORPUS = {
                   unitPrice: 100,
                   vatRateBps: 2100,
                   vatTreatment: "domestic_vat",
+                  exemptionReason: null,
                   netAmount: 100,
                   vatAmount: 21,
                   grossAmount: 121,
@@ -1467,8 +1507,8 @@ const CONTRACT_CORPUS = {
     },
   ],
   search_case_law: [
-    {
-      mode: "search",
+    ...DECISION_SEARCH_MATCHES.map((match) => ({
+      mode: `search-${match}`,
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
@@ -1505,6 +1545,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match,
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1517,10 +1558,12 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
-    },
+      expectPayloadContains: [JSON.stringify({ match }).slice(1, -1)],
+    })),
     {
       // Page one of a single query carries the filter rail. A source facet's
       // value is the source's own id, which an agent passes back as
@@ -1581,6 +1624,7 @@ const CONTRACT_CORPUS = {
               language: "cs",
               textWithheldReason: null,
               matchingPassages: 3,
+              match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1593,6 +1637,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          relaxedHitCount: 0,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1612,6 +1657,7 @@ const CONTRACT_CORPUS = {
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
           caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          citationCount: 2,
           citationsFrom: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -2452,6 +2498,7 @@ describe("decision text in chat projection", () => {
       resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
       caseNumber: "22 Cdo 1000/2020",
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationCount: 0,
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,

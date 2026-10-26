@@ -236,7 +236,7 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           await runtime.close();
           await other.close();
           await index.close();
-          indexConnection.release();
+          await indexConnection.release();
           await client.unsafe(`DROP SCHEMA ${schema} CASCADE`);
         }
       });
@@ -340,11 +340,11 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
               "SELECT id FROM legislation_documents WHERE slug IS NOT NULL",
             ),
           ).toHaveLength(0);
-          expect(
-            await client.unsafe<{ cursor: string | null }[]>(
+          expect([
+            ...(await client.unsafe<{ cursor: string | null }[]>(
               "SELECT cursor FROM database_backfill_states WHERE name = 'statute-slugs'",
-            ),
-          ).toEqual([{ cursor: "019dd47d-f507-7c84-b827-000000000002" }]);
+            )),
+          ]).toEqual([{ cursor: "019dd47d-f507-7c84-b827-000000000002" }]);
           expect((await step()).value).toMatchObject({
             written: 2,
             failed: 0,
@@ -369,11 +369,11 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
             written: 1,
             failed: 0,
           });
-          expect(
-            await client.unsafe<{ slug: string | null }[]>(
+          expect([
+            ...(await client.unsafe<{ slug: string | null }[]>(
               "SELECT slug FROM legislation_documents WHERE id = '019dd47d-f507-7c84-b827-000000000001'",
-            ),
-          ).toEqual([{ slug: "app-assigned" }]);
+            )),
+          ]).toEqual([{ slug: "app-assigned" }]);
           expect((await step()).value).toMatchObject({
             written: 0,
             skipped: 2,

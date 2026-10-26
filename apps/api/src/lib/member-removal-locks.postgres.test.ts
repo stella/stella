@@ -25,9 +25,10 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -54,18 +55,28 @@ const waitUntilBlocked = async (db: GatedTestDb, blockedPid: number) => {
   throw new Error("The transaction did not reach its lock wait");
 };
 
-/** Waits until any backend is blocked by `holderPid`. */
+/**
+ * Waits until any backend is blocked by `holderPid`. A holder parked on its
+ * release never waits itself; one that does was signalled before it took its
+ * locks, so the ordering under test was inverted and waiting cannot help.
+ */
 const waitUntilHolding = async (db: GatedTestDb, holderPid: number) => {
   const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
   while (performance.now() < deadline) {
-    const [row] = await db.execute<{ blocking: boolean }>(
+    const [row] = await db.execute<{ blocking: boolean; waiting: boolean }>(
       sql`SELECT EXISTS (
         SELECT 1 FROM pg_stat_activity
         WHERE ${holderPid} = ANY(pg_blocking_pids(pid))
-      ) AS blocking`,
+      ) AS blocking,
+      cardinality(pg_blocking_pids(${holderPid})) > 0 AS waiting`,
     );
     if (row?.blocking === true) {
       return;
+    }
+    if (row?.waiting === true) {
+      throw new Error(
+        "The holder is itself waiting on a lock: signal it only after it holds",
+      );
     }
     await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
   }
@@ -116,6 +127,10 @@ const fixture = async (db: GatedTestDb) => {
     name: "Erasure",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values([
     {
@@ -550,7 +565,7 @@ describeLocks("matter creation against organization removal (postgres)", () => {
           type: "person",
           displayName: "Matter client",
         });
-        const creationPid = Promise.withResolvers<number>();
+        const creationHolding = Promise.withResolvers<number>();
         const releaseCreation = Promise.withResolvers<undefined>();
         const create = async (hold: boolean) =>
           await Result.gen(() =>
@@ -559,7 +574,6 @@ describeLocks("matter creation against organization removal (postgres)", () => {
               safeDb: safeDbFromScoped(
                 async (fn) =>
                   await creationDb.transaction(async (tx) => {
-                    creationPid.resolve(await backendPid(tx));
                     // A request transaction carries its organization and
                     // member; matter creation in the database reads them.
                     await tx.execute(
@@ -568,6 +582,10 @@ describeLocks("matter creation against organization removal (postgres)", () => {
                     );
                     const value = await fn(asTestRaw<Transaction>(tx));
                     if (hold) {
+                      // Signal only once the creation's writes hold their
+                      // locks: a removal started earlier can take the
+                      // membership first and leave creation waiting on it.
+                      creationHolding.resolve(await backendPid(tx));
                       await releaseCreation.promise;
                     }
                     return value;
@@ -599,7 +617,15 @@ describeLocks("matter creation against organization removal (postgres)", () => {
         try {
           if (first === "creation") {
             const creation = create(true);
-            const holder = await creationPid.promise;
+            // A creation that settles without holding fails here at once;
+            // rejecting after the signal resolved is a no-op.
+            const notHolding = () => {
+              creationHolding.reject(
+                new Error("Matter creation settled before it held its locks"),
+              );
+            };
+            void creation.then(notHolding, notHolding);
+            const holder = await creationHolding.promise;
             removal = heldRemoval(removalDb, data);
             await waitUntilHolding(db, holder);
             releaseCreation.resolve(undefined);
@@ -703,6 +729,10 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
     name: "Target",
     slug: targetOrganizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: targetOrganizationId,
+    now: new Date(),
   });
   await db.insert(workspaces).values({
     id: workspaceId,

@@ -46,7 +46,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -783,9 +783,7 @@ const valueIdentifier = (value: ts.Expression): string | null => {
 };
 
 type FunctionLike =
-  | ts.ArrowFunction
-  | ts.FunctionExpression
-  | ts.FunctionDeclaration;
+  ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration;
 
 const isFunctionLike = (node: ts.Node): node is FunctionLike =>
   ts.isArrowFunction(node) ||

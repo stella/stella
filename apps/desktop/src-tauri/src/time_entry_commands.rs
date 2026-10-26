@@ -17,6 +17,18 @@ use crate::{
 };
 
 const REFUSAL: &str = "draft time entry is unavailable";
+
+/// The window learns only that the batch was refused; the cause is logged.
+fn rejected<E: std::fmt::Display>(cause: E) -> SubmitError {
+  crate::logging::log_cause(&cause, "time entry batch was refused");
+  SubmitError::Rejected
+}
+
+/// The batch may have reached the server; the cause is logged.
+fn uncertain<E: std::fmt::Display>(cause: E) -> SubmitError {
+  crate::logging::log_cause(&cause, "time entry batch outcome is uncertain");
+  SubmitError::Uncertain
+}
 // Serialize confirmation through receipt persistence. A concurrent retry must
 // not race the first request's definitive rejection or successful receipt.
 pub(crate) static BATCH_CONFIRMATION: tokio::sync::Mutex<()> =
@@ -70,7 +82,7 @@ fn validate_confirmation(
   batch: &ConfirmedBatch,
   date: &str,
 ) -> Result<(), SubmitError> {
-  batch.validate().map_err(|_| SubmitError::Rejected)?;
+  batch.validate().map_err(rejected)?;
   if batch.entries.iter().any(|entry| entry.date_worked != date) {
     return Err(SubmitError::Rejected);
   }
@@ -116,7 +128,7 @@ async fn linked_account(
 ) -> Result<AccountRequest, String> {
   let linked = account::request_account(state)
     .await
-    .map_err(|_| REFUSAL.to_string())?
+    .map_err(crate::logging::with_cause_logged(REFUSAL))?
     .ok_or_else(|| REFUSAL.to_string())?;
   require_account(caller, gates, &linked)?;
   Ok(linked)
@@ -132,6 +144,7 @@ pub async fn time_entry_search_matters(
   let account = linked_account(&caller, &gates, &accounts).await?;
   let matters = time_entry_submit::search_matters(&account, &query).await?;
   require_account(&caller, &gates, &account)?;
+  drop(account);
   Ok(matters)
 }
 
@@ -144,6 +157,7 @@ pub async fn time_entry_candidates(
   let account = linked_account(&caller, &gates, &accounts).await?;
   let candidates = time_entry_submit::candidates(&account).await?;
   require_account(&caller, &gates, &account)?;
+  drop(account);
   Ok(candidates)
 }
 
@@ -162,10 +176,10 @@ pub async fn time_entry_submit_batch_confirmed(
     items,
   } = request;
   let _confirmation = BATCH_CONFIRMATION.lock().await;
-  let day = activity::parse_date(&date).map_err(|_| SubmitError::Rejected)?;
+  let day = activity::parse_date(&date).map_err(rejected)?;
   let account = linked_account(&caller, &gates, &accounts)
     .await
-    .map_err(|_| SubmitError::Rejected)?;
+    .map_err(rejected)?;
   let (entries, ranges): (Vec<_>, Vec<_>) = items
     .into_iter()
     .map(|item| (item.entry, item.ranges))
@@ -177,50 +191,39 @@ pub async fn time_entry_submit_batch_confirmed(
   validate_confirmation(&batch, &date)?;
   let pending = ActivityPendingBatch {
     idempotency_key: batch.idempotency_key.clone(),
-    entries: serde_json::to_value(&batch.entries).map_err(|_| SubmitError::Rejected)?,
+    entries: serde_json::to_value(&batch.entries).map_err(rejected)?,
     ranges: ranges.clone(),
   };
   {
-    let mut manager = state.lock().map_err(|_| SubmitError::Rejected)?;
-    caller
-      .require_current(&app)
-      .map_err(|_| SubmitError::Rejected)?;
-    manager
-      .require_caller(&caller)
-      .map_err(|_| SubmitError::Rejected)?;
+    let mut manager = state.lock().map_err(rejected)?;
+    caller.require_current(&app).map_err(rejected)?;
+    manager.require_caller(&caller).map_err(rejected)?;
     // Persist the exact confirmed request before any outbound I/O. A changed
     // request cannot replace a batch whose response may have been lost.
     manager.reserve_batch(day, pending)?;
   };
-  let created = match time_entry_submit::submit_batch_with_recovery(&account, &batch)
-    .await
-  {
-    Ok(created) => created,
-    Err(time_entry_submit::SubmitFailure::Cancelled) => {
-      require_account(&caller, &gates, &account).map_err(|_| SubmitError::Uncertain)?;
-      caller
-        .require_current(&app)
-        .map_err(|_| SubmitError::Uncertain)?;
-      let mut manager = state.lock().map_err(|_| SubmitError::Uncertain)?;
-      manager
-        .require_caller(&caller)
-        .map_err(|_| SubmitError::Uncertain)?;
-      manager
-        .cancel_pending_batch(day, &batch.idempotency_key)
-        .map_err(|_| SubmitError::Uncertain)?;
-      drop(manager);
-      best_effort(
-        app.emit(activity::CHANGED_EVENT, ()),
-        "activity change was not announced",
-      );
-      return Err(SubmitError::Rejected);
-    }
-    Err(_) => return Err(SubmitError::Uncertain),
-  };
-  require_account(&caller, &gates, &account).map_err(|_| SubmitError::Uncertain)?;
-  caller
-    .require_current(&app)
-    .map_err(|_| SubmitError::Uncertain)?;
+  let created =
+    match time_entry_submit::submit_batch_with_recovery(&account, &batch).await {
+      Ok(created) => created,
+      Err(time_entry_submit::SubmitFailure::Cancelled) => {
+        require_account(&caller, &gates, &account).map_err(uncertain)?;
+        caller.require_current(&app).map_err(uncertain)?;
+        let mut manager = state.lock().map_err(uncertain)?;
+        manager.require_caller(&caller).map_err(uncertain)?;
+        manager
+          .cancel_pending_batch(day, &batch.idempotency_key)
+          .map_err(uncertain)?;
+        drop(manager);
+        best_effort(
+          app.emit(activity::CHANGED_EVENT, ()),
+          "activity change was not announced",
+        );
+        return Err(SubmitError::Rejected);
+      }
+      Err(_) => return Err(SubmitError::Uncertain),
+    };
+  require_account(&caller, &gates, &account).map_err(uncertain)?;
+  caller.require_current(&app).map_err(uncertain)?;
   let markers = created
     .entries
     .iter()
@@ -234,12 +237,12 @@ pub async fn time_entry_submit_batch_confirmed(
     })
     .collect();
   let marker_saved = {
-    let mut manager = state.lock().map_err(|_| SubmitError::Uncertain)?;
-    manager
-      .require_caller(&caller)
-      .map_err(|_| SubmitError::Uncertain)?;
+    let mut manager = state.lock().map_err(uncertain)?;
+    manager.require_caller(&caller).map_err(uncertain)?;
     manager.finish_batch(day, markers).is_ok()
   };
+  // The account request lease covers the submission and its marker.
+  drop(account);
   best_effort(
     app.emit(activity::CHANGED_EVENT, ()),
     "activity change was not announced",
@@ -263,7 +266,9 @@ pub async fn time_entry_discard_pending_batch_confirmed(
   caller.require_current(&app)?;
   require_local_discard(&caller, &gates)?;
   let date = activity::parse_date(&date)?;
-  let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
+  let mut manager = state
+    .lock()
+    .map_err(crate::logging::with_cause_logged(REFUSAL))?;
   manager.require_caller(&caller)?;
   manager.cancel_pending_batch(date, &idempotency_key)?;
   drop(manager);

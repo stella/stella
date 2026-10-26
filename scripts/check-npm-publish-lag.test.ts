@@ -8,9 +8,9 @@ import {
   newestStableTag,
   parseArgs,
   readPublishablePackages,
-  renderLagTable,
   type RegistryFetcher,
   type RegistryView,
+  renderLagTable,
 } from "./check-npm-publish-lag";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
@@ -205,7 +205,7 @@ describe("readPublishablePackages", () => {
       ["ui", manifestFor("ui", { private: true })],
     ]);
     const packages = readPublishablePackages({
-      only: ["cli", "ui", "time"],
+      only: ["cli", "ui", "chat"],
       readManifest: (directory) => manifests.get(directory),
     });
     expect(packages.map((pkg) => pkg.directory)).toEqual(["cli"]);

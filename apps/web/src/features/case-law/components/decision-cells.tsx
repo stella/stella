@@ -13,11 +13,12 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  type DecisionHeadnotePreview,
   decisionHeadnoteText,
   TEXT_FIELD_TYPE,
-  type DecisionHeadnotePreview,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
+import type { DecisionSearchMatch } from "@stll/api-contract/search";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -62,6 +63,8 @@ const NO_QUERY_TOKENS: readonly string[] = [];
 
 /** One decision as the public list, search and research tables show it. */
 export type Decision = {
+  /** Search match semantics; absent on browse rows. */
+  match?: DecisionSearchMatch;
   id: string;
   caseNumber: string;
   /** What `caseNumber` is: a docket, or a reporter or neutral citation. */
@@ -174,6 +177,11 @@ export const CaseNumberCell = ({
             <HighlightedText columnId="caseNumber" text={caseNumber} />
           </BidiText>
         </DecisionLink>
+        {decision.match === "some_terms" && (
+          <span className="text-muted-foreground text-xs">
+            {t("caseLaw.searchWarnings.partialMatch")}
+          </span>
+        )}
         {multilingual && displayLanguage !== null && (
           <DecisionLanguageMenu
             alternates={languageAlternates}

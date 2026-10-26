@@ -73,8 +73,8 @@ import {
   changeStatutesIndexQuery,
   readStatuteIntent,
   STATUTE_MAX_QUERY_LENGTH,
-  statutesIndexSearchSchema,
   type StatutesIndexSearch,
+  statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
 import {
   useStatuteColumnPreferences,
@@ -83,6 +83,10 @@ import {
 import { useHydrated } from "@/hooks/use-hydrated";
 import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import {
+  searchTiming,
+  useSearchResultsTiming,
+} from "@/lib/analytics/search-timing";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -266,7 +270,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
     select: ({ country: routeCountry }) => routeCountry,
   });
   const search = Route.useSearch({
-    select: ({ asOf, type }) => ({ asOf, type }),
+    select: ({ asOf, q, type }) => ({ asOf, q, type }),
   });
   const navigate = Route.useNavigate();
   const [input, setInput] = useState(query);
@@ -279,6 +283,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
     }
   }
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("legislation", value);
     detached(
       navigate({
         replace: true,
@@ -297,6 +302,11 @@ function PublicStatuteFullText({ query }: { query: string }) {
     }),
     enabled: hydrated,
   });
+  useSearchResultsTiming(
+    "legislation",
+    search.q ?? "",
+    dataQuery.data !== undefined && !dataQuery.isPlaceholderData,
+  );
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     dataQuery;
   const dataView = useQueryView(dataQuery, {
@@ -305,7 +315,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
   const data = dataView.type === "items" ? dataView.items : undefined;
   const facetsQuery = useQuery(statuteFacetsOptions(country.toUpperCase()));
   const facetsView = useQueryView(facetsQuery);
-  useQueryViewError(facetsView);
+  useQueryViewError(facetsView, "PublicStatuteFullText:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const selectType = (documentType: string | undefined) => {
     const pending = writeQuery.isPending() ? input.trim() : query;
@@ -471,6 +481,7 @@ function PublicStatuteList({
   // this value is the field's own write coming back, not somebody else's.
   const [requestedQuery, setRequestedQuery] = useState(search.q ?? "");
   const writeQuery = useDebouncedCallback((value: string) => {
+    searchTiming.requested("legislation", value);
     detached(
       navigate({
         replace: true,
@@ -519,6 +530,11 @@ function PublicStatuteList({
     isLoading,
     isPlaceholderData,
   } = dataQuery;
+  useSearchResultsTiming(
+    "legislation",
+    search.q ?? "",
+    dataQuery.data !== undefined && !isPlaceholderData,
+  );
   const dataView = useQueryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
@@ -528,7 +544,7 @@ function PublicStatuteList({
     placeholderData: keepPreviousData,
   });
   const facetsView = useQueryView(facetsQuery);
-  useQueryViewError(facetsView);
+  useQueryViewError(facetsView, "PublicStatuteList:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
 

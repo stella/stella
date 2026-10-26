@@ -1,6 +1,6 @@
 import {
-  memoryStream,
   EventType,
+  memoryStream,
   StreamProcessor,
   toServerSentEventsResponse,
 } from "@tanstack/ai";
@@ -25,7 +25,9 @@ import {
   testModelAdmission,
   testOrganizationStateDb,
 } from "@/api/tests/helpers/model-dispatch-admission";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   chatMessageContentFromMessage,
@@ -80,7 +82,10 @@ test("durable SSE delivers a tool start while its provider is waiting", async ()
         }
         return text;
       },
-      { label: "durable tool start delivery", timeoutMs: 1000 },
+      {
+        label: "durable tool start delivery",
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+      },
     );
     expect(received).toContain('"toolCallName":"ask_user"');
     expect(providerReleased).toBe(false);
@@ -92,7 +97,7 @@ test("durable SSE delivers a tool start while its provider is waiting", async ()
     await reader.cancel();
     await withTimeout(async () => await providerFinished.promise, {
       label: "tool start provider cleanup",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
   }
 });
@@ -257,7 +262,11 @@ describe("chat run admission follows owned settlement", () => {
         },
       });
       const delivered = run
-        .produce(output, memoryStream({ runId: Bun.randomUUIDv7() }))
+        .produce(
+          output,
+          memoryStream({ runId: Bun.randomUUIDv7() }),
+          HELD_TEST_STREAM_BINDING,
+        )
         .text();
       try {
         await sourceBlocked.promise;
@@ -271,7 +280,10 @@ describe("chat run admission follows owned settlement", () => {
         }
         const [end, body] = await withTimeout(
           async () => await Promise.all([run.settled, delivered]),
-          { label: "blocked source run settlement", timeoutMs: 1000 },
+          {
+            label: "blocked source run settlement",
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          },
         );
         expect(end).toBe("stored");
         if (cut === "admission-then-deadline") {
@@ -297,7 +309,7 @@ describe("chat run admission follows owned settlement", () => {
       }
       await withTimeout(async () => await sourceClosed.promise, {
         label: "blocked source cleanup",
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       });
       expect(sourceFinished).toBe(true);
       expect(persisted).toBe(1);
@@ -357,19 +369,23 @@ describe("chat run admission follows owned settlement", () => {
       yield { type: EventType.CUSTOM, name: "unused-provider", value: {} };
     })();
     await run
-      .produce(source, {
-        ...durability,
-        append: async () => {
-          throw new HandlerError({
-            status: 500,
-            message: "Delivery write failed",
-          });
+      .produce(
+        source,
+        {
+          ...durability,
+          append: async () => {
+            throw new HandlerError({
+              status: 500,
+              message: "Delivery write failed",
+            });
+          },
+          close: async () => {
+            await run.failProduction("not-started");
+            await durability.close();
+          },
         },
-        close: async () => {
-          await run.failProduction("not-started");
-          await durability.close();
-        },
-      })
+        HELD_TEST_STREAM_BINDING,
+      )
       .text();
     // The deliberately empty DB fixture cannot store the failure, but the
     // local lifecycle must still terminate and return its occupied capacity.
@@ -486,7 +502,11 @@ describe("chat run admission follows owned settlement", () => {
         },
       });
       await run
-        .produce(output, memoryStream({ runId: Bun.randomUUIDv7() }))
+        .produce(
+          output,
+          memoryStream({ runId: Bun.randomUUIDv7() }),
+          HELD_TEST_STREAM_BINDING,
+        )
         .text();
       expect(await run.settled).toBe("stored");
       expect(persisted).toBe(1);
@@ -564,6 +584,7 @@ describe("chat run admission follows owned settlement", () => {
     const transport = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     await beatStarted.promise;
     expect(releases).toBe(0);
@@ -681,6 +702,7 @@ describe("chat run admission follows owned settlement", () => {
     const transport = run.produce(
       output,
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     const consumed = transport.text();
     await persistenceFinished.promise;
@@ -933,7 +955,11 @@ describe("chat run admission follows owned settlement", () => {
           source: source(),
         });
         await run
-          .produce(output, memoryStream({ runId: Bun.randomUUIDv7() }))
+          .produce(
+            output,
+            memoryStream({ runId: Bun.randomUUIDv7() }),
+            HELD_TEST_STREAM_BINDING,
+          )
           .text();
       }
       expect(await run.settled).toBe("stored");
@@ -1057,7 +1083,7 @@ describe("chat run admission follows owned settlement", () => {
             const error = new TimeoutError({
               message: "Upstream cleanup timed out",
               label: options.label,
-              timeoutMs: options.timeoutMs,
+              timeoutMs: options.timeoutMs, // timeout: error payload copied from the caller, not a deadline
             });
             controller.abort(error);
             throw error;
@@ -1094,7 +1120,11 @@ describe("chat run admission follows owned settlement", () => {
       }
     };
     const consumed = run
-      .produce(output(), memoryStream({ runId: Bun.randomUUIDv7() }))
+      .produce(
+        output(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
+      )
       .text();
     await finalizerStarted.promise;
     await waitStarted.promise;

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
-// The query module imports the Eden client, which reads the API URL eagerly.
+// The query module imports the API client, which reads the API URL eagerly.
 beforeAll(() => {
   process.env["VITE_API_URL"] ??= "https://api.example.test";
 });
@@ -41,6 +41,11 @@ describe("cached AI availability after config mutations", () => {
       const current = {
         available: !(currentInstanceProvisioned || orgConfigured),
         deferredServiceTierAvailable,
+        unavailableReason:
+          currentInstanceProvisioned || !orgConfigured
+            ? null
+            : ("provider_not_configured" as const),
+        providerConfiguration: "allowed" as const,
         instanceProvisioned: currentInstanceProvisioned,
         mockAnswers: false,
         orgConfigured: !orgConfigured,
@@ -55,6 +60,11 @@ describe("cached AI availability after config mutations", () => {
       ).toEqual({
         available: instanceProvisioned || orgConfigured,
         deferredServiceTierAvailable,
+        unavailableReason:
+          instanceProvisioned || orgConfigured
+            ? null
+            : ("provider_not_configured" as const),
+        providerConfiguration: "allowed" as const,
         instanceProvisioned,
         mockAnswers: false,
         orgConfigured,

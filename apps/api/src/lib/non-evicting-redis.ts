@@ -24,9 +24,7 @@ type CheckedConnection = {
 };
 
 export type StorePolicyObservation =
-  | { status: "allowed" }
-  | { status: "unknown" }
-  | { status: "refused" };
+  { status: "allowed" } | { status: "unknown" } | { status: "refused" };
 
 export type NonEvictingRedisClient = {
   type: "checked";

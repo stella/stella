@@ -1,8 +1,8 @@
 import { panic } from "better-result";
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities } from "@/api/db/schema";
+import { entities, fields } from "@/api/db/schema";
 import {
   dueFromToday,
   openAgendaTask,
@@ -91,6 +91,18 @@ type UnexpectedPreviewColumn = UnbackedProjectionKeys<
 true satisfies MissingPreviewColumn extends never ? true : never;
 true satisfies UnexpectedPreviewColumn extends never ? true : never;
 
+// The file type lives on the current version's file field, not on the entity
+// row, so documents carry it as a derived column for their type icon.
+const currentFileMimeType = sql<string | null>`(
+  select ${fields.content}->>'mimeType'
+  from ${fields}
+  where ${fields.workspaceId} = ${entities.workspaceId}
+    and ${fields.entityVersionId} = ${entities.currentVersionId}
+    and ${fields.content}->>'type' = 'file'
+  order by ${fields.id}
+  limit 1
+)`;
+
 type ReadSearchPreviewOptions = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
@@ -117,7 +129,7 @@ export const readSearchPreviewHandler = async ({
           .orderBy(asc(entities.dueDate), asc(entities.id))
           .limit(LIMITS.matterSearchPreviewAgendaItems),
         tx
-          .select(DOCUMENT_COLUMNS)
+          .select({ ...DOCUMENT_COLUMNS, mimeType: currentFileMimeType })
           .from(entities)
           .where(
             and(
@@ -129,7 +141,10 @@ export const readSearchPreviewHandler = async ({
           .orderBy(desc(entities.updatedAt), desc(entities.id))
           .limit(LIMITS.matterSearchPreviewDocuments),
         tx
-          .select(LEGACY_DOCUMENT_COLUMNS)
+          .select({
+            ...LEGACY_DOCUMENT_COLUMNS,
+            mimeType: currentFileMimeType,
+          })
           .from(entities)
           .where(
             and(
@@ -144,15 +159,17 @@ export const readSearchPreviewHandler = async ({
 
     const recentDocuments = [
       ...updatedDocuments,
-      ...legacyDocuments.map(({ id, name, createdAt }) => ({
+      ...legacyDocuments.map(({ id, name, createdAt, mimeType }) => ({
         id,
         name,
         updatedAt: createdAt,
+        mimeType,
       })),
     ]
       .map((document) => ({
         id: document.id,
         name: document.name,
+        mimeType: document.mimeType,
         updatedAt:
           document.updatedAt ??
           panic("Matter preview document has no activity timestamp"),
@@ -176,6 +193,7 @@ export const readSearchPreviewHandler = async ({
       recentDocuments: recentDocuments.map((document) => ({
         id: document.id,
         name: document.name,
+        mimeType: document.mimeType,
         updatedAt: document.updatedAt.toISOString(),
       })),
     };

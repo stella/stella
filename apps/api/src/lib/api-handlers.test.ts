@@ -3,20 +3,32 @@ import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import tableChart from "@/api/handlers/chat/table-chart";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
+  captureError,
+  detached,
+  resetCaptureWindows,
+} from "@/api/lib/analytics/capture";
+import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
   createSafeHandler,
+  createSafePublicHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
   resolveMeteringContext,
@@ -32,6 +44,9 @@ import {
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
+import { WorkRefusal } from "@/api/lib/load/work-admission";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -45,6 +60,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -52,14 +68,168 @@ const testState = createTestState({ file: import.meta.path, config: env });
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
+test.each([
+  [
+    "work refusal",
+    () => {
+      const refusal = new WorkRefusal({
+        message: "Work capacity is unavailable",
+        reason: "busy",
+        retryAfterMs: 2000,
+      });
+      return new HandlerError({
+        status: 503,
+        message: refusal.message,
+        retryable: true,
+        retryAfterMs: refusal.retryAfterMs,
+      });
+    },
+  ],
+  [
+    "provider refusal",
+    () =>
+      createProviderCallError({
+        model: { provider: "openai", keySource: "byok" },
+        status: 503,
+        evidence: { status: 503, headers: { "Retry-After": "2" } },
+      }),
+  ],
+])("%s never shortens the advised retry wait", async (_name, createError) => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(createError());
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+  const response = await endpoint.handler(ctx);
+  expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
+  if (!(response instanceof HttpStatusResponse)) {
+    throw new Error("Expected a status response");
+  }
+  expect(response.response.retryable).toBe(true);
+  expect(response.response.retryAfterMs).toBeGreaterThanOrEqual(1000);
+});
+
+test("a thrown retryable handler error sets Retry-After", async () => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      throw new HandlerError({
+        status: 503,
+        message: "Work capacity is unavailable",
+        retryable: true,
+        retryAfterMs: 2000,
+      });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+
+  const response = await endpoint.handler(ctx);
+
+  expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
+  expect(response).toMatchObject({
+    code: 503,
+    response: { retryable: true, retryAfterMs: 2000 },
+  });
+});
+
+test("a retryable handler error sets a whole-second Retry-After", async () => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          message: "Work capacity is unavailable",
+          retryable: true,
+          retryAfterMs: 2000,
+        }),
+      );
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+
+  await endpoint.handler(ctx);
+
+  const retryAfter = ctx.set.headers["Retry-After"];
+  expect(retryAfter).toMatch(/^\d+$/u);
+  expect(Number(retryAfter)).toBeGreaterThanOrEqual(2);
+});
+
+test.each([
+  [
+    "canonical",
+    () => ({ "Content-Disposition": "attachment; filename=fixture.txt" }),
+  ],
+  [
+    "lower-cased",
+    () => ({ "content-disposition": "attachment; filename=fixture.txt" }),
+  ],
+] as const)(
+  "reads a %s Content-Disposition header",
+  async (_name, createHeaders) => {
+    const endpoint = createSafePublicHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        cache: { kind: "none" },
+        mcp: { type: "internal", reason: "health_infra" },
+        contentDelivery: { type: "audited" },
+      },
+      async function* () {
+        return Result.ok("fixture");
+      },
+    );
+
+    const response = await runWithContentDeliveryScope(
+      { type: "audited" },
+      async () =>
+        await endpoint.handler(
+          asTestRaw({
+            request: new Request("https://example.test/delivery"),
+            route: "/delivery",
+            set: { headers: createHeaders(), status: 200 },
+          }),
+        ),
+    );
+
+    expect(response).toMatchObject({ code: 500 });
+  },
+);
+
 describe("createSafeHandler workspace audit binding", () => {
-  test("rebinds audit recording to the validated workspace", async () => {
+  // The caller binds the recorder to the matter it proved (REST in
+  // `authorizeWorkspace`, MCP in `capabilityHandlerContext`); the handler
+  // factory hands that recorder on and never builds or swaps its own.
+  test("hands the handler the recorder its caller bound to the matter", async () => {
     const workspaceId = toSafeId<"workspace">(
       "019e7000-0000-7000-8000-000000000003",
     );
-    const reboundRecorder: AuditRecorder = async () => undefined;
+    const boundRecorder: AuditRecorder = async () => undefined;
     let recorderSeenByHandler: AuditRecorder | undefined;
-    let recorderWorkspaceId: string | null | undefined;
+    let recorderFactoryCalled = false;
     const endpoint = createSafeHandler(
       {
         contract: "patch",
@@ -101,20 +271,18 @@ describe("createSafeHandler workspace audit binding", () => {
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
-      recordAuditEvent: noopAuditRecorder,
-      createAuditRecorder: (options?: {
-        workspaceId?: typeof workspaceId | null;
-      }) => {
-        recorderWorkspaceId = options?.workspaceId;
-        return reboundRecorder;
+      recordAuditEvent: boundRecorder,
+      createAuditRecorder: () => {
+        recorderFactoryCalled = true;
+        return noopAuditRecorder;
       },
     };
 
     const result = await endpoint.handler(asTestRaw(context));
 
     expect(result).toEqual({ ok: true });
-    expect(recorderWorkspaceId).toBe(workspaceId);
-    expect(recorderSeenByHandler).toBe(reboundRecorder);
+    expect(recorderSeenByHandler).toBe(boundRecorder);
+    expect(recorderFactoryCalled).toBe(false);
   });
 });
 
@@ -338,8 +506,8 @@ describe("createSafeRootHandler usage preflight", () => {
   });
 });
 
-const createContext = (
-  endpoint: ReturnType<typeof createSafeRootHandler>,
+const createContext = <TContext>(
+  _endpoint: { readonly handler: (ctx: TContext) => unknown },
   safeDb: SafeDb,
   {
     orgAIConfig = null,
@@ -350,10 +518,11 @@ const createContext = (
     orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
-): Parameters<typeof endpoint.handler>[0] =>
+): TContext =>
   ({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
+    set: { headers: {} },
     user: {
       id: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
     },
@@ -377,7 +546,7 @@ const createContext = (
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
-  }) as unknown as Parameters<typeof endpoint.handler>[0];
+  }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
@@ -413,10 +582,7 @@ describe("createSafeRootHandler member AI access", () => {
     );
     expect(bodyRan).toBe(false);
     if (!("code" in result)) {
-      throw new HandlerError({
-        message: "Expected an AI access response",
-        status: 500,
-      });
+      throw new Error("Expected an AI access response");
     }
     expect(result.code).toBe(403);
     expect(result.response).toMatchObject({
@@ -552,6 +718,187 @@ describe("createSafeRootHandler permission gate", () => {
   });
 });
 
+test("safe handlers group plain errors by declared route across source-line moves", async () => {
+  const analytics = installRecordingAnalytics();
+  const recordingLogger = installRecordingLogger();
+  let sourceLine = 100;
+  const createFailingEndpoint = () =>
+    createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        const error = new Error("Handler failed");
+        error.stack = `Error: Handler failed\n    at performOperation (/app/operation.ts:${sourceLine}:9)`;
+        return Result.ok(await Promise.reject(error));
+      },
+    );
+  const first = createFailingEndpoint();
+  const second = createFailingEndpoint();
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({
+        "/first/:entityId": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await first.handler({
+                ...createContext(first, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+        "/second/:entityId": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await second.handler({
+                ...createContext(second, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+      }),
+    }),
+  );
+  try {
+    for (const path of [
+      "/first/first-private-id",
+      "/second/second-private-id",
+    ]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(500);
+    }
+    const original = analytics.exceptions();
+    expect(original).toHaveLength(2);
+    const firstFingerprint =
+      original.at(0)?.properties["$exception_fingerprint"];
+    const secondFingerprint =
+      original.at(1)?.properties["$exception_fingerprint"];
+    expect(firstFingerprint).toContain("/first/:entityId");
+    expect(secondFingerprint).toContain("/second/:entityId");
+    expect(firstFingerprint).not.toBe(secondFingerprint);
+    expect(JSON.stringify(original)).not.toContain("private-id");
+
+    sourceLine += 10;
+    resetCaptureWindows();
+    const shifted = await app.fetch(
+      new Request("https://example.test/first/another-private-id"),
+    );
+    expect(shifted.status).toBe(500);
+    const captures = analytics.exceptions();
+    expect(captures).toHaveLength(3);
+    expect(captures.at(2)?.properties["$exception_fingerprint"]).toBe(
+      firstFingerprint,
+    );
+    expect(captures.at(2)?.properties["error.cause.frame"]).not.toBe(
+      captures.at(0)?.properties["error.cause.frame"],
+    );
+  } finally {
+    await app.stop();
+    recordingLogger.restore();
+    analytics.restore();
+  }
+});
+
+test("safe handlers preserve request scope through shared helpers and detached rejections", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      captureError(
+        new Error("Shared failure"),
+        handlerErrorContext("test.sharedCapture"),
+      );
+      detached(
+        Promise.reject(new Error("Detached failure")),
+        "test.shared-detached",
+      );
+      return Result.ok({ ok: true });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({
+        "/first/:id": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await endpoint.handler({
+                ...createContext(endpoint, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+        "/second/:id": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await endpoint.handler({
+                ...createContext(endpoint, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+      }),
+    }),
+  );
+  try {
+    for (const path of ["/first/private-first", "/second/private-second"]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(200);
+    }
+    const fingerprints = analytics
+      .exceptions()
+      .map(({ properties }) => properties["$exception_fingerprint"]);
+    expect(fingerprints).toHaveLength(4);
+    expect(new Set(fingerprints).size).toBe(4);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/first/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/second/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(JSON.stringify(fingerprints)).not.toContain("private-first");
+    expect(JSON.stringify(fingerprints)).not.toContain("private-second");
+  } finally {
+    await app.stop();
+    logs.restore();
+    analytics.restore();
+  }
+});
+
 describe("request.failed severity", () => {
   const runFailingHandler = async (error: SafeDbError | HandlerError) => {
     const analytics = installRecordingAnalytics();
@@ -625,6 +972,37 @@ describe("request.failed severity", () => {
     expect(exceptions).toHaveLength(0);
   });
 
+  test("an operator feature refusal is a warning without exception capture", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.featureDisabled];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.featureDisabled,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toEqual([]);
+  });
+
+  test("an unavailable admission service remains a captured server fault", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures.at(0)?.severityText).toBe("ERROR");
+    expect(exceptions).toHaveLength(1);
+  });
+
   test("grades a database failure as a server fault", async () => {
     const { response, failures } = await runFailingHandler(
       new DatabaseError({ message: "connection closed" }),
@@ -694,7 +1072,7 @@ describe("a mapped status survives the transport wrapper", () => {
         for (const mode of ["return", "throw"] as const) {
           const response = await runEndpoint(async function* () {
             if (mode === "throw") {
-              throw wrapped;
+              throw new Error("Action admission refused", { cause: wrapped });
             }
             return Result.err(wrapped);
           });
@@ -809,8 +1187,16 @@ describe("a mapped status survives the transport wrapper", () => {
   test("a status thrown through Result.tryPromise is answered, not graded 500", async () => {
     const response = await runEndpoint(async function* () {
       const value = yield* Result.await(
-        Result.tryPromise(async () => {
-          throw upstreamRefusal();
+        Result.tryPromise({
+          try: async () => {
+            throw new Error("Upstream request refused", {
+              cause: upstreamRefusal(),
+            });
+          },
+          catch: (cause) =>
+            new UnhandledException({
+              cause: cause instanceof Error ? cause.cause : cause,
+            }),
         }),
       );
 
@@ -1085,6 +1471,7 @@ describe("provider failure HTTP response", () => {
                 dataClass: "public_corpus",
                 task: "chat",
                 organizationId: null,
+                userId: null,
                 admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",

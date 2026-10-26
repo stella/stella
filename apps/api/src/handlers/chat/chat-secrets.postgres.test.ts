@@ -15,10 +15,10 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 import { organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
-  chatSecrets,
   chatMessages,
-  chatTurns,
+  chatSecrets,
   chatThreads,
+  chatTurns,
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
@@ -44,8 +44,8 @@ import { validatePrivateReceipts } from "./chat-secret-validation";
 import {
   consumeChatSecret,
   getChatSecretReceipt,
-  storeChatSecret,
   saveChatSecretForFuture,
+  storeChatSecret,
 } from "./chat-secrets";
 
 const databaseUrl = process.env["DATABASE_URL"];

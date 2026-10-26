@@ -5,8 +5,8 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { parsePlainDate } from "@stll/time";
 
 import {
-  validateSoftLawAuthorityMetadata,
   SOFT_LAW_AUTHORITY_POLICIES,
+  validateSoftLawAuthorityMetadata,
 } from "./soft-law-authority-policy";
 import { SoftLawItemError } from "./soft-law-types";
 import type {

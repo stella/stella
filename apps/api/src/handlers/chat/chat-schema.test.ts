@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -10,36 +9,36 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
 } from "@stll/api-contract";
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
-  isServerChatToolCall,
   createChatPastedTextPart,
+  isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  toPersistedChatMessageContentV3,
-  createChatAttachmentPart,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
-  normalizePersistedChatMessageContent,
+  createChatAttachmentPart,
   getAwaitingUserInteractions,
   isChatPart,
+  normalizePersistedChatMessageContent,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
 import {
   ACTIVE_CONTEXT_SCHEMAS,
   activeDecisionSchema,
+  activeDraftSchema,
   activeExternalSchema,
   activeFileSchema,
-  activeDraftSchema,
   activeSkillSchema,
   activeStatuteSchema,
   activeTemplateSchema,
@@ -47,8 +46,8 @@ import {
   parseMessage,
   resolveBrowserClientCapability,
   sendMessageBodySchema,
-  validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
+  validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -202,9 +201,9 @@ describe("active draft request context", () => {
   };
 
   test("requires the live document snapshot it advertises to the model", () => {
-    expect(Value.Check(activeDraftSchema, identity)).toBe(false);
+    expect(v.is(activeDraftSchema, identity)).toBe(false);
     expect(
-      Value.Check(activeDraftSchema, {
+      v.is(activeDraftSchema, {
         ...identity,
         docxEditSnapshot: {
           blocks: [
@@ -234,14 +233,14 @@ describe("active statute request context", () => {
   };
 
   test("carries the open consolidation by id and nothing else", () => {
-    expect(Value.Check(activeStatuteSchema, { documentId })).toBe(true);
-    expect(Value.Check(activeStatuteSchema, {})).toBe(false);
-    expect(
-      Value.Check(activeStatuteSchema, { documentId: "89/2012 Sb." }),
-    ).toBe(false);
+    expect(v.is(activeStatuteSchema, { documentId })).toBe(true);
+    expect(v.is(activeStatuteSchema, {})).toBe(false);
+    expect(v.is(activeStatuteSchema, { documentId: "89/2012 Sb." })).toBe(
+      false,
+    );
     // Wording is resolved from the corpus, never dictated by the client.
     expect(
-      Value.Check(activeStatuteSchema, {
+      v.is(activeStatuteSchema, {
         documentId,
         fulltext: "fabricated statutory text",
       }),
@@ -250,7 +249,7 @@ describe("active statute request context", () => {
 
   test("the send body accepts a statute as the active document", () => {
     expect(
-      Value.Check(sendMessageBodySchema, {
+      v.is(sendMessageBodySchema, {
         ...request,
         activeStatute: { documentId },
       }),
@@ -259,8 +258,8 @@ describe("active statute request context", () => {
 
   test("every declared active document is a field of the send body", () => {
     const declared = Object.keys(ACTIVE_CONTEXT_SCHEMAS).toSorted();
-    for (const branch of sendMessageBodySchema.anyOf) {
-      const onBody = Object.keys(branch.properties)
+    for (const branch of sendMessageBodySchema.options) {
+      const onBody = Object.keys(branch.entries)
         .filter((key) => key.startsWith("active"))
         .toSorted();
       expect(onBody).toEqual(declared);
@@ -337,13 +336,13 @@ describe("active document schemas", () => {
     ACTIVE_CONTEXT_CASES,
   )) {
     test(`${kind} rejects content the client made up`, () => {
-      expect(Value.Check(schema, sample)).toBe(true);
+      expect(v.is(schema, sample)).toBe(true);
 
       // Every kind is resolved server-side from the ids it carries, so an
       // extra property is the client telling the model something the server
       // never looked up: a fabricated email citation, wording of its own.
       expect(
-        Value.Check(schema, {
+        v.is(schema, {
           ...sample,
           emailCitationSnapshot: {
             blocks: [{ id: "body-0001", text: "fabricated source text" }],
@@ -377,13 +376,13 @@ describe("chat turn intent", () => {
 
   test("accepts only the shared explicit regeneration discriminator", () => {
     expect(
-      Value.Check(sendMessageBodySchema, {
+      v.is(sendMessageBodySchema, {
         ...request,
         turnIntent: CHAT_TURN_INTENT.regenerate,
       }),
     ).toBe(true);
     expect(
-      Value.Check(sendMessageBodySchema, {
+      v.is(sendMessageBodySchema, {
         ...request,
         turnIntent: "retry",
       }),
@@ -410,7 +409,7 @@ describe("browser client capability", () => {
       BROWSER_CONTROL_PROTOCOL_VERSION + 1,
     ]) {
       expect(
-        Value.Check(sendMessageBodySchema, {
+        v.is(sendMessageBodySchema, {
           ...request,
           browserClient: { protocolVersion },
         }),
@@ -421,14 +420,14 @@ describe("browser client capability", () => {
   test("rejects a malformed browser capability", () => {
     for (const protocolVersion of [0, 1.5, "3"]) {
       expect(
-        Value.Check(sendMessageBodySchema, {
+        v.is(sendMessageBodySchema, {
           ...request,
           browserClient: { protocolVersion },
         }),
       ).toBe(false);
     }
     expect(
-      Value.Check(sendMessageBodySchema, {
+      v.is(sendMessageBodySchema, {
         ...request,
         browserClient: {
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
@@ -495,7 +494,7 @@ describe("native AG-UI request envelope", () => {
       resume,
     };
     expect(
-      Value.Check(agUiSendMessageBodySchema, {
+      v.is(agUiSendMessageBodySchema, {
         ...request,
         parentRunId: "run-parent",
         resume,
@@ -507,20 +506,20 @@ describe("native AG-UI request envelope", () => {
 
   test("rejects untyped fields, incomplete resume items, and user-message resumes", () => {
     expect(
-      Value.Check(agUiSendMessageBodySchema, {
+      v.is(agUiSendMessageBodySchema, {
         ...request,
         shadowPayload: {},
       }),
     ).toBe(false);
     expect(
-      Value.Check(agUiSendMessageBodySchema, {
+      v.is(agUiSendMessageBodySchema, {
         ...request,
         parentRunId: "run-parent",
         resume: [{ interruptId: "approval-1" }],
       }),
     ).toBe(false);
     expect(
-      Value.Check(agUiSendMessageBodySchema, {
+      v.is(agUiSendMessageBodySchema, {
         ...request,
         parentRunId: "run-parent",
         resume: [
@@ -1931,6 +1930,77 @@ describe("validateMessage", () => {
 
     expect(Result.isOk(result)).toBe(true);
   });
+
+  // Resuming an approval hands an approved client call to the client, which
+  // answers it with the call's result. Nothing else answers an approved call.
+  test.each([
+    { approved: true, executor: "client", accepted: true },
+    { approved: true, executor: "server", accepted: false },
+    { approved: false, executor: "client", accepted: false },
+  ] as const)(
+    "the client answers an approved call only when it runs it ($executor, approved: $approved)",
+    async ({ accepted, approved, executor }) => {
+      const id = chatMessageId("msg_approved_client_call");
+      const callId = "call_approved_note";
+      const input = { note: null, query: "NDA" };
+      const output = { ok: true };
+      const approvedCall = {
+        approval: { approved, id: `approval_${callId}`, needsApproval: true },
+        arguments: JSON.stringify(input),
+        id: callId,
+        input,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+        name: "mcp__external__set_note",
+        state: "approval-responded",
+        type: "tool-call",
+      } satisfies ChatParts[number];
+      const result = await validateMessageWithPersistence({
+        message: {
+          id,
+          role: "assistant",
+          parts: [
+            { ...approvedCall, output, state: "complete" },
+            {
+              type: "tool-result",
+              toolCallId: callId,
+              content: JSON.stringify(output),
+              state: "complete",
+            },
+          ],
+        },
+        persistedMessage: {
+          role: "assistant",
+          content: chatMessageContentFromMessage(
+            toPersistableChatMessage({
+              id,
+              role: "assistant",
+              parts: [approvedCall],
+            }),
+          ),
+        },
+        resume: [
+          {
+            interruptId: `client_tool_${callId}`,
+            payload: output,
+            status: "resolved",
+          },
+        ],
+        safeDb: noDbReads,
+        threadId: chatThreadId("thread_approved_client_call"),
+        tools: noteTools,
+        userId: userId("user_approved_client_call"),
+      });
+
+      expect(Result.isOk(result)).toBe(accepted);
+      if (Result.isOk(result)) {
+        expect(result.value.message.parts.at(0)).toMatchObject({
+          approval: approvedCall.approval,
+          output,
+          state: "complete",
+        });
+      }
+    },
+  );
 
   describe("a continuation's input is folded by its tool's schema", () => {
     const continueSetNote = async ({

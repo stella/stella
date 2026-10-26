@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import * as ts from "typescript";
+import * as ts from "typescript6";
 
 import {
   containsJsxTag,

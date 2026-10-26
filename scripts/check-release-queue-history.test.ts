@@ -1,9 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
+
+import { drawPropertySamples } from "@stll/property-testing";
 
 import {
   assertReleaseQueueHistory,
   formatReleaseQueueHistoryNotice,
   parseOptions,
+  previousReleaseTag,
+  releaseCommitHistoryQuery,
   ReleaseQueueHistoryError,
   releaseQueueHistoryWarning,
   runReleaseQueueHistoryCli,
@@ -15,7 +23,16 @@ const SECOND_SHA = "2222222222222222222222222222222222222222";
 const THIRD_SHA = "3333333333333333333333333333333333333333";
 const FOURTH_SHA = "4444444444444444444444444444444444444444";
 
-const pullRequest = (number: number, sha: string) => ({
+// GitHub reports an unmerged pull request with no merge commit or date.
+type FakePullRequest = {
+  html_url: string;
+  merge_commit_sha: string | null;
+  merged_at: string | null;
+  number: number;
+  title: string;
+};
+
+const pullRequest = (number: number, sha: string): FakePullRequest => ({
   html_url: `https://github.com/stella/stella/pull/${String(number)}`,
   merge_commit_sha: sha,
   merged_at: "2026-10-01T00:00:00Z",
@@ -23,19 +40,26 @@ const pullRequest = (number: number, sha: string) => ({
   title: `Change ${String(number)}`,
 });
 
-const queueTimeline = (events: readonly string[], hasPreviousPage = false) => ({
-  data: {
-    repository: {
-      pullRequest: {
-        timelineItems: {
-          nodes: events.map((__typename, index) => ({
-            __typename,
-            createdAt: `2026-10-01T00:0${String(index)}:00Z`,
-          })),
-          pageInfo: { hasPreviousPage },
-        },
-      },
-    },
+const QUEUED = ["AddedToMergeQueueEvent", "MergedEvent"] as const;
+const DIRECT = ["MergedEvent"] as const;
+const REMOVED = [
+  "AddedToMergeQueueEvent",
+  "RemovedFromMergeQueueEvent",
+  "MergedEvent",
+] as const;
+
+const timelineItems = (events: readonly string[], hasPreviousPage = false) => ({
+  nodes: events.map((__typename) => ({ __typename })),
+  pageInfo: { hasPreviousPage },
+});
+
+const mergeGroupSuite = (
+  overrides: { conclusion?: string; event?: string; path?: string } = {},
+) => ({
+  conclusion: overrides.conclusion ?? "SUCCESS",
+  workflowRun: {
+    event: overrides.event ?? "merge_group",
+    file: { path: overrides.path ?? ".github/workflows/ci.yml" },
   },
 });
 
@@ -49,103 +73,178 @@ const heavyRun = (sha: string, headSha: string, event: string) => ({
 });
 
 type FakeOptions = {
+  commits?: readonly string[];
   direct?: readonly number[];
   heavyEvent?: string;
   heavyHeadSha?: string;
   heavySha?: string | null;
   missingPullRequestFor?: readonly string[];
+  pullRequestsFor?: (sha: string, index: number) => FakePullRequest[];
+  eventsFor?: (number: number) => readonly string[];
   removed?: readonly number[];
   truncated?: readonly number[];
   dispatchPages?: readonly (readonly object[])[];
   fourCommits?: boolean;
   successfulMergeGroupShas?: readonly string[];
+  // Check suite pages per commit; the batched query carries the first page.
+  checkSuitePages?: Readonly<Record<string, readonly (readonly object[])[]>>;
+  // Rewrites one commit's node in the batched answer, to corrupt it.
+  rewriteCommit?: (sha: string, node: Record<string, unknown>) => unknown;
+  // Rewrites the whole batched answer.
+  rewriteHistory?: (payload: Record<string, unknown>) => unknown;
 };
 
-const MERGE_GROUP_ENDPOINT =
-  /^actions\/workflows\/ci\.yml\/runs\?head_sha=(\w+)&event=merge_group&status=success&per_page=1&page=1$/u;
 const HEAVY_COMMIT_ENDPOINT =
   /^actions\/workflows\/main-heavy\.yml\/runs\?head_sha=(\w+)&event=(push|schedule)&status=success&per_page=1&page=1$/u;
 const HEAVY_DISPATCH_ENDPOINT =
   /^actions\/workflows\/main-heavy\.yml\/runs\?event=workflow_dispatch&status=success&per_page=100&page=(\d+)$/u;
+const HISTORY_ALIAS = /c(\d+): object\(oid: "([0-9a-f]{40})"\)/gu;
 
 const fillerRuns = (count: number) =>
   Array.from({ length: count }, (_, index) =>
     heavyRun(String(index).padEnd(40, "f"), MAIN_TIP_SHA, "workflow_dispatch"),
   );
 
+const DEFAULT_NUMBERS: Readonly<Record<string, number>> = {
+  [FIRST_SHA]: 101,
+  [SECOND_SHA]: 202,
+  [THIRD_SHA]: 303,
+  [FOURTH_SHA]: 404,
+};
+
 const fakeCommand = ({
+  commits,
   direct = [],
   heavyEvent = "workflow_dispatch",
   heavyHeadSha = MAIN_TIP_SHA,
   heavySha = null,
   missingPullRequestFor = [],
+  pullRequestsFor,
+  eventsFor,
   removed = [],
   dispatchPages,
   fourCommits = false,
   successfulMergeGroupShas = [THIRD_SHA],
+  checkSuitePages = {},
+  rewriteCommit = (_sha, node) => node,
+  rewriteHistory = (payload) => payload,
   truncated = [],
 }: FakeOptions = {}) => {
-  const requests: string[] = [];
+  const historyRequests: string[][] = [];
+  const checkSuiteRequests: string[] = [];
   const dispatchRequests: string[] = [];
-  const timelineRequests: string[] = [];
   const heavyRequests: string[] = [];
-  const responses = new Map<string, unknown>([
-    [`commits/${FIRST_SHA}/pulls?per_page=100`, [pullRequest(101, FIRST_SHA)]],
-    [
-      `commits/${SECOND_SHA}/pulls?per_page=100`,
-      [pullRequest(202, SECOND_SHA)],
-    ],
-    [`commits/${THIRD_SHA}/pulls?per_page=100`, [pullRequest(303, THIRD_SHA)]],
-    [
-      `commits/${FOURTH_SHA}/pulls?per_page=100`,
-      [pullRequest(404, FOURTH_SHA)],
-    ],
-  ]);
-  for (const number of [101, 202, 303, 404]) {
-    let events = ["AddedToMergeQueueEvent", "MergedEvent"];
-    if (direct.includes(number)) {
-      events = ["MergedEvent"];
-    } else if (removed.includes(number)) {
-      events = [
-        "AddedToMergeQueueEvent",
-        "RemovedFromMergeQueueEvent",
-        "MergedEvent",
-      ];
+  const history = commits ?? [
+    FIRST_SHA,
+    SECOND_SHA,
+    THIRD_SHA,
+    ...(fourCommits ? [FOURTH_SHA] : []),
+  ];
+  const pullRequestsOf = (sha: string): FakePullRequest[] => {
+    if (missingPullRequestFor.includes(sha)) {
+      return [];
     }
-    responses.set(
-      `graphql:${String(number)}`,
-      queueTimeline(events, truncated.includes(number)),
-    );
-  }
-  for (const sha of missingPullRequestFor) {
-    responses.set(`commits/${sha}/pulls?per_page=100`, []);
-  }
+    if (pullRequestsFor) {
+      return pullRequestsFor(sha, history.indexOf(sha));
+    }
+    const number = DEFAULT_NUMBERS[sha];
+    return number === undefined ? [] : [pullRequest(number, sha)];
+  };
+  const eventsOf = (number: number): readonly string[] => {
+    if (eventsFor) {
+      return eventsFor(number);
+    }
+    if (direct.includes(number)) {
+      return DIRECT;
+    }
+    return removed.includes(number) ? REMOVED : QUEUED;
+  };
+  const suitePagesOf = (sha: string): readonly (readonly object[])[] =>
+    checkSuitePages[sha] ?? [
+      successfulMergeGroupShas.includes(sha) ? [mergeGroupSuite()] : [],
+    ];
+  const suitePage = (sha: string, page: number) => {
+    const pages = suitePagesOf(sha);
+    const hasNextPage = page < pages.length - 1;
+    return {
+      nodes: pages[page] ?? [],
+      pageInfo: {
+        endCursor: hasNextPage ? `page${String(page + 1)}` : null,
+        hasNextPage,
+      },
+    };
+  };
+  const commitNode = (sha: string): Record<string, unknown> => ({
+    associatedPullRequests: {
+      nodes: pullRequestsOf(sha).map((entry) => ({
+        mergeCommit:
+          entry.merge_commit_sha === null
+            ? null
+            : { oid: entry.merge_commit_sha },
+        mergedAt: entry.merged_at,
+        number: entry.number,
+        timelineItems: timelineItems(
+          eventsOf(entry.number),
+          truncated.includes(entry.number),
+        ),
+        title: entry.title,
+        url: entry.html_url,
+      })),
+      pageInfo: { hasNextPage: false },
+    },
+    checkSuites: suitePage(sha, 0),
+    oid: sha,
+  });
+  const argument = (command: readonly string[], name: string) =>
+    command
+      .find((entry) => entry.startsWith(`${name}=`))
+      ?.slice(name.length + 1);
 
   const run = (command: readonly string[]): string => {
     if (command.at(0) === "git" && command.at(1) === "rev-parse") {
       return BASE_SHA;
     }
     if (command.at(0) === "git" && command.at(1) === "rev-list") {
-      return [
-        FIRST_SHA,
-        SECOND_SHA,
-        THIRD_SHA,
-        ...(fourCommits ? [FOURTH_SHA] : []),
-      ].join("\n");
+      return history.join("\n");
     }
     if (command.at(0) === "git" && command.at(1) === "show") {
-      return "2222222 Direct release adjustment";
+      const sha = command.at(-1) ?? "";
+      return sha === SECOND_SHA
+        ? "2222222 Direct release adjustment"
+        : `${sha.slice(0, 7)} Direct change`;
     }
-    const numberArgument = command.find((argument) =>
-      argument.startsWith("number="),
-    );
-    const number = numberArgument?.slice("number=".length);
-    if (command.at(3) === "graphql" && number) {
-      timelineRequests.push(number);
-      const response = responses.get(`graphql:${number}`);
-      if (response !== undefined) {
-        return JSON.stringify(response);
+    const query = argument(command, "query");
+    if (
+      command.at(3) === "graphql" &&
+      query?.includes("ReleaseCommitHistory")
+    ) {
+      const repository: Record<string, unknown> = {};
+      const shas: string[] = [];
+      for (const [, index, sha] of query.matchAll(HISTORY_ALIAS)) {
+        if (index !== undefined && sha !== undefined) {
+          shas.push(sha);
+          repository[`c${index}`] = rewriteCommit(sha, commitNode(sha));
+        }
       }
+      historyRequests.push(shas);
+      return JSON.stringify(rewriteHistory({ data: { repository } }));
+    }
+    if (
+      command.at(3) === "graphql" &&
+      query?.includes("ReleaseCommitCheckSuites")
+    ) {
+      const sha = argument(command, "oid") ?? "";
+      const after = argument(command, "after") ?? "";
+      checkSuiteRequests.push(`${sha}@${after}`);
+      return JSON.stringify({
+        data: {
+          repository: {
+            object: {
+              checkSuites: suitePage(sha, Number(after.slice("page".length))),
+            },
+          },
+        },
+      });
     }
     const endpoint = command.at(-1)?.replace("repos/stella/stella/", "");
     const heavyRuns =
@@ -171,30 +270,13 @@ const fakeCommand = ({
           heavyRuns.filter((entry) => entry.event === "workflow_dispatch"),
       });
     }
-    const mergeGroup = endpoint ? MERGE_GROUP_ENDPOINT.exec(endpoint) : null;
-    if (endpoint && mergeGroup) {
-      requests.push(mergeGroup[1] ?? "");
-      return JSON.stringify({
-        workflow_runs: successfulMergeGroupShas
-          .filter((head_sha) => head_sha === mergeGroup[1])
-          .map((head_sha) => ({
-            conclusion: "success",
-            event: "merge_group",
-            head_sha,
-          })),
-      });
-    }
-    const response = endpoint ? responses.get(endpoint) : undefined;
-    if (response === undefined) {
-      throw new Error(`Unexpected command: ${command.join(" ")}`);
-    }
-    return JSON.stringify(response);
+    throw new Error(`Unexpected command: ${command.join(" ")}`);
   };
   return Object.assign(run, {
+    checkSuiteRequests,
     dispatchRequests,
     heavyRequests,
-    requests,
-    timelineRequests,
+    historyRequests,
   });
 };
 
@@ -211,11 +293,14 @@ describe("release queue history", () => {
     expect(() => check(fakeCommand())).not.toThrow();
   });
 
-  test("looks up merge-group runs once per commit checked", () => {
+  test("reads the whole history in one query, with no per-commit or per-pull-request read", () => {
     const command = fakeCommand();
 
-    expect(() => check(command)).not.toThrow();
-    expect(command.requests).toEqual([FIRST_SHA, SECOND_SHA, THIRD_SHA]);
+    expect(check(command).validated).toBeTrue();
+    expect(command.historyRequests).toEqual([
+      [FIRST_SHA, SECOND_SHA, THIRD_SHA],
+    ]);
+    expect(command.checkSuiteRequests).toEqual([]);
   });
 
   test("covers a batch by a run three commits ahead", () => {
@@ -224,13 +309,169 @@ describe("release queue history", () => {
       successfulMergeGroupShas: [FOURTH_SHA],
     });
 
-    expect(() => check(command)).not.toThrow();
-    expect(command.requests).toEqual([
-      FIRST_SHA,
-      SECOND_SHA,
-      THIRD_SHA,
-      FOURTH_SHA,
+    expect(check(command).validated).toBeTrue();
+  });
+
+  test("does not cover a batch by a run four commits ahead", () => {
+    const fifthSha = "5555555555555555555555555555555555555555";
+    const report = check(
+      fakeCommand({
+        commits: [FIRST_SHA, SECOND_SHA, THIRD_SHA, FOURTH_SHA, fifthSha],
+        pullRequestsFor: (sha, index) => [pullRequest(100 + index, sha)],
+        successfulMergeGroupShas: [fifthSha],
+      }),
+    );
+
+    expect(report.bypassingPullRequests.map(({ number }) => number)).toEqual([
+      100,
     ]);
+  });
+
+  test("splits a long history into queries of twenty-five commits", () => {
+    const commits = Array.from({ length: 120 }, (_, index) =>
+      (index + 1).toString(16).padStart(40, "a"),
+    );
+    const command = fakeCommand({
+      commits,
+      pullRequestsFor: (sha, index) => [pullRequest(1000 + index, sha)],
+      successfulMergeGroupShas: commits,
+    });
+
+    expect(check(command).validated).toBeTrue();
+    expect(command.historyRequests.map((batch) => batch.length)).toEqual([
+      25, 25, 25, 25, 20,
+    ]);
+    expect(command.historyRequests.flat()).toEqual(commits);
+  });
+
+  test("pages through check suites until the merge-group run appears", () => {
+    const filler = Array.from({ length: 3 }, () =>
+      mergeGroupSuite({ event: "push" }),
+    );
+    const command = fakeCommand({
+      checkSuitePages: {
+        [THIRD_SHA]: [
+          filler,
+          [mergeGroupSuite({ path: ".github/workflows/cla.yml" })],
+          [mergeGroupSuite()],
+        ],
+      },
+    });
+
+    expect(check(command).validated).toBeTrue();
+    expect(command.checkSuiteRequests).toEqual([
+      `${THIRD_SHA}@page1`,
+      `${THIRD_SHA}@page2`,
+    ]);
+  });
+
+  test("counts only a successful ci.yml merge_group suite as a merge-group run", () => {
+    for (const suite of [
+      mergeGroupSuite({ conclusion: "FAILURE" }),
+      mergeGroupSuite({ event: "push" }),
+      mergeGroupSuite({ path: ".github/workflows/cla.yml" }),
+      { conclusion: "SUCCESS", workflowRun: null },
+    ]) {
+      const report = check(
+        fakeCommand({ checkSuitePages: { [THIRD_SHA]: [[suite]] } }),
+      );
+      expect(report.validated, JSON.stringify(suite)).toBeFalse();
+    }
+  });
+
+  test("fails closed when the check suites run past the page limit", () => {
+    const command = fakeCommand({
+      checkSuitePages: { [THIRD_SHA]: Array.from({ length: 21 }, () => []) },
+    });
+
+    expect(() => check(command)).toThrow(
+      `Check suites for ${THIRD_SHA} exceed 20 pages of 50`,
+    );
+  });
+
+  test("fails closed on a missing, cut or malformed commit in the batched answer", () => {
+    const cases: [string, FakeOptions][] = [
+      ["unknown commit", { rewriteCommit: () => null }],
+      [
+        "another commit's node",
+        { rewriteCommit: (_sha, node) => ({ ...node, oid: BASE_SHA }) },
+      ],
+      [
+        "more associated pull requests than one page",
+        {
+          rewriteCommit: (_sha, node) => ({
+            ...node,
+            associatedPullRequests: {
+              nodes: [],
+              pageInfo: { hasNextPage: true },
+            },
+          }),
+        },
+      ],
+      [
+        "pull request without a number",
+        {
+          rewriteCommit: (_sha, node) => ({
+            ...node,
+            associatedPullRequests: {
+              nodes: [
+                { title: "x", url: "u", mergedAt: null, mergeCommit: null },
+              ],
+              pageInfo: { hasNextPage: false },
+            },
+          }),
+        },
+      ],
+    ];
+    for (const [label, options] of cases) {
+      expect(() => check(fakeCommand(options)), label).toThrow(
+        `Pull requests for ${FIRST_SHA} returned an unexpected payload`,
+      );
+    }
+  });
+
+  test("fails closed on malformed check suites", () => {
+    expect(() =>
+      check(
+        fakeCommand({
+          rewriteCommit: (sha, node) =>
+            sha === THIRD_SHA ? { ...node, checkSuites: { nodes: [] } } : node,
+        }),
+      ),
+    ).toThrow(`Check suites for ${THIRD_SHA} returned an unexpected payload`);
+    expect(() =>
+      check(
+        fakeCommand({
+          checkSuitePages: {
+            [THIRD_SHA]: [[{ conclusion: "SUCCESS", workflowRun: {} }]],
+          },
+        }),
+      ),
+    ).toThrow(`Check suites for ${THIRD_SHA} returned an unexpected payload`);
+  });
+
+  test("fails closed on a GraphQL answer that carries errors or no data", () => {
+    for (const rewriteHistory of [
+      (payload: Record<string, unknown>) => ({
+        ...payload,
+        errors: [{ message: "timeout" }],
+      }),
+      () => ({ errors: [{ message: "timeout" }] }),
+      () => [],
+    ]) {
+      expect(() => check(fakeCommand({ rewriteHistory }))).toThrow(
+        "returned an unexpected payload",
+      );
+    }
+  });
+
+  test("never inlines anything but a full SHA into the query", () => {
+    expect(() => releaseCommitHistoryQuery([`${FIRST_SHA}") { x }`])).toThrow(
+      ReleaseQueueHistoryError,
+    );
+    expect(() => releaseCommitHistoryQuery([BASE_SHA.toUpperCase()])).toThrow(
+      ReleaseQueueHistoryError,
+    );
   });
 
   test("CLI warns when the dispatch listing exceeds the page limit", () => {
@@ -261,8 +502,7 @@ describe("release queue history", () => {
     expect(() => check(command)).not.toThrow();
     expect(command.heavyRequests).toHaveLength(2);
     expect(command.dispatchRequests).toHaveLength(1);
-    expect(command.timelineRequests).toHaveLength(0);
-    expect(command.requests).toHaveLength(0);
+    expect(command.historyRequests).toHaveLength(0);
   });
 
   test("accepts a push run of main heavy whose head is the base", () => {
@@ -274,7 +514,7 @@ describe("release queue history", () => {
     });
 
     expect(() => check(command)).not.toThrow();
-    expect(command.timelineRequests).toHaveLength(0);
+    expect(command.historyRequests).toHaveLength(0);
   });
 
   test("refuses a dispatched heavy run on the base that tested another commit", () => {
@@ -285,7 +525,7 @@ describe("release queue history", () => {
     });
 
     expect(() => check(command)).toThrow(ReleaseQueueHistoryError);
-    expect(command.timelineRequests.length).toBeGreaterThan(0);
+    expect(command.historyRequests.length).toBeGreaterThan(0);
   });
 
   test("fails closed on a truncated timeline without a green heavy base", () => {
@@ -421,6 +661,144 @@ describe("release queue history", () => {
   });
 });
 
+// The verdict the per-commit and per-pull-request reads gave, stated over a
+// history model: a merged pull request is covered when it was in the merge
+// queue at its merge and a successful merge-group run sits on its commit or
+// on one of the next three, with only queued merges in between.
+type ModelCommit =
+  | { kind: "direct"; mergeGroup: boolean }
+  | {
+      kind: "pullRequest";
+      timeline: "queued" | "direct" | "removed" | "requeued";
+      // Another pull request GitHub associates with the commit, merged
+      // elsewhere: it never counts for this commit.
+      foreign: boolean;
+      mergeGroup: boolean;
+    };
+
+const MODEL_TIMELINES = {
+  direct: DIRECT,
+  queued: QUEUED,
+  removed: REMOVED,
+  requeued: [
+    "AddedToMergeQueueEvent",
+    "RemovedFromMergeQueueEvent",
+    "AddedToMergeQueueEvent",
+    "MergedEvent",
+  ],
+} as const;
+
+const modelSha = (index: number) => (index + 1).toString(16).padStart(40, "c");
+const modelNumber = (index: number) => 1000 + index;
+const FOREIGN_OFFSET = 50_000;
+
+const specifiedReport = (commits: readonly ModelCommit[]) => {
+  const queued = (index: number) => {
+    const commit = commits[index];
+    return (
+      commit?.kind === "pullRequest" &&
+      (commit.timeline === "queued" || commit.timeline === "requeued")
+    );
+  };
+  const covered = (index: number) =>
+    [0, 1, 2, 3].some(
+      (ahead) =>
+        index + ahead < commits.length &&
+        Array.from({ length: ahead + 1 }, (_, step) => index + step).every(
+          queued,
+        ) &&
+        commits[index + ahead]?.mergeGroup === true,
+    );
+  const bypassing = commits.flatMap((commit, index) =>
+    commit.kind === "pullRequest" && !covered(index)
+      ? [modelNumber(index)]
+      : [],
+  );
+  const withoutPullRequest = commits.flatMap((commit, index) =>
+    commit.kind === "direct"
+      ? [`${modelSha(index).slice(0, 7)} Direct change`]
+      : [],
+  );
+  return {
+    bypassing,
+    validated: bypassing.length === 0 && withoutPullRequest.length === 0,
+    withoutPullRequest,
+  };
+};
+
+const modelCommit: fc.Arbitrary<ModelCommit> = fc.oneof(
+  {
+    weight: 1,
+    arbitrary: fc.record({
+      kind: fc.constant("direct" as const),
+      mergeGroup: fc.boolean(),
+    }),
+  },
+  {
+    weight: 6,
+    arbitrary: fc.record({
+      kind: fc.constant("pullRequest" as const),
+      timeline: fc.constantFrom("queued", "direct", "removed", "requeued"),
+      foreign: fc.boolean(),
+      mergeGroup: fc.boolean(),
+    }),
+  },
+);
+
+describe("batched release history", () => {
+  test("gives the per-pull-request verdict on every history, across query boundaries", () => {
+    const samples = drawPropertySamples(
+      fc.array(modelCommit, { maxLength: 130 }),
+      { numRuns: 40 },
+    );
+    for (const { label, value: commits } of samples) {
+      const shas = commits.map((_, index) => modelSha(index));
+      const command = fakeCommand({
+        commits: shas,
+        eventsFor: (number) => {
+          const commit = commits[number - modelNumber(0)];
+          return number < FOREIGN_OFFSET && commit?.kind === "pullRequest"
+            ? MODEL_TIMELINES[commit.timeline]
+            : DIRECT;
+        },
+        pullRequestsFor: (sha, index) => {
+          const commit = commits[index];
+          if (commit?.kind !== "pullRequest") {
+            return [];
+          }
+          const own = pullRequest(modelNumber(index), sha);
+          return commit.foreign
+            ? [
+                {
+                  ...pullRequest(FOREIGN_OFFSET + index, sha),
+                  merge_commit_sha: BASE_SHA,
+                },
+                own,
+              ]
+            : [own];
+        },
+        successfulMergeGroupShas: shas.filter(
+          (_, index) => commits[index]?.mergeGroup === true,
+        ),
+      });
+      const report = check(command);
+      const expected = specifiedReport(commits);
+
+      expect(
+        report.bypassingPullRequests.map(({ number }) => number),
+        label,
+      ).toEqual(expected.bypassing);
+      expect(report.commitsWithoutPullRequest, label).toEqual(
+        expected.withoutPullRequest,
+      );
+      expect(report.validated, label).toBe(expected.validated);
+      expect(command.historyRequests, label).toHaveLength(
+        Math.ceil(commits.length / 25),
+      );
+    }
+  });
+});
+
 describe("release queue history options", () => {
   test("parses both options in either order", () => {
     const expected = {
@@ -462,6 +840,13 @@ describe("release queue history options", () => {
       previousTag: "v1.2.3",
       strict: true,
       repoDir: "/checkout",
+    });
+  });
+
+  test("leaves the previous tag to the history when --from is omitted", () => {
+    expect(parseOptions(["--base", BASE_SHA])).toEqual({
+      baseSha: BASE_SHA,
+      strict: false,
     });
   });
 
@@ -568,5 +953,229 @@ describe("strict release queue history", () => {
 
     expect(exitCode).toBe(0);
     expect(lines.at(0)).toStartWith("::warning::Release history");
+  });
+});
+
+const REPOSITORY_ROOT = nodePath.resolve(import.meta.dirname, "..");
+const historyRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of historyRoots.splice(0)) {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
+const git = (cwd: string) => (command: readonly string[]) => {
+  const result = Bun.spawnSync([...command], {
+    cwd,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (!result.success) {
+    throw new Error(`${command.join(" ")}: ${result.stderr.toString()}`);
+  }
+  return result.stdout.toString().trim();
+};
+
+// One linear main history: each step either lands an ordinary change or a
+// version commit, and a version commit is tagged or left untagged (superseded
+// by the next one).
+type Step = { kind: "change" } | { kind: "version"; tagged: boolean };
+
+type BuiltHistory = {
+  // The history's tip, the base a release is prepared from.
+  base: string;
+  // The last tag on a commit before the base, read from the steps.
+  expectedTag: string;
+};
+
+const COMMITTER = `Release <release@example.com> ${String(
+  Date.parse("2026-10-01T00:00:00Z") / 1000,
+)} +0000`;
+
+const fastImportData = (text: string) =>
+  `data ${String(Buffer.byteLength(text))}\n${text}\n`;
+
+// Every history becomes its own root branch of one fixture repository, written
+// by a single `git fast-import`. Each history numbers its releases under its
+// own major version, so no tag is shared and none is reachable from another.
+const buildHistories = (histories: readonly (readonly Step[])[]) => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-history-"));
+  historyRoots.push(root);
+  const run = git(root);
+  run(["git", "init", "--quiet", "--bare"]);
+  let stream = "";
+  let mark = 0;
+  const expectedTags = histories.map((steps, history) => {
+    const major = String(history + 1);
+    let patch = 0;
+    let lastTag = "";
+    let expectedTag = "";
+    // The first release is always tagged, so a previous release exists.
+    const allSteps: readonly Step[] = [
+      { kind: "version", tagged: true },
+      ...steps,
+    ];
+    for (const [index, step] of allSteps.entries()) {
+      // Before each commit, the last tag so far is the nearest one before it.
+      expectedTag = lastTag;
+      mark += 1;
+      if (step.kind === "version") {
+        patch += 1;
+      }
+      const [file, content] =
+        step.kind === "version"
+          ? ["VERSION", `${major}.0.${String(patch)}\n`]
+          : ["change.txt", `${String(index)}\n`];
+      stream += `commit refs/heads/h${String(history)}\nmark :${String(mark)}\ncommitter ${COMMITTER}\n`;
+      stream += fastImportData(`step ${String(index)}`);
+      stream += `M 644 inline ${file}\n${fastImportData(content)}\n`;
+      if (step.kind === "version" && step.tagged) {
+        lastTag = `v${major}.0.${String(patch)}`;
+        stream += `reset refs/tags/${lastTag}\nfrom :${String(mark)}\n\n`;
+      }
+    }
+    return expectedTag;
+  });
+  const imported = Bun.spawnSync(["git", "fast-import", "--quiet"], {
+    cwd: root,
+    stderr: "pipe",
+    stdin: Buffer.from(stream),
+    stdout: "pipe",
+  });
+  if (!imported.success) {
+    throw new Error(`git fast-import: ${imported.stderr.toString()}`);
+  }
+  const bases = run([
+    "git",
+    "rev-parse",
+    ...histories.map((_, history) => `refs/heads/h${String(history)}`),
+  ]).split("\n");
+  const built: BuiltHistory[] = bases.map((base, history) => ({
+    base,
+    expectedTag: expectedTags[history] ?? "",
+  }));
+  return { built, run };
+};
+
+const historySteps = fc.array(
+  fc.oneof(
+    fc.constant<Step>({ kind: "change" }),
+    fc.boolean().map<Step>((tagged) => ({ kind: "version", tagged })),
+  ),
+  { maxLength: 6, minLength: 1 },
+);
+
+describe("previous release tag", () => {
+  test("is the nearest tag before the base, never v + an untagged VERSION", () => {
+    // The histories are drawn once and built as one batch; each sample then
+    // runs the real git describe against its own branch.
+    const samples = drawPropertySamples(historySteps, { numRuns: 25 });
+    const { built, run } = buildHistories(samples.map(({ value }) => value));
+    const tags = new Set(run(["git", "tag", "--list"]).split("\n"));
+    for (const [index, { label }] of samples.entries()) {
+      const history = built[index];
+      if (history === undefined) {
+        throw new Error(`history ${String(index)} was not built`);
+      }
+      const previous = previousReleaseTag(history.base, run);
+      expect(previous, label).toBe(history.expectedTag);
+      const version = run(["git", "show", `${history.base}:VERSION`]);
+      if (!tags.has(`v${version}`)) {
+        expect(previous, label).not.toBe(`v${version}`);
+      }
+    }
+  });
+
+  test("reads the history of a base whose VERSION was never tagged", () => {
+    const {
+      built: [history],
+      run,
+    } = buildHistories([
+      [
+        { kind: "change" },
+        { kind: "version", tagged: false },
+        { kind: "change" },
+      ],
+    ]);
+    if (history === undefined) {
+      throw new Error("history was not built");
+    }
+    const ranges: string[] = [];
+    const report = assertReleaseQueueHistory({
+      baseSha: history.base,
+      command: (command) => {
+        if (command[0] === "git" && command[1] === "rev-list") {
+          ranges.push(command.at(-1) ?? "");
+          return "";
+        }
+        if (command[0] === "git") {
+          return run(command);
+        }
+        return "[]";
+      },
+      ghRetryScript: "/fake/gh-retry.sh",
+      strict: true,
+    });
+    expect(ranges).toEqual([`v1.0.1..${history.base}`]);
+    expect(report.validated).toBe(true);
+  });
+});
+
+// Every checked-in reader of the VERSION file, with why an untagged VERSION
+// (a version commit superseded by the next one) cannot mislead it. A new
+// reader fails here until it is classified; one that needs the previous
+// release takes it from previousReleaseTag.
+const VERSION_READERS: Record<string, string> = {
+  ".github/ci-checks/ci-checks-rest.yml":
+    "VERSION changed against the base; the previous release comes from previousReleaseTag",
+  ".github/workflows/ci.yml":
+    "VERSION changed in the commit, and the image build label",
+  ".github/workflows/publish-npm.yml":
+    "VERSION equals the release tag being published",
+  ".github/workflows/release.yml": "VERSION equals the tag being built",
+  "scripts/check-cli-release-coupling.ts":
+    "VERSION changed against the merge base; compared with npm, not with tags",
+  "scripts/check-railway-template-shape.ts": "watch pattern",
+  "scripts/check-release-candidate.sh":
+    "the pending version commit; its tag is the one to create",
+  "scripts/check-release-changelog.sh":
+    "VERSION changed against the base; names the new changelog file",
+  "scripts/ci-package-scope.ts": "changed-path scope",
+  "scripts/ci-plan-scope.ts": "changed-path scope",
+  "scripts/ci-root-check-inputs.json": "changed-path scope",
+  "scripts/prepare-maintenance-release.ts":
+    "readPreviousRelease answers superseded for an untagged VERSION",
+  "scripts/verify-release-candidate-tree.mjs":
+    "VERSION changed against main and is a supported release version",
+  "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",
+};
+const NOT_VERSION_READERS = new Set([
+  "scripts/check-parser-versions.ts",
+  "scripts/desktop-release-step.ts",
+  "scripts/env-catalog.ts",
+]);
+const VERSION_FILE_READ =
+  /git show [^\n]*:VERSION\b|<\s*VERSION\b|"VERSION"|-- VERSION\b|cat VERSION\b|-f VERSION\b|\/VERSION"/u;
+
+describe("VERSION reader census", () => {
+  test("classifies every reader of the VERSION file", () => {
+    const files = git(REPOSITORY_ROOT)([
+      "git",
+      "ls-files",
+      "scripts",
+      ".github",
+    ])
+      .split("\n")
+      .filter((file) => !/\.test\.|\/fixtures?\//u.test(file));
+    const readers = files
+      .filter((file) => !NOT_VERSION_READERS.has(file))
+      .filter((file) =>
+        VERSION_FILE_READ.test(
+          readFileSync(nodePath.join(REPOSITORY_ROOT, file), "utf-8"),
+        ),
+      )
+      .toSorted();
+    expect(readers).toEqual(Object.keys(VERSION_READERS).toSorted());
   });
 });

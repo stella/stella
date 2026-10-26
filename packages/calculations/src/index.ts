@@ -207,9 +207,15 @@ const classify = (values: readonly CalculationValue[]): NumericValues => {
       case "text":
         return { type: "unsupported", reason: "non-numeric" };
       case "number":
+        if (!Number.isFinite(value.value)) {
+          return { type: "unsupported", reason: "non-numeric" };
+        }
         numbers.push(value.value);
         break;
       case "money": {
+        if (!Number.isFinite(value.amountCents)) {
+          return { type: "unsupported", reason: "non-numeric" };
+        }
         const bucket = buckets.get(value.currency);
         if (bucket) {
           bucket.push(value.amountCents);
@@ -275,13 +281,17 @@ const reduceNumeric = (
       }
       return { type: "unsupported", kind, reason: classified.reason };
     case "numbers":
-      return { type: "number", kind, value: REDUCERS[kind](classified.values) };
+      return finiteNumberResult(kind, REDUCERS[kind](classified.values));
     case "money": {
       const totals = new MoneyTotals();
       for (const [currency, amounts] of classified.buckets) {
         // Minor units are integers; an average or a median can land between
         // two of them, so the reduction rounds to the nearest minor unit.
-        totals.add(currency, cents(Math.round(REDUCERS[kind](amounts))));
+        const reduced = REDUCERS[kind](amounts);
+        if (!Number.isFinite(reduced)) {
+          return { type: "unsupported", kind, reason: "non-numeric" };
+        }
+        totals.add(currency, cents(Math.round(reduced)));
       }
       return { type: "money", kind, totals: totals.entries() };
     }
@@ -291,6 +301,14 @@ const reduceNumeric = (
     }
   }
 };
+
+const finiteNumberResult = (
+  kind: Exclude<NumericCalculationKind, "percent-of-total">,
+  value: number,
+): CalculationResult =>
+  Number.isFinite(value)
+    ? { type: "number", kind, value }
+    : { type: "unsupported", kind, reason: "non-numeric" };
 
 /**
  * The column's total as a share of the view's total.
@@ -345,11 +363,7 @@ const singleTotal = (values: readonly CalculationValue[]): SingleTotal => {
     case "unsupported":
       return { type: "unsupported", reason: classified.reason };
     case "numbers":
-      return {
-        type: "total",
-        value: REDUCERS.sum(classified.values),
-        unit: "number",
-      };
+      return finiteTotal(REDUCERS.sum(classified.values), "number");
     case "money": {
       if (classified.buckets.size > 1) {
         return { type: "unsupported", reason: "mixed-units" };
@@ -358,7 +372,7 @@ const singleTotal = (values: readonly CalculationValue[]): SingleTotal => {
         "",
         [],
       ];
-      return { type: "total", value: REDUCERS.sum(amounts), unit: currency };
+      return finiteTotal(REDUCERS.sum(amounts), currency);
     }
     default: {
       classified satisfies never;
@@ -366,5 +380,10 @@ const singleTotal = (values: readonly CalculationValue[]): SingleTotal => {
     }
   }
 };
+
+const finiteTotal = (value: number, unit: TotalUnit): SingleTotal =>
+  Number.isFinite(value)
+    ? { type: "total", value, unit }
+    : { type: "unsupported", reason: "non-numeric" };
 
 export type { CentsAmount, MoneyTotalsEntry };

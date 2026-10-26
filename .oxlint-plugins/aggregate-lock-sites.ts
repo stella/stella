@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "typescript6";
 
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 

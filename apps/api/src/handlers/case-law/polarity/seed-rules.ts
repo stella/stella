@@ -6,7 +6,7 @@
  * corpus (Harasta, Masaryk University).
  */
 
-import { REPORTED_PARTY_SUBMISSION_GROUP, type Polarity } from "./consts";
+import { type Polarity, REPORTED_PARTY_SUBMISSION_GROUP } from "./consts";
 
 type SeedRule = {
   pattern: string;

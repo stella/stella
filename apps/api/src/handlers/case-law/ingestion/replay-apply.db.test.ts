@@ -26,6 +26,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
   caseLawCorpusUploadIntents,
   caseLawDecisions,
@@ -67,10 +68,10 @@ import type {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   presentTextField,
   splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -84,6 +85,10 @@ import {
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  RAW_SOURCE_FAMILY,
+  rawSourcePayloadKey,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -199,6 +204,7 @@ const textChangingAdapter = stubAdapter((stored) => ({
     language: stored.language,
     ...splitStoredDecisionTextMetadata(stored.metadata),
     rawHash: "hash-from-the-new-parser",
+    parserVersion: 5,
     fulltext: NEW_PARSER_TEXT,
     documentAst: EMPTY_AST,
   }),
@@ -287,9 +293,26 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     observationOrder: 1n,
   });
 
-  // Same payload, same parser: the second run re-derives the stored hash, so
-  // neither the decision nor its observation watermark is written.
-  // That fixed point is what makes a re-run safe.
+  await db
+    .update(caseLawDecisions)
+    .set({ parserVersion: 1 })
+    .where(eq(caseLawDecisions.id, id));
+  const [beforeUnchanged] = await db
+    .select({
+      contentHash: caseLawDecisions.contentHash,
+      projectionEpoch: caseLawDecisions.projectionEpoch,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, id));
+  if (beforeUnchanged === undefined) {
+    panic("Expected the replayed decision to remain stored");
+  }
+  const desiredBeforeUnchanged = await db
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, id));
+
+  // Equal output still establishes the target parser's exact input proof.
   const second = await replay();
   if (second.type !== "ran") {
     throw new TypeError("Expected the capable adapter to run");
@@ -299,7 +322,13 @@ test("a writing replay goes through the pipeline, and replaying again converges"
 
   const [converged] = await db
     .select({
+      contentHash: caseLawDecisions.contentHash,
       fulltext: caseLawDecisions.fulltext,
+      parserVersion: caseLawDecisions.parserVersion,
+      parsedSourceHash: caseLawDecisions.parsedSourceHash,
+      parsedSourceHashVersion: caseLawDecisions.parsedSourceHashVersion,
+      parsedSourceRawS3Key: caseLawDecisions.parsedSourceRawS3Key,
+      projectionEpoch: caseLawDecisions.projectionEpoch,
       sourceHash: caseLawDecisions.sourceHash,
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
       observationOrder: caseLawDecisions.sourceObservationOrder,
@@ -307,11 +336,37 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.id, id));
   expect(converged).toEqual({
+    contentHash: beforeUnchanged.contentHash,
     fulltext: NEW_PARSER_TEXT,
+    parserVersion: 5,
+    parsedSourceHash: "hash-from-the-new-parser",
+    parsedSourceHashVersion: 0,
+    parsedSourceRawS3Key: contentAddressedKey,
+    projectionEpoch: beforeUnchanged.projectionEpoch,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,
-    observationOrder: 1n,
+    observationOrder: 2n,
   });
+  const beforeThird = await db
+    .select()
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, id));
+  const updatesBeforeThird = decisionUpdates.length;
+  const third = await replay();
+  if (third.type !== "ran") {
+    panic("Expected the proved replay to run");
+  }
+  expect(third.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(decisionUpdates.slice(updatesBeforeThird)).toEqual([]);
+  expect(
+    await db.select().from(caseLawDecisions).where(eq(caseLawDecisions.id, id)),
+  ).toEqual(beforeThird);
+  expect(
+    await db
+      .select()
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, id)),
+  ).toEqual(desiredBeforeUnchanged);
   // A converged replay re-reads the payload but has nothing to store: the
   // key the row already records names an object with these exact bytes.
   expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
@@ -327,6 +382,22 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   expect(citations.map(({ citationText }) => citationText)).toEqual([
     "C-283/81",
   ]);
+
+  // A matching stored hash does not settle a row whose mirror still awaits
+  // repair: only the write pipeline repairs it.
+  await db
+    .update(caseLawDecisions)
+    .set({
+      parserVersion: 1,
+      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+    })
+    .where(eq(caseLawDecisions.id, id));
+  const pending = await replay();
+  if (pending.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+  expect(pending.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(0);
+  expect(pending.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
 
   await sourceLease.release();
 });
@@ -803,7 +874,10 @@ const replayConvergenceFixture = async (text: string) => {
     documentAst: payload.ast,
     parserVersion: 4,
     sourceHash: sanitized.rawHash,
-    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    sourceRawS3Key: rawSourcePayloadKey({
+      owner: { family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId, documentId: id },
+      data: STORED_PAYLOAD,
+    }),
     sourceRawContentType: "application/xhtml+xml",
   });
   const adapter = stubAdapter(() => ({ type: "parsed", result }));
@@ -1070,7 +1144,7 @@ test.each(["r o z h o d o l :", "Body text.\u0000"])(
 );
 
 test.each(["row-columns", "content-hash"])(
-  "an identical replay never updates the decision at a newer parser version: %p",
+  "an identical replay establishes its parser proof once: %p",
   async (storage) => {
     const fixture = await replayConvergenceFixture("Unchanged body text.");
     await db
@@ -1114,13 +1188,35 @@ test.each(["row-columns", "content-hash"])(
       throw new TypeError("Expected replay to run");
     }
     expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
-    expect(decisionUpdates.slice(updatesBefore)).toEqual([]);
-    expect(await readRow()).toEqual(before);
+    expect(decisionUpdates.length).toBeGreaterThan(updatesBefore);
+    const proved = await readRow();
+    expect(proved).toMatchObject({
+      parserVersion: 4,
+      parsedSourceHash: fixture.result.rawHash,
+      parsedSourceHashVersion: 0,
+      parsedSourceRawS3Key: before.sourceRawS3Key,
+      fulltext: before.fulltext,
+      sections: before.sections,
+      documentAst: before.documentAst,
+      metadata: before.metadata,
+    });
+    const [beforeTimestamp] = await db
+      .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, fixture.id));
+    const updatesBeforeFixedPoint = decisionUpdates.length;
+    const fixedPoint = await fixture.replay(lease);
+    if (fixedPoint.type !== "ran") {
+      panic("Expected the proved fixed point to run");
+    }
+    expect(fixedPoint.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    expect(decisionUpdates.slice(updatesBeforeFixedPoint)).toEqual([]);
+    expect(await readRow()).toEqual(proved);
     const [timestamp] = await db
       .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, fixture.id));
-    expect(timestamp?.value).toContain(".123456");
+    expect(timestamp?.value).toBe(beforeTimestamp?.value);
     expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
       0,
     );
@@ -1152,7 +1248,7 @@ test.each(["row-columns", "content-hash"])(
       .select({ order: caseLawSources.observationOrder })
       .from(caseLawSources)
       .where(eq(caseLawSources.id, fixture.sourceId));
-    expect(source?.order).toBe(0n);
+    expect(source?.order).toBe(1n);
     const second = await fixture.replay(null);
     if (second.type !== "ran") {
       throw new TypeError("Expected replay to run");
@@ -1287,7 +1383,7 @@ test("an unchanged replay preserves a version written after the row was selected
   if (run.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
-  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
   const [row] = await db
     .select({ version: caseLawDecisions.parserVersion })
     .from(caseLawDecisions)
@@ -1535,12 +1631,16 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
 
 test("replay updates exactly changed rows and produces content-free terminal results", async () => {
   await db.execute(
-    sql`CREATE TEMP TABLE replay_decision_updates (decision_id text NOT NULL)`,
+    sql`CREATE TEMP TABLE replay_decision_updates (decision_id text NOT NULL, payload_changed boolean NOT NULL)`,
   );
   await db.execute(sql`
     CREATE FUNCTION pg_temp.count_replay_decision_update() RETURNS trigger AS $$
     BEGIN
-      INSERT INTO replay_decision_updates VALUES (NEW.id::text);
+      INSERT INTO replay_decision_updates VALUES (
+        NEW.id::text,
+        ROW(OLD.fulltext, OLD.sections, OLD.document_ast) IS DISTINCT FROM
+        ROW(NEW.fulltext, NEW.sections, NEW.document_ast)
+      );
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql
@@ -1592,7 +1692,14 @@ test("replay updates exactly changed rows and produces content-free terminal res
             sections: fixture.payload.sections,
             documentAst: fixture.payload.ast,
             parserVersion: 3,
-            sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+            sourceRawS3Key: rawSourcePayloadKey({
+              owner: {
+                family: RAW_SOURCE_FAMILY.CASE_LAW,
+                sourceId: fixture.sourceId,
+                documentId: id,
+              },
+              data: STORED_PAYLOAD,
+            }),
           });
           expected.push(
             outcome === "rejected"
@@ -1655,7 +1762,7 @@ test("replay updates exactly changed rows and produces content-free terminal res
         }
         expect(first.report.haltReason).toBeNull();
         const updates = await db.execute<{ decision_id: string }>(
-          sql`SELECT decision_id FROM replay_decision_updates`,
+          sql`SELECT decision_id FROM replay_decision_updates WHERE payload_changed`,
         );
         expect(
           updates.rows.map(({ decision_id }) => decision_id).toSorted(),
@@ -1665,8 +1772,28 @@ test("replay updates exactly changed rows and produces content-free terminal res
             .map(({ decisionId }) => decisionId)
             .toSorted(),
         );
+        const parsedInputs = await db
+          .select({
+            id: caseLawDecisions.id,
+            parserVersion: caseLawDecisions.parserVersion,
+            sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+            parsedSourceRawS3Key: caseLawDecisions.parsedSourceRawS3Key,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, fixture.sourceId));
         for (const receipt of expected) {
           expect(receipts.get(receipt.decisionId)).toEqual(receipt);
+          const row = parsedInputs.find(({ id }) => id === receipt.decisionId);
+          if (row === undefined) {
+            panic("Expected the replayed fixture row");
+          }
+          if (receipt.outcome === "rejected") {
+            expect(row.parserVersion).toBe(3);
+            expect(row.parsedSourceRawS3Key).toBeNull();
+            continue;
+          }
+          expect(row.parserVersion).toBe(4);
+          expect(row.parsedSourceRawS3Key).toBe(row.sourceRawS3Key);
         }
         expect(receipts.size).toBe(kinds.length + 1);
         await db.execute(sql`TRUNCATE replay_decision_updates`);

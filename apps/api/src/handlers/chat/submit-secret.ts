@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -34,7 +33,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -70,12 +69,12 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
-  params: t.Object({
-    threadId: tSafeId("chatThread"),
-    toolCallId: t.String({ minLength: 1, maxLength: 200 }),
+  params: v.object({
+    threadId: resourceIdSchema("chatThread"),
+    toolCallId: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
   }),
   // Validate inside the handler so framework validation errors never contain private input.
-  body: t.Unknown(),
+  body: v.unknown(),
 } satisfies HandlerConfig;
 
 type PendingRequestOptions = {
@@ -257,8 +256,7 @@ const readEnabledConnector = async ({
 };
 
 type SubmitOutcome =
-  | { kind: "conflict" }
-  | { kind: "receipt"; receipt: RequestSecretOutput };
+  { kind: "conflict" } | { kind: "receipt"; receipt: RequestSecretOutput };
 
 const submitOutcomeResult = (outcome: SubmitOutcome) =>
   outcome.kind === "conflict"
@@ -470,7 +468,7 @@ const submitSecret = createSafeRootHandler(
 );
 // The thread fence comes first; the request's turn and receipt fences follow
 // in rank order inside the same transaction.
-declareAggregateMutation(submitSecret.handler, {
+declareAggregateMutation(submitSecret, {
   type: "aggregate",
   aggregates: ["chatThread"],
 });

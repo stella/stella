@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  SEVERITY,
   checkBaseline,
   compareSeverities,
   declaredBaseRules,
   effectiveBaseRules,
   flattenLayers,
+  SEVERITY,
   severityOf,
   shadowedDeclarations,
 } from "./oxlint-effective-config.ts";

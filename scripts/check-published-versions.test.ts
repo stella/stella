@@ -7,15 +7,283 @@ import { compareCodeUnit } from "../packages/collation/src/collation";
 import {
   checkRegistry,
   classifyPackage,
+  type NpmRunner,
   readPackageManifest,
   readPublishablePackages,
-  versionBumpTime,
+  type RegistryFetch,
   type RegistryResult,
+  versionBumpTime,
 } from "./check-npm-publish-lag";
+import {
+  checkPublishedVersions,
+  type GitRunner,
+} from "./check-published-versions";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const NOW = 2_000_000_000;
 const SENTINEL = "registry-private-response";
+const BUMP_COMMIT = "a".repeat(40);
+const DEPLOYED_COMMIT = "b".repeat(40);
+
+const journeyGit =
+  ({
+    deployedContainsBump = false,
+    tag = "v1.2.3",
+    recent = false,
+    shallow = "false",
+  }: {
+    deployedContainsBump?: boolean;
+    tag?: string;
+    recent?: boolean;
+    shallow?: string;
+  } = {}): GitRunner =>
+  (args) => {
+    const command = args.join(" ");
+    if (command === "rev-parse --is-shallow-repository") {
+      return { exitCode: 0, stdout: `${shallow}\n` };
+    }
+    if (args.at(0) === "show" && args.at(1)?.includes(":packages/")) {
+      const directory =
+        args.at(1)?.split(":packages/").at(1)?.split("/").at(0) ?? "unknown";
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({
+          name: `@stll/${directory}`,
+          version: "1.2.3",
+        }),
+      };
+    }
+    if (args.at(0) === "log" && args.includes("--format=journey-commit %ct")) {
+      return {
+        exitCode: 0,
+        stdout: recent
+          ? `journey-commit ${NOW - 60}\n- "version": "1.2.2"\n+ "version": "1.2.3"`
+          : "",
+      };
+    }
+    if (args.at(0) === "log" && args.includes("--format=%H")) {
+      return { exitCode: 0, stdout: `${BUMP_COMMIT}\n` };
+    }
+    if (args.at(0) === "cat-file") {
+      return { exitCode: 0, stdout: "" };
+    }
+    if (args.at(0) === "merge-base") {
+      return { exitCode: deployedContainsBump ? 0 : 1, stdout: "" };
+    }
+    if (args.at(0) === "tag") {
+      return { exitCode: 0, stdout: `${tag}\n` };
+    }
+    if (command === `show ${BUMP_COMMIT}:VERSION`) {
+      return { exitCode: 0, stdout: "1.2.4\n" };
+    }
+    return { exitCode: 2, stdout: "" };
+  };
+
+const runJourney = async ({
+  gitRunner = journeyGit(),
+  healthFetch = async () => Response.json({ commit: DEPLOYED_COMMIT }),
+  registryVersion = "1.2.2",
+  directories = ["cli"],
+}: {
+  gitRunner?: GitRunner;
+  healthFetch?: RegistryFetch;
+  registryVersion?: string;
+  directories?: readonly (typeof ALL_PACKAGE_ORDER)[number][];
+} = {}) => {
+  const lines: string[] = [];
+  let healthRequests = 0;
+  const failed = await checkPublishedVersions({
+    ref: "main",
+    registry: "https://registry.invalid",
+    cliUrl: "https://api.invalid",
+    timeoutMs: 50,
+    now: NOW,
+    directories,
+    gitRunner,
+    healthFetch: async (...args) => {
+      healthRequests += 1;
+      return healthFetch(...args);
+    },
+    registryFetch: async () => Response.json({ version: registryVersion }),
+    log: (line) => {
+      lines.push(line);
+    },
+  });
+  return { failed, lines, healthRequests };
+};
+
+describe("release promotion diagnosis", () => {
+  test("names the oldest stable release containing an undeployed bump", async () => {
+    const result = await runJourney();
+    expect(result).toEqual({
+      failed: true,
+      healthRequests: 1,
+      lines: [
+        "journey registry-@stll/cli failed publish_awaits_promote",
+        "journey-detail registry-@stll/cli awaits v1.2.3",
+      ],
+    });
+  });
+
+  test("names the earliest stable version despite reversed annotated-tag creation dates", async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "journey-release-tags-"),
+    );
+    const runGit = (args: readonly string[], date = "2026-01-01T00:00:00Z") => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-C",
+          directory,
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          ...args,
+        ],
+        {
+          env: {
+            ...process.env,
+            GIT_CONFIG_GLOBAL: "/dev/null",
+            GIT_CONFIG_NOSYSTEM: "1",
+            GIT_COMMITTER_DATE: date,
+            GIT_AUTHOR_DATE: date,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode).toBe(0);
+      return {
+        exitCode: result.exitCode,
+        stdout: new TextDecoder().decode(result.stdout),
+      };
+    };
+    try {
+      runGit(["init", "--quiet"]);
+      runGit(["commit", "--allow-empty", "-qm", "fixture"]);
+      const commit = runGit(["rev-parse", "HEAD"]).stdout.trim();
+      runGit(["tag", "-a", "v1.2.5-rc.1", "-m", "prerelease"]);
+      runGit(
+        ["tag", "-a", "v1.2.4", "-m", "later version"],
+        "2026-01-02T00:00:00Z",
+      );
+      runGit(
+        ["tag", "-a", "v1.2.3", "-m", "earlier version"],
+        "2026-01-03T00:00:00Z",
+      );
+      expect(
+        runGit(["tag", "--contains", commit, "--sort=creatordate"])
+          .stdout.trim()
+          .split("\n"),
+      ).toEqual(["v1.2.5-rc.1", "v1.2.4", "v1.2.3"]);
+      const base = journeyGit();
+      const gitRunner: GitRunner = (args) =>
+        args.at(0) === "tag"
+          ? runGit(args.map((arg) => (arg === BUMP_COMMIT ? commit : arg)))
+          : base(args);
+      const { lines } = await runJourney({ gitRunner });
+      expect(lines).toContain(
+        "journey-detail registry-@stll/cli awaits v1.2.3",
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("names an untagged bump from its VERSION file", async () => {
+    const { lines } = await runJourney({
+      gitRunner: journeyGit({ tag: "preview" }),
+    });
+    expect(lines).toContain(
+      "journey-detail registry-@stll/cli awaits v1.2.4 (untagged)",
+    );
+  });
+
+  test("keeps a registry ahead of main as a mismatch without fetching health", async () => {
+    const { lines, healthRequests } = await runJourney({
+      registryVersion: "1.2.4",
+    });
+    expect(healthRequests).toBe(0);
+    expect(lines).toEqual([
+      "journey registry-@stll/cli failed version_mismatch",
+    ]);
+  });
+
+  test("keeps a deployed bump as a registry mismatch", async () => {
+    const { lines } = await runJourney({
+      gitRunner: journeyGit({ deployedContainsBump: true }),
+    });
+    expect(lines).toEqual([
+      "journey registry-@stll/cli failed version_mismatch",
+    ]);
+  });
+
+  test.each([
+    [
+      "times out",
+      async () => {
+        throw new DOMException("timed out", "TimeoutError");
+      },
+    ],
+    ["returns non-JSON", async () => new Response("not json")],
+    ["omits commit", async () => Response.json({ status: "ok" })],
+  ] as const)("fails closed when health %s", async (_, healthFetch) => {
+    const { lines } = await runJourney({ healthFetch });
+    expect(lines).toEqual([
+      "journey registry-@stll/cli failed version_mismatch",
+    ]);
+  });
+
+  test.each([
+    ["is shallow", journeyGit({ shallow: "true" })],
+    [
+      "cannot report its depth",
+      (
+        (base: GitRunner): GitRunner =>
+        (args) =>
+          args.at(0) === "rev-parse"
+            ? { exitCode: 128, stdout: "" }
+            : base(args)
+      )(journeyGit()),
+    ],
+  ] as const)(
+    "fails closed without fetching health when history %s",
+    async (_, gitRunner) => {
+      const { lines, healthRequests } = await runJourney({ gitRunner });
+      expect(healthRequests).toBe(0);
+      expect(lines).toEqual([
+        "journey registry-@stll/cli failed version_mismatch",
+      ]);
+    },
+  );
+
+  test("fails closed when the deployed commit is absent locally", async () => {
+    const base = journeyGit();
+    const gitRunner: GitRunner = (args) =>
+      args.at(0) === "cat-file" ? { exitCode: 1, stdout: "" } : base(args);
+    const { lines } = await runJourney({ gitRunner });
+    expect(lines).toEqual([
+      "journey registry-@stll/cli failed version_mismatch",
+    ]);
+  });
+
+  test.each([
+    ["matching npm version", { registryVersion: "1.2.3" }],
+    ["recent bump", { gitRunner: journeyGit({ recent: true }) }],
+  ] as const)("does not fetch health for a %s", async (_, options) => {
+    const { healthRequests, lines } = await runJourney(options);
+    expect(healthRequests).toBe(0);
+    expect(lines.at(0)).toMatch(/ (passed ok|skipped publish_pending)$/u);
+  });
+
+  test("fetches health once for several lagging packages", async () => {
+    const { healthRequests } = await runJourney({
+      directories: ["cli", "chat", "ui"],
+    });
+    expect(healthRequests).toBe(1);
+  });
+});
 
 const run = async ({
   body = '{"version":"1.2.3"}',
@@ -43,6 +311,7 @@ const run = async ({
     const result = await checkRegistry({
       name: "@stll/fixture",
       version: "1.2.3",
+      movedRepository: undefined,
       bumpedAt,
       now: NOW,
       registry: server.url.toString(),
@@ -109,6 +378,7 @@ describe("published registry versions", () => {
       ).toEqual({
         status: "failed",
         reason: "version_mismatch",
+        latest: "1.2.2",
       });
     }
     expect(
@@ -255,11 +525,349 @@ describe("published registry versions", () => {
   );
 });
 
-const POLICY_RESULTS = {
-  passed: { status: "passed", reason: "ok" },
-  skipped: { status: "skipped", reason: "publish_pending" },
-  failed: { status: "failed", reason: "version_mismatch" },
-} as const satisfies Record<RegistryResult["status"], RegistryResult>;
+const provenanceStatement = ({
+  version = "1.2.4",
+  repository = "https://github.com/stella/moved.git",
+}: {
+  version?: string;
+  repository?: string;
+} = {}) => ({
+  subject: [{ name: `pkg:npm/%40stll/fixture@${version}` }],
+  predicate: {
+    buildDefinition: { externalParameters: { workflow: { repository } } },
+  },
+});
+
+const SLSA_PROVENANCE = "https://slsa.dev/provenance/v1";
+const NPM_PUBLISH_ATTESTATION =
+  "https://github.com/npm/attestation/tree/main/specs/publish/v0.1";
+
+const signedBundle = (
+  statement: unknown,
+  predicateType: string = SLSA_PROVENANCE,
+) => ({
+  predicateType,
+  bundle: {
+    dsseEnvelope: {
+      payload: Buffer.from(JSON.stringify(statement)).toBase64(),
+    },
+  },
+});
+
+// The shape npm 11.20.0 prints for `npm audit signatures --json
+// --include-attestations`: each verified package with its verified bundles.
+const verifiedEntry = (
+  version: string,
+  bundles: readonly unknown[] = [
+    signedBundle(provenanceStatement({ version }), NPM_PUBLISH_ATTESTATION),
+    signedBundle(provenanceStatement({ version })),
+  ],
+) => ({
+  name: "@stll/fixture",
+  version,
+  location: "node_modules/@stll/fixture",
+  registry: "https://registry.npmjs.org/",
+  attestations: {
+    url: `https://registry.npmjs.org/-/npm/v1/attestations/@stll%2ffixture@${version}`,
+    provenance: { predicateType: SLSA_PROVENANCE },
+  },
+  attestationBundles: bundles,
+});
+const auditReport = (verified: readonly unknown[]) =>
+  JSON.stringify({ invalid: [], missing: [], verified });
+
+const MOVED_LATEST = {
+  version: "1.2.4",
+  repository: "git+https://github.com/stella/moved.git/",
+};
+
+const runRepositoryCheck = async ({
+  latest = MOVED_LATEST,
+  movedRepository = "github.com/stella/moved",
+  bumpedAt = NOW - 60,
+  installedVersion = "1.2.4",
+  npmResults = [
+    { exitCode: 0, stdout: "" },
+    { exitCode: 0, stdout: auditReport([verifiedEntry("1.2.4")]) },
+  ],
+}: {
+  latest?: Record<string, unknown>;
+  movedRepository?: string | undefined;
+  bumpedAt?: number | undefined;
+  installedVersion?: string;
+  npmResults?: { exitCode: number; stdout: string }[];
+} = {}) => {
+  const npmCalls: Parameters<NpmRunner>[0][] = [];
+  const npmRunner: NpmRunner = async (options) => {
+    npmCalls.push(options);
+    const result = npmResults.at(npmCalls.length - 1) ?? {
+      exitCode: 1,
+      stdout: "",
+    };
+    if (options.args.at(0) === "install" && result.exitCode === 0) {
+      await Bun.write(
+        path.join(
+          options.cwd,
+          "node_modules",
+          "@stll",
+          "fixture",
+          "package.json",
+        ),
+        JSON.stringify({ name: "@stll/fixture", version: installedVersion }),
+      );
+    }
+    return result;
+  };
+  const server = Bun.serve({ port: 0, fetch: () => Response.json(latest) });
+  try {
+    const result = await checkRegistry({
+      name: "@stll/fixture",
+      version: "1.2.3",
+      movedRepository,
+      bumpedAt,
+      now: NOW,
+      registry: server.url.toString(),
+      timeoutMs: 5000,
+      npmRunner,
+    });
+    return { result, npmCalls };
+  } finally {
+    await server.stop(true);
+  }
+};
+
+const UNATTESTED = { status: "failed", reason: "unattested_publish" } as const;
+
+describe("published repository provenance", () => {
+  test.each([
+    ["exact", "1.2.3", undefined, { status: "passed", reason: "ok" }],
+    [
+      "pending",
+      "1.2.2",
+      NOW - 60,
+      { status: "skipped", reason: "publish_pending" },
+    ],
+    [
+      "mismatch",
+      "1.2.4",
+      undefined,
+      { status: "failed", reason: "version_mismatch", latest: "1.2.4" },
+    ],
+  ] as const)(
+    "keeps %s behavior for the same repository",
+    async (_, version, bumpedAt, expected) => {
+      const server = Bun.serve({
+        port: 0,
+        fetch: () =>
+          Response.json({
+            version,
+            repository: { url: "git+https://github.com/STELLA/stella.git/" },
+          }),
+      });
+      try {
+        expect(
+          await checkRegistry({
+            name: "@stll/fixture",
+            version: "1.2.3",
+            movedRepository: undefined,
+            bumpedAt,
+            now: NOW,
+            registry: server.url.toString(),
+            timeoutMs: 5000,
+          }),
+        ).toEqual(expected);
+      } finally {
+        await server.stop(true);
+      }
+    },
+  );
+
+  test("accepts a moved package only with npm's verified provenance", async () => {
+    const { result, npmCalls } = await runRepositoryCheck();
+    expect(result).toEqual({
+      status: "passed",
+      reason: "published_from_declared_repository",
+    });
+    expect(npmCalls.map(({ args }) => args)).toEqual([
+      [
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--registry",
+        expect.any(String),
+      ],
+      [
+        "exec",
+        "--yes",
+        "npm@11.20.0",
+        "--",
+        "audit",
+        "signatures",
+        "--json",
+        "--include-attestations",
+        "--registry",
+        expect.any(String),
+      ],
+    ]);
+    expect(npmCalls.at(0)?.env["npm_config_cache"]).toStartWith(
+      npmCalls.at(0)?.cwd ?? "not-called",
+    );
+  });
+
+  test.each([
+    [
+      "an invalid attestation",
+      JSON.stringify({
+        invalid: [{ name: "@stll/fixture", version: "1.2.4" }],
+        missing: [],
+        verified: [],
+      }),
+    ],
+    [
+      "a missing attestation",
+      JSON.stringify({
+        invalid: [],
+        missing: [{ name: "@stll/fixture", version: "1.2.4" }],
+        verified: [],
+      }),
+    ],
+    ["another package version", auditReport([verifiedEntry("9.9.9")])],
+    [
+      "an invalid dependency signature",
+      JSON.stringify({
+        invalid: [{ name: "@stll/fixture-dependency", version: "1.0.0" }],
+        missing: [],
+        verified: [verifiedEntry("1.2.4")],
+      }),
+    ],
+    [
+      "failures only, with no verified record (older npm)",
+      JSON.stringify({ invalid: [], missing: [] }),
+    ],
+    [
+      "a verified signature without a provenance bundle",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          signedBundle(provenanceStatement(), NPM_PUBLISH_ATTESTATION),
+        ]),
+      ]),
+    ],
+    [
+      "verified provenance from another repository",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          signedBundle(
+            provenanceStatement({
+              repository: "https://github.com/stella/other",
+            }),
+          ),
+        ]),
+      ]),
+    ],
+    [
+      "verified provenance for another subject version",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          signedBundle(provenanceStatement({ version: "1.2.3" })),
+        ]),
+      ]),
+    ],
+    [
+      "a verified bundle with a malformed payload",
+      auditReport([
+        verifiedEntry("1.2.4", [
+          {
+            predicateType: SLSA_PROVENANCE,
+            bundle: { dsseEnvelope: { payload: "not JSON" } },
+          },
+        ]),
+      ]),
+    ],
+    ["a report without its lists", JSON.stringify({})],
+  ])("rejects npm reporting %s", async (_, stdout) => {
+    const { result } = await runRepositoryCheck({
+      npmResults: [
+        { exitCode: 0, stdout: "" },
+        { exitCode: 0, stdout },
+      ],
+    });
+    expect(result).toEqual(UNATTESTED);
+  });
+
+  test.each([
+    [
+      "a package that is not on the moved list",
+      undefined,
+      "https://github.com/stella/stella",
+    ],
+    [
+      "a declared repository other than the listed move",
+      "github.com/stella/moved",
+      "https://github.com/stella/other",
+    ],
+  ])(
+    "compares versions for %s without consulting provenance",
+    async (_, movedRepository, declared) => {
+      const { result, npmCalls } = await runRepositoryCheck({
+        movedRepository,
+        // Outside the publication window, so only an exact match could pass.
+        bumpedAt: NOW - 2 * 24 * 60 * 60,
+        latest: { version: "1.2.4", repository: declared },
+      });
+      expect(result).toEqual({
+        status: "failed",
+        reason: "version_mismatch",
+        latest: "1.2.4",
+      });
+      expect(npmCalls).toHaveLength(0);
+    },
+  );
+
+  test("rejects a verified audit when npm installed another version", async () => {
+    const { result } = await runRepositoryCheck({ installedVersion: "1.2.3" });
+    expect(result).toEqual(UNATTESTED);
+  });
+
+  test.each([
+    ["an install failure", [{ exitCode: 1, stdout: "" }]],
+    [
+      "an audit failure",
+      [
+        { exitCode: 0, stdout: "" },
+        { exitCode: 1, stdout: "{}" },
+      ],
+    ],
+    [
+      "malformed audit JSON",
+      [
+        { exitCode: 0, stdout: "" },
+        { exitCode: 0, stdout: "not JSON" },
+      ],
+    ],
+  ])("rejects npm returning %s", async (_, npmResults) => {
+    const { result } = await runRepositoryCheck({ npmResults });
+    expect(result).toEqual(UNATTESTED);
+  });
+});
+
+const policyResult = (
+  status: RegistryResult["status"],
+  latest: string,
+): RegistryResult => {
+  switch (status) {
+    case "passed":
+      return { status: "passed", reason: "ok" };
+    case "skipped":
+      return { status: "skipped", reason: "publish_pending" };
+    case "failed":
+      return { status: "failed", reason: "version_mismatch", latest };
+    default: {
+      status satisfies never;
+      throw new Error("Unhandled policy status");
+    }
+  }
+};
 
 // Each row goes through both callers, including their different bump policies.
 const POLICY_MATRIX = [
@@ -293,12 +901,13 @@ describe("published version policy matrix", () => {
           const result = await checkRegistry({
             name: pkg.name,
             version: pkg.version,
+            movedRepository: undefined,
             bumpedAt: NOW - (window === "recent" ? 86_399 : 86_400),
             now: NOW,
             registry: server.url.toString(),
             timeoutMs: 5000,
           });
-          expect(result).toEqual(POLICY_RESULTS[row[window]]);
+          expect(result).toEqual(policyResult(row[window], row.latest));
         } finally {
           await server.stop(true);
         }

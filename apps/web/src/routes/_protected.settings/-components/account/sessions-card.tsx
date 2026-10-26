@@ -52,7 +52,7 @@ const MISSING_VALUE = "-";
 // and blank the entire profile page instead of just this card.
 export const SessionsCard = () => (
   <QuerySuspenseBoundary
-    area="account.sessions"
+    area="account-sessions"
     errorFallback={({ reset }) => <SessionsCardError onRetry={reset} />}
     suspenseFallback={<SessionsCardSkeleton />}
   >
@@ -152,7 +152,16 @@ const SessionsCardContent = () => {
 
               return (
                 <TableRow key={session.id}>
-                  <TableCell>{deviceLabel}</TableCell>
+                  <TableCell>
+                    {deviceLabel}
+                    {session.originClientName && (
+                      <p className="text-muted-foreground text-sm">
+                        {t("account.sessions.signedInFrom", {
+                          clientName: session.originClientName,
+                        })}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
                   <TableCell>
                     <Tooltip
@@ -229,7 +238,10 @@ const RevokeSessionButton = ({ sessionId }: RevokeSessionButtonProps) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RevokeSessionButton:failure",
+        scope: { type: "handler", handlerId: "RevokeSessionButton:failure" },
+      });
     },
   });
 
@@ -275,7 +287,10 @@ const RevokeAllDialog = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RevokeAllDialog:failure",
+        scope: { type: "handler", handlerId: "RevokeAllDialog:failure" },
+      });
     },
     onSettled: () => {
       setIsOpen(false);

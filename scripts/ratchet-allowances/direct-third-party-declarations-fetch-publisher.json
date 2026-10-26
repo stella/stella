@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/fetch/publisher returns typed Result values, so the package declares better-result, the repository's shared error-handling library."
+}

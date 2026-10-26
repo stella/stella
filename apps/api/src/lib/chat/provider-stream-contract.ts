@@ -4,7 +4,7 @@ import {
   toRunErrorPayload,
   toRunErrorRawEvent,
 } from "@tanstack/ai/adapter-internals";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ReasoningProvenance, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
@@ -26,8 +26,8 @@ import {
 import {
   recordedStopReasonOf,
   refuseTurnPausingRequest,
-  UNRECOGNIZED_STOP_REASON,
   unfinishedStopMessage,
+  UNRECOGNIZED_STOP_REASON,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";

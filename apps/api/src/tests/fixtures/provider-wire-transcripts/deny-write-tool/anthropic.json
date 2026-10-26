@@ -1,0 +1,446 @@
+{
+  "format": 1,
+  "scenario": "deny-write-tool",
+  "provider": "anthropic",
+  "model": "claude-opus-5-5",
+  "entries": [
+    {
+      "type": "expect_outbound",
+      "label": "ask",
+      "request": {
+        "path": "/v1/messages?beta=true",
+        "headers": {
+          "accept": "application/json",
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Delete the draft"
+            }
+          ],
+          "system": [
+            {
+              "type": "text",
+              "text": "[system prompt]"
+            }
+          ],
+          "tools": [
+            {
+              "name": "ask-user",
+              "cache_control": null
+            },
+            {
+              "name": "request_secret",
+              "cache_control": null
+            },
+            {
+              "name": "use_connector_secret",
+              "cache_control": null
+            },
+            {
+              "name": "execute_typescript",
+              "cache_control": null
+            },
+            {
+              "name": "discover_tools",
+              "cache_control": null
+            },
+            {
+              "name": "load-skill",
+              "cache_control": null
+            },
+            {
+              "name": "read-skill-resource",
+              "cache_control": null
+            },
+            {
+              "name": "counterparty_check",
+              "cache_control": null
+            },
+            {
+              "name": "update-entity-fields",
+              "cache_control": null
+            },
+            {
+              "name": "list_templates",
+              "cache_control": null
+            },
+            {
+              "name": "describe_template",
+              "cache_control": null
+            },
+            {
+              "name": "fill_template",
+              "cache_control": null
+            },
+            {
+              "name": "suggest_template_fields",
+              "cache_control": null
+            },
+            {
+              "name": "search-chat-history",
+              "cache_control": null
+            },
+            {
+              "name": "expand-chat-history",
+              "cache_control": null
+            },
+            {
+              "name": "search-past-chats",
+              "cache_control": null
+            },
+            {
+              "name": "create-document",
+              "cache_control": null
+            },
+            {
+              "name": "review_folder_consistency",
+              "cache_control": null
+            },
+            {
+              "name": "set_practice_jurisdictions",
+              "cache_control": null
+            },
+            {
+              "name": "create_template",
+              "cache_control": null
+            },
+            {
+              "name": "configure_template_fields",
+              "cache_control": null
+            },
+            {
+              "name": "save_document",
+              "cache_control": null
+            },
+            {
+              "name": "delete_document",
+              "cache_control": null
+            },
+            {
+              "name": "set_field_value",
+              "cache_control": null
+            },
+            {
+              "name": "save_matter",
+              "cache_control": null
+            },
+            {
+              "name": "delete_matter",
+              "cache_control": null
+            },
+            {
+              "name": "save_contact",
+              "cache_control": null
+            },
+            {
+              "name": "delete_contact",
+              "cache_control": null
+            },
+            {
+              "name": "save_task",
+              "cache_control": null
+            },
+            {
+              "name": "delete_task",
+              "cache_control": null
+            },
+            {
+              "name": "link_matter_contact",
+              "cache_control": null
+            },
+            {
+              "name": "save_clause",
+              "cache_control": null
+            },
+            {
+              "name": "delete_clause",
+              "cache_control": null
+            },
+            {
+              "name": "save_playbook",
+              "cache_control": null
+            },
+            {
+              "name": "run_playbook",
+              "cache_control": null
+            },
+            {
+              "name": "create_reader_annotation",
+              "cache_control": null
+            },
+            {
+              "name": "update_reader_annotation",
+              "cache_control": null
+            },
+            {
+              "name": "delete_reader_annotation",
+              "cache_control": null
+            },
+            {
+              "name": "add_matter_member",
+              "cache_control": null
+            },
+            {
+              "name": "remove_matter_member",
+              "cache_control": null
+            },
+            {
+              "name": "update_organization_settings",
+              "cache_control": null
+            },
+            {
+              "name": "mcp__external__delete",
+              "cache_control": null
+            },
+            {
+              "name": "spawn_subagents",
+              "cache_control": null
+            }
+          ],
+          "stream": true
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "tool-call"
+    },
+    {
+      "type": "expect_outbound",
+      "label": "after-denial",
+      "request": {
+        "path": "/v1/messages?beta=true",
+        "headers": {
+          "accept": "application/json",
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "claude-opus-5-5",
+          "max_tokens": 128000,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Delete the draft"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "[id-1]",
+                  "name": "mcp__external__delete",
+                  "input": {
+                    "name": "draft"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "[id-1]",
+                  "content": "{\"error\":\"User declined tool execution\"}",
+                  "is_error": true
+                }
+              ]
+            }
+          ],
+          "system": [
+            {
+              "type": "text",
+              "text": "[system prompt]"
+            }
+          ],
+          "tools": [
+            {
+              "name": "ask-user",
+              "cache_control": null
+            },
+            {
+              "name": "request_secret",
+              "cache_control": null
+            },
+            {
+              "name": "use_connector_secret",
+              "cache_control": null
+            },
+            {
+              "name": "execute_typescript",
+              "cache_control": null
+            },
+            {
+              "name": "discover_tools",
+              "cache_control": null
+            },
+            {
+              "name": "load-skill",
+              "cache_control": null
+            },
+            {
+              "name": "read-skill-resource",
+              "cache_control": null
+            },
+            {
+              "name": "counterparty_check",
+              "cache_control": null
+            },
+            {
+              "name": "update-entity-fields",
+              "cache_control": null
+            },
+            {
+              "name": "list_templates",
+              "cache_control": null
+            },
+            {
+              "name": "describe_template",
+              "cache_control": null
+            },
+            {
+              "name": "fill_template",
+              "cache_control": null
+            },
+            {
+              "name": "suggest_template_fields",
+              "cache_control": null
+            },
+            {
+              "name": "search-chat-history",
+              "cache_control": null
+            },
+            {
+              "name": "expand-chat-history",
+              "cache_control": null
+            },
+            {
+              "name": "search-past-chats",
+              "cache_control": null
+            },
+            {
+              "name": "create-document",
+              "cache_control": null
+            },
+            {
+              "name": "review_folder_consistency",
+              "cache_control": null
+            },
+            {
+              "name": "set_practice_jurisdictions",
+              "cache_control": null
+            },
+            {
+              "name": "create_template",
+              "cache_control": null
+            },
+            {
+              "name": "configure_template_fields",
+              "cache_control": null
+            },
+            {
+              "name": "save_document",
+              "cache_control": null
+            },
+            {
+              "name": "delete_document",
+              "cache_control": null
+            },
+            {
+              "name": "set_field_value",
+              "cache_control": null
+            },
+            {
+              "name": "save_matter",
+              "cache_control": null
+            },
+            {
+              "name": "delete_matter",
+              "cache_control": null
+            },
+            {
+              "name": "save_contact",
+              "cache_control": null
+            },
+            {
+              "name": "delete_contact",
+              "cache_control": null
+            },
+            {
+              "name": "save_task",
+              "cache_control": null
+            },
+            {
+              "name": "delete_task",
+              "cache_control": null
+            },
+            {
+              "name": "link_matter_contact",
+              "cache_control": null
+            },
+            {
+              "name": "save_clause",
+              "cache_control": null
+            },
+            {
+              "name": "delete_clause",
+              "cache_control": null
+            },
+            {
+              "name": "save_playbook",
+              "cache_control": null
+            },
+            {
+              "name": "run_playbook",
+              "cache_control": null
+            },
+            {
+              "name": "create_reader_annotation",
+              "cache_control": null
+            },
+            {
+              "name": "update_reader_annotation",
+              "cache_control": null
+            },
+            {
+              "name": "delete_reader_annotation",
+              "cache_control": null
+            },
+            {
+              "name": "add_matter_member",
+              "cache_control": null
+            },
+            {
+              "name": "remove_matter_member",
+              "cache_control": null
+            },
+            {
+              "name": "update_organization_settings",
+              "cache_control": null
+            },
+            {
+              "name": "mcp__external__delete",
+              "cache_control": null
+            },
+            {
+              "name": "spawn_subagents",
+              "cache_control": null
+            }
+          ],
+          "stream": true
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text"
+    }
+  ]
+}

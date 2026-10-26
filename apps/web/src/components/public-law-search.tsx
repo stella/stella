@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
 import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import { Button } from "@stll/ui/button";
-import { MessageSquareTextIcon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon, MessageSquareTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 

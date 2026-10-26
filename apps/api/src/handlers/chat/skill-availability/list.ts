@@ -1,25 +1,29 @@
 import { Result } from "better-result";
 import { and, eq, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   CHAT_EDIT_APPLY_MODE,
   CHAT_SKILL_DOCUMENT,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
+import {
+  arrayFromQuery,
+  booleanFromString,
+} from "@stll/api-contract/http-input";
 import { listSkillMetadata } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   CHAT_SKILL_AVAILABILITY_STATUS,
-  resolveCallerChatSkillAvailability,
   type ChatSkillContext,
+  resolveCallerChatSkillAvailability,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
 import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
@@ -41,34 +45,32 @@ const config = {
    * of the three switches is given, or all are. The client picks which chat
    * is evaluated; access to its matter and open file is checked here.
    */
-  query: t.Object({
-    anonymized: t.Optional(t.BooleanString()),
-    browserExtension: t.Optional(t.BooleanString()),
-    /** The matters the chat draws from, as a send's `contextMatterIds`. */
-    contextMatterIds: t.Optional(
-      t.Array(tSafeId("workspace"), { maxItems: LIMITS.workspacesCount }),
+  query: v.object({
+    anonymized: v.optional(booleanFromString()),
+    browserExtension: v.optional(booleanFromString()),
+    contextMatterIds: v.optional(
+      v.pipe(
+        arrayFromQuery(resourceIdSchema("workspace")),
+        v.maxLength(LIMITS.workspacesCount),
+      ),
     ),
-    document: t.Optional(
-      t.Union([
-        t.Literal(CHAT_SKILL_DOCUMENT.file),
-        t.Literal(CHAT_SKILL_DOCUMENT.draft),
-        t.Literal(CHAT_SKILL_DOCUMENT.template),
+    document: v.optional(
+      v.union([
+        v.literal(CHAT_SKILL_DOCUMENT.file),
+        v.literal(CHAT_SKILL_DOCUMENT.draft),
+        v.literal(CHAT_SKILL_DOCUMENT.template),
       ]),
     ),
-    /** The open file's entity, required with `document=file`. */
-    documentId: t.Optional(tSafeId("entity")),
-    /** How AI edits land; omitted means the send's default. */
-    editApplyMode: t.Optional(
-      t.Union([
-        t.Literal(CHAT_EDIT_APPLY_MODE.manual),
-        t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+    documentId: v.optional(resourceIdSchema("entity")),
+    editApplyMode: v.optional(
+      v.union([
+        v.literal(CHAT_EDIT_APPLY_MODE.manual),
+        v.literal(CHAT_EDIT_APPLY_MODE.auto),
       ]),
     ),
-    /** The open file's file field, as a send's `activeFile` carries it. */
-    fileFieldId: t.Optional(tSafeId("field")),
-    webSearch: t.Optional(t.BooleanString()),
-    /** The chat's matter; absent for a chat outside any matter. */
-    workspaceId: t.Optional(tSafeId("workspace")),
+    fileFieldId: v.optional(resourceIdSchema("field")),
+    webSearch: v.optional(booleanFromString()),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
   }),
 } satisfies HandlerConfig;
 

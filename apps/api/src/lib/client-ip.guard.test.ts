@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 /** The one module allowed to resolve the client address. */

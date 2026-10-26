@@ -85,6 +85,66 @@ describe("prepareTemplateFromDocument", () => {
     expect(unapplied).toEqual([]);
   });
 
+  test("keeps the original document when a part cannot be read completely", async () => {
+    // The body is readable and holds the literal, so it is rewritten first;
+    // the header part (rewritten too, though no section references it) ends
+    // inside an open <w:t>. The partial rewrite must not reach the result.
+    const file = await makeDocx(["Granted by Acme Ltd."]);
+    const zip = await JSZip.loadAsync(file.bytes);
+    writeZipEntry(
+      zip,
+      "word/header1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Acme</w:hdr>`,
+    );
+    const incomplete = testDocxFile(
+      await zip.generateAsync({ type: "uint8array" }),
+    );
+    const suggestions = [
+      { literalText: "Acme Ltd.", fieldPath: "company.name" },
+    ];
+
+    const result = await prepareTemplateFromDocument({
+      file: incomplete,
+      suggest: async () => suggestions,
+    });
+
+    expect(result.file).toBe(incomplete);
+    expect(result.fields).toEqual([]);
+    expect(result.unapplied).toEqual(suggestions);
+  });
+
+  test("refuses a document whose main part cannot be read, before any suggestion", async () => {
+    const file = await makeDocx(["Granted by Acme Ltd."]);
+    const zip = await JSZip.loadAsync(file.bytes);
+    const documentXml = await zip.file("word/document.xml")?.async("text");
+    if (documentXml === undefined) {
+      throw new Error("Fixture has no main document part");
+    }
+    writeZipEntry(
+      zip,
+      "word/document.xml",
+      documentXml.replace("<w:sectPr/>", "<w:p><w:r><w:t>Acme<w:sectPr/>"),
+    );
+    const unreadable = testDocxFile(
+      await zip.generateAsync({ type: "uint8array" }),
+    );
+    let suggestCalls = 0;
+
+    const rejection: unknown = await prepareTemplateFromDocument({
+      file: unreadable,
+      suggest: async () => {
+        suggestCalls += 1;
+        return [{ literalText: "Acme Ltd.", fieldPath: "company.name" }];
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(suggestCalls).toBe(0);
+  });
+
   test("propagates a suggest() rejection instead of swallowing it", async () => {
     // prepareTemplateFromDocument stays a thin pass-through: the decision to
     // degrade a model-call failure to an empty list (or surface it) belongs

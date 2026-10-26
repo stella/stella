@@ -13,8 +13,7 @@ type RetainedDraftSnapshot = {
 };
 
 type RetainedDraftChatBinding =
-  | { status: "bound"; threadId: ChatThreadId }
-  | { status: "unbound" };
+  { status: "bound"; threadId: ChatThreadId } | { status: "unbound" };
 
 let draftSavers: Record<string, CreateDocumentDraftSaver | undefined> = {};
 let retainedDraftSnapshots: Record<string, RetainedDraftSnapshot | undefined> =

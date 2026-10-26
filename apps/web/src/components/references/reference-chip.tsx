@@ -5,7 +5,13 @@ import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { LandmarkIcon, LibraryIcon, SkillIcon } from "@stll/ui/icons";
+import {
+  Building2Icon,
+  LandmarkIcon,
+  LibraryIcon,
+  PlugIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
@@ -13,6 +19,7 @@ import { cn } from "@stll/ui/utils";
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { skillRefDestination } from "@/components/chat/skill-ref-link";
+import { CHIP_ICON_CLASS } from "@/components/chip-scale";
 import { InlinePill } from "@/components/inline-pill";
 import { referenceHintOptions } from "@/components/references/reference-hints";
 import {
@@ -63,7 +70,7 @@ export const ReferenceRenderScope = ({
 export const useReferenceRenderWorkspaceId = (): string | undefined =>
   use(ReferenceRenderContext).workspaceId;
 
-const GLYPH_CLASS = "size-3 shrink-0";
+const GLYPH_CLASS = CHIP_ICON_CLASS;
 
 const toLiveFact = <TData, TValue>(
   query: { data: TData | undefined; isError: boolean; isPending: boolean },
@@ -114,7 +121,7 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
     ),
   );
   const hintQueryView = useQueryView(hintQuery);
-  useQueryViewError(hintQueryView);
+  useQueryViewError(hintQueryView, "useReferenceFacts:query");
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
@@ -230,6 +237,10 @@ const ReferenceGlyphIcon = ({
       ) : (
         <LibraryIcon className={GLYPH_CLASS} />
       );
+    case "registry":
+      return <Building2Icon className={GLYPH_CLASS} />;
+    case "connector":
+      return <PlugIcon className={GLYPH_CLASS} />;
     case "user":
       return (
         <UserIdentityAvatar
@@ -348,9 +359,11 @@ export const useReferenceActivation = (reference: ChatReference) => {
           navigate(skillRefDestination(reference.slug)),
           "reference-chip.open-skill",
         );
-    // A person has no page here; a corpus scope is not a document to open.
+    // A person has no page here; a source scope is not a document to open.
     case "user":
     case "corpus":
+    case "registry":
+    case "connector":
       return undefined;
     default:
       reference satisfies never;
