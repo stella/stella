@@ -397,8 +397,10 @@ export const decodeTraceString = (value: string): string => {
   }
   return Buffer.from(bytes).toString("utf-8");
 };
-// strace marks a string it cut short with "..." after the closing quote.
-const TRUNCATED_STRING = /"\.\.\./u;
+// strace marks a string it cut short with "..." after the closing quote. A
+// quote inside a string is printed escaped (`\"...` in a traced script is
+// text), so only a quote after an even run of backslashes closes one.
+const TRUNCATED_STRING = /(?<!\\)(?:\\\\)*"\.\.\./u;
 const assertWholeRecord = (line: string) => {
   if (TRUNCATED_STRING.test(line)) {
     panic(`Truncated trace record; raise the strace string limit: ${line}`);

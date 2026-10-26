@@ -4,6 +4,7 @@
       "apps/api/Dockerfile",
       "apps/legal-atlas-runner/package.json",
       "deploy/**",
+      "docker/**",
       "docs/self-hosting.md"
     ],
     "scripts/api-test-impact.test.ts": ["**"],
@@ -18,6 +19,10 @@
     "scripts/check-npm-publish-lag.test.ts": [
       ".github/workflows/publish-npm.yml",
       ".github/workflows/release-tag.yml"
+    ],
+    "scripts/check-registrations.test.ts": [
+      ".github/ci-checks/**",
+      "apps/api/**"
     ],
     "scripts/check-rust-test-determinism.test.ts": [
       "apps/**",

@@ -652,6 +652,32 @@ describe("directory scan coverage", () => {
     ).toThrow("Truncated trace record");
   });
 
+  test("an escaped quote before an ellipsis is text, not a cut string", () => {
+    for (const script of [
+      String.raw`git diff \"origin/$BASE_REF\"...HEAD`,
+      String.raw`echo \\\"...`,
+    ]) {
+      const trace = `1 execve("/usr/bin/bash", ["bash", "-c", "${script}"], 0x0) = 0`;
+      expect(() =>
+        undeclaredTracedFiles({
+          trace,
+          closure: new Set(),
+          declared: [],
+          tracked: new Set(),
+        }),
+      ).not.toThrow();
+    }
+    const cut = String.raw`1 execve("/usr/bin/bash", ["bash", "-c", "echo \\"...], 0x0) = 0`;
+    expect(() =>
+      undeclaredTracedFiles({
+        trace: cut,
+        closure: new Set(),
+        declared: [],
+        tracked: new Set(),
+      }),
+    ).toThrow("Truncated trace record");
+  });
+
   test("resolves subprocess scans against the process working directory", () => {
     withTrackedFixture(({ root, tracked }) => {
       const trace = [
