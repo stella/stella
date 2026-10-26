@@ -700,6 +700,54 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261025130000_reader_answer_continuation_spans",
+    form: "add-column",
+    reason:
+      "The NOT NULL jsonb column uses a constant '[]'::jsonb default on PostgreSQL's fast-default catalog path without scanning or rewriting answer rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "add-column",
+    reason:
+      "The three parsed-input fields and two captured raw-object keys are nullable and default-free catalog additions, without a corpus row scan or table rewrite; lock acquisition is bounded by 1s and the statement by 30s.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "add-constraint",
+    reason:
+      "The complete parsed-input CHECK is added NOT VALID without scanning existing corpus rows, under transaction-local 1s lock_timeout and 30s statement_timeout; the canonical online phase validates it after releasing the schema lock.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "create-trigger",
+    reason:
+      "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-column",
+    reason:
+      "The two nullable, default-free UUID binding columns are catalog-only additions without a table rewrite; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-constraint",
+    reason:
+      "The single-binding CHECK is added NOT VALID, enforcing new writes without scanning existing rows; the gated online phase validates it after deploy, with this catalog addition bounded by 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-foreign-key",
+    reason:
+      "The two composite binding foreign keys retain organization identity and are added NOT VALID without scanning existing rows; validation runs through the online table gate, while pre-deploy lock acquisition is bounded by 1s and each catalog statement by 5s.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "create-policy",
+    reason:
+      "The seven replacement policies retain organization and visibility checks, add binding reach, and allow a matter-bound skill's author to write it; each catalog-only replacement stays in the migration transaction under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261024193000_owner_erasure_paths",
     form: "create-policy",
     reason:
@@ -728,6 +776,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     form: "add-constraint",
     reason:
       "The three language CHECKs are added NOT VALID without scanning existing rows, under 5s lock_timeout and 30s statement_timeout; they are validated in the online phase after the schema lock is released.",
+  },
+  {
+    migration: "20261024214500_invoice_vat_exchange_rate",
+    form: "add-column",
+    reason:
+      "The five VAT exchange-rate columns are nullable and default-free, a catalog-only addition without a table rewrite, under 1s lock_timeout and 5s statement_timeout.",
   },
   {
     migration: "20261024190200_case_law_decision_date_floor_gbr",

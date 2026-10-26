@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
 
@@ -15,7 +15,7 @@ import {
   isChatModelReasoningEffortAvailable,
   isChatModelSelectionAvailable,
 } from "@/api/lib/chat-model-selection";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -23,27 +23,20 @@ const config = {
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
-  // A required (not optional) union: Elysia coerces an absent optional
-  // `UnionEnum`-adjacent field, so a dedicated required body avoids that
-  // gotcha (see `webSearchEnabled` on updateThread for the sibling toggle).
-  body: t.Object({
-    model: t.Union([t.String(), t.Null()]),
-    // Optional for rolling compatibility with clients that predate the effort
-    // control. Literal union avoids Elysia's absent-UnionEnum coercion.
-    reasoningEffort: t.Optional(
-      t.Union([
-        t.Literal("none"),
-        t.Literal("minimal"),
-        t.Literal("low"),
-        t.Literal("medium"),
-        t.Literal("high"),
-        t.Literal("xhigh"),
-        t.Literal("max"),
-        t.Null(),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    model: v.union([v.string(), v.null()]),
+    reasoningEffort: v.optional(
+      v.union([
+        v.literal("none"),
+        v.literal("minimal"),
+        v.literal("low"),
+        v.literal("medium"),
+        v.literal("high"),
+        v.literal("xhigh"),
+        v.literal("max"),
+        v.null(),
       ]),
     ),
   }),

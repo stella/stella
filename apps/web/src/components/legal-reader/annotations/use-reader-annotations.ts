@@ -43,7 +43,7 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -59,6 +59,56 @@ type ReaderAnnotations = {
   /** Marks this tab holds that no account owns yet. */
   guestCount: number;
   mode: "authenticated" | "guest";
+};
+
+type MigrateGuestAnnotationOptions = {
+  item: ReturnType<typeof readGuestAnnotationStore>["items"][number];
+  storage: Parameters<typeof removeGuestAnnotation>[0];
+};
+
+const migrateGuestAnnotation = async ({
+  item,
+  storage,
+}: MigrateGuestAnnotationOptions) => {
+  const migrated = await Result.tryPromise(async () => {
+    const response = await api.reader.annotations.post({
+      ...item.input,
+      requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
+      targetId: item.targetId,
+      targetType: item.targetType,
+    });
+    unwrapApiResponse(response);
+  });
+  if (Result.isError(migrated)) {
+    getAnalytics().captureError(migrated.error, {
+      fingerprintKey: "useReaderAnnotations.operation:failure",
+      scope: {
+        type: "handler",
+        handlerId: `reader-annotations.guest.${item.targetType}.migrate`,
+      },
+      context: {
+        operation: "legal-reader.guest-annotation.migrate",
+        type: "detached",
+      },
+    });
+    return migrated;
+  }
+  const removed = removeGuestAnnotation(storage, item.requestId);
+  if (Result.isError(removed)) {
+    getAnalytics().captureError(removed.error, {
+      fingerprintKey: "useReaderAnnotations.operation:failure-2",
+      scope: {
+        type: "handler",
+        handlerId: `reader-annotations.guest.${item.targetType}.remove-migrated`,
+      },
+      context: {
+        operation: "legal-reader.guest-annotation.migrate",
+        type: "detached",
+      },
+    });
+    return removed;
+  }
+  return Result.ok(undefined);
 };
 
 /**
@@ -87,16 +137,17 @@ export const useReaderAnnotations = (
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, `useReaderAnnotations.${target.type}:query`);
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: `reader-annotations.${target.type}`,
     create: async (input: CreateAnnotationInput) => {
       const response = await api.reader.annotations.post({
         ...input,
         ...targetKey,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     pendingInput: (input) => input,
     queryKey,
@@ -104,13 +155,13 @@ export const useReaderAnnotations = (
       const response = await api.reader
         .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
         .delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     update: async ({ id, ...change }: UpdateAnnotationInput) => {
       const response = await api.reader
         .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
         .patch(change);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -134,33 +185,11 @@ export const useReaderAnnotations = (
         const results = await mapWithConcurrency({
           items: store.items,
           limit: GUEST_ANNOTATION_MIGRATION_CONCURRENCY,
-          operation: async (item) => {
-            const migrated = await Result.tryPromise(async () => {
-              const response = await api.reader.annotations.post({
-                ...item.input,
-                requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
-                targetId: item.targetId,
-                targetType: item.targetType,
-              });
-              unwrapEden(response);
-            });
-            if (Result.isError(migrated)) {
-              getAnalytics().captureError(migrated.error, {
-                operation: "legal-reader.guest-annotation.migrate",
-                type: "detached",
-              });
-              return migrated;
-            }
-            const removed = removeGuestAnnotation(storage, item.requestId);
-            if (Result.isError(removed)) {
-              getAnalytics().captureError(removed.error, {
-                operation: "legal-reader.guest-annotation.migrate",
-                type: "detached",
-              });
-              return removed;
-            }
-            return Result.ok(undefined);
-          },
+          operation: async (item) =>
+            await migrateGuestAnnotation({
+              item,
+              storage,
+            }),
         });
         setStore(readGuestAnnotationStore(storage));
         await queryClient.invalidateQueries({
@@ -197,6 +226,7 @@ export const useReaderAnnotations = (
       next,
       storage,
       unavailableMessage: t("legalReader.annotations.guestStorageUnavailable"),
+      targetType: target.type,
     });
     if (Result.isOk(persisted)) {
       setStore(next);
@@ -334,6 +364,7 @@ type GuestAnnotationAction = "create" | "delete" | "update";
 
 type PersistGuestAnnotationStoreOptions = {
   action: GuestAnnotationAction;
+  targetType: ReaderAnnotationTarget["type"];
   next: Parameters<typeof writeGuestAnnotationStore>[1];
   storage: Parameters<typeof writeGuestAnnotationStore>[0] | null;
   unavailableMessage: string;
@@ -342,6 +373,7 @@ type PersistGuestAnnotationStoreOptions = {
 /** Writes the tab's marks, telling the reader when the tab cannot keep them. */
 function persistGuestAnnotationStore({
   action,
+  targetType,
   next,
   storage,
   unavailableMessage,
@@ -358,8 +390,15 @@ function persistGuestAnnotationStore({
   const stored = writeGuestAnnotationStore(storage, next);
   if (Result.isError(stored)) {
     getAnalytics().captureError(stored.error, {
-      operation: `legal-reader.guest-annotation.${action}`,
-      type: "detached",
+      fingerprintKey: "useReaderAnnotations.commit:failure",
+      scope: {
+        type: "handler",
+        handlerId: `reader-annotations.guest.${targetType}.${action}`,
+      },
+      context: {
+        operation: `legal-reader.guest-annotation.${action}`,
+        type: "detached",
+      },
     });
     notifyUserError(stored.error, unavailableMessage);
     return Result.err(stored.error);

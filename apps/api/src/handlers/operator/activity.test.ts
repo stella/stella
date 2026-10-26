@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import { routes } from "@/api/http/route";
 import type { OperatorActivitySummary } from "@/api/lib/db/operator-activity/read";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import { createOperatorActivity } from "./activity";
 
@@ -34,12 +38,16 @@ const summary = {
   },
 } satisfies OperatorActivitySummary;
 
-const createApp = (options: Parameters<typeof createOperatorActivity>[0]) => {
-  const activity = createOperatorActivity(options);
-  return new Elysia().get("/operator/activity", activity.handler, {
-    query: activity.config.query,
-  });
-};
+// The pipeline's cache stage and error boundary, as production composes them.
+const createApp = (options: Parameters<typeof createOperatorActivity>[0]) =>
+  serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/operator/activity": { GET: createOperatorActivity(options) },
+      }),
+      middleware: [responseCachePolicy, errorBoundary],
+    }),
+  );
 
 const request = (query: string, headers?: Record<string, string>) =>
   new Request(`http://localhost/operator/activity${query}`, { headers });
@@ -66,7 +74,7 @@ describe("operator activity HTTP boundary", () => {
       },
     ]) {
       let reads = 0;
-      const app = createApp({
+      await using app = createApp({
         configuredToken: () => configuredToken,
         now: () => NOW,
         readSummary: async () => {
@@ -75,7 +83,7 @@ describe("operator activity HTTP boundary", () => {
         },
       });
       for (const query of ["", "?email=private@example.test&limit=-1"]) {
-        const response = await app.handle(request(query, headers));
+        const response = await app.fetch(request(query, headers));
         expect(response.status).toBe(status);
         expect(response.headers.get("cache-control")).toBe("private, no-store");
         const body = await response.text();
@@ -90,7 +98,7 @@ describe("operator activity HTTP boundary", () => {
   test("projects only weekly aggregates, timestamp, timezone and unavailable reasons", async () => {
     const secret = Bun.randomUUIDv7();
     const readTimes: number[] = [];
-    const app = createApp({
+    await using app = createApp({
       configuredToken: () => secret,
       now: () => NOW,
       readSummary: async (now) => {
@@ -112,7 +120,7 @@ describe("operator activity HTTP boundary", () => {
         };
       },
     });
-    const response = await app.handle(
+    const response = await app.fetch(
       request("", { authorization: `Bearer ${secret}` }),
     );
     expect(response.status).toBe(200);
@@ -124,7 +132,7 @@ describe("operator activity HTTP boundary", () => {
   test("rejects every supplied query parameter after authorization without reading", async () => {
     const secret = Bun.randomUUIDv7();
     let reads = 0;
-    const app = createApp({
+    await using app = createApp({
       configuredToken: () => secret,
       readSummary: async () => {
         reads += 1;
@@ -137,24 +145,28 @@ describe("operator activity HTTP boundary", () => {
       "?unknown=",
       "?unknown=a&unknown=b",
     ]) {
-      const response = await app.handle(
+      const response = await app.fetch(
         request(query, { authorization: `Bearer ${secret}` }),
       );
-      expect(response.status).toBe(400);
+      // A request that fails its route's schema is the caller's 422.
+      expect(response.status).toBe(422);
       expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(await response.json()).toMatchObject({
+        message: "Invalid request",
+      });
     }
     expect(reads).toBe(0);
   });
 
   test("surfaces read failures without leaking their details", async () => {
     const secret = Bun.randomUUIDv7();
-    const app = createApp({
+    await using app = createApp({
       configuredToken: () => secret,
       readSummary: async () => {
         throw new TypeError("activity read failed for private@example.test");
       },
     });
-    const response = await app.handle(
+    const response = await app.fetch(
       request("", { authorization: `Bearer ${secret}` }),
     );
     expect(response.status).toBe(500);

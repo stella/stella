@@ -1274,7 +1274,7 @@ const RegistryAutofillControl = ({
     const seq = lookupSeq.current;
     setLoading(true);
     // A timeout, dropped connection, or DNS failure throws instead of
-    // resolving to an Eden `.error` response, which would otherwise leave
+    // resolving to an API client `.error` response, which would otherwise leave
     // `loading` stuck forever (see runDownload's own catch below for the
     // same class of bug on the fill/download path).
     let response: Awaited<
@@ -1291,7 +1291,13 @@ const RegistryAutofillControl = ({
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RegistryAutofillControl.handleLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegistryAutofillControl.handleLookup:failure",
+        },
+      });
       return;
     }
     const { data, error } = response;
@@ -1934,7 +1940,10 @@ export const TemplateForm = ({
 
       const aiFieldPaths = readAiFieldErrorPaths(response.response.headers);
       if (Result.isError(aiFieldPaths)) {
-        getAnalytics().captureError(aiFieldPaths.error);
+        getAnalytics().captureError(aiFieldPaths.error, {
+          fingerprintKey: "TemplateForm:failure",
+          scope: { type: "handler", handlerId: "TemplateForm:failure" },
+        });
         stellaToast.add({
           type: "warning",
           title: t("common.unexpectedError"),
@@ -1952,7 +1961,10 @@ export const TemplateForm = ({
         response.response.headers,
       );
       if (Result.isError(undecidedLabels)) {
-        getAnalytics().captureError(undecidedLabels.error);
+        getAnalytics().captureError(undecidedLabels.error, {
+          fingerprintKey: "TemplateForm:failure-2",
+          scope: { type: "handler", handlerId: "TemplateForm:failure-2" },
+        });
         stellaToast.add({
           type: "warning",
           title: t("common.unexpectedError"),
@@ -1968,7 +1980,10 @@ export const TemplateForm = ({
 
       const clauseWarnings = readClauseWarnings(response.response.headers);
       if (clauseWarnings.isErr()) {
-        getAnalytics().captureError(clauseWarnings.error);
+        getAnalytics().captureError(clauseWarnings.error, {
+          fingerprintKey: "TemplateForm:failure-3",
+          scope: { type: "handler", handlerId: "TemplateForm:failure-3" },
+        });
         stellaToast.add({
           type: "warning",
           title: t("common.unexpectedError"),
@@ -1999,7 +2014,7 @@ export const TemplateForm = ({
   );
 
   // Run a download and surface a thrown fill/convert failure as a toast.
-  // handleDownload's own error-toast only covers Eden `.error` responses; a
+  // handleDownload's own error-toast only covers API client `.error` responses; a
   // timeout, dropped connection, or blob-read failure throws instead, which
   // would otherwise be swallowed into a silent no-op that also leaves the
   // button stuck on its "generating" label.
@@ -2020,7 +2035,10 @@ export const TemplateForm = ({
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         },
       );
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateForm.runDownload:failure",
+        scope: { type: "handler", handlerId: `template-export.${format}` },
+      });
     });
   };
 
@@ -2143,7 +2161,13 @@ export const TemplateForm = ({
         }),
       );
       if (Result.isError(destinationResult)) {
-        getAnalytics().captureError(destinationResult.error);
+        getAnalytics().captureError(destinationResult.error, {
+          fingerprintKey: "TemplateForm.performFillToMatter:failure",
+          scope: {
+            type: "handler",
+            handlerId: "TemplateForm.performFillToMatter:failure",
+          },
+        });
       }
       const destination = Result.isError(destinationResult)
         ? null

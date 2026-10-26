@@ -15,72 +15,74 @@ case_law_replay_batches.first_decision_id      safeUuid     not null          ca
 case_law_replay_batches.last_decision_id       safeUuid     not null          case-law-replay.ts:54
 case_law_replay_batches.parser_version_from    integer      null              case-law-replay.ts:55
 case_law_replay_batches.parser_version_to      integer      not null          case-law-replay.ts:56
-case_law_replay_batches.budget_day             date         not null          case-law-replay.ts:57
-case_law_replay_batches.status                 text         not null          case-law-replay.ts:58
-case_law_replay_batches.outcome                text         null              case-law-replay.ts:59
-case_law_replay_batches.attempted              integer      not null          case-law-replay.ts:60
-case_law_replay_batches.applied                integer      default,not null  case-law-replay.ts:61
-case_law_replay_batches.blocked                integer      default,not null  case-law-replay.ts:62
-case_law_replay_batches.failed                 integer      default,not null  case-law-replay.ts:63
-case_law_replay_batches.duration_ms            integer      default,not null  case-law-replay.ts:64
-case_law_replay_batches.gate_verdict           jsonb        not null          case-law-replay.ts:65
-case_law_replay_batches.created_at             timestamptz  default,not null  case-law-replay.ts:66
-case_law_replay_batches.completed_at           timestamptz  null              case-law-replay.ts:67
-case_law_replay_batches.superseded_at          timestamptz  null              case-law-replay.ts:68
-case_law_replay_batches.attempts               integer      default,not null  case-law-replay.ts:69
-case_law_replay_batches.readmissions           integer      default,not null  case-law-replay.ts:70
-case_law_replay_batches.systemic_failures      integer      default,not null  case-law-replay.ts:71
-case_law_replay_batches.systemic_progress      bigint       default,not null  case-law-replay.ts:72
-case_law_replay_batches.attempt_state          text         default,not null  case-law-replay.ts:76
-case_law_replay_batches.retry_at               timestamptz  null              case-law-replay.ts:80
-case_law_replay_batches.failure_code           text         null              case-law-replay.ts:81
-case_law_replay_batches.failure_message_class  text         null              case-law-replay.ts:82
+case_law_replay_batches.source_raw_s3_key      varchar      null              case-law-replay.ts:58  Immutable raw generation captured when this reservation was created; null for legacy reservations.
+case_law_replay_batches.budget_day             date         not null          case-law-replay.ts:59
+case_law_replay_batches.status                 text         not null          case-law-replay.ts:60
+case_law_replay_batches.outcome                text         null              case-law-replay.ts:61
+case_law_replay_batches.attempted              integer      not null          case-law-replay.ts:62
+case_law_replay_batches.applied                integer      default,not null  case-law-replay.ts:63
+case_law_replay_batches.blocked                integer      default,not null  case-law-replay.ts:64
+case_law_replay_batches.failed                 integer      default,not null  case-law-replay.ts:65
+case_law_replay_batches.duration_ms            integer      default,not null  case-law-replay.ts:66
+case_law_replay_batches.gate_verdict           jsonb        not null          case-law-replay.ts:67
+case_law_replay_batches.created_at             timestamptz  default,not null  case-law-replay.ts:68
+case_law_replay_batches.completed_at           timestamptz  null              case-law-replay.ts:69
+case_law_replay_batches.superseded_at          timestamptz  null              case-law-replay.ts:70
+case_law_replay_batches.attempts               integer      default,not null  case-law-replay.ts:71
+case_law_replay_batches.readmissions           integer      default,not null  case-law-replay.ts:72
+case_law_replay_batches.systemic_failures      integer      default,not null  case-law-replay.ts:73
+case_law_replay_batches.systemic_progress      bigint       default,not null  case-law-replay.ts:74
+case_law_replay_batches.attempt_state          text         default,not null  case-law-replay.ts:78
+case_law_replay_batches.retry_at               timestamptz  null              case-law-replay.ts:82
+case_law_replay_batches.failure_code           text         null              case-law-replay.ts:83
+case_law_replay_batches.failure_message_class  text         null              case-law-replay.ts:84
 ```
 
-## case_law_replay_blocked · `caseLawReplayBlocked` · case-law-replay.ts:153 · rls
+## case_law_replay_blocked · `caseLawReplayBlocked` · case-law-replay.ts:156 · rls
 
-Any terminal receipt excludes its target version until the parser advances.
+One current terminal receipt per decision and target parser.
 
 ```text
-case_law_replay_blocked.source_id            safeUuid     fk,not null       case-law-replay.ts:156
-case_law_replay_blocked.decision_id          safeUuid     not null          case-law-replay.ts:159
-case_law_replay_blocked.parser_version_from  integer      null              case-law-replay.ts:160
-case_law_replay_blocked.parser_version_to    integer      not null          case-law-replay.ts:161
-case_law_replay_blocked.outcome              text         not null          case-law-replay.ts:162
-case_law_replay_blocked.reason               text         null              case-law-replay.ts:163
-case_law_replay_blocked.detail               text         null              case-law-replay.ts:164
-case_law_replay_blocked.created_at           timestamptz  default,not null  case-law-replay.ts:165
+case_law_replay_blocked.source_id            safeUuid     fk,not null       case-law-replay.ts:159
+case_law_replay_blocked.decision_id          safeUuid     not null          case-law-replay.ts:162
+case_law_replay_blocked.source_raw_s3_key    varchar      null              case-law-replay.ts:164  Exact raw generation verified at completion; null means unknown.
+case_law_replay_blocked.parser_version_from  integer      null              case-law-replay.ts:165
+case_law_replay_blocked.parser_version_to    integer      not null          case-law-replay.ts:166
+case_law_replay_blocked.outcome              text         not null          case-law-replay.ts:167
+case_law_replay_blocked.reason               text         null              case-law-replay.ts:168
+case_law_replay_blocked.detail               text         null              case-law-replay.ts:169
+case_law_replay_blocked.created_at           timestamptz  default,not null  case-law-replay.ts:170
 ```
 
-## case_law_replay_daily_rows · `caseLawReplayDailyRows` · case-law-replay.ts:196 · rls
+## case_law_replay_daily_rows · `caseLawReplayDailyRows` · case-law-replay.ts:201 · rls
 
 Recovery can charge the same reservation on a later UTC day, once per day.
 
 ```text
-case_law_replay_daily_rows.batch_id    text      not null     case-law-replay.ts:199
-case_law_replay_daily_rows.budget_day  date      not null     case-law-replay.ts:200
-case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts:201
+case_law_replay_daily_rows.batch_id    text      not null     case-law-replay.ts:204
+case_law_replay_daily_rows.budget_day  date      not null     case-law-replay.ts:205
+case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts:206
 ```
 
-## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:226 · rls
+## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:231 · rls
 
 ```text
-case_law_replay_source_progress.source_id               safeUuid     not null          case-law-replay.ts:229
-case_law_replay_source_progress.ticks_without_progress  integer      default,not null  case-law-replay.ts:230
-case_law_replay_source_progress.last_completed_at       timestamptz  null              case-law-replay.ts:234
-case_law_replay_source_progress.completed_rows          bigint       default,not null  case-law-replay.ts:235
+case_law_replay_source_progress.source_id               safeUuid     not null          case-law-replay.ts:234
+case_law_replay_source_progress.ticks_without_progress  integer      default,not null  case-law-replay.ts:235
+case_law_replay_source_progress.last_completed_at       timestamptz  null              case-law-replay.ts:239
+case_law_replay_source_progress.completed_rows          bigint       default,not null  case-law-replay.ts:240
 ```
 
-## case_law_replay_audit_events · `caseLawReplayAuditEvents` · case-law-replay.ts:299 · rls
+## case_law_replay_audit_events · `caseLawReplayAuditEvents` · case-law-replay.ts:304 · rls
 
 Independent of receipt FKs: audit history survives bounded receipt compaction.
 
 ```text
-case_law_replay_audit_events.id           text         not null          case-law-replay.ts:302
-case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:303
-case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:304
-case_law_replay_audit_events.action       text         not null          case-law-replay.ts:305
-case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:306
-case_law_replay_audit_events.details      jsonb        not null          case-law-replay.ts:307
-case_law_replay_audit_events.created_at   timestamptz  default,not null  case-law-replay.ts:308
+case_law_replay_audit_events.id           text         not null          case-law-replay.ts:307
+case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:308
+case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:309
+case_law_replay_audit_events.action       text         not null          case-law-replay.ts:310
+case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:311
+case_law_replay_audit_events.details      jsonb        not null          case-law-replay.ts:312
+case_law_replay_audit_events.created_at   timestamptz  default,not null  case-law-replay.ts:313
 ```

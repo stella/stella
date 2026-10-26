@@ -23,7 +23,15 @@ export const useWebReaderPresentationAdapters =
         url.hash = anchorId;
         const copied = await copyToClipboard(url.href);
         if (Result.isError(copied)) {
-          analytics.captureError(copied.error);
+          analytics.captureError(copied.error, {
+            fingerprintKey:
+              "useWebReaderPresentationAdapters.copyPermalink:failure",
+            scope: {
+              type: "handler",
+              handlerId:
+                "useWebReaderPresentationAdapters.copyPermalink:failure",
+            },
+          });
           notifyUserError(copied.error, t("errors.actionFailed"));
           return false;
         }

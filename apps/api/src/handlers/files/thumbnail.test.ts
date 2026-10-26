@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -82,8 +82,8 @@ const recordingAudit = () => {
 };
 
 const expectStatus = (response: unknown, code: number) => {
-  expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
+  expect(response).toBeInstanceOf(HttpStatusResponse);
+  if (response instanceof HttpStatusResponse) {
     expect(response.code).toBe(code);
   }
 };

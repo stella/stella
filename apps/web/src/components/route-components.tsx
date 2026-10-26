@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "@tanstack/react-router";
+import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -31,6 +31,7 @@ import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import { resolveCaughtRouteTemplate } from "@/lib/analytics/route-error-lifecycle";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -115,6 +116,9 @@ export const DefaultErrorComponent = ({
   className,
 }: DefaultErrorComponentProps) => {
   const analytics = useAnalytics();
+  const routeTemplate = useRouterState({
+    select: ({ matches }) => resolveCaughtRouteTemplate(matches),
+  });
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const isCancelledError = error instanceof CancelledError;
@@ -131,7 +135,11 @@ export const DefaultErrorComponent = ({
             query.state.status === "error",
         })
         .catch((refetchError: unknown) => {
-          analytics.captureError(refetchError);
+          analytics.captureError(refetchError, {
+            fingerprintKey:
+              "DefaultErrorComponent.retryErroredQueries:refetchError",
+            scope: { type: "request", method: "GET", routeTemplate },
+          });
         });
 
       reset();
@@ -157,7 +165,10 @@ export const DefaultErrorComponent = ({
 
     if (retriesAtLimit) {
       reportErrorOnce(error, (caughtError) => {
-        analytics.captureError(caughtError);
+        analytics.captureError(caughtError, {
+          fingerprintKey: "DefaultErrorComponent:failure",
+          scope: { type: "request", method: "GET", routeTemplate },
+        });
       });
     }
   }, [
@@ -167,6 +178,7 @@ export const DefaultErrorComponent = ({
     networkError,
     isCancelledError,
     retriesAtLimit,
+    routeTemplate,
   ]);
 
   const t = useTranslations();

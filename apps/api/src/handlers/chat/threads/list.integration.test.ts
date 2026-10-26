@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
@@ -214,6 +214,7 @@ const listThreads = async (
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
       request: new Request("http://localhost/v1/chat/threads"),
+      route: "/v1/chat/threads",
       safeDb: scopedTo(workspaceIds),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -524,6 +525,7 @@ describe("chat thread list matter filter", () => {
           ...(cursor === undefined ? {} : { cursor }),
         },
         request: new Request("http://localhost/v1/chat/threads"),
+        route: "/v1/chat/threads",
         safeDb: scopedTo(workspaceIds),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -657,10 +659,8 @@ describe("chat thread list matter filter", () => {
 
   test("rejects a matter id that is not a safe identifier at the query boundary", () => {
     const querySchema = getThreads.config.query;
-    expect(Value.Check(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
-    expect(Value.Check(querySchema, { workspaceId: "not-a-matter-id" })).toBe(
-      false,
-    );
+    expect(v.is(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
+    expect(v.is(querySchema, { workspaceId: "not-a-matter-id" })).toBe(false);
   });
 });
 

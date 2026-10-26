@@ -146,6 +146,8 @@ describe("document review run history across versions", () => {
 
     const result = await listDocumentReviewRuns.handler(
       asTestRaw<Parameters<typeof listDocumentReviewRuns.handler>[0]>({
+        request: new Request("https://api.example.test/handler"),
+        route: "/v1/workspaces/:workspaceId/document-reviews/runs",
         memberRole: sessionMemberRole("owner"),
         params: { workspaceId: ids.wsA1 },
         query: { entityId: ids.entityA1, fileFieldId: laterFieldId },

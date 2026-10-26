@@ -248,12 +248,12 @@ describe("organization_member_capacity", () => {
       expected: 3,
     },
     {
-      name: "a per-seat policy without a member bound is unbounded",
+      name: "a per-seat policy without a member bound bounds by its seats",
       shape: {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 1 },
+        entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 3 },
       },
-      expected: null,
+      expected: 3,
     },
     {
       name: "a member bound below the seats wins",
@@ -339,23 +339,23 @@ describe("member insert guard", () => {
     });
   });
 
-  test("leaves a per-seat entitlement whose policy sets no member bound unbounded", async () => {
+  test("bounds a per-seat entitlement whose policy sets no member bound by its seats", async () => {
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 1 },
+        entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 2 },
       });
-      for (let index = 0; index < 3; index += 1) {
-        expect(await tryAddMember(tx, organizationId)).toBe("added");
-      }
-      expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
-        null,
-      );
+      expect(await tryAddMember(tx, organizationId)).toBe("added");
+      expect(await tryAddMember(tx, organizationId)).toBe("added");
+      expect(await tryAddMember(tx, organizationId)).toBe("refused");
+      expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(2);
       const admission = await checkMemberAdmission(tx, {
         organizationId,
         kind: "invitation",
       });
-      expect(Result.isOk(admission)).toBe(true);
+      expect(Result.isError(admission) && admission.error.code).toBe(
+        MEMBER_CAPACITY_REACHED_ERROR_CODE,
+      );
     });
   });
 
@@ -417,7 +417,7 @@ describe("checkMemberAdmission", () => {
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 1 },
+        entitlement: { priceBasis: "flat", maxMembers: null, seats: 1 },
       });
       await insertMember(tx, organizationId, await insertUser(tx));
       expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
@@ -571,6 +571,7 @@ describe("AI access for members", () => {
   let selfManagedOrgId: SafeId<"organization">;
   let unboundedOrgId: SafeId<"organization">;
   let unlimitedPolicyOrgId: SafeId<"organization">;
+  let seatBoundOrgId: SafeId<"organization">;
   let assignedUserId: SafeId<"user">;
   let unassignedUserId: SafeId<"user">;
   const fixtureOrgIds: SafeId<"organization">[] = [];
@@ -607,6 +608,10 @@ describe("AI access for members", () => {
     });
     unlimitedPolicyOrgId = await insertOrganization(owner, {
       state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      entitlement: { priceBasis: "flat", maxMembers: null, seats: 2 },
+    });
+    seatBoundOrgId = await insertOrganization(owner, {
+      state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
       entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 2 },
     });
     fixtureOrgIds.push(
@@ -614,6 +619,7 @@ describe("AI access for members", () => {
       selfManagedOrgId,
       unboundedOrgId,
       unlimitedPolicyOrgId,
+      seatBoundOrgId,
     );
     for (const organizationId of fixtureOrgIds) {
       await insertMember(owner, organizationId, assignedUserId);
@@ -705,6 +711,17 @@ describe("AI access for members", () => {
       AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
       AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
     ]);
+  });
+
+  test("a per-seat policy without a member bound admits only seated members", async () => {
+    enforce();
+    const owner = asTestRaw<Transaction>(testDb);
+    expect(await memberMayUseAI(owner, seatBoundOrgId, unassignedUserId)).toBe(
+      false,
+    );
+    expect(await memberMayUseAI(owner, seatBoundOrgId, assignedUserId)).toBe(
+      true,
+    );
   });
 
   test("an assigned member keeps AI access", async () => {
@@ -887,7 +904,13 @@ describe("the free floor", () => {
         await insertEndedEvaluation(tx, organizationId);
         await tx
           .update(usageEntitlements)
-          .set({ status, currentPeriodEnd: new Date(Date.now() - DAY_IN_MS) })
+          // Provider statuses belong to hosted entitlements; a manual one
+          // is bounded by its period end alone.
+          .set({
+            status,
+            source: "hosted",
+            currentPeriodEnd: new Date(Date.now() - DAY_IN_MS),
+          })
           .where(eq(usageEntitlements.organizationId, organizationId));
         expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
           5,

@@ -8,7 +8,7 @@ import { childExitStatus } from "./child-exit-status";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const API_ROOT = path.join(REPO_ROOT, "apps/api");
-const TYPESCRIPT_CLI = path.join(REPO_ROOT, "node_modules/typescript/bin/tsc");
+const COMPILER_CLI = path.join(REPO_ROOT, "node_modules/tsrs/bin/tsrs");
 const GENERATED_PREFIX = "./.cache/typecheck-declarations/";
 const FIX_COMMAND = "bun --filter @stll/api generate:typecheck-declarations";
 
@@ -56,10 +56,10 @@ const compilers = [
     ],
   },
   {
-    name: "TypeScript",
+    name: "tsrs",
     command: (project: string, listFiles = false) => [
       process.execPath,
-      TYPESCRIPT_CLI,
+      COMPILER_CLI,
       "--pretty",
       "false",
       ...(listFiles ? ["--listFilesOnly"] : []),

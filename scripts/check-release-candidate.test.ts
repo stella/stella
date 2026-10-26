@@ -69,7 +69,11 @@ const fixture = (script = subject) => {
   const repo = path.join(directory, "repo");
   mkdirSync(path.join(repo, "scripts"), { recursive: true });
   writeFileSync(path.join(repo, "scripts/check-release-candidate.sh"), script);
-  for (const name of ["verify-release-tree-proof.sh", "gh-retry.sh"]) {
+  for (const name of [
+    "verify-release-tree-proof.sh",
+    "verify-release-candidate-tree.mjs",
+    "gh-retry.sh",
+  ]) {
     writeFileSync(
       path.join(repo, "scripts", name),
       readFileSync(new URL(name, import.meta.url), "utf-8"),
@@ -169,6 +173,71 @@ const assertDispatch = (
 
 test("only untagged candidates matching the pending main VERSION pass before gate statuses exist", () =>
   assertIdentity());
+test("an earlier release keeps its version commit after a later release merges", () => {
+  const { directory, repo, previous, sha } = fixture();
+  const versionCommitFor = (version: string) =>
+    Bun.spawnSync(
+      [
+        "bash",
+        "scripts/check-release-candidate.sh",
+        "--version-commit-for",
+        version,
+      ],
+      { cwd: repo },
+    );
+  try {
+    git(repo, "commit", "--allow-empty", "-qm", "feature after 1.2.4");
+    writeFileSync(path.join(repo, "VERSION"), "1.2.5\n");
+    git(repo, "add", "VERSION");
+    git(repo, "commit", "-qm", "chore: release v1.2.5");
+    const next = git(repo, "rev-parse", "HEAD");
+    git(repo, "commit", "--allow-empty", "-qm", "feature after 1.2.5");
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+    for (const [version, commit] of [
+      ["1.2.3", previous],
+      ["1.2.4", sha],
+      ["1.2.5", next],
+    ] as const) {
+      const resolved = versionCommitFor(version);
+      expect(resolved.exitCode, resolved.stderr.toString()).toBe(0);
+      expect(resolved.stdout.toString(), version).toBe(`${commit}\n`);
+    }
+    const pending = Bun.spawnSync(
+      ["bash", "scripts/check-release-candidate.sh", "--version-commit"],
+      { cwd: repo },
+    );
+    expect(pending.stdout.toString()).toBe(`${next}\n`);
+
+    const unknown = versionCommitFor("9.9.9");
+    expect(unknown.exitCode).toBe(1);
+    expect(unknown.stderr.toString()).toContain("sets VERSION to 9.9.9");
+    const malformed = versionCommitFor("1.2");
+    expect(malformed.exitCode).toBe(1);
+    expect(malformed.stdout.toString()).toBe("");
+    const missing = Bun.spawnSync(
+      ["bash", "scripts/check-release-candidate.sh", "--version-commit-for"],
+      { cwd: repo },
+    );
+    expect(missing.exitCode).toBe(2);
+    expect(missing.stderr.toString()).toContain("Usage:");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+test("the release workflow resolves the tag's version commit through the trusted checker", () => {
+  const release = readFileSync(
+    new URL("../.github/workflows/release.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(release).toContain(
+    'cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-candidate.sh" "$RUNNER_TEMP/check-release-candidate.sh"',
+  );
+  expect(release).toContain(
+    'version_commit="$(bash "$RELEASE_CANDIDATE_CHECKER" --version-commit-for "$VERSION")"',
+  );
+  expect(release).not.toMatch(/git log -n 1 [^\n]*origin\/main -- VERSION/u);
+});
 test("removing tagged or version commit refusals violates the candidate identity contract", () => {
   for (const [before, after, failure] of [
     [

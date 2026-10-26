@@ -19,7 +19,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
@@ -81,10 +81,13 @@ export const BillingCodesDialog = ({
         request,
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure" },
+      });
     },
   });
   const deleteCode = useCapabilityMutation({
@@ -109,10 +112,13 @@ export const BillingCodesDialog = ({
         request,
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-2",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure-2" },
+      });
     },
   });
   type UpdateBillingCodeVars = {
@@ -142,10 +148,13 @@ export const BillingCodesDialog = ({
         request,
       );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-3",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure-3" },
+      });
     },
   });
 

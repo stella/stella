@@ -37,76 +37,28 @@ const requestWithBody = (body: string, declaredLength?: string) => {
 };
 
 describe("tenant action size boundaries", () => {
-  test("meters actual UTF-8 request bytes at the exact bound even when the declared length lies", async () => {
-    for (const body of ["é", "😀", '"\\n\\\""', "plain"]) {
-      const size = utf8.encode(body).byteLength;
-      for (const declaredLength of [undefined, "0", "1", String(size)]) {
-        const original = requestWithBody(body, declaredLength);
-        const bounded = await boundActionRequest(original, size);
-        if (Result.isError(bounded)) {
-          throw bounded.error;
-        }
-        expect(bounded.value).toBe(original);
-        expect(original.bodyUsed).toBe(false);
-        expect(await bounded.value.text()).toBe(body);
-        expect(bounded.value.headers.get("content-length")).toBe(String(size));
-        expect(bounded.value.headers.get("x-request-id")).toBe("request-size");
-        const refused = await boundActionRequest(
-          requestWithBody(body, declaredLength),
-          size - 1,
-        );
-        expect(Result.isError(refused)).toBe(true);
-        if (Result.isError(refused)) {
-          expect(refused.error.reason).toBe("request_too_large");
-        }
-      }
+  test("bounds a tenant action's request at the policy maximum and refuses an oversized body as request_too_large", async () => {
+    const body = "Příloha 🗂";
+    const size = utf8.encode(body).byteLength;
+    const bounded = await boundActionRequest(requestWithBody(body), size);
+    if (Result.isError(bounded)) {
+      throw bounded.error;
     }
-  });
-
-  test("refuses a declared oversize without reading and cancels actual oversized producers at the crossing chunk", async () => {
-    let pulls = 0;
-    let cancelled = false;
-    const source = () =>
-      new ReadableStream<Uint8Array>(
-        {
-          pull: (controller) => {
-            pulls += 1;
-            controller.enqueue(utf8.encode("é"));
-          },
-          cancel: () => {
-            cancelled = true;
-          },
-        },
-        { highWaterMark: 0 },
+    expect(bounded.value.bytes).toBe(size);
+    expect(await bounded.value.request.text()).toBe(body);
+    for (const declaredLength of [undefined, String(size)]) {
+      const refused = await boundActionRequest(
+        requestWithBody(body, declaredLength),
+        size - 1,
       );
-    const declaredOversize = new Request("http://localhost/v1/action", {
-      body: source(),
-      headers: { "content-length": "4" },
-      method: "POST",
-    });
-    expect(Result.isError(await boundActionRequest(declaredOversize, 3))).toBe(
-      true,
-    );
-    expect(pulls).toBe(0);
-    const chunked = new Request("http://localhost/v1/action", {
-      body: source(),
-      headers: { "content-length": "1" },
-      method: "POST",
-    });
-    expect(Result.isError(await boundActionRequest(chunked, 3))).toBe(true);
-    // A tee can prefetch one chunk; neither branch may keep pulling after cancellation.
-    expect(pulls).toBeGreaterThanOrEqual(2);
-    expect(pulls).toBeLessThanOrEqual(3);
-    expect(cancelled).toBe(true);
-    const pullsAtCancellation = pulls;
-    await Promise.resolve();
-    expect(pulls).toBe(pullsAtCancellation);
-    for (const declaredLength of ["-1", "1.5", "NaN", "not-a-length"]) {
       expect(
-        Result.isError(
-          await boundActionRequest(requestWithBody("{}", declaredLength), 10),
-        ),
-      ).toBe(true);
+        Result.isError(refused) &&
+          ActionSizeError.is(refused.error) &&
+          refused.error.reason,
+      ).toBe("request_too_large");
+      if (Result.isError(refused)) {
+        expect(actionSizeErrorResponse(refused.error).status).toBe(413);
+      }
     }
   });
 

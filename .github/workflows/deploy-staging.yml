@@ -103,6 +103,7 @@ jobs:
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
@@ -929,8 +930,8 @@ jobs:
         with:
           name: staging-user-journeys-report
           path: |
-            apps/web/test-results/user-journeys-deployed*/
-            apps/web/test-results/user-journeys-local-stack*/
+            ${{ steps.deployed-journeys.outputs.report-paths }}
+            ${{ steps.mock-journeys.outputs.report-paths }}
             /tmp/api.log
             ${{ runner.temp }}/web-user-journeys.log
           retention-days: 7

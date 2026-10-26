@@ -67,7 +67,7 @@ test("upload commit durably marks the entity before its immediate search flush",
     "await enqueueEntitySearchRepairs(tx, [entityId]);",
   );
   expect(entityCreateSource.slice(transactionEnd, postCommitEnd)).toContain(
-    "flushEntitySearchRepairs([entityId]).catch(captureError);",
+    "flushEntitySearchRepairs([entityId])",
   );
 });
 

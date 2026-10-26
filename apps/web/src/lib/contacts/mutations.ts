@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import type { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
@@ -109,10 +109,13 @@ export const useCreateContact = () => {
     mutationFn: async (vars: CreateContactVars) => {
       const response = await api.contacts.put(vars);
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateContact:failure",
+        scope: { type: "handler", handlerId: "useCreateContact:failure" },
+      });
     },
   });
 };
@@ -166,7 +169,7 @@ export const useUpdateContact = () => {
     }: UpdateContactVars) => {
       const response = await api.contacts({ contactId }).post(body);
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, vars) => {
       // Mutation callbacks outlive page observers. Use the submitted scope even
@@ -192,7 +195,10 @@ export const useUpdateContact = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateContact:failure",
+        scope: { type: "handler", handlerId: "useUpdateContact:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -214,7 +220,10 @@ export const useDeleteContact = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteContact:failure",
+        scope: { type: "handler", handlerId: "useDeleteContact:failure" },
+      });
     },
   });
 };

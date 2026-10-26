@@ -578,6 +578,20 @@ test("the route generator guard rejects missing script and direct pin", async ()
   }
 });
 
+test("visual sandbox regeneration follows its shared error metadata owner", () => {
+  for (const file of [
+    "packages/errors/src/fingerprint-fields.ts",
+    "packages/errors/src/exception-cause-chain.ts",
+    "apps/api/src/handlers/visual-sandbox/prepare.ts",
+    "apps/api/src/handlers/visual-sandbox/sanitize.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("visual-sandbox-bundle");
+  }
+});
+
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
   expect(
     generatorsForFiles([
@@ -722,6 +736,19 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
+  // Local skill sources must affect the generation input contract, including a skill
+  // added after the generator's other inputs were last reviewed.
+  const instructions = generator("ai-instructions");
+  const localSkills = tracked.filter((file) =>
+    file.startsWith(".ai/local-skills/"),
+  );
+  expect(localSkills.length).toBeGreaterThan(0);
+  for (const file of localSkills) {
+    expect(
+      instructions.inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      `ai-instructions: ${file}`,
+    ).toBe(true);
+  }
   // Pooled checks are steps of their job, so resolve names through them.
   const workflow: unknown = Bun.YAML.parse(ci);
   const steps = new Set([
@@ -951,6 +978,15 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
       ).toBe("true");
     }
   }
+});
+
+test.each([
+  "apps/api/src/mcp/web-handoff-link-contract.ts",
+  "apps/api/src/mcp/write-result-omission.ts",
+])("app contracts follow their advertised output owner %s", (file) => {
+  expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
+    "mcp-app-contracts",
+  );
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {

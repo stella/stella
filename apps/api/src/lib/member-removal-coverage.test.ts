@@ -136,6 +136,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
+  "legal_reader_answers.continuation_spans",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",

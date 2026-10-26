@@ -8,6 +8,7 @@ import { DetachedWindowAPI } from "happy-dom";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswer,
+  ReaderAnswerAnchor,
   ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
@@ -68,12 +69,13 @@ const user = {
   timezoneId: "UTC",
   wordEditShortcut: null,
 };
-const anchor = {
+const span = {
   paragraphId: "paragraph-1",
   quote: "Selected text",
   startOffset: 0,
   endOffset: 13,
 };
+const anchor: ReaderAnswerAnchor = { spans: [span] };
 const now = "2026-10-10T12:00:00.000Z";
 
 const setup = () => {
@@ -587,7 +589,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     return (
       <>
         <article ref={root} style={{ overflow: "visible" }}>
-          <p data-anchor={anchor.paragraphId}>{anchor.quote}</p>
+          <p data-anchor={span.paragraphId}>{span.quote}</p>
         </article>
         <AnnotationToolbar
           activeAnnotation={null}
@@ -616,13 +618,17 @@ test("selecting decision text and clicking Explain opens the persisted margin an
             name: null,
           }}
           onExplain={(spans) => {
-            const span = spans.at(0);
-            if (span) {
+            const selected = spans.at(0);
+            if (selected) {
               void answers.createExplain({
-                paragraphId: span.blockAnchorId,
-                quote: span.quote,
-                startOffset: span.startOffset,
-                endOffset: span.endOffset,
+                spans: [
+                  {
+                    paragraphId: selected.blockAnchorId,
+                    quote: selected.quote,
+                    startOffset: selected.startOffset,
+                    endOffset: selected.endOffset,
+                  },
+                ],
               });
             }
           }}

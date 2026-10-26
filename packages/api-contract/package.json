@@ -22,6 +22,7 @@
     "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./limits": "./src/limits.ts",
+    "./http-input": "./src/http-input.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
     "./untrusted-content-fence": "./src/untrusted-content-fence.ts",
@@ -146,6 +147,7 @@
   "dependencies": {
     "@stll/aho-corasick": "catalog:",
     "@stll/anonymize-chat": "workspace:*",
+    "@stll/errors": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",

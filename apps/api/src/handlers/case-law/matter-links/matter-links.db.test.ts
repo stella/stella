@@ -27,8 +27,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -90,10 +90,10 @@ const call = async (
   }
 };
 
-const modelCapabilityContext = (): McpRequestContext => {
+const modelCapabilityContext = (): AuthorizedMcpRequestContext => {
   const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [ids.wsA1],
     accessibleWorkspaceIdSet: new Set([ids.wsA1]),
     accessibleWorkspaceStatusById: new Map([[ids.wsA1, "active"]]),
@@ -129,7 +129,7 @@ const modelCapabilityContext = (): McpRequestContext => {
   });
 };
 
-/** A refusal arrives as Elysia's status response: `{ code, response }`. */
+/** A refusal arrives as an `HttpStatusResponse`: `{ code, response }`. */
 const statusOf = (result: unknown): number | null =>
   typeof result === "object" &&
   result !== null &&

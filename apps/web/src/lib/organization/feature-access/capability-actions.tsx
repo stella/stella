@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { roleOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { optionalOrganizationSettingsOptions } from "@/queries/organization-settings";
@@ -32,7 +32,7 @@ const documentOcrAvailabilityOptions = (organizationId: string) =>
   queryOptions({
     queryKey: ["document-ocr-availability", organizationId],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["document-ocr-availability"].get({
           fetch: { signal },
         }),
@@ -99,12 +99,12 @@ const useLiveActionCapabilities = (
   const desktop = useQueryView(desktopQuery);
   const settings = useQueryView(settingsQuery);
   const role = useQueryView(roleQuery);
-  useQueryViewError(ai);
-  useQueryViewError(deepl);
-  useQueryViewError(ocr);
-  useQueryViewError(desktop);
-  useQueryViewError(settings);
-  useQueryViewError(role);
+  useQueryViewError(ai, "useLiveActionCapabilities:query");
+  useQueryViewError(deepl, "useLiveActionCapabilities:query-2");
+  useQueryViewError(ocr, "useLiveActionCapabilities:query-3");
+  useQueryViewError(desktop, "useLiveActionCapabilities:query-4");
+  useQueryViewError(settings, "useLiveActionCapabilities:query-5");
+  useQueryViewError(role, "useLiveActionCapabilities:query-6");
   return resolveActionCapabilities({
     role: role.type === "items" ? role.items : undefined,
     ai: ai.type === "items" ? ai.items.available : undefined,

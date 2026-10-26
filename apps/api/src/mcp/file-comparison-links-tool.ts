@@ -19,7 +19,6 @@ import {
   parseSafeOutboundUrl,
   safeOutboundFetchBytes,
 } from "@/api/lib/safe-outbound-fetch";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   FILE_COMPARISON_MAX_BYTES,
@@ -49,6 +48,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 const TRANSFER_TIMEOUT_MS = 60_000;
 
@@ -340,7 +340,7 @@ const transferFailure = (side: ComparisonSide): InternalToolErrorResult =>
 
 type PrepareFileComparisonFromLinksCall = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   permit: ThirdPartyOutboundPermit;
 };
 

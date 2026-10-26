@@ -22,7 +22,7 @@ import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/cont
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -296,7 +296,7 @@ const withTenants = async (
 const capabilityContext = async (
   db: GatedTestDb,
   tenant: Tenant,
-): Promise<McpRequestContext> => {
+): Promise<McpRequestResources> => {
   const scopedDb = scopedFor(db, tenant);
   const safeDb = createSafeDb(
     markRlsDatabase(db),

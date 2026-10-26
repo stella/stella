@@ -22,12 +22,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Which documents do we hold?"
               }
             ],
@@ -383,36 +383,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Which documents do we hold?"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Which documents do we hold?"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -670,25 +670,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-2",
-            "parentRunId": "run-recorded-1",
-            "resume": [
-              {
-                "interruptId": "client_tool_call-2",
-                "payload": {
-                  "answers": [
-                    {
-                      "answer": "Buyer",
-                      "question": "Which side?"
-                    }
-                  ]
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:19.000Z",
@@ -708,7 +694,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "content": "Two documents",
                 "toolCalls": [
                   {
@@ -730,8 +715,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-1",
+                "role": "tool",
                 "toolCallId": "call-1",
                 "content": "{\"success\":true,\"result\":[{\"id\":\"ent_1\",\"matter\":\"mat_2\",\"name\":\"entityA2\"},{\"id\":\"ent_2\",\"matter\":\"mat_1\",\"name\":\"entityA1\"}],\"logs\":[]}",
                 "metadata": {
@@ -741,8 +726,8 @@
                 }
               },
               {
-                "role": "tool",
                 "id": "tool-call-2",
+                "role": "tool",
                 "toolCallId": "call-2",
                 "content": "{\"answers\":[{\"answer\":\"Buyer\",\"question\":\"Which side?\"}]}",
                 "metadata": {
@@ -1104,6 +1089,9 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1125,26 +1113,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "content": "Two documents",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "execute_typescript",
-                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
-                    }
-                  },
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "ask-user",
-                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1221,15 +1189,33 @@
                     "state": "complete"
                   }
                 ],
+                "role": "assistant",
+                "content": "Two documents",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "execute_typescript",
+                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "ask-user",
+                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:21.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "client_tool_call-2",
+                  "status": "resolved",
                   "payload": {
                     "answers": [
                       {
@@ -1237,12 +1223,14 @@
                         "question": "Which side?"
                       }
                     ]
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1264,26 +1252,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "content": "Two documents",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "execute_typescript",
-                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
-                    }
-                  },
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "ask-user",
-                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1360,15 +1328,33 @@
                     "state": "complete"
                   }
                 ],
+                "role": "assistant",
+                "content": "Two documents",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "execute_typescript",
+                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "ask-user",
+                      "arguments": "{\"analysis\":\"The draft depends on the side the user represents.\",\"questions\":[{\"question\":\"Which side?\",\"reason\":\"It decides the draft.\"}]}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:23.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "client_tool_call-2",
+                  "status": "resolved",
                   "payload": {
                     "answers": [
                       {
@@ -1376,11 +1362,25 @@
                         "question": "Which side?"
                       }
                     ]
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "client_tool_call-2",
+                "status": "resolved",
+                "payload": {
+                  "answers": [
+                    {
+                      "answer": "Buyer",
+                      "question": "Which side?"
+                    }
+                  ]
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {
