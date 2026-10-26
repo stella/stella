@@ -118,7 +118,7 @@
     "@tanstack/ai-react": "catalog:",
     "@tanstack/react-devtools": "^0.10.13",
     "@tanstack/react-form": "^1.33.5",
-    "@tanstack/react-hotkeys": "^0.14.5",
+    "@tanstack/react-hotkeys": "^0.16.0",
     "@tanstack/react-query": "^5.104.4",
     "@tanstack/react-query-devtools": "^5.104.4",
     "@tanstack/react-router": "^1.170.45",

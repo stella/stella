@@ -71,6 +71,13 @@ const RUNTIME_ASSET_CONTRACTS = [
     pattern: "dist/client/assets/render-worker-????????-????????.js",
   },
   {
+    expectedCount: 2,
+    // The PPTX and XLSX model workers ship inline and start from a blob URL,
+    // so they inherit the cross-origin-isolated document's policy.
+    label: "Office inline model workers",
+    pattern: "dist/client/assets/worker-source-????????-????????.js",
+  },
+  {
     expectedCount: 1,
     label: "Office font metrics worker",
     pattern: "dist/client/assets/font-metrics.worker-????????.js",

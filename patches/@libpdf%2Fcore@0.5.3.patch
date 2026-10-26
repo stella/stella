@@ -1,5 +1,5 @@
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 27ae20847211562a874f02c165d58e6edf6637f7..024bee6464f58845acf40089ecc2e5bae21e976b 100644
+index 3becfdee05549f3e180d1b6787a3c523c1c71828..21ef1b7a3285fa25b9fba0d7bc48b961028d0f9b 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -35419,8 +35419,7 @@
