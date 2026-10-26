@@ -5077,6 +5077,7 @@ const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: result.error.message ?? fallback });",
   "if (APIError.is(error) &&",
   "    error.message) {",
+  "}",
   "const internal = userErrorMessage(response.error, fallback);",
   'const literal = "error.message ?? fallback";',
   "// error instanceof Error ? error.message : fallback",
