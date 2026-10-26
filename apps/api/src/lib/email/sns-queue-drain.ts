@@ -3,13 +3,14 @@ import {
   DeleteMessageCommand,
   type Message,
   ReceiveMessageCommand,
-  type SQSClient,
+  SQSClient,
 } from "@aws-sdk/client-sqs";
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import type { SqsQueue } from "@/api/lib/email/sqs-queue-url";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type { logger as appLogger } from "@/api/lib/observability/logger";
 
@@ -22,6 +23,19 @@ const RUN_BUDGET_MS = 30_000;
 const RECEIVE_WAIT_SECONDS = 1;
 const DELETE_TIMEOUT_MS = 5000;
 const RELEASE_TIMEOUT_MS = 5000;
+
+// One client per region; credentials come from the SDK's default chain (the
+// task role in a deployment).
+const sqsClients = new Map<string, SQSClient>();
+export const sqsClientFor = ({ region }: SqsQueue): SQSClient => {
+  const existing = sqsClients.get(region);
+  if (existing) {
+    return existing;
+  }
+  const client = new SQSClient({ region });
+  sqsClients.set(region, client);
+  return client;
+};
 
 // SNS adds signing and routing fields the consumers do not use; strip them.
 const snsNotificationSchema = v.object({

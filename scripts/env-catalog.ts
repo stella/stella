@@ -482,15 +482,15 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   EMAIL_EVENTS_QUEUE_URL:
-    "SQS queue subscribed to the mail provider's bounce and complaint topic. Set with the other EMAIL_EVENTS_* keys to mark undeliverable account addresses; unset disables it.",
+    "SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<name>) subscribed to the mail provider's bounce and complaint topic, reached in the region it names. Set with the other EMAIL_EVENTS_* keys to mark undeliverable account addresses; unset disables it.",
   EMAIL_EVENTS_TOPIC_ARN:
     "SNS topic the mail provider publishes bounce and complaint events to; deliveries from any other topic are refused.",
   EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL:
-    "Dead-letter queue of EMAIL_EVENTS_QUEUE_URL; its depth is reported on every run.",
+    "Dead-letter queue of EMAIL_EVENTS_QUEUE_URL, in the same region; its depth is reported on every run.",
   INBOUND_MAIL_DOMAIN:
     "Dedicated catch-all domain for matter inbound addresses. Unset disables address creation.",
   INBOUND_MAIL_QUEUE_URL:
-    "SQS queue subscribed to the SES receipt topic. Set with the other INBOUND_MAIL_* transport keys to file inbound mail; unset disables receiving.",
+    "SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<name>) subscribed to the SES receipt topic, reached in the region it names. Set with the other INBOUND_MAIL_* transport keys to file inbound mail; unset disables receiving.",
   INBOUND_MAIL_TOPIC_ARN:
     "SNS topic the SES receipt rule publishes to. Queue messages from any other topic are left for the dead-letter queue.",
   INBOUND_MAIL_BUCKET:

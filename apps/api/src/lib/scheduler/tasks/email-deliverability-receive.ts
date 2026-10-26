@@ -1,12 +1,12 @@
-import { GetQueueAttributesCommand, SQSClient } from "@aws-sdk/client-sqs";
+import { GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 import { panic, Result } from "better-result";
 
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envBase } from "@/api/env-base";
 import { markAccountEmailUndeliverable } from "@/api/lib/db/account-row";
 import { drainDeliverabilityEvents } from "@/api/lib/email/deliverability";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
+import { sqsClientFor } from "@/api/lib/email/sns-queue-drain";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   type SchedulerTask,
@@ -17,14 +17,6 @@ export const RECEIVE_EMAIL_DELIVERABILITY_TASK =
   "emailDeliverability.receive" as const;
 
 const DEAD_LETTER_DEPTH_TIMEOUT_MS = 5000;
-
-// The queue shares the object store's region; credentials come from the SDK's
-// default chain (the task role in a deployment).
-let sqsClient: SQSClient | null = null;
-const getSqsClient = () => {
-  sqsClient ??= new SQSClient({ region: envBase.S3_REGION });
-  return sqsClient;
-};
 
 export const receiveEmailDeliverability: SchedulerTask = async ({
   dueAt,
@@ -48,10 +40,10 @@ export const receiveEmailDeliverability: SchedulerTask = async ({
       config satisfies never;
       return panic("Unhandled email events configuration");
   }
-  const client = getSqsClient();
+  const client = sqsClientFor(config.queue);
   const drained = await drainDeliverabilityEvents({
     client,
-    queueUrl: config.queueUrl,
+    queueUrl: config.queue.url,
     topicArn: config.topicArn,
     markUndeliverable: async (email, reason, at) =>
       await markAccountEmailUndeliverable({
@@ -70,7 +62,7 @@ export const receiveEmailDeliverability: SchedulerTask = async ({
     async () =>
       await client.send(
         new GetQueueAttributesCommand({
-          QueueUrl: config.deadLetterQueueUrl,
+          QueueUrl: config.deadLetterQueue.url,
           AttributeNames: ["ApproximateNumberOfMessages"],
         }),
         { abortSignal: AbortSignal.timeout(DEAD_LETTER_DEPTH_TIMEOUT_MS) },

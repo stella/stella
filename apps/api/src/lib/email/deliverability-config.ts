@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { parseSqsQueueUrl, type SqsQueue } from "@/api/lib/email/sqs-queue-url";
+
 export type EmailEventsInput = {
   EMAIL_EVENTS_QUEUE_URL?: string | undefined;
   EMAIL_EVENTS_TOPIC_ARN?: string | undefined;
@@ -10,9 +12,9 @@ type EmailEvents =
   | { type: "disabled" }
   | {
       type: "enabled";
-      queueUrl: string;
+      queue: SqsQueue;
       topicArn: string;
-      deadLetterQueueUrl: string;
+      deadLetterQueue: SqsQueue;
     };
 
 class EmailEventsConfigError extends TaggedError("EmailEventsConfigError")<{
@@ -45,10 +47,28 @@ export const resolveEmailEvents = ({
       }),
     );
   }
+  const queue = parseSqsQueueUrl(EMAIL_EVENTS_QUEUE_URL);
+  const deadLetterQueue = parseSqsQueueUrl(EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL);
+  if (queue === null || deadLetterQueue === null) {
+    return Result.err(
+      new EmailEventsConfigError({
+        message:
+          "EMAIL_EVENTS_QUEUE_URL and EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL must be SQS queue URLs (https://sqs.<region>.amazonaws.com/<account>/<name>).",
+      }),
+    );
+  }
+  // SQS only redrives to a dead-letter queue in the source queue's region.
+  if (deadLetterQueue.region !== queue.region) {
+    return Result.err(
+      new EmailEventsConfigError({
+        message: `EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL is in ${deadLetterQueue.region}; it must be in the queue's region, ${queue.region}.`,
+      }),
+    );
+  }
   return Result.ok({
     type: "enabled",
-    queueUrl: EMAIL_EVENTS_QUEUE_URL,
+    queue,
     topicArn: EMAIL_EVENTS_TOPIC_ARN,
-    deadLetterQueueUrl: EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
+    deadLetterQueue,
   });
 };
