@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   type Expression,
-  type Node,
+  type ObjectPropertyKind,
   parseSource,
   type Program,
   walk,
@@ -63,7 +63,7 @@ const provenMilliseconds = (
 };
 
 /** The value an object literal gives `timeoutMs`; shorthand reads the binding. */
-const timeoutValue = (node: Node): Expression | undefined => {
+const timeoutValue = (node: ObjectPropertyKind): Expression | undefined => {
   if (
     node.type === "Property" &&
     !node.computed &&
@@ -91,13 +91,16 @@ export const findApiTestTimeoutViolations = (
   const bindings = constLiterals(parsed.program);
   const lines = source.split("\n");
   const violations: string[] = [];
-  walk(parsed.program, (node, ancestors) => {
-    if (ancestors.at(-1)?.type !== "ObjectExpression") {
+  walk(parsed.program, (node) => {
+    if (node.type !== "ObjectExpression") {
       return;
     }
-    const value = timeoutValue(node);
-    if (value !== undefined) {
-      const { line } = parsed.locate(node.start);
+    for (const property of node.properties) {
+      const value = timeoutValue(property);
+      if (value === undefined) {
+        continue;
+      }
+      const { line } = parsed.locate(property.start);
       const unwrapped = unwrap(value);
       const shared =
         unwrapped.type === "Identifier" && unwrapped.name === SHARED_DEADLINE;

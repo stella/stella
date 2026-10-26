@@ -2,12 +2,20 @@ import path from "node:path";
 
 import {
   type Node,
+  type ObjectProperty,
   type ParsedSource,
   parseSource,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 
 type Identifier = Extract<Node, { type: "Identifier" }>;
+type FunctionLike = Extract<
+  Node,
+  {
+    type:
+      "ArrowFunctionExpression" | "FunctionDeclaration" | "FunctionExpression";
+  }
+>;
 
 const TRUNCATING_CLASS =
   /(?:^|[\s:])(?:truncate|text-ellipsis|line-clamp-\d+|whitespace-nowrap|overflow-hidden)(?:\s|$)/u;
@@ -17,7 +25,7 @@ const textFields = new Set(["title", "description"]);
 type SourceTree = ParsedSource & { parents: ReadonlyMap<Node, Node> };
 const nodeText = (node: Node, source: ParsedSource) =>
   source.sourceText.slice(node.start, node.end);
-const isFunctionLike = (node: Node) =>
+const isFunctionLike = (node: Node): node is FunctionLike =>
   node.type === "ArrowFunctionExpression" ||
   node.type === "FunctionDeclaration" ||
   node.type === "FunctionExpression";
@@ -466,7 +474,7 @@ export const inspectToastSource = (text: string, fileName = "source.tsx") => {
     // variant is part of the same census even without a local toast call.
     if (node.type === "ObjectExpression") {
       const properties = node.properties.filter(
-        (property) =>
+        (property): property is ObjectProperty =>
           property.type === "Property" &&
           !property.method &&
           !property.shorthand &&

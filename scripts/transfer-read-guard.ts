@@ -375,7 +375,9 @@ class TransferReadInspector {
       return root.type === "Identifier" && /^[A-Z][A-Z_\d]*$/u.test(root.name);
     }
     if (value.type === "BinaryExpression") {
+      // `#field in object` tests a private name, never a constant.
       return (
+        value.left.type !== "PrivateIdentifier" &&
         this.isConstant(value.left, depth + 1) &&
         this.isConstant(value.right, depth + 1)
       );

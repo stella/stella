@@ -580,9 +580,9 @@ test("computed keys count only when they name a static timeout or response metho
       const response = await fetch(url, { ${key}: 1000 });
       return response?.json();
     };`;
-    expect(findTransferReads(file, source).map(({ kind }) => kind)).toEqual(
-      expected,
-    );
+    expect(findTransferReads(file, source).map(({ kind }) => kind)).toEqual([
+      ...expected,
+    ]);
   }
   for (const [member, expected] of [
     ['["json"]', ["numeric-timeout", "total-timeout-body"]],
@@ -596,6 +596,6 @@ test("computed keys count only when they name a static timeout or response metho
           return response${member}();
         };`,
       ).map(({ kind }) => kind),
-    ).toEqual(expected);
+    ).toEqual([...expected]);
   }
 });

@@ -265,11 +265,12 @@ const mutationsFor = (source: Program) => {
       const left = node.left;
       if (left.type === "Identifier") {
         recordMutation(left, { type: "value", expression: node.right });
-      } else {
-        const object =
-          left.type === "ArrayPattern" || left.type === "ObjectPattern"
-            ? undefined
-            : receiver(left);
+      } else if (
+        left.type !== "ArrayPattern" &&
+        left.type !== "ObjectPattern"
+      ) {
+        // A destructuring target mutates no single receiver.
+        const object = receiver(left);
         if (object !== undefined) {
           recordMutation(object, {
             type: "property",

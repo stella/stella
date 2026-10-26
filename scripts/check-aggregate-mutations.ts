@@ -79,6 +79,9 @@ const sourceOf = (node: Node) =>
   contexts.get(node)?.source ?? panic("Missing syntax source context");
 const nodeText = (node: Node, source = sourceOf(node)) =>
   source.sourceText.slice(node.start, node.end);
+// An array hole (`[a, , b]`) has no node; diagnostics name it instead.
+const elementText = (element: Node | null, source: SourceTree) =>
+  element === null ? "an empty array slot" : nodeText(element, source);
 const isFunctionLike = (node: Node): node is Callable =>
   node.type === "FunctionDeclaration" ||
   node.type === "FunctionExpression" ||
@@ -166,7 +169,7 @@ const validateDeclaration = ({
     for (const aggregate of aggregates.elements) {
       if (!isStringLiteral(aggregate) || !registry.has(aggregate.value)) {
         panic(
-          `Unknown aggregate registry name in ${file}: ${nodeText(aggregate, source)}`,
+          `Unknown aggregate registry name in ${file}: ${elementText(aggregate, source)}`,
         );
       }
     }
@@ -1279,7 +1282,7 @@ const awaitedAggregateNames = ({
           module: REGISTRY,
           exported: ["withAggregateLock", "withAggregateRowQuery"],
         }) &&
-        options?.type
+        options?.type === "ObjectExpression"
       ) {
         const aggregate = options.properties.find(
           (property) =>
@@ -1493,7 +1496,7 @@ const assertDeclaredHandlerLocks = ({
   for (const aggregate of aggregates.elements) {
     if (!isStringLiteral(aggregate) || !held.has(aggregate.value)) {
       panic(
-        `Declared handler must await withAggregateLock for ${nodeText(aggregate, source)} in ${file}`,
+        `Declared handler must await withAggregateLock for ${elementText(aggregate, source)} in ${file}`,
       );
     }
   }
@@ -1567,7 +1570,9 @@ const verifyFileDeclarations = (file: string, access: SourceAccess) => {
         call?.type !== "CallExpression" ||
         call.callee !== node
       ) {
-        panic(`Call ${DECLARE} directly in ${file}: ${nodeText(call, source)}`);
+        panic(
+          `Call ${DECLARE} directly in ${file}: ${nodeText(call ?? node, source)}`,
+        );
       }
       const [handler, declaration] = call.arguments;
       if (

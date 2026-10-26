@@ -62,6 +62,7 @@ import {
   type Expression,
   type FormalParameterRest,
   type ImportExpression,
+  isObjectLiteralProperty,
   type Node,
   parseSource,
   type Program,
@@ -582,11 +583,7 @@ const scanRootConnectionShapes = (
     ) {
       record(ROOT_CONNECTION_SHAPE.assignment, node.right);
     } else if (
-      node.type === "Property" &&
-      parents.get(node)?.type === "ObjectExpression" &&
-      node.value.type !== "AssignmentPattern" &&
-      node.value.type !== "ObjectPattern" &&
-      node.value.type !== "ArrayPattern" &&
+      isObjectLiteralProperty(node, parents.get(node)) &&
       isHandle(node.value)
     ) {
       record(ROOT_CONNECTION_SHAPE.dependencyProperty, node.value);

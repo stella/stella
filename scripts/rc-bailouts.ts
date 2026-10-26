@@ -294,10 +294,11 @@ const addExplicitOptOuts = (
       return;
     }
     let body;
-    if (node.type === "MethodDefinition") {
-      body = node.value.body;
-    } else if (node.type === "Property") {
+    if (node.type === "Property") {
       body = node.value.type === "FunctionExpression" ? node.value.body : null;
+    } else if ("value" in node) {
+      // A class method (MethodDefinition) carries its function as `value`.
+      body = node.value.body;
     } else {
       body = node.body;
     }
