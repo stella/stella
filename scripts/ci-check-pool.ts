@@ -28,7 +28,6 @@ import {
   openSync,
   readFileSync,
   readSync,
-  statSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -377,6 +376,7 @@ export const runChecks = async ({
 };
 
 const POOL_ENV = [
+  "CI_CHECK_POOL_JOB_STARTED_AT",
   "CI_CHECK_POOL_NEEDS_FILE",
   "CI_CHECK_POOL_STEPS",
   "CI_CHECK_POOL_INPUTS",
@@ -400,8 +400,8 @@ const killPid = (pid: number) => {
 
 type ProcessRow = { pid: number; ppid: number; pgid: number; cpu: number };
 
-/** `ps` CPU time, `[[dd-]hh:]mm:ss[.ff]`, in seconds. */
-export const cpuSeconds = (value: string) => {
+/** A `ps` duration (CPU or elapsed time), `[[dd-]hh:]mm:ss[.ff]`, in seconds. */
+export const psSeconds = (value: string) => {
   const [days, clock] = value.includes("-")
     ? [Number(value.split("-")[0]), value.split("-")[1] ?? ""]
     : [0, value];
@@ -436,7 +436,7 @@ const processTable = (): ProcessRow[] => {
               pid: Number(pid),
               ppid: Number(ppid),
               pgid: Number(pgid),
-              cpu: cpuSeconds(time),
+              cpu: psSeconds(time),
             },
           ];
     });
@@ -997,26 +997,84 @@ export const jobTimeout = ({
   return { workflow, job, minutes };
 };
 
+/** The runner's per-job process: it starts as the job does. */
+const RUNNER_WORKER = /(?:^|\/)Runner\.Worker$/u;
+type AncestorRow = {
+  pid: number;
+  ppid: number;
+  elapsed: number;
+  command: string;
+};
+
+/**
+ * When the Actions runner's worker for this job started (epoch ms), found
+ * among the pool's ancestors; undefined outside a runner. The event file is
+ * no clock: the runner rewrites it before each step.
+ */
+export const runnerWorkerStartedAt = (
+  rows: readonly AncestorRow[],
+  self: number,
+  now: number,
+) => {
+  const byPid = new Map(rows.map((row) => [row.pid, row]));
+  const seen = new Set<number>();
+  for (
+    let row = byPid.get(self);
+    row !== undefined && !seen.has(row.pid);
+    row = byPid.get(row.ppid)
+  ) {
+    seen.add(row.pid);
+    if (RUNNER_WORKER.test(row.command)) {
+      return now - row.elapsed * 1000;
+    }
+  }
+  return undefined;
+};
+
+const ancestorRows = (): AncestorRow[] => {
+  const listed = Bun.spawnSync(["ps", "-A", "-o", "pid=,ppid=,etime=,comm="], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  return listed.stdout
+    .toString()
+    .split("\n")
+    .flatMap((line) => {
+      const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/u.exec(line);
+      return match === null
+        ? []
+        : [
+            {
+              pid: Number(match[1]),
+              ppid: Number(match[2]),
+              elapsed: psSeconds(match[3] ?? ""),
+              command: (match[4] ?? "").trim(),
+            },
+          ];
+    });
+};
+
 type JobStartOptions = {
-  /** mtime of GITHUB_EVENT_PATH, which the runner writes as it sets up the job. */
-  eventWrittenAt: number | undefined;
+  /** The job's start as observed (epoch ms), when it could be. */
+  observedStart: number | undefined;
   poolStartedAt: number;
   timeoutMinutes: number;
 };
 /**
- * When the job started (epoch ms). An event file time the job cannot have
- * started at, later than the pool or longer ago than the job's timeout, falls
- * back to the pool's own start, which can only make the deadline later.
+ * When the job started (epoch ms). An observed start the job cannot have had,
+ * later than the pool or longer ago than the job's timeout, falls back to
+ * the pool's own start, which can only make the deadline later; the runner's
+ * cancellation then still reaches the pool, which reports the same way.
  */
 export const jobStartedAt = ({
-  eventWrittenAt,
+  observedStart,
   poolStartedAt,
   timeoutMinutes,
 }: JobStartOptions) =>
-  eventWrittenAt !== undefined &&
-  eventWrittenAt <= poolStartedAt &&
-  poolStartedAt - eventWrittenAt < timeoutMinutes * 60_000
-    ? eventWrittenAt
+  observedStart !== undefined &&
+  observedStart <= poolStartedAt &&
+  poolStartedAt - observedStart < timeoutMinutes * 60_000
+    ? observedStart
     : poolStartedAt;
 
 /** The pool's deadline (epoch ms): its job's timeout less the margin. */
@@ -1097,20 +1155,25 @@ const poolStopper = (
 type ArmDeadlineOptions = {
   root: string;
   job: CheckPoolJob;
-  eventPath: string | undefined;
   stop: (cause: StopCause) => void;
 };
-/** Stop the pool at its deadline when it runs in a workflow job. */
-const armDeadline = ({ root, job, eventPath, stop }: ArmDeadlineOptions) => {
+/**
+ * Stop the pool at its deadline when it runs in a workflow job. The job's
+ * start comes from CI_CHECK_POOL_JOB_STARTED_AT (epoch ms) when a caller
+ * knows it, else from the runner's worker process.
+ */
+const armDeadline = ({ root, job, stop }: ArmDeadlineOptions) => {
   const timeout = jobTimeout({ root, poolJob: job, env: process.env });
   if (timeout === undefined) {
     return undefined;
   }
+  const declared = process.env["CI_CHECK_POOL_JOB_STARTED_AT"];
   const deadline = poolDeadline(
     jobStartedAt({
-      eventWrittenAt: eventPath
-        ? statSync(eventPath, { throwIfNoEntry: false })?.mtimeMs
-        : undefined,
+      observedStart:
+        declared === undefined || declared === ""
+          ? runnerWorkerStartedAt(ancestorRows(), process.pid, Date.now())
+          : Number(declared),
       poolStartedAt: Date.now(),
       timeoutMinutes: timeout.minutes,
     }),
@@ -1188,7 +1251,7 @@ const main = async () => {
   const stop = poolStopper(directory, unreported);
   process.on("SIGINT", () => stop({ kind: "signal", signal: "SIGINT" }));
   process.on("SIGTERM", () => stop({ kind: "signal", signal: "SIGTERM" }));
-  const deadlineTimer = armDeadline({ root, job, eventPath, stop });
+  const deadlineTimer = armDeadline({ root, job, stop });
   const started = performance.now();
   const budgets = readCheckBudgets(root);
   const launch = processLauncher({

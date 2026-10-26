@@ -6,7 +6,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +19,6 @@ import {
   type CheckResult,
   conditionHolds,
   continueOnErrorHolds,
-  cpuSeconds,
   failedCheckAnnotation,
   failedCheckCause,
   finishedCheckLine,
@@ -37,8 +35,10 @@ import {
   poolDeadline,
   processLauncher,
   processTree,
+  psSeconds,
   resolveEnv,
   runChecks,
+  runnerWorkerStartedAt,
   selectChecks,
   stillRunningLines,
   stopDetail,
@@ -636,10 +636,10 @@ test("a stopped check reports its stop as the failure cause", () => {
 });
 
 test("ps CPU times parse on Linux and macOS", () => {
-  expect(cpuSeconds("00:01:05")).toBe(65);
-  expect(cpuSeconds("1-02:00:00")).toBe(93_600);
-  expect(cpuSeconds("0:00.50")).toBe(0.5);
-  expect(cpuSeconds("12:03.25")).toBeCloseTo(723.25);
+  expect(psSeconds("00:01:05")).toBe(65);
+  expect(psSeconds("1-02:00:00")).toBe(93_600);
+  expect(psSeconds("0:00.50")).toBe(0.5);
+  expect(psSeconds("12:03.25")).toBeCloseTo(723.25);
 });
 
 test("a check's process tree follows descendants that left its group", () => {
@@ -913,21 +913,49 @@ test("every job that runs the pool declares a timeout the pool's deadline fits u
   );
 });
 
+test("the job starts when the runner's worker process for it does", () => {
+  const now = 1_000_000;
+  const row = (
+    pid: number,
+    ppid: number,
+    elapsed: number,
+    command: string,
+  ) => ({
+    pid,
+    ppid,
+    elapsed,
+    command,
+  });
+  const rows = [
+    row(1, 0, 9000, "/sbin/init"),
+    row(50, 1, 4000, "/home/runner/runners/2.330.0/bin/Runner.Listener"),
+    row(60, 50, 300, "/home/runner/runners/2.330.0/bin/Runner.Worker"),
+    row(70, 60, 30, "/bin/bash"),
+    row(80, 70, 5, "bun"),
+    // Another job's worker is no ancestor.
+    row(90, 50, 1000, "Runner.Worker"),
+  ];
+  expect(runnerWorkerStartedAt(rows, 80, now)).toBe(now - 300_000);
+  // Outside a runner there is no worker to read.
+  expect(runnerWorkerStartedAt(rows.slice(0, 2), 50, now)).toBeUndefined();
+  expect(runnerWorkerStartedAt([row(5, 5, 1, "loop")], 5, now)).toBeUndefined();
+});
+
 test("the deadline counts from the job's start and falls back to the pool's start only later", () => {
   const minute = 60_000;
   const pool = 100 * minute;
-  // The event file, written as the job is set up, marks the job's start.
+  // An observed start marks the job's start.
   expect(
     jobStartedAt({
-      eventWrittenAt: pool - 2 * minute,
+      observedStart: pool - 2 * minute,
       poolStartedAt: pool,
       timeoutMinutes: 40,
     }),
   ).toBe(pool - 2 * minute);
   // A time the job cannot have started at never moves the deadline earlier.
-  for (const eventWrittenAt of [undefined, pool + minute, pool - 41 * minute]) {
+  for (const observedStart of [undefined, pool + minute, pool - 41 * minute]) {
     expect(
-      jobStartedAt({ eventWrittenAt, poolStartedAt: pool, timeoutMinutes: 40 }),
+      jobStartedAt({ observedStart, poolStartedAt: pool, timeoutMinutes: 40 }),
     ).toBe(pool);
   }
   expect(poolDeadline(pool, 40)).toBe(
@@ -993,12 +1021,9 @@ test("the pool stops before its job's timeout and names the check still running"
     }),
   );
   writeFileSync(path.join(directory, "needs.json"), "{}");
-  // The runner writes the event file as it sets up the job: this job started
-  // 57 s ago, so one minute of its budget before the margin remains 3 s.
-  const event = path.join(directory, "event.json");
-  writeFileSync(event, "{}");
-  const jobStart = (Date.now() - 57_000) / 1000;
-  utimesSync(event, jobStart, jobStart);
+  // This job started 57 s ago, so of the one minute its timeout leaves
+  // before the margin, 3 s remain.
+  const jobStart = Date.now() - 57_000;
   const child = Bun.spawn(
     [
       process.execPath,
@@ -1012,7 +1037,7 @@ test("the pool stops before its job's timeout and names the check still running"
         PATH: process.env["PATH"] ?? "",
         RUNNER_TEMP: directory,
         GITHUB_JOB: "ci-checks-rest",
-        GITHUB_EVENT_PATH: event,
+        CI_CHECK_POOL_JOB_STARTED_AT: String(jobStart),
         CI_CHECK_POOL_CONCURRENCY: "2",
         CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
         CI_CHECK_POOL_STEPS: "{}",
