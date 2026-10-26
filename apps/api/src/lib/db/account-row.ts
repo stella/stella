@@ -1,4 +1,5 @@
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, ne, or } from "drizzle-orm";
+import * as v from "valibot";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -6,13 +7,22 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  ACCOUNT_EMAIL_UNDELIVERABLE_REASONS,
+  type AccountEmailUndeliverableReason,
+} from "@/api/lib/email/deliverability-contract";
+import {
+  emailColumnMatches,
+  type NormalizedEmail,
+} from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // Account-level access to the auth `user` row.
 //
 // Every query here is keyed by the one account it acts for: the caller's own
-// session user id, or the email an OTP or sign-in request names before any
-// organization context exists. Membership reads are likewise filtered by the
+// session user id, the email an OTP or sign-in request names before any
+// organization context exists, or the address a mail provider's delivery
+// event names. Membership reads are likewise filtered by the
 // caller's user id and return no organization row data. This module is listed
 // in the user-query lint rule's `allowedFiles` for these account-scoped reads.
 
@@ -187,4 +197,77 @@ export const anonymizeDeletedAccountRow = async (
       deletedAt: new Date(),
     })
     .where(eq(user.id, userId));
+};
+
+type MarkAccountEmailUndeliverableOptions = {
+  database: Pick<typeof rootDb, "update">;
+  email: NormalizedEmail;
+  reason: AccountEmailUndeliverableReason;
+  at: Date;
+};
+
+/**
+ * Records the mail provider's refusal of an address on the account that uses
+ * it. The first refusal's reason and time stand while the account keeps that
+ * address; an address no account uses changes nothing. Returns whether an
+ * account was marked.
+ */
+export const markAccountEmailUndeliverable = async ({
+  database,
+  email,
+  reason,
+  at,
+}: MarkAccountEmailUndeliverableOptions): Promise<boolean> => {
+  const marked = await database
+    .update(user)
+    .set({
+      emailUndeliverableAddress: email,
+      emailUndeliverableReason: reason,
+      emailUndeliverableAt: at,
+    })
+    .where(
+      and(
+        emailColumnMatches(user.email, email),
+        or(
+          isNull(user.emailUndeliverableAddress),
+          ne(user.emailUndeliverableAddress, email),
+        ),
+      ),
+    )
+    .returning({ id: user.id });
+  return marked.length > 0;
+};
+
+const undeliverableReasonSchema = v.picklist(
+  ACCOUNT_EMAIL_UNDELIVERABLE_REASONS,
+);
+
+/**
+ * Why mail to the account at this address cannot be delivered, or undefined
+ * when it can. A refusal recorded for an earlier address no longer applies.
+ */
+export const readAccountEmailUndeliverable = async (
+  database: Pick<typeof rootDb, "select">,
+  email: NormalizedEmail,
+): Promise<
+  { userId: string; reason: AccountEmailUndeliverableReason } | undefined
+> => {
+  const rows = await database
+    .select({ id: user.id, reason: user.emailUndeliverableReason })
+    .from(user)
+    .where(
+      and(
+        emailColumnMatches(user.email, email),
+        eq(user.emailUndeliverableAddress, email),
+      ),
+    )
+    .limit(1);
+  const row = rows.at(0);
+  if (row === undefined) {
+    return undefined;
+  }
+  return {
+    userId: row.id,
+    reason: v.parse(undeliverableReasonSchema, row.reason),
+  };
 };
