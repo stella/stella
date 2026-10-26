@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
@@ -68,7 +69,8 @@ const createContext = (
     memberRole: sessionMemberRole("owner"),
     body: { key },
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/reports/templates/clone-builtin",
+    route:
+      "/v1/workspaces/:workspaceId/reports/templates/clone-builtin" satisfies ApiRoutePath,
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),

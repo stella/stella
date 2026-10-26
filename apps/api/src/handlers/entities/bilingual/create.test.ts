@@ -10,6 +10,7 @@ import {
 import { readBilingualDocx } from "@stll/folio-core/server";
 
 import { entities, fields } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -176,7 +177,7 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
     managedAIResidency: "eu" as const,
     promptCachingEnabled: true,
     request: new Request("http://localhost/entities/test/bilingual"),
-    route: "/entities/:workspaceId/bilingual",
+    route: "/v1/entities/:workspaceId/bilingual" satisfies ApiRoutePath,
   });
 
 describe("createBilingualEntity", () => {
