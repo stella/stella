@@ -579,6 +579,92 @@ const joinedTraceRecords = (trace: string): string[] => {
   return records;
 };
 
+// Git options that come before the subcommand and take a separate value.
+const GIT_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+  "-C",
+  "-c",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--config-env",
+  "--exec-path",
+  "--super-prefix",
+]);
+
+/**
+ * The subcommand of a `git` invocation after its global options, the
+ * directory its `-C` options move it to (relative to where it starts), and
+ * the subcommand's own arguments.
+ */
+export const gitInvocation = (args: readonly string[]) => {
+  let directory = ".";
+  let index = 1;
+  while ((args[index] ?? "").startsWith("-")) {
+    const option = args[index] ?? "";
+    if (option === "-C") {
+      directory = path.join(directory, args[index + 1] ?? ".");
+    }
+    index += GIT_VALUE_OPTIONS.has(option) ? 2 : 1;
+  }
+  return {
+    subcommand: args[index],
+    directory,
+    rest: args.slice(index + 1),
+  };
+};
+
+/**
+ * The directory a `getdents` call lists. Every directory listing, whatever
+ * API or child process makes it, reads its entries through this call, and
+ * -yy names the directory behind the descriptor.
+ */
+const listedDirectory = (line: string): string | undefined => {
+  const call = line.indexOf(" getdents");
+  if (call === -1) {
+    return undefined;
+  }
+  const open = line.indexOf("<", call);
+  const close = line.indexOf(">,", open);
+  return open === -1 || close === -1
+    ? undefined
+    : decodeTraceString(line.slice(open + 1, close));
+};
+
+/** The directories a scanning command lists, or undefined for any other. */
+const commandOperands = (
+  executable: string,
+  args: readonly string[],
+  git: ReturnType<typeof gitInvocation> | undefined,
+): string[] | undefined => {
+  const gitArguments = git?.rest ?? [];
+  const separator = gitArguments.indexOf("--");
+  if (git?.subcommand === "ls-files") {
+    return (
+      separator === -1 ? gitArguments : gitArguments.slice(separator + 1)
+    ).filter((argument) => !argument.startsWith("-"));
+  }
+  if (
+    git?.subcommand === "grep" ||
+    (git?.subcommand === "diff" && gitArguments.includes("--name-only"))
+  ) {
+    return separator === -1 ? [] : gitArguments.slice(separator + 1);
+  }
+  if (executable === "find") {
+    const findArguments = args.slice(1);
+    const expression = findArguments.findIndex(
+      (argument) =>
+        argument.startsWith("-") || argument === "!" || argument === "(",
+    );
+    return expression === -1
+      ? findArguments
+      : findArguments.slice(0, expression);
+  }
+  if (executable === "ls") {
+    return args.slice(1).filter((arg) => !arg.startsWith("-"));
+  }
+  return undefined;
+};
+
 const commandScans = (trace: string): ScanRecord[] => {
   const scans: ScanRecord[] = [];
   const workingDirectories = new Map<string, string>();
@@ -606,6 +692,11 @@ const commandScans = (trace: string): ScanRecord[] => {
       continue;
     }
     assertWholeRecord(line);
+    const listed = listedDirectory(line);
+    if (listed !== undefined) {
+      scans.push({ directory: listed });
+      continue;
+    }
     const call = /execve\([^,]+, \[((?:.|\n)*?)\],/u.exec(line)?.[1];
     if (call === undefined) {
       continue;
@@ -614,34 +705,22 @@ const commandScans = (trace: string): ScanRecord[] => {
       decodeTraceString(match[1] ?? ""),
     );
     const executable = path.basename(args[0] ?? "");
-    const cwd = workingDirectories.get(pid);
-    const gitSubcommand = executable === "git" ? args[1] : undefined;
-    let operands: string[];
-    if (gitSubcommand === "ls-files") {
-      const separator = args.indexOf("--");
-      operands = (
-        separator === -1 ? args.slice(2) : args.slice(separator + 1)
-      ).filter((argument) => !argument.startsWith("-"));
-    } else if (gitSubcommand === "grep") {
-      const separator = args.indexOf("--");
-      operands = separator === -1 ? [] : args.slice(separator + 1);
-    } else if (gitSubcommand === "diff" && args.includes("--name-only")) {
-      const separator = args.indexOf("--");
-      operands = separator === -1 ? [] : args.slice(separator + 1);
-    } else if (executable === "find") {
-      const findArguments = args.slice(1);
-      const expression = findArguments.findIndex(
-        (argument) =>
-          argument.startsWith("-") || argument === "!" || argument === "(",
-      );
-      operands =
-        expression === -1 ? findArguments : findArguments.slice(0, expression);
-    } else if (executable === "ls") {
-      operands = args.slice(1).filter((arg) => !arg.startsWith("-"));
-    } else {
+    const git = executable === "git" ? gitInvocation(args) : undefined;
+    const traced = workingDirectories.get(pid);
+    const cwd =
+      git === undefined || traced === undefined
+        ? traced
+        : path.resolve(traced, git.directory);
+    const operands = commandOperands(executable, args, git);
+    if (operands === undefined) {
       continue;
     }
-    for (const directory of operands.length === 0 ? ["."] : operands) {
+    for (const operand of operands.length === 0 ? ["."] : operands) {
+      // An untraced working directory resolves later; `git -C` still applies.
+      const directory =
+        git !== undefined && traced === undefined
+          ? path.join(git.directory, operand)
+          : operand;
       const record = {
         directory: cwd === undefined ? directory : path.resolve(cwd, directory),
         ...(cwd === undefined ? { command: executable } : {}),
@@ -763,7 +842,7 @@ const run = async ({
           "-s",
           String(TRACE_STRING_LIMIT),
           "-e",
-          "trace=open,openat,openat2,execve,clone,clone3,fork,vfork,chdir,fchdir",
+          "trace=open,openat,openat2,execve,clone,clone3,fork,vfork,chdir,fchdir,getdents,getdents64",
           "-o",
           tracePath,
           ...testCommand,

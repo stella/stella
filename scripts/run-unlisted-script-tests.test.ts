@@ -15,6 +15,7 @@ import { comparisonBase } from "./ci-comparison-base";
 import {
   balanceTestFiles,
   decodeTraceString,
+  gitInvocation,
   parseScriptTestArguments,
   prepareStrace,
   SCAN_PRELOAD_PATH,
@@ -484,6 +485,76 @@ describe("directory scan coverage", () => {
           uncoveredScans({ scanLog: "", trace, declared, tracked, root }),
         ).toEqual([{ directory: path.join(root, "data") }]);
       }
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/**"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("git global options move the scan before the subcommand", () => {
+    expect(
+      gitInvocation([
+        "git",
+        "--no-pager",
+        "-c",
+        "core.quotepath=off",
+        "-C",
+        "parent",
+        "ls-files",
+        "--",
+        "data",
+      ]),
+    ).toEqual({
+      subcommand: "ls-files",
+      directory: "parent",
+      rest: ["--", "data"],
+    });
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        `1 openat(AT_FDCWD<${root}>, ".git", O_RDONLY) = 3`,
+        '1 execve("/usr/bin/git", ["git", "--no-pager", "-C", "parent", "ls-files", "--", "data"], 0x0) = 0',
+      ].join("\n");
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/**"],
+          tracked,
+          root,
+        }),
+      ).toEqual([{ directory: path.join(root, "parent/data") }]);
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["parent/data/**"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("a directory listing through any API is a scan", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      // A named node:fs import bypasses the preload; the listing still
+      // reads the directory's entries.
+      const trace = `1 getdents64(3<${root}/data>, 0x5555 /* 3 entries */, 32768) = 80`;
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/a.txt"],
+          tracked,
+          root,
+        }),
+      ).toEqual([{ directory: path.join(root, "data") }]);
       expect(
         uncoveredScans({
           scanLog: "",
