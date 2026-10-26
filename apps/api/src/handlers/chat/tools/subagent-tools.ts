@@ -1,4 +1,8 @@
 import {
+  CONNECT_CONNECTOR_TOOL_NAME,
+  LIST_CONNECTABLE_CONNECTORS_TOOL_NAME,
+} from "@stll/api-contract/chat-connector";
+import {
   REQUEST_SECRET_TOOL_NAME,
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
@@ -117,7 +121,9 @@ export const projectToolMapForSubagent = (
     if (
       name === SPAWN_SUBAGENTS_TOOL_NAME ||
       name === REQUEST_SECRET_TOOL_NAME ||
-      name === USE_CONNECTOR_SECRET_TOOL_NAME
+      name === USE_CONNECTOR_SECRET_TOOL_NAME ||
+      name === CONNECT_CONNECTOR_TOOL_NAME ||
+      name === LIST_CONNECTABLE_CONNECTORS_TOOL_NAME
     ) {
       continue;
     }

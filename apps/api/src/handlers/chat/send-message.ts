@@ -17,6 +17,8 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import { isServerChatToolCall } from "@stll/api-contract/chat";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -185,6 +187,7 @@ import {
   resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
+  buildConnectableMcpConnectorsSystemHint,
   buildExternalMcpSystemHint,
   createLazyExternalMcpToolsLoader,
   loadExternalMcpToolsForUser,
@@ -217,6 +220,7 @@ import {
   restrictChatToolsToScope,
   scopeAllowsTool,
 } from "@/api/handlers/chat/tools/tool-scope";
+import { loadTurnPromptSources } from "@/api/handlers/chat/turn-prompt-sources";
 import type {
   ChatMention,
   ChatMessage,
@@ -283,6 +287,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -2138,6 +2143,8 @@ type AssembleTurnSystemPromptOptions = {
   };
   /** The connectors the turn may call, after its source chips. */
   externalMcpConnectors: readonly LoadedExternalMcpConnector[];
+  /** Offered only when the turn registers `connect_connector`. */
+  connectableConnectors: ConnectableMcpConnectorCatalog | undefined;
   requestedSkillsPrompt: string;
   sendMode: ChatSendMode;
 };
@@ -2151,6 +2158,7 @@ type AssembleTurnSystemPromptOptions = {
 const assembleTurnSystemPrompt = ({
   chatContext,
   externalMcpConnectors,
+  connectableConnectors,
   requestedSkillsPrompt,
   sendMode,
 }: AssembleTurnSystemPromptOptions) => ({
@@ -2162,6 +2170,7 @@ const assembleTurnSystemPrompt = ({
     chatContext.systemUntrusted,
     [
       buildExternalMcpSystemHint(externalMcpConnectors),
+      buildConnectableMcpConnectorsSystemHint(connectableConnectors),
       requestedSkillsPrompt,
     ].map(chatVolatilePromptSection),
   ),
@@ -3112,19 +3121,36 @@ export const createSendMessage = (
               : restrictChatToolsToScope(chatTools, body.toolScope),
         });
 
-        const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
-          activeSkillContext: chatContext.activeSkillContext,
-          bindingScope: chatContext.skillBindingScope,
-          catalog: chatContext.skillMetadata,
-          messages: chatContext.hydratedMessages,
-          organizationId: session.activeOrganizationId,
-          recordAuditEvent: recordReadAuditEvent,
-          safeDb,
-          userId: user.id,
+        const promptSources = await loadTurnPromptSources({
+          requestedSkills: {
+            type: "required",
+            load: async () =>
+              loadRequestedSkillsPrompt({
+                activeSkillContext: chatContext.activeSkillContext,
+                bindingScope: chatContext.skillBindingScope,
+                catalog: chatContext.skillMetadata,
+                messages: chatContext.hydratedMessages,
+                organizationId: session.activeOrganizationId,
+                recordAuditEvent: recordReadAuditEvent,
+                safeDb,
+                userId: user.id,
+              }),
+          },
+          connectorCatalog: {
+            type: "optional",
+            load: async () =>
+              streamingTools[CONNECT_CONNECTOR_TOOL_NAME] === undefined
+                ? Promise.resolve(Result.ok(undefined))
+                : loadConnectableMcpConnectorsForUser({
+                    organizationId: session.activeOrganizationId,
+                    safeDb,
+                    userId: user.id,
+                  }),
+          },
         });
-        if (Result.isError(requestedSkillsPrompt)) {
+        if (Result.isError(promptSources)) {
           await lifecycle.failCurrentTurn("internal", true);
-          return Result.err(requestedSkillsPrompt.error);
+          return Result.err(promptSources.error);
         }
         const storedHistory = await loadStoredHistory({
           historyIds: latestMessagePlan.messages.flatMap(({ id }) =>
@@ -3143,11 +3169,12 @@ export const createSendMessage = (
         }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
+          connectableConnectors: promptSources.value.connectableConnectors,
           externalMcpConnectors: scopedExternalConnectors(
             sourceScopes,
             externalConnectors,
           ),
-          requestedSkillsPrompt: requestedSkillsPrompt.value,
+          requestedSkillsPrompt: promptSources.value.requestedSkillsPrompt,
           sendMode: body.sendMode,
         });
 

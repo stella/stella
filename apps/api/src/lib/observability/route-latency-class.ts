@@ -509,6 +509,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/chat/template-thread": "crud",
   "POST /v1/chat/template-thread/rotate": "crud",
   "POST /v1/chat/threads/:threadId/export": "crud",
+  "POST /v1/chat/threads/:threadId/connectors/:toolCallId": "crud",
   "POST /v1/chat/threads/:threadId/fork": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions/:revision/revert":

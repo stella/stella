@@ -144,6 +144,8 @@ const ChatThreadDomPage = ({
           handleDeny: session.handleDeny,
           handleRequestSecret: session.handleRequestSecret,
           continueRequestSecret: session.continueRequestSecret,
+          handleConnectConnector: session.handleConnectConnector,
+          continueConnectConnector: session.continueConnectConnector,
           resolveSecretTarget: session.resolveSecretTarget,
           secretAvailabilityKey: session.secretAvailabilityKey,
         }}
