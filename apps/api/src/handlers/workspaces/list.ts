@@ -176,6 +176,7 @@ const readWorkspaces = createSafeRootHandler(
           ? {
               id: client.id,
               displayName: client.displayName,
+              type: client.type,
               responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
             }
           : null,

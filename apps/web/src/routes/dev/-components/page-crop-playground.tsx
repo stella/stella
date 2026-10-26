@@ -105,7 +105,10 @@ export const PageCropPlayground = () => {
           return undefined;
         });
         if (Result.isError(result)) {
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "PageCropPlayground:failure",
+            scope: { type: "handler", handlerId: "PageCropPlayground:failure" },
+          });
           if (!lifecycle.disposed) {
             setFixture({ status: "failed", message: result.error.message });
           }

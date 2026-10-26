@@ -51,7 +51,7 @@ export const useSyncJustifications = (
     enabled: enabled && normalizedEntityIds.length > 0,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useSyncJustifications:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   useExternalSyncEffect(() => {
@@ -119,7 +119,10 @@ export const useSyncJustificationChunks = (
     queries,
     combine: combineResults,
   });
-  useQueryViewErrors(syncedResults.map(({ view }) => view));
+  useQueryViewErrors(
+    syncedResults.map(({ view }) => view),
+    "useSyncJustificationChunks:query",
+  );
 
   useExternalSyncEffect(() => {
     const syncedKeys = syncedResultsRef.current;

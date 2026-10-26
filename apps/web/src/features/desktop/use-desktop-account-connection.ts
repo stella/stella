@@ -13,7 +13,14 @@ const linkAccountToRunningDesktop = async () => {
 
 const store = createDesktopConnectionStore({
   link: linkAccountToRunningDesktop,
-  onError: (error) => getAnalytics().captureError(error),
+  onError: (error) =>
+    getAnalytics().captureError(error, {
+      fingerprintKey: "use-desktop-account-connection:failure",
+      scope: {
+        type: "handler",
+        handlerId: "use-desktop-account-connection:failure",
+      },
+    }),
 });
 
 export const useDesktopAccountConnection = () => {

@@ -16,6 +16,7 @@
  */
 import { panic } from "better-result";
 
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "@stll/api-contract/statute-gazette";
 import type {
@@ -35,6 +36,33 @@ import {
   parseEuWorkIdentifier,
 } from "./eu-provision-citations";
 import { formatWorkIdentifier } from "./provision-citation-profile";
+import { provisionCitationProfileFor } from "./provision-citation-profiles";
+import {
+  formatUsCodeReference,
+  locateUsCodeCitations,
+  normalizeUsCodeReference,
+  parseUsCodeAnchor,
+  parseUsCodeReference,
+  parseUsCodeWorkIdentifier,
+  US_CODE_ANCHOR_SEPARATOR,
+  usCodeAnchor,
+  usCodeReference,
+  usCodeWorkEli,
+  usCodeWorkIdentifier,
+} from "./us-code-citations";
+import type { UsCodeWork } from "./us-code-citations";
+
+/** The one work a printed citation names (`42 U.S.C. § 1983`), or null. */
+const onlyCitedWork = (raw: string): UsCodeWork | null => {
+  const text = raw.trim();
+  const [only, ...others] = locateUsCodeCitations(text);
+  return only === undefined ||
+    others.length > 0 ||
+    only.start !== 0 ||
+    only.end !== text.length
+    ? null
+    : only.work;
+};
 
 export type StatuteAbbreviationEntry = {
   canonicalAbbreviation: string;
@@ -135,6 +163,16 @@ export type SupportedProvisionCitationGrammar<
   ) => ProvisionReference | null;
   /** Where this grammar's references can be opened. */
   target: "hosted" | "publisher";
+  /**
+   * How a reference reads back to a lawyer. `catalog`: the section sign or
+   * article word, then each subdivision named in the reader's language
+   * (`§ 46 para. 1 lit. a)`). `printed`: the jurisdiction prints its
+   * citations in one form whatever the reader's language (`§ 1983(a)(1)`),
+   * and the grammar renders it.
+   */
+  citationForm:
+    | { type: "catalog" }
+    | { type: "printed"; format: (reference: ProvisionReference) => string };
   status: "supported";
 };
 
@@ -212,6 +250,11 @@ const referenceOf = (
           return null;
         }
         reference.section = Number.parseInt(number, 10);
+        // A statute numbers its sections from 1; the shared schema admits 0
+        // only for the codes that use it.
+        if (reference.section < 1) {
+          return null;
+        }
         const suffix = parts?.["suffix"];
         reference.sectionSuffix =
           suffix === undefined || suffix.length === 0 ? null : suffix;
@@ -473,7 +516,7 @@ export const createProvisionCitationGrammar = <
   const gazetteInput = new RegExp(`^(?:${gazette.source})$`, "iu");
   return {
     normalizeReference: (reference) => {
-      if (reference.unit !== unit) {
+      if (reference.unit !== unit || reference.section < 1) {
         return null;
       }
       const values: (string | null)[] = [];
@@ -596,6 +639,7 @@ export const createProvisionCitationGrammar = <
     },
     status: "supported",
     target: "hosted",
+    citationForm: { type: "catalog" },
   };
 };
 
@@ -670,6 +714,7 @@ export const PROVISION_CITATION_GRAMMARS = {
     jurisdiction: "EU",
     status: "supported",
     target: "publisher",
+    citationForm: { type: "catalog" },
     unit: "article",
     anchor: euProvisionAnchor,
     anchorSeparator: EU_PROVISION_ANCHOR_SEPARATOR,
@@ -699,7 +744,52 @@ export const PROVISION_CITATION_GRAMMARS = {
   HUN: unsupported("HUN"),
   POL: unsupported("POL"),
   SVK: unsupported("SVK"),
-  USA: unsupported("USA"),
+  USA: {
+    jurisdiction: "USA",
+    status: "supported",
+    target: "hosted",
+    citationForm: { type: "printed", format: formatUsCodeReference },
+    unit: "section",
+    anchor: usCodeAnchor,
+    anchorSeparator: US_CODE_ANCHOR_SEPARATOR,
+    parseAnchor: parseUsCodeAnchor,
+    normalizeReference: normalizeUsCodeReference,
+    parseReference: parseUsCodeReference,
+    // A US citation names its section and its work in one span, so the
+    // work-level reading would only repeat the provision: the provision
+    // carries the work's ELI.
+    locateGazetteCitations: () => [],
+    gazette: {
+      parse: (raw: string) => {
+        const work = parseUsCodeWorkIdentifier(raw) ?? onlyCitedWork(raw);
+        return work === null
+          ? null
+          : {
+              identifier: usCodeWorkIdentifier(work),
+              eli: usCodeWorkEli(work),
+            };
+      },
+    },
+    locateAbbreviatedProvisions: (text: string) =>
+      locateUsCodeCitations(text).flatMap((citation) => {
+        const reference = usCodeReference(citation);
+        return reference === null
+          ? []
+          : [
+              {
+                abbreviation: {
+                  canonicalAbbreviation: usCodeWorkIdentifier(citation.work),
+                  eli: usCodeWorkEli(citation.work),
+                },
+                anchor: usCodeAnchor(reference),
+                end: citation.end,
+                jurisdiction: "USA" as const,
+                reference,
+                start: citation.start,
+              },
+            ];
+      }),
+  },
 } as const satisfies {
   readonly [
     TJurisdiction in CaseLawJurisdiction
@@ -723,3 +813,38 @@ export const locateGazetteCitations = (
   text: string,
 ): LocatedGazetteCitation[] =>
   SUPPORTED_GRAMMARS.flatMap((grammar) => grammar.locateGazetteCitations(text));
+
+/**
+ * The separator a jurisdiction's provision anchors are cut on: its
+ * grammar's where it has one, its citation profile's where only the profile
+ * mints anchors (Slovakia's `paragraf-5.odsek-1` joins on `.`), and null for
+ * a jurisdiction that mints none, whose anchors are read whole.
+ */
+export const provisionAnchorSeparatorFor = (
+  jurisdiction: string,
+): string | null => {
+  if (isCaseLawJurisdiction(jurisdiction)) {
+    const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+    if (grammar.status === "supported") {
+      return grammar.anchorSeparator;
+    }
+  }
+  return provisionCitationProfileFor(jurisdiction)?.anchor.join ?? null;
+};
+
+/**
+ * How a jurisdiction's provision references read back to a lawyer: the
+ * catalog's localized subdivision words unless its grammar prints its own
+ * form.
+ */
+export const provisionCitationFormFor = (
+  jurisdiction: string,
+): SupportedProvisionCitationGrammar["citationForm"] => {
+  if (isCaseLawJurisdiction(jurisdiction)) {
+    const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+    if (grammar.status === "supported") {
+      return grammar.citationForm;
+    }
+  }
+  return { type: "catalog" };
+};

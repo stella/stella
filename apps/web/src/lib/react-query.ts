@@ -1,4 +1,7 @@
-import { QueryClient } from "@tanstack/react-query";
+import {
+  defaultShouldDehydrateQuery,
+  QueryClient,
+} from "@tanstack/react-query";
 import type {
   InfiniteData,
   InfiniteQueryExecuteOptions,
@@ -274,14 +277,25 @@ export const ensureRouteInfiniteQueryData = async <
   );
 
 /**
- * Which queries a server render hands to the browser. A failed read is left
- * behind: the SSR payload rebuilds every error as a plain `Error`, so the
- * browser would hold a failure it can no longer classify (an outage reads
- * as a crash). The loader already turned the failure into route state, and
- * the browser reads the query again on its own, with typed errors.
+ * Which queries a server render hands to the browser: only reads that
+ * succeeded, TanStack's own default. The router integration offers a query
+ * again each time it changes, so a read that settles while the page is still
+ * streaming reaches the browser with its data.
+ *
+ * A pending read is left behind. Its in-flight promise would travel with it,
+ * and the server can still cancel that read after the payload left (a loader
+ * deadline, or the render teardown clearing the cache), so the browser would
+ * resume a promise that rejects with `Error("redacted")`. The browser reads
+ * the query itself instead.
+ *
+ * A failed read is left behind too: the SSR payload rebuilds every error as a
+ * plain `Error`, so the browser would hold a failure it can no longer classify
+ * (an outage reads as a crash). The loader already turned the failure into
+ * route state, and the browser reads the query again on its own, with typed
+ * errors.
  */
 export const shouldDehydrateServerQuery = (query: Query): boolean =>
-  query.state.status !== "error";
+  defaultShouldDehydrateQuery(query);
 
 /** The app's query cache, with the defaults every read shares. */
 export const createAppQueryClient = () =>

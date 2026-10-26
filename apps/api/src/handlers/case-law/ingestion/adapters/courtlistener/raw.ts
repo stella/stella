@@ -1,4 +1,7 @@
+// parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 import { Result, TaggedError } from "better-result";
+
+import { declareFingerprintFields } from "@stll/errors";
 /**
  * The stored raw of a CourtListener record and the hash that decides whether
  * a later edition of it changed anything.
@@ -8,7 +11,6 @@ import { Result, TaggedError } from "better-result";
  * sanitizer removes, so NUL, zero-width and unpaired surrogate code units in
  * publisher text survive storage and decode to the exact original strings.
  */
-
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
@@ -141,7 +143,11 @@ class CourtListenerRawDecodeError extends TaggedError(
   message: string;
   reason: (typeof COURTLISTENER_RAW_DECODE_FAILURE)[keyof typeof COURTLISTENER_RAW_DECODE_FAILURE];
   part: string | null;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const decodeFailure = (
   reason: CourtListenerRawDecodeError["reason"],

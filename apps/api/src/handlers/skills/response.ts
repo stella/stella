@@ -26,6 +26,8 @@ type AgentSkillResponseRow = Pick<
   | "invocation"
   | "body"
   | "command"
+  | "boundClientId"
+  | "boundWorkspaceId"
   | "createdAt"
 >;
 
@@ -54,6 +56,8 @@ export const toAgentSkillResponse = (
   invocation: skill.invocation,
   body: skill.body,
   command: skill.command,
+  boundClientId: skill.boundClientId,
+  boundWorkspaceId: skill.boundWorkspaceId,
   createdAt: skill.createdAt,
   resources: resources.map(({ id, path, sizeBytes, content }) => ({
     id,
