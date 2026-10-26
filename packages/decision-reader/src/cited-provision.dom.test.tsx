@@ -204,7 +204,9 @@ describe("a cited provision's wording", () => {
     );
     const quoted = wordingOf(await openCard(container));
     const quotes = [
-      ...quoted.querySelectorAll('[data-slot="provision-card-quote"]'),
+      ...quoted.querySelectorAll<HTMLElement>(
+        '[data-slot="provision-card-quote"]',
+      ),
     ];
     expect(
       quotes.map((quote) => ({
