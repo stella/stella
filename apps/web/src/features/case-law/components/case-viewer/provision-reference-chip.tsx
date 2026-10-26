@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import { ReferencePeek } from "@stll/decision-reader/reference-peek";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -9,11 +10,9 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
-import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import type { ProvisionGroup } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
-import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
@@ -124,7 +123,7 @@ export const ProvisionReferenceChip = ({
   const document = target.type === "hosted" ? target.document : null;
   const t = useTranslations();
   const format = useFormatter();
-  const inspector = useInspectorView();
+  const { openProvision } = useReaderAdapters();
   const count = provision.occurrences.length;
   const anchorId = provisionHeadingAnchor(provision.anchor, anchorSeparator);
 
@@ -161,19 +160,17 @@ export const ProvisionReferenceChip = ({
             document === null
               ? null
               : () =>
-                  inspector.open(
-                    createProvisionViewTab({
-                      anchorId,
-                      documentId: document.id,
-                      eli: document.eli,
-                      highlightAnchorId: provision.anchor,
-                      jurisdiction,
-                      provisionLabel: label,
-                      statuteTitle,
-                      versionCount: 1,
-                      versionValidFrom: document.versionValidFrom,
-                    }),
-                  ),
+                  openProvision({
+                    anchorId,
+                    documentId: document.id,
+                    eli: document.eli,
+                    highlightAnchorId: provision.anchor,
+                    jurisdiction,
+                    provisionLabel: label,
+                    statuteTitle,
+                    versionCount: 1,
+                    versionValidFrom: document.versionValidFrom,
+                  }),
           openInStella:
             document === null ? null : (
               <Link

@@ -261,8 +261,11 @@ export const DecisionCitationChip = ({
         actions: {
           openInSidePanel: onOpenInSidePanel ?? null,
           openInStella: (
-            // oxlint-disable-next-line jsx-a11y/anchor-has-content -- a render element; the peek supplies its content
-            <a href={sanitizeHref(readerHref)} onClick={onOpenPage} />
+            <a
+              aria-label={t("common.openInStella")}
+              href={sanitizeHref(readerHref)}
+              onClick={onOpenPage}
+            />
           ),
           openOriginal: originalUrl,
         },
