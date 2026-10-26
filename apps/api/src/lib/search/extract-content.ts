@@ -22,6 +22,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   resolveRuntimeWorkerPath,
@@ -35,6 +36,7 @@ import {
   ATTACHMENT_EXTRACTION_OUTCOME,
   parseAttachmentIssues,
 } from "@/api/lib/search/extraction-worker-attachments";
+import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
 import { spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
@@ -172,6 +174,7 @@ export const extractFileTextResult = async (
       mimeType: normalizedMimeType,
       sizeBytes: buffer.byteLength,
       termination,
+      workerErrorClass: parseWorkerErrorClass(result.error.message),
     });
     return Result.err(error);
   }
@@ -203,6 +206,9 @@ export const extractFileText = async (
     return result.value;
   }
 
-  captureError(result.error, context);
+  captureError(
+    result.error,
+    handlerErrorContext("search.extractFileText.result_error", context),
+  );
   return null;
 };

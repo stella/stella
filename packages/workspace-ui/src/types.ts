@@ -3,6 +3,21 @@ import type { OptionColor } from "@stll/ui/option-color";
 
 export type { OptionColor } from "@stll/ui/option-color";
 
+/**
+ * Why a document could not be converted. Mirrors the API contract type; the
+ * web app asserts both declarations stay equal.
+ */
+export type FileConversionRefusal =
+  | { kind: "unsupported_encoding"; encoding: string }
+  | {
+      kind: "unsupported_reference";
+      format: string;
+      element: string;
+      attribute: string;
+    }
+  | { kind: "unsupported_field"; fieldType: string }
+  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" };
+
 export type FieldContent =
   | {
       type: "error";
@@ -41,6 +56,14 @@ export type FieldContent =
       encrypted: boolean;
       sha256Hex: string;
       pdfFileId: string | null;
+      pdfDerivative?:
+        | { status: "not-required" | "pending" | "ready" }
+        | {
+            status: "failed";
+            reason?: "enqueue" | "processing" | "too-large" | undefined;
+            conversionRefusal?: FileConversionRefusal | undefined;
+          }
+        | undefined;
     }
   | {
       type: "date";
@@ -106,7 +129,7 @@ export const FIELD_CONTENT_TYPES =
     typeof fieldContentTypes
   >;
 
-export type WorkspaceFieldContent = FieldContent;
+export type WorkspaceFieldContent = FieldContent & { truncated?: true };
 
 /**
  * Minimal structural bound the display layer needs from a property: the cell

@@ -5,6 +5,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
@@ -29,6 +30,10 @@ import {
 } from "@/components/search-dialog.shared";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import {
+  DocumentExtractionStatus,
+  readDocumentProcessingStatus,
+} from "@/components/workspaces/document-extraction-status";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
 import type { ResolvedCommandAction } from "@/features/command-palette/hooks/use-command-actions";
@@ -63,77 +68,40 @@ type SearchSummaryItemProps = {
   onCitationClick: (citationId: string) => void;
 };
 
-export type CommandActionEntry = {
-  type: "command-action";
-  title: string;
-  action: ResolvedCommandAction;
-};
-
 type CommandActionItemProps = {
-  entry: CommandActionEntry;
-  navigation: { type: "button" } | { type: "command"; index: number };
+  action: ResolvedCommandAction;
   onSelect: (actionId: string) => void;
 };
 
+/** An action row on the blank search screen; results never list actions. */
 export const CommandActionItem = ({
-  entry,
-  navigation,
+  action,
   onSelect,
 }: CommandActionItemProps) => {
-  const { action } = entry;
   const Icon = action.icon;
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
-  const content = (
-    <>
-      <Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{action.title}</span>
-      {action.hotkey && (
-        <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
-          {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
-        </kbd>
+  return (
+    <CapabilityAction action={action} surface="control">
+      {(capabilityProps) => (
+        <Button
+          data-command-action-id={action.id}
+          data-search-empty-row=""
+          onClick={() => onSelect(action.id)}
+          size="row"
+          variant="ghost"
+          {...capabilityProps}
+        >
+          <Icon className="text-muted-foreground size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{action.title}</span>
+          {action.hotkey && (
+            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
+              {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
+            </kbd>
+          )}
+        </Button>
       )}
-    </>
+    </CapabilityAction>
   );
-  switch (navigation.type) {
-    case "command":
-      return (
-        <CapabilityAction action={action} surface="control">
-          {(capabilityProps) => (
-            <CommandItem
-              data-command-action-id={action.id}
-              data-command-action-index={navigation.index}
-              index={navigation.index}
-              onClick={() => onSelect(action.id)}
-              size="row"
-              value={entry}
-              {...capabilityProps}
-            >
-              {content}
-            </CommandItem>
-          )}
-        </CapabilityAction>
-      );
-    case "button":
-      return (
-        <CapabilityAction action={action} surface="control">
-          {(capabilityProps) => (
-            <Button
-              data-command-action-id={action.id}
-              data-search-empty-row=""
-              onClick={() => onSelect(action.id)}
-              size="row"
-              variant="ghost"
-              {...capabilityProps}
-            >
-              {content}
-            </Button>
-          )}
-        </CapabilityAction>
-      );
-    default:
-      navigation satisfies never;
-      return panic("Unhandled command action navigation type");
-  }
 };
 
 export const SearchSummaryItem = ({
@@ -462,6 +430,11 @@ export const SearchResultItem = ({
           />
         )}
       </div>
+      {isEntityKind(hit.type) ? (
+        <DocumentExtractionStatus
+          processingStatus={readDocumentProcessingStatus(hit)}
+        />
+      ) : null}
       <span className="text-foreground-subtle mt-0.5 shrink-0 px-1 text-xs tabular-nums">
         {resultNumber}
       </span>
@@ -489,7 +462,7 @@ const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
     enabled: false,
   });
   const entityView = useQueryView(entityQuery);
-  useQueryViewError(entityView);
+  useQueryViewError(entityView, "RecentFileTypeIcon:query");
   const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({

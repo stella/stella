@@ -31,6 +31,7 @@ const checkInputsSchema = v.record(v.string(), v.array(v.string()));
 const inputsSchema = v.strictObject({
   "ci-checks-rest": checkInputsSchema,
   "ci-checks-policy": checkInputsSchema,
+  "code-quality-web-rest": checkInputsSchema,
 });
 const toolingPackages = [
   "@stll/scripts",

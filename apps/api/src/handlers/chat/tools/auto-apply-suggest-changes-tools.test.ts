@@ -15,6 +15,7 @@ import {
   fields,
   fileChatThreads,
   pendingUploads,
+  searchProjectionRepairQueue,
   workspaces,
 } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
@@ -37,6 +38,7 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
@@ -54,6 +56,10 @@ const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const computeVersionDiffStatsMock = mock(async () => {});
 const broadcastMock = mock(() => {});
 const requestNativeExtractionRunMock = mock(async () => null);
+const flushEntitySearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
 let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
 const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
@@ -70,6 +76,8 @@ const createVersionDependencies = {
   writeFileVersion,
   processExtraction: processExtractionMock,
   requestNativeExtractionRun: requestNativeExtractionRunMock,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   computeVersionDiffStats: computeVersionDiffStatsMock,
@@ -322,11 +330,26 @@ const buildTx = ({
       if ("max" in selectedFields) {
         return maxVersionNumberSelect;
       }
+      if ("sourceId" in selectedFields && "organizationId" in selectedFields) {
+        return {
+          from: () => ({
+            innerJoin: () => ({ where: async () => [{ sourceId: entityId }] }),
+          }),
+        };
+      }
       return editSessionSelect;
     },
     execute: async (query: SQL) =>
       new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
     insert: (table: unknown) => ({
+      select: (query: Promise<unknown>) => ({
+        onConflictDoUpdate: async () => {
+          if (table !== searchProjectionRepairQueue) {
+            throw new TypeError("Unexpected insert-select target");
+          }
+          await query;
+        },
+      }),
       values: (values: unknown) => {
         insertedTables.push({ table, values });
         if (table === pendingUploads) {

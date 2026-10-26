@@ -92,7 +92,13 @@ for arg in "$@"; do
     *) endpoint=$arg ;;
   esac
 done
-jq -ce --arg key "$endpoint" '.[$key]' "$FIXTURES" || {
+printf '%s\\n' "$endpoint" >> "$FIXTURES.requests"
+# A {"sequence": [...]} fixture answers its nth request with its nth entry
+# (the last one from then on).
+count=$(grep -cxF -- "$endpoint" "$FIXTURES.requests")
+jq -ce --arg key "$endpoint" --argjson n "$count" '.[$key]
+  | if type == "object" and has("sequence")
+    then .sequence[([$n, (.sequence | length)] | min) - 1] else . end' "$FIXTURES" || {
   echo "unexpected request: $endpoint" >&2
   exit 1
 }
@@ -513,4 +519,44 @@ test("every pass-through reason the step writes is one merge-bar reads", () => {
     ),
   ].toSorted();
   expect(written).toEqual(MERGE_BAR_PASS_THROUGH_REASONS);
+});
+
+test("the required-jobs artifact keeps its exact external schema", () => {
+  const schema =
+    /\| \{version: 1, event: \$event,[\s\S]*?verdict: \(if \$status == "0" then "success" else "failure" end\)\}/u.exec(
+      script,
+    )?.[0];
+  expect(schema).toBeDefined();
+  expect(
+    [...(schema ?? "").matchAll(/(?:\{|,)\s*([a-z_]+):/gu)].map(
+      ([, field]) => field,
+    ),
+  ).toEqual([
+    "version",
+    "event",
+    "head_sha",
+    "base_sha",
+    "run_id",
+    "run_attempt",
+    "depth",
+    "coverage_profile",
+    "reused_from_run_id",
+    "basis",
+    "pass_through_reason",
+    "required",
+    "job",
+    "conclusion",
+    "not_required",
+    "verdict",
+  ]);
+});
+
+test("metadata mirroring and verified supersession remain fail closed", () => {
+  expect(script).toContain("mirror_metadata_code_run");
+  expect(script).toContain("Metadata mirror could not list CI code runs.");
+  expect(script).toContain(
+    "Cancelled CI job failed-step lookup was unavailable.",
+  );
+  expect(script).toContain("cancelled_dependencies_were_superseded");
+  expect(script).toContain("CI run was superseded by a newer run");
 });

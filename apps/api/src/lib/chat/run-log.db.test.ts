@@ -50,6 +50,7 @@ import type {
   ChatTurnOutcome,
   ChatTurnTiming,
 } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -62,6 +63,7 @@ import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -598,6 +600,7 @@ describe("chat run log database contract", () => {
             });
           },
         }),
+        HELD_TEST_STREAM_BINDING,
       );
       const capture = createStreamMessageCapture({
         initialMessages: [],
@@ -738,7 +741,8 @@ describe("chat run log database contract", () => {
           request: new Request(
             `http://localhost/v1/chat/threads/${run.threadId}/turns/${run.execution.id}/join`,
           ),
-          route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+          route:
+            "/v1/chat/threads/:threadId/turns/:turnId/join" satisfies ApiRoutePath,
           safeDb: toSafeDbMock(scopedDbA),
           scopedDb: scopedDbA,
           session: { activeOrganizationId: ids.orgA },

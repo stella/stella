@@ -2,6 +2,8 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL, SQLChunk } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   oauthClient,
   oauthClientResource,
@@ -109,14 +111,6 @@ const onlineConnection = (transaction: TestDatabaseTransaction) => {
   };
 };
 
-const captureRejection = async (
-  operation: Promise<unknown>,
-): Promise<unknown> =>
-  await operation.then(
-    () => null,
-    (error: unknown) => error,
-  );
-
 /** The resources a deployment served before the law audience was added. */
 const preUpgradeResources = () =>
   getBetterAuthOAuthResources()
@@ -222,7 +216,7 @@ test("the deploy repair adds a new audience to an existing database", async () =
       // Booting the new image before the repair runs refuses to start, and
       // inserts nothing while refusing.
       expect(
-        await captureRejection(
+        await rejectionOf(
           ensureBetterAuthOAuthPolicy(
             transaction,
             getBetterAuthOAuthResources(),
@@ -449,7 +443,7 @@ test("the deploy repair takes a released policy to the configured scopes", async
 
       // The new image refuses to boot on the released policy.
       expect(
-        await captureRejection(
+        await rejectionOf(
           ensureBetterAuthOAuthPolicy(
             transaction,
             getBetterAuthOAuthResources(),
@@ -555,7 +549,7 @@ test.each(["name", "scopes", "disabled"] as const)(
         const policiesBefore = await resourcePolicies(transaction);
 
         expect(
-          await captureRejection(
+          await rejectionOf(
             BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection),
           ),
         ).toMatchObject({ code: "invalid-source-state" });

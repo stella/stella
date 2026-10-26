@@ -425,6 +425,10 @@ export const useReviewActions = ({
   const captureResolveFailure = (context: PersistChangeOptions["context"]) => {
     getAnalytics().captureError(
       new Error(`DOCX suggestion ${context} failed to persist`),
+      {
+        fingerprintKey: "useReviewActions.captureResolveFailure:Error",
+        scope: { type: "handler", handlerId: `docx-suggestion.${context}` },
+      },
     );
   };
 

@@ -43,6 +43,19 @@ const entry = (
   ...overrides,
 });
 
+test("catalog confirmation requirements survive generated leaf projection", () => {
+  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  expect(parsed).not.toBeNull();
+  const guarded =
+    parsed?.filter((candidate) => candidate.confirmation === "required") ?? [];
+  expect(guarded.length).toBeGreaterThan(0);
+  for (const item of guarded) {
+    expect(deriveCapabilityLeaf(item).spec.confirmation, item.id).toBe(
+      "required",
+    );
+  }
+});
+
 const fileInput = (field: string, required: boolean): CatalogTransport => ({
   type: "file-input",
   input: { field, required },
@@ -654,10 +667,66 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     expect(stats.generated).toBe(catalog.length - suppressed);
   });
 
+  test("agent workflow capabilities generate their commands and flags", async () => {
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
+    const listings = await Bun.file(
+      new URL("generated/registry-snapshot.json", import.meta.url),
+    ).json();
+    const { tree } = insertCapabilities({
+      tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
+      entries: catalog,
+    });
+    // A discriminated-union body has no flag projection, so it travels in
+    // `--input`; every other property is a flag.
+    const expected = {
+      "docx-suggestions.list": {
+        flags: ["--entity-id", "--matter-id", "--status"],
+        inputOnly: [],
+      },
+      "docx-suggestions.resolve": {
+        flags: ["--entity-id", "--matter-id", "--suggestion-id"],
+        inputOnly: ["body"],
+      },
+      "docx-suggestions.revert": {
+        flags: ["--entity-id", "--matter-id", "--suggestion-id"],
+        inputOnly: [],
+      },
+      "memories.create": { flags: [], inputOnly: ["body"] },
+      "memories.list": {
+        flags: ["--matter-id", "--scope", "--status"],
+        inputOnly: [],
+      },
+      "memories.update": {
+        flags: ["--memory-id", "--content", "--pinned", "--status"],
+        inputOnly: [],
+      },
+      "notifications.list": { flags: [], inputOnly: [] },
+      "notifications.read-state.update": {
+        flags: ["--notification-id"],
+        inputOnly: [],
+      },
+    } as const;
+    for (const [id, { flags, inputOnly }] of Object.entries(expected)) {
+      const catalogEntry = catalog.find((candidate) => candidate.id === id);
+      const leaf = leafAt(tree, capabilityCommandPath(id));
+      expect(catalogEntry).toBeDefined();
+      expect(leaf).toMatchObject({
+        capabilityId: id,
+        access: catalogEntry?.access,
+        destructive: catalogEntry?.destructive,
+      });
+      expect(leaf?.flags.map((flag) => flag.flag)).toEqual([...flags]);
+      expect(leaf?.inputOnly).toEqual([...inputOnly]);
+    }
+  });
+
   test("no committed input schema carries a transport coercion union", async () => {
-    // Elysia compiles `t.Integer` and friends to a string|scalar union with
-    // the bounds hoisted above it. The catalog embeds the advertised
-    // projection, which flattens that to the scalar; a union surviving here
+    // A path or query number travels as a string (`numberFromString`); the
+    // advertised projection the catalog embeds renders the scalar it stands
+    // for, never a string|scalar union. A union surviving here
     // would give the generated command an opaque `--input` where the MCP
     // surface advertises a bounded flag.
     const catalog = parseCapabilityCatalog(readCapabilityCatalog());

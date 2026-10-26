@@ -57,7 +57,7 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError } from "@/lib/errors/api";
+import { APIError, chatRefusal } from "@/lib/errors/api";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
 
@@ -3316,6 +3316,63 @@ describe("acquireChatRuntime reconcile", () => {
       },
     },
   ];
+
+  test("shows a rejected native approval continuation as the thread error", async () => {
+    const requests: unknown[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createApprovalSseChunks(parseChatRequestRunId(init)),
+        );
+      }
+      return Response.json(
+        {
+          code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+          message: "Chat continuation does not match its awaited interaction",
+        },
+        { status: 400 },
+      );
+    });
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient: new QueryClient(),
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
+    );
+    await started.stream;
+    expect(runtime.getSnapshot().messages.at(-1)?.parts).toContainEqual(
+      expect.objectContaining({
+        type: "tool-call",
+        state: "approval-requested",
+      }),
+    );
+    await runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-A",
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).toMatchObject({
+      parentRunId: chatRequestRunId(requests.at(0)),
+      resume: [
+        {
+          interruptId: "approval_tool-A",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      threadId,
+    });
+    expect(chatRefusal(runtime.getSnapshot().error)).toMatchObject({
+      status: 400,
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+    });
+    expect(runtime.getSnapshot().isLoading).toBe(false);
+  });
 
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {
     const queryClient = new QueryClient();

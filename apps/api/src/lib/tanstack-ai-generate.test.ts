@@ -1628,7 +1628,7 @@ describe("model dispatch within its admitted action", () => {
   });
 
   test("refuses a dispatch on a proof that outlived its admitted run", async () => {
-    const escaped = await admitModelDispatch({
+    const escapedResult = await admitModelDispatch({
       organizationId,
       userId: null,
       actionKind: "templates.fill",
@@ -1636,6 +1636,7 @@ describe("model dispatch within its admitted action", () => {
       signal: new AbortController().signal,
       run: async (admission) => await Promise.resolve(admission),
     });
+    const escaped = escapedResult.unwrap();
     expect(escaped.signal.aborted).toBe(true);
     queueRun(textRun(["never sent"]));
 
@@ -2834,7 +2835,7 @@ describe("an unrepaired structured answer falls back once within the approved se
           },
         }),
     });
-    expect(result).toEqual({ answer: "ok", page: 3 });
+    expect(result.unwrap()).toEqual({ answer: "ok", page: 3 });
     expect(resolutions).toHaveLength(2);
     expect(resolutions[1]?.modelId).toStartWith("openai::");
     expect(providerRequests[2]?.messages).toEqual(

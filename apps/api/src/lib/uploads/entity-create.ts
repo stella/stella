@@ -34,7 +34,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -70,12 +70,15 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -518,7 +521,10 @@ export const finalizeEntityCreate = async function* ({
   // the finalize runtime had to download it for scanning.
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: declaredMime, scanned }),
-    { mimeType: declaredMime, sizeBytes: String(declaredSize) },
+    handlerErrorContext("entityCreate.detectEncryption", {
+      mimeType: declaredMime,
+      sizeBytes: String(declaredSize),
+    }),
   );
   if (encryption === null) {
     return finalizeErr({
@@ -647,6 +653,7 @@ export const finalizeEntityCreate = async function* ({
       // Durable extraction request, committed with the file it reads. The
       // post-promote call below only accelerates the queue handoff.
       await requestNativeExtractionRun({ entityId, tx });
+      await enqueueEntitySearchRepairs(tx, [entityId]);
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.CREATE,
@@ -717,12 +724,22 @@ export const finalizeEntityCreate = async function* ({
     }
     const { finalized } = writeResult;
 
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(handlerErrorContext("entityCreate.flushSearch")),
+    );
+
     const afterPromote = () => {
       // Async kickoffs mirror the legacy handler. They run only after
       // both promotion and the DB transaction have succeeded, so
       // consumers never read a final key before it exists.
       processExtraction(entityId).catch((error: unknown) => {
-        captureError(error, { entityId, mimeType: declaredMime });
+        captureError(
+          error,
+          handlerErrorContext("entityCreate.processExtraction", {
+            entityId,
+            mimeType: declaredMime,
+          }),
+        );
       });
       // File-upload flow trigger. Fire-and-forget on the USER upload path only;
       // flow-created documents (create-document step) never reach this call site.
@@ -732,7 +749,13 @@ export const finalizeEntityCreate = async function* ({
         organizationId,
         fileName: finalized.fileName,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, workspaceId });
+        captureError(
+          error,
+          handlerErrorContext("entityCreate.startFlows", {
+            entityId,
+            workspaceId,
+          }),
+        );
       });
       enqueuePdfDerivativeOrMarkFailed({
         encrypted,
@@ -743,7 +766,14 @@ export const finalizeEntityCreate = async function* ({
         userId,
         workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+        captureError(
+          error,
+          handlerErrorContext("entityCreate.enqueuePdfDerivative", {
+            entityId,
+            fieldId,
+            mimeType: declaredMime,
+          }),
+        );
       });
       enqueueImageThumbnailOrMarkFailed({
         encrypted,
@@ -754,7 +784,14 @@ export const finalizeEntityCreate = async function* ({
         userId,
         workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+        captureError(
+          error,
+          handlerErrorContext("entityCreate.enqueueThumbnail", {
+            entityId,
+            fieldId,
+            mimeType: declaredMime,
+          }),
+        );
       });
     };
 

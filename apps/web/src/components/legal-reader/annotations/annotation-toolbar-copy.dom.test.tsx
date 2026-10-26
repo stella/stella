@@ -12,6 +12,8 @@ const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
 testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { stellaToast } = await import("@stll/ui/toast");
@@ -74,37 +76,41 @@ afterAll(async () => {
 const mountToolbar = async () => {
   const rootRef = createRef<HTMLElement>();
   const view = render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <article ref={rootRef} style={{ overflow: "visible" }}>
-        <p data-anchor="paragraph-1">{SELECTED_TEXT}</p>
-      </article>
-      <p>{OUTSIDE_TEXT}</p>
-      <AnnotationToolbar
-        activeAnnotation={null}
-        activeSpans={[]}
-        controller={{
-          create: () => undefined,
-          remove: () => undefined,
-          update: () => undefined,
-        }}
-        mode="guest"
-        onActivateAnnotation={() => undefined}
-        onClearActive={() => undefined}
-        scrollContainerRef={rootRef}
-        target={{
-          type: "decision",
-          id: "decision-1",
-          caseNumber: "1 Test 1",
-          caseNumberType: "case-number",
-          country: "CZ",
-          court: "Test court",
-          decisionDate: null,
-          decisionType: null,
-          ecli: null,
-          name: null,
-        }}
-      />
-    </IntlProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <article ref={rootRef} style={{ overflow: "visible" }}>
+          <p data-anchor="paragraph-1">{SELECTED_TEXT}</p>
+        </article>
+        <p>{OUTSIDE_TEXT}</p>
+        <AnnotationToolbar
+          activeAnnotation={null}
+          activeSpans={[]}
+          controller={{
+            create: async () => undefined,
+            redo: async () => undefined,
+            remove: async () => undefined,
+            undo: async () => undefined,
+            update: async () => undefined,
+          }}
+          mode="guest"
+          onActivateAnnotation={() => undefined}
+          onClearActive={() => undefined}
+          scrollContainerRef={rootRef}
+          target={{
+            type: "decision",
+            id: "decision-1",
+            caseNumber: "1 Test 1",
+            caseNumberType: "case-number",
+            country: "CZ",
+            court: "Test court",
+            decisionDate: null,
+            decisionType: null,
+            ecli: null,
+            name: null,
+          }}
+        />
+      </IntlProvider>
+    </QueryClientProvider>,
   );
   const readerText = view.getByText(SELECTED_TEXT).firstChild;
   const root = rootRef.current;

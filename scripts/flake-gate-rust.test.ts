@@ -383,6 +383,7 @@ test("listing batches preserve every selected name within bounded arguments and 
   }).toThrow("selected-name budget");
 });
 
+// Measured p95 is 39.4 s; this test must compile and run a real Cargo fixture.
 test("a real Cargo module excludes failing substring siblings and unrelated binary tests", async () => {
   await withAsyncFixture(async (root) => {
     write(root, "src/lib.rs", "mod feature; mod other_feature;\n");
@@ -432,7 +433,7 @@ test("a real Cargo module excludes failing substring siblings and unrelated bina
       failedTests: [],
     });
   });
-}, 90_000);
+}, 80_000);
 
 test("real Cargo modules absent on this target and ignored-only modules are reported as typed skips", async () => {
   await withAsyncFixture(async (root) => {

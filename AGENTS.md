@@ -56,6 +56,7 @@ details unless they are already public in the repository.
 
 ## Meta Preferences
 
+- Use Computer Use or desktop/browser UI control only when the user explicitly asks for it. General fix, build, and test requests do not authorize operating user applications; isolated automated tests and code-level checks remain allowed.
 - Never manually reformat code you did not semantically change (auto-formatter output
   from `bun run format` is fine to include)
 - In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
@@ -107,8 +108,9 @@ details unless they are already public in the repository.
 - Keep feature branches rebased onto main so review sees a clean diff. How a
   branch lands (merge queue, squash) follows the repository's merge policy; main
   stays linear either way.
-- Enable `git rerere` (`git config --global rerere.enabled true`, plus
-  `rerere.autoupdate true` to auto-stage what it resolves) so conflict
+- Enable `git rerere` in the clone, never globally (`git config rerere.enabled
+  true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
+  `git -c rerere.enabled=true -c rerere.autoupdate=true merge ...`) so conflict
   resolutions are recorded and auto-replayed across repeated or long rebases
 - Fail fast: validate at boundaries, return/throw early
 - Minimize brace nesting: invert conditions, early returns
@@ -166,7 +168,7 @@ details unless they are already public in the repository.
   widening it or paying the annotation's instantiation cost.
 - Companion maps over a union (policy, consent, projection, or rendering
   dispositions per tool/route/kind) must be total: `as const satisfies
-Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
+  Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   member land without a decision. Derive the union from the source of truth
   (`keyof typeof SOURCE_MAP`, or a mapped filter over it) instead of
   hand-listing names.
@@ -247,8 +249,9 @@ publishable code lives in `packages/`. Use Glob/Grep to explore.
 Before changing a convention-governed domain, read and apply the matching
 `.agents/skills/conventions-*/SKILL.md`. This includes AI, databases, i18n and
 user-facing strings, ingestion, MCP tools and CLI capabilities (agent-facing
-schemas, errors, and reference resources), performance guard failures and hot
-paths, architecture and scale, auth and data access, files and external APIs,
+schemas, errors, and reference resources), performance measurement for routes,
+screens, endpoints, MCP tools, mutations, live events, background jobs and polling
+loops, architecture and scale, auth and data access, files and external APIs,
 tests, `apps/web` React effects, and user-facing UI. The skills own the detailed
 rules.
 

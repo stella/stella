@@ -9,6 +9,7 @@ import type {
   AnalysisQueryResult,
   DecisionAnalysisKey,
 } from "@/features/case-law/queries/decision-analysis";
+import type { Analytics } from "@/lib/analytics/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -23,6 +24,10 @@ const { aiAvailabilityOptions } =
   await import("@/lib/organization/ai-config-queries");
 const { decisionAnalysisOptions, isTerminalAnalysisResult } =
   await import("@/features/case-law/queries/decision-analysis");
+const { AnalyticsProvider } =
+  await import("@/lib/analytics/analytics-provider");
+const { noopAnalytics } = await import("@/lib/analytics/noop");
+const { useDecisionAnalysis } = await import("./use-decision-analysis");
 const { useLazyDecisionAnalysis } =
   await import("./use-lazy-decision-analysis");
 
@@ -88,6 +93,8 @@ const clientWithAvailability = (available = true) => {
       .queryKey,
     {
       available,
+      unavailableReason: available ? null : "provider_not_configured",
+      providerConfiguration: "allowed",
       orgConfigured: available,
       instanceProvisioned: false,
       deferredServiceTierAvailable: false,
@@ -100,19 +107,26 @@ const clientWithAvailability = (available = true) => {
 type WrapperOptions = {
   client: InstanceType<typeof QueryClient>;
   authenticated?: boolean;
+  analytics?: Analytics;
 };
 const wrapperFor =
-  ({ client, authenticated = true }: WrapperOptions) =>
+  ({
+    client,
+    authenticated = true,
+    analytics = noopAnalytics,
+  }: WrapperOptions) =>
   ({ children }: PropsWithChildren) => (
     <StrictMode>
       <QueryClientProvider client={client}>
-        {authenticated ? (
-          <AuthenticatedUserProvider user={user}>
-            {children}
-          </AuthenticatedUserProvider>
-        ) : (
-          children
-        )}
+        <AnalyticsProvider value={{ analytics, client: null }}>
+          {authenticated ? (
+            <AuthenticatedUserProvider user={user}>
+              {children}
+            </AuthenticatedUserProvider>
+          ) : (
+            children
+          )}
+        </AnalyticsProvider>
       </QueryClientProvider>
     </StrictMode>
   );
@@ -135,6 +149,60 @@ const respondToAnalysis = (response: () => Promise<Response>) => {
 };
 
 describe("shared lazy decision analysis", () => {
+  test("re-enabling the same decision records a new completed visit after leaving", async () => {
+    const timings: Parameters<Analytics["captureCaseLawAnalysisTiming"]>[0][] =
+      [];
+    const analytics = {
+      ...noopAnalytics,
+      captureCaseLawAnalysisTiming: (event) => {
+        timings.push(event);
+      },
+    } satisfies Analytics;
+    const requests = respondToAnalysis(async () =>
+      Response.json({ status: "generating" }),
+    );
+    const client = clientWithAvailability();
+    const queryKey = decisionAnalysisOptions(key).queryKey;
+    const mounted = renderHook(
+      ({ enabled }) => useDecisionAnalysis({ ...key, enabled }),
+      {
+        initialProps: { enabled: true },
+        wrapper: wrapperFor({ client, analytics }),
+      },
+    );
+    await waitFor(() => {
+      expect(requests).toHaveLength(1);
+      expect(client.getQueryState(queryKey)?.fetchStatus).toBe("idle");
+    });
+    mounted.rerender({ enabled: false });
+    await waitFor(() =>
+      expect(timings.map(({ outcome }) => outcome)).toEqual(["left"]),
+    );
+    mounted.rerender({ enabled: true });
+    await waitFor(() => {
+      expect(requests).toHaveLength(2);
+      expect(client.getQueryState(queryKey)?.fetchStatus).toBe("idle");
+    });
+    await act(async () => {
+      client.setQueryData(
+        queryKey,
+        () =>
+          ({
+            kind: "done",
+            analysis,
+          }) satisfies AnalysisQueryResult,
+      );
+    });
+    await waitFor(() =>
+      expect(mounted.result.current.state.status).toBe("done"),
+    );
+    expect(timings.map(({ outcome }) => outcome)).toEqual(["left", "done"]);
+    expect(timings[1]?.from_store).toBe(false);
+    expect(timings[1]?.ms_to_done).toBeGreaterThanOrEqual(0);
+    mounted.unmount();
+    expect(timings).toHaveLength(2);
+  });
+
   test("concurrent StrictMode views join one first read and reuse its completed analysis", async () => {
     const pending = Promise.withResolvers<Response>();
     const requests = respondToAnalysis(async () => await pending.promise);

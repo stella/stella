@@ -977,9 +977,11 @@ const runPagesSchema = v.array(
   }),
 );
 
-type WorkflowRun = v.InferOutput<
+type ListedRun = v.InferOutput<
   typeof runPagesSchema
->[number]["workflow_runs"][number] & {
+>[number]["workflow_runs"][number];
+
+type WorkflowRun = ListedRun & {
   readonly fullDepth: boolean;
 };
 
@@ -1093,6 +1095,72 @@ type ListWorkflowRunsOptions = Pick<
   "gh" | "repository" | "now"
 > & { readonly since: number };
 
+// GitHub stops returning runs after this many results for a filtered listing.
+const RUN_LISTING_CAP = 1000;
+const SECOND_MS = 1000;
+
+const isoSecond = (ms: number): string =>
+  `${new Date(ms).toISOString().slice(0, 19)}Z`;
+
+type ListCreatedRunsOptions = Pick<CollectOptions, "gh" | "repository"> & {
+  readonly workflow: string;
+  readonly date: string;
+  readonly from: number;
+  readonly to: number;
+};
+
+const listCreatedRuns = async ({
+  gh,
+  repository,
+  workflow,
+  date,
+  from,
+  to,
+}: ListCreatedRunsOptions): Promise<Result<ListedRun[], GhCommandError>> => {
+  const branch = workflow === CI_WORKFLOW ? "" : "&branch=main";
+  const response = await gh([
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${repository}/actions/workflows/${workflow}/runs?created=${isoSecond(from)}..${isoSecond(to)}${branch}&per_page=100`,
+  ]);
+  if (response.isErr()) {
+    return response;
+  }
+  const pages = v.parse(runPagesSchema, JSON.parse(response.value));
+  let runs = pages.flatMap((page) => page.workflow_runs);
+  const total = pages.at(0)?.total_count ?? 0;
+  if (total > RUN_LISTING_CAP && to - from >= SECOND_MS) {
+    const mid = from + Math.floor((to - from) / (2 * SECOND_MS)) * SECOND_MS;
+    runs = [];
+    for (const [start, end] of [
+      [from, mid],
+      [mid + SECOND_MS, to],
+    ] as const) {
+      const half = await listCreatedRuns({
+        gh,
+        repository,
+        workflow,
+        date,
+        from: start,
+        to: end,
+      });
+      if (half.isErr()) {
+        return half;
+      }
+      runs.push(...half.value);
+    }
+  }
+  if (runs.length !== total) {
+    return Result.err(
+      new GhCommandError({
+        message: `Incomplete workflow run listing for ${workflow} on ${date}: GitHub reported ${total}, but returned ${runs.length}.`,
+      }),
+    );
+  }
+  return Result.ok(runs);
+};
+
 const listWorkflowRuns = async ({
   gh,
   repository,
@@ -1113,29 +1181,19 @@ const listWorkflowRuns = async ({
   );
   for (const workflow of [CI_WORKFLOW, ...FULL_DEPTH_WORKFLOWS]) {
     for (let day = firstDay; day <= lastDay; day += DAY_MS) {
-      const date = isoDay(day);
-      const branch = workflow === CI_WORKFLOW ? "" : "&branch=main";
-      const response = await gh([
-        "api",
-        "--paginate",
-        "--slurp",
-        `repos/${repository}/actions/workflows/${workflow}/runs?created=${date}${branch}&per_page=100`,
-      ]);
-      if (response.isErr()) {
-        return response;
-      }
-      const pages = v.parse(runPagesSchema, JSON.parse(response.value));
-      const runs = pages.flatMap((page) => page.workflow_runs);
-      const total = pages.at(0)?.total_count ?? 0;
-      if (runs.length !== total) {
-        return Result.err(
-          new GhCommandError({
-            message: `Incomplete workflow run listing for ${workflow} on ${date}: GitHub reported ${total}, but returned ${runs.length}.`,
-          }),
-        );
+      const runs = await listCreatedRuns({
+        gh,
+        repository,
+        workflow,
+        date: isoDay(day),
+        from: day,
+        to: day + DAY_MS - SECOND_MS,
+      });
+      if (runs.isErr()) {
+        return runs;
       }
       workflowRuns.push(
-        ...runs.map((run) => ({
+        ...runs.value.map((run) => ({
           ...run,
           fullDepth: workflow !== CI_WORKFLOW,
         })),

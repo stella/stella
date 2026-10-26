@@ -11,6 +11,12 @@ import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 import type { AppSnapshot, DesktopAccountSnapshot } from "../../src/shared/rpc";
 import { BRIDGE_VERSION } from "../bridge-version";
+import {
+  emitTauriEvent,
+  installTauriIpc,
+  tauriInvocations,
+  unexpectedTauriCalls,
+} from "./tauri-ipc";
 
 const REGISTRIES = [
   {
@@ -85,6 +91,7 @@ const SNAPSHOT = {
     },
   ],
   persistence: { imageCleanup: "idle", status: "encrypted" },
+  revision: 0,
   retention: "month",
   screenCapture: "hidden",
   sourceAppExclusionLimit: 128,
@@ -102,7 +109,6 @@ type Connection =
       accountLabel: string;
       expiresAt: string;
     } & DesktopRegistryConfig);
-type Invocation = { args: Record<string, unknown>; command: string };
 type BoundaryMode =
   | "normal"
   | "reject-first-search"
@@ -194,11 +200,7 @@ test.afterEach(async ({ page }) => {
   expect(audit.pageErrors).toEqual([]);
   expect(audit.consoleErrors).toEqual([]);
   if (!page.isClosed()) {
-    expect(
-      await page.evaluate(() =>
-        Reflect.get(window, "__STELLA_REGISTRY_UNEXPECTED__"),
-      ),
-    ).toEqual([]);
+    expect(await unexpectedTauriCalls(page)).toEqual([]);
   }
 });
 
@@ -227,23 +229,37 @@ const installNativeBoundary = async (
         }
       : { status: connection.status, server: ACCOUNT_SERVER }
   ) satisfies DesktopAccountSnapshot;
-  await page.addInitScript(
-    ({
-      initialConnection,
-      initialMode,
-      formatResponse,
-      searchResponse,
-      secondResponse,
-      clipboardSnapshot,
-      signedInConnection,
-      settingsSnapshot,
-      accountSnapshot,
-      windowLabel,
-    }) => {
-      const invocations: Invocation[] = [];
-      const unexpected: string[] = [];
-      const callbacks = new Map<number, (data: unknown) => unknown>();
-      let callbackId = 0;
+  await installTauriIpc(page, {
+    windowLabel: configuration.settings ? "main" : "clipboard",
+    unhandled: "rejectAsUnexpected",
+    arg: {
+      initialConnection: connection,
+      initialMode: configuration.mode ?? "normal",
+      formatResponse: FORMAT_RESPONSE,
+      searchResponse: SEARCH_RESPONSE,
+      secondResponse: SECOND_RESPONSE,
+      clipboardSnapshot: {
+        ...SNAPSHOT,
+        welcomeStatus: configuration.welcome ? "pending" : "completed",
+      },
+      settingsSnapshot: SETTINGS_SNAPSHOT,
+      accountSnapshot: account,
+      signedInConnection: connected(),
+    },
+    handlers: (
+      {
+        initialConnection,
+        initialMode,
+        formatResponse,
+        searchResponse,
+        secondResponse,
+        clipboardSnapshot,
+        signedInConnection,
+        settingsSnapshot,
+        accountSnapshot,
+      },
+      { unexpected },
+    ) => {
       let searchCount = 0;
       let stateCount = 0;
       let connectCount = 0;
@@ -256,206 +272,119 @@ const installNativeBoundary = async (
       Reflect.set(window, "__STELLA_RESOLVE_FIRST_STATE__", () =>
         resolveFirstState?.(currentConnection),
       );
-      Reflect.set(window, "__STELLA_REGISTRY_INVOCATIONS__", invocations);
-      Reflect.set(window, "__STELLA_REGISTRY_UNEXPECTED__", unexpected);
       Reflect.set(window, "__STELLA_COMPLETE_SIGN_IN__", () => {
         currentConnection = signedInConnection;
       });
       Reflect.set(window, "__STELLA_RESOLVE_FIRST_SEARCH__", () =>
         resolveFirstSearch?.(searchResponse),
       );
-      Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
-        unregisterListener: () => undefined,
-      });
-      Reflect.set(window, "__TAURI_INTERNALS__", {
-        callbacks,
-        convertFileSrc: (path: string) => path,
-        invoke: async (command: string, args: Record<string, unknown> = {}) => {
-          invocations.push({ args, command });
-          switch (command) {
-            case "account_disconnect":
-              if (initialMode === "reject-disconnect") {
-                throw new TypeError("Deliberate disconnect failure");
-              }
-              return undefined;
-            case "account_record_use":
-              activityCount += 1;
-              if (Object.keys(args).length !== 0) {
-                unexpected.push("account_record_use arguments");
-                throw new TypeError("Account activity must not contain data");
-              }
-              if (
-                initialMode === "reject-first-activity" &&
-                activityCount === 1
-              ) {
-                throw new TypeError("Deliberate account activity failure");
-              }
-              return null;
-            case "get_desktop_telemetry_enabled":
-              return telemetryEnabled;
-            case "set_desktop_telemetry_enabled":
-              if (typeof args["enabled"] !== "boolean") {
-                unexpected.push("set_desktop_telemetry_enabled arguments");
-                throw new TypeError("Reporting preference must be a boolean");
-              }
-              telemetryEnabled = args["enabled"];
-              return telemetryEnabled;
-            case "get_desktop_language":
-              return navigator.language === "ar" ? "ar" : "en";
-            case "clipboard_get_snapshot":
-              return clipboardSnapshot;
-            case "clipboard_complete_welcome":
-              return { ...clipboardSnapshot, welcomeStatus: "completed" };
-            case "get_state":
-              return settingsSnapshot;
-            case "shortcut_get_snapshot":
-              return {
-                defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
-                keys: { code: "KeyV", modifiers: ["shift", "super"] },
-                registration: "active",
-              };
-            case "permissions_get_snapshot":
-              return { rows: [] };
-            case "account_get_state":
-              return accountSnapshot;
-            case "open_stella_account":
-              connectCount += 1;
-              if (
-                initialMode === "reject-first-connect" &&
-                connectCount === 1
-              ) {
-                throw new TypeError("Deliberate connect failure");
-              }
-              return undefined;
-            case "is_autostart_enabled":
-              return false;
-            case "plugin:event|listen":
-              return args["handler"];
-            case "plugin:event|unlisten":
-            case "desktop_report_timing":
-            case "desktop_report_error":
-            case "clipboard_hide":
-            case "registry_copy":
-            case "registry_open_company_format":
-              return undefined;
-            case "registry_get_state": {
-              stateCount += 1;
-              if (initialMode === "reject-first-state" && stateCount === 1) {
-                throw new TypeError("Deliberate connection failure");
-              }
-              if (initialMode === "defer-first-state" && stateCount === 1) {
-                return await new Promise<Connection>((resolve) => {
-                  resolveFirstState = resolve;
-                });
-              }
-              return currentConnection;
-            }
-            case "registry_search": {
-              searchCount += 1;
-              if (initialMode === "reject-first-search" && searchCount === 1) {
-                throw new TypeError("Deliberate registry search failure");
-              }
-              if (initialMode === "defer-first-search" && searchCount === 1) {
-                return await new Promise<DesktopRegistrySearchResponse>(
-                  (resolve) => {
-                    resolveFirstSearch = resolve;
-                  },
-                );
-              }
-              return initialMode === "normal" ||
-                initialMode === "reject-first-state"
-                ? searchResponse
-                : secondResponse;
-            }
-            case "registry_format":
-              return formatResponse;
-            case "registry_set_default_format": {
-              // The API answers with the default the member now resolves to.
-              // Clearing falls back to the firm's default, which this fixture
-              // has: the same format the first search arrived with.
-              const formatId = args["formatId"];
-              return formatId === null
-                ? {
-                    defaultFormatId: searchResponse.defaultFormatId,
-                    defaultFormatSource: searchResponse.defaultFormatSource,
-                  }
-                : { defaultFormatId: formatId, defaultFormatSource: "user" };
-            }
-            default:
-              unexpected.push(command);
-              throw new TypeError(`Unexpected native command: ${command}`);
+      return {
+        account_disconnect: () => {
+          if (initialMode === "reject-disconnect") {
+            throw new TypeError("Deliberate disconnect failure");
           }
+          return undefined;
         },
-        metadata: {
-          currentWebview: { label: windowLabel, windowLabel },
-          currentWindow: { label: windowLabel },
+        account_record_use: (args) => {
+          activityCount += 1;
+          if (Object.keys(args).length !== 0) {
+            unexpected.push("account_record_use arguments");
+            throw new TypeError("Account activity must not contain data");
+          }
+          if (initialMode === "reject-first-activity" && activityCount === 1) {
+            throw new TypeError("Deliberate account activity failure");
+          }
+          return null;
         },
-        runCallback: (id: number, data: unknown) => callbacks.get(id)?.(data),
-        transformCallback: (
-          callback: ((data: unknown) => unknown) | undefined,
-          once = false,
-        ) => {
-          callbackId += 1;
-          const id = callbackId;
-          callbacks.set(id, (data) => {
-            if (once) {
-              callbacks.delete(id);
-            }
-            return callback?.(data);
-          });
-          return id;
+        get_desktop_telemetry_enabled: () => telemetryEnabled,
+        set_desktop_telemetry_enabled: (args) => {
+          if (typeof args["enabled"] !== "boolean") {
+            unexpected.push("set_desktop_telemetry_enabled arguments");
+            throw new TypeError("Reporting preference must be a boolean");
+          }
+          telemetryEnabled = args["enabled"];
+          return telemetryEnabled;
         },
-        unregisterCallback: (id: number) => callbacks.delete(id),
-      });
+        get_desktop_language: () => (navigator.language === "ar" ? "ar" : "en"),
+        clipboard_get_snapshot: () => clipboardSnapshot,
+        clipboard_complete_welcome: () => ({
+          ...clipboardSnapshot,
+          welcomeStatus: "completed",
+        }),
+        get_state: () => settingsSnapshot,
+        shortcut_get_snapshot: () => ({
+          defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
+          keys: { code: "KeyV", modifiers: ["shift", "super"] },
+          registration: "active",
+        }),
+        permissions_get_snapshot: () => ({ rows: [] }),
+        account_get_state: () => accountSnapshot,
+        open_stella_account: () => {
+          connectCount += 1;
+          if (initialMode === "reject-first-connect" && connectCount === 1) {
+            throw new TypeError("Deliberate connect failure");
+          }
+          return undefined;
+        },
+        is_autostart_enabled: () => false,
+        desktop_report_timing: () => undefined,
+        desktop_report_error: () => undefined,
+        clipboard_hide: () => undefined,
+        registry_copy: () => undefined,
+        registry_open_company_format: () => undefined,
+        registry_get_state: async () => {
+          stateCount += 1;
+          if (initialMode === "reject-first-state" && stateCount === 1) {
+            throw new TypeError("Deliberate connection failure");
+          }
+          if (initialMode === "defer-first-state" && stateCount === 1) {
+            return await new Promise<Connection>((resolve) => {
+              resolveFirstState = resolve;
+            });
+          }
+          return currentConnection;
+        },
+        registry_search: async () => {
+          searchCount += 1;
+          if (initialMode === "reject-first-search" && searchCount === 1) {
+            throw new TypeError("Deliberate registry search failure");
+          }
+          if (initialMode === "defer-first-search" && searchCount === 1) {
+            return await new Promise<DesktopRegistrySearchResponse>(
+              (resolve) => {
+                resolveFirstSearch = resolve;
+              },
+            );
+          }
+          return initialMode === "normal" ||
+            initialMode === "reject-first-state"
+            ? searchResponse
+            : secondResponse;
+        },
+        registry_format: () => formatResponse,
+        registry_set_default_format: (args) => {
+          // The API answers with the default the member now resolves to.
+          // Clearing falls back to the firm's default, which this fixture
+          // has: the same format the first search arrived with.
+          const formatId = args["formatId"];
+          return formatId === null
+            ? {
+                defaultFormatId: searchResponse.defaultFormatId,
+                defaultFormatSource: searchResponse.defaultFormatSource,
+              }
+            : { defaultFormatId: formatId, defaultFormatSource: "user" };
+        },
+      };
     },
-    {
-      initialConnection: connection,
-      initialMode: configuration.mode ?? "normal",
-      formatResponse: FORMAT_RESPONSE,
-      searchResponse: SEARCH_RESPONSE,
-      secondResponse: SECOND_RESPONSE,
-      clipboardSnapshot: {
-        ...SNAPSHOT,
-        welcomeStatus: configuration.welcome ? "pending" : "completed",
-      },
-      settingsSnapshot: SETTINGS_SNAPSHOT,
-      accountSnapshot: account,
-      windowLabel: configuration.settings ? "main" : "clipboard",
-      signedInConnection: connected(),
-    },
-  );
+  });
 };
 
-const readInvocations = async (page: Page) =>
-  page.evaluate(() => {
-    const value: unknown = Reflect.get(
-      window,
-      "__STELLA_REGISTRY_INVOCATIONS__",
-    );
-    if (!Array.isArray(value)) {
-      throw new TypeError("Registry invocation log is not installed");
-    }
-    return value.map((invocation): Invocation => {
-      if (
-        typeof invocation !== "object" ||
-        invocation === null ||
-        !("args" in invocation) ||
-        typeof invocation.args !== "object" ||
-        invocation.args === null ||
-        !("command" in invocation) ||
-        typeof invocation.command !== "string"
-      ) {
-        throw new TypeError("Registry invocation log contains an invalid call");
-      }
-      return { args: invocation.args, command: invocation.command };
-    });
-  });
 const ACCOUNT_SERVER = "https://web.example.test";
 const ACCOUNT_HOST = "web.example.test";
 const withHost = (template: string) =>
   template.replace("{host}", () => ACCOUNT_HOST);
 const searches = async (page: Page) =>
-  (await readInvocations(page)).filter(
+  (await tauriInvocations(page)).filter(
     ({ command }) => command === "registry_search",
   );
 const connected = (
@@ -540,7 +469,7 @@ test("sign-in stays available without disabling local clipboard search", async (
     })
     .click();
   await expect
-    .poll(async () => await readInvocations(page))
+    .poll(async () => await tauriInvocations(page))
     .toContainEqual({ command: "open_stella_account", args: {} });
   expect(await searches(page)).toEqual([]);
 });
@@ -554,7 +483,7 @@ test("keyboard activation retains the input and Enter never copies a hidden clip
   await expect.poll(async () => (await searches(page)).length).toBe(1);
   await searchBox(page).press("Enter");
   expect(
-    (await readInvocations(page)).filter(
+    (await tauriInvocations(page)).filter(
       ({ command }) => command === "clipboard_copy_item",
     ),
   ).toEqual([]);
@@ -573,7 +502,7 @@ test("highlights the first registry result and copies it with Enter from the sea
   await searchBox(page).press("Enter");
   await expect
     .poll(async () =>
-      (await readInvocations(page)).filter(
+      (await tauriInvocations(page)).filter(
         ({ command }) => command === "registry_copy",
       ),
     )
@@ -646,36 +575,8 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
       throw new TypeError("Sign-in completion fixture is missing");
     }
     complete();
-    const invocations: unknown = Reflect.get(
-      window,
-      "__STELLA_REGISTRY_INVOCATIONS__",
-    );
-    if (!Array.isArray(invocations)) {
-      throw new TypeError("Registry invocation fixture is missing");
-    }
-    const subscription = invocations.findLast(
-      (entry: { args: Record<string, unknown>; command: string }) =>
-        entry.command === "plugin:event|listen" &&
-        entry.args["event"] === "desktop-account-changed",
-    );
-    const id = subscription?.args["handler"];
-    if (typeof id !== "number") {
-      throw new TypeError("Registry connection listener is not installed");
-    }
-    const internals: unknown = Reflect.get(window, "__TAURI_INTERNALS__");
-    const callbacks =
-      typeof internals === "object" && internals !== null
-        ? Reflect.get(internals, "callbacks")
-        : undefined;
-    if (!(callbacks instanceof Map)) {
-      throw new TypeError("Tauri callback registry is missing");
-    }
-    callbacks.get(id)?.({
-      event: "desktop-account-changed",
-      id,
-      payload: null,
-    });
   });
+  await emitTauriEvent(page, "desktop-account-changed");
   await expect
     .poll(async () => await searches(page))
     .toContainEqual({
@@ -728,7 +629,7 @@ test("registry chooser owns its arrow keys and Escape without closing the clipbo
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
   expect(
-    (await readInvocations(page)).filter(
+    (await tauriInvocations(page)).filter(
       ({ command }) => command === "clipboard_hide",
     ),
   ).toEqual([]);
@@ -937,7 +838,7 @@ test("applies saved formatting and copies only the selected registry output", as
   await expect(card).toContainText("Saved detailed registry output");
   await expect(card.locator("strong")).toHaveText("ACME PLC");
   await card.click();
-  const calls = await readInvocations(page);
+  const calls = await tauriInvocations(page);
   expect(calls).toContainEqual({
     command: "registry_format",
     args: {
@@ -972,7 +873,7 @@ test("opens the selected company's specification formats from the format menu", 
     .click();
 
   await expect
-    .poll(async () => await readInvocations(page))
+    .poll(async () => await tauriInvocations(page))
     .toContainEqual({
       command: "registry_open_company_format",
       args: { id: "company-1", registry: "ares" },
@@ -1005,7 +906,7 @@ test("labels non-company directory templates as registry results", async ({
     .click();
 
   await expect
-    .poll(async () => await readInvocations(page))
+    .poll(async () => await tauriInvocations(page))
     .toContainEqual({
       command: "registry_open_company_format",
       args: { id: "company-1", registry: "denue" },
@@ -1036,7 +937,7 @@ for (const language of ["en", "ar"] as const) {
         })
         .click();
       await expect
-        .poll(async () => await readInvocations(page))
+        .poll(async () => await tauriInvocations(page))
         .toContainEqual({
           command: "registry_set_default_format",
           args: {
@@ -1061,7 +962,7 @@ for (const language of ["en", "ar"] as const) {
         })
         .click();
       await expect
-        .poll(async () => await readInvocations(page))
+        .poll(async () => await tauriInvocations(page))
         .toContainEqual({
           command: "registry_set_default_format",
           args: {
@@ -1084,7 +985,7 @@ for (const language of ["en", "ar"] as const) {
         })
         .click();
       await expect
-        .poll(async () => await readInvocations(page))
+        .poll(async () => await tauriInvocations(page))
         .toContainEqual({
           command: "registry_set_default_format",
           args: { formatId: null, registry: "ares" },
@@ -1259,7 +1160,7 @@ for (const language of ["en", "ar"] as const) {
       await connect.click();
       await expect
         .poll(async () =>
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "open_stella_account",
           ),
         )
@@ -1292,13 +1193,13 @@ for (const language of ["en", "ar"] as const) {
         await expect(welcome).toHaveCount(0);
         await expect
           .poll(async () =>
-            (await readInvocations(page)).filter(
+            (await tauriInvocations(page)).filter(
               ({ command }) => command === "clipboard_complete_welcome",
             ),
           )
           .toEqual([{ command: "clipboard_complete_welcome", args: {} }]);
         expect(
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "open_stella_account",
           ),
         ).toEqual([]);
@@ -1337,7 +1238,7 @@ for (const language of ["en", "ar"] as const) {
         .click();
       await expect
         .poll(async () =>
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "open_stella_account",
           ),
         )
@@ -1368,7 +1269,7 @@ for (const language of ["en", "ar"] as const) {
       await expect(reporting).toBeChecked();
       await expect
         .poll(async () =>
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "set_desktop_telemetry_enabled",
           ),
         )
@@ -1412,7 +1313,7 @@ for (const language of ["en", "ar"] as const) {
         .click();
       await expect
         .poll(async () =>
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "open_stella_account",
           ),
         )
@@ -1438,7 +1339,7 @@ for (const language of ["en", "ar"] as const) {
         .click();
       await expect
         .poll(async () =>
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "open_stella_account",
           ),
         )
@@ -1482,7 +1383,7 @@ for (const language of ["en", "ar"] as const) {
             })
             .click();
           const accountActions = async () =>
-            (await readInvocations(page)).filter(
+            (await tauriInvocations(page)).filter(
               ({ command }) =>
                 command === "account_disconnect" ||
                 command === "open_stella_account",
@@ -1533,7 +1434,7 @@ for (const language of ["en", "ar"] as const) {
       await expect
         .poll(
           async () =>
-            (await readInvocations(page)).filter(
+            (await tauriInvocations(page)).filter(
               ({ command }) => command === "registry_get_state",
             ).length,
         )
@@ -1597,7 +1498,7 @@ for (const language of ["en", "ar"] as const) {
       await expect
         .poll(
           async () =>
-            (await readInvocations(page)).filter(
+            (await tauriInvocations(page)).filter(
               ({ command }) => command === "registry_get_state",
             ).length,
         )
@@ -1636,7 +1537,7 @@ for (const language of ["en", "ar"] as const) {
         messages.clipboard.registryErrorState,
       );
       expect(
-        (await readInvocations(page)).filter(
+        (await tauriInvocations(page)).filter(
           ({ command }) => command === "registry_get_state",
         ),
       ).toHaveLength(1);
@@ -1651,7 +1552,7 @@ for (const language of ["en", "ar"] as const) {
         .click();
       await expect(welcome.getByRole("alert")).toHaveCount(0);
       expect(
-        (await readInvocations(page)).filter(
+        (await tauriInvocations(page)).filter(
           ({ command }) => command === "registry_get_state",
         ),
       ).toHaveLength(2);
@@ -1685,7 +1586,7 @@ for (const language of ["en", "ar"] as const) {
       await expect(welcome.getByRole("alert")).toHaveCount(0);
       await expect
         .poll(async () =>
-          (await readInvocations(page)).filter(
+          (await tauriInvocations(page)).filter(
             ({ command }) => command === "open_stella_account",
           ),
         )
@@ -1756,7 +1657,7 @@ test("clipboard activity is paced and never sends clipboard or keyboard contents
   await page.clock.install();
   await openClipboard(page);
   expect(
-    (await readInvocations(page)).filter(
+    (await tauriInvocations(page)).filter(
       ({ command }) => command === "account_record_use",
     ),
   ).toEqual([]);
@@ -1764,7 +1665,7 @@ test("clipboard activity is paced and never sends clipboard or keyboard contents
   await page.keyboard.type(PRIVATE_CLIPBOARD_TEXT);
   await expect
     .poll(async () =>
-      (await readInvocations(page)).filter(
+      (await tauriInvocations(page)).filter(
         ({ command }) => command === "account_record_use",
       ),
     )
@@ -1773,7 +1674,7 @@ test("clipboard activity is paced and never sends clipboard or keyboard contents
   await page.keyboard.press("ArrowLeft");
   await expect
     .poll(async () =>
-      (await readInvocations(page)).filter(
+      (await tauriInvocations(page)).filter(
         ({ command }) => command === "account_record_use",
       ),
     )
@@ -1797,13 +1698,13 @@ test("native refresh and synthetic input do not count as account activity", asyn
   await expect
     .poll(
       async () =>
-        (await readInvocations(page)).filter(
+        (await tauriInvocations(page)).filter(
           ({ command }) => command === "registry_get_state",
         ).length,
     )
     .toBeGreaterThan(1);
   expect(
-    (await readInvocations(page)).filter(
+    (await tauriInvocations(page)).filter(
       ({ command }) => command === "account_record_use",
     ),
   ).toEqual([]);
@@ -1819,7 +1720,7 @@ test("foreground Settings interactions record use without passing event data", a
     .click();
   await expect
     .poll(async () =>
-      (await readInvocations(page)).filter(
+      (await tauriInvocations(page)).filter(
         ({ command }) => command === "account_record_use",
       ),
     )
@@ -1833,7 +1734,7 @@ test("activity failure reports only the existing telemetry classification", asyn
   await searchBox(page).click();
   await expect
     .poll(async () =>
-      (await readInvocations(page)).filter(
+      (await tauriInvocations(page)).filter(
         ({ command }) => command === "desktop_report_error",
       ),
     )

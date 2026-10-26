@@ -121,7 +121,17 @@ export const DECISION_REFRESH = {
 export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
+/** A fresh observation or the exact immutable object a stored parse consumed. */
+export type DecisionInputProvenance =
+  | { type: "observation" }
+  | {
+      type: "stored";
+      sourceRawS3Key: string;
+      decisionId: SafeId<"caseLawDecision">;
+    };
+
 export type ProcessDecisionAttemptOptions = {
+  inputProvenance: DecisionInputProvenance;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
@@ -134,6 +144,8 @@ export type ProcessDecisionAttemptOptions = {
   observationOrder: bigint;
   contentionReconciliation: ContentionReconciliation;
   refresh: DecisionRefresh;
+  sourceFingerprintVersion: number;
+  sourceFingerprintFromStoredRaw: (key: string) => Promise<string>;
   corpus: CaseLawCorpusDependencies;
   /**
    * The batch this decision's payloads join. A caller processing a page
@@ -152,15 +164,21 @@ export type ProcessDecisionAttemptOptions = {
 
 export type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
+  | "inputProvenance"
   | "contentionReconciliation"
   | "corpus"
   | "judges"
   | "refresh"
   | "metadataUrlSchema"
   | "statedEcliIdentity"
+  | "sourceFingerprintVersion"
+  | "sourceFingerprintFromStoredRaw"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;
   corpus?: CaseLawCorpusDependencies;
   judges?: CaseLawJudgeDependencies;
+  /** Test seam for the external raw-object store. */
+  sourceFingerprintFromStoredRaw?:
+    ((key: string) => Promise<string>) | undefined;
 };

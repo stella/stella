@@ -40,7 +40,6 @@ export type CommandAction = {
   id: CommandActionId;
   group: CommandActionGroup;
   titleKey: CommandActionTextKey;
-  keywords?: readonly CommandActionTextKey[];
   icon: LucideIcon;
   shortcutId?: ShortcutId;
   isAvailable: (ctx: CommandActionContext) => boolean;

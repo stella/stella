@@ -1,10 +1,15 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  checkConversionInput,
+  type ConversionInputRefusal,
+} from "@/api/lib/files/conversion-input";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import type { ImageHeader } from "@/api/lib/files/image-header";
@@ -16,6 +21,7 @@ import {
   isEmbeddableImageMimeType,
 } from "@/api/lib/files/image-pdf";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
+import { isConvertibleMimeType } from "@/api/lib/files/pdf-derivative-policy";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -66,8 +72,45 @@ export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
   cause?: unknown;
 }> {}
 
+export type ConversionInputErrorReason = ConversionInputRefusal;
+
+export class ConversionInputError extends TaggedError("ConversionInputError")<{
+  message: string;
+  reason: ConversionInputErrorReason;
+  cause?: unknown;
+}> {
+  static {
+    declareFingerprintFields(this, ["reason.kind"]);
+  }
+}
+
+const conversionInputRefusalMessage = (
+  reason: ConversionInputRefusal,
+): string => {
+  switch (reason.kind) {
+    case "external_reference":
+      return "The document contains a reference that cannot be converted.";
+    case "unsupported_encoding":
+      return `The document encoding ${reason.encoding} cannot be converted.`;
+    case "unsupported_reference":
+      return `This document refers to an external resource in ${reason.element} ${reason.attribute}, so it can't be converted.`;
+    case "unsupported_field":
+      return `The document field ${reason.fieldType} cannot be converted.`;
+    case "legacy_format":
+      return `Re-save this document as ${reason.replacementExtension} to convert it.`;
+    case "inspection_failed":
+      return "The document could not be inspected for conversion.";
+    default:
+      reason satisfies never;
+      return panic("Unexpected conversion input refusal");
+  }
+};
+
 type ConvertToPdfError =
-  DerivativeAdmissionError | GotenbergError | ImageTranscodeError;
+  | DerivativeAdmissionError
+  | ConversionInputError
+  | GotenbergError
+  | ImageTranscodeError;
 
 const IMAGE_EMBED_FAILED_SINK = failureSink({
   event: "file_conversion.image_embed_failed",
@@ -282,6 +325,29 @@ export const convertToPdf = async (
       sink: IMAGE_EMBED_FAILED_SINK,
       ctx: { operation: "image-to-pdf" },
     });
+  }
+
+  if (isConvertibleMimeType(mimeType)) {
+    const inspection = await Result.tryPromise({
+      try: async () => await checkConversionInput(mimeType, bytes),
+      catch: (cause) =>
+        new ConversionInputError({
+          message: "The document could not be inspected for conversion.",
+          reason: { kind: "inspection_failed" },
+          cause,
+        }),
+    });
+    if (Result.isError(inspection)) {
+      return inspection;
+    }
+    if (inspection.value.kind === "refuse") {
+      return Result.err(
+        new ConversionInputError({
+          message: conversionInputRefusalMessage(inspection.value.reason),
+          reason: inspection.value.reason,
+        }),
+      );
+    }
   }
 
   return await Result.tryPromise(

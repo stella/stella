@@ -114,7 +114,7 @@ jobs:
       - name: Mint app token
         if: github.repository == 'stella/stella' && github.ref == 'refs/heads/main'
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
@@ -127,7 +127,7 @@ jobs:
       # The app token lets the signed commit trigger pull request checks.
       - name: Open or update pull request
         if: steps.app-token.outcome == 'success'
-        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

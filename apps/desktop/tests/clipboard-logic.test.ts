@@ -6,10 +6,12 @@ import {
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
+  clipboardPastePreview,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
@@ -18,18 +20,24 @@ import {
   clipboardSearchPreviewText,
   clipboardSourceTintIndex,
   clipboardTimelineKeyAction,
+  clipboardUntitledName,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
+  refreshClipboardEditorName,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
-import type { ClipboardItem } from "../src/clipboard/clipboard-types";
+import type {
+  ClipboardCopyFormat,
+  ClipboardItem,
+} from "../src/clipboard/clipboard-types";
 
 const TEXT_ITEM = {
   copiedAt: "2026-08-23T10:00:00Z",
@@ -978,5 +986,126 @@ describe("clipboardItemLink", () => {
         plainText: "https://example.com/exhibit",
       })?.host,
     ).toBe("example.com");
+  });
+});
+
+describe("clipboardUntitledName", () => {
+  const KIND_LABELS = { image: "Image", text: "Text" };
+  const BROWSER_SOURCE = {
+    identifier: "com.google.Chrome",
+    name: "Google Chrome",
+    page: {
+      host: "www.example.com",
+      origin: "https://www.example.com",
+      url: "https://www.example.com/ruling",
+    },
+    visualKey: null,
+  };
+
+  test("names a browser copy after its page", () => {
+    expect(
+      clipboardUntitledName(
+        { ...IMAGE_ITEM, sourceApp: BROWSER_SOURCE },
+        KIND_LABELS,
+      ),
+    ).toBe("example.com");
+  });
+
+  test("names a link after its host, else the clip after its kind", () => {
+    expect(
+      clipboardUntitledName(
+        { ...TEXT_ITEM, plainText: "https://court.example/decision" },
+        KIND_LABELS,
+      ),
+    ).toBe("court.example");
+    expect(clipboardUntitledName(TEXT_ITEM, KIND_LABELS)).toBe("Text");
+    expect(clipboardUntitledName(IMAGE_ITEM, KIND_LABELS)).toBe("Image");
+  });
+
+  test("skips an app source without a page", () => {
+    expect(
+      clipboardUntitledName(
+        {
+          ...TEXT_ITEM,
+          sourceApp: { ...BROWSER_SOURCE, name: "Word", page: null },
+        },
+        KIND_LABELS,
+      ),
+    ).toBe("Text");
+  });
+});
+
+describe("clipboard editor name ownership", () => {
+  test("history refreshes untouched names, including external clearing", () => {
+    let draft = refreshClipboardEditorName(
+      { type: "unchanged", value: "Original name" },
+      "Timeline rename",
+    );
+    expect(draft).toEqual({ type: "unchanged", value: "Timeline rename" });
+    draft = refreshClipboardEditorName(draft, null);
+    expect(draft).toEqual({ type: "unchanged", value: "" });
+  });
+
+  test("history refresh never replaces an explicit name edit or clear", () => {
+    for (const value of ["Editor rename", ""]) {
+      for (const externalName of ["Timeline rename", null]) {
+        expect(
+          refreshClipboardEditorName({ type: "edited", value }, externalName),
+        ).toEqual({ type: "edited", value });
+      }
+    }
+  });
+});
+
+describe("paste format previews", () => {
+  // Keys of a total map, so a new copy format cannot skip this matrix.
+  const FORMATS = Object.keys({
+    original: true,
+    plainText: true,
+  } as const satisfies Record<ClipboardCopyFormat, true>).filter(
+    (format): format is ClipboardCopyFormat =>
+      format === "original" || format === "plainText",
+  );
+
+  test("only a formatted clip renders as plain text, and only for its own preview", () => {
+    for (const item of ITEMS) {
+      for (const highlighted of ITEMS) {
+        for (const format of FORMATS) {
+          const preview = clipboardPastePreview(highlighted, format);
+          const expected =
+            item.id === highlighted.id &&
+            item.type === "formattedText" &&
+            format === "plainText"
+              ? "plainText"
+              : "original";
+          expect(clipboardCardRenderFormat(item, [preview])).toBe(expected);
+          expect(
+            clipboardCardRenderFormat(item, [
+              NO_CLIPBOARD_PASTE_PREVIEW,
+              preview,
+            ]),
+          ).toBe(expected);
+        }
+      }
+    }
+  });
+
+  test("a card without previews renders its clip as copied", () => {
+    for (const item of ITEMS) {
+      expect(clipboardCardRenderFormat(item, [])).toBe("original");
+      expect(
+        clipboardCardRenderFormat(item, [NO_CLIPBOARD_PASTE_PREVIEW]),
+      ).toBe("original");
+    }
+  });
+
+  test("a plain-text preview for an unformatted clip changes nothing", () => {
+    for (const item of [TEXT_ITEM, IMAGE_ITEM]) {
+      expect(
+        clipboardCardRenderFormat(item, [
+          { itemId: item.id, type: "plainText" },
+        ]),
+      ).toBe("original");
+    }
   });
 });

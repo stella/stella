@@ -1,4 +1,3 @@
-import { type Static, t } from "elysia";
 /**
  * Legal-vocabulary alternatives for a case-law search: per word the reader
  * typed, the words the jurisdiction's statutes and courts use for the same
@@ -10,6 +9,8 @@ import { type Static, t } from "elysia";
  * Alternatives only ever add recall. The reader's own word stays in its OR
  * group, and a word the rules below reject simply gets no alternative.
  */
+
+import * as v from "valibot";
 
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -41,24 +42,30 @@ export const LEGAL_ALTERNATIVES_LIMITS = {
   chars: 64,
 } as const;
 
-export const tLegalAlternatives = t.Array(
-  t.Object(
-    {
-      term: t.String({
-        minLength: 1,
-        maxLength: LEGAL_ALTERNATIVES_LIMITS.chars,
-      }),
-      alternatives: t.Array(
-        t.String({ minLength: 1, maxLength: LEGAL_ALTERNATIVES_LIMITS.chars }),
-        { maxItems: LEGAL_ALTERNATIVES_LIMITS.perTerm },
+export const tLegalAlternatives = v.pipe(
+  v.array(
+    v.strictObject({
+      term: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(LEGAL_ALTERNATIVES_LIMITS.chars),
       ),
-    },
-    { additionalProperties: false },
+      alternatives: v.pipe(
+        v.array(
+          v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(LEGAL_ALTERNATIVES_LIMITS.chars),
+          ),
+        ),
+        v.maxLength(LEGAL_ALTERNATIVES_LIMITS.perTerm),
+      ),
+    }),
   ),
-  { maxItems: LEGAL_ALTERNATIVES_LIMITS.terms },
+  v.maxLength(LEGAL_ALTERNATIVES_LIMITS.terms),
 );
 
-export type LegalAlternatives = Static<typeof tLegalAlternatives>;
+export type LegalAlternatives = v.InferOutput<typeof tLegalAlternatives>;
 
 type NormalizeLegalAlternativesOptions = {
   /** The reader's query, whose words alone may carry alternatives. */

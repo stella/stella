@@ -14,6 +14,7 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -26,7 +27,7 @@ import { invokedCapabilityAgentRefusal } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
-  type McpRequestContext,
+  type McpRequestResources,
 } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import {
@@ -73,9 +74,8 @@ import {
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
-  mcpToolAuthorityDenialRefusal,
+  authorizeMcpToolContext,
   mcpToolAuthorityRefusal,
-  mcpToolInputAuthorityDenial,
 } from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
@@ -143,7 +143,7 @@ export const isDocumentsMcpCapabilityAllowed = (
 
 export const getMcpToolDefinition = async (
   toolName: string,
-  context: McpRequestContext,
+  context: McpRequestResources,
   mode: McpMode = "default",
 ): Promise<McpToolDefinition | undefined> =>
   await getGatewayMcpToolDefinition({ context, mode, toolName });
@@ -175,7 +175,7 @@ export const getMcpToolRequiredScopesHint = (
 };
 
 export const listMcpTools = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
   mode: McpMode = "default",
   scopes?: readonly string[],
 ): Promise<McpTool[]> => {
@@ -203,7 +203,7 @@ const isStaticToolCallable = ({
   mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   grantedScopes: readonly string[];
   mode: McpMode;
   toolName: string;
@@ -226,7 +226,7 @@ const isStaticToolCallable = ({
   );
 };
 
-type McpToolSurface = { context: McpRequestContext; mode: McpMode };
+type McpToolSurface = { context: McpRequestResources; mode: McpMode };
 
 const createSurfaceSerializer =
   ({ context, mode }: McpToolSurface) =>
@@ -316,7 +316,7 @@ export const agentAccessRefusal = async ({
 
 type McpToolCallArgs = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode?: McpMode;
   toolName: string;
   dependencies?: { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
@@ -379,7 +379,7 @@ const staticToolReferenceRefusal = async ({
   mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   definition: McpToolDefinition;
   args: Record<string, unknown>;
   mode: McpMode;
@@ -534,19 +534,17 @@ const dispatchMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
-  // With the input: the exact grant of the operation it selects.
-  const inputDenial = mcpToolInputAuthorityDenial(
+  const authorization = authorizeMcpToolContext({
     context,
-    staticTool,
-    normalizedArgs,
-  );
-  if (inputDenial !== null) {
-    const refusal = mcpToolAuthorityDenialRefusal(
-      `this ${toolName} operation`,
-      inputDenial,
-    );
-    return serializeForSurface(structuredErrorResult(refusal));
+    dataAccess: context,
+    definition: staticTool,
+    input: normalizedArgs,
+    toolName,
+  });
+  if (!authorization.authorized) {
+    return serializeForSurface(structuredErrorResult(authorization.refusal));
   }
+  const authorizedContext = authorization.context;
 
   // Agent access, once the caller is known to hold the operation's grant: what
   // a person must run or approve is refused here, before the handler or any
@@ -556,7 +554,7 @@ const dispatchMcpToolCall = async ({
   // selects (`capability-tools.ts`).
   const decision = decideAgentCall({
     target: { type: "tool", name: toolName, access: staticTool.access },
-    context,
+    context: authorizedContext,
     surface: AGENT_CALL_SURFACE.mcp,
     subject: toolName,
     confirmed: normalizedArgs["confirm"] === true,
@@ -596,8 +594,8 @@ const dispatchMcpToolCall = async ({
 
       const executionContext =
         decision.approval === "confirmed"
-          ? bindApprovedMcpAuditContext(context)
-          : context;
+          ? bindApprovedMcpAuditContext(authorizedContext)
+          : authorizedContext;
       const response = await handler({
         args: normalizedArgs,
         context: executionContext,
@@ -658,7 +656,7 @@ const internalErrorResult = ({
   error,
 }: {
   mode: McpMode;
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   error: unknown;
 }): CallToolResult => {
@@ -680,7 +678,13 @@ const internalErrorResult = ({
       ctx: { source: "mcp", tool: toolName },
     });
   } else {
-    captureError(error, { source: "mcp", toolName });
+    captureError(
+      error,
+      handlerErrorContext("mcp.internalErrorResult", {
+        source: "mcp",
+        toolName,
+      }),
+    );
   }
   return serializeToolResult(
     scopeToolResultToSurface(

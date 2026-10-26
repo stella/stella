@@ -10,7 +10,7 @@ import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatc
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import { describeForAgents } from "@/api/mcp/agent-access";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   isMcpDescriptorFeatureEnabled,
   projectMcpFeatureInput,
@@ -31,7 +31,7 @@ import {
  * description ends with its agent-access sentence; dispatch refuses the call.
  */
 const withAgentAccessNote = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): McpToolDefinition => {
   const description = describeForAgents({
@@ -53,7 +53,7 @@ const withAgentAccessNote = (
  * discovery and, on a call by name, answered as an unknown tool.
  */
 export const isStaticToolShownToMemberRole = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean => definition.isVisibleToMemberRole?.(context.memberRole) ?? true;
 
@@ -64,7 +64,7 @@ export const isStaticToolShownToMemberRole = (
  * `permission_denied` naming the member role, the credential, or the account.
  */
 const isStaticToolVisibleToRole = (
-  context: McpRequestContext,
+  context: McpRequestResources,
   definition: McpToolDefinition,
 ): boolean =>
   hasMcpToolAuthority(context, definition) &&
@@ -80,7 +80,7 @@ const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
  * enum whole; only a read that produced the set narrows it.
  */
 export const resolveOfferedRegistrySlugs = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
   mode: McpMode,
 ): Promise<readonly BusinessRegistrySlug[] | undefined> => {
   if (mode !== "default" || context.loadEnabledRegistrySlugs === undefined) {
@@ -191,7 +191,7 @@ const narrowBusinessRegistryTool = (
  * its local all-scopes preflight reachable when the primary grant is absent.
  */
 type OfferedStaticMcpToolOptions = {
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
   audience?: "model" | "app";

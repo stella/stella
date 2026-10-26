@@ -81,6 +81,8 @@ const createClient = () => {
   });
   client.setQueryData(aiAvailabilityOptions({ organizationId }).queryKey, {
     available: true,
+    unavailableReason: null,
+    providerConfiguration: "allowed",
     deferredServiceTierAvailable: false,
     instanceProvisioned: false,
     mockAnswers: false,

@@ -1,4 +1,4 @@
-import { createContext, use, useId } from "react";
+import { createContext, createElement, use, useId } from "react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 
 import { queryOptions, useQuery } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { roleOptions } from "@/lib/auth-queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { optionalOrganizationSettingsOptions } from "@/queries/organization-settings";
@@ -32,7 +32,7 @@ const documentOcrAvailabilityOptions = (organizationId: string) =>
   queryOptions({
     queryKey: ["document-ocr-availability", organizationId],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["document-ocr-availability"].get({
           fetch: { signal },
         }),
@@ -99,17 +99,17 @@ const useLiveActionCapabilities = (
   const desktop = useQueryView(desktopQuery);
   const settings = useQueryView(settingsQuery);
   const role = useQueryView(roleQuery);
-  useQueryViewError(ai);
-  useQueryViewError(deepl);
-  useQueryViewError(ocr);
-  useQueryViewError(desktop);
-  useQueryViewError(settings);
-  useQueryViewError(role);
+  useQueryViewError(ai, "useLiveActionCapabilities:query");
+  useQueryViewError(deepl, "useLiveActionCapabilities:query-2");
+  useQueryViewError(ocr, "useLiveActionCapabilities:query-3");
+  useQueryViewError(desktop, "useLiveActionCapabilities:query-4");
+  useQueryViewError(settings, "useLiveActionCapabilities:query-5");
+  useQueryViewError(role, "useLiveActionCapabilities:query-6");
   return resolveActionCapabilities({
     role: role.type === "items" ? role.items : undefined,
     ai: ai.type === "items" ? ai.items.available : undefined,
     deepl: deepl.type === "items" ? deepl.items.configured : undefined,
-    ocr: ocr.type === "items" ? ocr.items.available : undefined,
+    ocr: ocr.type === "items" ? ocr.items : undefined,
     desktop: desktop.type === "items" ? desktop.items.type : undefined,
     settings: settings.type === "items" ? settings.items : undefined,
   });
@@ -122,6 +122,42 @@ export const useActionCapabilities = (
   const live = useLiveActionCapabilities(fixture === null, capability);
   return fixture ?? live;
 };
+
+/**
+ * Renders `children` only where `CapabilityAction` renders `action`. Chrome
+ * that belongs to the action but sits outside its render function (a
+ * separator before it) is rendered through this, so it never outlives the
+ * action and reads capabilities only where the action does.
+ */
+export const CapabilityActionChrome = ({
+  action,
+  children,
+}: {
+  action: ActionDescriptor;
+  children: ReactElement;
+}) =>
+  createElement(
+    renderCapabilityActionChromeContent,
+    {
+      action,
+      capabilities: useActionCapabilities(action.capability),
+    },
+    children,
+  );
+
+function renderCapabilityActionChromeContent({
+  action,
+  capabilities,
+  children,
+}: {
+  action: ActionDescriptor;
+  capabilities: ActionCapabilities;
+  children?: ReactElement;
+}): ReactElement | null {
+  return isCapabilityActionVisible(action, capabilities)
+    ? (children ?? null)
+    : null;
+}
 
 type CapabilityActionChildProps = {
   disabled?: boolean;

@@ -82,7 +82,7 @@ test("every workflow edit selects the classification digest refresh", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
-    ".github/ci-job-classification-decisions.json",
+    ".github/ci-job-classification-decisions/**",
     "scripts/ci-job-classification/yaml.ts",
   ]) {
     expect(
@@ -108,9 +108,17 @@ const namedCiStep = (workflow: unknown, name: string) => {
     if (!isRecord(job) || !Array.isArray(job["steps"])) {
       return [];
     }
-    return workflowJobSteps(workflow, jobId);
+    const jobSteps = workflowJobSteps(workflow, jobId);
+    return jobSteps.some((step) => step["name"] === name)
+      ? [workflowStepByName(jobSteps, name)]
+      : [];
   });
-  return workflowStepByName(steps, name);
+  const step = workflowStepByName(steps.slice(0, 1), name);
+  // The same anchored guard runs in mutually exclusive event carriers.
+  for (const match of steps.slice(1)) {
+    expect(match).toEqual(step);
+  }
+  return step;
 };
 
 describe("Dependabot Bun autofix boundary", () => {
@@ -337,6 +345,52 @@ describe("changed-file autofix boundary", () => {
     expect(namedCiStep(workflow, "Generated files manifest guard")["run"]).toBe(
       "bun scripts/generated-files-guard.ts --guard-b",
     );
+  });
+
+  test("shared CI guards preserve identical commands and inputs in every carrier", () => {
+    const source = `jobs:
+  pull-request:
+    steps: &shared
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: check
+  other-events:
+    steps: *shared
+`;
+    expect(
+      namedCiStep(Bun.YAML.parse(source), "Generated files manifest guard")[
+        "run"
+      ],
+    ).toBe("bun scripts/generated-files-guard.ts --guard-b");
+    const changed = `jobs:
+  pull-request:
+    steps:
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: check
+  other-events:
+    steps:
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: write
+`;
+    expect(() =>
+      namedCiStep(Bun.YAML.parse(changed), "Generated files manifest guard"),
+    ).toThrow("toEqual");
+    const duplicate = `jobs:
+  check:
+    steps:
+      - &guard
+        name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+      - *guard
+`;
+    expect(() =>
+      namedCiStep(Bun.YAML.parse(duplicate), "Generated files manifest guard"),
+    ).toThrow("Expected one workflow step");
   });
 
   test("every selected generator finishes after every source-rewriting fixer", async () => {

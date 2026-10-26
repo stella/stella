@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -8,10 +9,13 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
 import type {
   CitationAnchorSource,
   CitedDecisionTarget as ReaderCitedDecisionTarget,
 } from "@stll/decision-reader/reader-types";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Skeleton } from "@stll/ui/skeleton";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
@@ -20,6 +24,7 @@ import {
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
@@ -32,7 +37,11 @@ import {
   CitationPassageQuote,
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
+import { decisionCardSummaryOptions } from "@/features/case-law/queries/decisions";
+import { useFormatter } from "@/i18n/formatting-context";
+import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { useQueryView } from "@/lib/use-query-view";
 
 /** Where the citing text names the decision, when a passage can be quoted. */
 type CitedDecisionPassage =
@@ -229,12 +238,115 @@ export const CitedDecisionChip = ({
       label={label}
       citingText={citingText}
       onOpen={openDecision}
+      preview={<CitedDecisionCard decision={decision} treatment={treatment} />}
       passage={
-        passage !== undefined || treatment !== undefined ? (
-          <CitedDecisionPreview passage={passage} treatment={treatment} />
+        passage !== undefined ? (
+          <CitedDecisionPreview passage={passage} />
         ) : undefined
       }
       presentation={presentation}
     />
+  );
+};
+
+export const CitedDecisionCard = ({
+  decision: knownDecision,
+  treatment,
+}: {
+  decision: Pick<CitedDecisionTarget, "id" | "court" | "caseNumber">;
+  treatment: CitationTreatment | undefined;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
+  const view = useQueryView(read);
+
+  if (view.type === "pending") {
+    return (
+      <div aria-busy="true" className="flex flex-col gap-2 py-1">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    );
+  }
+  if (view.type !== "items") {
+    return (
+      <div className="flex flex-col gap-2">
+        <BidiText as="div" className="text-sm font-medium">
+          {knownDecision.court}
+        </BidiText>
+        <BidiText as="div" className="text-sm">
+          {knownDecision.caseNumber}
+        </BidiText>
+        <QueryViewFeedback view={view} />
+      </div>
+    );
+  }
+
+  const decision = view.items;
+  const date = formatDecisionDate(decision.decisionDate, format);
+  const headnote =
+    decision.headnote.type === "present" ? decision.headnote.text : null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <QueryViewFeedback view={view} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <BidiText as="div" className="text-sm font-medium">
+            {decision.court}
+          </BidiText>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+            <BidiText as="span">{decision.caseNumber}</BidiText>
+            {date !== null && <span>{date}</span>}
+            {decision.decisionType !== null && (
+              <span className="capitalize">{decision.decisionType}</span>
+            )}
+          </div>
+        </div>
+        {treatment !== undefined && (
+          <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium">
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 rounded-full",
+                CITATION_TREATMENT_DOT[treatment],
+              )}
+            />
+            {t(CITATION_TREATMENT_LABEL[treatment])}
+          </span>
+        )}
+      </div>
+      {headnote !== null && (
+        <div className="space-y-1">
+          <div className="text-foreground-disabled flex items-center justify-between text-xs font-semibold tracking-wide uppercase">
+            <span>{t("caseLaw.viewer.legalSentence")}</span>
+            {decision.courtAbbreviation === null ? (
+              <span className="align-middle">{t("common.court")}</span>
+            ) : (
+              <CourtTierBadge
+                abbreviation={decision.courtAbbreviation}
+                className="align-middle"
+                tier={decision.courtTier}
+              />
+            )}
+          </div>
+          <BidiText as="p" className="line-clamp-6 text-sm leading-relaxed">
+            {headnote}
+          </BidiText>
+        </div>
+      )}
+      <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
+        <span>
+          {t("caseLaw.citation.citedSummary", {
+            count: decision.citationCount,
+          })}
+        </span>
+        {decision.publication !== null && (
+          <BidiText as="span">{decision.publication}</BidiText>
+        )}
+      </div>
+    </div>
   );
 };

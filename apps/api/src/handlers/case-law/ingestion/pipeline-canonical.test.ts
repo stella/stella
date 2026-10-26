@@ -910,15 +910,10 @@ describe("processDecision — canonical storage mode", () => {
     // The next crawl pass sees the row the settle produced — the addresses
     // it wrote, not a recomputation of them; with the source unchanged it
     // advances the watermark and touches no corpus state.
-    existingDecision = {
-      ...existingDecision,
-      corpusMirrorStatus: "settled",
-      contentHash: settled["contentHash"],
-      textS3Key: settled["textS3Key"],
-      normalizedS3Key: settled["normalizedS3Key"],
-      astS3Key: settled["astS3Key"],
-      hasStoredDocument: true,
-    };
+    for (const updated of updatedDecisionRows) {
+      Object.assign(existingDecision, updated);
+    }
+    existingDecision.hasStoredDocument = true;
     events.length = 0;
     transferredPacks.length = 0;
 
@@ -987,11 +982,9 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
     fake.stop();
   });
 
-  test("reports the raw-source retry although the pack settled", async () => {
-    // The update kept its old `sourceHash` so the next pass re-observes the
-    // decision. A single decision is its own batch, and its corpus outcome
-    // is the whole answer only if nothing else is owed: reporting complete
-    // here would advance the cursor past a raw source that never landed.
+  test("preserves the stored parse until its new raw input is durable", async () => {
+    // A failed raw write cannot pair new derived output with the old input.
+    // The retry holds the cursor while the existing row and corpus stand.
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
@@ -1024,15 +1017,15 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });
 
-    // The corpus write itself succeeded, so the reason names the retry the
-    // page-batch path reports for the same failure.
-    expect(transferredPacks).toHaveLength(1);
-    expect(settledDecisionRows()).toHaveLength(1);
     expect(outcome).toEqual({
       status: "retryable",
-      inserted: true,
-      reason: "corpus-write",
+      inserted: false,
+      reason: "source-raw-write",
     });
+    expect(transferredPacks).toEqual([]);
+    expect(insertedRows).toEqual([]);
+    expect(updatedDecisionRows).toEqual([]);
+    expect(events).not.toContain("intent-reserve");
   });
 });
 

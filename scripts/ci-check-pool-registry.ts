@@ -9,13 +9,18 @@ class CheckPoolRegistryError extends Error {
 }
 
 /** Jobs whose checks live in .github/ci-checks/<job>.yml. */
-export const CHECK_POOL_JOBS = ["ci-checks-policy", "ci-checks-rest"] as const;
+export const CHECK_POOL_JOBS = [
+  "ci-checks-policy",
+  "ci-checks-rest",
+  "code-quality-web-rest",
+] as const;
 export type CheckPoolJob = (typeof CHECK_POOL_JOBS)[number];
 
 /** Step names stay unique across jobs: guards key checks by name. */
 export const CHECK_POOL_STEP_NAMES = {
   "ci-checks-policy": "Run policy checks",
   "ci-checks-rest": "Run repository checks",
+  "code-quality-web-rest": "Run independent code-quality checks",
 } as const satisfies Record<CheckPoolJob, string>;
 // The pool step writes the job's `needs` to a file and runs the pool on it:
 // ci-plan's outputs can exceed the 128 KiB limit of one environment value.

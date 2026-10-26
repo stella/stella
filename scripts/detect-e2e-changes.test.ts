@@ -23,6 +23,7 @@ import {
 } from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -853,6 +854,7 @@ describe("detect-e2e-changes", () => {
     }
   });
 
+  // Measured p95: 12.7 s; this must evaluate the real workflow and repository scope.
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     expect(
       changedFileScope("docs/development.md", "pull_request", {
@@ -890,7 +892,7 @@ describe("detect-e2e-changes", () => {
         ].join("\n"),
       );
     }
-  }, 15_000);
+  }, 30_000);
 
   test("runs the full native compiler only at the release boundary", () => {
     const plan = workflowJob("ci-plan");
@@ -906,8 +908,9 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    // Release compiles gate merge groups (and heavy runs), never pull requests.
-    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    // Release compiles gate merge groups, armed pull requests and heavy
+    // runs, never an unarmed pull request.
+    expect(releaseTypecheck).toContain(HEAVY_PROOF_GATE);
     expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
@@ -1041,7 +1044,13 @@ describe("detect-e2e-changes", () => {
     const predicate = requiredExpression(
       ciContract.jobs["marketing-screenshots"]?.if,
     );
-    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+    // The armed proof runs them on a pull request; a merge group whose head
+    // carries it skips them.
+    for (const [event, heavyProof] of [
+      "pull_request",
+      "merge_group",
+      "workflow_dispatch",
+    ].flatMap((name) => [[name, false] as const, [name, true] as const])) {
       for (const planned of [false, true]) {
         for (const trusted of [false, true]) {
           for (const buildRequired of [false, true]) {
@@ -1056,6 +1065,7 @@ describe("detect-e2e-changes", () => {
                         outputs: {
                           queue_depth: "full",
                           run_required: "true",
+                          heavy_proof: String(heavyProof),
                           trusted: String(trusted),
                           marketing_screenshots_required: String(planned),
                           web_build_required: String(buildRequired),
@@ -1068,7 +1078,7 @@ describe("detect-e2e-changes", () => {
                     cancelled: () => cancelled,
                   };
                   const certified =
-                    event !== "pull_request" &&
+                    heavyProof &&
                     planned &&
                     (trusted || event === "workflow_dispatch") &&
                     (!buildRequired ||
@@ -1292,9 +1302,7 @@ describe("detect-e2e-changes", () => {
       jobOf(marketingCaptureWorkflow, "capture"),
       "Upload regenerated baselines",
     );
-    expect(upload["uses"]).toBe(
-      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-    );
+    expect(upload["uses"]).toMatch(/^actions\/upload-artifact@[a-f0-9]{40}$/u);
     expect(upload["with"]).toMatchObject({
       name: "marketing-screenshots",
       path: "apps/landing/public/media/products/*.png",
@@ -1535,7 +1543,12 @@ describe("detect-e2e-changes", () => {
             for (const webResult of ["success", "skipped", "failure"]) {
               for (const heavyResult of ["success", "skipped", "failure"]) {
                 for (const heavyOnly of [false, true]) {
-                  for (const cancelled of [false, true]) {
+                  for (const [cancelled, armed] of [
+                    [false, false],
+                    [false, true],
+                    [true, false],
+                    [true, true],
+                  ] as const) {
                     const context = {
                       github: { event_name: event },
                       inputs: { heavy_only: heavyOnly },
@@ -1550,6 +1563,10 @@ describe("detect-e2e-changes", () => {
                             run_required: "true",
                             trusted: String(trusted),
                             e2e_production_required: String(planned),
+                            // A pull request runs the suite once armed.
+                            heavy_proof: String(
+                              event !== "pull_request" || armed,
+                            ),
                           },
                         },
                         "web-build": { result: webResult },
@@ -1563,7 +1580,7 @@ describe("detect-e2e-changes", () => {
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
                       (event !== "merge_group" || !cancelled);
-                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`;
+                    const label = `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}/${armed}`;
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       label,

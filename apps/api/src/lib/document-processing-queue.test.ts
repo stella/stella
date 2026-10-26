@@ -366,33 +366,6 @@ describe("repair cursor Redis deadlines", () => {
 });
 
 describe("reconciliation fault isolation", () => {
-  test("dispatches every durable processing kind and repairs native gaps", () => {
-    const dispatchStart = queueSource.indexOf(
-      "export const dispatchQueuedDocumentProcessingRuns",
-    );
-    const dispatchEnd = queueSource.indexOf(
-      "const dispatchScheduledDocumentProcessingRetries",
-      dispatchStart,
-    );
-    const dispatchSource = queueSource.slice(dispatchStart, dispatchEnd);
-    const repairStart = queueSource.indexOf(
-      "const recoverMissingNativeExtractionRuns",
-    );
-    const repairEnd = queueSource.indexOf(
-      "const updateQueuedRunSchedule",
-      repairStart,
-    );
-    const repairSource = queueSource.slice(repairStart, repairEnd);
-
-    expect(dispatchStart).toBeGreaterThan(-1);
-    expect(dispatchSource).not.toContain(
-      'eq(documentProcessingRuns.kind, "ocr")',
-    );
-    expect(repairStart).toBeGreaterThan(-1);
-    expect(repairSource).toContain("persistMissingNativeExtractionRuns");
-    expect(repairSource).not.toContain("organizationSettings");
-  });
-
   test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
     const dispatchStart = queueSource.indexOf(
       "export const dispatchQueuedDocumentProcessingRuns",

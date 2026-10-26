@@ -85,6 +85,10 @@ import {
   recoverDocumentDeadlineScouts,
 } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
 import {
+  DISPATCH_NATIVE_EXTRACTION_TASK,
+  dispatchNativeExtraction,
+} from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
+import {
   DISPATCH_DOCUMENT_OCR_TASK,
   dispatchDocumentOcr,
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
@@ -236,6 +240,7 @@ const SCHEDULER_TASKS = {
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
+  [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,

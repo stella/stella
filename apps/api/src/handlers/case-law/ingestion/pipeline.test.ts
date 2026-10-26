@@ -85,7 +85,10 @@ import {
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -1822,7 +1825,7 @@ describe("processDecision — corpus storage off", () => {
 describe("processDecision — the decision's judges", () => {
   type ReplacedJudges = {
     decisionId: string;
-    judges: readonly { role: string; nameAsPrinted: string }[];
+    judges: readonly DecisionJudgeInput[];
     /** Whether the write happened inside the transaction that wrote the row. */
     inTransaction: boolean;
   };

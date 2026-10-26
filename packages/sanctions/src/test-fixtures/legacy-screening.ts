@@ -12,6 +12,7 @@ import type {
 } from "../entry";
 import {
   hasExcessQueryTokens,
+  MAX_QUERY_CHARACTERS,
   MAX_QUERY_TOKENS,
   nameReading,
 } from "../normalise";
@@ -229,7 +230,11 @@ export type ScreeningResult = {
 };
 
 export class ScreeningQueryError extends TaggedError("ScreeningQueryError")<{
-  code: "empty-query" | "invalid-birth-date" | "excess-query-tokens";
+  code:
+    | "empty-query"
+    | "invalid-birth-date"
+    | "excess-query-tokens"
+    | "excess-query-characters";
   message: string;
 }> {}
 
@@ -504,6 +509,14 @@ const prepareScreeningQuery = (
       new ScreeningQueryError({
         code: "invalid-birth-date",
         message: "the birth date is not a valid calendar date",
+      }),
+    );
+  }
+  if (query.name.length > MAX_QUERY_CHARACTERS) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "excess-query-characters",
+        message: `the name must contain at most ${MAX_QUERY_CHARACTERS} characters`,
       }),
     );
   }

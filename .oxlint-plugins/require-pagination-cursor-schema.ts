@@ -1,23 +1,26 @@
 // Pagination cursors accepted at an API boundary come from the shared schema
-// helper. Several handlers repeated `t.Optional(t.String())`, while sibling
+// helper. Several handlers repeated an optional inline string, while sibling
 // handlers capped the same opaque cursor shape; the copies therefore accepted
 // different input envelopes before reaching the common decoder.
 //
 // A bounded inline string is no better than an unbounded one: it is a second
-// copy of a cap `tPaginationCursor()` already owns, and a literal that agrees
-// with the shared value today is the one that silently disagrees tomorrow. So
-// every object property named `cursor` (identifier or quoted key) whose value
-// is an inline `t.String(...)`, bare or wrapped in `t.Optional(...)`, is
-// reported. A provider-owned continuation token passes its own bound through
-// `tPaginationCursor({ maxChars })` rather than weakening the shared default.
+// copy of a cap `paginationCursorSchema()` already owns, and a literal that
+// agrees with the shared value today is the one that silently disagrees
+// tomorrow. So every object property named `cursor` (identifier or quoted key)
+// whose schema is an inline `v.string()` is reported: bare, under any of the
+// optional/nullable wrappers, or at the head of a `v.pipe(...)` whatever steps
+// follow it. A provider-owned continuation token gives its own bound to
+// `paginationCursorSchema({ maxChars })` rather than weakening the shared
+// default, and a cursor that needs a decode check pipes the helper:
+// `v.pipe(paginationCursorSchema(), v.check(...))`.
 //
 // A file that genuinely accepts something else — an upstream page number with
-// its own syntax `pattern` — is named in `allowedFiles` in oxlint.config.ts,
+// its own syntax `v.regex` — is named in `allowedFiles` in oxlint.config.ts,
 // with the reason next to it.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { filenameForContext, isAstNode } from "./utils.ts";
+import { filenameForContext, isAstNode, unwrapExpression } from "./utils.ts";
 
 const getStaticName = (node: unknown): string | null => {
   if (!isAstNode(node)) {
@@ -59,14 +62,33 @@ const configuredAllowedFiles = (context: {
     : [];
 };
 
-// The cursor schema itself, with the optional wrapper peeled off.
-const cursorSchema = (value: unknown): unknown => {
-  if (!isMemberCall(value, "t", "Optional")) {
-    return value;
+// Wrappers whose first argument is the schema that reads the cursor.
+const CURSOR_WRAPPERS = [
+  "exactOptional",
+  "nullable",
+  "nullish",
+  "optional",
+  "pipe",
+  "undefinedable",
+] as const;
+
+// Whether the cursor schema, with its wrappers peeled off, is an inline
+// `v.string()`.
+const isInlineStringCursor = (value: unknown): boolean => {
+  let schema = unwrapExpression(value);
+  while (schema !== null) {
+    if (isMemberCall(schema, "v", "string")) {
+      return true;
+    }
+    const current = schema;
+    if (!CURSOR_WRAPPERS.some((name) => isMemberCall(current, "v", name))) {
+      return false;
+    }
+    schema = Array.isArray(current.arguments)
+      ? unwrapExpression(current.arguments.at(0))
+      : null;
   }
-  return isAstNode(value) && Array.isArray(value.arguments)
-    ? value.arguments.at(0)
-    : value;
+  return false;
 };
 
 export default eslintCompatPlugin({
@@ -77,11 +99,12 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           inlineCursor:
-            "Use t.Optional(tPaginationCursor()) for pagination cursors. " +
-            "The byte cap and the description belong to the helper in " +
-            "apps/api/src/lib/custom-schema.ts; pass tPaginationCursor({ maxChars }) " +
-            "when an external continuation token needs a larger bound, or add " +
-            "this file to the allowlist in oxlint.config.ts with a reason.",
+            "Use v.optional(paginationCursorSchema()) for pagination cursors. " +
+            "The length cap and the description belong to the helper in " +
+            "apps/api/src/lib/custom-schema.ts. Give an external continuation " +
+            "token its bound with paginationCursorSchema({ maxChars }), pipe " +
+            "the helper into v.check(...) to validate the decoded cursor, or " +
+            "add this file to the allowlist in oxlint.config.ts with a reason.",
         },
         schema: [
           {
@@ -115,7 +138,7 @@ export default eslintCompatPlugin({
             if (getStaticName(node.key) !== "cursor") {
               return;
             }
-            if (isMemberCall(cursorSchema(node.value), "t", "String")) {
+            if (isInlineStringCursor(node.value)) {
               context.report({ node, messageId: "inlineCursor" });
             }
           },

@@ -26,12 +26,14 @@ import {
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { createHttpApp } from "@/api/http/app";
 import { getAuth } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -44,6 +46,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -61,7 +64,14 @@ beforeAll(async () => {
     )
     .onConflictDoNothing();
 });
+const server = serveForTest(
+  createHttpApp({
+    routes: [...contactsRoute, ...organizationSettingsRoute],
+    middleware: [errorBoundary],
+  }),
+);
 afterAll(async () => {
+  await server.stop();
   await releaseAgentAuthTestDb();
 });
 
@@ -110,13 +120,11 @@ const dispatch = async ({
   contactId,
 }: DispatchOptions) => {
   if (transport === "http") {
-    const route =
-      contactId === undefined ? organizationSettingsRoute : contactsRoute;
     const path =
       contactId === undefined
         ? "/organization-settings/sanctions-monitoring"
         : `/contacts/${contactId}/sanctions/monitoring`;
-    const response = await route.handle(
+    const response = await server.fetch(
       new Request(`http://localhost${path}`, {
         method: "POST",
         headers: {
@@ -351,7 +359,7 @@ const seedActiveEdition = async () => {
 };
 
 const readHttp = async (browser: HumanBrowser, path: string) => {
-  const response = await contactsRoute.handle(
+  const response = await server.fetch(
     new Request(`http://localhost${path}`, {
       headers: { cookie: browser.cookieHeader() },
     }),

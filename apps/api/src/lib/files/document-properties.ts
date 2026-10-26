@@ -90,7 +90,7 @@ const unreadableDocument = (
 };
 
 /** Property XML is a few kilobytes; a hostile archive declaring more is not read. */
-const PROPERTY_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
+export const DOCUMENT_METADATA_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
 
 const readPropertyEntry = async (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
@@ -106,7 +106,7 @@ const readPropertyEntry = async (
     let size = 0;
     stream.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (size > PROPERTY_ENTRY_MAX_BYTES) {
+      if (size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
         const destroy: unknown = Reflect.get(stream, "destroy");
         if (typeof destroy === "function") {
           Reflect.apply(destroy, stream, []);

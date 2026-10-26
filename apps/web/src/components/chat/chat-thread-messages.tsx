@@ -17,14 +17,12 @@ import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
-  FileTextIcon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
@@ -42,6 +40,8 @@ import {
 } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
+import { AttachmentChip } from "@/components/chat/attachment-chip";
+import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
 import {
   countProcessWork,
   getLatestCompletedResearchPartIndex,
@@ -103,6 +103,7 @@ import {
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
+  canRetryChatRequest,
 } from "@/components/chat/chat-user-actions";
 import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -123,6 +124,7 @@ import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { DocumentIcon } from "@/components/document-icon";
 import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
@@ -426,6 +428,7 @@ export const ChatThreadMessages = ({
                             messages,
                           })}
                           canRetry={canRetryAssistantMessage({
+                            error,
                             isGenerating: generationActive,
                             messageId: message.id,
                             messages,
@@ -911,7 +914,10 @@ const downloadDataAttachment = ({
 }: DownloadDataAttachmentOptions): void => {
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
-    getAnalytics().captureError(decoded.error);
+    getAnalytics().captureError(decoded.error, {
+      fingerprintKey: "downloadDataAttachment:failure",
+      scope: { type: "handler", handlerId: "downloadDataAttachment:failure" },
+    });
     notifyUserError(decoded.error, errorTitle);
     return;
   }
@@ -982,56 +988,32 @@ const UserAttachments = ({
           );
         }
 
-        const attachmentContent = (
-          <>
-            <FileTextIcon className="size-3" />
-            <span>{filename ?? fallbackLabel}</span>
-          </>
-        );
-        const attachmentClassName = cn(
-          "flex items-center gap-1.5",
-          "bg-muted/50 rounded-md px-2 py-1",
-          "text-muted-foreground text-xs",
-        );
-
+        const title = filename ?? fallbackLabel;
+        let open: AttachmentChipOpen = { type: "none" };
         if (contentUrl?.startsWith(DATA_URL_PREFIX)) {
-          return (
-            <button
-              className={attachmentClassName}
-              key={key}
-              onClick={() =>
-                downloadDataAttachment({
-                  errorTitle: t("errors.actionFailed"),
-                  fileName: filename ?? fallbackLabel,
-                  mimeType,
-                  url: contentUrl,
-                })
-              }
-              type="button"
-            >
-              {attachmentContent}
-            </button>
-          );
+          open = {
+            type: "action",
+            onClick: () =>
+              downloadDataAttachment({
+                errorTitle: t("errors.actionFailed"),
+                fileName: title,
+                mimeType,
+                url: contentUrl,
+              }),
+          };
+        } else if (contentUrl !== null) {
+          open = { type: "link", href: contentUrl };
         }
-
-        if (contentUrl) {
-          return (
-            <a
-              className={attachmentClassName}
-              href={sanitizeHref(contentUrl)}
-              key={key}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {attachmentContent}
-            </a>
-          );
-        }
-
         return (
-          <span className={attachmentClassName} key={key}>
-            {attachmentContent}
-          </span>
+          <AttachmentChip
+            icon={({ className }) => (
+              <DocumentIcon className={className} mimeType={mimeType} />
+            )}
+            key={key}
+            kind="file"
+            open={open}
+            title={title}
+          />
         );
       })}
     </div>
@@ -1131,9 +1113,12 @@ export const ChatErrorMessage = ({
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
-  const errorMessage = rejectedInput
-    ? t("errors.api.validation")
-    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
+  let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
+  if (!canRetryChatRequest(error)) {
+    errorMessage = t("chat.sendErrorContinuationRejected");
+  } else if (rejectedInput) {
+    errorMessage = t("errors.api.validation");
+  }
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1179,7 +1164,7 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
-          {onResend && (
+          {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
               onClick={() => {
@@ -1618,6 +1603,13 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
+      {
+        fingerprintKey: "UnknownChatActivity:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "UnknownChatActivity:ClientTelemetryError",
+        },
+      },
     );
   }, [activitySession, activityType, analytics]);
   return null;
@@ -2221,11 +2213,13 @@ const AssistantProcessGroup = ({
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "size-3.5 shrink-0 transition-transform",
             isOpen && "rotate-90",
           )}
+          flip={!isOpen}
+          icon={ChevronRightIcon}
         />
         <span className="text-xs font-medium">
           <SwapText

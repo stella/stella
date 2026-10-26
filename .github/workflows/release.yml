@@ -1,4 +1,8 @@
 name: Release Artifacts
+# The run name carries the tag for a tag push and a dispatch alike: a
+# dispatched run's head branch is main. Release Desktop App and the desktop
+# release canary find a tag's runs by this name.
+run-name: Release Artifacts ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
 
 # release-chain-alert
 defaults:
@@ -39,6 +43,9 @@ env:
 jobs:
   resolve:
     name: Resolve trusted release
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -55,13 +62,23 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/check-release-candidate.sh
+            scripts/verify-release-candidate-tree.mjs
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve release candidate verifier across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-candidate.sh" "$RUNNER_TEMP/check-release-candidate.sh"
+          echo "RELEASE_CANDIDATE_CHECKER=$RUNNER_TEMP/check-release-candidate.sh" >> "$GITHUB_ENV"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/verify-release-candidate-tree.mjs" "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
+          echo "RELEASE_CANDIDATE_TREE_VERIFIER=$RUNNER_TEMP/verify-release-candidate-tree.mjs" >> "$GITHUB_ENV"
 
       - name: Resolve release tag
         id: release
@@ -113,6 +130,7 @@ jobs:
 
       - name: Verify release source
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.release.outputs.ref }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           VERSION: ${{ steps.release.outputs.version }}
@@ -129,6 +147,41 @@ jobs:
             exit 1
           fi
 
+          # The commit that set VERSION to this release, wherever main is now:
+          # a later bump must not reject a retry of an earlier release.
+          version_commit="$(bash "$RELEASE_CANDIDATE_CHECKER" --version-commit-for "$VERSION")"
+          if [[ "$RELEASE_SHA" != "$version_commit" ]]; then
+            echo "::error::Release tag $RELEASE_REF must target its exact VERSION commit ($version_commit)"
+            exit 1
+          fi
+
+          release_parent="$(git show -s --format=%P "$RELEASE_SHA")"
+          if [[ ! "$release_parent" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Release commit must have exactly one parent"
+            exit 1
+          fi
+          node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_parent" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
+
+          expected_title="chore: release $RELEASE_REF"
+          release_pulls="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/pulls?per_page=100")"
+          if ! jq -e \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg sha "$RELEASE_SHA" \
+            --arg title "$expected_title" \
+            '[.[][] | select(
+              .state == "closed"
+              and (.merged_at | type) == "string"
+              and .merge_commit_sha == $sha
+              and .title == $title
+              and .head.repo.full_name == $repo
+              and .base.repo.full_name == $repo
+              and .base.ref == "main"
+            )] | length == 1' <<<"$release_pulls" >/dev/null; then
+            echo "::error::Release commit must belong to exactly one same-repository main PR titled '$expected_title'"
+            exit 1
+          fi
+
       - name: Write trusted release receipt
         env:
           RELEASE_REF: ${{ steps.release.outputs.ref }}
@@ -141,7 +194,7 @@ jobs:
             > release-source-receipt.json
 
       - name: Upload trusted release receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-source-receipt
           path: release-source-receipt.json
@@ -153,6 +206,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     needs: [resolve, build]
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: success()
     permissions:
       contents: read
       packages: read
@@ -203,7 +259,7 @@ jobs:
 
       - name: Upload failed Bun install logs
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bun-install-${{ github.job }}
           path: ${{ runner.temp }}/bun-install/*.log
@@ -252,6 +308,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: success()
     permissions:
       contents: read
       packages: write
@@ -370,6 +429,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     needs: resolve
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: success()
     permissions:
       contents: read
       packages: write
@@ -509,6 +571,7 @@ jobs:
       - name: Build and publish web image publicly
         if: steps.existing.outputs.reused != 'true'
         id: publish
+        timeout-minutes: 45
         uses: ./.workflow-source/.github/actions/build-web-image
         with:
           release-ref: ${{ needs.resolve.outputs.release_ref }}
@@ -606,6 +669,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [resolve, build, prepare-web-image, smoke]
+    # Runs only when every job it needs succeeded, so it skips with
+    # resolve outside the protected ref.
+    if: success()
     outputs:
       api-image-digest: ${{ steps.manifest.outputs.digest }}
     permissions:
@@ -788,7 +854,7 @@ jobs:
             > release-manifest.json
 
       - name: Upload manifest artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-manifest-${{ needs.resolve.outputs.release_ref }}
           path: release-manifest.json
@@ -921,7 +987,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [resolve, manifest, prepare-web-image, smoke]
-    if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+    if: ${{ success() && !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: read
     steps:
@@ -979,7 +1045,7 @@ jobs:
     # cannot time out first and lose observation of an active promotion.
     timeout-minutes: 360
     needs: [resolve, manifest, prepare-web-image, smoke, release-health-gate]
-    if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+    if: ${{ success() && !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: write # publish the draft release
       packages: write # advance the mutable image aliases
@@ -1147,7 +1213,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [resolve, manifest, prepare-web-image, smoke]
-    if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}
+    if: ${{ success() && contains(needs.resolve.outputs.release_ref, '-rc.') }}
     permissions:
       contents: write # publish the draft prerelease
     environment: release-app

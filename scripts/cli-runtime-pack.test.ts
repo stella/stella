@@ -40,7 +40,8 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_DIRECTORY = "packages/cli";
 const COMMAND_TIMEOUT_MS = 180_000;
-const TEST_TIMEOUT_MS = 600_000;
+// Measured p95 is 20.8 s; this test must perform a fresh real CLI build and pack.
+const TEST_TIMEOUT_MS = 45_000;
 const RUNTIME_SOURCES = [
   "src/generated/route-map.ts",
   "src/generated/tool-annotations.ts",
@@ -494,6 +495,21 @@ describe("generated imports", () => {
       },
       generators: [derived, committed],
     });
+
+  test.each([
+    "import(`./generated/missing`);",
+    "require(`./generated/missing`);",
+    'require("./generated/missing", 2);',
+    'type Missing = import("./generated/missing");',
+  ])("generated imports retain module references in %s", (source) => {
+    expect(scan({ source })).toEqual([
+      {
+        importer,
+        specifier: "./generated/missing",
+        missing: "packages/probe/src/generated/missing.ts",
+      },
+    ]);
+  });
 
   test("a tracked generated module is buildable", () => {
     expect(

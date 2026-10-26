@@ -12,7 +12,7 @@ import { Result } from "better-result";
 
 import type {
   DecisionAnalysis,
-  DecisionAnalysisV3,
+  DecisionAnalysisV4,
 } from "@stll/legal-ast/analysis";
 import { isSignificanceCurrent } from "@stll/legal-ast/analysis";
 import { Temporal } from "@stll/time";
@@ -27,6 +27,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import type { AnalysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
@@ -89,9 +90,9 @@ const readPublicGraphFacts = async (decisionId: SafeId<"caseLawDecision">) =>
     async (tx) => await readCitationGraphFacts({ decisionId, tx }),
   );
 
-/** Only a version 3 analysis has a slot to write the statement into. */
-const asV3 = (analysis: DecisionAnalysis): DecisionAnalysisV3 | null =>
-  analysis.version === 3 ? analysis : null;
+/** Only a version 4 analysis has a slot to write the statement into. */
+const asV4 = (analysis: DecisionAnalysis): DecisionAnalysisV4 | null =>
+  analysis.version === 4 ? analysis : null;
 
 export const refreshSignificance = async ({
   admitModelAction,
@@ -111,7 +112,7 @@ export const refreshSignificance = async ({
   if (!derivedAi) {
     return;
   }
-  const current = asV3(analysis);
+  const current = asV4(analysis);
   if (current === null) {
     return;
   }
@@ -145,7 +146,7 @@ export const refreshSignificance = async ({
           },
           contentHash,
           decisionId,
-          expected: analysis,
+          ownership: { type: "revision", expected: analysis },
         }),
     );
     if (Result.isError(saved)) {
@@ -263,7 +264,7 @@ export const refreshSignificance = async ({
       },
       contentHash,
       decisionId,
-      expected: analysis,
+      ownership: { type: "revision", expected: analysis },
     });
   });
 
@@ -274,10 +275,13 @@ export const refreshSignificance = async ({
   if (Result.isError(written) && !ActionAdmissionError.is(written.error)) {
     // A reader is already looking at the document layers; the graph one
     // simply does not appear this time. Captured, never swallowed.
-    captureError(written.error, {
-      source: "case-law-analysis-significance",
-      decisionId,
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("analysis.refreshSignificance.written_error", {
+        source: "case-law-analysis-significance",
+        decisionId,
+      }),
+    );
     aiAnalytics?.captureError(written.error);
   }
 };

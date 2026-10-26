@@ -175,16 +175,16 @@ describe("screenshot regeneration trust boundary", () => {
       ],
       [
         "Download regenerated baselines",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
       ],
       ["Stage validated baselines", "run"],
       [
         "Mint App token",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+        "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
       ],
       [
         "Push regenerated baselines",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+        "stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8",
       ],
     ]);
     for (const step of publish) {

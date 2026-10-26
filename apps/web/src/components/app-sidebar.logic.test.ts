@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
+  getMatterBillingLinks,
+  MATTER_BILLING_LINK_KINDS,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
   resolveAutomaticExpandedMatterId,
@@ -162,6 +164,49 @@ describe("sidebar matter context", () => {
         activeWorkspaceId: undefined,
       }),
     ).toBeNull();
+  });
+});
+
+describe("sidebar matter billing links", () => {
+  const TIMESHEETS = { kind: MATTER_BILLING_LINK_KINDS.timesheets };
+  const INVOICES = { kind: MATTER_BILLING_LINK_KINDS.invoices };
+  const cases = [
+    [false, false, false, []],
+    [false, false, true, []],
+    [false, true, false, []],
+    [false, true, true, []],
+    [true, false, false, []],
+    [true, false, true, [INVOICES]],
+    [true, true, false, [TIMESHEETS]],
+    [true, true, true, [TIMESHEETS, INVOICES]],
+  ] as const;
+
+  test.each(cases)(
+    "preview=%s, time-entry-read=%s, invoice-read=%s",
+    (
+      timeBillingPreviewEnabled,
+      canReadTimeEntries,
+      canReadInvoices,
+      expected,
+    ) => {
+      expect(
+        getMatterBillingLinks({
+          canReadInvoices,
+          canReadTimeEntries,
+          timeBillingPreviewEnabled,
+        }),
+      ).toEqual([...expected]);
+    },
+  );
+
+  test("the preview flag hides every billing link", () => {
+    expect(
+      getMatterBillingLinks({
+        canReadInvoices: true,
+        canReadTimeEntries: true,
+        timeBillingPreviewEnabled: false,
+      }),
+    ).toEqual([]);
   });
 });
 

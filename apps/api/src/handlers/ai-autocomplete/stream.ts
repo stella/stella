@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
@@ -8,7 +8,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
-import { sseResponse } from "@/api/lib/sse";
+import { memberSessionStreamBinding, sseResponse } from "@/api/lib/sse";
 import { streamTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const MAX_PREFIX_CHARS = 8000;
@@ -18,11 +18,13 @@ const AUTOCOMPLETE_TIMEOUT_MS = 10_000;
 const AUTOCOMPLETE_ACTION_KIND = "editor.autocomplete";
 const AUTOCOMPLETE_STREAM_INTERRUPTED_MESSAGE = "stream interrupted";
 
-const requestBody = t.Object({
-  prefix: t.String({ maxLength: MAX_PREFIX_CHARS }),
-  suffix: t.Optional(t.String({ maxLength: MAX_SUFFIX_CHARS })),
-  headings: t.Optional(t.Array(t.String({ maxLength: 240 }), { maxItems: 8 })),
-  language: t.Optional(t.String({ maxLength: 8 })),
+const requestBody = v.object({
+  prefix: v.pipe(v.string(), v.maxLength(MAX_PREFIX_CHARS)),
+  suffix: v.optional(v.pipe(v.string(), v.maxLength(MAX_SUFFIX_CHARS))),
+  headings: v.optional(
+    v.pipe(v.array(v.pipe(v.string(), v.maxLength(240))), v.maxLength(8)),
+  ),
+  language: v.optional(v.pipe(v.string(), v.maxLength(8))),
 });
 
 const config = {
@@ -199,7 +201,9 @@ const autocompleteStream = createSafeRootHandler(
     };
     const sse = createAutocompleteEventStream(admittedStream(), request.signal);
 
-    return Result.ok(sseResponse(sse));
+    return Result.ok(
+      sseResponse(sse, memberSessionStreamBinding({ session, user })),
+    );
   },
 );
 

@@ -35,6 +35,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -269,6 +270,7 @@ const produceUntilCut = ({
   const response = run.produce(
     output(),
     memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
   );
   return { response, run, stored };
 };
@@ -317,6 +319,7 @@ describe("a producing run", () => {
     const response = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     try {
       await stalled.promise;
@@ -683,6 +686,7 @@ describe("a producing run", () => {
     const response = run.produce(
       output(),
       memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
     );
     await response.text();
 
@@ -843,7 +847,11 @@ describe("a producing run", () => {
       yield* [];
     };
     await run
-      .produce(output(), memoryStream({ runId: Bun.randomUUIDv7() }))
+      .produce(
+        output(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
+      )
       .text();
     expect(ownership.run(execution.executionId)).toBeUndefined();
 

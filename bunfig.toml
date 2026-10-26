@@ -29,6 +29,9 @@ minimumReleaseAgeExcludes = [
   # quarantined optional bindings otherwise leave the executable unavailable.
   # bun-types ships only declarations and must match the pinned Bun runtime.
   "bun-types", # quarantine-expires: 2026-10-27T10:17:50.170Z
+  # body-parser 2.4.0 is the first release outside GHSA-27r3-jxmh-p828.
+  "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
+  # happy-dom 21.0.4 carries the patched DOMStringMap override forward.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick", # quarantine-excluded-since: 2026-10-17T16:30:00.000Z
@@ -89,6 +92,9 @@ minimumReleaseAgeExcludes = [
 ]
 
 [fmt]
+# These options apply on top of Prettier's defaults because the root
+# .prettierrc.yml ends the formatter's config lookup at this repository root
+# (scripts/formatter-config-root.test.ts).
 printWidth = 80
 ignorePatterns = [
   # Shared generated files (stll-toolchain formatter policy).
@@ -107,6 +113,7 @@ ignorePatterns = [
   "**/*.min.*",
   "sbom.cdx.json",
   "**/.cache/**",
+  ".tailwind-cache/**",
   "**/.oxlintrc.json",
   "**/dist/**",
   "**/.react-email/**",

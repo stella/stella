@@ -50,6 +50,7 @@ import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -290,6 +291,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: DISPATCH_DOCUMENT_OCR_TASK,
   },
   {
+    description: "Release queued native extraction runs to their worker",
+    id: "documentProcessing.dispatchNativeExtraction.twoMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
+    task: DISPATCH_NATIVE_EXTRACTION_TASK,
+  },
+  {
     description: "Dispatch document deadline scouts nothing has picked up",
     id: "documentProcessing.recoverDeadlineScouts.fiveMinute",
     mode: "recurring",
@@ -344,10 +352,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
+    // Hourly: nothing alarms on these gauges at a finer resolution, and a
+    // source falls behind by sync cycles, not minutes. The id is the row's
+    // key and outlives its old cadence: a new id would register a second
+    // job beside the existing row, which only retires by task name.
     description: "Report case-law projection backlog and source freshness",
     id: "caseLaw.reportFreshness.fiveMinute",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
   },
   {

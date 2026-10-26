@@ -75,8 +75,11 @@ const isCalendarDate = (value: string): boolean => {
 
 // `permanent` is a structural exception: the code cannot satisfy the rule and
 // never will, so an owner or expiry field would be theatre that rots. A
-// `temporary` waiver is a promise with a date attached, and this guard fails
-// once the date passes. A boolean would not survive a third disposition.
+// `temporary` waiver is a promise with a date attached. This guard checks
+// only that the date is well formed; scripts/dated-waivers.ts owns the expiry,
+// so it fails the change that touches the ledger and the scheduled
+// default-branch check, never an unrelated change. A boolean would not survive
+// a third disposition.
 const WAIVER_KINDS = ["permanent", "temporary"] as const;
 
 type WaiverKind = (typeof WAIVER_KINDS)[number];
@@ -285,7 +288,6 @@ type InspectionInput = {
   readonly observation: Observation;
   readonly evidenceExists: (file: string) => boolean;
   readonly evidenceContains: (file: string, symbol: string) => boolean;
-  readonly today: string;
 };
 
 /** `path/to/file.ts#symbol` split into its two halves. */
@@ -348,7 +350,6 @@ const inspectShape = (
   waivers: readonly Waiver[],
   evidenceExists: (file: string) => boolean,
   evidenceContains: (file: string, symbol: string) => boolean,
-  today: string,
 ): string[] => {
   const errors: string[] = [];
   const ids = new Set<string>();
@@ -381,11 +382,6 @@ const inspectShape = (
     if (evidenceProblem !== undefined) {
       errors.push(evidenceProblem);
     }
-    if (waiver.kind === "temporary" && waiver.expires < today) {
-      errors.push(
-        `${waiver.id}: temporary waiver expired on ${waiver.expires}; remove the suppression or re-justify it with a new date`,
-      );
-    }
   }
 
   return errors;
@@ -396,14 +392,8 @@ export const inspectLedger = ({
   observation,
   evidenceExists,
   evidenceContains,
-  today,
 }: InspectionInput): readonly string[] => {
-  const errors = inspectShape(
-    ledger.waivers,
-    evidenceExists,
-    evidenceContains,
-    today,
-  );
+  const errors = inspectShape(ledger.waivers, evidenceExists, evidenceContains);
 
   for (const file of observation.bare) {
     errors.push(
@@ -453,8 +443,6 @@ export const inspectLedger = ({
 
 // --- Modes ------------------------------------------------------------------
 
-const today = (): string => new Date().toISOString().slice(0, 10);
-
 const readLedger = (): Ledger => {
   const parsed = Result.try((): unknown =>
     JSON.parse(readFileSync(LEDGER_PATH, "utf-8")),
@@ -482,7 +470,6 @@ const runCheck = (): number => {
     evidenceExists: (file) => existsSync(path.join(REPO_ROOT, file)),
     evidenceContains: (file, symbol) =>
       readFileSync(path.join(REPO_ROOT, file), "utf-8").includes(symbol),
-    today: today(),
   });
 
   if (errors.length === 0) {
@@ -644,14 +631,12 @@ const fixtureObserved = (
 const inspect = (
   ledger: readonly Waiver[],
   observation: Observation,
-  asOf = "2026-01-01",
 ): readonly string[] =>
   inspectLedger({
     ledger: { waivers: ledger },
     observation,
     evidenceExists: () => true,
     evidenceContains: () => true,
-    today: asOf,
   });
 
 const SOURCE_FIXTURE_LINES = [
@@ -787,19 +772,12 @@ const runSelfTest = (): number => {
     "undeclared security suppression",
   );
 
-  expectError(
-    "an expired temporary waiver",
-    inspect(
-      [temporaryWaiver("2025-12-31")],
-      fixtureObservation([fixtureObserved()]),
-    ),
-    "expired on 2025-12-31",
-  );
-
+  // The ledger mirrors the tree; scripts/dated-waivers.ts owns expiry, so a
+  // lapsed date never turns this check red for an unrelated change.
   expectClean(
-    "a temporary waiver still in date",
+    "a temporary waiver past its date",
     inspect(
-      [temporaryWaiver("2026-06-30")],
+      [temporaryWaiver("2000-01-01")],
       fixtureObservation([fixtureObserved()]),
     ),
   );
@@ -851,7 +829,6 @@ const runSelfTest = (): number => {
       observation: fixtureObservation([fixtureObserved()]),
       evidenceExists: () => false,
       evidenceContains: () => true,
-      today: "2026-01-01",
     }),
     "does not exist",
   );

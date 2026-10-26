@@ -52,8 +52,37 @@ const UNREACHABLE_DATABASE_URL =
   "postgres://stella_owner:stella@127.0.0.1:1/stella?sslmode=require";
 
 const ENVIRONMENT_VALIDATION_MESSAGE = "Invalid environment variables";
+const MIGRATION_MODULE_LOADED = "migration module loaded";
 
 setDefaultTimeout(60_000);
+
+test("the migration module imports with only DATABASE_URL", async () => {
+  await Bun.write(EMPTY_ENV_FILE, "");
+  const modulePath = nodePath.join(import.meta.dir, "migration-runner.ts");
+  const child = Bun.spawn({
+    cmd: [
+      "bun",
+      `--env-file=${EMPTY_ENV_FILE}`,
+      "--eval",
+      `await import(${JSON.stringify(modulePath)}); console.log(${JSON.stringify(MIGRATION_MODULE_LOADED)});`,
+    ],
+    env: {
+      DATABASE_URL: UNREACHABLE_DATABASE_URL,
+      PATH: process.env["PATH"] ?? "",
+    },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const [stderr, stdout, exitCode] = await Promise.all([
+    new Response(child.stderr).text(),
+    new Response(child.stdout).text(),
+    child.exited,
+  ]);
+
+  expect(stderr).not.toContain(ENVIRONMENT_VALIDATION_MESSAGE);
+  expect(exitCode).toBe(0);
+  expect(stdout.trim()).toBe(MIGRATION_MODULE_LOADED);
+});
 
 const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await Bun.write(EMPTY_ENV_FILE, "");

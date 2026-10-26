@@ -42,8 +42,12 @@
         "tokens": 32845
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 32661
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 32670
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 32439
       }
     ],
     "anthropic/extended": [
@@ -88,8 +92,12 @@
         "tokens": 33336
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 33151
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 33160
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 32928
       }
     ],
     "bedrock/default": [
@@ -134,8 +142,8 @@
         "tokens": 33078
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 32899
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 32677
       }
     ],
     "bedrock/extended": [
@@ -180,8 +188,8 @@
         "tokens": 33567
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 33388
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 33165
       }
     ],
     "google/default": [
@@ -222,8 +230,8 @@
         "tokens": 32188
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 32026
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 31804
       }
     ],
     "google/extended": [
@@ -258,6 +266,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 32281
       }
     ],
     "mistral/default": [
@@ -302,8 +314,8 @@
         "tokens": 34330
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 34134
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 33912
       }
     ],
     "mistral/extended": [
@@ -348,8 +360,8 @@
         "tokens": 34857
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 34661
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 34438
       }
     ],
     "openai/default": [
@@ -394,8 +406,8 @@
         "tokens": 33933
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 33732
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 33510
       }
     ],
     "openai/extended": [
@@ -440,8 +452,8 @@
         "tokens": 34449
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 34248
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 34025
       }
     ],
     "openrouter-anthropic/default": [
@@ -482,8 +494,12 @@
         "tokens": 34298
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 33978
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34013
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 33756
       }
     ],
     "openrouter-anthropic/extended": [
@@ -524,8 +540,12 @@
         "tokens": 34797
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 34490
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34525
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 34267
       }
     ],
     "openrouter/default": [
@@ -566,8 +586,12 @@
         "tokens": 34298
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 33978
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34013
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 33756
       }
     ],
     "openrouter/extended": [
@@ -608,8 +632,12 @@
         "tokens": 34797
       },
       {
-        "reason": "Removed obsolete confirmation inputs from person-gated tools",
-        "tokens": 34490
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34525
+      },
+      {
+        "reason": "Reflect resolved agent access policy",
+        "tokens": 34267
       }
     ]
   },

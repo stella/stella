@@ -62,8 +62,12 @@
     "chooseRewriteInstruction": "Rewrite options",
     "editWithAI": "Edit with AI",
     "keyRequired": {
+      "accountRestricted": "AI provider settings are unavailable for this account.",
+      "configUnreadable": "The AI provider configuration cannot be read. Ask an organization admin to reconnect it.",
       "cta": "Open AI settings",
       "description": "Add provider credentials to start using AI features.",
+      "permissionRequired": "Only an organization admin can connect an AI provider.",
+      "seatRequired": "Ask an organization admin to assign you a seat.",
       "title": "Connect AI provider"
     },
     "refinePlaceholder": "How should the AI adjust the wording?",
@@ -155,7 +159,6 @@
     "organizationNamePlaceholder": "My organization",
     "password": "Password",
     "professionalUse": {
-      "description": "Your account was set up without showing you this statement. Accept it to continue.",
       "title": "Confirm professional use"
     },
     "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.",
@@ -385,6 +388,7 @@
         "reading": "Reading view"
       },
       "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
+      "pdfTextFailed": "The PDF's text could not be read, so the claims are not marked on its pages.",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
@@ -641,6 +645,7 @@
         "eso9": "ESO9 import sheet (XLSX)",
         "exporting": "Preparing export…",
         "isdoc": "ISDOC e-invoice (ABRA Gen and others)",
+        "ksefFa3": "KSeF e-invoice FA(3) (XML)",
         "spreadsheets": "Spreadsheets",
         "xlsx": "Invoices (XLSX)",
         "xlsxLines": "Invoice lines (XLSX)"
@@ -754,6 +759,7 @@
     "sellerProfiles": {
       "add": "Add seller profile",
       "archiveConfirm": "Archive this seller profile? It will no longer be available for new invoices.",
+      "barRegistration": "Bar registration",
       "bic": "BIC / SWIFT code",
       "default": "Default seller",
       "defaultCurrency": "Default currency",
@@ -765,11 +771,10 @@
       "invalidCurrency": "Enter a three-letter currency code.",
       "invalidIban": "Enter a valid IBAN.",
       "legalName": "Legal name",
+      "registerEntry": "Register entry",
       "registrationId": "Registration ID",
       "setDefault": "Make default",
       "title": "Seller profiles",
-      "vatId": "VAT ID",
-      "vatPayer": "VAT payer",
       "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.",
       "vatPayerRequiresVatId": "Enter the VAT ID to issue invoices as a VAT payer."
     },
@@ -804,6 +809,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Add VAT rate",
+      "addCzechia": "Add rates for Czechia",
+      "addSlovakia": "Add rates for Slovakia",
       "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.",
       "code": "Rate code",
       "current": "Current rate",
@@ -818,6 +825,7 @@
       "overlap": "Validity periods for the same rate code cannot overlap.",
       "past": "Past rate",
       "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.",
+      "presetResult": "Added {added}; skipped {skipped}.",
       "rate": "VAT percentage",
       "title": "VAT rates",
       "validFrom": "Valid since",
@@ -1024,7 +1032,10 @@
       "pageOfCount": "Page {page} of {pageCount}",
       "pageOfEstimatedCount": "Page {page} of ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page {page} · about {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}",
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithPartialMatchCount": "Page {page} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}",
       "perPage": "Per page",
       "refineForMore": "Refine your search to see more results"
@@ -1475,7 +1486,7 @@
       "label": "Mock AI"
     },
     "modelSelector": {
-      "allModels": "All models ({count, number})",
+      "allModels": "All models",
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",
       "belowFrontier": "Below the best trade-offs",
@@ -1593,6 +1604,7 @@
     "sendError": "There was an issue sending your message. Contact support if the error persists.",
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
     "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.",
+    "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
@@ -2117,6 +2129,7 @@
       "ZH-HANT": "Chinese (traditional)"
     },
     "lastUpdated": "Last updated",
+    "layoutResetAfterProblem": "The layout was reset after a problem.",
     "legalDatabase": "Legal database",
     "loadMore": "Load more",
     "loading": "Loading",
@@ -2215,6 +2228,7 @@
     "suggested": "Suggested",
     "summarizeChanges": "Summarize changes",
     "target": "Target",
+    "taxId": "Tax ID",
     "timeBilling": "Time & Billing",
     "today": "Today",
     "translate": "Translate",
@@ -2238,6 +2252,8 @@
     "urlIdentifierPlaceholder": "my-organization",
     "user": "User",
     "value": "Value",
+    "vatId": "VAT ID",
+    "vatPayer": "VAT payer",
     "verified": "Verified",
     "verify": "Verify",
     "version": "Version",
@@ -2279,6 +2295,7 @@
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks",
     "scopeLawRead": "Read public statutes and case law",
     "scopeMattersWrite": "Create and edit your matters and tasks",
+    "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
     "scopeProfile": "Access your profile information",
@@ -2306,6 +2323,7 @@
     "summaryLineRead": "<group>Read:</group> {items}",
     "summaryLineUse": "<group>Use:</group> {items}",
     "summaryMattersWrite": "matters and tasks",
+    "summaryMemoryWrite": "assistant memories",
     "summaryProfile": "profile",
     "summaryRead": "documents, matters and contacts",
     "summaryReadAnonymized": "anonymized documents and matters",
@@ -2426,7 +2444,9 @@
       "prefix": "Prefix",
       "registrationNumber": "Registration number",
       "suffix": "Suffix",
-      "taxId": "Tax ID",
+      "vatPayer": "VAT-payer status",
+      "vatPayerNo": "Not a VAT payer",
+      "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
     "filterOrganizations": "Organizations",
@@ -2466,7 +2486,6 @@
         "primary_phone": "Primary phone",
         "state": "State or region",
         "suffix": "Suffix",
-        "tax_id": "Tax ID",
         "type": "Contact type"
       },
       "fileInvalid": "Choose one CSV, TSV or TXT file.",
@@ -2671,6 +2690,7 @@
       "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
       "contact": "Contact us",
+      "featureDisabled": "This feature is temporarily turned off.",
       "notEnabled": "This action is not enabled for your organization.",
       "periodExhausted": "This action is paused for your organization."
     },
@@ -3526,6 +3546,12 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
+      "unsupportedField": "This document contains {fieldType}, which can't be converted.",
+      "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."
+    },
     "external": {
       "confirmDescription": "You're about to visit an external website.",
       "confirmTitle": "Open external link?",
@@ -3804,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "One client",
+      "availabilityClientBadgeHelp": "Available only in one client's matters.",
+      "availabilityClientHelp": "Usable only in this client's matters. This can't be changed later.",
+      "availabilityFixedHelp": "Set when the skill was created. It can't be changed.",
+      "availabilityLabel": "Available in",
+      "availabilityMatter": "One matter",
+      "availabilityMatterBadgeHelp": "Available only in one matter.",
+      "availabilityMatterHelp": "Usable only in this matter. This can't be changed later.",
+      "availabilityOrganization": "Whole organization",
+      "availabilityTeamNeedsMatter": "To share a skill with the team, choose the matter it is for. This can't be changed later.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",
@@ -4225,6 +4261,22 @@
       "guestStorageUnavailable": "Highlights and notes could not be saved in this tab.",
       "highlight": "Highlight",
       "highlightedPassage": "Highlighted passage",
+      "history": {
+        "colorRestored": "Color restored",
+        "commentRemoved": "Comment removed",
+        "commentRestored": "Comment restored",
+        "highlightRemoved": "Highlight removed",
+        "highlightRestored": "Highlight restored",
+        "markChanged": "This highlight or comment was changed elsewhere, so it was left as it is.",
+        "markGone": "This highlight or comment no longer exists.",
+        "nothingToRedo": "Nothing to redo",
+        "nothingToUndo": "Nothing to undo",
+        "redoShortcut": "Redo highlight or comment change",
+        "styleRestored": "Style restored",
+        "textRestored": "Comment text restored",
+        "undoShortcut": "Undo highlight or comment change",
+        "visibilityRestored": "Sharing restored"
+      },
       "removeHighlight": "Remove highlight",
       "sharedBadge": "Shared",
       "styleHighlight": "Highlight",
@@ -4718,7 +4770,7 @@
     "modelError": "The model could not finish this answer.",
     "networkError": "The connection was interrupted. Try again.",
     "regenerate": "Regenerate answer",
-    "selectionError": "Select text within a single paragraph (up to 2,000 characters).",
+    "selectionError": "Select text from the decision itself.",
     "send": "Send follow-up",
     "share": "Share with team",
     "timeoutError": "The answer timed out. Try again.",
@@ -4736,6 +4788,7 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "continueInChat": "Continue in chat",
@@ -4770,6 +4823,8 @@
     "recentDocuments": "Recent documents",
     "recentSearches": "Recent searches",
     "recentlyOpenedFiles": "Recently opened files",
+    "registryCandidateNameMismatch": "Official name is “{officialName}” and does not match",
+    "registryCandidateNoOfficialRecord": "Official register has no record for this number",
     "registryChoose": "Choose a company registry",
     "registryCredentialAskAdmin": "Ask an organization administrator to configure access to this registry.",
     "registryCredentialSaved": "Registry access saved",
@@ -4780,6 +4835,7 @@
       "enrichmentUnavailable": "Commercial-register details are temporarily unavailable"
     },
     "registryKrsHint": "KRS searches by registration number, not company name. Enter a 10-digit KRS number, including leading zeros (e.g. 0000006865).",
+    "registryNameSearchNotFound": "No verified company matched that name. The following candidates were rejected:",
     "registryVatHint": "VIES checks VAT numbers, not company names. Enter a VAT number with its country prefix (e.g. CZ27082440); the format depends on the country.",
     "renameSearchTitle": "Rename saved search",
     "requestCountry": "Request a new country",
@@ -4793,6 +4849,7 @@
     "savedSearchesEmpty": "Save a search to reuse it.",
     "scopeFilter": "Search scope",
     "scopePlaceholderAll": "Search across all <scope>sources</scope>…",
+    "scopePlaceholderCaseLaw": "Search in <scope>case law</scope>…",
     "scopePlaceholderMatters": "Search across all <scope>matters</scope>…",
     "scopePlaceholderRegistries": "Search in <scope>registries</scope>…",
     "scopeRegistries": "Registries",
@@ -5303,7 +5360,7 @@
     "importDescription": "Styles are extracted into a fresh, content-free DOCX.",
     "importTitle": "Import style set",
     "loadFailed": "Style sets could not be loaded",
-    "newDocument": "New document",
+    "newDocument": "New DOCX document",
     "pickerDescription": "Choose the formatting system for the new file.",
     "renameTitle": "Rename style set",
     "replace": "Replace source",
@@ -5587,7 +5644,7 @@
     "moveToMatter": "Save to matter",
     "moveToMatterAnyway": "Save anyway",
     "myDefaultLookupFormat": "My default",
-    "newFromTemplate": "New document from template",
+    "newFromTemplate": "New DOCX document from template",
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.",
     "newTemplate": "New template",
     "noTemplates": "No templates yet",
@@ -5958,6 +6015,7 @@
         "action": "Edit in desktop",
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",
+        "editInApplication": "Edit in <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edit this file locally and sync changes with stella.",
         "forceRelease": "Force release",
         "notOpenedDescription": "stella desktop did not confirm that <bdi>{application}</bdi> opened. Start stella desktop and try again.",
@@ -5981,13 +6039,15 @@
         "alreadyInstalled": "Already installed? Connect it",
         "connect": "Connect stella desktop",
         "connected": "stella desktop is connected",
+        "download": "Download stella desktop",
         "editNone": "Download stella desktop to edit this file",
         "editOutdated": "Update stella desktop to edit",
         "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.",
         "signCurrent": "Sign with stella desktop",
         "signNone": "Download stella desktop to sign this PDF",
         "signOutdated": "Update stella desktop to sign",
-        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop."
+        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.",
+        "update": "Update stella desktop"
       },
       "downloadAs": "Download as…",
       "downloadAsZip": "Download as ZIP",
@@ -6000,8 +6060,10 @@
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
       "ocrAlreadyProcessed": "Text recognition has already completed",
+      "ocrBatchHelp": "Queued documents are processed in the next OCR batch.",
       "ocrQueueFailed": "Couldn't queue text recognition",
-      "ocrQueued": "Text recognition queued for the next OCR batch",
+      "ocrQueued": "Text recognition queued",
+      "ocrQueuedForBatch": "Text recognition queued for the next OCR batch",
       "pdfSigning": {
         "alreadySigningTitle": "Signing is already in progress in stella desktop",
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.",
@@ -6058,6 +6120,7 @@
         "waitingDescription": "Choose a signing certificate in stella desktop to sign this PDF.",
         "waitingTitle": "Waiting for stella desktop"
       },
+      "queueForOcr": "Queue for OCR",
       "rateLimited": "Rate limited; resuming in {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "What to do with {fileName}",
@@ -6069,7 +6132,6 @@
       "removeMetadata": "Remove document metadata",
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
-      "runOcr": "Queue OCR",
       "scrubFailed": "This file's metadata could not be removed, so nothing was downloaded",
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
       "uploadedSuccessfully": "Files uploaded successfully",
@@ -6357,6 +6419,7 @@
       "addParty": "Add party",
       "changeClient": "Change client",
       "client": "Client",
+      "movedToClient": "Moved <bdi>{matterName}</bdi> to <bdi>{clientName}</bdi>",
       "noClient": "No client assigned",
       "noClientOptional": "No client (optional)",
       "noParties": "No parties added to this matter.",
@@ -6375,7 +6438,9 @@
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
       "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
+      "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
       "promotedSuccess": "Matter promoted",
+      "recentClients": "Recent clients",
       "removeClient": "Remove client",
       "removeParty": "Remove party",
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?",
@@ -6587,6 +6652,12 @@
     "referenceTaken": "This reference number is already in use",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Find a matter…",
+      "trigger": "Switch matter",
+      "viewAll": "View all matters",
+      "viewAllForClient": "View all matters for {clientName}"
     },
     "table": {
       "clearFlags": "Clear flags",

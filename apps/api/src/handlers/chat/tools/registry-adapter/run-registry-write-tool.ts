@@ -11,7 +11,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { AGENT_CALL_SURFACE, decideAgentCall } from "@/api/mcp/agent-access";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import {
@@ -42,8 +42,8 @@ import { structuredErrorResult } from "@/api/mcp/tool-utils";
 import {
   ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
   type AccountOperationCheck,
+  authorizeMcpToolContext,
   hasMcpToolAuthority,
-  hasMcpToolInputAuthority,
   isAccountAuthorizedForMcpTool,
 } from "@/api/mcp/write-tool-authority";
 
@@ -145,7 +145,7 @@ export type RegistryWriteToolOutputContract = AssertTrue<
 export type RunRegistryWriteToolProps = {
   toolName: RegistryWriteToolName;
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   refRegistry: ChatRefRegistry;
 };
 
@@ -241,21 +241,6 @@ export const runRegistryWriteTool = async (
     );
   }
 
-  // The chat approval step asked the person before this call ran; the
-  // decision still refuses what only a person may do.
-  const decision = decideAgentCall({
-    target: { type: "tool", name: toolName, access: staticDefinition.access },
-    context,
-    surface: AGENT_CALL_SURFACE.chat,
-    subject: toolName,
-    confirmed: false,
-  });
-  if (decision.type === "refuse") {
-    return Result.err(
-      toRegistryChatToolError(structuredErrorResult(decision.refusal).error),
-    );
-  }
-
   if (
     !isMcpDescriptorFeatureEnabled({
       context,
@@ -319,12 +304,35 @@ export const runRegistryWriteTool = async (
   }
 
   // The exact grant of the operation the normalized input selects.
-  if (!hasMcpToolInputAuthority(context, staticDefinition, normalized.value)) {
+  const authorization = authorizeMcpToolContext({
+    context,
+    dataAccess: context,
+    definition: staticDefinition,
+    input: normalized.value,
+    toolName,
+  });
+  if (!authorization.authorized) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
         message: `Your member role does not permit this ${toolName} operation.`,
       }),
+    );
+  }
+  const authorizedContext = authorization.context;
+
+  // The chat approval step asked the person before this call ran; the
+  // decision still refuses what only a person may do.
+  const decision = decideAgentCall({
+    target: { type: "tool", name: toolName, access: staticDefinition.access },
+    context: authorizedContext,
+    surface: AGENT_CALL_SURFACE.chat,
+    subject: toolName,
+    confirmed: false,
+  });
+  if (decision.type === "refuse") {
+    return Result.err(
+      toRegistryChatToolError(structuredErrorResult(decision.refusal).error),
     );
   }
 
@@ -340,7 +348,7 @@ export const runRegistryWriteTool = async (
             value: normalized.value,
           },
         ],
-        scopedDb: context.scopedDb,
+        scopedDb: authorizedContext.scopedDb,
       }),
   );
   if (visible.isErr()) {
@@ -364,7 +372,7 @@ export const runRegistryWriteTool = async (
 
   const needsMatter = matterRequiredResult({
     args: normalized.value,
-    context,
+    context: authorizedContext,
     // Chat carries no OAuth scopes, and save_matter is always projected.
     saveMatterCallable: WRITE_TOOL_REF_FIELD_MAP.save_matter.chatProjectable,
     toolName,
@@ -375,10 +383,10 @@ export const runRegistryWriteTool = async (
 
   const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
     args: normalized.value,
-    context,
+    context: authorizedContext,
   });
   const finished = await finalizeToolEgress({
-    context,
+    context: authorizedContext,
     mode: "default",
     response,
   });

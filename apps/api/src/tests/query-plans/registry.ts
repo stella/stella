@@ -30,6 +30,11 @@ import {
   getShardConditions,
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import {
+  citingDecisionConditions,
+  citingDecisionsPageQuery,
+  citingJurisdictionScope,
+} from "@/api/handlers/case-law/provisions/citing-decisions";
 import { LEGISLATION_DOCUMENT_TYPE_BUCKET_LIMIT } from "@/api/handlers/legislation/catalog-response";
 import {
   buildLegislationFacetsQuery,
@@ -59,6 +64,7 @@ import {
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { DOCUMENT_SCAN_ROW_BUDGET } from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { LIMITS } from "@/api/lib/limits";
+import { caseLawFreshnessPendingStatesQuery } from "@/api/lib/observability/case-law-freshness-metrics";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
 import {
@@ -487,6 +493,32 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.top-citing-decisions"],
   },
   {
+    // A provision's cited-by page: its whole subtree of link rows, one range
+    // of the byte-ordered anchor index, never a walk of the work's links.
+    id: "case-law.provision-citing-decisions",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      citingDecisionsPageQuery({
+        tx,
+        conditions:
+          citingDecisionConditions(
+            {
+              jurisdiction: QUERY_PLAN_SAMPLE.caseLaw.country,
+              work: "/eli/cz/sb/2024/1",
+              anchor: "section-1",
+            },
+            citingJurisdictionScope(QUERY_PLAN_SAMPLE.caseLaw.country) ??
+              panic("The query-plan country must be public"),
+          ) ?? panic("The query-plan request names one work key"),
+        cursor: null,
+        sort: undefined,
+        limit: citationPageSize,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.provision-citing-decisions"],
+  },
+  {
     id: "legislation.list",
     class: "page",
     role: "public-law-reader",
@@ -591,6 +623,20 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["corpus-index.projection-erasure-claim"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of one served generation's queue
+    // index, never a count over the table.
+    id: "case-law.freshness-pending-states",
+    class: "page",
+    role: "root",
+    build: () =>
+      caseLawFreshnessPendingStatesQuery({
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.freshness-pending-states"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

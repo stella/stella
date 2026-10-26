@@ -31,6 +31,7 @@ import {
   describeAgentAccess,
   describeForAgents,
 } from "@/api/mcp/agent-access";
+import { connectToolWeights } from "@/api/mcp/connect-tool-weights";
 import {
   MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ADVANCED_HTTP_PATH,
@@ -116,6 +117,16 @@ await Bun.write(snapshotPath, `${JSON.stringify(listings, null, 2)}\n`);
 process.stderr.write(
   `Wrote ${listings.length} tool listings to ${snapshotPath.pathname}\n`,
 );
+
+const connectWeightPath = new URL(
+  "../mcp-connect-tool-weights.json",
+  import.meta.url,
+);
+await Bun.write(
+  connectWeightPath,
+  `${JSON.stringify(connectToolWeights(listings), null, 2)}\n`,
+);
+process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
 
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
@@ -267,11 +278,3 @@ export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,
 );
 process.stderr.write(`Wrote ${mcpContractOutputPath.pathname}\n`);
-
-// The registry transitively pulls in `@/api/lib/sse.ts`, which opens a
-// Redis subscriber connection at import time (for cross-instance SSE
-// broadcast) and never unrefs it. That's correct for the long-running API
-// process but leaves this one-off script's event loop open indefinitely.
-// The export is done at this point, so exit explicitly instead of waiting
-// on a handle this script never needed.
-process.exit(0);

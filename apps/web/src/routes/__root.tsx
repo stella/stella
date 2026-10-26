@@ -11,6 +11,7 @@ import {
   redirect,
   Scripts,
   useNavigate,
+  useRouter,
   useRouterState,
 } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -32,6 +33,7 @@ import {
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import "@/fonts.css";
+import { readSidebarStateAttribute } from "@/components/sidebar/sidebar-state";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -47,6 +49,7 @@ import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
+import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
 
@@ -69,6 +72,19 @@ export const Route = createRootRouteWithContext<{
       panic("TanStack Router did not throw the handoff redirect.");
     }
     await requireFreshDocument({ queryClient: context.queryClient, location });
+    // Public SSR has no browser session. Caching its anonymous response would
+    // keep signed-in member actions hidden after hydration.
+    if (import.meta.env.SSR) {
+      return;
+    }
+    // Development fixtures supply their own auth providers without an API.
+    if (isDev && location.pathname === "/dev") {
+      return;
+    }
+    await requireProfessionalUseForSignedInRoute({
+      queryClient: context.queryClient,
+      location,
+    });
   },
   shellComponent: RootDocument,
   component: RootComponent,
@@ -109,20 +125,31 @@ function RootErrorComponent(props: ErrorComponentProps) {
 
 function RootComponent() {
   const navigate = useNavigate();
+  const router = useRouter();
   // Public documents reuse server route context during hydration. Re-enter
-  // the clean location so the client root guard handles a captured handoff.
+  // the browser guard after mounting so redirects stay in the router boundary.
   useMountEffect(() => {
     const href = pendingHandoffPath();
-    if (!href) {
+    if (href) {
+      detached(
+        navigate({
+          href,
+          replace: true,
+        }),
+        "mcp-handoff.route-entry",
+      );
       return;
     }
-    detached(
-      navigate({
-        href,
-        replace: true,
-      }),
-      "mcp-handoff.route-entry",
-    );
+    if (isPublicSsrPath(router.state.location.pathname)) {
+      detached(
+        navigate({
+          href: router.state.location.publicHref,
+          replace: true,
+          resetScroll: false,
+        }),
+        "professional-use.route-entry",
+      );
+    }
   });
   const appContext = Route.useRouteContext({
     select: (context) => ({
@@ -175,10 +202,13 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     // recovered hydration error. The server renders the document's own
     // language on pages that show one, and the interface locale otherwise;
     // data-lang-source tells prepaint-init.js to keep a document language.
+    // data-sidebar-state carries the sidebar's stored state from the server
+    // render to the browser (see components/sidebar/sidebar-state.ts).
     <html
       lang={lang}
       dir={dir}
       data-lang-source={langSource}
+      data-sidebar-state={readSidebarStateAttribute()}
       suppressHydrationWarning
     >
       <head>

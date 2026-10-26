@@ -35,9 +35,7 @@ type DownloadTabFileProps = {
 /**
  * A rendition the API builds from the stored bytes, as a Blob. Served by the
  * API rather than by a presigned storage URL because those bytes exist only
- * per request, and fetched directly rather than through the treaty client,
- * which text-decodes every non-JSON body except `application/octet-stream` and
- * would mangle the DOCX.
+ * per request, and fetched directly rather than through the API client.
  *
  * Preserves typed API refusals and transport errors for the notification owner.
  */

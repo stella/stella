@@ -1,8 +1,7 @@
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
 
@@ -22,35 +21,40 @@ import {
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { normalizeClauseBody } from "@/api/lib/clauses/types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 import type { ClauseMetadata } from "./metadata";
 import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
 
-const updateClauseBodySchema = t.Object({
-  title: t.Optional(tDefaultVarchar),
-  categoryId: t.Optional(t.Nullable(tSafeId("clauseCategory"))),
-  language: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
-  body: t.Optional(clauseBodySchema),
-  expectedBody: t.Optional(clauseExpectedBodySchema),
-  // When true, also append a `clause_versions` snapshot + bump
-  // `currentVersion`. Autosave omits it (head-only working-copy save);
-  // an explicit "Save as new version" / leave-with-changes sends `true`.
-  snapshotVersion: t.Optional(t.Boolean()),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  usageNotes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  metadata: t.Optional(t.Nullable(t.Record(t.String(), t.Unknown()))),
+const updateClauseBodySchema = v.object({
+  title: v.exactOptional(defaultVarcharSchema),
+  categoryId: v.exactOptional(v.nullable(resourceIdSchema("clauseCategory"))),
+  language: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(10)))),
+  body: v.exactOptional(clauseBodySchema),
+  expectedBody: v.exactOptional(clauseExpectedBodySchema),
+  snapshotVersion: v.exactOptional(v.boolean()),
+  description: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+  ),
+  usageNotes: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+  ),
+  metadata: v.exactOptional(v.nullable(v.record(v.string(), v.unknown()))),
 });
 
-const updateClauseParamsSchema = t.Object({
-  clauseId: tSafeId("clause"),
+const updateClauseParamsSchema = v.object({
+  clauseId: resourceIdSchema("clause"),
 });
 
-type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
+type UpdateClauseBody = v.InferOutput<typeof updateClauseBodySchema>;
 
 /**
  * Pure decision for whether an update should append a `clause_versions`
@@ -347,7 +351,13 @@ export const updateClauseHandler = async function* ({
       body.body ?? existing.body,
     );
     if (Result.isError(searchVectorResult)) {
-      captureError(searchVectorResult.error, { clauseId });
+      captureError(
+        searchVectorResult.error,
+        handlerErrorContext(
+          "clauses.updateClauseHandler.searchVectorResult_error",
+          { clauseId },
+        ),
+      );
     }
   }
 

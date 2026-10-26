@@ -72,6 +72,10 @@ describe("classification", () => {
       { name: "a nested lockfile", path: "apps/desktop/src-tauri/Cargo.lock" },
       { name: "a baseline", path: "apps/api/mcp-surface-baseline.json" },
       { name: "a changeset", path: ".changeset/new.md" },
+      {
+        name: "a job classification decision",
+        path: ".github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fci.yml%2Fcheck.json",
+      },
       { name: "hand-written regions", path: "DESIGN.md" },
       {
         name: "a generator autofix may not run",
@@ -727,6 +731,7 @@ describe("branch update", () => {
   const main = "2".repeat(40);
   const tree = "3".repeat(40);
   const commit = "4".repeat(40);
+  const blob = "5".repeat(40);
 
   const requests = () => {
     const directory = mkdtempSync(path.join(tmpdir(), "generated-push-"));
@@ -740,7 +745,10 @@ describe("branch update", () => {
     return directory;
   };
 
-  const github = (updateRefsErrors: unknown[] | null) => {
+  const github = (
+    updateRefsErrors: unknown[] | null,
+    blobStatuses: number[] = [],
+  ) => {
     const calls: { route: string; body: unknown }[] = [];
     const fetch = async (url: string, init: RequestInit) => {
       const route = url.replace("https://api.example", "");
@@ -750,6 +758,12 @@ describe("branch update", () => {
       calls.push({ route, body });
       const json = (value: unknown) =>
         new Response(JSON.stringify(value), { status: 200 });
+      if (route.endsWith("/git/blobs")) {
+        const status = blobStatuses.shift();
+        return status === undefined
+          ? json({ sha: blob })
+          : new Response("unavailable", { status });
+      }
       if (route.endsWith("/git/trees")) {
         return json({ sha: tree });
       }
@@ -828,5 +842,60 @@ describe("branch update", () => {
       rmSync(directory, { recursive: true, force: true });
     }
     expect(String(refusal)).toContain("GraphQL refused");
+  });
+
+  const withBlob = () => {
+    const directory = requests();
+    writeFileSync(
+      path.join(directory, "blobs", `${blob}.json`),
+      JSON.stringify({ content: "", encoding: "base64" }),
+    );
+    return directory;
+  };
+
+  test("a server error on an object write is repeated", async () => {
+    const { calls, fetch } = github(null, [500, 502]);
+    const directory = withBlob();
+    try {
+      expect(
+        await push({
+          requests: directory,
+          repository: "stella/stella",
+          branch: "feat/x",
+          token: "token",
+          api: "https://api.example",
+          fetch,
+          retryDelayMs: 0,
+        }),
+      ).toBe(commit);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+    expect(
+      calls.filter(({ route }) => route.endsWith("/git/blobs")),
+    ).toHaveLength(3);
+  });
+
+  test("a refused object write is not repeated", async () => {
+    const { calls, fetch } = github(null, [422]);
+    const directory = withBlob();
+    let refusal: unknown;
+    try {
+      await push({
+        requests: directory,
+        repository: "stella/stella",
+        branch: "feat/x",
+        token: "token",
+        api: "https://api.example",
+        fetch,
+        retryDelayMs: 0,
+      });
+    } catch (error) {
+      refusal = error;
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+    expect(String(refusal)).toContain("git/blobs answered 422");
+    expect(calls).toHaveLength(1);
   });
 });

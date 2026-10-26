@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, RefObject } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -20,9 +20,11 @@ import {
   parseDocumentAst,
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { outlineEntryText, OutlineRail } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -33,6 +35,11 @@ import {
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+  LegalReaderControls,
+} from "@/components/legal-reader/legal-reader-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
@@ -40,6 +47,9 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
+import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
 import { PendingStatuteChanges } from "@/features/statutes/components/pending-statute-changes";
 import {
@@ -209,8 +219,16 @@ export const PublicStatuteViewer = ({
   const navigate = useNavigate();
   const asOfLabelId = useId();
   const routeHash = useRouterState({ select: (state) => state.location.hash });
-  const readerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const {
+    readerRef: contentRef,
+    element: contentElement,
+    attach: attachContent,
+  } = useReaderElement<HTMLDivElement>();
+  const {
+    readerRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
   const panelRef = useRef<HTMLElement>(null);
   const header = statute ?? work;
   useRecordStatuteOpen({ eli: work.eli, title: header.title });
@@ -272,48 +290,39 @@ export const PublicStatuteViewer = ({
 
   // A comparison is a view of the text on screen, not another address: it
   // lives in the search params, beside the path that names the text.
-  const navigateComparison = useCallback(
-    (next: StatuteCompareSearch) => {
-      detached(
-        navigate({
-          search: (previous) => ({
-            ...previous,
-            compare: next.compare,
-            provision: next.provision,
-            show: next.show,
-          }),
-          to: ".",
+  const navigateComparison = (next: StatuteCompareSearch) => {
+    detached(
+      navigate({
+        search: (previous) => ({
+          ...previous,
+          compare: next.compare,
+          provision: next.provision,
+          show: next.show,
         }),
-        "statutes.reader-compare",
-      );
-    },
-    [navigate],
-  );
+        to: ".",
+      }),
+      "statutes.reader-compare",
+    );
+  };
 
-  const handleCompare = useCallback(
-    (versionValidFrom: string) => {
-      navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
-    },
-    [navigateComparison],
-  );
+  const handleCompare = (versionValidFrom: string) => {
+    navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
+  };
 
-  const handleAsOfChange = useCallback(
-    (value: string | null) => {
-      // A day is a lookup, not an address: it is asked on the act's own page
-      // and the loader forwards to the consolidation that applied.
-      goTo(
-        createStatuteRouteParams({
-          country: header.country,
-          documentId: work.id,
-          eli: work.eli,
-          slug: work.slug,
-          version: null,
-        }),
-        value === null || value === "" ? undefined : value,
-      );
-    },
-    [goTo, header.country, work.eli, work.id, work.slug],
-  );
+  const handleAsOfChange = (value: string | null) => {
+    // A day is a lookup, not an address: it is asked on the act's own page
+    // and the loader forwards to the consolidation that applied.
+    goTo(
+      createStatuteRouteParams({
+        country: header.country,
+        documentId: work.id,
+        eli: work.eli,
+        slug: work.slug,
+        version: null,
+      }),
+      value === null || value === "" ? undefined : value,
+    );
+  };
 
   // The query and its selection move together: typing puts the selection
   // back on the best match, which is what Enter is expected to go to.
@@ -329,6 +338,7 @@ export const PublicStatuteViewer = ({
     statuteTitle: header.title,
   });
   const blocks = preparedReader.blocks;
+  const textScale = useReaderTextScale("statute");
   const outline = statuteOutlineFromHeadings(blocks);
   const outlineMatches = rankOutlineMatches(outline, jump.query);
   // Clamped where it is read, not where it is set: the list changes under the
@@ -346,40 +356,12 @@ export const PublicStatuteViewer = ({
     ? outlineMatchItems(outlineMatches)
     : outline;
 
-  // A jump named in the URL is honoured once, when the reader mounts with
-  // the text already loaded; after that the field is the reader's own. Only a
-  // designation the act actually holds moves the reader: a URL naming
-  // something else leaves the page where it opened.
-  useMountEffect(() => {
-    const container = readerRef.current;
-
-    if (
-      requestedJump === undefined ||
-      outlineMatches.exactId === null ||
-      container === null
-    ) {
-      return;
-    }
-
-    jumpToAnchor(outlineMatches.exactId, container);
-  });
-
-  // Citation extractors state the local provision id (`cl_7`), while a
-  // publisher may namespace it under a structural container
-  // (`prilohy-cl_7`). Resolve that unambiguous suffix once the AST is present.
-  useMountEffect(() => {
-    const container = readerRef.current;
-    const requestedAnchorId = routeHash.startsWith("#")
-      ? routeHash.slice(1)
-      : routeHash;
-    if (container === null || requestedAnchorId === "") {
-      return;
-    }
-    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
-    if (resolved === null || resolved.anchorId === requestedAnchorId) {
-      return;
-    }
-    jumpToAnchor(resolved.anchorId, container);
+  useStatuteRouteLanding({
+    blocks,
+    exactJumpId: outlineMatches.exactId,
+    readerRef,
+    requestedJump,
+    routeHash,
   });
 
   const sourceHref = statute
@@ -395,35 +377,38 @@ export const PublicStatuteViewer = ({
       ? null
       : { type: "statute", documentId: statute.id, title: statute.title };
 
-  const readerBody = (
-    <div className="reader-scroll h-full overflow-y-auto" ref={readerRef}>
-      <div
-        className="flex flex-col gap-4 py-6"
-        data-slot="reader-document-column"
-        ref={contentRef}
-      >
-        {statute === null ? (
-          <NoVersionOnDay windowGap={windowGap} />
-        ) : (
-          <>
-            <StatuteIneligibleVersionNotice version={statute} />
-            <PendingStatuteChanges changes={statute.pendingChanges} />
-            <StatuteReaderBody
-              blocks={blocks}
-              masthead={preparedReader.masthead}
-              scrollContainerRef={readerRef}
-              statute={statute}
-              versionCount={versions.length}
-            />
-          </>
-        )}
-      </div>
-    </div>
-  );
-
   const readerWithChat = (
     <StatuteReaderChat activeLegal={activeLegal} signedIn={user !== null}>
-      {readerBody}
+      <div
+        className="reader-scroll h-full overflow-y-auto"
+        ref={attachViewport}
+        {...textScale.rootProps}
+      >
+        <div
+          className={cn(
+            "flex flex-col gap-4 pb-6",
+            LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+          )}
+          data-slot="reader-document-column"
+          ref={attachContent}
+        >
+          {statute === null ? (
+            <NoVersionOnDay windowGap={windowGap} />
+          ) : (
+            <>
+              <StatuteIneligibleVersionNotice version={statute} />
+              <PendingStatuteChanges changes={statute.pendingChanges} />
+              <StatuteReaderBody
+                blocks={blocks}
+                masthead={preparedReader.masthead}
+                scrollContainerRef={readerRef}
+                statute={statute}
+                versionCount={versions.length}
+              />
+            </>
+          )}
+        </div>
+      </div>
     </StatuteReaderChat>
   );
 
@@ -473,9 +458,15 @@ export const PublicStatuteViewer = ({
       ) : (
         <>
           <InspectorFindBar find={find} />
-          <div className="relative min-h-0 flex-1">
+          <div
+            className={cn(
+              LEGAL_READER_LAYOUT_CLASS_NAME,
+              "relative min-h-0 flex-1",
+            )}
+          >
             {/* The rail hides itself when a document has no outline to show. */}
             <OutlineRail
+              topOffset={READER_BREADCRUMB_CLEARANCE}
               ariaLabel={t("statutes.outline")}
               // While the field has a query, the panel points at the selected match
               // rather than at the scroll position, and the ranked list it shows is
@@ -542,9 +533,68 @@ export const PublicStatuteViewer = ({
           conversation. A page with no version in force has no document to
           bind, so it keeps its text alone. */}
             {readerWithChat}
+            {statute !== null && (
+              <LegalReaderControls
+                textScale={textScale}
+                blocks={blocks}
+                content={contentElement}
+                viewport={viewportElement}
+                key={statute.id}
+              />
+            )}
           </div>
         </>
       )}
     </main>
   );
 };
+
+type StatuteRouteLandingOptions = {
+  blocks: readonly Block[];
+  exactJumpId: string | null;
+  readerRef: RefObject<HTMLElement | null>;
+  requestedJump: string | undefined;
+  routeHash: string;
+};
+
+function useStatuteRouteLanding({
+  blocks,
+  exactJumpId,
+  readerRef,
+  requestedJump,
+  routeHash,
+}: StatuteRouteLandingOptions) {
+  // A jump named in the URL is honoured once, when the reader mounts with
+  // the text already loaded; after that the field is the reader's own.
+  useMountEffect(() => {
+    const container = readerRef.current;
+
+    if (
+      requestedJump === undefined ||
+      exactJumpId === null ||
+      container === null
+    ) {
+      return;
+    }
+
+    jumpToAnchor(exactJumpId, container);
+  });
+
+  // Citation extractors state the local provision id (`cl_7`), while a
+  // publisher may namespace it under a structural container
+  // (`prilohy-cl_7`). Resolve that unambiguous suffix once the AST is present.
+  useMountEffect(() => {
+    const container = readerRef.current;
+    const requestedAnchorId = routeHash.startsWith("#")
+      ? routeHash.slice(1)
+      : routeHash;
+    if (container === null || requestedAnchorId === "") {
+      return;
+    }
+    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
+    if (resolved === null || resolved.anchorId === requestedAnchorId) {
+      return;
+    }
+    jumpToAnchor(resolved.anchorId, container);
+  });
+}

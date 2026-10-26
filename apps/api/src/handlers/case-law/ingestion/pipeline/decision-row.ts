@@ -16,6 +16,7 @@ import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeli
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
+  recordParsedGenerationTx,
   writeDecisionJudges,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
@@ -53,6 +54,7 @@ const insertedRowValues = (
     persistedDecisionDate,
     observedAt,
     observationOrder,
+    sourceFingerprintVersion,
     shape: { storesUnpublishedWithoutDocument },
     plan: { docketColumns, languageGroupKey, payloadColumns, preparedMetadata },
     rawArtifact: { sourceRawS3Key, sourceRawContentType },
@@ -84,6 +86,7 @@ const insertedRowValues = (
   sourceRawS3Key,
   sourceRawContentType,
   sourceHash: result.rawHash,
+  sourceHashVersion: sourceFingerprintVersion,
   sourceObservedAt: observedAt,
   sourceObservationOrder: observationOrder,
   sourceObservationHash: result.rawHash,
@@ -193,6 +196,7 @@ const finishInsertedRowTx = async (
     ...(write.signal === undefined ? {} : { signal: write.signal }),
   });
   await reconcileStableProjection(tx, write, insertedId, projectionLock);
+  await recordParsedGenerationTx(tx, { write, phase: "row" });
   return DECISION_ROW_WRITE_STATUS.APPLIED;
 };
 
@@ -215,6 +219,7 @@ const writeDecisionRow = async (
       composedSupplements,
       shape: { preservesExistingDetail },
       plan: { payloadColumns, storedPayloadUnchanged },
+      inputProvenance,
     } = write;
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
@@ -271,7 +276,8 @@ const writeDecisionRow = async (
         // payload fence: another write replaced what the plan compared
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
-          payloadFenced: storedPayloadUnchanged,
+          payloadFenced:
+            storedPayloadUnchanged || inputProvenance.type === "stored",
         });
       }
 
@@ -337,6 +343,11 @@ const writeDecisionRow = async (
         replacedState,
         projectionLock,
       );
+    }
+
+    if (inputProvenance.type === "stored") {
+      // A reparse must never recreate a removed decision under a new identity.
+      return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
     }
 
     if (slugLadder === undefined) {

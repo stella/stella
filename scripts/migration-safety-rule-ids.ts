@@ -3,6 +3,12 @@
 // diffs it against the merge base to tell whether a change introduces a rule,
 // so the file must stay import-free: it is evaluated standalone from git.
 export const MIGRATION_SAFETY_RULE_IDS = [
+  "pre-deploy-concurrent-index",
+  "pre-deploy-validate-constraint",
+  "pre-deploy-update",
+  "pre-deploy-row-copy",
+  "pre-deploy-dynamic-sql",
+  "pre-deploy-row-loop",
   "drop-object",
   "drop-column",
   "drop-column-identity",

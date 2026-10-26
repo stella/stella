@@ -1,11 +1,19 @@
 import { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import Elysia from "elysia";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATEMENT_VERSION,
   PROFESSIONAL_USE_TERMS_VERSION,
@@ -14,6 +22,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { user } from "@/api/db/auth-schema";
 import {
   auditLogs,
   organizationProfessionalUseAcceptances,
@@ -24,8 +33,12 @@ import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { meRoute } from "@/api/handlers/me/routes";
 import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
-import { authMacro, createAuth, getAuth } from "@/api/lib/auth";
-import { acceptAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { createAuth, getAuth } from "@/api/lib/auth";
+import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -38,6 +51,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -302,7 +316,175 @@ const acceptanceAuditEvents = async (organizationId: string) =>
       ),
     );
 
+const acceptanceProvenanceCases = {
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive]: {
+    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+    performerType: "user",
+    triggerType: "direct",
+    triggerSource: null,
+  },
+  [PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning]: {
+    source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning,
+    performerType: "service",
+    triggerType: "system",
+    triggerSource: "review-account",
+  },
+} as const satisfies Record<
+  Parameters<typeof recordAccountProfessionalUse>[0]["source"],
+  Pick<
+    typeof auditLogs.$inferSelect,
+    "performerType" | "triggerType" | "triggerSource"
+  > & { source: Parameters<typeof recordAccountProfessionalUse>[0]["source"] }
+>;
+
 describe("professional-use acceptance", () => {
+  test("a Google registration started by the web sign-in panel records acceptance from OAuth state", async () => {
+    testState.patchConfig({
+      GOOGLE_AUTH_CLIENT_ID: "professional-use-google-client",
+      GOOGLE_AUTH_CLIENT_SECRET: "professional-use-google-secret",
+    });
+    const auth = createAuth();
+    const email = `professional-use-google-${Bun.randomUUIDv7()}@stella.dev`;
+    const origin = "http://localhost:3001";
+    const started = await auth.handler(
+      new Request(`${origin}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          provider: "google",
+          callbackURL: "/law/cze/cases/ns/fixture",
+          additionalData: {
+            [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+              PROFESSIONAL_USE_STATEMENT_VERSION,
+          },
+        }),
+      }),
+    );
+    expect(started.status).toBe(200);
+    const { url } = v.parse(
+      v.object({ url: v.string() }),
+      await started.json(),
+    );
+    const state = new URL(url).searchParams.get("state");
+    expect(state).not.toBeNull();
+    const cookie = started.headers
+      .getSetCookie()
+      .map((value) => value.split(";").at(0) ?? "")
+      .join("; ");
+    const encodeJwtPart = (value: object) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const idToken = [
+      encodeJwtPart({ alg: "RS256", typ: "JWT" }),
+      encodeJwtPart({
+        aud: "professional-use-google-client",
+        email,
+        email_verified: true,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iss: "https://accounts.google.com",
+        name: "Professional use reader",
+        sub: `professional-use-google-${Bun.randomUUIDv7()}`,
+      }),
+      "fixture-signature",
+    ].join(".");
+    const providerFetch = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (input: string | URL | Request) => {
+          const requestUrl =
+            input instanceof Request ? input.url : String(input);
+          if (requestUrl.includes("oauth2.googleapis.com/token")) {
+            return Response.json({
+              access_token: "professional-use-access-token",
+              token_type: "Bearer",
+              expires_in: 3600,
+              id_token: idToken,
+            });
+          }
+          return new Response("Unexpected provider request", { status: 500 });
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    try {
+      const callback = await auth.handler(
+        new Request(
+          `${origin}/api/auth/callback/google?code=fixture&state=${encodeURIComponent(state ?? "")}`,
+          { headers: { cookie } },
+        ),
+      );
+      expect(callback.status).toBe(302);
+    } finally {
+      providerFetch.mockRestore();
+    }
+    const createdUser = await testDb
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1)
+      .then((rows) => rows.at(0));
+    expect(createdUser).toBeDefined();
+    if (createdUser === undefined) {
+      return;
+    }
+    expect(await userAcceptances([createdUser.id])).toMatchObject([
+      CURRENT_VERSIONS,
+    ]);
+  });
+
+  test.each(Object.values(acceptanceProvenanceCases))(
+    "$source acceptance preserves its account source and audit performer on replay",
+    async ({ source, ...execution }) => {
+      const person = await signInHuman(
+        `professional-use-origin-${Bun.randomUUIDv7()}@stella.dev`,
+      );
+      const userId = brandPersistedUserId(person.userId);
+      await testDb
+        .delete(userProfessionalUseAcceptances)
+        .where(eq(userProfessionalUseAcceptances.userId, userId));
+      const organization = await createOrganizationFor(person);
+      const organizationId = brandPersistedOrganizationId(organization.id);
+      expect(await organizationAcceptances([organizationId])).toEqual([]);
+
+      expect(
+        (await recordAccountProfessionalUse({ userId, source })).isOk(),
+      ).toBe(true);
+      const accepted = await userAcceptances([userId]);
+      expect(accepted).toMatchObject([{ source, ...CURRENT_VERSIONS }]);
+      const readExecution = async () =>
+        await testDb
+          .select({
+            performerType: auditLogs.performerType,
+            performerId: auditLogs.performerId,
+            triggerType: auditLogs.triggerType,
+            triggerSource: auditLogs.triggerSource,
+          })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.organizationId, organizationId),
+              sql`${auditLogs.metadata}->>'field' = 'professionalUseAcceptance'`,
+            ),
+          );
+      const events = await readExecution();
+      expect(events).toEqual([
+        {
+          ...execution,
+          performerId:
+            execution.performerType === "user" ? userId : "review-account",
+        },
+      ]);
+
+      for (const next of Object.values(acceptanceProvenanceCases)) {
+        expect(
+          (
+            await recordAccountProfessionalUse({ userId, source: next.source })
+          ).isOk(),
+        ).toBe(true);
+        expect(await userAcceptances([userId])).toEqual(accepted);
+        expect(await readExecution()).toEqual(events);
+      }
+    },
+  );
+
   test("every account and organization created through interactive registration has exactly one acceptance with the current versions", async () => {
     await assertProperty(
       "every account and organization created through interactive registration has exactly one acceptance with the current versions",
@@ -437,32 +619,43 @@ describe("professional-use acceptance", () => {
       headers: person.headers(),
     });
 
-  const signedInProduct = new Elysia()
-    .use(authMacro)
-    .get("/product", () => ({ served: true }), { validateAuth: true });
+  // A member route stands for any signed-in product route.
+  const server = serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: [
+        ...routes({
+          "/product": {
+            GET: defineEndpoint.member({}, () => ({ served: true })),
+          },
+        }),
+        ...meRoute,
+        ...publicKnowledgeRoute,
+      ],
+    }),
+  );
+  afterAll(async () => {
+    await server.stop();
+  });
 
   const readProduct = async (person: HumanBrowser) =>
-    await signedInProduct.handle(
-      new Request("http://localhost/product", { headers: person.headers() }),
-    );
+    await server.fetch("http://localhost/product", {
+      headers: person.headers(),
+    });
 
   const readOwnState = async (person: HumanBrowser) =>
-    await meRoute.handle(
-      new Request("http://localhost/me/professional-use", {
-        headers: person.headers(),
-      }),
-    );
+    await server.fetch("http://localhost/me/professional-use", {
+      headers: person.headers(),
+    });
 
   const accept = async (person: HumanBrowser, statementVersion: string) => {
     const headers = person.headers();
     headers.set("content-type", "application/json");
-    return await meRoute.handle(
-      new Request("http://localhost/me/professional-use", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ statementVersion }),
-      }),
-    );
+    return await server.fetch("http://localhost/me/professional-use", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ statementVersion }),
+    });
   };
 
   test("acceptance reads and writes the authenticated account without changing another account", async () => {
@@ -676,12 +869,10 @@ describe("professional-use acceptance", () => {
       "/public/knowledge/template-packs",
       "/public/knowledge/playbook-starters",
     ]) {
-      const anonymous = await publicKnowledgeRoute.handle(
-        new Request(`http://localhost${path}`),
-      );
-      const signedIn = await publicKnowledgeRoute.handle(
-        new Request(`http://localhost${path}`, { headers: person.headers() }),
-      );
+      const anonymous = await server.fetch(`http://localhost${path}`);
+      const signedIn = await server.fetch(`http://localhost${path}`, {
+        headers: person.headers(),
+      });
       expect(anonymous.status).toBe(200);
       expect(signedIn.status).toBe(200);
       expect(await signedIn.text()).toBe(await anonymous.text());
@@ -718,7 +909,10 @@ describe("professional-use acceptance", () => {
     expect(await organizationAcceptances([organizationId])).toEqual([]);
     expect(await acceptanceAuditEvents(organizationId)).toEqual([]);
 
-    const accepted = await acceptAccountProfessionalUse(userId);
+    const accepted = await recordAccountProfessionalUse({
+      userId,
+      source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+    });
     expect(Result.isOk(accepted)).toBe(true);
 
     expect(await organizationAcceptances([organizationId])).toMatchObject([

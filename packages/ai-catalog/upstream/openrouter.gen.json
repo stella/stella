@@ -475,6 +475,12 @@
       }
     },
     {
+      "id": "moonshotai/kimi-k3.1-pro",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "moonshotai/kimi-k3:batch",
       "reasoning": {
         "default_effort": "max"

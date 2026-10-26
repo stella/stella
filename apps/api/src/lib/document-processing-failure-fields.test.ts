@@ -32,6 +32,7 @@ const errorFor = (termination: ExtractionWorkerTermination | null) =>
     mimeType: "application/pdf",
     sizeBytes: 12_345,
     termination,
+    workerErrorClass: termination === null ? "PdfParseError" : null,
   });
 
 /**

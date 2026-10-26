@@ -23,6 +23,7 @@ export const CLI_KNOWN_SCOPES = [
   "stella:matters_write",
   "stella:contacts_write",
   "stella:chat",
+  "stella:memory_write",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",
@@ -41,6 +42,7 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:matters_write",
   "stella:contacts_write",
   "stella:chat",
+  "stella:memory_write",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",
@@ -55,6 +57,7 @@ export const MCP_ERROR_CODES = [
   "action_concurrency_busy",
   "action_not_enabled",
   "action_admission_unavailable",
+  "action_feature_disabled",
   "verification_active_limit_reached",
   "verification_daily_limit_reached",
   "validation_error",
@@ -106,6 +109,12 @@ export const ACTION_ADMISSION_REFUSALS = {
     hint: "Wait for the service to recover, then retry this call.",
     retryable: true,
   },
+  action_feature_disabled: {
+    status: 503,
+    message: "This feature is temporarily turned off.",
+    hint: "Do not retry this call until the feature is turned back on.",
+    retryable: false,
+  },
 } as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = [
@@ -114,6 +123,7 @@ export const MCP_CLI_TOOL_SCOPES = [
   "contacts_write",
   "matters_write",
   "chat",
+  "memory_write",
   "documents_write",
   "knowledge_write",
   "search",

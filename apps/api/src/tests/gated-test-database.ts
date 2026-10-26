@@ -18,8 +18,13 @@ import type { Logger } from "drizzle-orm";
 import { databaseRelations } from "@/api/db/database-relations";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { forceClosePool } from "@/api/db/sql-close";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
+import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 
-const openDatabase = (client: SQL, logger?: Logger) =>
+const openDatabase = (client: SQL, logger: Logger = queryCountLogger) =>
   createDatabase({ client, relations: databaseRelations, logger });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
@@ -47,7 +52,9 @@ export const openGatedTestDatabase = (
   databaseUrl: string,
   { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
 ): GatedTestDatabase => {
-  const client = createSqlClient({ url: databaseUrl, max });
+  const client = instrumentSqlTransactionCounts(
+    runTransactionsInCallerContext(createSqlClient({ url: databaseUrl, max })),
+  );
   const cleanupSteps: CleanupStep[] = [];
 
   afterAll(async () => {
@@ -120,12 +127,16 @@ export const withGatedTestClients = async <T>(
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = createSqlClient({
-      url: clientDatabaseUrl,
-      max,
-      idleTimeout,
-      connection,
-    });
+    const client = instrumentSqlTransactionCounts(
+      runTransactionsInCallerContext(
+        createSqlClient({
+          url: clientDatabaseUrl,
+          max,
+          idleTimeout,
+          connection,
+        }),
+      ),
+    );
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };
