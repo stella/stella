@@ -22,8 +22,10 @@ import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
+  POSTGRES_MAX_SHARDS,
+  POSTGRES_MIN_SHARDS,
   POSTGRES_SHARD_TEST_BUDGET_SECONDS,
-  POSTGRES_TEST_SHARD_IDS,
+  postgresShardMatrix,
 } from "../apps/api/scripts/postgres-test-shards";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { type: "json" };
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
@@ -4769,32 +4771,152 @@ test("every parallel quality and guard leg fails closed at full depth", () => {
   }
 });
 
-test("Postgres service shards bind every matrix leg to a distinct runner partition", () => {
+test("Postgres service shards take their matrix and n from the plan", () => {
   const job = v.parse(
     v.object({
       "timeout-minutes": v.number(),
       strategy: v.object({
         "fail-fast": v.boolean(),
-        matrix: v.object({ shard: v.array(v.number()) }),
+        matrix: v.strictObject({ shard: v.string() }),
       }),
     }),
     ciJobs["postgres-service-suites"],
   );
-  const shards = job.strategy.matrix.shard;
-  expect(shards.length).toBeGreaterThanOrEqual(2);
-  expect(shards.length).toBeLessThanOrEqual(3);
-  expect(shards).toEqual([...POSTGRES_TEST_SHARD_IDS]);
+  expect(job.strategy.matrix.shard).toBe(
+    `\${{ fromJSON(needs.ci-plan.outputs.postgres_shards) }}`,
+  );
   expect(POSTGRES_SHARD_TEST_BUDGET_SECONDS).toBeLessThanOrEqual(
     job["timeout-minutes"] * 60 * 0.7,
   );
   expect(job.strategy["fail-fast"]).toBe(false);
   expect(job["timeout-minutes"]).toBe(15);
-  const runner = jobSteps(ciJobs["postgres-service-suites"]).find(
+  const steps = jobSteps(ciJobs["postgres-service-suites"]);
+  const runner = steps.find(
     (step) => step.name === "Run Postgres-gated API suites",
   );
-  expect(runner?.env?.["CI_POSTGRES_TEST_SHARD"]).toBe(
-    `\${{ matrix.shard }}/${shards.length}`,
+  // Each leg's `i/n` is the selector itself: no constant count to drift.
+  expect(runner?.env?.["CI_POSTGRES_TEST_SHARD"]).toBe(`\${{ matrix.shard }}`);
+  // Artifact names cannot hold the `/` of a matrix value.
+  const jobText = JSON.stringify(ciJobs["postgres-service-suites"]);
+  expect(jobText).toContain(`postgres-test-timings-\${{ strategy.job-index }}`);
+  expect(jobText).not.toMatch(/-\$\{\{ matrix\.shard \}\}/u);
+
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
   );
+  const maxShardMatrix = JSON.stringify(
+    postgresShardMatrix(POSTGRES_MAX_SHARDS),
+  );
+  const maxShardMatrixOutput = `\${{ steps.postgres-shards.outputs.postgres_shards || '${maxShardMatrix}' }}`;
+  const maxShardCountOutput = `\${{ steps.postgres-shards.outputs.postgres_shard_count || '${POSTGRES_MAX_SHARDS}' }}`;
+  expect(plan.outputs["postgres_shards"]).toBe(maxShardMatrixOutput);
+  expect(plan.outputs["postgres_shard_count"]).toBe(maxShardCountOutput);
+  const planSteps = jobSteps(ciJobs["ci-plan"]);
+  const planner = planSteps.find(
+    (step) => step.name === "Plan Postgres test shards",
+  );
+  const stepIndex = (name: string) =>
+    planSteps.findIndex((step) => step.name === name);
+  // The planner reads the durations the shards verify by hash.
+  expect(stepIndex("Plan Postgres test shards")).toBeGreaterThan(
+    stepIndex("Resolve Postgres test durations"),
+  );
+  expect(planner?.run).toContain("bun scripts/ci-postgres-shard-plan.ts");
+  expect(planner?.run).toContain(
+    "if ! timeout --kill-after=10s 120s bun scripts/ci-postgres-shard-plan.ts",
+  );
+  expect(planner?.env?.["PLANNER_DEPS"]).toBeUndefined();
+  // Without the planner the maximum stands in: time never fails a run.
+  expect(planner?.run).toContain(
+    `echo 'postgres_shards=${JSON.stringify(postgresShardMatrix(POSTGRES_MAX_SHARDS))}'`,
+  );
+  expect(planner?.run).toContain(
+    `echo 'postgres_shard_count=${POSTGRES_MAX_SHARDS}'`,
+  );
+  expect(planner?.run).not.toMatch(/exit 1/u);
+});
+
+test("every run of the Postgres service shards follows its planner step", () => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const axes = {
+    "github.event_name": [
+      EVENT.pullRequest,
+      EVENT.mergeGroup,
+      EVENT.workflowDispatch,
+      "push",
+      "schedule",
+    ],
+    "inputs.pr_depth_only": [false, true],
+    "vars.CI_POSTGRES_PR_SELECTION": ["on", ""],
+    "steps.check.outputs.trusted": ["true", "false"],
+    "steps.completed-depth.outputs.run_required": ["true", "false"],
+    "steps.depth.outputs.suite_depth": [SUITE_DEPTH.fast, SUITE_DEPTH.full],
+    "steps.changed-files.outputs.postgres_suites_required": ["true", "false"],
+    "steps.changed-files.outputs.service_suites_pr_required": ["true", "false"],
+  } as const;
+  let combinations: Record<string, string | boolean>[] = [{}];
+  for (const [axis, values] of Object.entries(axes)) {
+    combinations = combinations.flatMap((row) =>
+      values.map((value) => ({ ...row, [axis]: value })),
+    );
+  }
+  let runs = 0;
+  for (const row of combinations) {
+    const context = contextWithPlanOutputs({
+      outputs,
+      context: {
+        values: {
+          ...row,
+          "steps.changed-files.outputs.package_checks_required": "true",
+          "steps.changed-files.outputs.collab_redis_required": "false",
+          "inputs.heavy_only": false,
+          "needs.ci-plan.result": "success",
+          "needs.pr-heavy-gate.result": "success",
+        },
+        status: { cancelled: false },
+        fallback: (path) => (path.startsWith("steps.") ? "" : undefined),
+      },
+    });
+    const job = evaluateExpression(
+      jobIf(ciJobs["postgres-service-suites"]),
+      context,
+    );
+    expect(job === UNKNOWN, JSON.stringify(row)).toBe(false);
+    if (job !== true) {
+      continue;
+    }
+    runs++;
+    const matrixOutput = evaluateExpression(
+      outputs["postgres_shards"] ?? panic("Missing postgres_shards output"),
+      context,
+    );
+    if (typeof matrixOutput !== "string") {
+      panic("Postgres service shards received no matrix output");
+    }
+    const matrix = v.parse(v.array(v.string()), JSON.parse(matrixOutput));
+    expect(matrix.length, JSON.stringify(row)).toBeGreaterThanOrEqual(
+      POSTGRES_MIN_SHARDS,
+    );
+    expect(matrix.length, JSON.stringify(row)).toBeLessThanOrEqual(
+      POSTGRES_MAX_SHARDS,
+    );
+    expect(matrix, JSON.stringify(row)).toEqual(
+      postgresShardMatrix(matrix.length),
+    );
+    expect(
+      evaluateExpression(
+        outputs["postgres_shard_count"] ??
+          panic("Missing postgres_shard_count output"),
+        context,
+      ),
+      JSON.stringify(row),
+    ).toBe(String(matrix.length));
+  }
+  expect(runs).toBeGreaterThan(0);
 });
 
 test("split service suites preserve their scopes and independent verdicts", () => {

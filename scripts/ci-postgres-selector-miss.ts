@@ -4,9 +4,12 @@ import path from "node:path";
 import * as v from "valibot";
 
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
-import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
 import { planPostgresTests } from "./ci-postgres-test-plan";
 import { parseJunit } from "./fix-tests-on-base";
+import {
+  POSTGRES_MAX_SHARDS,
+  POSTGRES_MIN_SHARDS,
+} from "./test-shard-planning";
 
 const normalizeFailedFile = (file: string | undefined): string => {
   if (file === undefined || file === "") {
@@ -127,39 +130,71 @@ const fullRunJobsSchema = v.object({
 });
 
 type PostgresRunJobs = v.InferOutput<typeof fullRunJobsSchema>["jobs"];
+type PostgresShardJob = {
+  job: PostgresRunJobs[number];
+  index: number;
+  count: number;
+};
 
-const POSTGRES_SHARD_JOB = /(?:^| \/ )postgres-service-suites \((\d+)\)$/u;
+const POSTGRES_SHARD_JOB =
+  /(?:^| \/ )postgres-service-suites \(([1-9]\d*)\/([1-9]\d*)\)$/u;
+const POSTGRES_SHARD_JOB_NAME = /(?:^| \/ )postgres-service-suites(?:$| \()/u;
 
-// A run certifies coverage only when its shard jobs are exactly 1..n for
-// today's shard count n, and every one of them succeeded. Accepting several
-// counts would let an n-shard run that lacks its last shard pass as a
-// smaller topology, so a run from before a shard-count change never
-// certifies; the next full run on main restores the baseline.
+// Each shard job is named `(i/n)` with the n its run's planner emitted. A
+// run certifies coverage only when its shard jobs agree on one n, are
+// exactly 1..n, and every one of them succeeded: a run lacking any shard,
+// or mixing counts, never passes as a smaller topology.
 export const hasSuccessfulPostgresShards = (jobs: PostgresRunJobs): boolean => {
-  const shards = new Set(
-    jobs.flatMap((job) => {
-      const shard = POSTGRES_SHARD_JOB.exec(job.name)?.at(1);
-      return shard === undefined ? [] : [Number(shard)];
-    }),
+  const postgresJobs = jobs.filter(({ name }) =>
+    POSTGRES_SHARD_JOB_NAME.test(name),
   );
-  const count = POSTGRES_TEST_SHARD_IDS.length;
-  return (
-    Math.max(0, ...shards) === count &&
-    shards.size === count &&
-    Array.from({ length: count }, (_, index) => index + 1).every(
-      (shard) =>
-        shards.has(shard) &&
-        jobs.some(
-          (job) =>
-            POSTGRES_SHARD_JOB.exec(job.name)?.at(1) === String(shard) &&
-            job.conclusion === "success" &&
-            job.steps.some(
-              (step) =>
-                step.name === "Run Postgres-gated API suites" &&
-                step.conclusion === "success",
-            ),
-        ),
-    )
+  if (postgresJobs.length === 0) {
+    return false;
+  }
+  const shardJobs: PostgresShardJob[] = [];
+  for (const job of postgresJobs) {
+    const match = POSTGRES_SHARD_JOB.exec(job.name);
+    if (match === null) {
+      return false;
+    }
+    shardJobs.push({
+      job,
+      index: Number(match[1]),
+      count: Number(match[2]),
+    });
+  }
+  const counts = new Set(shardJobs.map(({ count }) => count));
+  const [count] = counts;
+  if (
+    count === undefined ||
+    !Number.isSafeInteger(count) ||
+    count < POSTGRES_MIN_SHARDS ||
+    count > POSTGRES_MAX_SHARDS ||
+    counts.size !== 1 ||
+    shardJobs.length !== count ||
+    shardJobs.some(({ index }) => index > count)
+  ) {
+    return false;
+  }
+  const jobsByIndex = new Map<number, PostgresRunJobs[number]>();
+  for (const shard of shardJobs) {
+    if (jobsByIndex.has(shard.index)) {
+      return false;
+    }
+    jobsByIndex.set(shard.index, shard.job);
+  }
+  return Array.from({ length: count }, (_, index) => index + 1).every(
+    (shardIndex) => {
+      const job = jobsByIndex.get(shardIndex);
+      return (
+        job?.conclusion === "success" &&
+        job.steps.some(
+          (step) =>
+            step.name === "Run Postgres-gated API suites" &&
+            step.conclusion === "success",
+        )
+      );
+    },
   );
 };
 

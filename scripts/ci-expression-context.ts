@@ -4,6 +4,10 @@ import * as v from "valibot";
 
 import type { ScopeOutput } from "./ci-plan-scope";
 import { predicateVariables } from "./ci-plan-variables";
+import {
+  POSTGRES_MAX_SHARDS,
+  postgresShardMatrix,
+} from "./test-shard-planning";
 
 const MODELLED_EVENTS = [
   "merge_group",
@@ -257,6 +261,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pilot-plan": { fast_jobs: "[]" },
   "pilot-queue-plan": { queue_jobs: "[]" },
   pilot: { coverage_profile: "normal-v1" },
+  "postgres-shards": {
+    postgres_shard_count: String(POSTGRES_MAX_SHARDS),
+    postgres_shards: JSON.stringify(postgresShardMatrix(POSTGRES_MAX_SHARDS)),
+  },
   "postgres-test-durations": { hash: "" },
   "postgres-test-plan": {
     postgres_selection_reason: "",

@@ -1472,7 +1472,8 @@
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
-        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/test-shard-planning.ts"
       ]
     },
     "@stll/mcp-apps#test": {
