@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { selectPromotedRelease } from "./check-npm-publish-lag";
+import { selectPromotedRelease } from "./promoted-release-policy";
 
 const DEFAULT_MANIFEST_PATH = path.join(
   import.meta.dir,

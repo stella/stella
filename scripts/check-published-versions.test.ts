@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-
-import { assertProperty } from "@stll/property-testing";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import {
@@ -96,14 +93,14 @@ const runJourney = async ({
 
 describe("promoted CLI publication", () => {
   test("CLI main bumps cannot reset promotion grace", async () => {
-    await assertProperty(
-      "CLI main bumps cannot reset promotion grace",
-      fc.asyncProperty(
-        fc.array(fc.integer({ min: 1, max: 200_000 }), {
-          minLength: 1,
-          maxLength: 25,
-        }),
-        async (intervals) => {
+    // Install-free CI enumerates sequences across both sides of the grace boundary.
+    for (const firstInterval of [1, 86_399, 86_400, 86_401, 200_000]) {
+      for (const drift of [0, 1, 86_399]) {
+        for (let length = 1; length <= 25; length += 1) {
+          const intervals = Array.from(
+            { length },
+            (_, index) => ((firstInterval - 1 + index * drift) % 200_000) + 1,
+          );
           let now = NOW;
           for (const [index, interval] of intervals.entries()) {
             now += interval;
@@ -134,9 +131,9 @@ describe("promoted CLI publication", () => {
             });
             expect(published.failed).toBe(false);
           }
-        },
-      ),
-    );
+        }
+      }
+    }
   });
 
   test("unpromoted main stays pending without consulting bump history", async () => {

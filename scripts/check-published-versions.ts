@@ -6,10 +6,12 @@ import {
   readPackageManifest,
   type RegistryFetch,
   type RegistryResult,
-  selectPromotedRelease,
-  STABLE_RELEASE_TAG,
   versionBumpTime,
 } from "./check-npm-publish-lag";
+import {
+  selectPromotedRelease,
+  STABLE_RELEASE_TAG,
+} from "./promoted-release-policy";
 import {
   ALL_PACKAGE_ORDER,
   MOVED_PACKAGE_REPOSITORIES,
