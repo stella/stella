@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "مقطع من القرار",
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {الانتقال إلى الفقرات} one {الانتقال إلى الفقرة} two {الانتقال إلى الفقرتين} few {الانتقال إلى الفقرات} many {الانتقال إلى الفقرات} other {الانتقال إلى الفقرات}}",
       "judgeRole": {
         "advocateGeneral": "المحامي العام",
         "dissenting": "رأي مخالف",

@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "Passage dans la décision",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Aller au paragraphe} other {Aller aux paragraphes}}",
       "judgeRole": {
         "advocateGeneral": "Avocat général",
         "dissenting": "Opinion dissidente",

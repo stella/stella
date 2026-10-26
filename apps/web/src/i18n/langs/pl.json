@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "Fragment orzeczenia",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Przejdź do akapitu} few {Przejdź do akapitów} many {Przejdź do akapitów} other {Przejdź do akapitów}}",
       "judgeRole": {
         "advocateGeneral": "Rzecznik generalny",
         "dissenting": "Zdanie odrębne",

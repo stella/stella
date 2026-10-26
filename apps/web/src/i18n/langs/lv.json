@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "Fragments nolēmumā",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {Pāriet uz rindkopām} one {Pāriet uz rindkopu} other {Pāriet uz rindkopām}}",
       "judgeRole": {
         "advocateGeneral": "Ģenerāladvokāts",
         "dissenting": "Atsevišķās domas",

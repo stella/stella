@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "Lõik lahendis",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Mine lõigu juurde} other {Mine lõikude juurde}}",
       "judgeRole": {
         "advocateGeneral": "Kohtujurist",
         "dissenting": "Eriarvamus",

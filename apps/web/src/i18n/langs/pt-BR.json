@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "Trecho da decisão",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ir para o parágrafo} other {Ir para os parágrafos}}",
       "judgeRole": {
         "advocateGeneral": "Advogado-geral",
         "dissenting": "Voto divergente",

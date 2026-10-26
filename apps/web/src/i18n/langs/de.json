@@ -1166,6 +1166,7 @@
       "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Zum Absatz springen} other {Zu den Absätzen springen}}",
       "judgeRole": {
         "advocateGeneral": "Generalanwalt",
         "dissenting": "Sondervotum",
