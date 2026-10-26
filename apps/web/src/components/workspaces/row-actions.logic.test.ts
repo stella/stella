@@ -8,6 +8,7 @@ import {
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
   canRunManualOcr,
+  COLUMN_CONTEXT_MENU,
   getDesktopEditLockState,
   getDuplicateName,
   getOcrExportFormats,
@@ -16,9 +17,12 @@ import {
   hasOcrExport,
   planFolderFromSelection,
   requestDesktopEditTakeover,
+  resolveRowMenuSubject,
+  ROW_MENU_SECTIONS,
+  type RowMenuSection,
 } from "@/components/workspaces/row-actions.logic";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceEntity } from "@/lib/types";
+import type { PropertyId, WorkspaceEntity } from "@/lib/types";
 
 describe("duplicate names", () => {
   test("keeps the final extension and a recognizable source name", () => {
@@ -354,5 +358,119 @@ describe("folder from a selection", () => {
       entityIds: ["draft", "letter"],
       parentId: null,
     });
+  });
+});
+
+const textPropertyId = toSafeId<"property">("property-text");
+const emptyPropertyId = toSafeId<"property">("property-empty");
+const menuFields = {
+  ...ocrFields,
+  [textPropertyId]: {
+    id: toSafeId<"field">("field-text"),
+    propertyId: textPropertyId,
+    entityId: toSafeId<"entity">("entity-test"),
+    content: { type: "text", version: 1, value: "Acme" },
+  },
+} satisfies WorkspaceEntity["fields"];
+
+// Actions on the row's file or entity (download, delete, preview, …). A cell
+// that does not hold the row's file offers none of them.
+const ENTITY_SECTIONS = [
+  "chat",
+  "desktop-edit",
+  "file-operations",
+  "new-folder-from-selection",
+  "new-subfolder",
+  "open",
+  "preview",
+  "rename",
+  "sign",
+  "upload-version",
+] satisfies readonly RowMenuSection[];
+
+const subjectsOffering = (section: RowMenuSection) =>
+  Object.entries(ROW_MENU_SECTIONS)
+    .filter(([, sections]) => sections.some((offered) => offered === section))
+    .map(([subject]) => subject)
+    .toSorted();
+
+const columnsOpening = (menu: string) =>
+  Object.entries(COLUMN_CONTEXT_MENU)
+    .filter(([, columnMenu]) => columnMenu === menu)
+    .map(([column]) => column)
+    .toSorted();
+
+describe("context menu per column", () => {
+  test("keeps the browser menu on metadata columns no action applies to", () => {
+    expect(columnsOpening("native")).toEqual([
+      "created-by",
+      "list-item-type",
+      "task-due-date",
+      "task-priority",
+      "task-status",
+      "updated-at",
+      "version",
+    ]);
+  });
+
+  test("opens the row menu only from the row's handle and name", () => {
+    expect(columnsOpening("row")).toEqual(["add-property", "name", "select"]);
+    expect(columnsOpening("cell")).toEqual(["property"]);
+  });
+});
+
+describe("row menu subject", () => {
+  const resolve = (cellPropertyId: PropertyId | null, isBulk: boolean) =>
+    resolveRowMenuSubject({
+      cellPropertyId,
+      fields: menuFields,
+      isBulk,
+      rowFilePropertyId: firstPropertyId,
+    });
+
+  test("tells the row's file cell from another file cell and a value cell", () => {
+    expect(resolve(null, false)).toBe("row");
+    expect(resolve(firstPropertyId, false)).toBe("row-file-cell");
+    expect(resolve(selectedPropertyId, false)).toBe("file-cell");
+    expect(resolve(textPropertyId, false)).toBe("value-cell");
+    expect(resolve(emptyPropertyId, false)).toBe("value-cell");
+  });
+
+  test("acts on the whole selection whichever cell was right-clicked", () => {
+    for (const cell of [null, firstPropertyId, textPropertyId]) {
+      expect(resolve(cell, true)).toBe("bulk");
+    }
+  });
+});
+
+describe("row menu sections", () => {
+  test("offers entity actions only on the row, a selection and the row's file cell", () => {
+    const entitySubjects = ["bulk", "row", "row-file-cell"];
+    for (const section of ENTITY_SECTIONS) {
+      expect(
+        subjectsOffering(section).filter(
+          (subject) => !entitySubjects.includes(subject),
+        ),
+      ).toEqual([]);
+    }
+    expect(subjectsOffering("file-operations")).toEqual(entitySubjects);
+  });
+
+  test("gives a value cell only its own review actions", () => {
+    expect(ROW_MENU_SECTIONS["value-cell"]).toEqual(["cell-review"]);
+  });
+
+  test("keeps a file cell's actions on that cell's own file", () => {
+    expect(ROW_MENU_SECTIONS["file-cell"]).toEqual(
+      expect.arrayContaining(["run-ocr", "translate", "cell-review"]),
+    );
+  });
+
+  test("offers cell review on every cell and never on the row", () => {
+    expect(subjectsOffering("cell-review")).toEqual([
+      "file-cell",
+      "row-file-cell",
+      "value-cell",
+    ]);
   });
 });
