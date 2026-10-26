@@ -141,7 +141,10 @@ export const ChatMessageActionsMenu = ({
     },
     onError: (error) => {
       sidePanelChat.fail();
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatMessageActionsMenu:failure",
+        scope: { type: "handler", handlerId: "ChatMessageActionsMenu:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

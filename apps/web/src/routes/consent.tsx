@@ -93,7 +93,7 @@ function ConsentPage() {
   // The session query follows an organization switch on this page; the route
   // context only knows the organization the page loaded with.
   const sessionView = useQueryView(useQuery(sessionOptions));
-  useQueryViewError(sessionView);
+  useQueryViewError(sessionView, "ConsentPage:query");
   const activeOrganizationId =
     (sessionView.type === "items"
       ? sessionView.items?.session.activeOrganizationId
@@ -110,7 +110,7 @@ function ConsentPage() {
   const organizationsView = useQueryView(
     useQuery(organizationListOptions(userId)),
   );
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "ConsentPage:query-2");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
   const roleView = useQueryView(
@@ -120,7 +120,7 @@ function ConsentPage() {
       staleTime: Number.POSITIVE_INFINITY,
     }),
   );
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "ConsentPage:query-3");
   const canManageOrganization =
     roleView.type === "items" &&
     roleView.refetchError === undefined &&
@@ -157,7 +157,7 @@ function ConsentPage() {
       select: (settings) => settings.practiceJurisdictions,
     }),
   );
-  useQueryViewError(jurisdictionsView);
+  useQueryViewError(jurisdictionsView, "ConsentPage:query-4");
   const showJurisdictionsNotice =
     canManageOrganization && jurisdictionsView.type === "empty";
 

@@ -25,6 +25,7 @@ import {
   fileFieldQuery,
 } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getS3 } from "@/api/lib/s3";
@@ -90,11 +91,17 @@ export const readEmailHtmlPreviewHandler = async ({
   });
 
   if (Result.isError(previewResult)) {
-    captureError(previewResult.error, {
-      fieldId,
-      mimeType: emailMimeType,
-      workspaceId,
-    });
+    captureError(
+      previewResult.error,
+      handlerErrorContext(
+        "files.readEmailHtmlPreviewHandler.previewResult_error",
+        {
+          fieldId,
+          mimeType: emailMimeType,
+          workspaceId,
+        },
+      ),
+    );
     return status(422, { message: "Failed to render email preview" });
   }
 
@@ -178,7 +185,10 @@ const fetchStoredFileResponse = async (
       timeoutMs: 30_000,
     },
   ).catch((error: unknown) => {
-    captureError(error, { source: "stored-file-fetch" });
+    captureError(
+      error,
+      handlerErrorContext("files.response", { source: "stored-file-fetch" }),
+    );
     return null;
   });
 
@@ -288,18 +298,26 @@ export const printPdfHandler = async ({
   );
 
   if (Result.isError(source)) {
-    captureError(source.error, { source: "stored-file-fetch" });
+    captureError(
+      source.error,
+      handlerErrorContext("files.printPdfHandler.source_error", {
+        source: "stored-file-fetch",
+      }),
+    );
     return status(502);
   }
 
   const conversionResult = await convertToPdf(source.value);
 
   if (Result.isError(conversionResult)) {
-    captureError(conversionResult.error, {
-      fieldId,
-      mimeType: content.mimeType,
-      sizeBytes: String(content.sizeBytes),
-    });
+    captureError(
+      conversionResult.error,
+      handlerErrorContext("files.printPdfHandler.conversionResult_error", {
+        fieldId,
+        mimeType: content.mimeType,
+        sizeBytes: String(content.sizeBytes),
+      }),
+    );
     return status(502);
   }
 

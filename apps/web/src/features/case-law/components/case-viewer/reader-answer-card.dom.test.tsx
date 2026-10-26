@@ -79,10 +79,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: "Selected words",
-    startOffset: 0,
-    endOffset: 14,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: "Selected words",
+        startOffset: 0,
+        endOffset: 14,
+      },
+    ],
   },
   messages: [
     {

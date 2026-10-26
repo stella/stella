@@ -155,7 +155,7 @@ const seedPreparedSession = async () => {
   return {
     sessionId,
     sessionToken: redeemed?.sessionToken ?? "",
-    signature: signature.toString("base64"),
+    signature: signature.toBase64(),
   };
 };
 
@@ -238,7 +238,7 @@ describe("finalizing a PDF signature", () => {
     const finalize: SubmitPdfSigningSignatureDependencies["finalize"] = async (
       options,
     ) => {
-      finalizedWith.push(Buffer.from(options.signature).toString("base64"));
+      finalizedWith.push(Buffer.from(options.signature).toBase64());
       if (finalizedWith.length === 1) {
         return Result.err(
           retryable(
@@ -282,7 +282,7 @@ describe("finalizing a PDF signature", () => {
     expect(afterFailure?.attempts).toBe(1);
     // The lease is back, so the retry below may start at once.
     expect(afterFailure?.lease).toBe(null);
-    expect(Buffer.from(afterFailure?.signature ?? []).toString("base64")).toBe(
+    expect(Buffer.from(afterFailure?.signature ?? []).toBase64()).toBe(
       signature,
     );
 
@@ -315,7 +315,7 @@ describe("finalizing a PDF signature", () => {
         audit: auditRecorderDouble(),
         body: {
           sessionToken,
-          signature: Buffer.alloc(256, 7).toString("base64"),
+          signature: Buffer.alloc(256, 7).toBase64(),
         },
         params: { sessionId },
         caller: await verifiedCaller({ sessionId, sessionToken }),

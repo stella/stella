@@ -105,7 +105,10 @@ export const useFactDetailActions = (scope: ListScope) => {
       if (context !== undefined) {
         writeDetails(itemEntityId, context.previous);
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useFactDetailActions:failure",
+        scope: { type: "handler", handlerId: "useFactDetailActions:failure" },
+      });
       notifyUserError(error, t("avt.save.failedTitle"));
     },
   });

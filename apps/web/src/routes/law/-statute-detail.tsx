@@ -338,7 +338,7 @@ export const PublicStatuteViewer = ({
     statuteTitle: header.title,
   });
   const blocks = preparedReader.blocks;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("statute");
   const outline = statuteOutlineFromHeadings(blocks);
   const outlineMatches = rankOutlineMatches(outline, jump.query);
   // Clamped where it is read, not where it is set: the list changes under the
