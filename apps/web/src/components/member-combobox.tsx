@@ -16,7 +16,7 @@ import {
 import { SearchIcon } from "@stll/ui/icons";
 
 import { UserIdentity, UserIdentityAvatar } from "@/components/user-avatar";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { QueryView } from "@/lib/query-view.logic";
 
@@ -143,7 +143,7 @@ export const MemberCombobox = ({
   onSubmit,
 }: MemberComboboxProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [open, setOpen] = useState(false);
   const unknownUser = t("common.unknownUser");
   const noneLabel =
