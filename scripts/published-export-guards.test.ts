@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   importMetaUrlTargets,
@@ -223,4 +224,60 @@ describe("import.meta.url targets", () => {
       }),
     ).toEqual(["../shared/a.wasm"]);
   });
+});
+
+test("workspace scan engine starts its default source worker", async () => {
+  // The engine owns a persistent worker; a child process bounds its lifetime.
+  const child = Bun.spawn({
+    cmd: [
+      process.execPath,
+      "--eval",
+      `
+        import { existsSync } from "node:fs";
+        import { createScanEngine } from "@stll/scan-engine";
+        if (typeof Worker === "undefined") throw new Error("Worker runtime required");
+        // Bun can fill in .ts for an absent .js; browser worker URLs cannot.
+        const NativeWorker = Worker;
+        globalThis.Worker = class extends NativeWorker {
+          constructor(url, options) {
+            if (!existsSync(url)) throw new Error("Worker URL does not name a source file: " + url);
+            super(url, options);
+          }
+        };
+        const result = await createScanEngine().clean({
+          pixels: new Uint8ClampedArray([255, 255, 255, 255]),
+          width: 1,
+          height: 1,
+          pageSize: { widthPoints: 1, heightPoints: 1 },
+          dpi: 300,
+          rotation: 0,
+        }, { output: "grayscale", contentCrop: "off", deskew: "off" });
+        console.log(JSON.stringify({
+          resolved: import.meta.resolve("@stll/scan-engine"),
+          result,
+        }));
+        process.exit(result.isOk() ? 0 : 1);
+      `,
+    ],
+    cwd: fileURLToPath(new URL("../packages/scan-engine", import.meta.url)),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  try {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exitCode, stderr || stdout).toBe(0);
+    expect(JSON.parse(stdout)).toMatchObject({
+      resolved: new URL(
+        "../packages/scan-engine/src/scan-engine.ts",
+        import.meta.url,
+      ).href,
+      result: { status: "ok" },
+    });
+  } finally {
+    child.kill();
+  }
 });

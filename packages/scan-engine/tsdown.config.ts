@@ -1,8 +1,33 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsdown";
 
+const engineSourcePath = fileURLToPath(
+  new URL("src/scan-engine.ts", import.meta.url),
+).replaceAll("\\", "/");
+
 export default defineConfig({
-  // scan-engine.ts spawns the worker by URL (`./scan-engine.worker.js`), so
-  // the worker is an entry of its own and lands beside the main entry.
+  // The source URL stays resolvable by workspace consumers; only this build
+  // changes its extension to the worker entry emitted beside the engine.
+  plugins: [
+    {
+      name: "scan-engine-worker-url",
+      transform(code, id) {
+        if (id.replaceAll("\\", "/") !== engineSourcePath) {
+          return;
+        }
+        const workerUrl =
+          /new URL\(\s*(["'])scan-engine\.worker\.ts\1\s*,\s*import\.meta\.url\s*\)/u;
+        if (!workerUrl.test(code)) {
+          this.error(
+            "The scan engine source must reference its TypeScript worker URL",
+          );
+        }
+        return code.replace(workerUrl, (url) =>
+          url.replace("scan-engine.worker.ts", "scan-engine.worker.js"),
+        );
+      },
+    },
+  ],
   entry: [
     "src/scan-engine.ts",
     "src/scan-engine.worker.ts",
