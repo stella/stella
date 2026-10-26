@@ -33,6 +33,22 @@ describe("marketing capture text collection", () => {
     ]);
   });
 
+  test("reads text that inline markup splits as one line", () => {
+    expect(
+      markersOn("<p>Visit example<strong>.com</strong> today</p>"),
+    ).toEqual([{ element: "p", marker: "example.com" }]);
+  });
+
+  test("reports a marker inside inline markup once", () => {
+    expect(
+      markersOn("<main><p>Draft <strong><em>TODO</em></strong></p></main>"),
+    ).toEqual([{ element: "main", marker: "TODO" }]);
+  });
+
+  test("does not join text across separate blocks", () => {
+    expect(markersOn("<div>DE<div>MO</div></div>")).toEqual([]);
+  });
+
   test("reads the value a form field shows", () => {
     expect(
       markersOn(

@@ -14,8 +14,9 @@ export type CaptureTextElement = {
 };
 
 /**
- * Each visible element's own text, read in the page: its text nodes, and for
- * a form field the text it shows (its value, or its placeholder while empty).
+ * Each visible element's own text, read in the page: its text, including what
+ * its inline children render inside it, and for a form field the text it
+ * shows (its value, or its placeholder while empty).
  * Self-contained, because `page.evaluate` runs it from its source; a DOM
  * without layout passes `checkLayout: false`.
  */
@@ -53,6 +54,46 @@ export const collectCaptureText = ({
     }
     return described.localName;
   };
+  // Inline markup runs one line of text through several elements
+  // (`example<strong>.com</strong>`), so an element reads its text through its
+  // inline children, and an inline element is read by its parent.
+  const inlineTags = new Set([
+    "a",
+    "abbr",
+    "b",
+    "bdi",
+    "bdo",
+    "cite",
+    "code",
+    "em",
+    "i",
+    "kbd",
+    "mark",
+    "q",
+    "s",
+    "samp",
+    "small",
+    "span",
+    "strong",
+    "sub",
+    "sup",
+    "time",
+    "u",
+    "var",
+  ]);
+  const isInline = (node: Node): node is HTMLElement =>
+    node instanceof HTMLElement && inlineTags.has(node.localName);
+  const flowText = (element: HTMLElement): string =>
+    [...element.childNodes]
+      .map((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return node.textContent ?? "";
+        }
+        return isInline(node) && visible(node) ? flowText(node) : " ";
+      })
+      .join("");
+  const readHere = (element: HTMLElement) =>
+    !isInline(element) || element.parentElement === document.body;
   const shownText = (element: HTMLElement) => {
     if (
       element instanceof HTMLInputElement ||
@@ -70,13 +111,10 @@ export const collectCaptureText = ({
         ? ""
         : element.placeholder;
     }
-    return [...element.childNodes]
-      .filter((node) => node.nodeType === Node.TEXT_NODE)
-      .map((node) => node.textContent ?? "")
-      .join(" ");
+    return flowText(element);
   };
   return [...document.body.querySelectorAll<HTMLElement>("*")]
-    .filter(visible)
+    .filter((element) => visible(element) && readHere(element))
     .flatMap((element) => {
       const text = shownText(element).replaceAll(/\s+/gu, " ").trim();
       return text ? [{ descriptor: descriptorFor(element), text }] : [];
