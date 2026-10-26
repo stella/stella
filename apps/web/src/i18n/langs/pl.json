@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Przekreślenie",
       "visibilityShared": "Udostępnione organizacji"
     },
+    "contents": {
+      "aiSection": "{section} (część wygenerowana przez AI)",
+      "headingWithAiSection": "{heading} (część wygenerowana przez AI: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
       "citationOnly": "Tylko odesłanie",

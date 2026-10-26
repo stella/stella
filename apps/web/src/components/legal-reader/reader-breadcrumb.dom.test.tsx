@@ -1,8 +1,14 @@
+import type { ReactNode } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterEach, expect, jest, mock, spyOn, test } from "bun:test";
 
-import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  HeadingBlock,
+  HeadingLevel,
+} from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen, waitFor } =
@@ -13,8 +19,22 @@ const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
 const { useReaderTextScale } =
   await import("@stll/decision-reader/use-reader-text-scale");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { useAnalysisReaderBreadcrumb } =
+const { useAnalysisReaderOutline } =
   await import("@/features/case-law/components/case-viewer/analysis/reader-breadcrumb");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("./web-reader-presentation");
+
+// Analysis rows carry the AI mark, worded from the app's reader messages.
+const AnalysisProviders = ({ children }: { children: ReactNode }) => (
+  <IntlProvider locale="en" messages={messages} timeZone="UTC">
+    <FormattingProvider locale="en" timeZone="UTC">
+      <WebReaderPresentationProvider>
+        <TooltipProvider>{children}</TooltipProvider>
+      </WebReaderPresentationProvider>
+    </FormattingProvider>
+  </IntlProvider>
+);
 
 afterEach(() => {
   cleanup();
@@ -34,11 +54,21 @@ const path = (
   title,
   level,
 }));
+const rows = path.map(({ anchorId, title }) => ({
+  type: "heading" as const,
+  anchorId,
+  title,
+}));
 const mount = (onJump: (id: string) => void) =>
   render(
     <IntlProvider locale="en" messages={messages}>
       <TooltipProvider>
-        <ReaderBreadcrumb headings={path} onJump={onJump} path={path} />
+        <ReaderBreadcrumb
+          activeAnchorId={path.at(-1)?.anchorId ?? null}
+          onJump={onJump}
+          path={path}
+          rows={rows}
+        />
       </TooltipProvider>
     </IntlProvider>,
   );
@@ -48,9 +78,10 @@ test("Contents stays attached to its trigger as the visible heading path changes
     <IntlProvider locale="en" messages={messages}>
       <TooltipProvider>
         <ReaderBreadcrumb
-          headings={path}
+          activeAnchorId={visiblePath.at(-1)?.anchorId ?? null}
           onJump={() => {}}
           path={visiblePath}
+          rows={rows}
         />
       </TooltipProvider>
     </IntlProvider>
@@ -272,7 +303,7 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
     },
   ];
   const ReaderSurface = () => {
-    const fallback = useAnalysisReaderBreadcrumb(completedAnalysisTree);
+    const analysis = useAnalysisReaderOutline(completedAnalysisTree);
     return (
       <LegalReaderBreadcrumb
         blocks={[
@@ -291,18 +322,16 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
             inlines: [{ type: "text", text: "The appeal is dismissed." }],
           },
         ]}
-        fallback={fallback}
+        analysis={analysis}
         viewport={viewport}
         content={content}
       />
     );
   };
   const reader = (surface: "inspector" | "main") => (
-    <IntlProvider locale="en" messages={messages}>
-      <TooltipProvider>
-        <ReaderSurface key={surface} />
-      </TooltipProvider>
-    </IntlProvider>
+    <AnalysisProviders>
+      <ReaderSurface key={surface} />
+    </AnalysisProviders>
   );
   try {
     const assertContentsAndJump = async () => {
@@ -745,7 +774,12 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
     <IntlProvider locale="ar" messages={arabic}>
       <TooltipProvider>
         <div dir="rtl">
-          <ReaderBreadcrumb headings={path} onJump={() => {}} path={path} />
+          <ReaderBreadcrumb
+            activeAnchorId={path.at(-1)?.anchorId ?? null}
+            onJump={() => {}}
+            path={path}
+            rows={rows}
+          />
         </div>
       </TooltipProvider>
     </IntlProvider>,
@@ -898,6 +932,160 @@ test("Contents remains reachable while introductory paragraphs precede the first
     );
     expect(screen.getByRole("button", { name: "First heading" })).toBeTruthy();
   } finally {
+    cleanup();
+    viewport.remove();
+  }
+});
+
+test("Contents places streamed analysis sections among the headings without moving the open list", async () => {
+  const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
+  jest.useFakeTimers();
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  const blocks = [
+    {
+      type: "heading",
+      id: "b0",
+      anchorId: "b0",
+      level: 1,
+      plainText: "USNESENÍ",
+      inlines: [],
+    },
+    {
+      type: "paragraph",
+      id: "b1",
+      anchorId: "b1",
+      plainText: "The court decided.",
+      inlines: [],
+    },
+    {
+      type: "heading",
+      id: "b2",
+      anchorId: "b2",
+      level: 1,
+      plainText: "Odůvodnění:",
+      inlines: [],
+    },
+    {
+      type: "paragraph",
+      id: "b3",
+      anchorId: "b3",
+      plainText: "The complaint is manifestly unfounded.",
+      inlines: [],
+    },
+  ] satisfies Block[];
+  for (const [index, { anchorId }] of blocks.entries()) {
+    const element = document.createElement(index % 2 === 0 ? "h2" : "p");
+    element.dataset["anchor"] = anchorId;
+    element.getBoundingClientRect = () =>
+      new DOMRect(0, 100 + index * 100 - viewport.scrollTop, 200, 24);
+    content.append(element);
+  }
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 1000 },
+  });
+  viewport.append(content);
+  document.body.append(viewport);
+  const section = (id: string, label: string, anchorId: string) => ({
+    id,
+    label,
+    category: "reasoning",
+    startAnchorId: anchorId,
+    endAnchorId: anchorId,
+    annotations: [],
+    children: [],
+  });
+  const firstSection = [section("a-1", "Heading and operative part", "b0")];
+  const bothSections = [
+    ...firstSection,
+    section("a-2", "Reasons for dismissal", "b3"),
+  ];
+  const Reader = ({ tree }: { tree: typeof bothSections | null }) => {
+    const analysis = useAnalysisReaderOutline(tree);
+    return (
+      <AnalysisProviders>
+        <LegalReaderBreadcrumb
+          analysis={analysis}
+          blocks={blocks}
+          content={content}
+          viewport={viewport}
+        />
+      </AnalysisProviders>
+    );
+  };
+  const rowAt = (anchorId: string) =>
+    document.querySelector<HTMLElement>(`[data-contents-anchor="${anchorId}"]`);
+  const positioned = spyOn(HTMLElement.prototype, "scrollIntoView");
+  // Reading under the second heading, so Contents opens on a current row.
+  viewport.scrollTop = 240;
+  try {
+    const { rerender } = render(<Reader tree={null} />);
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: "Contents: Odůvodnění:" }),
+      ),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name: messages.statutes.outline,
+    });
+    expect(
+      [...dialog.querySelectorAll("[data-contents-anchor]")].map(
+        (row) => row.textContent,
+      ),
+    ).toEqual(["USNESENÍ", "Odůvodnění:"]);
+    expect(dialog.querySelector('[data-slot="ai-label"]')).toBeNull();
+    const heading = rowAt("b2");
+    heading?.focus();
+    const reveals = positioned.mock.calls.length;
+
+    rerender(<Reader tree={firstSection} />);
+    rerender(<Reader tree={bothSections} />);
+    expect(rowAt("b2")).toBe(heading);
+    expect(document.activeElement).toBe(heading);
+    expect(positioned.mock.calls.length).toBe(reveals);
+    expect(
+      [...dialog.querySelectorAll<HTMLElement>("[data-contents-anchor]")].map(
+        (row) => row.dataset["contentsAnchor"],
+      ),
+    ).toEqual(["b0", "b2", "b3"]);
+    const shared = screen.getByRole("button", {
+      name: "USNESENÍ (AI-generated section: Heading and operative part)",
+    });
+    expect(shared.querySelector("bdi")?.textContent).toBe("USNESENÍ");
+    expect(
+      screen.getByRole("button", {
+        name: "Reasons for dismissal (AI-generated section)",
+      }),
+    ).toBe(rowAt("b3") ?? panic("The analysis row is missing"));
+    for (const anchorId of ["b0", "b3"]) {
+      const label = rowAt(anchorId)
+        ?.closest("li")
+        ?.querySelector('[data-slot="ai-label"]');
+      expect(label?.textContent).toBe(messages.caseLaw.notesFilter.ai);
+    }
+    expect(
+      rowAt("b2")?.closest("li")?.querySelector('[data-slot="ai-label"]'),
+    ).toBeNull();
+
+    await act(async () => fireEvent.keyDown(dialog, { key: "Escape" }));
+    await act(async () => {
+      viewport.scrollTop = 340;
+      viewport.dispatchEvent(new Event("scroll"));
+      jest.advanceTimersByTime(220);
+    });
+    // The section being read is current in Contents; the trail keeps the
+    // document's own heading.
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: "Contents: Odůvodnění:" }),
+      ),
+    );
+    expect(rowAt("b3")?.getAttribute("aria-current")).toBe("location");
+    expect(rowAt("b2")?.hasAttribute("aria-current")).toBe(false);
+  } finally {
+    positioned.mockRestore();
     cleanup();
     viewport.remove();
   }

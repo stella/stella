@@ -1,8 +1,11 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { AiDisclosureContext } from "@stll/api-contract/ai-disclosure";
+import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
@@ -16,16 +19,140 @@ import {
   readerProvisionNumber,
 } from "./reader-breadcrumb.logic";
 import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
+import type { ReaderContentsRow } from "./reader-contents.logic";
 
 type ReaderBreadcrumbProps = {
   path: readonly ReaderBreadcrumbSegment[];
-  headings: readonly ReaderBreadcrumbSegment[];
+  rows: readonly ReaderContentsRow[];
+  /** The row being read, which Contents marks as the current location. */
+  activeAnchorId: string | null;
   onJump: (anchorId: string) => void;
+};
+
+// A stable callback ref: it runs when Contents opens, never again while it
+// stays open, so rows arriving later cannot move the list under the reader.
+const revealCurrentRow = (node: HTMLDivElement | null) => {
+  node
+    ?.querySelector<HTMLElement>("[data-contents-anchor][aria-current]")
+    ?.scrollIntoView({ block: "nearest" });
+};
+
+type ReaderContentsListProps = {
+  rows: readonly ReaderContentsRow[];
+  activeAnchorId: string | null;
+  onSelect: (anchorId: string) => void;
+};
+
+const ReaderContentsList = ({
+  rows,
+  activeAnchorId,
+  onSelect,
+}: ReaderContentsListProps) => {
+  const t = useTranslations();
+  const jump = ({
+    anchorId,
+    label,
+    children,
+    className,
+  }: {
+    anchorId: string;
+    label?: string;
+    children: ReactNode;
+    className?: string;
+  }) => (
+    <Button
+      aria-current={anchorId === activeAnchorId ? "location" : undefined}
+      aria-label={label}
+      className={cn(
+        "min-h-11 min-w-0 flex-1 justify-start text-start whitespace-normal",
+        className,
+      )}
+      data-contents-anchor={anchorId}
+      onClick={() => onSelect(anchorId)}
+      variant="ghost"
+    >
+      {children}
+    </Button>
+  );
+  const aiLabel = (disclosure: AiDisclosureContext) => (
+    <span className="text-muted-foreground shrink-0 pe-2 text-xs">
+      <ReaderAiLabel context={disclosure} label={t("caseLaw.notesFilter.ai")} />
+    </span>
+  );
+  const row = (entry: ReaderContentsRow) => {
+    switch (entry.type) {
+      case "heading": {
+        return jump({
+          anchorId: entry.anchorId,
+          children: <bdi>{entry.title}</bdi>,
+        });
+      }
+      case "analysis": {
+        return (
+          <>
+            {jump({
+              anchorId: entry.anchorId,
+              label: t("legalReader.contents.aiSection", {
+                section: entry.title,
+              }),
+              children: <bdi>{entry.title}</bdi>,
+              className: "text-muted-foreground",
+            })}
+            {aiLabel(entry.disclosure)}
+          </>
+        );
+      }
+      case "headingWithAnalysis": {
+        return (
+          <>
+            {jump({
+              anchorId: entry.anchorId,
+              label: t("legalReader.contents.headingWithAiSection", {
+                heading: entry.title,
+                section: entry.analysisTitle,
+              }),
+              children: (
+                <span className="flex min-w-0 flex-col items-start gap-0.5 py-1">
+                  <bdi>{entry.title}</bdi>
+                  <bdi className="text-muted-foreground text-xs">
+                    {entry.analysisTitle}
+                  </bdi>
+                </span>
+              ),
+            })}
+            {aiLabel(entry.disclosure)}
+          </>
+        );
+      }
+      default: {
+        entry satisfies never;
+        return panic("Unhandled contents row");
+      }
+    }
+  };
+  return (
+    <ScrollArea
+      axis="vertical"
+      className="max-h-72"
+      viewportRef={revealCurrentRow}
+    >
+      <ol>
+        {rows.map((entry) => (
+          // The AI mark is a control of its own, so it sits beside the jump
+          // rather than inside it.
+          <li className="flex items-center gap-1" key={entry.anchorId}>
+            {row(entry)}
+          </li>
+        ))}
+      </ol>
+    </ScrollArea>
+  );
 };
 
 export const ReaderBreadcrumb = ({
   path,
-  headings,
+  rows,
+  activeAnchorId,
   onJump,
 }: ReaderBreadcrumbProps) => {
   const t = useTranslations();
@@ -87,29 +214,12 @@ export const ReaderBreadcrumb = ({
     update();
     return () => observer.disconnect();
   };
-  const contentsRef = (node: HTMLDivElement | null) => {
-    if (node === null || current === undefined) {
-      return;
-    }
-    node
-      .querySelector<HTMLElement>(
-        `[data-contents-anchor="${CSS.escape(current.anchorId)}"]`,
-      )
-      ?.scrollIntoView({ block: "nearest" });
-  };
-  const entries = (
-    segments: readonly ReaderBreadcrumbSegment[],
-    close: () => void,
-  ) => (
+  const hiddenEntries = (close: () => void) => (
     <ol>
-      {segments.map(({ anchorId, title }) => (
+      {hidden.map(({ anchorId, title }) => (
         <li key={anchorId}>
           <Button
-            aria-current={
-              anchorId === current?.anchorId ? "location" : undefined
-            }
             className="min-h-11 w-full justify-start text-start whitespace-normal"
-            data-contents-anchor={anchorId}
             onClick={() => {
               onJump(anchorId);
               close();
@@ -158,13 +268,14 @@ export const ReaderBreadcrumb = ({
         className="w-80 max-w-[calc(100vw-2rem)]"
         padding="sm"
       >
-        <ScrollArea
-          axis="vertical"
-          className="max-h-72"
-          viewportRef={contentsRef}
-        >
-          {entries(headings, () => setContentsOpen(false))}
-        </ScrollArea>
+        <ReaderContentsList
+          activeAnchorId={activeAnchorId}
+          onSelect={(anchorId) => {
+            onJump(anchorId);
+            setContentsOpen(false);
+          }}
+          rows={rows}
+        />
       </PopoverPopup>
     </Popover>
   );
@@ -258,7 +369,7 @@ export const ReaderBreadcrumb = ({
                         padding="sm"
                       >
                         <ScrollArea axis="vertical" className="max-h-72">
-                          {entries(hidden, () => setMiddleOpen(false))}
+                          {hiddenEntries(() => setMiddleOpen(false))}
                         </ScrollArea>
                       </PopoverPopup>
                     </Popover>
@@ -267,7 +378,7 @@ export const ReaderBreadcrumb = ({
             </li>
           );
         })}
-        {(current !== undefined || headings.length > 0) && (
+        {(current !== undefined || rows.length > 0) && (
           // Keep the Contents root and trigger mounted as scrolling changes
           // the path; Base UI associates an open popup with its trigger id.
           <li className="flex min-w-0 shrink-0 items-center">

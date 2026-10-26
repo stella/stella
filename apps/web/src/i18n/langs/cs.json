@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Přeškrtnutí",
       "visibilityShared": "Sdíleno s organizací"
     },
+    "contents": {
+      "aiSection": "{section} (část vygenerovaná AI)",
+      "headingWithAiSection": "{heading} (část vygenerovaná AI: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citací",
       "citationOnly": "Pouze citace",

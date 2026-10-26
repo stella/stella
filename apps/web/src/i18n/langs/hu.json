@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Áthúzás",
       "visibilityShared": "Megosztva a szervezettel"
     },
+    "contents": {
+      "aiSection": "{section} (AI által generált szakasz)",
+      "headingWithAiSection": "{heading} (AI által generált szakasz: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
       "citationOnly": "Csak hivatkozás",

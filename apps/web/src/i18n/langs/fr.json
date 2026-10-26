@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Barré",
       "visibilityShared": "Partagé avec l’organisation"
     },
+    "contents": {
+      "aiSection": "{section} (partie générée par IA)",
+      "headingWithAiSection": "{heading} (partie générée par IA : {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
       "citationOnly": "Référence seule",

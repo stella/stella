@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "يتوسطه خط",
       "visibilityShared": "مشارك مع المؤسسة"
     },
+    "contents": {
+      "aiSection": "{section} (قسم مُنشأ بالذكاء الاصطناعي)",
+      "headingWithAiSection": "{heading} (قسم مُنشأ بالذكاء الاصطناعي: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
       "citationOnly": "الإحالة فقط",

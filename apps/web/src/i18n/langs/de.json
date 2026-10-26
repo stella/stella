@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Durchstreichung",
       "visibilityShared": "Mit der Organisation geteilt"
     },
+    "contents": {
+      "aiSection": "{section} (KI-generierter Abschnitt)",
+      "headingWithAiSection": "{heading} (KI-generierter Abschnitt: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
       "citationOnly": "Nur Fundstelle",

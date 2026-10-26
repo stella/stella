@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Perbraukimas",
       "visibilityShared": "Bendrinama su organizacija"
     },
+    "contents": {
+      "aiSection": "{section} (DI sugeneruota dalis)",
+      "headingWithAiSection": "{heading} (DI sugeneruota dalis: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
       "citationOnly": "Tik nuoroda",

@@ -4308,6 +4308,10 @@
       "styleStrikethrough": "Pārsvītrojums",
       "visibilityShared": "Kopīgots ar organizāciju"
     },
+    "contents": {
+      "aiSection": "{section} (AI ģenerēta sadaļa)",
+      "headingWithAiSection": "{heading} (AI ģenerēta sadaļa: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
       "citationOnly": "Tikai atsauce",
