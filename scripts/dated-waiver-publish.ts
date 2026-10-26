@@ -281,6 +281,14 @@ export const listRemovalProposals = async ({
   }
 };
 
+// The renewal branch carries no waiver key, so the keyed listing above never
+// returns it; this read lets a run with nothing due still retire it.
+export const renewalProposalOpen = async ({
+  repo,
+  request,
+}: ListRemovalProposalsOptions): Promise<boolean> =>
+  (await listRemovalPrs({ branch: RENEWAL_BRANCH, repo, request })).length > 0;
+
 export const orphanRemovalProposals = (
   inventory: readonly DatedWaiver[],
   proposals: readonly RemovalProposal[],

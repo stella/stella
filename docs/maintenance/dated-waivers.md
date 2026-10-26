@@ -16,7 +16,9 @@ every sample of its probe receives HTTP 404 or 410, healing records it as
 absent and renews it on main: `checkedAt` becomes the start of the UTC day and
 `expiresAt` follows 30 days later. All renewals of a run go into one proposal
 on the reserved `chore/dated-waiver-renewal` branch, published and armed like
-removal proposals; a run with nothing to renew closes an open one. Entries that
+removal proposals; a run with nothing to renew closes an open one. Read-only
+discovery checks that branch every run, so an open renewal proposal needs a
+write even when no entry is due. Entries that
 share one date constant renew only when every entry sharing it was confirmed
 absent; the others are held and named in the `dated-waiver-renewal` signal.
 A network error, timeout, redirect or any other status stays red and opens the

@@ -34,6 +34,7 @@ import {
   publishRemoval,
   type RemovalProposal,
   RENEWAL_BRANCH,
+  renewalProposalOpen,
   retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
@@ -988,22 +989,35 @@ export const renderHealingFailureSignal = (error: HealingRunError) => ({
   failures: error.failures.map(({ key, stage }) => ({ key, stage })),
 });
 
+// Open proposals a run may have to retire even when no entry is due.
+export type PendingProposals = {
+  orphans: readonly RemovalProposal[];
+  renewalOpen: boolean;
+};
+const NO_PENDING_PROPOSALS: PendingProposals = {
+  orphans: [],
+  renewalOpen: false,
+};
+
 export const healingWriteNeeded = (
   report: HealingReport,
-  orphanProposals: readonly RemovalProposal[] = [],
+  pending: PendingProposals = NO_PENDING_PROPOSALS,
 ) =>
   report.entries.length > 0 ||
   report.failures.length > 0 ||
-  orphanProposals.length > 0;
+  pending.orphans.length > 0 ||
+  pending.renewalOpen;
 
-const discoverOrphanRemovals = async (inventory: readonly DatedWaiver[]) =>
-  orphanRemovalProposals(
+export const discoverPendingProposals = async (
+  inventory: readonly DatedWaiver[],
+  request: typeof githubRequest = githubRequest,
+): Promise<PendingProposals> => ({
+  orphans: orphanRemovalProposals(
     inventory,
-    await listRemovalProposals({
-      repo: "stella/stella",
-      request: githubRequest,
-    }),
-  );
+    await listRemovalProposals({ repo: "stella/stella", request }),
+  ),
+  renewalOpen: await renewalProposalOpen({ repo: "stella/stella", request }),
+});
 
 const main = async (): Promise<void> => {
   const fileIndex = process.argv.indexOf("--evidence");
@@ -1053,19 +1067,21 @@ const main = async (): Promise<void> => {
     // Discovery uses the read-only workflow token and the full inventory, even
     // when no entries are due. A failed discovery remains a recorded run failure.
     const discovered = await Result.tryPromise(async () =>
-      discoverOrphanRemovals(inventory),
+      discoverPendingProposals(inventory),
     );
     if (Result.isError(discovered)) {
       report.failures.push({ key: "evidence-0", stage: "evidence" });
     }
-    const orphans = Result.isOk(discovered) ? discovered.value : [];
+    const pending = Result.isOk(discovered)
+      ? discovered.value
+      : NO_PENDING_PROPOSALS;
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(report), { mode: 0o600 });
     const output = process.env["GITHUB_OUTPUT"];
     if (output) {
       appendFileSync(
         output,
-        `write_needed=${healingWriteNeeded(report, orphans)}\n`,
+        `write_needed=${healingWriteNeeded(report, pending)}\n`,
       );
     }
     console.log(
@@ -1088,7 +1104,7 @@ const main = async (): Promise<void> => {
   // Re-read proposals on the write path: runner evidence never supplies branch
   // names or authority to retire a proposal.
   const discovered = await Result.tryPromise(async () =>
-    discoverOrphanRemovals(inventory),
+    discoverPendingProposals(inventory),
   );
   if (
     Result.isOk(discovered) &&
@@ -1147,7 +1163,7 @@ const main = async (): Promise<void> => {
       discover: async () =>
         await (Result.isError(discovered)
           ? Promise.reject(discovered.error)
-          : Promise.resolve(discovered.value)),
+          : Promise.resolve(discovered.value.orphans)),
       retire: async ({ branch }) =>
         retireRemoval({
           branch,

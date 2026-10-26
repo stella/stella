@@ -13,13 +13,20 @@ import {
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   applyHealing,
+  discoverPendingProposals,
   type HealingActions,
   type HealingEntry,
+  healingWriteNeeded,
   RENEWAL_FAILURE_KEY,
   renewalRecords,
 } from "./dated-waiver-healing";
 import { removeWaiver, runWaiverProbe } from "./dated-waiver-probes";
-import type { PublishedRemoval } from "./dated-waiver-publish";
+import {
+  type PublishedRemoval,
+  RENEWAL_BRANCH,
+  RENEWAL_TITLE,
+  retireRemoval,
+} from "./dated-waiver-publish";
 import {
   planDocRenewal,
   renderRenewalEvidence,
@@ -378,6 +385,82 @@ test("a run with nothing to renew retires the previous renewal proposal", async 
     },
   });
   expect(effects).toEqual(["fix:offline", "retire:offline", "retire-renewal"]);
+});
+
+// A GitHub fake holding one open renewal proposal on the reserved branch,
+// visible to both the full proposal listing and the branch-filtered one.
+const renewalGithub = () => {
+  const pr = {
+    number: 77,
+    title: RENEWAL_TITLE,
+    body: "Renew documentation waivers.",
+    state: "open" as "open" | "closed",
+    head: { ref: RENEWAL_BRANCH, repo: { full_name: "stella/stella" } },
+    base: { ref: "main" },
+  };
+  const disarmed: number[] = [];
+  const request = async (
+    args: readonly string[],
+    input?: unknown,
+  ): Promise<unknown> => {
+    const endpoint = args.at(0);
+    if (endpoint === "repos/stella/stella/pulls" && args.includes("GET")) {
+      const head = args.find((arg) => arg.startsWith("head="));
+      const open = pr.state === "open" ? [{ ...pr }] : [];
+      return head === undefined || head === `head=stella:${RENEWAL_BRANCH}`
+        ? open
+        : [];
+    }
+    if (endpoint === `repos/stella/stella/pulls/${pr.number}`) {
+      const closed = v.parse(
+        v.object({ state: v.literal("closed"), body: v.string() }),
+        input,
+      );
+      pr.state = closed.state;
+      pr.body = closed.body;
+      return {};
+    }
+    throw new TypeError(`Unexpected GitHub call: ${String(endpoint)}`);
+  };
+  return { pr, disarmed, request };
+};
+
+test("an open renewal proposal with nothing due is discovered and closed", async () => {
+  const github = renewalGithub();
+  const empty = {
+    sha: "base",
+    observedAt: NOW.toISOString(),
+    entries: [],
+    failures: [],
+  };
+  const pending = await discoverPendingProposals([], github.request);
+  expect(pending).toEqual({ orphans: [], renewalOpen: true });
+  // Both write-needed checks (workflow output and publisher) see it.
+  expect(healingWriteNeeded(empty, pending)).toBe(true);
+  await applyHealing({
+    report: empty,
+    actions: healingScenario().actions,
+    now: NOW,
+    renewal: {
+      publish: async () => {
+        throw new TypeError("nothing should publish");
+      },
+      retire: async () =>
+        retireRemoval({
+          branch: RENEWAL_BRANCH,
+          repo: "stella/stella",
+          request: github.request,
+          disarm: async (number) => {
+            github.disarmed.push(number);
+          },
+        }),
+    },
+  });
+  expect(github.disarmed).toEqual([77]);
+  expect(github.pr.state).toBe("closed");
+  const after = await discoverPendingProposals([], github.request);
+  expect(after).toEqual({ orphans: [], renewalOpen: false });
+  expect(healingWriteNeeded(empty, after)).toBe(false);
 });
 
 test("renewal publication failures fail the run under one opaque key", async () => {
