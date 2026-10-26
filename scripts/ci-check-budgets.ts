@@ -91,8 +91,10 @@ export const passedDurations = (log: string) =>
       : [{ name, seconds }];
   });
 
+const GH_RETRY = path.resolve(import.meta.dir, "gh-retry.sh");
+// Every GitHub API call goes through the retry owner.
 const gh = (...args: string[]) => {
-  const result = Bun.spawnSync(["gh", ...args], {
+  const result = Bun.spawnSync(["bash", GH_RETRY, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });

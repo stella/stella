@@ -1093,15 +1093,21 @@ const ancestorRows = (): AncestorRow[] => {
     .toString()
     .split("\n")
     .flatMap((line) => {
-      const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/u.exec(line);
-      return match === null
+      const [pid, ppid, elapsed, ...command] = line
+        .trim()
+        .split(" ")
+        .filter((field) => field !== "");
+      return pid === undefined ||
+        ppid === undefined ||
+        elapsed === undefined ||
+        command.length === 0
         ? []
         : [
             {
-              pid: Number(match[1]),
-              ppid: Number(match[2]),
-              elapsed: psSeconds(match[3] ?? ""),
-              command: (match[4] ?? "").trim(),
+              pid: Number(pid),
+              ppid: Number(ppid),
+              elapsed: psSeconds(elapsed),
+              command: command.join(" "),
             },
           ];
     });

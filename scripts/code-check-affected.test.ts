@@ -1314,7 +1314,7 @@ describe("parallel code-quality legs", () => {
                 job === "code-quality-web-rest"
                   ? job
                   : panic(`Unpooled job ${job}`),
-                String(pooled?.["name"] ?? panic(`Missing step ${name}`)),
+                pooled === undefined ? panic(`Missing step ${name}`) : name,
               )
             : minutes(step, 8);
         expect(stepMinutes * 60_000, name).toBeGreaterThanOrEqual(
