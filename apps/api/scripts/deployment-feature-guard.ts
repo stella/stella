@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The mobile app's client identity is published by every deployment it can sign in to",
   ],
   [
+    "/v1/mobile/updates",
+    "Mobile builds ask every deployment for updates; one with nothing published answers 404",
+  ],
+  [
     "/operator",
     "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
   ],

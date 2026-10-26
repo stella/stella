@@ -146,9 +146,11 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo/fingerprint",
       "expo",
       "expo-constants",
       "expo-crypto",
+      "expo-dev-client",
       "expo-doctor",
       "expo-linking",
       "expo-router",
@@ -292,6 +294,10 @@ export const DOC_SOURCES = {
   Lefthook: {
     dependencies: ["lefthook"],
     url: "https://lefthook.dev/llms.txt",
+  },
+  AgentDevice: {
+    dependencies: ["agent-device"],
+    url: "https://agent-device.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
 
