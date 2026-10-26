@@ -1051,6 +1051,7 @@
       "human": "Cilvēku",
       "toggleState": "{label}: {state, select, on {ieslēgts} other {izslēgts}}"
     },
+    "oldestDecisions": "Vecākie nolēmumi",
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
@@ -1156,6 +1157,8 @@
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
+      "oldest": "Vecākie",
+      "oldestUnavailable": "Meklēšanas rezultāti tiek kārtoti pēc atbilstības vai no jaunākajiem. Lai vispirms redzētu vecākos nolēmumus, notīriet meklēšanu.",
       "relevance": "Atbilstošākie"
     },
     "viewer": {
@@ -6660,10 +6663,12 @@
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
-      "sortAscending": "Kārtot augošā secībā",
       "sortAscendingDate": "Vecākie vispirms",
-      "sortDescending": "Kārtot dilstošā secībā",
+      "sortAscendingNumber": "Mazākie vispirms",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Jaunākie vispirms",
+      "sortDescendingNumber": "Lielākie vispirms",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, zero {Sadalīt # iespējās} one {Sadalīt # iespējā} other {Sadalīt # iespējās}}",
       "suggestWithAI": "Ieteikt ar AI",
       "text": "Teksts",
