@@ -66,6 +66,10 @@ const useKeySection = (section: KeySection) => {
   const [draft, setDraft] = useState<KeySettingsDraft>({ action: "untouched" });
   const [feedback, setFeedback] = useState<SectionFeedback>({ status: "idle" });
   const mutation = useSettingsMutation({
+    exceptionScope: (change) => ({
+      type: "handler",
+      handlerId: `settings.key.${section}.${change.action}`,
+    }),
     invalidate: KEY_SECTIONS[section].invalidate,
     mutationFn: async (change: KeyChange) => {
       switch (change.action) {

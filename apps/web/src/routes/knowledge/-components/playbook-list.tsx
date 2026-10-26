@@ -73,7 +73,7 @@ export const PlaybookList = ({
   const { id: userId } = useAuthenticatedUser();
   const organizationsQuery = useQuery(organizationListOptions(userId));
   const organizationsView = useQueryView(organizationsQuery);
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "PlaybookList:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
   const organizationName =

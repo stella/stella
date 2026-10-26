@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -347,11 +348,17 @@ const organizeSuggestionsHandler = async function* ({
 
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "entities.placements.suggest",
-      workspaceId,
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext(
+        "placements.organizeSuggestionsHandler.result_error",
+        {
+          feature: "entities.placements.suggest",
+          workspaceId,
+          organizationId,
+        },
+      ),
+    );
     return Result.err(
       aiHandlerError(result.error, {
         status: 502,
@@ -816,11 +823,14 @@ const generateMissingSummaries = async ({
 
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "entities.version-summary",
-      workspaceId,
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("placements.generateMissingSummaries.result_error", {
+        feature: "entities.version-summary",
+        workspaceId,
+        organizationId,
+      }),
+    );
     return Result.err(
       aiHandlerError(result.error, {
         status: 502,

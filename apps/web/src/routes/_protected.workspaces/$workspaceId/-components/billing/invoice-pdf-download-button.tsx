@@ -58,7 +58,13 @@ export const InvoicePdfDownloadButton = ({
       downloadFile(blob, fileName);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "InvoicePdfDownloadButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "InvoicePdfDownloadButton:failure",
+        },
+      });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });

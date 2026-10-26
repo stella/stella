@@ -33,7 +33,10 @@ const proofPayload = v.object({
 // One proof has exactly one string form: each segment must re-encode to
 // itself, so non-zero padding bits and impossible lengths are refused.
 const isCanonicalBase64Url = (segment: string) =>
-  Buffer.from(segment, "base64url").toString("base64url") === segment;
+  Buffer.from(segment, "base64url").toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  }) === segment;
 
 export const deviceProofRefusal = (
   code:

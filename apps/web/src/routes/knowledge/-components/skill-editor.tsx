@@ -790,6 +790,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       {/* Files — the skill's bundle, the main surface. Click a file to edit it
           in the inspector. */}
       <FileDropZone
+        exceptionScope={{
+          type: "handler",
+          handlerId: "knowledge.skill-files.drop",
+        }}
         className="p-3"
         coverage="content"
         enabled={canEditContent}
