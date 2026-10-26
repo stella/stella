@@ -12,7 +12,7 @@ import ts from "typescript6";
 import {
   type ParsedSource,
   parseSource as parseSyntaxTree,
-} from "../packages/scripts/src/syntax-tree";
+} from "../packages/scripts/src/syntax-tree.ts";
 
 type ParseDialect = ts.ScriptKind.TS | ts.ScriptKind.TSX;
 
