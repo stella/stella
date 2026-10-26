@@ -121,7 +121,7 @@ export const applyEntityPage = (
       }
     : { ...previous, loadedAt, error: result.error };
 
-export type EntitySectionKey = "documents" | "tasks";
+type EntitySectionKey = "documents" | "tasks";
 
 export type EntitySection = {
   readonly key: EntitySectionKey;
